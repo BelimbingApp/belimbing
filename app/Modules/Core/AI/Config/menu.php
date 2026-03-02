@@ -24,7 +24,7 @@ return [
             'id' => 'ai.providers',
             'label' => 'LLM Providers',
             'icon' => 'heroicon-o-server-stack',
-            'route' => 'admin.ai.providers',
+            'route' => 'admin.ai.providers.index',
             'parent' => 'ai',
             'position' => 20,
         ],

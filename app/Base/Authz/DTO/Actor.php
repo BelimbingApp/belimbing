@@ -60,6 +60,6 @@ final readonly class Actor
      */
     public function cacheKey(): string
     {
-        return $this->type->value . ':' . $this->id . ':' . $this->companyId;
+        return $this->type->value.':'.$this->id.':'.$this->companyId;
     }
 }

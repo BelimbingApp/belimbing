@@ -3,10 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
+use App\Base\System\Controllers\SystemInfoController;
 use Illuminate\Support\Facades\Route;
-use Livewire\Volt\Volt;
 
 Route::middleware(['auth'])->group(function () {
-    Volt::route('admin/system/info', 'admin.system.info.index')
-        ->name('admin.system.info.index');
+    Route::get('admin/system/info', [SystemInfoController::class, 'index'])->name('admin.system.info.index');
 });

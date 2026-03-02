@@ -6,7 +6,6 @@ use App\Base\Authz\Models\Role;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\DB;
-use Livewire\Livewire;
 
 beforeEach(function (): void {
     $roles = config('authz.roles', []);
@@ -63,15 +62,15 @@ test('authenticated users without capability are denied', function (): void {
 
 test('user can be created from create page component', function (): void {
     $actor = createAdminUser();
-    $this->actingAs($actor);
 
-    Livewire::test('users.create')
-        ->set('name', 'Jane Doe')
-        ->set('email', 'jane@example.com')
-        ->set('password', 'SecurePassword123!')
-        ->set('password_confirmation', 'SecurePassword123!')
-        ->call('store')
-        ->assertRedirect(route('admin.users.index'));
+    $response = $this->actingAs($actor)->post(route('admin.users.store'), [
+        'name' => 'Jane Doe',
+        'email' => 'jane@example.com',
+        'password' => 'SecurePassword123!',
+        'password_confirmation' => 'SecurePassword123!',
+    ]);
+
+    $response->assertRedirect(route('admin.users.index'));
 
     $user = User::query()->where('email', 'jane@example.com')->first();
 
@@ -84,16 +83,16 @@ test('user can be created from create page component', function (): void {
 test('user can be created with company', function (): void {
     $actor = createAdminUser();
     $company = Company::factory()->create();
-    $this->actingAs($actor);
 
-    Livewire::test('users.create')
-        ->set('company_id', (string) $company->id)
-        ->set('name', 'John Smith')
-        ->set('email', 'john@example.com')
-        ->set('password', 'SecurePassword123!')
-        ->set('password_confirmation', 'SecurePassword123!')
-        ->call('store')
-        ->assertRedirect(route('admin.users.index'));
+    $response = $this->actingAs($actor)->post(route('admin.users.store'), [
+        'company_id' => $company->id,
+        'name' => 'John Smith',
+        'email' => 'john@example.com',
+        'password' => 'SecurePassword123!',
+        'password_confirmation' => 'SecurePassword123!',
+    ]);
+
+    $response->assertRedirect(route('admin.users.index'));
 
     $user = User::query()->where('email', 'john@example.com')->first();
 
@@ -105,16 +104,19 @@ test('user can be created with company', function (): void {
 test('user fields can be inline edited from show page', function (): void {
     $actor = createAdminUser();
     $user = User::factory()->create(['name' => 'Old Name', 'email' => 'old@example.com']);
-    $this->actingAs($actor);
 
-    Livewire::test('users.show', ['user' => $user])
-        ->call('saveField', 'name', 'New Name');
+    $this->actingAs($actor)->patch(route('admin.users.update-field', $user), [
+        'field' => 'name',
+        'value' => 'New Name',
+    ])->assertRedirect();
 
     $user->refresh();
     expect($user->name)->toBe('New Name');
 
-    Livewire::test('users.show', ['user' => $user])
-        ->call('saveField', 'email', 'new@example.com');
+    $this->actingAs($actor)->patch(route('admin.users.update-field', $user), [
+        'field' => 'email',
+        'value' => 'new@example.com',
+    ])->assertRedirect();
 
     $user->refresh();
     expect($user->email)->toBe('new@example.com');
@@ -126,10 +128,11 @@ test('email change resets email_verified_at', function (): void {
         'email' => 'verified@example.com',
         'email_verified_at' => now(),
     ]);
-    $this->actingAs($actor);
 
-    Livewire::test('users.show', ['user' => $user])
-        ->call('saveField', 'email', 'changed@example.com');
+    $this->actingAs($actor)->patch(route('admin.users.update-field', $user), [
+        'field' => 'email',
+        'value' => 'changed@example.com',
+    ])->assertRedirect();
 
     $user->refresh();
     expect($user->email)->toBe('changed@example.com')
@@ -140,16 +143,17 @@ test('company can be changed from show page', function (): void {
     $actor = createAdminUser();
     $company = Company::factory()->create();
     $user = User::factory()->create(['company_id' => null]);
-    $this->actingAs($actor);
 
-    Livewire::test('users.show', ['user' => $user])
-        ->call('saveCompany', $company->id);
+    $this->actingAs($actor)->patch(route('admin.users.update-company', $user), [
+        'company_id' => $company->id,
+    ])->assertRedirect();
 
     $user->refresh();
     expect($user->company_id)->toBe($company->id);
 
-    Livewire::test('users.show', ['user' => $user])
-        ->call('saveCompany', null);
+    $this->actingAs($actor)->patch(route('admin.users.update-company', $user), [
+        'company_id' => '',
+    ])->assertRedirect();
 
     $user->refresh();
     expect($user->company_id)->toBeNull();
@@ -158,25 +162,27 @@ test('company can be changed from show page', function (): void {
 test('password can be updated from show page', function (): void {
     $actor = createAdminUser();
     $user = User::factory()->create();
-    $this->actingAs($actor);
 
-    Livewire::test('users.show', ['user' => $user])
-        ->set('password', 'NewSecurePassword123!')
-        ->set('password_confirmation', 'NewSecurePassword123!')
-        ->call('updatePassword')
-        ->assertHasNoErrors();
+    $response = $this->actingAs($actor)->patch(route('admin.users.update-password', $user), [
+        'password' => 'NewSecurePassword123!',
+        'password_confirmation' => 'NewSecurePassword123!',
+    ]);
+
+    $response->assertSessionHasNoErrors();
 });
 
 test('password update requires confirmation', function (): void {
     $actor = createAdminUser();
     $user = User::factory()->create();
-    $this->actingAs($actor);
 
-    Livewire::test('users.show', ['user' => $user])
-        ->set('password', 'NewSecurePassword123!')
-        ->set('password_confirmation', 'WrongConfirmation!')
-        ->call('updatePassword')
-        ->assertHasErrors(['password']);
+    $response = $this->actingAs($actor)
+        ->from(route('admin.users.show', $user))
+        ->patch(route('admin.users.update-password', $user), [
+            'password' => 'NewSecurePassword123!',
+            'password_confirmation' => 'WrongConfirmation!',
+        ]);
+
+    $response->assertSessionHasErrors(['password']);
 });
 
 test('user without delete capability cannot delete users', function (): void {
@@ -192,10 +198,8 @@ test('user without delete capability cannot delete users', function (): void {
     ]);
 
     $other = User::factory()->create();
-    $this->actingAs($viewer);
 
-    Livewire::test('users.index')
-        ->call('delete', $other->id);
+    $this->actingAs($viewer)->delete(route('admin.users.destroy', $other))->assertStatus(403);
 
     expect(User::query()->find($other->id))->not()->toBeNull();
 });
@@ -203,15 +207,12 @@ test('user without delete capability cannot delete users', function (): void {
 test('user can be deleted from index and cannot delete self', function (): void {
     $actor = createAdminUser();
     $other = User::factory()->create();
-    $this->actingAs($actor);
 
-    Livewire::test('users.index')
-        ->call('delete', $other->id);
+    $this->actingAs($actor)->delete(route('admin.users.destroy', $other))->assertRedirect(route('admin.users.index'));
 
     expect(User::query()->find($other->id))->toBeNull();
 
-    Livewire::test('users.index')
-        ->call('delete', $actor->id);
+    $this->actingAs($actor)->delete(route('admin.users.destroy', $actor))->assertRedirect(route('admin.users.index'));
 
     expect(User::query()->find($actor->id))->not()->toBeNull();
 });

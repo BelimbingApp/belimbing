@@ -3,7 +3,6 @@
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Geonames\Models\Country;
 use App\Modules\Core\User\Models\User;
-use Livewire\Livewire;
 
 test('guests are redirected to login from addresses pages', function (): void {
     $this->get(route('admin.addresses.index'))->assertRedirect(route('login'));
@@ -36,17 +35,17 @@ test('address can be created from create page component', function (): void {
     ]);
 
     $user = User::factory()->create();
-    $this->actingAs($user);
 
-    Livewire::test('addresses.create')
-        ->set('label', 'Warehouse')
-        ->set('line1', '88 River Road')
-        ->set('locality', 'Boston')
-        ->set('postcode', '02110')
-        ->set('country_iso', 'us')
-        ->set('verification_status', 'verified')
-        ->call('store')
-        ->assertRedirect(route('admin.addresses.index'));
+    $response = $this->actingAs($user)->post(route('admin.addresses.store'), [
+        'label' => 'Warehouse',
+        'line1' => '88 River Road',
+        'locality' => 'Boston',
+        'postcode' => '02110',
+        'country_iso' => 'US',
+        'verification_status' => 'verified',
+    ]);
+
+    $response->assertRedirect(route('admin.addresses.index'));
 
     $address = Address::query()->where('label', 'Warehouse')->first();
 

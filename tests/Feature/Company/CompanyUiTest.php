@@ -2,7 +2,6 @@
 
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
-use Livewire\Livewire;
 
 // ---------------------------------------------------------------------------
 // Licensee company tests
@@ -13,11 +12,9 @@ test('licensee company cannot be deleted from index', function (): void {
     $licensee = Company::query()->find(Company::LICENSEE_ID)
         ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
 
-    $this->actingAs($user);
+    $response = $this->actingAs($user)->delete(route('admin.companies.destroy', $licensee));
 
-    Livewire::test('companies.index')
-        ->call('delete', $licensee->id);
-
+    $response->assertRedirect();
     expect(Company::query()->find($licensee->id))->not()->toBeNull();
 });
 
@@ -42,10 +39,9 @@ test('licensee company shows licensee badge on index page', function (): void {
     Company::query()->find(Company::LICENSEE_ID)
         ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
 
-    $this->actingAs($user);
+    $response = $this->actingAs($user)->get(route('admin.companies.index'));
 
-    Livewire::test('companies.index')
-        ->assertSee(__('Licensee'));
+    $response->assertOk()->assertSee(__('Licensee'));
 });
 
 test('guests are redirected to login from company pages', function (): void {
@@ -66,16 +62,18 @@ test('authenticated users can view company pages', function (): void {
 
 test('company can be created from create page component', function (): void {
     $user = User::factory()->create();
-    $this->actingAs($user);
 
-    Livewire::test('companies.create')
-        ->set('name', 'Northwind Holdings')
-        ->set('status', 'active')
-        ->set('email', 'ops@northwind.example')
-        ->set('scope_activities_json', '{"industry":"Logistics"}')
-        ->set('metadata_json', '{"employee_count":250}')
-        ->call('store')
-        ->assertRedirect(route('admin.companies.index'));
+    $response = $this->actingAs($user)->post(route('admin.companies.store'), [
+        'name' => 'Northwind Holdings',
+        'status' => 'active',
+        'email' => 'ops@northwind.example',
+        'scope_activities' => '{"industry":"Logistics"}',
+        'scope_activities_json' => '{"industry":"Logistics"}',
+        'metadata' => '{"employee_count":250}',
+        'metadata_json' => '{"employee_count":250}',
+    ]);
+
+    $response->assertRedirect(route('admin.companies.index'));
 
     $company = Company::query()->where('name', 'Northwind Holdings')->first();
 

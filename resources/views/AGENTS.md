@@ -9,7 +9,7 @@ You are a specialized UI/UX designer focused on responsive design, high-end aest
 1. **Component-First** — Reuse `resources/views/components/ui/*` (`x-ui.button`, `x-ui.input`, `x-ui.search-input`, etc.). If a UI pattern appears 2+ times, extract or extend an existing `x-ui.*` component. Never duplicate raw markup for controls that already have a component.
 2. **Responsive** — Desktop first; layouts must stay mobile-friendly. Use Tailwind breakpoints (`sm:`, `md:`, `lg:`). Avoid fixed widths that break on narrow viewports.
 3. **Accessible (WCAG 2.1)** — Contrast via semantic tokens. Focus: `focus:ring-2 focus:ring-accent focus:ring-offset-2`. Keyboard navigation for all interactive components. Focus management for modals. `aria-*` and semantic HTML where needed.
-4. **Performant** — Target 60fps / <16ms per frame. Animate only `transform` and `opacity` (never layout properties). Respect `prefers-reduced-motion`. Paginate tables/lists by default. Use `wire:key` in lists. Prefer `wire:model.live.debounce` over unthrottled updates. Use `wire:loading` + skeletons over spinners.
+4. **Performant** — Target 60fps / <16ms per frame. Animate only `transform` and `opacity` (never layout properties). Respect `prefers-reduced-motion`. Paginate tables/lists by default. Use stable `id` attributes in lists. Prefer `hx-get` + `hx-trigger="input changed delay:300ms"` over unthrottled updates. Use `htmx-indicator` + skeletons over spinners.
 5. **i18n-Ready** — All user-facing strings must use `__()`, `@lang`, or `trans_choice()`. No hard-coded English in Blade (except temporary scaffolding marked with a TODO). Design for variable-length translations: avoid fixed-width buttons/labels. Never concatenate translated fragments; translate whole sentences with placeholders.
 6. **Deep Components** — Components expose simple props (`variant`, `size`, `disabled`, etc.) and hide Tailwind complexity internally. Callers should not need to remember long class strings. Document component APIs (props/slots) for anything non-trivial.
 7. **Open-Source Only** — No proprietary icon sets, hosted font services, analytics scripts, or SaaS widgets. Self-host all assets. Any new UI library must be OSS-compatible with AGPLv3.
@@ -75,10 +75,10 @@ When a needed primitive doesn't exist, create it in `resources/views/components/
 
 ```html
 <!-- ✅ Use component -->
-<x-ui.search-input wire:model.live.debounce.300ms="search" placeholder="{{ __('Search...') }}" />
+<x-ui.search-input hx-get="{{ route('...') }}" hx-trigger="input changed delay:300ms" hx-target="#list" hx-include="this" placeholder="{{ __('Search...') }}" />
 
 <!-- ❌ Avoid: raw input duplicating search-input markup -->
-<input type="text" wire:model.live.debounce.300ms="search" placeholder="Search..." class="w-full px-3 py-1.5 ..." />
+<input type="text" hx-get="{{ route('...') }}" hx-trigger="input changed delay:300ms" hx-target="#list" hx-include="this" placeholder="Search..." class="w-full px-3 py-1.5 ..." />
 
 <!-- ✅ Translated string -->
 <h1 class="text-2xl font-medium tracking-tight text-ink">{{ __('Countries') }}</h1>

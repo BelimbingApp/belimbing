@@ -6,8 +6,8 @@
 namespace App\Base\Menu;
 
 use App\Base\Menu\Contracts\MenuAccessChecker;
-use App\Base\Menu\Services\MenuDiscoveryService;
 use App\Base\Menu\Services\DefaultMenuAccessChecker;
+use App\Base\Menu\Services\MenuDiscoveryService;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 

@@ -209,7 +209,7 @@ class SeederRegistry extends Model
     /**
      * Register a single discovered seeder file if not already in the registry.
      *
-     * @param string $file Absolute path to the seeder PHP file
+     * @param  string  $file  Absolute path to the seeder PHP file
      */
     private static function registerDiscoveredFile(string $file): void
     {

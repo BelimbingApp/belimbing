@@ -31,7 +31,7 @@ interface AuthorizationPolicy
      * @param  string  $capability  The capability key being checked
      * @param  ResourceContext|null  $resource  Optional resource context
      * @param  array<string, mixed>  $context  Additional context
-     * @return AuthorizationDecision|null  Decision to halt pipeline, or null to continue
+     * @return AuthorizationDecision|null Decision to halt pipeline, or null to continue
      */
     public function evaluate(
         Actor $actor,

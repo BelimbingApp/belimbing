@@ -2,11 +2,18 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 import './echo'
+import htmx from 'htmx.org'
+import Alpine from 'alpinejs'
 
-// Alpine.js - only initialize if not already loaded by Livewire
-if (!window.Alpine) {
-    import('alpinejs').then((module) => {
-        window.Alpine = module.default
-        window.Alpine.start()
-    })
-}
+window.htmx = htmx
+window.Alpine = Alpine
+
+// Pass CSRF token with every HTMX request
+document.addEventListener('htmx:configRequest', (event) => {
+    const token = document.querySelector('meta[name="csrf-token"]')?.content
+    if (token) {
+        event.detail.headers['X-CSRF-TOKEN'] = token
+    }
+})
+
+Alpine.start()

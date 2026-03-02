@@ -1,7 +1,6 @@
 <?php
 
 use App\Modules\Core\User\Models\User;
-use Livewire\Volt\Volt as LivewireVolt;
 
 test('login screen can be rendered', function () {
     $response = $this->get(route('login'));
@@ -12,14 +11,12 @@ test('login screen can be rendered', function () {
 test('users can authenticate using the login screen', function () {
     $user = User::factory()->create();
 
-    $response = LivewireVolt::test('auth.login')
-        ->set('email', $user->email)
-        ->set('password', 'password')
-        ->call('login');
+    $response = $this->post(route('login'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
 
-    $response
-        ->assertHasNoErrors()
-        ->assertRedirect(route('dashboard', absolute: false));
+    $response->assertRedirect(route('dashboard', absolute: false));
 
     $this->assertAuthenticated();
 });
@@ -27,12 +24,12 @@ test('users can authenticate using the login screen', function () {
 test('users can not authenticate with invalid password', function () {
     $user = User::factory()->create();
 
-    $response = LivewireVolt::test('auth.login')
-        ->set('email', $user->email)
-        ->set('password', 'wrong-password')
-        ->call('login');
+    $response = $this->from(route('login'))->post(route('login'), [
+        'email' => $user->email,
+        'password' => 'wrong-password',
+    ]);
 
-    $response->assertHasErrors('email');
+    $response->assertSessionHasErrors('email');
 
     $this->assertGuest();
 });
@@ -42,7 +39,7 @@ test('users can logout', function () {
 
     $response = $this->actingAs($user)->post(route('logout'));
 
-    $response->assertRedirect(route('home'));
+    $response->assertRedirect('/');
 
     $this->assertGuest();
 });
