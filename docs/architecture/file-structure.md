@@ -3,7 +3,7 @@
 **Document Type:** Architecture Specification
 **Purpose:** Define the file and directory structure for Belimbing framework
 **Based On:** Project Brief v1.0.0, Ousterhout's "A Philosophy of Software Design"
-**Last Updated:** 2026-02-07
+**Last Updated:** 2026-03-02
 
 ---
 
@@ -122,7 +122,7 @@ belimbing/
 │   └── custom/             # Custom business-specific extensions
 │
 ├── resources/               # Frontend resources
-│   ├── views/              # Blade/Livewire templates
+│   ├── views/              # Blade templates
 │   ├── js/                 # JavaScript (with WebAssembly support)
 │   ├── css/                # Stylesheets
 │   ├── wasm/               # WebAssembly modules (performance-critical)
@@ -223,6 +223,13 @@ app/Base/
 │   ├── SchemaBuilder.php    # Dynamic schema extensions
 │   └── QueryBuilder.php     # Extended query builder
 │
+├── Htmx/                    # HTMX integration layer
+│   ├── HtmxRequest.php      # Typed accessors for HX-* request headers
+│   ├── HtmxResponse.php     # Fluent builder for HX-* response headers
+│   ├── Concerns/
+│   │   └── InteractsWithHtmx.php  # Controller trait
+│   └── ServiceProvider.php
+│
 └── Security/                  # Security foundation
     ├── AuthManager.php
     ├── PermissionManager.php
@@ -249,12 +256,11 @@ app/Modules/
 │   │   ├── Models/
 │   │   ├── Services/
 │   │   ├── Controllers/
-│   │   ├── Livewire/
 │   │   └── Hooks/
 │   │
 │   ├── Geonames/            # Database/, Models/
-│   ├── User/                # Database/, Models/, Services/, Controllers/, Livewire/, Hooks/
-│   ├── Workflow/            # Database/, Models/, Services/, Livewire/
+│   ├── User/                # Database/, Models/, Services/, Controllers/, Hooks/
+│   ├── Workflow/            # Database/, Models/, Services/
 │   └── Admin/               # Admin panel module
 │       ├── Git/
 │       ├── Extensions/
@@ -282,7 +288,6 @@ app/Modules/{Layer1}/{Module}/
 ├── Models/                   # Module internals: Eloquent models
 ├── Services/                 # Module internals: business logic
 ├── Controllers/              # Module internals: HTTP controllers
-├── Livewire/                 # Module internals: Livewire Volt components
 ├── Events/                   # Module internals: events
 ├── Listeners/                # Module internals: event listeners
 ├── Hooks/                    # Module internals: extension hooks
@@ -404,33 +409,16 @@ app/Admin/
 ├── Git/                     # Git workflow management
 │   ├── BranchManager.php    # Dev/staging/prod branch management
 │   ├── DeploymentManager.php # CI/CD pipeline
-│   ├── RollbackManager.php  # Rollback capability
-│   └── Livewire/
-│       ├── Branches/
-│       ├── Deployments/
-│       └── Rollbacks/
+│   └── RollbackManager.php  # Rollback capability
 │
 ├── Extensions/              # Extension management
-│   ├── ExtensionManager.php
-│   └── Livewire/
-│       ├── Index.php        # Extension list
-│       ├── Install.php      # Installation UI
-│       ├── Configure.php    # Configuration UI
-│       └── Uninstall.php
+│   └── ExtensionManager.php
 │
 ├── Configuration/           # Configuration management UI
-│   ├── ConfigManager.php
-│   └── Livewire/
-│       ├── Scopes/
-│       ├── Settings/
-│       └── Hierarchy/
+│   └── ConfigManager.php
 │
 ├── AI/                      # AI code generation UI
-│   ├── CodeGenerator.php
-│   └── Livewire/
-│       ├── Generate/
-│       ├── Templates/
-│       └── Review/
+│   └── CodeGenerator.php
 │
 └── System/                  # System management
     ├── Health/
@@ -459,7 +447,7 @@ app/AI/
 │   ├── Module/
 │   ├── Service/
 │   ├── Controller/
-│   └── Livewire/
+│   └── Views/
 │
 ├── Sandbox/                 # AI code sandboxing
 │   ├── DevSandbox.php       # Development environment
@@ -676,28 +664,27 @@ resources/
 │   │   ├── admin.blade.php
 │   │   └── auth.blade.php
 │   │
-│   ├── livewire/            # Livewire Volt components
-│   │   ├── admin/
-│   │   ├── modules/
-│   │   └── extensions/
+│   ├── partials/            # HTMX fragment partials (one root element, no html/head/body)
+│   │   ├── head.blade.php
+│   │   └── address/         # Example: geo-lookup option fragments
+│   │
+│   ├── {module}/            # Module views (e.g. users/, companies/, auth/, settings/)
+│   │   ├── index.blade.php
+│   │   ├── create.blade.php
+│   │   ├── show.blade.php
+│   │   └── partials/        # HTMX fragment partials for the module (e.g. table.blade.php)
 │   │
 │   └── components/          # Blade components
-│       ├── flux/            # Flux UI overrides
 │       └── custom/          # Custom components
 │
 ├── js/
-│   ├── app.js               # Main application
+│   ├── app.js               # Main application (imports HTMX + Alpine, CSRF config)
 │   ├── admin.js             # Admin panel
-│   ├── modules/             # Module-specific JS
-│   └── wasm/                # WebAssembly bindings
+│   └── modules/             # Module-specific JS
 │
-├── css/
-│   ├── app.css              # Main stylesheet
-│   └── admin.css            # Admin styles
-│
-└── wasm/                    # WebAssembly modules
-    ├── performance/         # Performance-critical operations
-    └── calculations/        # Complex calculations
+└── css/
+    ├── app.css              # Main stylesheet
+    └── admin.css            # Admin styles
 ```
 
 ---
@@ -765,6 +752,7 @@ This structure supports incremental adoption:
 
 ---
 
-**Document Status:** Proposal
+**Document Status:** Living document
+**Last Updated:** 2026-03-02
 **Next Steps:** Review and refine based on implementation experience
-**Related Documents:** `docs/brief.md`, `docs/modules/*/`
+**Related Documents:** `docs/brief.md`, `docs/modules/*/`, `docs/architecture/htmx-interaction-contract.md`

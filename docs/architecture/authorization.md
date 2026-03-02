@@ -467,7 +467,7 @@ Pattern:
 
 ## 11. Expected Call Patterns
 
-1. **Web Controller/Volt Action**
+1. **Web Controller Action**
    - `authorize(actor, capability, resource)` before service call.
 2. **Digital Worker Tool Execution**
    - Evaluate as Digital Worker actor with delegation/supervision context.

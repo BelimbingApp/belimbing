@@ -15,7 +15,7 @@ Belimbing is a **framework**, not a SaaS platform. Businesses fork the repo, bui
 ## Tech Stack
 
 - **Backend:** Laravel 12+ (PHP 8.2+), PostgreSQL, Redis
-- **Frontend:** Livewire Volt, Tailwind CSS 4, Alpine.js
+- **Frontend:** HTMX 2, Alpine.js, Tailwind CSS 4
 - **Tooling:** Vite, Pest PHP, Laravel Pint
 
 ## Getting Started
@@ -46,7 +46,8 @@ cd belimbing
 | Development environment setup | [docs/guides/development-setup.md](./docs/guides/development-setup.md) |
 | Guides (theming, extensions) | [docs/guides/](./docs/guides/) |
 | Module documentation | [docs/modules/](./docs/modules/) |
-| Tutorials (Caddy, Vite, Volt) | [docs/tutorials/](./docs/tutorials/) |
+| HTMX interaction contract | [docs/architecture/htmx-interaction-contract.md](./docs/architecture/htmx-interaction-contract.md) |
+| Tutorials (Caddy, Vite) | [docs/tutorials/](./docs/tutorials/) |
 
 ## Contributing
 

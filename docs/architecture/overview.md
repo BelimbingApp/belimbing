@@ -13,6 +13,7 @@
 |----------|---------|
 | [file-structure.md](file-structure.md) | Directory layers, root layout, `app/` structure, modules, extensions, config, tests, frontend |
 | [database.md](database.md) | Module-first migrations, auto-discovery, seeding registry, naming and execution order |
+| [htmx-interaction-contract.md](htmx-interaction-contract.md) | 7-policy HTMX contract: URL naming, validation, events, concurrency, navigation, partials, tests |
 | [broadcasting.md](broadcasting.md) | Real-time broadcasting (Laravel Reverb, Echo), channels, usage |
 | [user-employee-company.md](user-employee-company.md) | User, Employee, Company entity model and relationships |
 | [authorization.md](authorization.md) | AuthZ design (principals, policies, scope), RBAC, Digital Worker alignment |
