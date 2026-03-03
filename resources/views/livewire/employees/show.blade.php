@@ -660,7 +660,7 @@ new class extends Component
                                     <div x-show="editing" class="space-y-1">
                                         @foreach(['headquarters', 'billing', 'shipping', 'branch', 'other'] as $kindOption)
                                             <label class="flex items-center gap-2 text-sm cursor-pointer">
-                                                <input type="checkbox" value="{{ $kindOption }}" x-model="selected" class="rounded border-border-input text-accent focus:ring-accent" />
+                                                <input type="checkbox" value="{{ $kindOption }}" x-model="selected" class="rounded border-border-input accent-accent focus:ring-accent" />
                                                 {{ __(ucfirst($kindOption)) }}
                                             </label>
                                         @endforeach
@@ -745,7 +745,7 @@ new class extends Component
                     <div class="flex flex-wrap gap-x-4 gap-y-1">
                         @foreach(['headquarters', 'billing', 'shipping', 'branch', 'other'] as $kindOption)
                             <label class="flex items-center gap-2 text-sm cursor-pointer">
-                                <input type="checkbox" value="{{ $kindOption }}" wire:model="attach_kind" class="rounded border-border-input text-accent focus:ring-accent" />
+                                <input type="checkbox" value="{{ $kindOption }}" wire:model="attach_kind" class="rounded border-border-input accent-accent focus:ring-accent" />
                                 {{ __(ucfirst($kindOption)) }}
                             </label>
                         @endforeach

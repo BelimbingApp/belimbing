@@ -621,7 +621,7 @@ new class extends Component
                                         type="checkbox"
                                         value="{{ $role->id }}"
                                         x-model="selected"
-                                        class="rounded border-border-input text-accent focus:ring-accent"
+                                        class="rounded border-border-input accent-accent focus:ring-accent"
                                     >
                                     <span class="text-ink truncate" title="{{ $role->description ?? $role->name }}">{{ $role->name }}</span>
                                     @if ($role->company)
@@ -761,7 +761,7 @@ new class extends Component
                                                 type="checkbox"
                                                 value="{{ $cap }}"
                                                 x-model="selected"
-                                                class="rounded border-border-input text-accent focus:ring-accent"
+                                                class="rounded border-border-input accent-accent focus:ring-accent"
                                             >
                                             <span class="text-ink truncate" title="{{ $cap }}">{{ $cap }}</span>
                                         </label>

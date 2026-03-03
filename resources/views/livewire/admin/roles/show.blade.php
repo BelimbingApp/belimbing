@@ -558,7 +558,7 @@ new class extends Component
                                         type="checkbox"
                                         value="{{ $capability }}"
                                         x-model="selected"
-                                        class="rounded border-border-input text-accent focus:ring-accent"
+                                        class="rounded border-border-input accent-accent focus:ring-accent"
                                     >
                                     <span class="text-ink truncate" title="{{ $capability }}">{{ $capability }}</span>
                                 </label>
@@ -646,7 +646,7 @@ new class extends Component
                                     type="checkbox"
                                     value="{{ $availableUser->id }}"
                                     x-model="selected"
-                                    class="rounded border-border-input text-accent focus:ring-accent"
+                                    class="rounded border-border-input accent-accent focus:ring-accent"
                                 >
                                 <span class="text-ink truncate" title="{{ $availableUser->email }}">{{ $availableUser->name }}</span>
                                 <span class="text-muted text-xs truncate">{{ $availableUser->email }}</span>

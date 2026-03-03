@@ -188,7 +188,7 @@ new class extends Component
                                     <span class="text-muted truncate" title="{{ $name }} ({{ $iso }}) — already imported">{{ $name }}</span>
                                     <span class="text-muted text-xs shrink-0">{{ $iso }}</span>
                                 @else
-                                    <input type="checkbox" wire:model.live="selectedCountries" value="{{ $iso }}" class="rounded border-border-input text-accent focus:ring-accent">
+                                    <input type="checkbox" wire:model.live="selectedCountries" value="{{ $iso }}" class="rounded border-border-input accent-accent focus:ring-accent">
                                     <span class="text-ink truncate" title="{{ $name }} ({{ $iso }})">{{ $name }}</span>
                                     <span class="text-muted text-xs shrink-0">{{ $iso }}</span>
                                 @endif
