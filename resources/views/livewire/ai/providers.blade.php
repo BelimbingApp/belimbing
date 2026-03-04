@@ -1721,7 +1721,7 @@ new class extends Component
                                 <th class="px-table-cell-x py-table-header-y w-8"></th>
                                 <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Display Name') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-center text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Priority') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Priority') }}</th>
                                 <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Base URL') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Models') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
@@ -1751,7 +1751,7 @@ new class extends Component
                                         </div>
                                     </td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $provider->display_name }}</td>
-                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-center" @click.stop>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-left" @click.stop>
                                         <div class="inline-flex items-center gap-1">
                                             <span class="text-xs text-muted tabular-nums">{{ $provider->priority }}</span>
                                             @if($provider->priority > 1)
