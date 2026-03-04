@@ -1940,33 +1940,32 @@ new class extends Component
                                                         <tbody class="bg-surface-card divide-y divide-border-default">
                                                             @foreach($expandedModels as $model)
                                                                 <tr wire:key="model-{{ $model->id }}" class="hover:bg-surface-subtle/50 transition-colors">
-                                                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink font-mono">{{ $model->model_id }}</td>
+                                                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink font-mono">
+                                                                        <div class="flex items-center gap-1">
+                                                                            <button
+                                                                                wire:click="toggleDefaultModel({{ $model->id }})"
+                                                                                class="{{ $model->is_default ? 'text-accent' : 'text-muted hover:text-accent' }} p-0.5 rounded transition-colors"
+                                                                                title="{{ $model->is_default ? __('Unset default') : __('Set as default') }}"
+                                                                            >
+                                                                                <x-icon :name="$model->is_default ? 'heroicon-s-star' : 'heroicon-o-star'" class="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                            <span>{{ $model->model_id }}</span>
+                                                                        </div>
+                                                                    </td>
                                                                     @php $cost = $model->cost_override ?? []; @endphp
                                                                     <td class="hidden lg:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums text-right">{{ $this->formatCost($cost['input'] ?? null) }}</td>
                                                                     <td class="hidden lg:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums text-right">{{ $this->formatCost($cost['output'] ?? null) }}</td>
                                                                     <td class="hidden lg:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums text-right">{{ $this->formatCost($cost['cache_read'] ?? null) }}</td>
                                                                     <td class="hidden lg:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums text-right">{{ $this->formatCost($cost['cache_write'] ?? null) }}</td>
                                                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                                                        <div class="flex items-center gap-1.5">
-                                                                            @if($model->is_active)
-                                                                                <x-ui.badge variant="success">{{ __('Active') }}</x-ui.badge>
-                                                                            @else
-                                                                                <x-ui.badge variant="default">{{ __('Inactive') }}</x-ui.badge>
-                                                                            @endif
-                                                                            @if($model->is_default)
-                                                                                <x-ui.badge variant="accent">{{ __('Default') }}</x-ui.badge>
-                                                                            @endif
-                                                                        </div>
+                                                                        @if($model->is_active)
+                                                                            <x-ui.badge variant="success">{{ __('Active') }}</x-ui.badge>
+                                                                        @else
+                                                                            <x-ui.badge variant="default">{{ __('Inactive') }}</x-ui.badge>
+                                                                        @endif
                                                                     </td>
                                                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
                                                                         <div class="flex items-center justify-end gap-1">
-                                                                            <button
-                                                                                wire:click="toggleDefaultModel({{ $model->id }})"
-                                                                                class="{{ $model->is_default ? 'text-accent' : 'text-muted hover:text-accent' }} hover:bg-surface-subtle p-1 rounded"
-                                                                                title="{{ $model->is_default ? __('Unset default') : __('Set as default') }}"
-                                                                            >
-                                                                                <x-icon :name="$model->is_default ? 'heroicon-s-star' : 'heroicon-o-star'" class="w-4 h-4" />
-                                                                            </button>
                                                                             <button wire:click="openEditModel({{ $model->id }})" class="text-accent hover:bg-surface-subtle p-1 rounded" title="{{ __('Edit') }}">
                                                                                 <x-icon name="heroicon-o-pencil" class="w-4 h-4" />
                                                                             </button>
