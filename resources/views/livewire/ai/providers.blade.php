@@ -1748,7 +1748,7 @@ new class extends Component
                                                     class="text-muted hover:text-ink hover:bg-surface-subtle p-0.5 rounded transition-colors"
                                                     title="{{ __('Move up') }}"
                                                 >
-                                                    <x-icon name="heroicon-m-chevron-up" class="w-3.5 h-3.5" />
+                                                    <x-icon name="heroicon-m-arrow-up" class="w-3.5 h-3.5" />
                                                 </button>
                                             @endif
                                         </div>
