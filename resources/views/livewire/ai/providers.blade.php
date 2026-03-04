@@ -1650,16 +1650,6 @@ new class extends Component
                         <p>{{ __('This page shows the LLM providers and models your organization has connected. Digital Workers use these models to think, reason, and respond — at least one active provider with one active model is required.') }}</p>
 
                         <div>
-                            <p class="font-medium text-ink">{{ __('Managing providers') }}</p>
-                            <ul class="list-disc list-inside space-y-1 text-muted mt-1">
-                                <li>{{ __('Click a provider row to expand it and see its models.') }}</li>
-                                <li>{{ __('"Browse Providers" opens the catalog to connect additional providers.') }}</li>
-                                <li>{{ __('"Manual Add" lets you enter a custom provider not in the catalog (e.g. a private deployment).') }}</li>
-                                <li>{{ __('Use "Update Models" to fetch the latest model list from the provider\'s API.') }}</li>
-                            </ul>
-                        </div>
-
-                        <div>
                             <p class="font-medium text-ink">{{ __('Priority') }}</p>
                             <ul class="list-disc list-inside space-y-1 text-muted mt-1">
                                 <li>{{ __('The Priority column shows the order in which providers are tried when a Digital Worker needs a model.') }}</li>
@@ -1672,9 +1662,9 @@ new class extends Component
                         <div>
                             <p class="font-medium text-ink">{{ __('Default model') }}</p>
                             <ul class="list-disc list-inside space-y-1 text-muted mt-1">
-                                <li>{{ __('Each provider can have one default model, marked with a ★ star icon.') }}</li>
+                                <li>{{ __('Each provider has a default model, marked with a') }} <span class="text-accent">★</span> {{ __('star icon.') }}</li>
                                 <li>{{ __('The default model is used as the fallback when a Digital Worker does not specify a particular model.') }}</li>
-                                <li>{{ __('Click the ☆ next to a model to set it as the default. The current default is marked with ★.') }}</li>
+                                <li>{{ __('Click the ☆ next to a model to set it as the default. The current default is marked with') }} <span class="text-accent">★</span>.</li>
                             </ul>
                         </div>
 
