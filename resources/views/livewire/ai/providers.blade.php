@@ -6,6 +6,7 @@
 // Provider catalog and onboarding flow inspired by OpenClaw
 // (github.com/nicepkg/openclaw). Adapted for BLB's GUI context.
 
+use App\Base\AI\Providers\Help\ProviderHelpRegistry;
 use App\Base\AI\Services\ModelCatalogService;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
@@ -89,6 +90,17 @@ new class extends Component
 
     // Sync result flash
     public ?string $syncMessage = null;
+
+    /** Persistent sync error (connection failures — not auto-dismissed) */
+    public ?string $syncError = null;
+
+    /** Provider ID the current syncError belongs to */
+    public ?int $syncErrorProviderId = null;
+
+    // Help modal
+    public ?string $helpProviderKey = null;
+
+    public ?string $helpProviderAuthType = null;
 
     // Model delete
     public bool $showDeleteModel = false;
@@ -509,13 +521,20 @@ new class extends Component
             return;
         }
 
+        // Clear any prior error for this provider before retrying
+        if ($this->syncErrorProviderId === $providerId) {
+            $this->syncError = null;
+            $this->syncErrorProviderId = null;
+        }
+
         try {
             $discovery = app(ModelDiscoveryService::class);
             $result = $discovery->syncModels($provider);
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
-            $this->syncMessage = __('Could not connect to :url — is the server running?', [
+            $this->syncError = __('Could not connect to :url — is the server running?', [
                 'url' => $provider->base_url,
             ]);
+            $this->syncErrorProviderId = $providerId;
 
             \Illuminate\Support\Facades\Log::warning('Model sync failed', [
                 'provider' => $provider->name,
@@ -525,7 +544,8 @@ new class extends Component
 
             return;
         } catch (\Exception $e) {
-            $this->syncMessage = __('Sync failed: :message', ['message' => $e->getMessage()]);
+            $this->syncError = __('Sync failed: :message', ['message' => $e->getMessage()]);
+            $this->syncErrorProviderId = $providerId;
 
             \Illuminate\Support\Facades\Log::warning('Model sync failed', [
                 'provider' => $provider->name,
@@ -547,6 +567,63 @@ new class extends Component
         } else {
             $this->syncMessage = __('Models are up to date.');
         }
+    }
+
+    /**
+     * Dismiss the persistent sync error.
+     */
+    public function clearSyncError(): void
+    {
+        $this->syncError = null;
+        $this->syncErrorProviderId = null;
+    }
+
+    /**
+     * Open the provider help modal.
+     */
+    public function openProviderHelp(string $providerKey, string $authType = 'api_key'): void
+    {
+        // Toggle: clicking the same provider's ? again closes it
+        if ($this->helpProviderKey === $providerKey) {
+            $this->helpProviderKey = null;
+            $this->helpProviderAuthType = null;
+
+            return;
+        }
+
+        $this->helpProviderKey = $providerKey;
+        $this->helpProviderAuthType = $authType;
+    }
+
+    /**
+     * Close the provider help panel.
+     */
+    public function closeProviderHelp(): void
+    {
+        $this->helpProviderKey = null;
+        $this->helpProviderAuthType = null;
+    }
+
+    /**
+     * Return structured help content for the currently open help modal.
+     *
+     * @return array{setup_steps: list<string>, troubleshooting_tips: list<string>, documentation_url: string|null, connection_error_advice: string}|null
+     */
+    public function activeProviderHelp(): ?array
+    {
+        if ($this->helpProviderKey === null) {
+            return null;
+        }
+
+        $registry = app(ProviderHelpRegistry::class);
+        $help = $registry->get($this->helpProviderKey, $this->helpProviderAuthType);
+
+        return [
+            'setup_steps'             => $help->setupSteps(),
+            'troubleshooting_tips'    => $help->troubleshootingTips(),
+            'documentation_url'       => $help->documentationUrl(),
+            'connection_error_advice' => $help->connectionErrorAdvice(),
+        ];
     }
 
     /**
@@ -1029,7 +1106,7 @@ new class extends Component
                         wire:click="proceedToConnect"
                         :disabled="count($selectedTemplates) === 0"
                     >
-                        <x-icon name="heroicon-o-sparkles" class="w-4 h-4" />
+                        <x-icon name="heroicon-m-sparkles" class="w-4 h-4" />
                         {{ count($selectedTemplates) === 0 ? __('Connect Providers') : __('Connect Providers (:count)', ['count' => count($selectedTemplates)]) }}
                     </x-ui.button>
                 </x-slot>
@@ -1196,7 +1273,18 @@ new class extends Component
                                             class="w-4 h-4 text-muted"
                                         />
                                     </td>
-                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">{{ $entry['display_name'] }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">
+                                        <div class="flex items-center gap-1">
+                                            <span>{{ $entry['display_name'] }}</span>
+                                            <button
+                                                wire:click.stop="openProviderHelp('{{ $entry['key'] }}', '{{ $entry['auth_type'] ?? 'api_key' }}')"
+                                                class="text-accent hover:text-accent/80 p-0.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+                                                title="{{ __('Setup & troubleshooting') }}"
+                                            >
+                                                <x-icon name="heroicon-o-question-mark-circle" class="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </td>
                                     <td class="hidden md:table-cell px-table-cell-x py-table-cell-y text-sm text-muted">{{ $entry['description'] }}</td>
                                     <td class="hidden md:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums text-right">{{ $entry['model_count'] ?: '—' }}</td>
                                     <td class="hidden md:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums text-right">
@@ -1216,6 +1304,76 @@ new class extends Component
                                         @endif
                                     </td>
                                 </tr>
+
+                                {{-- Provider help panel (inline, like page-header help) --}}
+                                @if($helpProviderKey === $entry['key'])
+                                    @php $help = $this->activeProviderHelp(); @endphp
+                                    <tr
+                                        wire:key="catalog-{{ $entry['key'] }}-help"
+                                        x-show="matchesSearch('{{ mb_strtolower($entry['key'].' '.$entry['display_name'].' '.($entry['description'] ?? '')) }}') && matchesFilters({{ json_encode($entry['category']) }}, {{ json_encode($entry['region']) }})"
+                                    >
+                                        <td colspan="7" class="px-4 pb-3 pt-0">
+                                            <div
+                                                x-data
+                                                x-init="$el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })"
+                                                class="mt-3 rounded-2xl border border-border-default bg-surface-card p-4 text-sm text-muted shadow-lg shadow-black/[0.02]"
+                                            >
+                                                <div class="flex items-start justify-between gap-3 mb-3">
+                                                    <div class="flex items-center gap-1.5">
+                                                        <x-icon name="heroicon-o-question-mark-circle" class="w-4 h-4 text-accent shrink-0" />
+                                                        <span class="text-xs font-semibold uppercase tracking-wider text-accent">{{ __('Setup & Troubleshooting') }}</span>
+                                                        <span class="text-xs text-muted">— {{ $entry['display_name'] }}</span>
+                                                    </div>
+                                                    <button
+                                                        wire:click.stop="closeProviderHelp"
+                                                        class="text-muted hover:text-ink p-0.5 rounded hover:bg-surface-subtle shrink-0"
+                                                        title="{{ __('Close') }}"
+                                                    >
+                                                        <x-icon name="heroicon-o-x-mark" class="w-4 h-4" />
+                                                    </button>
+                                                </div>
+
+                                                <div class="grid sm:grid-cols-2 gap-4">
+                                                    @if(!empty($help['setup_steps']))
+                                                        <div>
+                                                            <p class="text-xs font-semibold uppercase tracking-wider text-muted mb-1.5">{{ __('How to set up') }}</p>
+                                                            <ol class="space-y-1 list-decimal list-outside pl-4">
+                                                                @foreach($help['setup_steps'] as $step)
+                                                                    <li class="leading-relaxed">{{ $step }}</li>
+                                                                @endforeach
+                                                            </ol>
+                                                        </div>
+                                                    @endif
+
+                                                    @if(!empty($help['troubleshooting_tips']))
+                                                        <div>
+                                                            <p class="text-xs font-semibold uppercase tracking-wider text-muted mb-1.5">{{ __('Troubleshooting') }}</p>
+                                                            <ul class="space-y-1 list-disc list-outside pl-4">
+                                                                @foreach($help['troubleshooting_tips'] as $tip)
+                                                                    <li class="leading-relaxed">{{ $tip }}</li>
+                                                                @endforeach
+                                                            </ul>
+                                                        </div>
+                                                    @endif
+                                                </div>
+
+                                                @if($help['documentation_url'])
+                                                    <div class="mt-3 pt-3 border-t border-border-default">
+                                                        <a
+                                                            href="{{ $help['documentation_url'] }}"
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            class="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                                                        >
+                                                            <x-icon name="heroicon-o-arrow-top-right-on-square" class="w-3.5 h-3.5" />
+                                                            {{ __('Official documentation') }}
+                                                        </a>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endif
 
                                 {{-- Expanded model catalog --}}
                                 @if($expandedCatalogProvider === $entry['key'] && count($entry['models']) > 0)
@@ -1290,7 +1448,7 @@ new class extends Component
                         {{ __('Back') }}
                     </x-ui.button>
                     <x-ui.button variant="primary" wire:click="connectAll" :disabled="$hasIncompleteDeviceFlow">
-                        <x-icon name="heroicon-o-bolt" class="w-4 h-4" />
+                        <x-icon name="heroicon-m-bolt" class="w-4 h-4" />
                         {{ __('Connect All & Import Models') }}
                     </x-ui.button>
                 </x-slot>
@@ -1391,6 +1549,14 @@ new class extends Component
                                             <span class="text-xs text-muted">{{ __('Listening for approval — this will update automatically once you authorize on GitHub.') }}</span>
                                         </div>
                                     </div>
+                                </div>
+                            @elseif($flow['status'] === 'idle')
+                                <div class="space-y-3">
+                                    <p class="text-xs text-muted">{{ __('Connecting to GitHub Copilot requires that you authorize this application on GitHub.') }}</p>
+                                    <x-ui.button variant="primary" wire:click="startDeviceFlow({{ $index }})">
+                                        <x-icon name="github" class="w-4 h-4" />
+                                        {{ __('Start GitHub Login') }}
+                                    </x-ui.button>
                                 </div>
                             @elseif($flow['status'] === 'success')
                                 <div class="space-y-2">
@@ -1517,11 +1683,11 @@ new class extends Component
                 </x-slot>
                 <x-slot name="actions">
                     <x-ui.button variant="ghost" wire:click="openCreateProvider">
-                        <x-icon name="heroicon-o-plus" class="w-4 h-4" />
+                        <x-icon name="heroicon-m-plus" class="w-4 h-4" />
                         {{ __('Manual Add') }}
                     </x-ui.button>
                     <x-ui.button variant="primary" wire:click="openCatalog">
-                        <x-icon name="heroicon-o-rectangle-stack" class="w-4 h-4" />
+                        <x-icon name="heroicon-m-rectangle-stack" class="w-4 h-4" />
                         {{ __('Browse Providers') }}
                     </x-ui.button>
                 </x-slot>
@@ -1579,6 +1745,13 @@ new class extends Component
                                     </td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
                                         <div class="flex items-center justify-end gap-1">
+                                            <button
+                                                wire:click.stop="openProviderHelp('{{ $provider->name }}', '{{ $provider->auth_type ?? 'api_key' }}')"
+                                                class="text-accent hover:text-accent/80 hover:bg-accent/5 p-1 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+                                                title="{{ __('Setup & troubleshooting') }}"
+                                            >
+                                                <x-icon name="heroicon-o-question-mark-circle" class="w-4.5 h-4.5" />
+                                            </button>
                                             @if($provider->priority > 0)
                                                 <button
                                                     wire:click.stop="deprioritizeProvider({{ $provider->id }})"
@@ -1614,6 +1787,73 @@ new class extends Component
                                     </td>
                                 </tr>
 
+                                {{-- Provider help panel (inline, like page-header help) --}}
+                                @if($helpProviderKey === $provider->name)
+                                    @php $help = $this->activeProviderHelp(); @endphp
+                                    <tr wire:key="provider-{{ $provider->id }}-help">
+                                        <td colspan="7" class="px-4 pb-3 pt-0">
+                                            <div
+                                                x-data
+                                                x-init="$el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })"
+                                                class="mt-3 rounded-2xl border border-border-default bg-surface-card p-4 text-sm text-muted shadow-lg shadow-black/[0.02]"
+                                            >
+                                                <div class="flex items-start justify-between gap-3 mb-3">
+                                                    <div class="flex items-center gap-1.5">
+                                                        <x-icon name="heroicon-o-question-mark-circle" class="w-4 h-4 text-accent shrink-0" />
+                                                        <span class="text-xs font-semibold uppercase tracking-wider text-accent">{{ __('Setup & Troubleshooting') }}</span>
+                                                        <span class="text-xs text-muted">— {{ $provider->display_name }}</span>
+                                                    </div>
+                                                    <button
+                                                        wire:click.stop="closeProviderHelp"
+                                                        class="text-muted hover:text-ink p-0.5 rounded hover:bg-surface-subtle shrink-0"
+                                                        title="{{ __('Close') }}"
+                                                    >
+                                                        <x-icon name="heroicon-o-x-mark" class="w-4 h-4" />
+                                                    </button>
+                                                </div>
+
+                                                <div class="grid sm:grid-cols-2 gap-4">
+                                                    @if(!empty($help['setup_steps']))
+                                                        <div>
+                                                            <p class="text-xs font-semibold uppercase tracking-wider text-muted mb-1.5">{{ __('How to set up') }}</p>
+                                                            <ol class="space-y-1 list-decimal list-outside pl-4">
+                                                                @foreach($help['setup_steps'] as $step)
+                                                                    <li class="leading-relaxed">{{ $step }}</li>
+                                                                @endforeach
+                                                            </ol>
+                                                        </div>
+                                                    @endif
+
+                                                    @if(!empty($help['troubleshooting_tips']))
+                                                        <div>
+                                                            <p class="text-xs font-semibold uppercase tracking-wider text-muted mb-1.5">{{ __('Troubleshooting') }}</p>
+                                                            <ul class="space-y-1 list-disc list-outside pl-4">
+                                                                @foreach($help['troubleshooting_tips'] as $tip)
+                                                                    <li class="leading-relaxed">{{ $tip }}</li>
+                                                                @endforeach
+                                                            </ul>
+                                                        </div>
+                                                    @endif
+                                                </div>
+
+                                                @if($help['documentation_url'])
+                                                    <div class="mt-3 pt-3 border-t border-border-default">
+                                                        <a
+                                                            href="{{ $help['documentation_url'] }}"
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            class="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                                                        >
+                                                            <x-icon name="heroicon-o-arrow-top-right-on-square" class="w-3.5 h-3.5" />
+                                                            {{ __('Official documentation') }}
+                                                        </a>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endif
+
                                 {{-- Expanded models sub-table --}}
                                 @if($expandedProviderId === $provider->id)
                                     <tr wire:key="provider-{{ $provider->id }}-models">
@@ -1642,6 +1882,36 @@ new class extends Component
                                                         x-transition.opacity
                                                     >
                                                         {{ $syncMessage }}
+                                                    </div>
+                                                @endif
+
+                                                @if($syncError && $syncErrorProviderId === $provider->id)
+                                                    @php $helpAdvice = app(\App\Base\AI\Providers\Help\ProviderHelpRegistry::class)->get($provider->name, $provider->auth_type ?? 'api_key')->connectionErrorAdvice(); @endphp
+                                                    <div class="mb-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
+                                                        <div class="flex items-start justify-between gap-2">
+                                                            <div class="flex items-start gap-2 min-w-0">
+                                                                <x-icon name="heroicon-o-exclamation-circle" class="w-4 h-4 text-red-500 dark:text-red-400 mt-0.5 shrink-0" />
+                                                                <div class="min-w-0">
+                                                                    <p class="text-sm text-red-700 dark:text-red-300 font-medium">{{ $syncError }}</p>
+                                                                    <p class="text-xs text-red-600 dark:text-red-400 mt-0.5">{{ $helpAdvice }}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div class="flex items-center gap-1 shrink-0">
+                                                                <button
+                                                                    wire:click.stop="openProviderHelp('{{ $provider->name }}', '{{ $provider->auth_type ?? 'api_key' }}')"
+                                                                    class="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline whitespace-nowrap"
+                                                                >
+                                                                    {{ __('Get help') }}
+                                                                </button>
+                                                                <button
+                                                                    wire:click.stop="clearSyncError"
+                                                                    class="p-0.5 rounded text-red-400 hover:text-red-600 dark:hover:text-red-200 hover:bg-red-100 dark:hover:bg-red-800/50"
+                                                                    title="{{ __('Dismiss') }}"
+                                                                >
+                                                                    <x-icon name="heroicon-o-x-mark" class="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 @endif
 

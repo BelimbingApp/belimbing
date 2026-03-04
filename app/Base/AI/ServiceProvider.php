@@ -6,6 +6,7 @@
 namespace App\Base\AI;
 
 use App\Base\AI\Console\Commands\AiCatalogSyncCommand;
+use App\Base\AI\Providers\Help\ProviderHelpRegistry;
 use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Services\ModelCatalogService;
@@ -28,6 +29,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(LlmClient::class);
         $this->app->singleton(ProviderDiscoveryService::class);
         $this->app->singleton(GithubCopilotAuthService::class);
+        $this->app->singleton(ProviderHelpRegistry::class);
     }
 
     /**
