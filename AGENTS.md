@@ -19,10 +19,10 @@ Think of Laravel as the Level 0 foundation and BLB as a Level 1 framework built 
 **No MVP mindset.** Build production-grade from day one. Scope may be small, but the bar is high: deep modules, clear contracts, zero tolerance for tech debt. If an approach would be unacceptable in production, it is unacceptable in the initialization phase too.
 
 ### Core Principles
+- **Boy-Scout Rule:** Leave the codebase better than you found it. When editing a file or area, fix nearby issues (naming, dead code, missing tests, unclear comments) in the same change — small, scoped improvements compound.
 - **Destructive Evolution:** Prioritize the best current design over backward compatibility. Drop tables, refactor schemas, and rewrite APIs freely — no migration paths for data. Use this freedom for structural improvement, not for cutting corners.
-- **Strategic Programming:** Invest in design quality to lower future development costs. Refactor immediately upon discovering design flaws (Zero Tolerance for Technical Debt).
+- **Strategic Programming:** Prefer structural solutions over tactical patches. Refactor immediately upon discovering design flaws (zero tolerance for tech debt); resist quick fixes and aim for simplicity to lower future costs.
 - **Deep Modules:** Modules should provide powerful functionality through simple interfaces. Hide complexity; do not leak implementation details.
-- **Prefer strategic thinking over tactical patches.** Resist quick fixes; aim for structural simplicity.
 
 ## 3. Laravel Customization: Embrace When Needed
 
@@ -190,8 +190,6 @@ $class = "App\Models\User";
 $greeting = "Hello $name";
 $message = "Line 1\nLine 2";
 ```
-
-**Rationale:** Single quotes are more performant (no interpolation parsing) and make it visually clear when a string contains variables.
 
 ### Avoiding Magic Methods
 - **Prefer direct method calls over magic methods** when alternatives are available
