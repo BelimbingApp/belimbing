@@ -57,6 +57,11 @@ Framework-level errors are not yet expressed through a consistent BLB contract, 
   - `tests/Unit/Base/Foundation/Exceptions/BlbExceptionContractsTest.php`
   - `tests/Unit/Base/Database/Exceptions/DatabaseExceptionContractsTest.php`
   - `tests/Unit/Modules/Core/AI/Services/LaraPromptFactoryExceptionTest.php`
+- ✅ Standardized BLB exception rendering/reporting for JSON requests in `bootstrap/app.php`:
+  - Deterministic status mapping by `BlbErrorCode`
+  - Safe message behavior in non-debug mode
+  - Structured logging (`reason_code`, exception class, context)
+  - Coverage: `tests/Feature/Foundation/BlbExceptionRenderingTest.php`
 
 ## Open questions
 - Should all framework exceptions carry a required reason code, or only selected modules?
