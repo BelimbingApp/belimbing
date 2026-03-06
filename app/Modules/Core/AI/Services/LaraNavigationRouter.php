@@ -11,15 +11,12 @@ use App\Base\Authz\Enums\PrincipalType;
 use App\Modules\Core\User\Models\User;
 
 /**
- * Deterministic navigation router for explicit `/go` commands.
+ * Deterministic navigation router for Lara browser control.
  *
- * Resolves navigation targets from explicit `/go <target>` user input only.
- * Natural-language navigation is delegated to the LLM, which outputs
- * `<lara-action>` JS blocks for client-side execution.
- *
- * Each target maps to a named route and an optional authz capability.
- * When a capability is declared, the router checks the current user's
- * permission before emitting the navigation payload.
+ * Resolves navigation targets from explicit `/go` commands and natural-language
+ * intents. Each target maps to a named route and an optional authz capability.
+ * When a capability is declared, the router checks the current user's permission
+ * before emitting the navigation payload.
  */
 class LaraNavigationRouter
 {
@@ -28,16 +25,17 @@ class LaraNavigationRouter
     ) {}
 
     /**
-     * Attempt to resolve a navigation action from explicit `/go` user input.
+     * Attempt to resolve a navigation action from user input.
      *
-     * Returns null when the message is not a `/go` command.
+     * Returns null when the message is not a navigation intent.
      * Returns a structured result with status, target, and optional navigation payload.
      *
      * @return array{status: string, target?: string, navigation?: array{strategy: string, url: string, label: string, target: string}, message: string}|null
      */
     public function resolve(string $message): ?array
     {
-        $target = $this->extractExplicitTarget($message);
+        $target = $this->extractExplicitTarget($message)
+            ?? $this->detectNavigationIntent($message);
 
         if ($target === null) {
             return null;
@@ -123,6 +121,74 @@ class LaraNavigationRouter
     }
 
     /**
+     * Detect navigation intent from natural-language input.
+     *
+     * Uses keyword matching against the aliases declared per target.
+     * Returns the best matching target key, or null when no intent detected.
+     */
+    private function detectNavigationIntent(string $message): ?string
+    {
+        $lower = mb_strtolower(trim($message));
+
+        // Require a navigation verb to avoid false positives on partial keyword matches.
+        if (! $this->containsNavigationVerb($lower)) {
+            return null;
+        }
+
+        $bestTarget = null;
+        $bestScore = 0;
+
+        foreach ($this->targets() as $key => $config) {
+            $score = $this->scoreKeywordMatch($lower, $config['aliases']);
+
+            if ($score > $bestScore) {
+                $bestTarget = $key;
+                $bestScore = $score;
+            }
+        }
+
+        return $bestTarget;
+    }
+
+    /**
+     * Check whether the message contains a navigation-intent verb.
+     */
+    private function containsNavigationVerb(string $lower): bool
+    {
+        $verbs = [
+            'go to', 'navigate to', 'open', 'show me', 'take me to',
+            'bring up', 'switch to', 'visit', 'head to', 'jump to',
+        ];
+
+        foreach ($verbs as $verb) {
+            if (str_contains($lower, $verb)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Score how well the message matches a target's keyword aliases.
+     *
+     * @param  list<string>  $aliases
+     */
+    private function scoreKeywordMatch(string $lower, array $aliases): int
+    {
+        $score = 0;
+
+        foreach ($aliases as $alias) {
+            if (str_contains($lower, $alias)) {
+                // Longer alias matches are more specific → higher score.
+                $score += mb_strlen($alias);
+            }
+        }
+
+        return $score;
+    }
+
+    /**
      * Check whether the current user has the given capability.
      */
     private function currentUserCan(string $capability): bool
@@ -145,14 +211,15 @@ class LaraNavigationRouter
     }
 
     /**
-     * Navigation target registry for explicit `/go` commands.
+     * Navigation target registry.
      *
      * Each entry maps a canonical target key to:
      * - route:      Named Laravel route
      * - label:      Human-readable label for UI feedback
      * - capability: Authz capability required (null = auth-only)
+     * - aliases:    Natural-language keyword triggers for intent detection
      *
-     * @return array<string, array{route: string, label: string, capability: string|null}>
+     * @return array<string, array{route: string, label: string, capability: string|null, aliases: list<string>}>
      */
     private function targets(): array
     {
@@ -161,51 +228,61 @@ class LaraNavigationRouter
                 'route' => 'dashboard',
                 'label' => __('Dashboard'),
                 'capability' => null,
+                'aliases' => ['dashboard', 'home', 'overview'],
             ],
             'users' => [
                 'route' => 'admin.users.index',
                 'label' => __('Users'),
                 'capability' => 'core.user.list',
+                'aliases' => ['users', 'user list', 'user management'],
             ],
             'companies' => [
                 'route' => 'admin.companies.index',
                 'label' => __('Companies'),
                 'capability' => null,
+                'aliases' => ['companies', 'company list', 'company management'],
             ],
             'employees' => [
                 'route' => 'admin.employees.index',
                 'label' => __('Employees'),
                 'capability' => null,
+                'aliases' => ['employees', 'employee list', 'employee management', 'staff'],
             ],
             'roles' => [
                 'route' => 'admin.roles.index',
                 'label' => __('Roles'),
                 'capability' => 'admin.role.list',
+                'aliases' => ['roles', 'role management', 'permissions'],
             ],
             'addresses' => [
                 'route' => 'admin.addresses.index',
                 'label' => __('Addresses'),
                 'capability' => null,
+                'aliases' => ['addresses', 'address list', 'address management'],
             ],
             'providers' => [
                 'route' => 'admin.ai.providers',
                 'label' => __('AI Providers'),
                 'capability' => null,
+                'aliases' => ['providers', 'ai providers', 'model providers'],
             ],
             'models' => [
                 'route' => 'admin.ai.providers',
                 'label' => __('AI Providers'),
                 'capability' => null,
+                'aliases' => ['ai models', 'model list'],
             ],
             'playground' => [
                 'route' => 'admin.ai.playground',
                 'label' => __('AI Playground'),
                 'capability' => null,
+                'aliases' => ['playground', 'ai playground', 'test model', 'try model'],
             ],
             'setup-lara' => [
                 'route' => 'admin.setup.lara',
                 'label' => __('Lara Setup'),
                 'capability' => null,
+                'aliases' => ['setup lara', 'lara setup', 'configure lara', 'activate lara'],
             ],
         ];
     }

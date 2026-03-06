@@ -162,6 +162,56 @@ it('returns usage guidance for empty /go command', function (): void {
         ->and($result['status'])->toBe('invalid_navigation_command');
 });
 
+// --- Natural language intent detection ---
+
+it('detects navigate to users page as navigation intent', function (): void {
+    $fixture = createNavigationFixture();
+    $this->actingAs($fixture['user']);
+
+    $router = new LaraNavigationRouter(makeAllowAllAuthService());
+    $result = $router->resolve('navigate to users page');
+
+    expect($result)->not->toBeNull()
+        ->and($result['status'])->toBe('navigation')
+        ->and($result['navigation']['url'])->toBe('/admin/users');
+});
+
+it('detects open dashboard as navigation intent', function (): void {
+    $fixture = createNavigationFixture();
+    $this->actingAs($fixture['user']);
+
+    $router = app(LaraNavigationRouter::class);
+    $result = $router->resolve('open dashboard');
+
+    expect($result)->not->toBeNull()
+        ->and($result['status'])->toBe('navigation')
+        ->and($result['navigation']['url'])->toBe('/dashboard');
+});
+
+it('detects show me the employees page as navigation intent', function (): void {
+    $fixture = createNavigationFixture();
+    $this->actingAs($fixture['user']);
+
+    $router = app(LaraNavigationRouter::class);
+    $result = $router->resolve('show me the employees page');
+
+    expect($result)->not->toBeNull()
+        ->and($result['status'])->toBe('navigation')
+        ->and($result['navigation']['url'])->toBe('/admin/employees');
+});
+
+it('detects go to ai playground as navigation intent', function (): void {
+    $fixture = createNavigationFixture();
+    $this->actingAs($fixture['user']);
+
+    $router = app(LaraNavigationRouter::class);
+    $result = $router->resolve('go to ai playground');
+
+    expect($result)->not->toBeNull()
+        ->and($result['status'])->toBe('navigation')
+        ->and($result['navigation']['url'])->toBe('/admin/ai/playground');
+});
+
 it('returns null for non-navigation messages', function (): void {
     $fixture = createNavigationFixture();
     $this->actingAs($fixture['user']);
@@ -170,13 +220,33 @@ it('returns null for non-navigation messages', function (): void {
 
     expect($router->resolve('Hello Lara'))->toBeNull()
         ->and($router->resolve('what is BLB?'))->toBeNull()
-        ->and($router->resolve('navigate to users page'))->toBeNull()
-        ->and($router->resolve('show me the employees page'))->toBeNull();
+        ->and($router->resolve('explain the authorization system'))->toBeNull();
+});
+
+it('returns null for messages with target keywords but no navigation verb', function (): void {
+    $fixture = createNavigationFixture();
+    $this->actingAs($fixture['user']);
+
+    $router = app(LaraNavigationRouter::class);
+
+    expect($router->resolve('how many users are there?'))->toBeNull()
+        ->and($router->resolve('tell me about the dashboard module'))->toBeNull();
+});
+
+it('denies natural language navigation when user lacks capability', function (): void {
+    $fixture = createNavigationFixture();
+    $this->actingAs($fixture['user']);
+
+    $router = new LaraNavigationRouter(makeDenyAllAuthService());
+    $result = $router->resolve('navigate to users page');
+
+    expect($result)->not->toBeNull()
+        ->and($result['status'])->toBe('navigation_denied');
 });
 
 // --- Integration with LaraOrchestrationService ---
 
-it('orchestration service delegates explicit /go to router', function (): void {
+it('orchestration service delegates navigation to router', function (): void {
     $fixture = createNavigationFixture();
     $this->actingAs($fixture['user']);
 
@@ -188,14 +258,16 @@ it('orchestration service delegates explicit /go to router', function (): void {
         ->and($result['meta']['orchestration']['navigation']['url'])->toBe('/admin/ai/providers');
 });
 
-it('orchestration returns null for natural language navigation (deferred to LLM)', function (): void {
+it('orchestration handles natural language navigation', function (): void {
     $fixture = createNavigationFixture();
     $this->actingAs($fixture['user']);
 
     $service = app(\App\Modules\Core\AI\Services\LaraOrchestrationService::class);
     $result = $service->dispatchFromMessage('open the dashboard');
 
-    expect($result)->toBeNull();
+    expect($result)->not->toBeNull()
+        ->and($result['meta']['orchestration']['status'])->toBe('navigation')
+        ->and($result['meta']['orchestration']['navigation']['url'])->toBe('/dashboard');
 });
 
 // --- Target completeness ---
