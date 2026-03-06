@@ -14,7 +14,34 @@
     @endif
 </head>
 <body
-    x-data="{ sidebarOpen: false, sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1' }"
+    x-data="{
+        sidebarOpen: false,
+        sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === '1',
+        laraChatOpen: false,
+        isTypingTarget(event) {
+            const target = event.target;
+
+            if (!(target instanceof HTMLElement)) {
+                return false;
+            }
+
+            return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+        },
+        openLaraChat() {
+            this.laraChatOpen = true;
+            this.$nextTick(() => window.dispatchEvent(new CustomEvent('lara-chat-opened')));
+        },
+        toggleLaraChat(event) {
+            if (this.isTypingTarget(event)) {
+                return;
+            }
+
+            this.laraChatOpen = !this.laraChatOpen;
+            if (this.laraChatOpen) {
+                this.$nextTick(() => window.dispatchEvent(new CustomEvent('lara-chat-opened')));
+            }
+        }
+    }"
     @toggle-sidebar.window="
         if (window.innerWidth >= 1024) {
             sidebarCollapsed = !sidebarCollapsed;
@@ -23,7 +50,11 @@
             sidebarOpen = !sidebarOpen;
         }
     "
-    @keydown.escape.window="sidebarOpen = false"
+    @open-lara-chat.window="openLaraChat()"
+    @close-lara-chat.window="laraChatOpen = false"
+    @keydown.ctrl.k.window.prevent="toggleLaraChat($event)"
+    @keydown.meta.k.window.prevent="toggleLaraChat($event)"
+    @keydown.escape.window="sidebarOpen = false; laraChatOpen = false"
     class="h-screen overflow-hidden bg-surface-page flex flex-col"
 >
     {{-- Impersonation Banner --}}
@@ -69,6 +100,34 @@
             {{ $slot }}
         </main>
     </div>
+
+    @auth
+        {{-- Global Lara chat overlay --}}
+        <div
+            x-show="laraChatOpen"
+            x-transition.opacity
+            @click="laraChatOpen = false"
+            class="fixed inset-0 z-40 bg-black/35"
+            style="display: none;"
+            aria-hidden="true"
+        ></div>
+
+        <div
+            x-show="laraChatOpen"
+            x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 translate-y-2"
+            x-transition:enter-end="opacity-100 translate-y-0"
+            x-transition:leave="transition ease-in duration-150"
+            x-transition:leave-start="opacity-100 translate-y-0"
+            x-transition:leave-end="opacity-0 translate-y-2"
+            class="fixed inset-x-3 sm:inset-x-4 bottom-8 z-50 flex justify-end"
+            style="display: none;"
+        >
+            <section class="w-full max-w-5xl h-[min(80vh,46rem)] bg-surface-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
+                <livewire:ai.lara-chat-overlay />
+            </section>
+        </div>
+    @endauth
 
     {{-- Status Bar --}}
     <x-layouts.status-bar />

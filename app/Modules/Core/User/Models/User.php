@@ -11,6 +11,7 @@ use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\ExternalAccess;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -108,5 +109,51 @@ class User extends Authenticatable implements CompanyScoped
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'employee_id');
+    }
+
+    /**
+     * Get active Digital Workers directly supervised by this user's employee.
+     *
+     * @return EloquentCollection<int, Employee>
+     */
+    public function getDigitalWorkers(): EloquentCollection
+    {
+        $supervisorId = $this->employee?->id;
+
+        if (! is_int($supervisorId)) {
+            return new EloquentCollection;
+        }
+
+        return Employee::query()
+            ->digitalWorker()
+            ->where('id', '!=', Employee::LARA_ID)
+            ->where('supervisor_id', $supervisorId)
+            ->active()
+            ->orderBy('full_name')
+            ->get();
+    }
+
+    /**
+     * Check whether this user can access a supervised Digital Worker.
+     *
+     * Lara is excluded; Lara access uses a dedicated system path/policy.
+     */
+    public function canAccessSupervisedDigitalWorker(int $employeeId): bool
+    {
+        if ($employeeId === Employee::LARA_ID) {
+            return false;
+        }
+
+        $supervisorId = $this->employee?->id;
+
+        if (! is_int($supervisorId)) {
+            return false;
+        }
+
+        return Employee::query()
+            ->digitalWorker()
+            ->whereKey($employeeId)
+            ->where('supervisor_id', $supervisorId)
+            ->exists();
     }
 }

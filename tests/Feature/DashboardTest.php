@@ -14,3 +14,15 @@ test('authenticated users can visit the dashboard', function () {
     $response = $this->get(route('dashboard'));
     $response->assertStatus(200);
 });
+
+test('authenticated users can access Lara chat entry points from dashboard', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    $response = $this->get(route('dashboard'));
+
+    $response->assertStatus(200)
+        ->assertSee('open-lara-chat', false)
+        ->assertSee('Ctrl+K')
+        ->assertSee('close-lara-chat', false);
+});

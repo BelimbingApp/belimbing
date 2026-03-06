@@ -7,6 +7,11 @@ namespace App\Modules\Core\AI;
 
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\DigitalWorkerRuntime;
+use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
+use App\Modules\Core\AI\Services\LaraContextProvider;
+use App\Modules\Core\AI\Services\LaraOrchestrationService;
+use App\Modules\Core\AI\Services\LaraPromptFactory;
+use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
@@ -29,5 +34,10 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(MessageManager::class);
         $this->app->singleton(DigitalWorkerRuntime::class);
         $this->app->singleton(ProviderAuthFlowService::class);
+        $this->app->singleton(LaraContextProvider::class);
+        $this->app->singleton(LaraCapabilityMatcher::class);
+        $this->app->singleton(LaraTaskDispatcher::class);
+        $this->app->singleton(LaraOrchestrationService::class);
+        $this->app->singleton(LaraPromptFactory::class);
     }
 }

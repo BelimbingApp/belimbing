@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Models;
 
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -94,6 +95,21 @@ class AiProvider extends Model
     public function scopeForCompany($query, int $companyId): void
     {
         $query->where('company_id', $companyId);
+    }
+
+    /**
+     * Get configured active providers for a company in runtime order.
+     *
+     * @return EloquentCollection<int, self>
+     */
+    public static function getConfiguredForCompany(int $companyId): EloquentCollection
+    {
+        return self::query()
+            ->forCompany($companyId)
+            ->active()
+            ->orderBy('priority')
+            ->orderBy('display_name')
+            ->get();
     }
 
     /**

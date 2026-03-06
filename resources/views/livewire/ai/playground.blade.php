@@ -6,6 +6,7 @@
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\DigitalWorkerRuntime;
+use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Employee\Models\Employee;
@@ -105,9 +106,13 @@ new class extends Component
 
         // Get Digital Worker's job description for system prompt
         $employee = Employee::query()->find($this->selectedEmployeeId);
-        $systemPrompt = $employee?->job_description
-            ? __('You are a Digital Worker. Your role: :role', ['role' => $employee->job_description])
-            : __('You are a helpful Digital Worker assistant.');
+        if ($employee?->isLara()) {
+            $systemPrompt = app(LaraPromptFactory::class)->buildForCurrentUser();
+        } else {
+            $systemPrompt = $employee?->job_description
+                ? __('You are a Digital Worker. Your role: :role', ['role' => $employee->job_description])
+                : __('You are a helpful Digital Worker assistant.');
+        }
 
         // Run LLM
         $result = $runtime->run($messages, $this->selectedEmployeeId, $systemPrompt);

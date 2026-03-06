@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Modules\Core\AI\DTO\Session;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Models\User;
 use DateTimeImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
@@ -188,12 +189,21 @@ class SessionManager
 
     /**
      * Get the sessions directory path for a Digital Worker.
+     *
+     * Regular DW: workspace/{employee_id}/sessions
+     * Lara:       workspace/{LARA_ID}/sessions/{user_id}  (per-user isolation)
      */
     public function sessionsPath(int $employeeId): string
     {
         $this->assertCanAccessDigitalWorker($employeeId);
 
-        return $this->basePath.'/'.$employeeId.'/sessions';
+        $base = $this->basePath.'/'.$employeeId.'/sessions';
+
+        if ($employeeId === Employee::LARA_ID) {
+            return $base.'/'.auth()->id();
+        }
+
+        return $base;
     }
 
     /**
@@ -215,26 +225,25 @@ class SessionManager
     /**
      * Ensure the current authenticated user can access the Digital Worker's sessions.
      *
-     * Access is limited to Digital Workers directly supervised by the user's employee.
+     * Two explicit strategies — no silent fallback between them:
+     *  - Lara (Employee::LARA_ID): any authenticated user; sessions are per-user isolated via path.
+     *  - Regular DW: supervisor-scoped — the user's employee must be the DW's direct supervisor.
      *
      * @throws AuthorizationException
      */
     private function assertCanAccessDigitalWorker(int $employeeId): void
     {
         $user = auth()->user();
-        $actorEmployeeId = $user?->employee?->id ? (int) $user->employee->id : null;
 
-        if ($actorEmployeeId === null) {
-            throw new AuthorizationException(__('Unauthorized Digital Worker session access.'));
+        if ($employeeId === Employee::LARA_ID) {
+            if (! $user instanceof User) {
+                throw new AuthorizationException(__('Unauthorized Digital Worker session access.'));
+            }
+
+            return;
         }
 
-        $authorized = Employee::query()
-            ->digitalWorker()
-            ->whereKey($employeeId)
-            ->where('supervisor_id', $actorEmployeeId)
-            ->exists();
-
-        if (! $authorized) {
+        if (! $user instanceof User || ! $user->canAccessSupervisedDigitalWorker($employeeId)) {
             throw new AuthorizationException(__('Unauthorized Digital Worker session access.'));
         }
     }

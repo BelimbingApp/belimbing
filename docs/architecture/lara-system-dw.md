@@ -315,6 +315,15 @@ Lara is a critical-path component — unlike a regular DW (where downtime only a
    - Regular DW: supervisor-scoped access (existing rule).
    - Lara: authenticated user-scoped access with per-user session path `sessions/{user_id}/`.
 
+### 11.2.1 Recommended Execution Order
+
+1. **Session/message access policy first** — Implement the dual strategy in `SessionManager` and `MessageManager` before UI work. This is the highest-risk area and defines Lara's isolation guarantees.
+2. **Global chat surface second** — Add the app-wide Lara panel/overlay and wire status-bar entry so users have a single, always-available access point.
+3. **Keyboard shortcut third** — Add a global toggle shortcut for fast access once the overlay exists.
+4. **Prompt + context layer fourth** — Build framework-managed prompt assembly, then inject runtime context (modules, providers, environment) through a dedicated context provider.
+5. **Orchestration primitives fifth** — Add DW discovery/capability matching/dispatch contracts after prompt/context is stable.
+6. **Validation throughout** — Add unit tests for session/path policy and prompt assembly, plus integration tests for setup-to-chat user flows.
+
 ### 11.3 Out of Scope
 
 1. Lara-specific tools or capabilities (e.g., "run migrations", "check module health") — future work.
