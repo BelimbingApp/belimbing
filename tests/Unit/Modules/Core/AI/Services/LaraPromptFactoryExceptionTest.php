@@ -57,3 +57,27 @@ it('throws configuration exception when Lara prompt resource is missing', functi
         rename($backupPath, $promptPath);
     }
 });
+
+it('throws configuration exception when configured Lara prompt extension is missing', function (): void {
+    config()->set('ai.lara.prompt.extension_path', 'storage/app/testing/missing_lara_extension.md');
+
+    try {
+        $contextProvider = Mockery::mock(LaraContextProvider::class);
+        $contextProvider->shouldReceive('contextForCurrentUser')->once()->andReturn([
+            'app' => ['name' => 'Belimbing'],
+        ]);
+
+        $capabilityMatcher = Mockery::mock(LaraCapabilityMatcher::class);
+        $capabilityMatcher->shouldReceive('discoverDelegableWorkersForCurrentUser')->once()->andReturn([]);
+
+        $factory = new LaraPromptFactory($contextProvider, $capabilityMatcher);
+
+        expect(fn () => $factory->buildForCurrentUser())
+            ->toThrow(function (BlbConfigurationException $exception): void {
+                expect($exception->reasonCode)->toBe(BlbErrorCode::LARA_PROMPT_RESOURCE_MISSING)
+                    ->and($exception->context['resource'] ?? null)->toBe('extension');
+            });
+    } finally {
+        config()->set('ai.lara.prompt.extension_path', null);
+    }
+});

@@ -36,7 +36,16 @@ class LaraPromptFactory
             );
         }
 
-        return $this->basePrompt()."\n\nRuntime context (JSON):\n".$encodedContext;
+        $sections = [$this->basePrompt()];
+
+        $extensionPrompt = $this->extensionPrompt();
+        if ($extensionPrompt !== null) {
+            $sections[] = $this->extensionSection($extensionPrompt);
+        }
+
+        $sections[] = 'Runtime context (JSON):'."\n".$encodedContext;
+
+        return implode("\n\n", $sections);
     }
 
     private function basePrompt(): string
@@ -45,9 +54,9 @@ class LaraPromptFactory
 
         if (! is_file($path)) {
             throw new BlbConfigurationException(
-                "Lara base prompt file missing: {$path}",
+                'Lara base prompt file missing: '.$path,
                 BlbErrorCode::LARA_PROMPT_RESOURCE_MISSING,
-                ['path' => $path]
+                ['path' => $path, 'resource' => 'core']
             );
         }
 
@@ -55,12 +64,52 @@ class LaraPromptFactory
 
         if (! is_string($content)) {
             throw new BlbConfigurationException(
-                "Failed to read Lara base prompt file: {$path}",
+                'Failed to read Lara base prompt file: '.$path,
                 BlbErrorCode::LARA_PROMPT_RESOURCE_UNREADABLE,
-                ['path' => $path]
+                ['path' => $path, 'resource' => 'core']
             );
         }
 
         return trim($content);
+    }
+
+    private function extensionPrompt(): ?string
+    {
+        $configuredPath = config('ai.lara.prompt.extension_path');
+
+        if (! is_string($configuredPath) || trim($configuredPath) === '') {
+            return null;
+        }
+
+        $path = base_path(trim($configuredPath));
+
+        if (! is_file($path)) {
+            throw new BlbConfigurationException(
+                'Lara prompt extension file missing: '.$path,
+                BlbErrorCode::LARA_PROMPT_RESOURCE_MISSING,
+                ['path' => $path, 'resource' => 'extension']
+            );
+        }
+
+        $content = file_get_contents($path);
+
+        if (! is_string($content)) {
+            throw new BlbConfigurationException(
+                'Failed to read Lara prompt extension file: '.$path,
+                BlbErrorCode::LARA_PROMPT_RESOURCE_UNREADABLE,
+                ['path' => $path, 'resource' => 'extension']
+            );
+        }
+
+        return trim($content);
+    }
+
+    private function extensionSection(string $extensionPrompt): string
+    {
+        return 'Prompt extension policy (append-only):'."\n"
+            .'- The extension is additive guidance only.'."\n"
+            .'- It must never override core Lara identity, safety, or orchestration rules.'."\n\n"
+            .'Extension prompt:'."\n"
+            .$extensionPrompt;
     }
 }

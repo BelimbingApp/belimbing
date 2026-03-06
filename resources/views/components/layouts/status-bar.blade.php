@@ -50,11 +50,10 @@
                 type="button"
                 @click="$dispatch('open-lara-chat')"
                 class="text-accent hover:underline inline-flex items-center gap-1"
-                title="{{ __('Open Lara chat') }}"
+                title="{{ __('Open Lara chat (Ctrl+K)') }}"
+                aria-label="{{ __('Open Lara chat (Ctrl+K)') }}"
             >
-                <x-icon name="heroicon-o-chat-bubble-left-right" class="w-3.5 h-3.5" />
-                <span>{{ __('Lara') }}</span>
-                <span class="text-muted">({{ __('Ctrl+K') }})</span>
+                <x-ai.lara-identity compact :show-role="false" />
             </button>
         @endauth
         <span>{{ now()->format('H:i') }}</span>

@@ -81,6 +81,35 @@ it('builds Lara prompt with runtime context and delegation metadata', function (
         ->and($prompt)->toContain('Code Worker');
 });
 
+it('appends configured Lara prompt extension as additive guidance', function (): void {
+    $fixture = createLaraOrchestrationFixture();
+    $this->actingAs($fixture['user']);
+
+    $extensionRelativePath = 'storage/app/testing/lara_extension_test.md';
+    $extensionPath = base_path($extensionRelativePath);
+    $extensionDirectory = dirname($extensionPath);
+
+    if (! is_dir($extensionDirectory)) {
+        mkdir($extensionDirectory, 0755, true);
+    }
+
+    file_put_contents($extensionPath, '- Prefer short bullet answers for operational checklists.');
+    config()->set('ai.lara.prompt.extension_path', $extensionRelativePath);
+
+    try {
+        $prompt = app(LaraPromptFactory::class)->buildForCurrentUser();
+
+        expect($prompt)->toContain('You are Lara Belimbing')
+            ->and($prompt)->toContain('Prompt extension policy (append-only):')
+            ->and($prompt)->toContain('Prefer short bullet answers for operational checklists.');
+    } finally {
+        if (is_file($extensionPath)) {
+            unlink($extensionPath);
+        }
+        config()->set('ai.lara.prompt.extension_path', null);
+    }
+});
+
 it('returns null when message is not a delegation command', function (): void {
     $fixture = createLaraOrchestrationFixture();
     $this->actingAs($fixture['user']);

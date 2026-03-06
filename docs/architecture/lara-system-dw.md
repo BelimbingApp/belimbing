@@ -239,6 +239,7 @@ Lara's purpose is hardcoded — she is the BLB framework guide:
 Lara's system prompt is **framework-managed** (not editable via workspace files). It is assembled at runtime from:
 1. A base prompt defining her identity, character, and role (shipped with BLB, versioned with the framework). This is where her personality traits from §9.1 are encoded.
 2. Contextual information about the current BLB instance (installed modules, configured providers, environment).
+3. Optional Licensee extension text (append-only), loaded from a configured file path. This extension can add local guidance (tone, company specifics) but cannot replace or relax core BLB/Lara policy.
 
 This differs from regular DWs whose identity comes from workspace files. Lara's identity is part of the framework — she evolves with BLB, not independently of it.
 
@@ -334,9 +335,16 @@ Lara is a critical-path component — unlike a regular DW (where downtime only a
 
 ## 12. Open Questions
 
-1. **Should Lara's system prompt be partially configurable by the Licensee?** (e.g., tone, company-specific knowledge) Or fully framework-managed?
-2. **Should Lara have a distinct visual identity in the UI?** (e.g., avatar, color accent) to differentiate her from user DWs.
-3. **Rate limiting** — Should Lara's usage be rate-limited per user to control costs, or is that the Licensee's concern via provider configuration?
+1. **Rate limiting** — Should Lara's usage be rate-limited per user to control costs, or is that the Licensee's concern via provider configuration?
+
+### 12.1 Resolved policy decisions (2026-03-06)
+
+1. **Prompt configurability contract**
+   - Core Lara prompt remains framework-managed and immutable.
+   - Licensees may provide an append-only extension file for additional local guidance.
+2. **Lara visual identity policy**
+   - Lara is always rendered with a distinct identity marker (`System DW` badge + dedicated icon treatment) across global entry points.
+   - Styling can follow theme tokens, but identity semantics remain fixed.
 
 ---
 
@@ -346,3 +354,4 @@ Lara is a critical-path component — unlike a regular DW (where downtime only a
 |---------|------|--------|---------|
 | 0.1 | 2026-03-05 | AI + Kiat | Initial draft — identity model, provisioning, status bar, access model, scope |
 | 0.2 | 2026-03-05 | AI + Kiat | Added explicit session ownership/path matrix and TODO to extend SessionManager/MessageManager for Lara user-scoped sessions |
+| 0.3 | 2026-03-06 | AI + Kiat | Finalized prompt extension contract and Lara UI identity policy; narrowed remaining open question to rate limiting |

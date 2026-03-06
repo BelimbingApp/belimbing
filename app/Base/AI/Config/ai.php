@@ -34,6 +34,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Lara (System Digital Worker)
+    |--------------------------------------------------------------------------
+    |
+    | Lara's core prompt is framework-managed and non-configurable.
+    | Licensees may append additive guidance through an extension file.
+    | The extension is append-only and must not override core policy.
+    |
+    */
+    'lara' => [
+        'prompt' => [
+            // Relative path from project root. Leave null to disable extension.
+            'extension_path' => env('AI_LARA_PROMPT_EXTENSION_PATH'),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Provider Overlay
     |--------------------------------------------------------------------------
     |

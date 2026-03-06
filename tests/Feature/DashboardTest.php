@@ -23,6 +23,6 @@ test('authenticated users can access Lara chat entry points from dashboard', fun
 
     $response->assertStatus(200)
         ->assertSee('open-lara-chat', false)
-        ->assertSee('Ctrl+K')
+        ->assertSee('Open Lara chat (Ctrl+K)')
         ->assertSee('close-lara-chat', false);
 });
