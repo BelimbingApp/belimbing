@@ -20,6 +20,14 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
 
 class Employee extends Model
 {
+    /**
+     * The well-known ID for Lara, BLB's system Digital Worker.
+     *
+     * Lara is provisioned at install time and cannot be deleted.
+     * Mirrors the Licensee pattern (Company::LICENSEE_ID).
+     */
+    public const LARA_ID = 1;
+
     use HasFactory;
 
     /**
@@ -28,6 +36,22 @@ class Employee extends Model
     protected static function newFactory(): EmployeeFactory
     {
         return new EmployeeFactory;
+    }
+
+    /**
+     * Boot the model.
+     *
+     * Prevents deletion of Lara, the system Digital Worker.
+     */
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::deleting(function (Employee $employee): void {
+            if ($employee->isLara()) {
+                throw new \LogicException('Lara (the system Digital Worker) cannot be deleted.');
+            }
+        });
     }
 
     /**
@@ -141,6 +165,58 @@ class Employee extends Model
     public function displayName(): string
     {
         return $this->short_name ?? $this->full_name;
+    }
+
+    /**
+     * Whether this employee is Lara, BLB's system Digital Worker.
+     */
+    public function isLara(): bool
+    {
+        return $this->id === self::LARA_ID;
+    }
+
+    /**
+     * Ensure Lara (the system Digital Worker) exists.
+     *
+     * Idempotent — safe to call from migrations, setup scripts, and UI.
+     * Requires the Licensee company to exist first. Resets the PostgreSQL
+     * sequence after explicit-ID insert to avoid auto-increment collisions.
+     *
+     * @return bool Whether Lara was created (false if already existed or Licensee missing).
+     */
+    public static function provisionLara(): bool
+    {
+        if (static::query()->where('id', self::LARA_ID)->exists()) {
+            return false;
+        }
+
+        if (! Company::query()->where('id', Company::LICENSEE_ID)->exists()) {
+            return false;
+        }
+
+        static::unguarded(fn () => static::query()->create([
+            'id' => self::LARA_ID,
+            'company_id' => Company::LICENSEE_ID,
+            'employee_type' => 'digital_worker',
+            'employee_number' => 'SYS-001',
+            'full_name' => 'Lara Belimbing',
+            'short_name' => 'Lara',
+            'designation' => 'System Assistant',
+            'job_description' => 'BLB\'s system Digital Worker. Guides users through setup and onboarding, explains framework architecture and conventions, orchestrates tasks by delegating to specialised Digital Workers, and bootstraps the AI workforce on fresh installs.',
+            'status' => 'active',
+            'employment_start' => now()->toDateString(),
+        ]));
+
+        // PostgreSQL sequences don't advance on explicit-ID inserts — reset to
+        // avoid unique-constraint violations when subsequent inserts auto-increment.
+        $connection = static::resolveConnection();
+        if ($connection->getDriverName() === 'pgsql') {
+            $connection->statement(
+                "SELECT setval(pg_get_serial_sequence('employees', 'id'), (SELECT COALESCE(MAX(id), 0) FROM employees))"
+            );
+        }
+
+        return true;
     }
 
     /**
