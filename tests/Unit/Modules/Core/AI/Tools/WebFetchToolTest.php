@@ -4,8 +4,9 @@ use App\Modules\Core\AI\Tools\WebFetchTool;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
+use Tests\Support\AssertsToolBehavior;
 
-uses(TestCase::class, LazilyRefreshDatabase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
 
 beforeEach(function () {
     $this->tool = new WebFetchTool;
@@ -27,36 +28,20 @@ beforeEach(function () {
 });
 
 describe('tool metadata', function () {
-    it('returns correct name', function () {
-        expect($this->tool->name())->toBe('web_fetch');
-    });
-
-    it('returns a description', function () {
-        expect($this->tool->description())->not->toBeEmpty();
-    });
-
-    it('requires web_fetch capability', function () {
-        expect($this->tool->requiredCapability())->toBe('ai.tool_web_fetch.execute');
-    });
-
-    it('has valid parameter schema', function () {
-        $schema = $this->tool->parametersSchema();
-
-        expect($schema['type'])->toBe('object')
-            ->and($schema['properties'])->toHaveKey('url')
-            ->and($schema['required'])->toBe(['url']);
+    it('has the expected metadata', function () {
+        $this->assertToolMetadata(
+            $this->tool,
+            'web_fetch',
+            'ai.tool_web_fetch.execute',
+            ['url'],
+            ['url'],
+        );
     });
 });
 
 describe('input validation', function () {
-    it('rejects empty URL', function () {
-        $result = ($this->executeTool)(['url' => '']);
-        expect($result)->toContain('Error');
-    });
-
-    it('rejects missing URL', function () {
-        $result = ($this->executeTool)([]);
-        expect($result)->toContain('Error');
+    it('rejects missing or empty URL', function () {
+        $this->assertRejectsMissingAndEmptyStringArgument('url');
     });
 });
 

@@ -11,7 +11,7 @@ trait AssertsToolBehavior
         string $expectedName,
         string $expectedCapability,
         array $expectedPropertyKeys = [],
-        array $expectedRequired = [],
+        ?array $expectedRequired = null,
     ): void {
         expect($tool->name())->toBe($expectedName);
         expect($tool->description())->not->toBeEmpty();
@@ -25,7 +25,7 @@ trait AssertsToolBehavior
             expect($schema['properties'])->toHaveKey($key);
         }
 
-        if ($expectedRequired !== []) {
+        if ($expectedRequired !== null) {
             expect($schema['required'])->toBe($expectedRequired);
         }
     }
@@ -55,6 +55,15 @@ trait AssertsToolBehavior
     protected function decodeToolExecution(array $arguments): array
     {
         return $this->decodeToolResult($this->tool->execute($arguments));
+    }
+
+    protected function assertToolExecutionStatus(array $arguments, string $expectedStatus): array
+    {
+        $data = $this->decodeToolExecution($arguments);
+
+        expect($data['status'])->toBe($expectedStatus);
+
+        return $data;
     }
 
     protected function decodeToolResult(string $result): array

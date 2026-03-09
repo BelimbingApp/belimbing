@@ -9,6 +9,13 @@ use Tests\Support\AssertsToolBehavior;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
 
+dataset('notification required string fields', [
+    [['user_id' => 1, 'body' => 'Test body'], 'subject'],
+    [['user_id' => 1, 'subject' => '', 'body' => 'Test body'], 'subject'],
+    [['user_id' => 1, 'subject' => 'Test'], 'body'],
+    [['user_id' => 1, 'subject' => 'Test', 'body' => ' '], 'body'],
+]);
+
 beforeEach(function () {
     $this->tool = new NotificationTool;
 });
@@ -40,13 +47,9 @@ describe('input validation', function () {
         expect($result)->toContain('Error');
     });
 
-    it('rejects missing subject', function () {
-        $this->assertToolError(['user_id' => 1, 'body' => 'Test body']);
-    });
-
-    it('rejects empty subject', function () {
-        $this->assertToolError(['user_id' => 1, 'subject' => '', 'body' => 'Test body']);
-    });
+    it('rejects missing or empty required string fields', function (array $arguments, string $fragment) {
+        $this->assertToolError($arguments, $fragment);
+    })->with('notification required string fields');
 
     it('rejects subject exceeding max length', function () {
         $result = $this->tool->execute([
@@ -56,14 +59,6 @@ describe('input validation', function () {
         ]);
         expect($result)->toContain('Error')
             ->and($result)->toContain('exceed');
-    });
-
-    it('rejects missing body', function () {
-        $this->assertToolError(['user_id' => 1, 'subject' => 'Test']);
-    });
-
-    it('rejects empty body', function () {
-        $this->assertToolError(['user_id' => 1, 'subject' => 'Test', 'body' => ' ']);
     });
 
     it('rejects body exceeding max length', function () {

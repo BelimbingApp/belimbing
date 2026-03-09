@@ -6,6 +6,20 @@ use Tests\Support\AssertsToolBehavior;
 
 uses(TestCase::class, AssertsToolBehavior::class);
 
+dataset('document analysis missing text fields', [
+    [['prompt' => 'Summarize this'], 'path'],
+    [['path' => '', 'prompt' => 'Summarize this'], 'path'],
+    [['path' => '/docs/report.pdf'], 'prompt'],
+    [['path' => '/docs/report.pdf', 'prompt' => ''], 'prompt'],
+]);
+
+dataset('document analysis accepted pages', [
+    ['1'],
+    ['1-5'],
+    ['1,3,7'],
+    ['1-3,5,8-10'],
+]);
+
 beforeEach(function () {
     $this->tool = new DocumentAnalysisTool;
 });
@@ -23,13 +37,9 @@ describe('tool metadata', function () {
 });
 
 describe('input validation', function () {
-    it('rejects missing path', function () {
-        $this->assertToolError(['prompt' => 'Summarize this']);
-    });
-
-    it('rejects empty path', function () {
-        $this->assertToolError(['path' => '', 'prompt' => 'Summarize this']);
-    });
+    it('rejects missing or empty required text fields', function (array $arguments, string $fragment) {
+        $this->assertToolError($arguments, $fragment);
+    })->with('document analysis missing text fields');
 
     it('rejects non-string path', function () {
         $result = $this->tool->execute(['path' => 123, 'prompt' => 'Summarize this']);
@@ -93,50 +103,15 @@ describe('input validation', function () {
 });
 
 describe('pages format validation', function () {
-    it('accepts single page number', function () {
-        $result = $this->tool->execute([
+    it('accepts supported page selectors', function (string $pages) {
+        $data = $this->assertToolExecutionStatus([
             'path' => '/docs/report.pdf',
             'prompt' => 'Summarize this',
-            'pages' => '1',
-        ]);
-        $data = $this->decodeToolResult($result);
+            'pages' => $pages,
+        ], 'analyzed');
 
-        expect($data)->not->toBeNull()
-            ->and($data['pages'])->toBe('1');
-    });
-
-    it('accepts page range', function () {
-        $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
-            'prompt' => 'Summarize this',
-            'pages' => '1-5',
-        ]);
-        $data = $this->decodeToolResult($result);
-
-        expect($data['pages'])->toBe('1-5');
-    });
-
-    it('accepts comma-separated pages', function () {
-        $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
-            'prompt' => 'Summarize this',
-            'pages' => '1,3,7',
-        ]);
-        $data = $this->decodeToolResult($result);
-
-        expect($data['pages'])->toBe('1,3,7');
-    });
-
-    it('accepts mixed ranges and pages', function () {
-        $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
-            'prompt' => 'Summarize this',
-            'pages' => '1-3,5,8-10',
-        ]);
-        $data = $this->decodeToolResult($result);
-
-        expect($data['pages'])->toBe('1-3,5,8-10');
-    });
+        expect($data['pages'])->toBe($pages);
+    })->with('document analysis accepted pages');
 });
 
 describe('stub execution', function () {
@@ -165,12 +140,11 @@ describe('stub execution', function () {
     });
 
     it('includes pages when provided', function () {
-        $result = $this->tool->execute([
+        $data = $this->assertToolExecutionStatus([
             'path' => '/docs/report.pdf',
             'prompt' => 'Summarize',
             'pages' => '1-3',
-        ]);
-        $data = $this->decodeToolResult($result);
+        ], 'analyzed');
 
         expect($data)->toHaveKey('pages')
             ->and($data['pages'])->toBe('1-3');

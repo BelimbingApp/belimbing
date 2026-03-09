@@ -11,6 +11,17 @@ beforeEach(function () {
 });
 
 dataset('supported image formats', ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+dataset('image analysis missing text fields', [
+    [['prompt' => 'Describe this image'], 'path'],
+    [['path' => '', 'prompt' => 'Describe this image'], 'path'],
+    [['path' => '/images/photo.jpg'], 'prompt'],
+    [['path' => '/images/photo.jpg', 'prompt' => ''], 'prompt'],
+]);
+dataset('image analysis accepted urls', [
+    ['http://example.com/image'],
+    ['https://example.com/images/photo.png'],
+    ['https://example.com/image?w=500&h=300'],
+]);
 
 describe('tool metadata', function () {
     it('has the expected metadata', function () {
@@ -25,25 +36,13 @@ describe('tool metadata', function () {
 });
 
 describe('input validation', function () {
-    it('rejects missing path', function () {
-        $this->assertToolError(['prompt' => 'Describe this image']);
-    });
-
-    it('rejects empty path', function () {
-        $this->assertToolError(['path' => '', 'prompt' => 'Describe this image']);
-    });
+    it('rejects missing or empty required text fields', function (array $arguments, string $fragment) {
+        $this->assertToolError($arguments, $fragment);
+    })->with('image analysis missing text fields');
 
     it('rejects non-string path', function () {
         $result = $this->tool->execute(['path' => 42, 'prompt' => 'Describe this image']);
         expect($result)->toContain('Error');
-    });
-
-    it('rejects missing prompt', function () {
-        $this->assertToolError(['path' => '/images/photo.jpg']);
-    });
-
-    it('rejects empty prompt', function () {
-        $this->assertToolError(['path' => '/images/photo.jpg', 'prompt' => '']);
     });
 
     it('rejects prompt exceeding max length', function () {
@@ -93,36 +92,12 @@ describe('supported formats', function () {
 });
 
 describe('URL paths', function () {
-    it('accepts http URL without extension check', function () {
-        $result = $this->tool->execute([
-            'path' => 'http://example.com/image',
+    it('accepts supported URL paths', function (string $path) {
+        $this->assertToolExecutionStatus([
+            'path' => $path,
             'prompt' => 'Describe this',
-        ]);
-        $data = $this->decodeToolResult($result);
-
-        expect($data)->not->toBeNull()
-            ->and($data['status'])->toBe('analyzed');
-    });
-
-    it('accepts https URL without extension check', function () {
-        $result = $this->tool->execute([
-            'path' => 'https://example.com/images/photo.png',
-            'prompt' => 'Describe this',
-        ]);
-        $data = $this->decodeToolResult($result);
-
-        expect($data['status'])->toBe('analyzed');
-    });
-
-    it('accepts https URL with query params', function () {
-        $result = $this->tool->execute([
-            'path' => 'https://example.com/image?w=500&h=300',
-            'prompt' => 'Describe this',
-        ]);
-        $data = $this->decodeToolResult($result);
-
-        expect($data['status'])->toBe('analyzed');
-    });
+        ], 'analyzed');
+    })->with('image analysis accepted urls');
 });
 
 describe('stub execution', function () {

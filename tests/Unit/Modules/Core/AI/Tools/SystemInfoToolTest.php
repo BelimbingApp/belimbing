@@ -18,6 +18,7 @@ describe('tool metadata', function () {
             'system_info',
             'ai.tool_system_info.execute',
             ['section'],
+            [],
         );
 
         expect($this->tool->parametersSchema()['properties']['section'])->toHaveKey('enum');

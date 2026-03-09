@@ -64,17 +64,14 @@ describe('navigate action', function () {
     });
 
     it('navigates successfully', function () {
-        $data = $this->decodeToolExecution(['action' => 'navigate', 'url' => 'https://example.com']);
-        expect($data['status'])->toBe('navigated');
+        $this->assertToolExecutionStatus(['action' => 'navigate', 'url' => 'https://example.com'], 'navigated');
     });
 });
 
 describe('snapshot action', function () {
     it('returns snapshot with default format', function () {
-        $data = $this->decodeToolExecution(['action' => 'snapshot']);
-
-        expect($data['format'])->toBe('ai')
-            ->and($data['status'])->toBe('captured');
+        $data = $this->assertToolExecutionStatus(['action' => 'snapshot'], 'captured');
+        expect($data['format'])->toBe('ai');
     });
 
     it('accepts aria format', function () {
@@ -85,8 +82,7 @@ describe('snapshot action', function () {
 
 describe('screenshot action', function () {
     it('returns screenshot stub', function () {
-        $data = $this->decodeToolExecution(['action' => 'screenshot']);
-        expect($data['status'])->toBe('captured');
+        $this->assertToolExecutionStatus(['action' => 'screenshot'], 'captured');
     });
 
     it('accepts full_page flag', function () {
@@ -110,15 +106,13 @@ describe('act action', function () {
     });
 
     it('performs action successfully', function () {
-        $data = $this->decodeToolExecution(['action' => 'act', 'kind' => 'click', 'ref' => 'e1']);
-        expect($data['status'])->toBe('performed');
+        $this->assertToolExecutionStatus(['action' => 'act', 'kind' => 'click', 'ref' => 'e1'], 'performed');
     });
 });
 
 describe('tabs action', function () {
     it('lists tabs', function () {
-        $data = $this->decodeToolExecution(['action' => 'tabs']);
-        expect($data['status'])->toBe('listed');
+        $this->assertToolExecutionStatus(['action' => 'tabs'], 'listed');
     });
 });
 
@@ -128,8 +122,7 @@ describe('open action', function () {
     });
 
     it('opens tab successfully', function () {
-        $data = $this->decodeToolExecution(['action' => 'open', 'url' => 'https://example.com']);
-        expect($data['status'])->toBe('opened');
+        $this->assertToolExecutionStatus(['action' => 'open', 'url' => 'https://example.com'], 'opened');
     });
 });
 
@@ -139,8 +132,7 @@ describe('close action', function () {
     });
 
     it('closes tab', function () {
-        $data = $this->decodeToolExecution(['action' => 'close', 'tab_id' => 'tab1']);
-        expect($data['status'])->toBe('closed');
+        $this->assertToolExecutionStatus(['action' => 'close', 'tab_id' => 'tab1'], 'closed');
     });
 });
 
@@ -166,15 +158,13 @@ describe('evaluate action', function () {
     it('evaluates when enabled', function () {
         config()->set('ai.tools.browser.evaluate_enabled', true);
 
-        $data = $this->decodeToolExecution(['action' => 'evaluate', 'script' => 'document.title']);
-        expect($data['status'])->toBe('evaluated');
+        $this->assertToolExecutionStatus(['action' => 'evaluate', 'script' => 'document.title'], 'evaluated');
     });
 });
 
 describe('pdf action', function () {
     it('exports pdf', function () {
-        $data = $this->decodeToolExecution(['action' => 'pdf']);
-        expect($data['status'])->toBe('exported');
+        $this->assertToolExecutionStatus(['action' => 'pdf'], 'exported');
     });
 });
 
@@ -191,8 +181,7 @@ describe('cookies action', function () {
     });
 
     it('gets cookies', function () {
-        $data = $this->decodeToolExecution(['action' => 'cookies', 'cookie_action' => 'get']);
-        expect($data['status'])->toBe('retrieved');
+        $this->assertToolExecutionStatus(['action' => 'cookies', 'cookie_action' => 'get'], 'retrieved');
     });
 
     it('rejects set without name', function () {
@@ -201,18 +190,16 @@ describe('cookies action', function () {
     });
 
     it('sets cookie', function () {
-        $data = $this->decodeToolExecution([
+        $this->assertToolExecutionStatus([
             'action' => 'cookies',
             'cookie_action' => 'set',
             'cookie_name' => 'test',
             'cookie_value' => 'val',
-        ]);
-        expect($data['status'])->toBe('set');
+        ], 'set');
     });
 
     it('clears cookies', function () {
-        $data = $this->decodeToolExecution(['action' => 'cookies', 'cookie_action' => 'clear']);
-        expect($data['status'])->toBe('cleared');
+        $this->assertToolExecutionStatus(['action' => 'cookies', 'cookie_action' => 'clear'], 'cleared');
     });
 });
 

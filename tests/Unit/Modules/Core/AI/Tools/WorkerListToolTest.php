@@ -19,6 +19,7 @@ describe('tool metadata', function () {
             'worker_list',
             'ai.tool_worker_list.execute',
             ['capability_filter'],
+            [],
         );
     });
 });
