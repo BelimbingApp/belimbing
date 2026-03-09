@@ -6,6 +6,8 @@
 namespace App\Modules\Core\AI\Tools;
 
 use App\Modules\Core\AI\Contracts\DigitalWorkerTool;
+use App\Modules\Core\AI\Contracts\Messaging\ChannelAdapter;
+use App\Modules\Core\AI\DTO\Messaging\ChannelCapabilities;
 use App\Modules\Core\AI\Services\Messaging\ChannelAdapterRegistry;
 
 /**
@@ -158,16 +160,20 @@ class MessageTool implements DigitalWorkerTool
                 .($available !== [] ? 'Available channels: '.implode(', ', $available).'.' : 'No channels are configured.');
         }
 
-        return match ($action) {
-            'send' => $this->handleSend($channel, $arguments),
-            'reply' => $this->handleReply($channel, $arguments),
-            'react' => $this->handleReact($channel, $arguments),
-            'edit' => $this->handleEdit($channel, $arguments),
-            'delete' => $this->handleDelete($channel, $arguments),
-            'poll' => $this->handlePoll($channel, $arguments),
-            'list_conversations' => $this->handleListConversations($channel, $arguments),
-            'search' => $this->handleSearch($channel, $arguments),
-        };
+        try {
+            return match ($action) {
+                'send' => $this->handleSend($channel, $arguments),
+                'reply' => $this->handleReply($channel, $arguments),
+                'react' => $this->handleReact($channel, $arguments),
+                'edit' => $this->handleEdit($channel, $arguments),
+                'delete' => $this->handleDelete($channel, $arguments),
+                'poll' => $this->handlePoll($channel, $arguments),
+                'list_conversations' => $this->handleListConversations($channel, $arguments),
+                'search' => $this->handleSearch($channel, $arguments),
+            };
+        } catch (MessageToolValidationException $e) {
+            return $e->getMessage();
+        }
     }
 
     /**
@@ -180,24 +186,10 @@ class MessageTool implements DigitalWorkerTool
      */
     private function handleSend(string $channel, array $arguments): string
     {
-        $target = $arguments['target'] ?? '';
+        $target = $this->resolveRequiredStringArgument($arguments, 'target', 'send');
+        $text = $this->resolveRequiredTextArgument($arguments, 'send');
 
-        if ($error = $this->requireStringArgument($target, 'target', 'send')) {
-            return $error;
-        }
-
-        $text = $arguments['text'] ?? '';
-
-        if ($error = $this->requireStringArgument($text, 'text', 'send')) {
-            return $error;
-        }
-
-        if ($error = $this->validateTextLength($text)) {
-            return $error;
-        }
-
-        $adapter = $this->adapterRegistry->resolve($channel);
-        $capabilities = $adapter->capabilities();
+        $capabilities = $this->resolveChannelCapabilities($channel);
 
         if (mb_strlen($text) > $capabilities->maxMessageLength) {
             return 'Error: Message exceeds '.$channel.' limit of '
@@ -206,16 +198,16 @@ class MessageTool implements DigitalWorkerTool
 
         $mediaPath = $arguments['media_path'] ?? null;
 
-        return json_encode([
+        return $this->encodeResponse([
             'action' => 'send',
             'channel' => $channel,
-            'target' => trim($target),
-            'text' => trim($text),
+            'target' => $target,
+            'text' => $text,
             'media_path' => is_string($mediaPath) ? trim($mediaPath) : null,
             'status' => 'sent',
             'message_id' => null,
             'message' => 'Message sent (stub). Channel adapter integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ]);
     }
 
     /**
@@ -228,30 +220,17 @@ class MessageTool implements DigitalWorkerTool
      */
     private function handleReply(string $channel, array $arguments): string
     {
-        $messageId = $arguments['message_id'] ?? '';
+        $messageId = $this->resolveRequiredStringArgument($arguments, 'message_id', 'reply');
+        $text = $this->resolveRequiredTextArgument($arguments, 'reply');
 
-        if ($error = $this->requireStringArgument($messageId, 'message_id', 'reply')) {
-            return $error;
-        }
-
-        $text = $arguments['text'] ?? '';
-
-        if ($error = $this->requireStringArgument($text, 'text', 'reply')) {
-            return $error;
-        }
-
-        if ($error = $this->validateTextLength($text)) {
-            return $error;
-        }
-
-        return json_encode([
+        return $this->encodeResponse([
             'action' => 'reply',
             'channel' => $channel,
-            'message_id' => trim($messageId),
-            'text' => trim($text),
+            'message_id' => $messageId,
+            'text' => $text,
             'status' => 'replied',
             'message' => 'Reply sent (stub). Channel adapter integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ]);
     }
 
     /**
@@ -264,32 +243,19 @@ class MessageTool implements DigitalWorkerTool
      */
     private function handleReact(string $channel, array $arguments): string
     {
-        $adapter = $this->adapterRegistry->resolve($channel);
+        $this->assertChannelCapability($channel, 'supportsReactions', 'Error: '.$channel.' does not support reactions.');
 
-        if (! $adapter->capabilities()->supportsReactions) {
-            return 'Error: '.$channel.' does not support reactions.';
-        }
+        $messageId = $this->resolveRequiredStringArgument($arguments, 'message_id', 'react');
+        $emoji = $this->resolveRequiredStringArgument($arguments, 'emoji', 'react');
 
-        $messageId = $arguments['message_id'] ?? '';
-
-        if ($error = $this->requireStringArgument($messageId, 'message_id', 'react')) {
-            return $error;
-        }
-
-        $emoji = $arguments['emoji'] ?? '';
-
-        if ($error = $this->requireStringArgument($emoji, 'emoji', 'react')) {
-            return $error;
-        }
-
-        return json_encode([
+        return $this->encodeResponse([
             'action' => 'react',
             'channel' => $channel,
-            'message_id' => trim($messageId),
-            'emoji' => trim($emoji),
+            'message_id' => $messageId,
+            'emoji' => $emoji,
             'status' => 'reacted',
             'message' => 'Reaction added (stub). Channel adapter integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ]);
     }
 
     /**
@@ -302,36 +268,19 @@ class MessageTool implements DigitalWorkerTool
      */
     private function handleEdit(string $channel, array $arguments): string
     {
-        $adapter = $this->adapterRegistry->resolve($channel);
+        $this->assertChannelCapability($channel, 'supportsEditing', 'Error: '.$channel.' does not support message editing.');
 
-        if (! $adapter->capabilities()->supportsEditing) {
-            return 'Error: '.$channel.' does not support message editing.';
-        }
+        $messageId = $this->resolveRequiredStringArgument($arguments, 'message_id', 'edit');
+        $text = $this->resolveRequiredTextArgument($arguments, 'edit');
 
-        $messageId = $arguments['message_id'] ?? '';
-
-        if ($error = $this->requireStringArgument($messageId, 'message_id', 'edit')) {
-            return $error;
-        }
-
-        $text = $arguments['text'] ?? '';
-
-        if ($error = $this->requireStringArgument($text, 'text', 'edit')) {
-            return $error;
-        }
-
-        if ($error = $this->validateTextLength($text)) {
-            return $error;
-        }
-
-        return json_encode([
+        return $this->encodeResponse([
             'action' => 'edit',
             'channel' => $channel,
-            'message_id' => trim($messageId),
-            'text' => trim($text),
+            'message_id' => $messageId,
+            'text' => $text,
             'status' => 'edited',
             'message' => 'Message edited (stub). Channel adapter integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ]);
     }
 
     /**
@@ -344,25 +293,17 @@ class MessageTool implements DigitalWorkerTool
      */
     private function handleDelete(string $channel, array $arguments): string
     {
-        $adapter = $this->adapterRegistry->resolve($channel);
+        $this->assertChannelCapability($channel, 'supportsDeletion', 'Error: '.$channel.' does not support message deletion.');
 
-        if (! $adapter->capabilities()->supportsDeletion) {
-            return 'Error: '.$channel.' does not support message deletion.';
-        }
+        $messageId = $this->resolveRequiredStringArgument($arguments, 'message_id', 'delete');
 
-        $messageId = $arguments['message_id'] ?? '';
-
-        if ($error = $this->requireStringArgument($messageId, 'message_id', 'delete')) {
-            return $error;
-        }
-
-        return json_encode([
+        return $this->encodeResponse([
             'action' => 'delete',
             'channel' => $channel,
-            'message_id' => trim($messageId),
+            'message_id' => $messageId,
             'status' => 'deleted',
             'message' => 'Message deleted (stub). Channel adapter integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ]);
     }
 
     /**
@@ -375,23 +316,10 @@ class MessageTool implements DigitalWorkerTool
      */
     private function handlePoll(string $channel, array $arguments): string
     {
-        $adapter = $this->adapterRegistry->resolve($channel);
+        $this->assertChannelCapability($channel, 'supportsPolls', 'Error: '.$channel.' does not support polls.');
 
-        if (! $adapter->capabilities()->supportsPolls) {
-            return 'Error: '.$channel.' does not support polls.';
-        }
-
-        $target = $arguments['target'] ?? '';
-
-        if ($error = $this->requireStringArgument($target, 'target', 'poll')) {
-            return $error;
-        }
-
-        $question = $arguments['question'] ?? '';
-
-        if ($error = $this->requireStringArgument($question, 'question', 'poll')) {
-            return $error;
-        }
+        $target = $this->resolveRequiredStringArgument($arguments, 'target', 'poll');
+        $question = $this->resolveRequiredStringArgument($arguments, 'question', 'poll');
 
         $options = $arguments['options'] ?? [];
 
@@ -409,15 +337,15 @@ class MessageTool implements DigitalWorkerTool
             }
         }
 
-        return json_encode([
+        return $this->encodeResponse([
             'action' => 'poll',
             'channel' => $channel,
-            'target' => trim($target),
-            'question' => trim($question),
+            'target' => $target,
+            'question' => $question,
             'options' => array_map('trim', $options),
             'status' => 'created',
             'message' => 'Poll created (stub). Channel adapter integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ]);
     }
 
     /**
@@ -432,14 +360,14 @@ class MessageTool implements DigitalWorkerTool
     {
         $limit = $this->resolveLimit($arguments);
 
-        return json_encode([
+        return $this->encodeResponse([
             'action' => 'list_conversations',
             'channel' => $channel,
             'limit' => $limit,
             'conversations' => [],
             'status' => 'listed',
             'message' => 'Conversations listed (stub). Channel adapter integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ]);
     }
 
     /**
@@ -452,45 +380,70 @@ class MessageTool implements DigitalWorkerTool
      */
     private function handleSearch(string $channel, array $arguments): string
     {
-        $adapter = $this->adapterRegistry->resolve($channel);
+        $this->assertChannelCapability($channel, 'supportsSearch', 'Error: '.$channel.' does not support message search.');
 
-        if (! $adapter->capabilities()->supportsSearch) {
-            return 'Error: '.$channel.' does not support message search.';
-        }
-
-        $query = $arguments['query'] ?? '';
-
-        if ($error = $this->requireStringArgument($query, 'query', 'search')) {
-            return $error;
-        }
+        $query = $this->resolveRequiredStringArgument($arguments, 'query', 'search');
 
         $limit = $this->resolveLimit($arguments);
 
-        return json_encode([
+        return $this->encodeResponse([
             'action' => 'search',
             'channel' => $channel,
-            'query' => trim($query),
+            'query' => $query,
             'limit' => $limit,
             'results' => [],
             'status' => 'searched',
             'message' => 'Search completed (stub). Channel adapter integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ]);
     }
 
-    private function requireStringArgument(mixed $value, string $name, string $action): ?string
+    private function resolveRequiredStringArgument(array $arguments, string $name, string $action): string
     {
+        $value = $arguments[$name] ?? '';
+
         if (! is_string($value) || trim($value) === '') {
-            return 'Error: "'.$name.'" is required for the '.$action.' action.';
+            throw new MessageToolValidationException('Error: "'.$name.'" is required for the '.$action.' action.');
         }
 
-        return null;
+        return trim($value);
     }
 
-    private function validateTextLength(string $text): ?string
+    private function resolveRequiredTextArgument(array $arguments, string $action): string
     {
-        return mb_strlen($text) > self::MAX_TEXT_LENGTH
-            ? 'Error: "text" must not exceed '.self::MAX_TEXT_LENGTH.' characters.'
-            : null;
+        $text = $this->resolveRequiredStringArgument($arguments, 'text', $action);
+        $this->assertTextLength($text);
+
+        return $text;
+    }
+
+    private function encodeResponse(array $payload): string
+    {
+        return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
+    private function assertTextLength(string $text): void
+    {
+        if (mb_strlen($text) > self::MAX_TEXT_LENGTH) {
+            throw new MessageToolValidationException('Error: "text" must not exceed '.self::MAX_TEXT_LENGTH.' characters.');
+        }
+    }
+
+    private function assertChannelCapability(string $channel, string $capabilityProperty, string $errorMessage): void
+    {
+        if (! $this->resolveChannelCapabilities($channel)->{$capabilityProperty}) {
+            throw new MessageToolValidationException($errorMessage);
+        }
+    }
+
+    private function resolveChannelCapabilities(string $channel): ChannelCapabilities
+    {
+        return $this->resolveAdapter($channel)->capabilities();
+    }
+
+    private function resolveAdapter(string $channel): ChannelAdapter
+    {
+        return $this->adapterRegistry->resolve($channel)
+            ?? throw new \RuntimeException('Channel "'.$channel.'" is not registered.');
     }
 
     /**
@@ -503,3 +456,5 @@ class MessageTool implements DigitalWorkerTool
         return is_int($limit) ? max(1, min(50, $limit)) : 10;
     }
 }
+
+final class MessageToolValidationException extends \InvalidArgumentException {}

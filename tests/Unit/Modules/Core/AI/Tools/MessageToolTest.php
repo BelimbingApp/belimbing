@@ -4,8 +4,8 @@ use App\Modules\Core\AI\Contracts\Messaging\ChannelAdapter;
 use App\Modules\Core\AI\DTO\Messaging\ChannelCapabilities;
 use App\Modules\Core\AI\Services\Messaging\ChannelAdapterRegistry;
 use App\Modules\Core\AI\Tools\MessageTool;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, AssertsToolBehavior::class);
 
