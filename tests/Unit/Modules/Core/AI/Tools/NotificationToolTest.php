@@ -9,9 +9,11 @@ use Tests\Support\AssertsToolBehavior;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
 
+const NOTIFICATION_TEST_BODY = 'Test body';
+
 dataset('notification required string fields', [
-    [['user_id' => 1, 'body' => 'Test body'], 'subject'],
-    [['user_id' => 1, 'subject' => '', 'body' => 'Test body'], 'subject'],
+    [['user_id' => 1, 'body' => NOTIFICATION_TEST_BODY], 'subject'],
+    [['user_id' => 1, 'subject' => '', 'body' => NOTIFICATION_TEST_BODY], 'subject'],
     [['user_id' => 1, 'subject' => 'Test'], 'body'],
     [['user_id' => 1, 'subject' => 'Test', 'body' => ' '], 'body'],
 ]);
@@ -34,16 +36,16 @@ describe('tool metadata', function () {
 
 describe('input validation', function () {
     it('rejects missing user_id', function () {
-        $this->assertToolError(['subject' => 'Test', 'body' => 'Test body']);
+        $this->assertToolError(['subject' => 'Test', 'body' => NOTIFICATION_TEST_BODY]);
     });
 
     it('rejects invalid user_id type', function () {
-        $result = $this->tool->execute(['user_id' => 'invalid', 'subject' => 'Test', 'body' => 'Test body']);
+        $result = $this->tool->execute(['user_id' => 'invalid', 'subject' => 'Test', 'body' => NOTIFICATION_TEST_BODY]);
         expect($result)->toContain('Error');
     });
 
     it('rejects negative user_id', function () {
-        $result = $this->tool->execute(['user_id' => -1, 'subject' => 'Test', 'body' => 'Test body']);
+        $result = $this->tool->execute(['user_id' => -1, 'subject' => 'Test', 'body' => NOTIFICATION_TEST_BODY]);
         expect($result)->toContain('Error');
     });
 
@@ -55,7 +57,7 @@ describe('input validation', function () {
         $result = $this->tool->execute([
             'user_id' => 1,
             'subject' => str_repeat('x', 256),
-            'body' => 'Test body',
+            'body' => NOTIFICATION_TEST_BODY,
         ]);
         expect($result)->toContain('Error')
             ->and($result)->toContain('exceed');
@@ -75,7 +77,7 @@ describe('input validation', function () {
         $result = $this->tool->execute([
             'user_id' => 1,
             'subject' => 'Test',
-            'body' => 'Test body',
+            'body' => NOTIFICATION_TEST_BODY,
             'channel' => 'sms',
         ]);
         expect($result)->toContain('Error');
@@ -95,7 +97,7 @@ describe('recipient resolution', function () {
         $result = $this->tool->execute([
             'user_id' => 99999,
             'subject' => 'Test',
-            'body' => 'Test body',
+            'body' => NOTIFICATION_TEST_BODY,
         ]);
 
         expect($result)->toContain('Error')

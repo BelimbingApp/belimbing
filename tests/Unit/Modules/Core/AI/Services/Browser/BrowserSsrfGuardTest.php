@@ -5,6 +5,8 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+const BROWSER_SSRF_PRIVATE_IP = 'https://192.168.1.1';
+
 dataset('browser ssrf blocked hostnames', [
     ['http://localhost', 'Blocked'],
     ['https://0.0.0.0', 'Blocked'],
@@ -13,7 +15,7 @@ dataset('browser ssrf blocked hostnames', [
 ]);
 
 dataset('browser ssrf private ips', [
-    'https://192.168.1.1',
+    BROWSER_SSRF_PRIVATE_IP,
     'https://10.0.0.1',
 ]);
 
@@ -64,7 +66,7 @@ describe('hostname allowlist', function () {
         config()->set('ai.tools.browser.ssrf_policy.hostname_allowlist', ['*.example.com']);
         config()->set('ai.tools.browser.ssrf_policy.allow_private_network', false);
 
-        expect($this->guard->validate('https://192.168.1.1'))->toContain('private or reserved');
+        expect($this->guard->validate(BROWSER_SSRF_PRIVATE_IP))->toContain('private or reserved');
     });
 });
 
@@ -82,6 +84,6 @@ describe('allow_private_network config', function () {
     it('allows private IPs when allow_private_network is true', function () {
         config()->set('ai.tools.browser.ssrf_policy.allow_private_network', true);
 
-        expect($this->guard->validate('https://192.168.1.1'))->toBe(true);
+        expect($this->guard->validate(BROWSER_SSRF_PRIVATE_IP))->toBe(true);
     });
 });

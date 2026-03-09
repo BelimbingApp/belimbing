@@ -6,16 +6,19 @@ use Tests\Support\AssertsToolBehavior;
 
 uses(TestCase::class, AssertsToolBehavior::class);
 
+const IMAGE_ANALYSIS_PROMPT = 'Describe this image';
+const IMAGE_ANALYSIS_PATH = '/images/photo.jpg';
+
 beforeEach(function () {
     $this->tool = new ImageAnalysisTool;
 });
 
 dataset('supported image formats', ['jpg', 'jpeg', 'png', 'gif', 'webp']);
 dataset('image analysis missing text fields', [
-    [['prompt' => 'Describe this image'], 'path'],
-    [['path' => '', 'prompt' => 'Describe this image'], 'path'],
-    [['path' => '/images/photo.jpg'], 'prompt'],
-    [['path' => '/images/photo.jpg', 'prompt' => ''], 'prompt'],
+    [['prompt' => IMAGE_ANALYSIS_PROMPT], 'path'],
+    [['path' => '', 'prompt' => IMAGE_ANALYSIS_PROMPT], 'path'],
+    [['path' => IMAGE_ANALYSIS_PATH], 'prompt'],
+    [['path' => IMAGE_ANALYSIS_PATH, 'prompt' => ''], 'prompt'],
 ]);
 dataset('image analysis accepted urls', [
     ['http://example.com/image'],
@@ -41,13 +44,13 @@ describe('input validation', function () {
     })->with('image analysis missing text fields');
 
     it('rejects non-string path', function () {
-        $result = $this->tool->execute(['path' => 42, 'prompt' => 'Describe this image']);
+        $result = $this->tool->execute(['path' => 42, 'prompt' => IMAGE_ANALYSIS_PROMPT]);
         expect($result)->toContain('Error');
     });
 
     it('rejects prompt exceeding max length', function () {
         $result = $this->tool->execute([
-            'path' => '/images/photo.jpg',
+            'path' => IMAGE_ANALYSIS_PATH,
             'prompt' => str_repeat('x', 5001),
         ]);
         expect($result)->toContain('Error')
@@ -95,7 +98,7 @@ describe('URL paths', function () {
     it('accepts supported URL paths', function (string $path) {
         $this->assertToolExecutionStatus([
             'path' => $path,
-            'prompt' => 'Describe this',
+            'prompt' => IMAGE_ANALYSIS_PROMPT,
         ], 'analyzed');
     })->with('image analysis accepted urls');
 });
@@ -103,7 +106,7 @@ describe('URL paths', function () {
 describe('stub execution', function () {
     it('returns valid JSON with required fields', function () {
         $result = $this->tool->execute([
-            'path' => '/images/photo.jpg',
+            'path' => IMAGE_ANALYSIS_PATH,
             'prompt' => 'What is in this image?',
         ]);
         $data = $this->decodeToolResult($result);
@@ -127,7 +130,7 @@ describe('stub execution', function () {
 
     it('returns stub message', function () {
         $result = $this->tool->execute([
-            'path' => '/images/photo.jpg',
+            'path' => IMAGE_ANALYSIS_PATH,
             'prompt' => 'Describe',
         ]);
         $data = $this->decodeToolResult($result);

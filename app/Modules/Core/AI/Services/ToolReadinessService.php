@@ -31,20 +31,17 @@ class ToolReadinessService
      */
     public function readiness(string $toolName): ToolReadiness
     {
+        $readiness = ToolReadiness::READY;
+
         if (! $this->toolRegistry->isRegistered($toolName)) {
-            // Conditional tools (WebSearchTool, MemorySearchTool) may not be registered
-            if ($this->isConditionalTool($toolName)) {
-                return ToolReadiness::UNCONFIGURED;
-            }
-
-            return ToolReadiness::UNAVAILABLE;
+            $readiness = $this->isConditionalTool($toolName)
+                ? ToolReadiness::UNCONFIGURED
+                : ToolReadiness::UNAVAILABLE;
+        } elseif (! $this->toolRegistry->canCurrentUserUseTool($toolName)) {
+            $readiness = ToolReadiness::UNAUTHORIZED;
         }
 
-        if (! $this->toolRegistry->canCurrentUserUseTool($toolName)) {
-            return ToolReadiness::UNAUTHORIZED;
-        }
-
-        return ToolReadiness::READY;
+        return $readiness;
     }
 
     /**

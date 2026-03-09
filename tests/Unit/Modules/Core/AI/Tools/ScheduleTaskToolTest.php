@@ -125,7 +125,7 @@ describe('add action', function () {
 });
 
 describe('update action', function () {
-    it('rejects missing or empty task_id', function () {
+    it('rejects missing or empty task_id for updates', function () {
         $this->assertRejectsMissingAndEmptyStringArgument('task_id', ['action' => 'update']);
     });
 
@@ -155,7 +155,7 @@ describe('update action', function () {
 });
 
 describe('remove action', function () {
-    it('rejects missing or empty task_id', function () {
+    it('rejects missing or empty task_id for removals', function () {
         $this->assertRejectsMissingAndEmptyStringArgument('task_id', ['action' => 'remove']);
     });
 
@@ -169,7 +169,7 @@ describe('remove action', function () {
 });
 
 describe('status action', function () {
-    it('rejects missing or empty task_id', function () {
+    it('rejects missing or empty task_id for status checks', function () {
         $this->assertRejectsMissingAndEmptyStringArgument('task_id', ['action' => 'status']);
     });
 

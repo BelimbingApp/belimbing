@@ -6,11 +6,14 @@ use Tests\Support\AssertsToolBehavior;
 
 uses(TestCase::class, AssertsToolBehavior::class);
 
+const DOCUMENT_ANALYSIS_PROMPT = 'Summarize this';
+const DOCUMENT_ANALYSIS_PATH = '/docs/report.pdf';
+
 dataset('document analysis missing text fields', [
-    [['prompt' => 'Summarize this'], 'path'],
-    [['path' => '', 'prompt' => 'Summarize this'], 'path'],
-    [['path' => '/docs/report.pdf'], 'prompt'],
-    [['path' => '/docs/report.pdf', 'prompt' => ''], 'prompt'],
+    [['prompt' => DOCUMENT_ANALYSIS_PROMPT], 'path'],
+    [['path' => '', 'prompt' => DOCUMENT_ANALYSIS_PROMPT], 'path'],
+    [['path' => DOCUMENT_ANALYSIS_PATH], 'prompt'],
+    [['path' => DOCUMENT_ANALYSIS_PATH, 'prompt' => ''], 'prompt'],
 ]);
 
 dataset('document analysis accepted pages', [
@@ -42,21 +45,13 @@ describe('input validation', function () {
     })->with('document analysis missing text fields');
 
     it('rejects non-string path', function () {
-        $result = $this->tool->execute(['path' => 123, 'prompt' => 'Summarize this']);
+        $result = $this->tool->execute(['path' => 123, 'prompt' => DOCUMENT_ANALYSIS_PROMPT]);
         expect($result)->toContain('Error');
-    });
-
-    it('rejects missing prompt', function () {
-        $this->assertToolError(['path' => '/docs/report.pdf']);
-    });
-
-    it('rejects empty prompt', function () {
-        $this->assertToolError(['path' => '/docs/report.pdf', 'prompt' => '']);
     });
 
     it('rejects prompt exceeding max length', function () {
         $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
+            'path' => DOCUMENT_ANALYSIS_PATH,
             'prompt' => str_repeat('x', 5001),
         ]);
         expect($result)->toContain('Error')
@@ -65,8 +60,8 @@ describe('input validation', function () {
 
     it('rejects invalid pages format with letters', function () {
         $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
-            'prompt' => 'Summarize this',
+            'path' => DOCUMENT_ANALYSIS_PATH,
+            'prompt' => DOCUMENT_ANALYSIS_PROMPT,
             'pages' => 'abc',
         ]);
         expect($result)->toContain('Error')
@@ -75,8 +70,8 @@ describe('input validation', function () {
 
     it('rejects invalid pages format with spaces', function () {
         $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
-            'prompt' => 'Summarize this',
+            'path' => DOCUMENT_ANALYSIS_PATH,
+            'prompt' => DOCUMENT_ANALYSIS_PROMPT,
             'pages' => '1 - 5',
         ]);
         expect($result)->toContain('Error');
@@ -84,8 +79,8 @@ describe('input validation', function () {
 
     it('rejects pages exceeding max length', function () {
         $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
-            'prompt' => 'Summarize this',
+            'path' => DOCUMENT_ANALYSIS_PATH,
+            'prompt' => DOCUMENT_ANALYSIS_PROMPT,
             'pages' => str_repeat('1,', 60).'1',
         ]);
         expect($result)->toContain('Error')
@@ -94,8 +89,8 @@ describe('input validation', function () {
 
     it('rejects non-string pages', function () {
         $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
-            'prompt' => 'Summarize this',
+            'path' => DOCUMENT_ANALYSIS_PATH,
+            'prompt' => DOCUMENT_ANALYSIS_PROMPT,
             'pages' => 5,
         ]);
         expect($result)->toContain('Error');
@@ -105,8 +100,8 @@ describe('input validation', function () {
 describe('pages format validation', function () {
     it('accepts supported page selectors', function (string $pages) {
         $data = $this->assertToolExecutionStatus([
-            'path' => '/docs/report.pdf',
-            'prompt' => 'Summarize this',
+            'path' => DOCUMENT_ANALYSIS_PATH,
+            'prompt' => DOCUMENT_ANALYSIS_PROMPT,
             'pages' => $pages,
         ], 'analyzed');
 
@@ -117,7 +112,7 @@ describe('pages format validation', function () {
 describe('stub execution', function () {
     it('returns valid JSON with required fields', function () {
         $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
+            'path' => DOCUMENT_ANALYSIS_PATH,
             'prompt' => 'Summarize this document',
         ]);
         $data = $this->decodeToolResult($result);
@@ -141,7 +136,7 @@ describe('stub execution', function () {
 
     it('includes pages when provided', function () {
         $data = $this->assertToolExecutionStatus([
-            'path' => '/docs/report.pdf',
+            'path' => DOCUMENT_ANALYSIS_PATH,
             'prompt' => 'Summarize',
             'pages' => '1-3',
         ], 'analyzed');
@@ -152,7 +147,7 @@ describe('stub execution', function () {
 
     it('excludes pages when not provided', function () {
         $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
+            'path' => DOCUMENT_ANALYSIS_PATH,
             'prompt' => 'Summarize',
         ]);
         $data = $this->decodeToolResult($result);
@@ -162,7 +157,7 @@ describe('stub execution', function () {
 
     it('includes model when provided', function () {
         $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
+            'path' => DOCUMENT_ANALYSIS_PATH,
             'prompt' => 'Summarize',
             'model' => 'claude-3-opus',
         ]);
@@ -174,7 +169,7 @@ describe('stub execution', function () {
 
     it('excludes model when not provided', function () {
         $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
+            'path' => DOCUMENT_ANALYSIS_PATH,
             'prompt' => 'Summarize',
         ]);
         $data = json_decode($result, true);
@@ -184,7 +179,7 @@ describe('stub execution', function () {
 
     it('returns stub message', function () {
         $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
+            'path' => DOCUMENT_ANALYSIS_PATH,
             'prompt' => 'Summarize',
         ]);
         $data = json_decode($result, true);
@@ -194,18 +189,18 @@ describe('stub execution', function () {
 
     it('trims whitespace from inputs', function () {
         $result = $this->tool->execute([
-            'path' => '  /docs/report.pdf  ',
-            'prompt' => '  Summarize this  ',
+            'path' => '  '.DOCUMENT_ANALYSIS_PATH.'  ',
+            'prompt' => '  '.DOCUMENT_ANALYSIS_PROMPT.'  ',
         ]);
         $data = json_decode($result, true);
 
-        expect($data['path'])->toBe('/docs/report.pdf')
-            ->and($data['prompt'])->toBe('Summarize this');
+        expect($data['path'])->toBe(DOCUMENT_ANALYSIS_PATH)
+            ->and($data['prompt'])->toBe(DOCUMENT_ANALYSIS_PROMPT);
     });
 
     it('handles empty pages string as no pages', function () {
         $result = $this->tool->execute([
-            'path' => '/docs/report.pdf',
+            'path' => DOCUMENT_ANALYSIS_PATH,
             'prompt' => 'Summarize',
             'pages' => '  ',
         ]);

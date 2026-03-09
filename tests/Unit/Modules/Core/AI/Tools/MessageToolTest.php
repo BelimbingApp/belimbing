@@ -9,10 +9,12 @@ use Tests\Support\AssertsToolBehavior;
 
 uses(TestCase::class, AssertsToolBehavior::class);
 
+const UPDATED_MESSAGE_TEXT = 'Updated text';
+
 dataset('message actions requiring message_id', [
     ['reply', ['text' => 'Reply text']],
     ['react', ['emoji' => '👍']],
-    ['edit', ['text' => 'Updated text']],
+    ['edit', ['text' => UPDATED_MESSAGE_TEXT]],
     ['delete', []],
 ]);
 
@@ -262,12 +264,12 @@ describe('edit action', function () {
             'action' => 'edit',
             'channel' => 'telegram',
             'message_id' => 'msg-123',
-            'text' => 'Updated text',
+            'text' => UPDATED_MESSAGE_TEXT,
         ], 'edited');
 
         expect($data['action'])->toBe('edit')
             ->and($data['message_id'])->toBe('msg-123')
-            ->and($data['text'])->toBe('Updated text');
+            ->and($data['text'])->toBe(UPDATED_MESSAGE_TEXT);
     });
 
     it('rejects editing on unsupported channel', function () {
@@ -275,7 +277,7 @@ describe('edit action', function () {
             'action' => 'edit',
             'channel' => 'email',
             'message_id' => 'msg-123',
-            'text' => 'Updated text',
+            'text' => UPDATED_MESSAGE_TEXT,
         ]);
         expect($result)->toContain('Error')
             ->and($result)->toContain('does not support message editing');

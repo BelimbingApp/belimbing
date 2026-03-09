@@ -84,7 +84,23 @@ class ToolMetadataRegistry
     private function defaultDefinitions(): array
     {
         return [
-            // Phase 1: Foundation Tools
+            ...$this->foundationDefinitions(),
+            ...$this->memoryDefinitions(),
+            ...$this->delegationDefinitions(),
+            ...$this->automationDefinitions(),
+            ...$this->browserDefinitions(),
+            ...$this->systemDefinitions(),
+            ...$this->messagingDefinitions(),
+            ...$this->mediaDefinitions(),
+        ];
+    }
+
+    /**
+     * @return list<ToolMetadata>
+     */
+    private function foundationDefinitions(): array
+    {
+        return [
             new ToolMetadata(
                 name: 'query_data',
                 displayName: 'Query Data',
@@ -196,8 +212,15 @@ class ToolMetadataRegistry
                     'Read-only — cannot modify system state',
                 ],
             ),
+        ];
+    }
 
-            // Phase 2: Memory & Knowledge
+    /**
+     * @return list<ToolMetadata>
+     */
+    private function memoryDefinitions(): array
+    {
+        return [
             new ToolMetadata(
                 name: 'memory_search',
                 displayName: 'Memory Search',
@@ -272,8 +295,15 @@ class ToolMetadataRegistry
                     'Read-only access to docs/',
                 ],
             ),
+        ];
+    }
 
-            // Phase 3: Delegation & Multi-Agent
+    /**
+     * @return list<ToolMetadata>
+     */
+    private function delegationDefinitions(): array
+    {
+        return [
             new ToolMetadata(
                 name: 'delegate_task',
                 displayName: 'Delegate Task',
@@ -328,8 +358,15 @@ class ToolMetadataRegistry
                     'Shows supervised workers only',
                 ],
             ),
+        ];
+    }
 
-            // Phase 4: Automation & Scheduling
+    /**
+     * @return list<ToolMetadata>
+     */
+    private function automationDefinitions(): array
+    {
+        return [
             new ToolMetadata(
                 name: 'schedule_task',
                 displayName: 'Schedule Task',
@@ -364,7 +401,6 @@ class ToolMetadataRegistry
                 setupRequirements: [
                     'Notification channels configured',
                 ],
-                testExamples: [],
                 healthChecks: [
                     'Notification system available',
                 ],
@@ -372,8 +408,15 @@ class ToolMetadataRegistry
                     'Internal BLB users only',
                 ],
             ),
+        ];
+    }
 
-            // Browser & Navigation
+    /**
+     * @return list<ToolMetadata>
+     */
+    private function browserDefinitions(): array
+    {
+        return [
             new ToolMetadata(
                 name: 'navigate',
                 displayName: 'Navigate',
@@ -414,8 +457,15 @@ class ToolMetadataRegistry
                     'Session isolation between DWs',
                 ],
             ),
+        ];
+    }
 
-            // System Tools
+    /**
+     * @return list<ToolMetadata>
+     */
+    private function systemDefinitions(): array
+    {
+        return [
             new ToolMetadata(
                 name: 'artisan',
                 displayName: 'Artisan',
@@ -470,8 +520,15 @@ class ToolMetadataRegistry
                     'Executes in the user\'s browser context',
                 ],
             ),
+        ];
+    }
 
-            // Messaging
+    /**
+     * @return list<ToolMetadata>
+     */
+    private function messagingDefinitions(): array
+    {
+        return [
             new ToolMetadata(
                 name: 'message',
                 displayName: 'Message',
@@ -486,7 +543,6 @@ class ToolMetadataRegistry
                     'At least one messaging channel account configured',
                     'Channel-specific credentials set up',
                 ],
-                testExamples: [],
                 healthChecks: [
                     'Channel adapter registry loaded',
                     'At least one channel configured',
@@ -496,8 +552,15 @@ class ToolMetadataRegistry
                     'Company-scoped account isolation',
                 ],
             ),
+        ];
+    }
 
-            // Media
+    /**
+     * @return list<ToolMetadata>
+     */
+    private function mediaDefinitions(): array
+    {
+        return [
             new ToolMetadata(
                 name: 'document_analysis',
                 displayName: 'Document Analysis',
