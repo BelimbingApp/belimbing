@@ -260,14 +260,12 @@ verify_postgresql_connection() {
     local db_password="${5:-}"
 
     # If credentials not provided, try to read from .env
-    if [[ -z "$db_name" ]] || [[ -z "$db_user" ]] || [[ -z "$db_password" ]]; then
-        if [[ -f "$PROJECT_ROOT/.env" ]]; then
-            db_host=$(get_env_var "DB_HOST" "127.0.0.1")
-            db_port=$(get_env_var "DB_PORT" "5432")
-            db_name=$(get_env_var "DB_DATABASE" "")
-            db_user=$(get_env_var "DB_USERNAME" "")
-            db_password=$(get_env_var "DB_PASSWORD" "")
-        fi
+    if [[ (-z "$db_name" || -z "$db_user" || -z "$db_password") && -f "$PROJECT_ROOT/.env" ]]; then
+        db_host=$(get_env_var "DB_HOST" "127.0.0.1")
+        db_port=$(get_env_var "DB_PORT" "5432")
+        db_name=$(get_env_var "DB_DATABASE" "")
+        db_user=$(get_env_var "DB_USERNAME" "")
+        db_password=$(get_env_var "DB_PASSWORD" "")
     fi
 
     # Check if we have all required credentials

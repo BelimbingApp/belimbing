@@ -36,6 +36,7 @@ source "$SCRIPT_DIR/shared/caddy.sh" 2>/dev/null || true
 
 # Environment (default to local if not provided)
 APP_ENV="${1:-local}"
+readonly PRODUCTION_ENV="production"
 
 # Check if Docker Desktop is providing Docker (WSL2)
 check_docker_desktop() {
@@ -272,7 +273,7 @@ setup_docker_compose() {
 
 # Get Docker Compose profile based on environment
 get_compose_profile() {
-    if [[ "$APP_ENV" = "production" ]]; then
+    if [[ "$APP_ENV" = "$PRODUCTION_ENV" ]]; then
         echo "prod"
     else
         echo "dev"
@@ -328,7 +329,7 @@ wait_for_services() {
 
     # Service name depends on profile (app-dev or app-prod)
     local app_service
-    if [[ "$APP_ENV" = "production" ]]; then
+    if [[ "$APP_ENV" = "$PRODUCTION_ENV" ]]; then
         app_service="app-prod"
     else
         app_service="app-dev"
@@ -429,7 +430,7 @@ get_compose_args() {
     local base_file="$PROJECT_ROOT/docker/docker-compose.yml"
     local prod_file="$PROJECT_ROOT/docker/docker-compose.prod.yml"
 
-    if [[ "$APP_ENV" = "production" ]]; then
+    if [[ "$APP_ENV" = "$PRODUCTION_ENV" ]]; then
         # Production: base + prod override (no auto-load of override.yml)
         echo "-f $base_file -f $prod_file"
     else
@@ -567,7 +568,7 @@ start_services() {
     local project_name
     project_name=$(get_compose_project_name)
 
-    if [[ "$APP_ENV" = "production" ]]; then
+    if [[ "$APP_ENV" = "$PRODUCTION_ENV" ]]; then
         echo -e "${CYAN}Starting production services...${NC}"
     else
         echo -e "${CYAN}Starting development services...${NC}"

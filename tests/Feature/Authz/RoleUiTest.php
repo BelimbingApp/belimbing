@@ -9,6 +9,8 @@ use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
+const CORE_ADMINISTRATOR_NAME = 'Core Administrator';
+
 beforeEach(function (): void {
     $roles = config('authz.roles', []);
 
@@ -83,17 +85,17 @@ test('role index displays roles with search', function (): void {
     $this->actingAs($user);
 
     Livewire::test('admin.roles.index')
-        ->assertSee('Core Administrator');
+        ->assertSee(CORE_ADMINISTRATOR_NAME);
 
     Livewire::test('admin.roles.index')
         ->set('search', 'user viewer')
         ->assertSee('User Viewer')
-        ->assertDontSee('Core Administrator');
+        ->assertDontSee(CORE_ADMINISTRATOR_NAME);
 
     Livewire::test('admin.roles.index')
         ->set('search', 'user editor')
         ->assertSee('User Editor')
-        ->assertDontSee('Core Administrator');
+        ->assertDontSee(CORE_ADMINISTRATOR_NAME);
 });
 
 test('role show displays role details and capabilities', function (): void {

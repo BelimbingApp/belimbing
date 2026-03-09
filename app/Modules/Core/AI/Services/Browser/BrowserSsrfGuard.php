@@ -123,44 +123,46 @@ class BrowserSsrfGuard
      */
     private function checkIpRange(string $host): ?string
     {
+        $error = null;
+
         // If the host is already a literal IP address, validate it directly.
         if (filter_var($host, FILTER_VALIDATE_IP)) {
             if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-                return "Blocked: {$host} is a private or reserved IP address.";
+                $error = "Blocked: {$host} is a private or reserved IP address.";
             }
+        } else {
+            // Resolve all A and AAAA records for the hostname.
+            $records = @dns_get_record($host, DNS_A + DNS_AAAA);
 
-            return null;
-        }
+            if ($records === false || $records === []) {
+                $error = "Blocked: unable to resolve hostname {$host}.";
+            } else {
+                $ips = [];
 
-        // Resolve all A and AAAA records for the hostname.
-        $records = @dns_get_record($host, DNS_A + DNS_AAAA);
+                foreach ($records as $record) {
+                    if (isset($record['ip'])) {
+                        $ips[] = $record['ip'];
+                    }
+                    if (isset($record['ipv6'])) {
+                        $ips[] = $record['ipv6'];
+                    }
+                }
 
-        if ($records === false || $records === []) {
-            return "Blocked: unable to resolve hostname {$host}.";
-        }
-
-        $ips = [];
-
-        foreach ($records as $record) {
-            if (isset($record['ip'])) {
-                $ips[] = $record['ip'];
+                if ($ips === []) {
+                    $error = "Blocked: unable to resolve hostname {$host}.";
+                } else {
+                    // Block if any resolved IP is in a private or reserved range.
+                    foreach ($ips as $ip) {
+                        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+                            $error = "Blocked: {$host} resolves to a private or reserved IP address ({$ip}).";
+                            break;
+                        }
+                    }
+                }
             }
-            if (isset($record['ipv6'])) {
-                $ips[] = $record['ipv6'];
-            }
         }
 
-        if ($ips === []) {
-            return "Blocked: unable to resolve hostname {$host}.";
-        }
-
-        // Block if any resolved IP is in a private or reserved range.
-        foreach ($ips as $ip) {
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-                return "Blocked: {$host} resolves to a private or reserved IP address ({$ip}).";
-            }
-        }
-        return null;
+        return $error;
     }
 
     /**

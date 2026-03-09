@@ -23,6 +23,11 @@ uses(TestCase::class);
 const TOOL_METADATA_DESCRIPTION = 'has correct name and required capability';
 
 const NO_COMMAND_PROVIDED = 'No command provided';
+const NO_TASK_DESCRIPTION_PROVIDED = 'No task description provided';
+const GENERATE_Q1_REPORT = 'Generate Q1 report';
+const REPORT_BOT = 'Report Bot';
+const DATA_ANALYST = 'Data Analyst';
+const PATH_REQUIRED_ERROR = '"path" is required and must be a non-empty string';
 
 class ToolExecutionFailure extends RuntimeException {}
 
@@ -291,9 +296,9 @@ describe('DelegateTaskTool', function () {
             Mockery::mock(LaraCapabilityMatcher::class),
         );
 
-        expect($tool->execute([]))->toContain('No task description provided');
-        expect($tool->execute(['task' => '']))->toContain('No task description provided');
-        expect($tool->execute(['task' => '   ']))->toContain('No task description provided');
+        expect($tool->execute([]))->toContain(NO_TASK_DESCRIPTION_PROVIDED);
+        expect($tool->execute(['task' => '']))->toContain(NO_TASK_DESCRIPTION_PROVIDED);
+        expect($tool->execute(['task' => '   ']))->toContain(NO_TASK_DESCRIPTION_PROVIDED);
     });
 
     it('returns error when no worker is available', function () {
@@ -310,28 +315,28 @@ describe('DelegateTaskTool', function () {
 
     it('dispatches task to best matching worker when no worker_id is given', function () {
         $matcher = Mockery::mock(LaraCapabilityMatcher::class);
-        $matcher->shouldReceive('matchBestForTask')->with('Generate Q1 report')->andReturn([
+        $matcher->shouldReceive('matchBestForTask')->with(GENERATE_Q1_REPORT)->andReturn([
             'employee_id' => 42,
-            'name' => 'Report Bot',
+            'name' => REPORT_BOT,
             'capability_summary' => 'Financial reporting',
         ]);
 
         $dispatcher = Mockery::mock(LaraTaskDispatcher::class);
-        $dispatcher->shouldReceive('dispatchForCurrentUser')->with(42, 'Generate Q1 report')->andReturn([
+        $dispatcher->shouldReceive('dispatchForCurrentUser')->with(42, GENERATE_Q1_REPORT)->andReturn([
             'dispatch_id' => 'dw_dispatch_abc123',
             'status' => 'queued',
             'employee_id' => 42,
-            'employee_name' => 'Report Bot',
-            'task' => 'Generate Q1 report',
+            'employee_name' => REPORT_BOT,
+            'task' => GENERATE_Q1_REPORT,
             'acting_for_user_id' => 1,
             'created_at' => '2025-01-01T00:00:00+00:00',
         ]);
 
         $tool = new DelegateTaskTool($dispatcher, $matcher);
 
-        $result = $tool->execute(['task' => 'Generate Q1 report']);
+        $result = $tool->execute(['task' => GENERATE_Q1_REPORT]);
 
-        expect($result)->toContain('Report Bot');
+        expect($result)->toContain(REPORT_BOT);
         expect($result)->toContain('dw_dispatch_abc123');
     });
 
@@ -339,7 +344,7 @@ describe('DelegateTaskTool', function () {
         $matcher = Mockery::mock(LaraCapabilityMatcher::class);
         $matcher->shouldReceive('findAccessibleWorkerById')->with(7)->andReturn([
             'employee_id' => 7,
-            'name' => 'Data Analyst',
+            'name' => DATA_ANALYST,
             'capability_summary' => 'Analytics',
         ]);
 
@@ -348,7 +353,7 @@ describe('DelegateTaskTool', function () {
             'dispatch_id' => 'dw_dispatch_xyz',
             'status' => 'queued',
             'employee_id' => 7,
-            'employee_name' => 'Data Analyst',
+            'employee_name' => DATA_ANALYST,
             'task' => 'Run analytics',
             'acting_for_user_id' => 1,
             'created_at' => '2025-01-01T00:00:00+00:00',
@@ -358,7 +363,7 @@ describe('DelegateTaskTool', function () {
 
         $result = $tool->execute(['task' => 'Run analytics', 'worker_id' => 7]);
 
-        expect($result)->toContain('Data Analyst');
+        expect($result)->toContain(DATA_ANALYST);
         expect($result)->toContain('dw_dispatch_xyz');
     });
 
@@ -394,9 +399,9 @@ describe('DocumentAnalysisTool', function () {
     it('returns error for empty or missing path', function () {
         $tool = new DocumentAnalysisTool;
 
-        expect($tool->execute([]))->toContain('"path" is required and must be a non-empty string');
-        expect($tool->execute(['path' => '']))->toContain('"path" is required and must be a non-empty string');
-        expect($tool->execute(['path' => '   ']))->toContain('"path" is required and must be a non-empty string');
+        expect($tool->execute([]))->toContain(PATH_REQUIRED_ERROR);
+        expect($tool->execute(['path' => '']))->toContain(PATH_REQUIRED_ERROR);
+        expect($tool->execute(['path' => '   ']))->toContain(PATH_REQUIRED_ERROR);
     });
 
     it('returns structured payload for a valid request', function () {
@@ -459,9 +464,9 @@ describe('ImageAnalysisTool', function () {
     it('returns error for empty or missing path', function () {
         $tool = new ImageAnalysisTool;
 
-        expect($tool->execute([]))->toContain('"path" is required and must be a non-empty string');
-        expect($tool->execute(['path' => '']))->toContain('"path" is required and must be a non-empty string');
-        expect($tool->execute(['path' => '   ']))->toContain('"path" is required and must be a non-empty string');
+        expect($tool->execute([]))->toContain(PATH_REQUIRED_ERROR);
+        expect($tool->execute(['path' => '']))->toContain(PATH_REQUIRED_ERROR);
+        expect($tool->execute(['path' => '   ']))->toContain(PATH_REQUIRED_ERROR);
     });
 
     it('returns error for a path that does not exist', function () {
