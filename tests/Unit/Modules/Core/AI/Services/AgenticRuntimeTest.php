@@ -16,6 +16,44 @@ use Illuminate\Foundation\Testing\TestCase;
 
 uses(TestCase::class);
 
+class TestDigitalWorkerTool implements DigitalWorkerTool
+{
+    /**
+     * @param  array<string, mixed>  $schema
+     */
+    public function __construct(
+        private readonly string $toolName,
+        private readonly string $toolDescription,
+        private readonly array $schema,
+        private readonly string $toolResult,
+    ) {}
+
+    public function name(): string
+    {
+        return $this->toolName;
+    }
+
+    public function description(): string
+    {
+        return $this->toolDescription;
+    }
+
+    public function parametersSchema(): array
+    {
+        return $this->schema;
+    }
+
+    public function requiredCapability(): ?string
+    {
+        return null;
+    }
+
+    public function execute(array $arguments): string
+    {
+        return $this->toolResult;
+    }
+}
+
 function buildMockConfig(): array
 {
     return [
@@ -78,66 +116,62 @@ function buildRuntime(
     );
 }
 
+function buildGenericTool(
+    string $name,
+    string $description,
+    array $schema,
+    string $result,
+): DigitalWorkerTool
+{
+    return new TestDigitalWorkerTool($name, $description, $schema, $result);
+}
+
 function buildEchoTool(): DigitalWorkerTool
 {
-    return new class implements DigitalWorkerTool
-    {
-        public function name(): string
-        {
-            return 'echo_tool';
-        }
-
-        public function description(): string
-        {
-            return 'Echoes input';
-        }
-
-        public function parametersSchema(): array
-        {
-            return ['type' => 'object', 'properties' => ['input' => ['type' => 'string']]];
-        }
-
-        public function requiredCapability(): ?string
-        {
-            return null;
-        }
-
-        public function execute(array $arguments): string
-        {
-            return 'executed:echo_tool:'.($arguments['input'] ?? 'none');
-        }
-    };
+    return buildGenericTool(
+        'echo_tool',
+        'Echoes input',
+        ['type' => 'object', 'properties' => ['input' => ['type' => 'string']]],
+        'executed:echo_tool:world',
+    );
 }
 
 function buildNavigateActionTool(): DigitalWorkerTool
 {
-    return new class implements DigitalWorkerTool
-    {
-        public function name(): string
-        {
-            return 'navigate_tool';
-        }
+    return buildGenericTool(
+        'navigate_tool',
+        'Returns Lara actions',
+        ['type' => 'object'],
+        '<lara-action>Livewire.navigate(\'/dashboard\')</lara-action>',
+    );
+}
 
-        public function description(): string
-        {
-            return 'Returns Lara actions';
-        }
+function buildToolCallResponse(string $callId, string $toolName, string $arguments): array
+{
+    return [
+        'content' => null,
+        'latency_ms' => 200,
+        'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 15],
+        'tool_calls' => [
+            [
+                'id' => $callId,
+                'type' => 'function',
+                'function' => [
+                    'name' => $toolName,
+                    'arguments' => $arguments,
+                ],
+            ],
+        ],
+    ];
+}
 
-        public function parametersSchema(): array
-        {
-            return ['type' => 'object'];
-        }
-
-        public function requiredCapability(): ?string
-        {
-            return null;
-        }
-
-        public function execute(array $arguments): string
-        {
-            return '<lara-action>Livewire.navigate(\'/dashboard\')</lara-action>';
-        }
-    };
+function buildFinalResponse(string $content): array
+{
+    return [
+        'content' => $content,
+        'latency_ms' => 150,
+        'usage' => ['prompt_tokens' => 30, 'completion_tokens' => 10],
+    ];
 }
 
 describe('AgenticRuntime', function () {
@@ -167,28 +201,14 @@ describe('AgenticRuntime', function () {
         $llmClient = Mockery::mock(LlmClient::class);
 
         // First call: LLM wants to call a tool
-        $llmClient->shouldReceive('chat')->once()->andReturn([
-            'content' => null,
-            'latency_ms' => 200,
-            'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 15],
-            'tool_calls' => [
-                [
-                    'id' => 'call_001',
-                    'type' => 'function',
-                    'function' => [
-                        'name' => 'echo_tool',
-                        'arguments' => '{"input": "world"}',
-                    ],
-                ],
-            ],
-        ]);
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            buildToolCallResponse('call_001', 'echo_tool', '{"input": "world"}')
+        );
 
         // Second call: LLM produces final response after receiving tool result
-        $llmClient->shouldReceive('chat')->once()->andReturn([
-            'content' => 'The echo result was: executed:echo_tool:world',
-            'latency_ms' => 150,
-            'usage' => ['prompt_tokens' => 30, 'completion_tokens' => 10],
-        ]);
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            buildFinalResponse('The echo result was: executed:echo_tool:world')
+        );
 
         $runtime = buildRuntime($llmClient, $configResolver, buildToolRegistry(buildEchoTool()));
         $result = $runtime->run([buildTestMessage('Echo world')], 1, 'You are Lara.');
@@ -203,26 +223,12 @@ describe('AgenticRuntime', function () {
         $configResolver = buildResolvedConfigResolverMock();
 
         $llmClient = Mockery::mock(LlmClient::class);
-        $llmClient->shouldReceive('chat')->once()->andReturn([
-            'content' => null,
-            'latency_ms' => 200,
-            'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 15],
-            'tool_calls' => [
-                [
-                    'id' => 'call_002',
-                    'type' => 'function',
-                    'function' => [
-                        'name' => 'navigate_tool',
-                        'arguments' => '{}',
-                    ],
-                ],
-            ],
-        ]);
-        $llmClient->shouldReceive('chat')->once()->andReturn([
-            'content' => 'Navigated successfully.',
-            'latency_ms' => 150,
-            'usage' => ['prompt_tokens' => 30, 'completion_tokens' => 10],
-        ]);
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            buildToolCallResponse('call_002', 'navigate_tool', '{}')
+        );
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            buildFinalResponse('Navigated successfully.')
+        );
 
         $runtime = buildRuntime($llmClient, $configResolver, buildToolRegistry(buildNavigateActionTool()));
         $result = $runtime->run([buildTestMessage('Go to dashboard')], 1, 'You are Lara.');
