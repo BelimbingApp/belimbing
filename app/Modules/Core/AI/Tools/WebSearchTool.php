@@ -133,6 +133,7 @@ class WebSearchTool extends AbstractTool
             $freshness = null;
         }
 
+        // Cache key only — not used for crypto; md5 is sufficient and more efficient.
         $cacheKey = 'lara_tool:web_search:'.md5($query.$count.$freshness);
 
         return Cache::remember($cacheKey, $this->cacheTtlMinutes * 60, function () use ($query, $count, $freshness): string {

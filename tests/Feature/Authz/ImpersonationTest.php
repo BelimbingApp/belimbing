@@ -1,7 +1,6 @@
 <?php
 
 use App\Base\Authz\Enums\PrincipalType;
-use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Authz\Services\ImpersonationManager;

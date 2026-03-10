@@ -58,9 +58,9 @@ trait ManagesProviderHelp
         $help = app(ProviderHelpRegistry::class)->get($this->helpProviderKey, $this->helpProviderAuthType);
 
         return [
-            'setup_steps'             => $help->setupSteps(),
-            'troubleshooting_tips'    => $help->troubleshootingTips(),
-            'documentation_url'       => $help->documentationUrl(),
+            'setup_steps' => $help->setupSteps(),
+            'troubleshooting_tips' => $help->troubleshootingTips(),
+            'documentation_url' => $help->documentationUrl(),
             'connection_error_advice' => $help->connectionErrorAdvice(),
         ];
     }

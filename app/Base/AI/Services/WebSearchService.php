@@ -47,24 +47,13 @@ class WebSearchService
      */
     private function searchParallel(string $apiKey, string $query, int $count, int $timeoutSeconds): array
     {
-        try {
-            $response = Http::withHeaders([
-                'x-api-key' => $apiKey,
-            ])
-                ->timeout($timeoutSeconds)
-                ->post(self::PARALLEL_ENDPOINT, [
-                    'query' => $query,
-                    'max_results' => $count,
-                ]);
-        } catch (ConnectionException $e) {
-            return ['error' => $e->getMessage()];
+        $response = $this->sendParallelRequest($apiKey, $query, $count, $timeoutSeconds);
+
+        if (isset($response['error'])) {
+            return $response;
         }
 
-        if ($response->failed()) {
-            return ['error' => 'HTTP '.$response->status()];
-        }
-
-        $results = $response->json('results', []);
+        $results = $response['response']->json('results', []);
 
         if (! is_array($results)) {
             return ['results' => []];
@@ -92,6 +81,50 @@ class WebSearchService
             $params['freshness'] = $freshness;
         }
 
+        $response = $this->sendBraveRequest($apiKey, $params, $timeoutSeconds);
+
+        if (isset($response['error'])) {
+            return $response;
+        }
+
+        $results = $response['response']->json('web.results', []);
+
+        if (! is_array($results)) {
+            return ['results' => []];
+        }
+
+        return ['results' => $this->normalizeResults($results, 'description')];
+    }
+
+    /**
+     * @return array{response?: \Illuminate\Http\Client\Response, error?: string}
+     */
+    private function sendParallelRequest(string $apiKey, string $query, int $count, int $timeoutSeconds): array
+    {
+        try {
+            $response = Http::withHeaders([
+                'x-api-key' => $apiKey,
+            ])
+                ->timeout($timeoutSeconds)
+                ->post(self::PARALLEL_ENDPOINT, [
+                    'query' => $query,
+                    'max_results' => $count,
+                ]);
+        } catch (ConnectionException $e) {
+            return ['error' => $e->getMessage()];
+        }
+
+        return $response->failed()
+            ? ['error' => 'HTTP '.$response->status()]
+            : ['response' => $response];
+    }
+
+    /**
+     * @param  array{q: string, count: int, freshness?: string}  $params
+     * @return array{response?: \Illuminate\Http\Client\Response, error?: string}
+     */
+    private function sendBraveRequest(string $apiKey, array $params, int $timeoutSeconds): array
+    {
         try {
             $response = Http::withHeaders([
                 'X-Subscription-Token' => $apiKey,
@@ -102,17 +135,9 @@ class WebSearchService
             return ['error' => $e->getMessage()];
         }
 
-        if ($response->failed()) {
-            return ['error' => 'HTTP '.$response->status()];
-        }
-
-        $results = $response->json('web.results', []);
-
-        if (! is_array($results)) {
-            return ['results' => []];
-        }
-
-        return ['results' => $this->normalizeResults($results, 'description')];
+        return $response->failed()
+            ? ['error' => 'HTTP '.$response->status()]
+            : ['response' => $response];
     }
 
     /**

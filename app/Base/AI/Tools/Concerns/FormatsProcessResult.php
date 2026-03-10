@@ -21,14 +21,14 @@ trait FormatsProcessResult
         $errorOutput = trim($result->errorOutput());
 
         if (! $result->successful()) {
-            $message = 'Command failed (exit code ' . $result->exitCode() . ').';
+            $message = 'Command failed (exit code '.$result->exitCode().').';
 
             if ($errorOutput !== '') {
-                $message .= "\n" . $errorOutput;
+                $message .= "\n".$errorOutput;
             }
 
             if ($output !== '') {
-                $message .= "\n" . $output;
+                $message .= "\n".$output;
             }
 
             return $message;

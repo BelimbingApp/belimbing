@@ -31,7 +31,10 @@ final class ToolSchemaBuilder
      */
     private ?string $lastProperty = null;
 
-    private function __construct() {}
+    private function __construct()
+    {
+        // Intentionally private: consumers create builders via make().
+    }
 
     /**
      * Create a new schema builder instance.

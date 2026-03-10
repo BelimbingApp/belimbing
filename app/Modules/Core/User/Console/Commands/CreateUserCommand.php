@@ -34,32 +34,16 @@ class CreateUserCommand extends Command
     public function handle(): int
     {
         $email = $this->argument('email');
-        if (! is_string($email) || $email === '') {
-            $this->components->error('Email is required.');
-
-            return self::FAILURE;
-        }
-
-        if (User::query()->where('email', $email)->exists()) {
-            $this->components->error("A user with email [{$email}] already exists.");
-
-            return self::FAILURE;
-        }
-
         $companyId = (int) $this->option('company');
-        $company = Company::query()->find($companyId);
-        if ($company === null) {
-            $this->components->error("Company with id [{$companyId}] does not exist.");
-
-            return self::FAILURE;
-        }
-
         $password = $this->option('stdin')
             ? trim((string) file_get_contents('php://stdin'))
             : $this->secret('Password (min 8 chars)');
 
-        if (strlen($password) < 8) {
-            $this->components->error('Password must be at least 8 characters.');
+        $company = Company::query()->find($companyId);
+        $error = $this->validateCreateUserRequest($email, $companyId, $company, $password);
+
+        if ($error !== null) {
+            $this->components->error($error);
 
             return self::FAILURE;
         }
@@ -85,6 +69,23 @@ class CreateUserCommand extends Command
         $this->components->info("User created: {$email}");
 
         return self::SUCCESS;
+    }
+
+    private function validateCreateUserRequest(mixed $email, int $companyId, ?Company $company, string $password): ?string
+    {
+        if (! is_string($email) || $email === '') {
+            return 'Email is required.';
+        }
+
+        if (User::query()->where('email', $email)->exists()) {
+            return "A user with email [{$email}] already exists.";
+        }
+
+        if ($company === null) {
+            return "Company with id [{$companyId}] does not exist.";
+        }
+
+        return strlen($password) < 8 ? 'Password must be at least 8 characters.' : null;
     }
 
     private function assignRole(User $user, string $roleCode): void

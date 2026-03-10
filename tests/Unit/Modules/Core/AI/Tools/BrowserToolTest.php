@@ -3,10 +3,12 @@
 use App\Modules\Core\AI\Services\Browser\BrowserPoolManager;
 use App\Modules\Core\AI\Services\Browser\BrowserSsrfGuard;
 use App\Modules\Core\AI\Tools\BrowserTool;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, AssertsToolBehavior::class);
+
+const EXAMPLE_URL = 'https://example.com';
 
 beforeEach(function () {
     $this->poolManager = Mockery::mock(BrowserPoolManager::class);
@@ -41,7 +43,7 @@ describe('input validation', function () {
     it('returns error when pool unavailable', function () {
         $this->poolManager->shouldReceive('isAvailable')->andReturn(false);
 
-        $result = $this->tool->execute(['action' => 'navigate', 'url' => 'https://example.com']);
+        $result = $this->tool->execute(['action' => 'navigate', 'url' => EXAMPLE_URL]);
 
         expect($result)->toContain('not available');
     });
@@ -64,7 +66,7 @@ describe('navigate action', function () {
     });
 
     it('navigates successfully', function () {
-        $this->assertToolExecutionStatus(['action' => 'navigate', 'url' => 'https://example.com'], 'navigated');
+        $this->assertToolExecutionStatus(['action' => 'navigate', 'url' => EXAMPLE_URL], 'navigated');
     });
 });
 
@@ -122,7 +124,7 @@ describe('open action', function () {
     });
 
     it('opens tab successfully', function () {
-        $this->assertToolExecutionStatus(['action' => 'open', 'url' => 'https://example.com'], 'opened');
+        $this->assertToolExecutionStatus(['action' => 'open', 'url' => EXAMPLE_URL], 'opened');
     });
 });
 

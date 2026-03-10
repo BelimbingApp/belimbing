@@ -35,6 +35,8 @@ use App\Modules\Core\AI\Services\Messaging\ChannelAdapterRegistry;
  */
 class MessageTool extends AbstractActionTool
 {
+    private const ERROR_PREFIX = 'Error: ';
+
     /**
      * Valid actions for messaging.
      *
@@ -61,9 +63,13 @@ class MessageTool extends AbstractActionTool
      */
     private const MAX_POLL_OPTIONS = 10;
 
+    private readonly MessageToolSupport $support;
+
     public function __construct(
         private readonly ChannelAdapterRegistry $adapterRegistry,
-    ) {}
+    ) {
+        $this->support = new MessageToolSupport($adapterRegistry);
+    }
 
     public function name(): string
     {
@@ -120,7 +126,7 @@ class MessageTool extends AbstractActionTool
         if (! $this->adapterRegistry->isAvailable($channel)) {
             $available = $this->adapterRegistry->channels();
 
-            return 'Error: Channel "'.$channel.'" is not available. '
+            return self::ERROR_PREFIX.'Channel "'.$channel.'" is not available. '
                 .($available !== [] ? 'Available channels: '.implode(', ', $available).'.' : 'No channels are configured.');
         }
 
@@ -151,23 +157,22 @@ class MessageTool extends AbstractActionTool
     private function handleSend(string $channel, array $arguments): string
     {
         $target = $this->requireString($arguments, 'target');
-        $text = $this->resolveRequiredText($arguments);
+        $text = $this->requireString($arguments, 'text');
+        $this->support->assertTextLength($text, self::MAX_TEXT_LENGTH);
 
-        $capabilities = $this->resolveChannelCapabilities($channel);
+        $capabilities = $this->support->channelCapabilities($channel);
 
         if (mb_strlen($text) > $capabilities->maxMessageLength) {
-            return 'Error: Message exceeds '.$channel.' limit of '
+            return self::ERROR_PREFIX.'Message exceeds '.$channel.' limit of '
                 .$capabilities->maxMessageLength.' characters.';
         }
-
-        $mediaPath = $this->optionalString($arguments, 'media_path');
 
         return $this->encodeResponse([
             'action' => 'send',
             'channel' => $channel,
             'target' => $target,
             'text' => $text,
-            'media_path' => $mediaPath,
+            'media_path' => $this->optionalString($arguments, 'media_path'),
             'status' => 'sent',
             'message_id' => null,
             'message' => 'Message sent (stub). Channel adapter integration pending.',
@@ -184,13 +189,13 @@ class MessageTool extends AbstractActionTool
      */
     private function handleReply(string $channel, array $arguments): string
     {
-        $messageId = $this->requireString($arguments, 'message_id');
-        $text = $this->resolveRequiredText($arguments);
+        $text = $this->requireString($arguments, 'text');
+        $this->support->assertTextLength($text, self::MAX_TEXT_LENGTH);
 
         return $this->encodeResponse([
             'action' => 'reply',
             'channel' => $channel,
-            'message_id' => $messageId,
+            'message_id' => $this->requireString($arguments, 'message_id'),
             'text' => $text,
             'status' => 'replied',
             'message' => 'Reply sent (stub). Channel adapter integration pending.',
@@ -207,16 +212,13 @@ class MessageTool extends AbstractActionTool
      */
     private function handleReact(string $channel, array $arguments): string
     {
-        $this->assertChannelCapability($channel, 'supportsReactions', 'Error: '.$channel.' does not support reactions.');
-
-        $messageId = $this->requireString($arguments, 'message_id');
-        $emoji = $this->requireString($arguments, 'emoji');
+        $this->support->assertCapability($channel, 'supportsReactions', self::ERROR_PREFIX.$channel.' does not support reactions.');
 
         return $this->encodeResponse([
             'action' => 'react',
             'channel' => $channel,
-            'message_id' => $messageId,
-            'emoji' => $emoji,
+            'message_id' => $this->requireString($arguments, 'message_id'),
+            'emoji' => $this->requireString($arguments, 'emoji'),
             'status' => 'reacted',
             'message' => 'Reaction added (stub). Channel adapter integration pending.',
         ]);
@@ -232,15 +234,15 @@ class MessageTool extends AbstractActionTool
      */
     private function handleEdit(string $channel, array $arguments): string
     {
-        $this->assertChannelCapability($channel, 'supportsEditing', 'Error: '.$channel.' does not support message editing.');
+        $this->support->assertCapability($channel, 'supportsEditing', self::ERROR_PREFIX.$channel.' does not support message editing.');
 
-        $messageId = $this->requireString($arguments, 'message_id');
-        $text = $this->resolveRequiredText($arguments);
+        $text = $this->requireString($arguments, 'text');
+        $this->support->assertTextLength($text, self::MAX_TEXT_LENGTH);
 
         return $this->encodeResponse([
             'action' => 'edit',
             'channel' => $channel,
-            'message_id' => $messageId,
+            'message_id' => $this->requireString($arguments, 'message_id'),
             'text' => $text,
             'status' => 'edited',
             'message' => 'Message edited (stub). Channel adapter integration pending.',
@@ -257,14 +259,12 @@ class MessageTool extends AbstractActionTool
      */
     private function handleDelete(string $channel, array $arguments): string
     {
-        $this->assertChannelCapability($channel, 'supportsDeletion', 'Error: '.$channel.' does not support message deletion.');
-
-        $messageId = $this->requireString($arguments, 'message_id');
+        $this->support->assertCapability($channel, 'supportsDeletion', self::ERROR_PREFIX.$channel.' does not support message deletion.');
 
         return $this->encodeResponse([
             'action' => 'delete',
             'channel' => $channel,
-            'message_id' => $messageId,
+            'message_id' => $this->requireString($arguments, 'message_id'),
             'status' => 'deleted',
             'message' => 'Message deleted (stub). Channel adapter integration pending.',
         ]);
@@ -280,33 +280,14 @@ class MessageTool extends AbstractActionTool
      */
     private function handlePoll(string $channel, array $arguments): string
     {
-        $this->assertChannelCapability($channel, 'supportsPolls', 'Error: '.$channel.' does not support polls.');
-
-        $target = $this->requireString($arguments, 'target');
-        $question = $this->requireString($arguments, 'question');
-
-        $options = $arguments['options'] ?? [];
-
-        if (! is_array($options) || count($options) < 2) {
-            return 'Error: "options" must be an array with at least 2 items.';
-        }
-
-        if (count($options) > self::MAX_POLL_OPTIONS) {
-            return 'Error: "options" must not exceed '.self::MAX_POLL_OPTIONS.' items.';
-        }
-
-        foreach ($options as $option) {
-            if (! is_string($option) || trim($option) === '') {
-                return 'Error: Each poll option must be a non-empty string.';
-            }
-        }
+        $this->support->assertCapability($channel, 'supportsPolls', self::ERROR_PREFIX.$channel.' does not support polls.');
 
         return $this->encodeResponse([
             'action' => 'poll',
             'channel' => $channel,
-            'target' => $target,
-            'question' => $question,
-            'options' => array_map('trim', $options),
+            'target' => $this->requireString($arguments, 'target'),
+            'question' => $this->requireString($arguments, 'question'),
+            'options' => $this->support->validatedPollOptions($arguments['options'] ?? [], self::MAX_POLL_OPTIONS),
             'status' => 'created',
             'message' => 'Poll created (stub). Channel adapter integration pending.',
         ]);
@@ -322,12 +303,10 @@ class MessageTool extends AbstractActionTool
      */
     private function handleListConversations(string $channel, array $arguments): string
     {
-        $limit = $this->optionalInt($arguments, 'limit', 10, min: 1, max: 50);
-
         return $this->encodeResponse([
             'action' => 'list_conversations',
             'channel' => $channel,
-            'limit' => $limit,
+            'limit' => $this->optionalInt($arguments, 'limit', 10, min: 1, max: 50),
             'conversations' => [],
             'status' => 'listed',
             'message' => 'Conversations listed (stub). Channel adapter integration pending.',
@@ -344,17 +323,13 @@ class MessageTool extends AbstractActionTool
      */
     private function handleSearch(string $channel, array $arguments): string
     {
-        $this->assertChannelCapability($channel, 'supportsSearch', 'Error: '.$channel.' does not support message search.');
-
-        $query = $this->requireString($arguments, 'query');
-
-        $limit = $this->optionalInt($arguments, 'limit', 10, min: 1, max: 50);
+        $this->support->assertCapability($channel, 'supportsSearch', self::ERROR_PREFIX.$channel.' does not support message search.');
 
         return $this->encodeResponse([
             'action' => 'search',
             'channel' => $channel,
-            'query' => $query,
-            'limit' => $limit,
+            'query' => $this->requireString($arguments, 'query'),
+            'limit' => $this->optionalInt($arguments, 'limit', 10, min: 1, max: 50),
             'results' => [],
             'status' => 'searched',
             'message' => 'Search completed (stub). Channel adapter integration pending.',
@@ -362,52 +337,70 @@ class MessageTool extends AbstractActionTool
     }
 
     /**
-     * Extract and validate the required 'text' argument.
-     *
-     * Uses the base `requireString()` for extraction, then applies
-     * domain-specific length validation via `assertTextLength()`.
-     *
-     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
-     *
-     * @throws MessageToolValidationException If text exceeds MAX_TEXT_LENGTH
+     * @param  array<string, mixed>  $payload
      */
-    private function resolveRequiredText(array $arguments): string
-    {
-        $text = $this->requireString($arguments, 'text');
-        $this->assertTextLength($text);
-
-        return $text;
-    }
-
     private function encodeResponse(array $payload): string
     {
         return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
+}
 
-    private function assertTextLength(string $text): void
+final class MessageToolValidationException extends \InvalidArgumentException {}
+
+final class MessageToolSupport
+{
+    public function __construct(
+        private readonly ChannelAdapterRegistry $adapterRegistry,
+    ) {}
+
+    public function assertTextLength(string $text, int $maxTextLength): void
     {
-        if (mb_strlen($text) > self::MAX_TEXT_LENGTH) {
-            throw new MessageToolValidationException('Error: "text" must not exceed '.self::MAX_TEXT_LENGTH.' characters.');
+        if (mb_strlen($text) > $maxTextLength) {
+            throw new MessageToolValidationException('Error: "text" must not exceed '.$maxTextLength.' characters.');
         }
     }
 
-    private function assertChannelCapability(string $channel, string $capabilityProperty, string $errorMessage): void
+    public function channelCapabilities(string $channel): ChannelCapabilities
     {
-        if (! $this->resolveChannelCapabilities($channel)->{$capabilityProperty}) {
+        return $this->resolveAdapter($channel)->capabilities();
+    }
+
+    public function assertCapability(string $channel, string $capabilityProperty, string $errorMessage): void
+    {
+        if (! $this->channelCapabilities($channel)->{$capabilityProperty}) {
             throw new MessageToolValidationException($errorMessage);
         }
     }
 
-    private function resolveChannelCapabilities(string $channel): ChannelCapabilities
+    /**
+     * @return list<string>
+     */
+    public function validatedPollOptions(mixed $options, int $maxPollOptions): array
     {
-        return $this->resolveAdapter($channel)->capabilities();
+        if (! is_array($options) || count($options) < 2) {
+            throw new MessageToolValidationException('Error: "options" must be an array with at least 2 items.');
+        }
+
+        if (count($options) > $maxPollOptions) {
+            throw new MessageToolValidationException('Error: "options" must not exceed '.$maxPollOptions.' items.');
+        }
+
+        $normalized = [];
+
+        foreach ($options as $option) {
+            if (! is_string($option) || trim($option) === '') {
+                throw new MessageToolValidationException('Error: Each poll option must be a non-empty string.');
+            }
+
+            $normalized[] = trim($option);
+        }
+
+        return $normalized;
     }
 
     private function resolveAdapter(string $channel): ChannelAdapter
     {
         return $this->adapterRegistry->resolve($channel)
-            ?? throw new \RuntimeException('Channel "'.$channel.'" is not registered.');
+            ?? throw new MessageToolValidationException('Error: Channel "'.$channel.'" is not registered.');
     }
 }
-
-final class MessageToolValidationException extends \InvalidArgumentException {}

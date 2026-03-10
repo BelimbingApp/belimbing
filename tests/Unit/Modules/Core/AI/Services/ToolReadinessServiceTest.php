@@ -3,9 +3,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-use App\Base\Authz\Contracts\AuthorizationService;
-use App\Base\Authz\DTO\AuthorizationDecision;
-use App\Base\Authz\Enums\AuthorizationReasonCode;
 use App\Modules\Core\AI\Enums\ToolHealthState;
 use App\Modules\Core\AI\Enums\ToolReadiness;
 use App\Modules\Core\AI\Services\DigitalWorkerToolRegistry;

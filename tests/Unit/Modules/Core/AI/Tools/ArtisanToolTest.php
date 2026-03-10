@@ -2,10 +2,13 @@
 
 use App\Modules\Core\AI\Tools\ArtisanTool;
 use Illuminate\Support\Facades\Process;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, AssertsToolBehavior::class);
+
+const ROUTES_OUTPUT = 'routes output';
+const COMMAND_NOT_FOUND = 'Command not found';
 
 beforeEach(function () {
     $this->tool = new ArtisanTool;
@@ -52,20 +55,20 @@ describe('input validation', function () {
 
     it('strips php artisan prefix', function () {
         Process::fake([
-            'php artisan route:list' => Process::result('routes output'),
+            'php artisan route:list' => Process::result(ROUTES_OUTPUT),
         ]);
 
         $result = $this->tool->execute(['command' => 'php artisan route:list']);
-        expect($result)->toBe('routes output');
+        expect($result)->toBe(ROUTES_OUTPUT);
     });
 
     it('strips artisan prefix without php', function () {
         Process::fake([
-            'php artisan route:list' => Process::result('routes output'),
+            'php artisan route:list' => Process::result(ROUTES_OUTPUT),
         ]);
 
         $result = $this->tool->execute(['command' => 'artisan route:list']);
-        expect($result)->toBe('routes output');
+        expect($result)->toBe(ROUTES_OUTPUT);
     });
 
     it('rejects artisan-only command that becomes empty after parsing', function () {
@@ -74,7 +77,7 @@ describe('input validation', function () {
         // The command runs as-is: "php artisan artisan" which will fail at runtime.
         // This is acceptable behavior — the LLM should provide an actual command.
         Process::fake([
-            '*' => Process::result(output: '', errorOutput: 'Command not found', exitCode: 1),
+            '*' => Process::result(output: '', errorOutput: COMMAND_NOT_FOUND, exitCode: 1),
         ]);
 
         $result = $this->tool->execute(['command' => '  ']);
@@ -96,14 +99,14 @@ describe('foreground execution', function () {
         Process::fake([
             'php artisan bad:command' => Process::result(
                 output: '',
-                errorOutput: 'Command not found',
+                errorOutput: COMMAND_NOT_FOUND,
                 exitCode: 1,
             ),
         ]);
 
         $result = $this->tool->execute(['command' => 'bad:command']);
         expect($result)->toContain('failed')
-            ->and($result)->toContain('Command not found');
+            ->and($result)->toContain(COMMAND_NOT_FOUND);
     });
 
     it('returns success message for empty output', function () {

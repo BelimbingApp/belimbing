@@ -159,12 +159,12 @@ class BrowserTool extends AbstractActionTool
         }
 
         return match ($action) {
-            'navigate' => $this->handleNavigate($arguments),
+            'navigate' => $this->handleNavigation('navigate', 'navigated', $arguments),
             'snapshot' => $this->handleSnapshot($arguments),
             'screenshot' => $this->handleScreenshot($arguments),
             'act' => $this->handleAct($arguments),
             'tabs' => $this->handleTabs(),
-            'open' => $this->handleOpen($arguments),
+            'open' => $this->handleNavigation('open', 'opened', $arguments),
             'close' => $this->handleClose($arguments),
             'evaluate' => $this->handleEvaluate($arguments),
             'pdf' => $this->handlePdf(),
@@ -174,13 +174,9 @@ class BrowserTool extends AbstractActionTool
     }
 
     /**
-     * Handle the "navigate" action.
-     *
-     * Navigates the browser to the given URL after SSRF validation.
-     *
-     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
+     * @param  array<string, mixed>  $arguments
      */
-    private function handleNavigate(array $arguments): string
+    private function handleNavigation(string $action, string $status, array $arguments): string
     {
         $url = $this->requireString($arguments, 'url');
         $ssrfCheck = $this->ssrfGuard->validate($url);
@@ -189,13 +185,24 @@ class BrowserTool extends AbstractActionTool
             return self::ERROR_PREFIX.$ssrfCheck;
         }
 
-        return json_encode([
-            'action' => 'navigate',
+        $payload = [
+            'action' => $action,
             'url' => $url,
-            'status' => 'navigated',
-            'message' => 'Navigation completed (stub). Playwright integration pending.',
-            'title' => '',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            'status' => $status,
+            'message' => $action === 'navigate'
+                ? 'Navigation completed (stub). Playwright integration pending.'
+                : 'New tab opened (stub). Playwright integration pending.',
+        ];
+
+        if ($action === 'navigate') {
+            $payload['title'] = '';
+        }
+
+        if ($action === 'open') {
+            $payload['tab_id'] = '';
+        }
+
+        return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 
     /**
@@ -208,14 +215,12 @@ class BrowserTool extends AbstractActionTool
     private function handleSnapshot(array $arguments): string
     {
         $format = $this->requireEnum($arguments, 'format', ['ai', 'aria'], 'ai');
-        $interactive = $this->optionalBool($arguments, 'interactive', true);
-        $compact = $this->optionalBool($arguments, 'compact');
 
         return json_encode([
             'action' => 'snapshot',
             'format' => $format,
-            'interactive' => $interactive,
-            'compact' => $compact,
+            'interactive' => $this->optionalBool($arguments, 'interactive', true),
+            'compact' => $this->optionalBool($arguments, 'compact'),
             'content' => '',
             'status' => 'captured',
             'message' => 'Snapshot captured (stub). Playwright integration pending.',
@@ -251,13 +256,10 @@ class BrowserTool extends AbstractActionTool
      */
     private function handleAct(array $arguments): string
     {
-        $kind = $this->requireEnum($arguments, 'kind', self::ACT_KINDS);
-        $ref = $this->requireString($arguments, 'ref');
-
         return json_encode([
             'action' => 'act',
-            'kind' => $kind,
-            'ref' => $ref,
+            'kind' => $this->requireEnum($arguments, 'kind', self::ACT_KINDS),
+            'ref' => $this->requireString($arguments, 'ref'),
             'text' => $this->optionalString($arguments, 'text'),
             'submit' => $this->optionalBool($arguments, 'submit'),
             'status' => 'performed',
@@ -281,31 +283,6 @@ class BrowserTool extends AbstractActionTool
     }
 
     /**
-     * Handle the "open" action.
-     *
-     * Opens a new tab with the given URL after SSRF validation.
-     *
-     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
-     */
-    private function handleOpen(array $arguments): string
-    {
-        $url = $this->requireString($arguments, 'url');
-        $ssrfCheck = $this->ssrfGuard->validate($url);
-
-        if ($ssrfCheck !== true) {
-            return self::ERROR_PREFIX.$ssrfCheck;
-        }
-
-        return json_encode([
-            'action' => 'open',
-            'url' => $url,
-            'tab_id' => '',
-            'status' => 'opened',
-            'message' => 'New tab opened (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    }
-
-    /**
      * Handle the "close" action.
      *
      * Closes a browser tab by tab ID.
@@ -314,11 +291,9 @@ class BrowserTool extends AbstractActionTool
      */
     private function handleClose(array $arguments): string
     {
-        $tabId = $this->requireString($arguments, 'tab_id');
-
         return json_encode([
             'action' => 'close',
-            'tab_id' => $tabId,
+            'tab_id' => $this->requireString($arguments, 'tab_id'),
             'status' => 'closed',
             'message' => 'Tab closed (stub). Playwright integration pending.',
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -340,11 +315,9 @@ class BrowserTool extends AbstractActionTool
                 .'An administrator must enable it via config("ai.tools.browser.evaluate_enabled").';
         }
 
-        $script = $this->requireString($arguments, 'script');
-
         return json_encode([
             'action' => 'evaluate',
-            'script' => $script,
+            'script' => $this->requireString($arguments, 'script'),
             'result' => null,
             'status' => 'evaluated',
             'message' => 'Script evaluated (stub). Playwright integration pending.',
@@ -376,70 +349,38 @@ class BrowserTool extends AbstractActionTool
     private function handleCookies(array $arguments): string
     {
         $cookieAction = $this->requireEnum($arguments, 'cookie_action', self::COOKIE_ACTIONS);
-
-        return match ($cookieAction) {
-            'get' => $this->handleCookieGet($arguments),
-            'set' => $this->handleCookieSet($arguments),
-            'clear' => $this->handleCookieClear($arguments),
-        };
-    }
-
-    /**
-     * Handle cookie "get" sub-action.
-     *
-     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
-     */
-    private function handleCookieGet(array $arguments): string
-    {
-        return json_encode([
+        $payload = [
             'action' => 'cookies',
-            'cookie_action' => 'get',
+            'cookie_action' => $cookieAction,
             'cookie_name' => $this->optionalString($arguments, 'cookie_name'),
-            'cookies' => [],
-            'status' => 'retrieved',
-            'message' => 'Cookies retrieved (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    }
+        ];
 
-    /**
-     * Handle cookie "set" sub-action.
-     *
-     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
-     */
-    private function handleCookieSet(array $arguments): string
-    {
-        $name = $this->requireString($arguments, 'cookie_name');
-
-        $value = $arguments['cookie_value'] ?? '';
-        if (! is_string($value)) {
-            throw new ToolArgumentException('"cookie_value" is required to set a cookie.');
+        if ($cookieAction === 'get') {
+            $payload['cookies'] = [];
+            $payload['status'] = 'retrieved';
+            $payload['message'] = 'Cookies retrieved (stub). Playwright integration pending.';
         }
 
-        return json_encode([
-            'action' => 'cookies',
-            'cookie_action' => 'set',
-            'cookie_name' => $name,
-            'cookie_value' => $value,
-            'cookie_url' => $this->optionalString($arguments, 'cookie_url'),
-            'status' => 'set',
-            'message' => 'Cookie set (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    }
+        if ($cookieAction === 'set') {
+            $cookieValue = $arguments['cookie_value'] ?? '';
 
-    /**
-     * Handle cookie "clear" sub-action.
-     *
-     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
-     */
-    private function handleCookieClear(array $arguments): string
-    {
-        return json_encode([
-            'action' => 'cookies',
-            'cookie_action' => 'clear',
-            'cookie_name' => $this->optionalString($arguments, 'cookie_name'),
-            'status' => 'cleared',
-            'message' => 'Cookies cleared (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            if (! is_string($cookieValue)) {
+                throw new ToolArgumentException('"cookie_value" is required to set a cookie.');
+            }
+
+            $payload['cookie_name'] = $this->requireString($arguments, 'cookie_name');
+            $payload['cookie_value'] = $cookieValue;
+            $payload['cookie_url'] = $this->optionalString($arguments, 'cookie_url');
+            $payload['status'] = 'set';
+            $payload['message'] = 'Cookie set (stub). Playwright integration pending.';
+        }
+
+        if ($cookieAction === 'clear') {
+            $payload['status'] = 'cleared';
+            $payload['message'] = 'Cookies cleared (stub). Playwright integration pending.';
+        }
+
+        return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 
     /**
@@ -461,14 +402,12 @@ class BrowserTool extends AbstractActionTool
             );
         }
 
-        $timeoutMs = $this->optionalInt($arguments, 'timeout_ms', 5000, 100);
-
         return json_encode([
             'action' => 'wait',
             'text' => $text,
             'selector' => $selector,
             'url' => $url,
-            'timeout_ms' => $timeoutMs,
+            'timeout_ms' => $this->optionalInt($arguments, 'timeout_ms', 5000, 100),
             'status' => 'waited',
             'message' => 'Wait completed (stub). Playwright integration pending.',
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);

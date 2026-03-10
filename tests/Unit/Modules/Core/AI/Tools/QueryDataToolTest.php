@@ -2,10 +2,13 @@
 
 use App\Modules\Core\AI\Tools\QueryDataTool;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
+
+const QUERY_NOT_ALLOWED = 'not allowed';
+const ONE_ROW = '1 row';
 
 beforeEach(function () {
     $this->tool = new QueryDataTool;
@@ -31,7 +34,7 @@ describe('SQL validation', function () {
     it('rejects write statements', function (string $query, string $keyword) {
         $result = $this->tool->execute(['query' => $query]);
         expect($result)->toContain($keyword)
-            ->and($result)->toContain('not allowed');
+            ->and($result)->toContain(QUERY_NOT_ALLOWED);
     })->with([
         ['INSERT INTO users (name) VALUES (\'test\')', 'INSERT'],
         ['UPDATE users SET name = \'test\'', 'UPDATE'],
@@ -98,7 +101,7 @@ describe('query execution', function () {
 
         // With only 1 row of data, we can't test the cap numerically,
         // but we verify the tool doesn't error on an oversized limit
-        expect($result)->toContain('1 row');
+        expect($result)->toContain(ONE_ROW);
     });
 
     it('handles NULL values', function () {
@@ -122,6 +125,6 @@ describe('query execution', function () {
     it('allows WITH (CTE) queries', function () {
         $result = $this->tool->execute(['query' => 'WITH cte AS (SELECT 1 AS val) SELECT * FROM cte']);
         expect($result)->toContain('val')
-            ->and($result)->toContain('1 row');
+            ->and($result)->toContain(ONE_ROW);
     });
 });

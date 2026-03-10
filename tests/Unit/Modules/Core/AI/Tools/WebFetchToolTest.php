@@ -3,8 +3,8 @@
 use App\Modules\Core\AI\Tools\WebFetchTool;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Http;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
 

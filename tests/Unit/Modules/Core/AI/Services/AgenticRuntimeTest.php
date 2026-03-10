@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
+use App\Base\AI\Contracts\Tool;
+use App\Base\AI\Enums\ToolCategory;
+use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
-use App\Base\AI\Contracts\Tool;
-use App\Base\AI\Enums\ToolCategory;
-use App\Base\AI\Enums\ToolRiskClass;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -66,7 +66,7 @@ class TestTool implements Tool
             return $this->toolResult;
         }
 
-        return $this->toolResult . json_encode($arguments);
+        return $this->toolResult.json_encode($arguments);
     }
 }
 
@@ -137,8 +137,7 @@ function buildGenericTool(
     string $description,
     array $schema,
     string $result,
-): Tool
-{
+): Tool {
     return new TestTool($name, $description, $schema, $result);
 }
 

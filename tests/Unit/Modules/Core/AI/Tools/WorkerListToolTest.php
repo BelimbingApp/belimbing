@@ -2,10 +2,13 @@
 
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Tools\WorkerListTool;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, AssertsToolBehavior::class);
+
+const WORKER_LIST_DATA_ANALYST = 'Data Analyst';
+const WORKER_LIST_CODE_REVIEWER = 'Code Reviewer';
 
 beforeEach(function () {
     $this->matcher = Mockery::mock(LaraCapabilityMatcher::class);
@@ -39,16 +42,16 @@ describe('worker discovery', function () {
         $this->matcher->shouldReceive('discoverDelegableWorkersForCurrentUser')
             ->once()
             ->andReturn([
-                ['employee_id' => 1, 'name' => 'Data Analyst', 'capability_summary' => 'Analyzes data and generates reports'],
-                ['employee_id' => 2, 'name' => 'Code Reviewer', 'capability_summary' => 'Reviews code for quality'],
+                ['employee_id' => 1, 'name' => WORKER_LIST_DATA_ANALYST, 'capability_summary' => 'Analyzes data and generates reports'],
+                ['employee_id' => 2, 'name' => WORKER_LIST_CODE_REVIEWER, 'capability_summary' => 'Reviews code for quality'],
             ]);
 
         $result = $this->tool->execute([]);
 
         expect($result)->toContain('2 Digital Workers available')
-            ->and($result)->toContain('Data Analyst')
+            ->and($result)->toContain(WORKER_LIST_DATA_ANALYST)
             ->and($result)->toContain('ID: 1')
-            ->and($result)->toContain('Code Reviewer')
+            ->and($result)->toContain(WORKER_LIST_CODE_REVIEWER)
             ->and($result)->toContain('ID: 2')
             ->and($result)->toContain('Analyzes data');
     });
@@ -72,33 +75,33 @@ describe('capability filtering', function () {
         $this->matcher->shouldReceive('discoverDelegableWorkersForCurrentUser')
             ->once()
             ->andReturn([
-                ['employee_id' => 1, 'name' => 'Data Analyst', 'capability_summary' => 'Analyzes data and generates reports'],
-                ['employee_id' => 2, 'name' => 'Code Reviewer', 'capability_summary' => 'Reviews code for quality'],
+                ['employee_id' => 1, 'name' => WORKER_LIST_DATA_ANALYST, 'capability_summary' => 'Analyzes data and generates reports'],
+                ['employee_id' => 2, 'name' => WORKER_LIST_CODE_REVIEWER, 'capability_summary' => 'Reviews code for quality'],
             ]);
 
         $result = $this->tool->execute(['capability_filter' => 'data']);
 
-        expect($result)->toContain('Data Analyst')
-            ->and($result)->not->toContain('Code Reviewer');
+        expect($result)->toContain(WORKER_LIST_DATA_ANALYST)
+            ->and($result)->not->toContain(WORKER_LIST_CODE_REVIEWER);
     });
 
     it('performs case-insensitive filtering', function () {
         $this->matcher->shouldReceive('discoverDelegableWorkersForCurrentUser')
             ->once()
             ->andReturn([
-                ['employee_id' => 1, 'name' => 'Data Analyst', 'capability_summary' => 'Analyzes DATA reports'],
+                ['employee_id' => 1, 'name' => WORKER_LIST_DATA_ANALYST, 'capability_summary' => 'Analyzes DATA reports'],
             ]);
 
         $result = $this->tool->execute(['capability_filter' => 'data']);
 
-        expect($result)->toContain('Data Analyst');
+        expect($result)->toContain(WORKER_LIST_DATA_ANALYST);
     });
 
     it('returns no match message when filter excludes all workers', function () {
         $this->matcher->shouldReceive('discoverDelegableWorkersForCurrentUser')
             ->once()
             ->andReturn([
-                ['employee_id' => 1, 'name' => 'Data Analyst', 'capability_summary' => 'Analyzes data'],
+                ['employee_id' => 1, 'name' => WORKER_LIST_DATA_ANALYST, 'capability_summary' => 'Analyzes data'],
             ]);
 
         $result = $this->tool->execute(['capability_filter' => 'nonexistent']);

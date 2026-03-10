@@ -115,23 +115,49 @@ class MessageManager
         $runMetadata = $this->sessionManager->runMetadata($employeeId, $sessionId);
 
         foreach ($lines as $line) {
-            $data = json_decode($line, true);
+            $message = $this->messageFromTranscriptLine($line, $runMetadata);
 
-            if (is_array($data)) {
-                $runId = $data['run_id'] ?? null;
-                $lineMeta = $data['meta'] ?? null;
-                if (($lineMeta === null || $lineMeta === []) && is_string($runId)) {
-                    $storedRun = $runMetadata[$runId] ?? null;
-                    $storedMeta = is_array($storedRun) ? ($storedRun['meta'] ?? null) : null;
-                    if (is_array($storedMeta)) {
-                        $data['meta'] = $storedMeta;
-                    }
-                }
-
-                $messages[] = Message::fromJsonLine($data);
+            if ($message !== null) {
+                $messages[] = $message;
             }
         }
 
         return $messages;
+    }
+
+    /**
+     * @param  array<string, mixed>  $runMetadata
+     */
+    private function messageFromTranscriptLine(string $line, array $runMetadata): ?Message
+    {
+        $data = json_decode($line, true);
+
+        if (! is_array($data)) {
+            return null;
+        }
+
+        return Message::fromJsonLine($this->enrichMessageMetadata($data, $runMetadata));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $runMetadata
+     * @return array<string, mixed>
+     */
+    private function enrichMessageMetadata(array $data, array $runMetadata): array
+    {
+        $runId = $data['run_id'] ?? null;
+        $lineMeta = $data['meta'] ?? null;
+
+        if (($lineMeta === null || $lineMeta === []) && is_string($runId)) {
+            $storedRun = $runMetadata[$runId] ?? null;
+            $storedMeta = is_array($storedRun) ? ($storedRun['meta'] ?? null) : null;
+
+            if (is_array($storedMeta)) {
+                $data['meta'] = $storedMeta;
+            }
+        }
+
+        return $data;
     }
 }

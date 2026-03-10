@@ -1,8 +1,8 @@
 <?php
 
 use App\Modules\Core\AI\Tools\WriteJsTool;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, AssertsToolBehavior::class);
 

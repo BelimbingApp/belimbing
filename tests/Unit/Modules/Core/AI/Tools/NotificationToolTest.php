@@ -4,8 +4,8 @@ use App\Modules\Core\AI\Tools\NotificationTool;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Notification;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
 

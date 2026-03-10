@@ -102,6 +102,14 @@ class WebFetchTool extends AbstractTool
             allowPrivateNetwork: (bool) config('ai.tools.web_fetch.ssrf_allow_private', false),
         );
 
+        return $this->formatFetchResponse($result, $url, $maxChars);
+    }
+
+    /**
+     * @param  array{validation_error?: string, request_error?: string, http_status?: int, content?: string, char_count?: int, truncated?: bool}  $result
+     */
+    private function formatFetchResponse(array $result, string $url, int $maxChars): string
+    {
         if (isset($result['validation_error'])) {
             return 'Error: '.$result['validation_error'];
         }
@@ -115,9 +123,8 @@ class WebFetchTool extends AbstractTool
         }
 
         $content = $result['content'] ?? '';
-        $truncated = (bool) ($result['truncated'] ?? false);
 
-        if ($truncated === true) {
+        if (($result['truncated'] ?? false) === true) {
             $content .= "\n\n[Content truncated at {$maxChars} characters]";
         }
 

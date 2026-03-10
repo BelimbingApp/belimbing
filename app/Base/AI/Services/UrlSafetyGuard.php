@@ -44,11 +44,13 @@ class UrlSafetyGuard
             return $blockedHostnameError;
         }
 
-        if ($this->matchesAllowlist($host, $hostnameAllowlist) || $allowPrivateNetwork) {
-            return true;
+        $ipRangeError = null;
+
+        if (! $this->matchesAllowlist($host, $hostnameAllowlist) && ! $allowPrivateNetwork) {
+            $ipRangeError = $this->checkIpRange($host);
         }
 
-        return $this->checkIpRange($host) ?? true;
+        return $ipRangeError ?? true;
     }
 
     /**
@@ -83,9 +85,7 @@ class UrlSafetyGuard
     private function checkIpRange(string $host): ?string
     {
         if (filter_var($host, FILTER_VALIDATE_IP)) {
-            return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false
-                ? "Blocked: {$host} is a private or reserved IP address."
-                : null;
+            return $this->validateResolvedIp($host, $host);
         }
 
         $records = @dns_get_record($host, DNS_A + DNS_AAAA);
@@ -111,12 +111,27 @@ class UrlSafetyGuard
         }
 
         foreach ($ips as $ip) {
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-                return "Blocked: {$host} resolves to a private or reserved IP address ({$ip}).";
+            $ipRangeError = $this->validateResolvedIp($ip, $host);
+
+            if ($ipRangeError !== null) {
+                return $ipRangeError;
             }
         }
 
         return null;
+    }
+
+    private function validateResolvedIp(string $ip, string $host): ?string
+    {
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false) {
+            return null;
+        }
+
+        if ($ip === $host) {
+            return "Blocked: {$host} is a private or reserved IP address.";
+        }
+
+        return "Blocked: {$host} resolves to a private or reserved IP address ({$ip}).";
     }
 
     /**

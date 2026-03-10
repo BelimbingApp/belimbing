@@ -3,10 +3,13 @@
 use App\Modules\Core\AI\Tools\WebSearchTool;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Http;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
+
+const SEARCH_QUERY = 'test query';
+const SEARCH_EXAMPLE_URL = 'https://example.com';
 
 beforeEach(function () {
     $this->tool = new WebSearchTool('parallel', 'test-key');
@@ -64,12 +67,12 @@ describe('parallel provider', function () {
         Http::fake([
             'api.parallel.ai/*' => Http::response([
                 'results' => [
-                    ['title' => 'Test', 'url' => 'https://example.com', 'snippet' => 'A test result'],
+                    ['title' => 'Test', 'url' => SEARCH_EXAMPLE_URL, 'snippet' => 'A test result'],
                 ],
             ]),
         ]);
 
-        $this->tool->execute(['query' => 'test query']);
+        $this->tool->execute(['query' => SEARCH_QUERY]);
 
         Http::assertSent(function ($request) {
             return str_contains($request->url(), 'parallel.ai');
@@ -80,17 +83,17 @@ describe('parallel provider', function () {
         Http::fake([
             'api.parallel.ai/*' => Http::response([
                 'results' => [
-                    ['title' => 'First Result', 'url' => 'https://example.com/1', 'snippet' => 'First snippet'],
-                    ['title' => 'Second Result', 'url' => 'https://example.com/2', 'snippet' => 'Second snippet'],
+                    ['title' => 'First Result', 'url' => SEARCH_EXAMPLE_URL.'/1', 'snippet' => 'First snippet'],
+                    ['title' => 'Second Result', 'url' => SEARCH_EXAMPLE_URL.'/2', 'snippet' => 'Second snippet'],
                 ],
             ]),
         ]);
 
-        $result = $this->tool->execute(['query' => 'test query']);
+        $result = $this->tool->execute(['query' => SEARCH_QUERY]);
 
         expect($result)->toContain('1. First Result')
             ->and($result)->toContain('2. Second Result')
-            ->and($result)->toContain('https://example.com/1')
+            ->and($result)->toContain(SEARCH_EXAMPLE_URL.'/1')
             ->and($result)->toContain('First snippet');
     });
 
@@ -111,7 +114,7 @@ describe('parallel provider', function () {
             'api.parallel.ai/*' => Http::response('Internal Server Error', 500),
         ]);
 
-        $result = $this->tool->execute(['query' => 'test query']);
+        $result = $this->tool->execute(['query' => SEARCH_QUERY]);
 
         expect($result)->toContain('Search failed');
     });
@@ -127,7 +130,7 @@ describe('brave provider', function () {
             'api.search.brave.com/*' => Http::response([
                 'web' => [
                     'results' => [
-                        ['title' => 'Brave Result', 'url' => 'https://example.com', 'description' => 'A brave result'],
+                        ['title' => 'Brave Result', 'url' => SEARCH_EXAMPLE_URL, 'description' => 'A brave result'],
                     ],
                 ],
             ]),
@@ -145,7 +148,7 @@ describe('brave provider', function () {
             'api.search.brave.com/*' => Http::response([
                 'web' => [
                     'results' => [
-                        ['title' => 'Fresh Result', 'url' => 'https://example.com', 'description' => 'Fresh'],
+                        ['title' => 'Fresh Result', 'url' => SEARCH_EXAMPLE_URL, 'description' => 'Fresh'],
                     ],
                 ],
             ]),
@@ -167,12 +170,12 @@ describe('caching', function () {
             'api.parallel.ai/*' => Http::sequence()
                 ->push([
                     'results' => [
-                        ['title' => 'First Call', 'url' => 'https://example.com', 'snippet' => 'First'],
+                        ['title' => 'First Call', 'url' => SEARCH_EXAMPLE_URL, 'snippet' => 'First'],
                     ],
                 ])
                 ->push([
                     'results' => [
-                        ['title' => 'Second Call', 'url' => 'https://example.com', 'snippet' => 'Second'],
+                        ['title' => 'Second Call', 'url' => SEARCH_EXAMPLE_URL, 'snippet' => 'Second'],
                     ],
                 ]),
         ]);

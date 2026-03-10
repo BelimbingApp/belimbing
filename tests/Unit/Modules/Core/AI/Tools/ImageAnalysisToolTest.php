@@ -1,12 +1,13 @@
 <?php
 
 use App\Modules\Core\AI\Tools\ImageAnalysisTool;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, AssertsToolBehavior::class);
 
 const IMAGE_ANALYSIS_PROMPT = 'Describe this image';
+const IMAGE_ANALYSIS_GENERIC_PROMPT = 'Describe this';
 const IMAGE_ANALYSIS_PATH = '/images/photo.jpg';
 
 beforeEach(function () {
@@ -60,7 +61,7 @@ describe('input validation', function () {
     it('rejects unsupported image extension', function () {
         $result = $this->tool->execute([
             'path' => '/images/photo.bmp',
-            'prompt' => 'Describe this',
+            'prompt' => IMAGE_ANALYSIS_GENERIC_PROMPT,
         ]);
         expect($result)->toContain('Error')
             ->and($result)->toContain('Unsupported');
@@ -69,7 +70,7 @@ describe('input validation', function () {
     it('rejects unsupported extension with uppercase', function () {
         $result = $this->tool->execute([
             'path' => '/images/photo.BMP',
-            'prompt' => 'Describe this',
+            'prompt' => IMAGE_ANALYSIS_GENERIC_PROMPT,
         ]);
         expect($result)->toContain('Error');
     });

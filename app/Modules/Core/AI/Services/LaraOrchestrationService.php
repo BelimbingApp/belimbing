@@ -37,22 +37,12 @@ class LaraOrchestrationService
      */
     public function dispatchFromMessage(string $message): ?array
     {
-        $navigation = $this->navigationRouter->resolve($message);
-        if ($navigation !== null) {
-            return $this->response(
-                $navigation['message'],
-                $navigation,
-            );
-        }
+        $response = $this->dispatchNavigationCommand($message)
+            ?? $this->dispatchModelsCommand($message)
+            ?? $this->dispatchGuideCommand($message);
 
-        $modelExpression = $this->extractModelExpression($message);
-        if ($modelExpression !== null) {
-            return $this->dispatchModelQuery($modelExpression);
-        }
-
-        $guideTopic = $this->extractGuideTopic($message);
-        if ($guideTopic !== null) {
-            return $this->dispatchGuideReferences($guideTopic);
+        if ($response !== null) {
+            return $response;
         }
 
         $task = $this->extractDelegationTask($message);
@@ -224,43 +214,76 @@ class LaraOrchestrationService
 
     private function dispatchModelQuery(string $expression): array
     {
+        $response = null;
+
         if ($expression === '') {
-            return $this->response(
+            $response = $this->response(
                 __('Use "/models <filter>" with boolean operators, e.g. "/models reasoning:true AND (family:gpt OR family:claude)".'),
                 ['status' => 'invalid_models_command'],
             );
         }
 
-        try {
-            $matches = $this->modelMatches($expression);
-        } catch (BlbDataContractException $exception) {
-            return $this->response(
-                $exception->getMessage(),
-                [
-                    'status' => 'invalid_models_filter',
-                    'filter' => $expression,
-                    'context' => $exception->context,
-                ],
-            );
+        if ($response === null) {
+            try {
+                $matches = $this->modelMatches($expression);
+            } catch (BlbDataContractException $exception) {
+                $response = $this->response(
+                    $exception->getMessage(),
+                    [
+                        'status' => 'invalid_models_filter',
+                        'filter' => $expression,
+                        'context' => $exception->context,
+                    ],
+                );
+            }
         }
 
-        if (count($matches) === 0) {
-            return $this->response(
-                __('No models matched ":filter".', ['filter' => $expression]),
-                [
-                    'status' => 'no_model_matches',
-                    'filter' => $expression,
-                ],
-            );
+        if ($response === null) {
+            $response = count($matches) === 0
+                ? $this->response(
+                    __('No models matched ":filter".', ['filter' => $expression]),
+                    [
+                        'status' => 'no_model_matches',
+                        'filter' => $expression,
+                    ],
+                )
+                : $this->response(
+                    $this->modelQueryResponseContent($expression, $matches),
+                    [
+                        'status' => 'model_query',
+                        'filter' => $expression,
+                        'matches' => $matches,
+                    ],
+                );
         }
 
-        return $this->response(
-            $this->modelQueryResponseContent($expression, $matches),
-            [
-                'status' => 'model_query',
-                'filter' => $expression,
-                'matches' => $matches,
-            ],
-        );
+        return $response;
+    }
+
+    private function dispatchNavigationCommand(string $message): ?array
+    {
+        $navigation = $this->navigationRouter->resolve($message);
+
+        return $navigation === null
+            ? null
+            : $this->response($navigation['message'], $navigation);
+    }
+
+    private function dispatchModelsCommand(string $message): ?array
+    {
+        $modelExpression = $this->extractModelExpression($message);
+
+        return $modelExpression === null
+            ? null
+            : $this->dispatchModelQuery($modelExpression);
+    }
+
+    private function dispatchGuideCommand(string $message): ?array
+    {
+        $guideTopic = $this->extractGuideTopic($message);
+
+        return $guideTopic === null
+            ? null
+            : $this->dispatchGuideReferences($guideTopic);
     }
 }

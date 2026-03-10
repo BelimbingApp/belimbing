@@ -47,7 +47,7 @@ final readonly class ToolResult implements Stringable
      */
     public static function error(string $message): self
     {
-        return new self('Error: ' . $message, true, []);
+        return new self('Error: '.$message, true, []);
     }
 
     /**
@@ -86,9 +86,9 @@ final readonly class ToolResult implements Stringable
 
         $actionBlocks = '';
         foreach ($this->clientActions as $action) {
-            $actionBlocks .= '<lara-action>' . $action . '</lara-action>';
+            $actionBlocks .= '<lara-action>'.$action.'</lara-action>';
         }
 
-        return $actionBlocks . $this->content;
+        return $actionBlocks.$this->content;
     }
 }

@@ -14,13 +14,20 @@ if (!frontendDomain) {
         const envFile = readFileSync(resolve(__dirname, '.env'), 'utf8');
         const match = envFile.match(/^FRONTEND_DOMAIN=(.+)$/m);
         if (match) {
-            frontendDomain = match[1].trim().replace(/^["']|["']$/g, '');
+            frontendDomain = stripWrappingQuotes(match[1].trim());
         }
     } catch (e) {
         // .env file not found or unreadable
     }
 }
 frontendDomain = frontendDomain || 'local.blb.lara';
+
+function stripWrappingQuotes(value) {
+    const isDoubleQuoted = value.startsWith('"') && value.endsWith('"');
+    const isSingleQuoted = value.startsWith("'") && value.endsWith("'");
+
+    return isDoubleQuoted || isSingleQuoted ? value.slice(1, -1) : value;
+}
 
 export default defineConfig({
     plugins: [

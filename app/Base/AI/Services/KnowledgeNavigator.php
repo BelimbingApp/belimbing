@@ -7,6 +7,8 @@ namespace App\Base\AI\Services;
 
 class KnowledgeNavigator
 {
+    private const DIGITAL_WORKER_KEYWORD = 'digital worker';
+
     /**
      * Curated BLB references Lara can use to navigate the framework knowledge base.
      *
@@ -25,13 +27,13 @@ class KnowledgeNavigator
                 'title' => 'Lara system Digital Worker',
                 'path' => 'docs/architecture/lara-system-dw.md',
                 'summary' => 'Lara identity, access model, session isolation, and orchestration scope.',
-                'keywords' => ['lara', 'chat', 'system', 'orchestration', 'digital worker'],
+                'keywords' => ['lara', 'chat', 'system', 'orchestration', self::DIGITAL_WORKER_KEYWORD],
             ],
             [
                 'title' => 'Digital Worker architecture',
                 'path' => 'docs/architecture/ai-digital-worker.md',
                 'summary' => 'Runtime lifecycle, workspace model, fallback behavior, and worker architecture.',
-                'keywords' => ['ai', 'digital worker', 'runtime', 'workspace', 'fallback'],
+                'keywords' => ['ai', self::DIGITAL_WORKER_KEYWORD, 'runtime', 'workspace', 'fallback'],
             ],
             [
                 'title' => 'Authorization architecture',
@@ -67,7 +69,7 @@ class KnowledgeNavigator
                 'title' => 'Employee module overview',
                 'path' => 'docs/modules/employee.md',
                 'summary' => 'Employee model, digital worker relations, and supervision chain.',
-                'keywords' => ['employee', 'digital worker', 'supervisor', 'module'],
+                'keywords' => ['employee', self::DIGITAL_WORKER_KEYWORD, 'supervisor', 'module'],
             ],
             [
                 'title' => 'Project brief',

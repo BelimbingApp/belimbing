@@ -296,6 +296,8 @@ class AgenticRuntime
             return $configs[0];
         }
 
+        $defaultConfig = null;
+
         try {
             $employee = \App\Modules\Core\Employee\Models\Employee::query()->find($employeeId);
         } catch (\Throwable) {
@@ -304,11 +306,11 @@ class AgenticRuntime
 
         $companyId = $employee?->company_id ? (int) $employee->company_id : null;
 
-        if ($companyId === null) {
-            return null;
+        if ($companyId !== null) {
+            $defaultConfig = $this->configResolver->resolveDefault($companyId);
         }
 
-        return $this->configResolver->resolveDefault($companyId);
+        return $defaultConfig;
     }
 
     /**
@@ -318,22 +320,10 @@ class AgenticRuntime
      */
     private function resolveCredentials(array $config): array
     {
-        if (empty($config['api_key'])) {
-            return [
-                'error' => __('API key is not configured for provider :provider.', [
-                    'provider' => $config['provider_name'] ?? 'default',
-                ]),
-                'error_type' => 'config_error',
-            ];
-        }
+        $configurationError = $this->configurationError($config);
 
-        if (empty($config['base_url'])) {
-            return [
-                'error' => __('Base URL is not configured for provider :provider.', [
-                    'provider' => $config['provider_name'] ?? 'default',
-                ]),
-                'error_type' => 'config_error',
-            ];
+        if ($configurationError !== null) {
+            return $configurationError;
         }
 
         $apiKey = $config['api_key'];
@@ -353,6 +343,32 @@ class AgenticRuntime
         }
 
         return ['api_key' => $apiKey, 'base_url' => $baseUrl];
+    }
+
+    /**
+     * @return array{error: string, error_type: string}|null
+     */
+    private function configurationError(array $config): ?array
+    {
+        if (empty($config['api_key'])) {
+            return [
+                'error' => __('API key is not configured for provider :provider.', [
+                    'provider' => $config['provider_name'] ?? 'default',
+                ]),
+                'error_type' => 'config_error',
+            ];
+        }
+
+        if (empty($config['base_url'])) {
+            return [
+                'error' => __('Base URL is not configured for provider :provider.', [
+                    'provider' => $config['provider_name'] ?? 'default',
+                ]),
+                'error_type' => 'config_error',
+            ];
+        }
+
+        return null;
     }
 
     /**

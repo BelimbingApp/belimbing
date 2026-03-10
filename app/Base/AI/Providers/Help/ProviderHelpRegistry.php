@@ -24,12 +24,12 @@ final class ProviderHelpRegistry
     public function get(string $providerKey, ?string $authType = null): ProviderHelpContract
     {
         return match ($providerKey) {
-            'copilot-proxy'         => new CopilotProxyHelp(),
-            'github-copilot'        => new GithubCopilotHelp(),
-            'cloudflare-ai-gateway' => new CloudflareAiGatewayHelp(),
-            'ollama'                => new OllamaHelp(),
-            'lmstudio'              => new LmStudioHelp(),
-            default                 => $this->fromAuthType($authType),
+            'copilot-proxy' => new CopilotProxyHelp,
+            'github-copilot' => new GithubCopilotHelp,
+            'cloudflare-ai-gateway' => new CloudflareAiGatewayHelp,
+            'ollama' => new OllamaHelp,
+            'lmstudio' => new LmStudioHelp,
+            default => $this->fromAuthType($authType),
         };
     }
 
@@ -39,11 +39,11 @@ final class ProviderHelpRegistry
     private function fromAuthType(?string $authType): ProviderHelpContract
     {
         return match ($authType) {
-            'local'                    => new LocalServerHelp(),
-            'device_flow'              => new DeviceFlowHelp(),
+            'local' => new LocalServerHelp,
+            'device_flow' => new DeviceFlowHelp,
             'api_key', 'oauth',
-            'subscription', 'custom'   => new ApiKeyHelp(),
-            default                    => new DefaultProviderHelp(),
+            'subscription', 'custom' => new ApiKeyHelp,
+            default => new DefaultProviderHelp,
         };
     }
 }
