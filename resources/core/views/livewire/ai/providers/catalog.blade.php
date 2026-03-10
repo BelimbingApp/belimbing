@@ -1,3 +1,9 @@
+<?php
+// SPDX-License-Identifier: AGPL-3.0-only
+// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+
+/** @var \App\Modules\Core\AI\Livewire\Providers\Catalog $this */
+?>
 <div class="space-y-section-gap">
     <x-ui.page-header :title="__('Choose Providers')" :subtitle="__('Browse available LLM providers and select the ones you want to connect.')">
         <x-slot name="help">

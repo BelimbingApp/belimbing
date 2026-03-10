@@ -28,6 +28,7 @@ final readonly class ToolMetadata
      * @param  list<array{label: string, input: array<string, mixed>}>  $testExamples  Sample inputs for the Try-It console
      * @param  list<string>  $healthChecks  Descriptions of health probes this tool supports
      * @param  list<string>  $limits  Known safety limits users should understand
+     * @param  list<ToolConfigField>  $configFields  Configurable settings for this tool
      */
     public function __construct(
         public string $name,
@@ -41,5 +42,6 @@ final readonly class ToolMetadata
         public array $testExamples = [],
         public array $healthChecks = [],
         public array $limits = [],
+        public array $configFields = [],
     ) {}
 }

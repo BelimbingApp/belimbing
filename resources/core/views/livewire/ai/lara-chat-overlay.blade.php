@@ -1,3 +1,9 @@
+<?php
+// SPDX-License-Identifier: AGPL-3.0-only
+// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+
+/** @var \App\Modules\Core\AI\Livewire\LaraChatOverlay $this */
+?>
 <div class="h-full flex flex-col" x-data @lara-focus-composer.window="$nextTick(() => $refs.laraComposer?.focus())">
     <div class="h-11 px-4 border-b border-border-default bg-surface-bar flex items-center justify-between shrink-0">
         <div class="flex items-center gap-2">

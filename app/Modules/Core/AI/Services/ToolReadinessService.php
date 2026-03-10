@@ -5,23 +5,23 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\AI\DTO\ToolMetadata;
-use App\Modules\Core\AI\Enums\ToolHealthState;
 use App\Modules\Core\AI\Enums\ToolReadiness;
-use Illuminate\Support\Facades\DB;
 
 /**
- * Computes readiness and health state for Digital Worker tools.
+ * Computes readiness and verification state for Digital Worker tools.
  *
  * Readiness answers "can this tool be used?" by checking registration,
- * configuration, and authorization. Health answers "is it behaving well
- * right now?" by running lightweight probes.
+ * configuration, and authorization. Verification state comes from
+ * actual Try It test results stored via the Settings module.
  */
 class ToolReadinessService
 {
     public function __construct(
         private readonly DigitalWorkerToolRegistry $toolRegistry,
         private readonly ToolMetadataRegistry $metadataRegistry,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -45,42 +45,41 @@ class ToolReadinessService
     }
 
     /**
-     * Run a basic health check for a tool.
+     * Get the last verification result for a tool.
      *
-     * @param  string  $toolName  Tool machine name
+     * @return array{at: string, success: bool}|null
      */
-    public function health(string $toolName): ToolHealthState
+    public function lastVerified(string $toolName): ?array
     {
-        if (! $this->toolRegistry->isRegistered($toolName)) {
-            return ToolHealthState::UNKNOWN;
+        $at = $this->settings->get("ai.tools.{$toolName}.last_verified_at");
+
+        if ($at === null) {
+            return null;
         }
 
-        return match ($toolName) {
-            'query_data' => $this->checkQueryDataHealth(),
-            'web_search' => $this->checkWebSearchHealth(),
-            'web_fetch' => $this->checkWebFetchHealth(),
-            'system_info' => ToolHealthState::HEALTHY,
-            default => ToolHealthState::UNKNOWN,
-        };
+        return [
+            'at' => $at,
+            'success' => (bool) $this->settings->get("ai.tools.{$toolName}.last_verified_success", false),
+        ];
     }
 
     /**
-     * Get a combined readiness + health snapshot for catalog display.
+     * Get a combined readiness + verification snapshot for catalog display.
      *
-     * @return array{readiness: ToolReadiness, health: ToolHealthState}
+     * @return array{readiness: ToolReadiness, lastVerified: array{at: string, success: bool}|null}
      */
     public function snapshot(string $toolName): array
     {
         return [
             'readiness' => $this->readiness($toolName),
-            'health' => $this->health($toolName),
+            'lastVerified' => $this->lastVerified($toolName),
         ];
     }
 
     /**
      * Get snapshots for all tools that have metadata.
      *
-     * @return array<string, array{readiness: ToolReadiness, health: ToolHealthState, metadata: ToolMetadata}>
+     * @return array<string, array{readiness: ToolReadiness, lastVerified: array{at: string, success: bool}|null, metadata: ToolMetadata}>
      */
     public function allSnapshots(): array
     {
@@ -102,34 +101,5 @@ class ToolReadinessService
     private function isConditionalTool(string $toolName): bool
     {
         return in_array($toolName, ['web_search', 'memory_search'], true);
-    }
-
-    private function checkQueryDataHealth(): ToolHealthState
-    {
-        try {
-            DB::select('SELECT 1');
-
-            return ToolHealthState::HEALTHY;
-        } catch (\Throwable) {
-            return ToolHealthState::FAILING;
-        }
-    }
-
-    private function checkWebSearchHealth(): ToolHealthState
-    {
-        $provider = config('ai.tools.web_search.provider', 'parallel');
-        $apiKey = config('ai.tools.web_search.'.$provider.'.api_key');
-
-        if (! is_string($apiKey) || trim($apiKey) === '') {
-            return ToolHealthState::FAILING;
-        }
-
-        return ToolHealthState::HEALTHY;
-    }
-
-    private function checkWebFetchHealth(): ToolHealthState
-    {
-        // SSRF guard is always available; just check basic HTTP capability
-        return ToolHealthState::HEALTHY;
     }
 }

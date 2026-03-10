@@ -3,88 +3,93 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-use App\Modules\Core\AI\Enums\ToolHealthState;
+use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\AI\Enums\ToolReadiness;
 use App\Modules\Core\AI\Services\DigitalWorkerToolRegistry;
 use App\Modules\Core\AI\Services\ToolMetadataRegistry;
 use App\Modules\Core\AI\Services\ToolReadinessService;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
 
-uses(TestCase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
-it('returns UNAVAILABLE for unregistered non-conditional tool', function () {
+function makeReadinessService(?DigitalWorkerToolRegistry $toolRegistry = null): ToolReadinessService
+{
+    $toolRegistry ??= Mockery::mock(DigitalWorkerToolRegistry::class);
+
+    return new ToolReadinessService(
+        $toolRegistry,
+        app(ToolMetadataRegistry::class),
+        app(SettingsService::class),
+    );
+}
+
+it('returns UNAVAILABLE for unregistered non-conditional tool', function (): void {
     $toolRegistry = Mockery::mock(DigitalWorkerToolRegistry::class);
     $toolRegistry->shouldReceive('isRegistered')->with('fake_tool')->andReturn(false);
 
-    $metadataRegistry = app(ToolMetadataRegistry::class);
-    $service = new ToolReadinessService($toolRegistry, $metadataRegistry);
+    $service = makeReadinessService($toolRegistry);
 
     expect($service->readiness('fake_tool'))->toBe(ToolReadiness::UNAVAILABLE);
 });
 
-it('returns UNCONFIGURED for unregistered conditional tool', function () {
+it('returns UNCONFIGURED for unregistered conditional tool', function (): void {
     $toolRegistry = Mockery::mock(DigitalWorkerToolRegistry::class);
     $toolRegistry->shouldReceive('isRegistered')->with('web_search')->andReturn(false);
 
-    $metadataRegistry = app(ToolMetadataRegistry::class);
-    $service = new ToolReadinessService($toolRegistry, $metadataRegistry);
+    $service = makeReadinessService($toolRegistry);
 
     expect($service->readiness('web_search'))->toBe(ToolReadiness::UNCONFIGURED);
 });
 
-it('returns UNAUTHORIZED when user lacks tool capability', function () {
+it('returns UNAUTHORIZED when user lacks tool capability', function (): void {
     $toolRegistry = Mockery::mock(DigitalWorkerToolRegistry::class);
     $toolRegistry->shouldReceive('isRegistered')->with('bash')->andReturn(true);
     $toolRegistry->shouldReceive('canCurrentUserUseTool')->with('bash')->andReturn(false);
 
-    $metadataRegistry = app(ToolMetadataRegistry::class);
-    $service = new ToolReadinessService($toolRegistry, $metadataRegistry);
+    $service = makeReadinessService($toolRegistry);
 
     expect($service->readiness('bash'))->toBe(ToolReadiness::UNAUTHORIZED);
 });
 
-it('returns READY when tool is registered and user is authorized', function () {
+it('returns READY when tool is registered and user is authorized', function (): void {
     $toolRegistry = Mockery::mock(DigitalWorkerToolRegistry::class);
     $toolRegistry->shouldReceive('isRegistered')->with('query_data')->andReturn(true);
     $toolRegistry->shouldReceive('canCurrentUserUseTool')->with('query_data')->andReturn(true);
 
-    $metadataRegistry = app(ToolMetadataRegistry::class);
-    $service = new ToolReadinessService($toolRegistry, $metadataRegistry);
+    $service = makeReadinessService($toolRegistry);
 
     expect($service->readiness('query_data'))->toBe(ToolReadiness::READY);
 });
 
-it('returns UNKNOWN health for unregistered tools', function () {
-    $toolRegistry = Mockery::mock(DigitalWorkerToolRegistry::class);
-    $toolRegistry->shouldReceive('isRegistered')->with('fake_tool')->andReturn(false);
+it('returns null lastVerified when no test has been run', function (): void {
+    $service = makeReadinessService();
 
-    $metadataRegistry = app(ToolMetadataRegistry::class);
-    $service = new ToolReadinessService($toolRegistry, $metadataRegistry);
-
-    expect($service->health('fake_tool'))->toBe(ToolHealthState::UNKNOWN);
+    expect($service->lastVerified('fake_tool'))->toBeNull();
 });
 
-it('returns HEALTHY health for system_info tool', function () {
-    $toolRegistry = Mockery::mock(DigitalWorkerToolRegistry::class);
-    $toolRegistry->shouldReceive('isRegistered')->with('system_info')->andReturn(true);
+it('returns lastVerified from settings when test has been run', function (): void {
+    $settings = app(SettingsService::class);
+    $settings->set('ai.tools.query_data.last_verified_at', '2026-03-10T12:00:00+00:00');
+    $settings->set('ai.tools.query_data.last_verified_success', true);
 
-    $metadataRegistry = app(ToolMetadataRegistry::class);
-    $service = new ToolReadinessService($toolRegistry, $metadataRegistry);
+    $service = makeReadinessService();
+    $result = $service->lastVerified('query_data');
 
-    expect($service->health('system_info'))->toBe(ToolHealthState::HEALTHY);
+    expect($result)->not->toBeNull()
+        ->and($result['at'])->toBe('2026-03-10T12:00:00+00:00')
+        ->and($result['success'])->toBeTrue();
 });
 
-it('provides combined snapshot with readiness and health', function () {
+it('provides combined snapshot with readiness and lastVerified', function (): void {
     $toolRegistry = Mockery::mock(DigitalWorkerToolRegistry::class);
     $toolRegistry->shouldReceive('isRegistered')->with('query_data')->andReturn(true);
     $toolRegistry->shouldReceive('canCurrentUserUseTool')->with('query_data')->andReturn(true);
 
-    $metadataRegistry = app(ToolMetadataRegistry::class);
-    $service = new ToolReadinessService($toolRegistry, $metadataRegistry);
-
+    $service = makeReadinessService($toolRegistry);
     $snapshot = $service->snapshot('query_data');
 
-    expect($snapshot)->toHaveKeys(['readiness', 'health'])
+    expect($snapshot)->toHaveKeys(['readiness', 'lastVerified'])
         ->and($snapshot['readiness'])->toBe(ToolReadiness::READY)
-        ->and($snapshot['health'])->toBe(ToolHealthState::HEALTHY);
+        ->and($snapshot['lastVerified'])->toBeNull();
 });

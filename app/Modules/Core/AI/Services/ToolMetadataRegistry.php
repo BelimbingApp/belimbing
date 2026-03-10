@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
+use App\Modules\Core\AI\DTO\ToolConfigField;
 use App\Modules\Core\AI\DTO\ToolMetadata;
 
 /**
@@ -157,6 +158,37 @@ class ToolMetadataRegistry
                     '15-second API timeout',
                     '15-minute result cache TTL',
                 ],
+                configFields: [
+                    new ToolConfigField(
+                        key: 'ai.tools.web_search.provider',
+                        label: 'Search Provider',
+                        type: 'select',
+                        options: ['parallel' => 'Parallel', 'brave' => 'Brave Search'],
+                        help: 'Select which search provider to use.',
+                    ),
+                    new ToolConfigField(
+                        key: 'ai.tools.web_search.parallel.api_key',
+                        label: 'Parallel API Key',
+                        type: 'secret',
+                        encrypted: true,
+                        help: 'API key for the Parallel search provider.',
+                        showWhen: 'ai.tools.web_search.provider=parallel',
+                    ),
+                    new ToolConfigField(
+                        key: 'ai.tools.web_search.brave.api_key',
+                        label: 'Brave Search API Key',
+                        type: 'secret',
+                        encrypted: true,
+                        help: 'API key for Brave Search.',
+                        showWhen: 'ai.tools.web_search.provider=brave',
+                    ),
+                    new ToolConfigField(
+                        key: 'ai.tools.web_search.cache_ttl_minutes',
+                        label: 'Cache TTL (minutes)',
+                        type: 'text',
+                        help: 'How long to cache search results.',
+                    ),
+                ],
             ),
             new ToolMetadata(
                 name: 'web_fetch',
@@ -186,6 +218,20 @@ class ToolMetadataRegistry
                     '50,000 character content cap (configurable)',
                     '30-second timeout',
                     '5 redirect maximum',
+                ],
+                configFields: [
+                    new ToolConfigField(
+                        key: 'ai.tools.web_fetch.timeout_seconds',
+                        label: 'Timeout (seconds)',
+                        type: 'text',
+                        help: 'Maximum time to wait for a response.',
+                    ),
+                    new ToolConfigField(
+                        key: 'ai.tools.web_fetch.max_response_bytes',
+                        label: 'Max Response Size (bytes)',
+                        type: 'text',
+                        help: 'Maximum response body size.',
+                    ),
                 ],
             ),
             new ToolMetadata(
@@ -455,6 +501,20 @@ class ToolMetadataRegistry
                 limits: [
                     'Company-scoped browser contexts',
                     'Session isolation between DWs',
+                ],
+                configFields: [
+                    new ToolConfigField(
+                        key: 'ai.tools.browser.enabled',
+                        label: 'Enable Browser Tool',
+                        type: 'boolean',
+                        help: 'Whether headless browser automation is enabled.',
+                    ),
+                    new ToolConfigField(
+                        key: 'ai.tools.browser.executable_path',
+                        label: 'Chromium Path',
+                        type: 'text',
+                        help: 'Path to the Chromium executable. Leave empty for auto-detection.',
+                    ),
                 ],
             ),
         ];

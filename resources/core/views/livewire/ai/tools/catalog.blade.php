@@ -1,3 +1,9 @@
+<?php
+// SPDX-License-Identifier: AGPL-3.0-only
+// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+
+/** @var \App\Modules\Core\AI\Livewire\Tools\Catalog $this */
+?>
 <div>
     <x-ui.page-header :title="__('Tools')" :subtitle="__('Tools extend what Digital Workers can do — they let AI take actions, query data, and interact with external systems beyond generating text.')">
         <x-slot name="help">
@@ -26,7 +32,7 @@
                     </ul>
                 </div>
 
-                <p>{{ __('Click any tool row to see its full description, setup requirements, and health status. Click column headers to sort.') }}</p>
+                <p>{{ __('Click any tool row to see its full description, configuration, and Try It console. Click column headers to sort.') }}</p>
             </div>
         </x-slot>
     </x-ui.page-header>
@@ -106,7 +112,7 @@
                             </span>
                         </th>
                         <th class="{{ $thBase }} {{ $thInactive }}">{{ __('Readiness') }}</th>
-                        <th class="{{ $thBase }} {{ $thInactive }} hidden lg:table-cell">{{ __('Health') }}</th>
+                        <th class="{{ $thBase }} {{ $thInactive }} hidden lg:table-cell">{{ __('Verified') }}</th>
                     </tr>
                 </thead>
                 <tbody class="bg-surface-card divide-y divide-border-default">
@@ -114,7 +120,7 @@
                         @php
                             $meta = $snap['metadata'];
                             $readiness = $snap['readiness'];
-                            $health = $snap['health'];
+                            $lastVerified = $snap['lastVerified'];
                         @endphp
                         <tr
                             wire:key="tool-{{ $name }}"
@@ -137,7 +143,13 @@
                                 <x-ui.badge :variant="$readiness->color()">{{ $readiness->label() }}</x-ui.badge>
                             </td>
                             <td class="hidden lg:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                <x-ui.badge :variant="$health->color()">{{ $health->label() }}</x-ui.badge>
+                                @if($lastVerified)
+                                    <x-ui.badge :variant="$lastVerified['success'] ? 'success' : 'danger'">
+                                        {{ $lastVerified['success'] ? __('Passed') : __('Failed') }}
+                                    </x-ui.badge>
+                                @else
+                                    <x-ui.badge variant="default">{{ __('—') }}</x-ui.badge>
+                                @endif
                             </td>
                         </tr>
                     @empty

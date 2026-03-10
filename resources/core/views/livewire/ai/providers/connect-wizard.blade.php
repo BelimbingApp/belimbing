@@ -1,3 +1,9 @@
+<?php
+// SPDX-License-Identifier: AGPL-3.0-only
+// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+
+/** @var \App\Modules\Core\AI\Livewire\Providers\ConnectWizard $this */
+?>
 <div class="space-y-section-gap">
     <x-ui.page-header :title="__('Connect Providers')" :subtitle="__('Enter your API key for each selected provider.')">
         <x-slot name="actions">

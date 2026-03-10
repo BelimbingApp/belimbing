@@ -1,3 +1,9 @@
+<?php
+// SPDX-License-Identifier: AGPL-3.0-only
+// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+
+/** @var \App\Modules\Core\AI\Livewire\Playground $this */
+?>
 <div>
     <x-slot name="title">{{ __('Digital Worker Playground') }}</x-slot>
 
