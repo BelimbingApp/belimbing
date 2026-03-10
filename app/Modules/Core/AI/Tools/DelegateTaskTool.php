@@ -91,20 +91,23 @@ class DelegateTaskTool extends AbstractTool
 
         $workerId = $this->resolveWorkerId($arguments, $task);
 
+        $response = 'Error: No suitable Digital Worker found for this task. '
+            .'Use worker_list to see available workers, then specify a worker_id explicitly.';
+
         if ($workerId === null) {
-            return 'Error: No suitable Digital Worker found for this task. '
-                .'Use worker_list to see available workers, then specify a worker_id explicitly.';
+            return $response;
         }
 
         try {
             $result = $this->dispatcher->dispatchForCurrentUser($workerId, $task);
-
-            return $this->formatDispatchResult($result);
+            $response = $this->formatDispatchResult($result);
         } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
-            return 'Error: '.$e->getMessage();
+            $response = 'Error: '.$e->getMessage();
         } catch (\Throwable $e) {
-            return 'Error dispatching task: '.$e->getMessage();
+            $response = 'Error dispatching task: '.$e->getMessage();
         }
+
+        return $response;
     }
 
     /**

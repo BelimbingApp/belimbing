@@ -5,10 +5,10 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\AI\Contracts\Tool;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
-use App\Base\AI\Contracts\Tool;
 use App\Modules\Core\User\Models\User;
 
 /**
@@ -104,20 +104,25 @@ class DigitalWorkerToolRegistry
     public function execute(string $toolName, array $arguments): string
     {
         $tool = $this->tools[$toolName] ?? null;
+        $response = null;
 
         if ($tool === null) {
-            return self::ERROR_PREFIX.'Unknown tool "'.$toolName.'".';
+            $response = self::ERROR_PREFIX.'Unknown tool "'.$toolName.'".';
         }
 
-        if (! $this->currentUserCanUse($tool)) {
-            return self::ERROR_PREFIX.'You do not have permission to use the "'.$toolName.'" tool.';
+        if ($tool !== null && ! $this->currentUserCanUse($tool)) {
+            $response = self::ERROR_PREFIX.'You do not have permission to use the "'.$toolName.'" tool.';
         }
 
-        try {
-            return $tool->execute($arguments);
-        } catch (\Throwable $e) {
-            return self::ERROR_PREFIX.'Error executing "'.$toolName.'": '.$e->getMessage();
+        if ($response === null && $tool !== null) {
+            try {
+                $response = $tool->execute($arguments);
+            } catch (\Throwable $e) {
+                $response = self::ERROR_PREFIX.'Error executing "'.$toolName.'": '.$e->getMessage();
+            }
         }
+
+        return $response;
     }
 
     /**

@@ -21,7 +21,7 @@ class RouteDiscoveryService
     /**
      * Discover all route files organized by type (web, api).
      *
-     * @return array<string, list<string>>  Keyed by route type, values are absolute file paths
+     * @return array<string, list<string>> Keyed by route type, values are absolute file paths
      */
     public function discover(): array
     {

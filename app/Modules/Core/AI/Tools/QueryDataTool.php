@@ -114,36 +114,15 @@ class QueryDataTool extends AbstractTool
         // Remove trailing semicolons (prevents multi-statement injection)
         $query = rtrim($query, ';');
 
-        $validationError = $this->validateQuery($query);
-        if ($validationError !== null) {
-            return $validationError;
-        }
+        $response = $this->validateQuery($query);
 
         $limit = $this->optionalInt($arguments, 'limit', self::DEFAULT_LIMIT, min: 1, max: self::MAX_ROWS);
 
-        // Enforce row limit by wrapping the query
-        $limitedQuery = $this->applyLimit($query, $limit);
-
-        try {
-            $results = DB::connection()
-                ->getReadPdo()
-                ->prepare($limitedQuery);
-
-            $results->execute();
-
-            /** @var list<array<string, mixed>> $rows */
-            $rows = $results->fetchAll(\PDO::FETCH_ASSOC);
-
-            if ($rows === []) {
-                return 'Query returned 0 rows.';
-            }
-
-            return $this->formatResults($rows, $limit);
-        } catch (\PDOException $e) {
-            return 'Query error: '.$e->getMessage();
-        } catch (\Throwable $e) {
-            return 'Error: '.$e->getMessage();
+        if ($response === null) {
+            $response = $this->runValidatedQuery($query, $limit);
         }
+
+        return $response;
     }
 
     /**
@@ -186,6 +165,30 @@ class QueryDataTool extends AbstractTool
     private function applyLimit(string $query, int $limit): string
     {
         return 'SELECT * FROM ('.$query.') AS _blb_limited LIMIT '.$limit;
+    }
+
+    private function runValidatedQuery(string $query, int $limit): string
+    {
+        $limitedQuery = $this->applyLimit($query, $limit);
+
+        try {
+            $results = DB::connection()
+                ->getReadPdo()
+                ->prepare($limitedQuery);
+
+            $results->execute();
+
+            /** @var list<array<string, mixed>> $rows */
+            $rows = $results->fetchAll(\PDO::FETCH_ASSOC);
+        } catch (\PDOException $e) {
+            return 'Query error: '.$e->getMessage();
+        } catch (\Throwable $e) {
+            return 'Error: '.$e->getMessage();
+        }
+
+        return $rows === []
+            ? 'Query returned 0 rows.'
+            : $this->formatResults($rows, $limit);
     }
 
     /**

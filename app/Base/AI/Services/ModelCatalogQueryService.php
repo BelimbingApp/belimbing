@@ -128,10 +128,7 @@ class ModelCatalogQueryService
             $upper = mb_strtoupper($token);
 
             if ($upper === 'AND' || $upper === 'OR') {
-                while ($operators !== [] && $this->isOperator(end($operators)) && $this->precedence(end($operators)) >= $this->precedence($upper)) {
-                    $output[] = array_pop($operators);
-                }
-                $operators[] = $upper;
+                $this->pushOperator($upper, $operators, $output);
 
                 continue;
             }
@@ -143,43 +140,94 @@ class ModelCatalogQueryService
             }
 
             if ($token === ')') {
-                while ($operators !== [] && end($operators) !== '(') {
-                    $output[] = array_pop($operators);
-                }
-
-                if ($operators === [] || end($operators) !== '(') {
-                    throw new BlbDataContractException('Invalid /models filter: mismatched parentheses.', context: [
-                        'expression' => $expression,
-                    ]);
-                }
-
-                array_pop($operators);
+                $this->closeParenthesizedExpression($expression, $operators, $output);
 
                 continue;
             }
 
-            if (! str_contains($token, ':')) {
-                throw new BlbDataContractException('Invalid /models filter token. Expected field:value.', context: [
-                    'token' => $token,
-                    'expression' => $expression,
-                ]);
-            }
-
+            $this->assertPredicateToken($token, $expression);
             $output[] = $token;
         }
 
+        $this->drainOperators($expression, $operators, $output);
+
+        return $output;
+    }
+
+    /**
+     * @param  list<string>  $operators
+     * @param  list<string>  $output
+     */
+    private function pushOperator(string $operator, array &$operators, array &$output): void
+    {
+        while ($this->shouldDrainOperatorStack($operators, $operator)) {
+            $output[] = array_pop($operators);
+        }
+
+        $operators[] = $operator;
+    }
+
+    /**
+     * @param  list<string>  $operators
+     */
+    private function shouldDrainOperatorStack(array $operators, string $operator): bool
+    {
+        $topOperator = end($operators);
+
+        return $operators !== []
+            && $this->isOperator($topOperator)
+            && $this->precedence($topOperator) >= $this->precedence($operator);
+    }
+
+    /**
+     * @param  list<string>  $operators
+     * @param  list<string>  $output
+     */
+    private function closeParenthesizedExpression(string $expression, array &$operators, array &$output): void
+    {
+        while ($operators !== [] && end($operators) !== '(') {
+            $output[] = array_pop($operators);
+        }
+
+        if ($operators === [] || end($operators) !== '(') {
+            $this->throwMismatchedParentheses($expression);
+        }
+
+        array_pop($operators);
+    }
+
+    private function assertPredicateToken(string $token, string $expression): void
+    {
+        if (! str_contains($token, ':')) {
+            throw new BlbDataContractException('Invalid /models filter token. Expected field:value.', context: [
+                'token' => $token,
+                'expression' => $expression,
+            ]);
+        }
+    }
+
+    /**
+     * @param  list<string>  $operators
+     * @param  list<string>  $output
+     */
+    private function drainOperators(string $expression, array &$operators, array &$output): void
+    {
         while ($operators !== []) {
             $operator = array_pop($operators);
+
             if ($operator === '(' || $operator === ')') {
-                throw new BlbDataContractException('Invalid /models filter: mismatched parentheses.', context: [
-                    'expression' => $expression,
-                ]);
+                $this->throwMismatchedParentheses($expression);
             }
 
             $output[] = $operator;
         }
+    }
 
-        return $output;
+    private function throwMismatchedParentheses(string $expression): never
+    {
+        throw new BlbDataContractException('Invalid /models filter: mismatched parentheses.', context: [
+            'expression' => $expression,
+        ]);
     }
 
     private function isOperator(string|false $token): bool

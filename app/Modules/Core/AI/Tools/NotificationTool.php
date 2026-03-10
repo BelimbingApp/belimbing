@@ -27,6 +27,8 @@ use Illuminate\Support\Facades\Notification as NotificationFacade;
  */
 class NotificationTool extends AbstractTool
 {
+    private const ERROR_PREFIX = 'Error: ';
+
     /**
      * Maximum length for the notification subject.
      */
@@ -111,45 +113,27 @@ class NotificationTool extends AbstractTool
         $body = $this->requireString($arguments, 'body');
 
         if (mb_strlen($subject) > self::MAX_SUBJECT_LENGTH) {
-            throw new ToolArgumentException(
-                'subject must not exceed '.self::MAX_SUBJECT_LENGTH.' characters.'
-            );
+            throw new ToolArgumentException('subject must not exceed '.self::MAX_SUBJECT_LENGTH.' characters.');
         }
 
         if (mb_strlen($body) > self::MAX_BODY_LENGTH) {
-            throw new ToolArgumentException(
-                'body must not exceed '.self::MAX_BODY_LENGTH.' characters.'
-            );
+            throw new ToolArgumentException('body must not exceed '.self::MAX_BODY_LENGTH.' characters.');
         }
 
         try {
             $users = $this->resolveRecipients($userId);
-        } catch (\RuntimeException $e) {
-            return 'Error: '.$e->getMessage();
+            $this->sendNotification($users, $this->buildNotification($subject, $body, $channel));
+        } catch (NotificationToolRecipientException|NotificationToolDeliveryException $e) {
+            return self::ERROR_PREFIX.$e->getMessage();
         }
 
-        $notification = $this->buildNotification($subject, $body, $channel);
-
-        try {
-            NotificationFacade::send($users, $notification);
-        } catch (\Throwable $e) {
-            if ($this->isTableMissing($e)) {
-                return 'Error: The notifications table does not exist. '
-                    .'Run "php artisan notifications:table" and "php artisan migrate" to create it.';
-            }
-
-            return 'Error: Failed to send notification — '.$e->getMessage();
-        }
-
-        $data = [
+        return json_encode([
             'status' => 'sent',
             'recipients' => count($users),
             'channel' => $channel,
             'subject' => $subject,
             'sent_at' => now()->toIso8601String(),
-        ];
-
-        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 
     /**
@@ -158,7 +142,7 @@ class NotificationTool extends AbstractTool
      * @param  int|string  $userId  User ID or "all"
      * @return \Illuminate\Database\Eloquent\Collection<int, User>|array<int, User>
      *
-     * @throws \RuntimeException If the user cannot be resolved
+     * @throws NotificationToolRecipientException If the user cannot be resolved
      */
     private function resolveRecipients(int|string $userId): \Illuminate\Database\Eloquent\Collection|array
     {
@@ -169,7 +153,7 @@ class NotificationTool extends AbstractTool
         $user = User::query()->find($userId);
 
         if ($user === null) {
-            throw new \RuntimeException('User with ID '.$userId.' not found.');
+            throw new NotificationToolRecipientException('User with ID '.$userId.' not found.');
         }
 
         return [$user];
@@ -180,26 +164,26 @@ class NotificationTool extends AbstractTool
      *
      * @return \Illuminate\Database\Eloquent\Collection<int, User>
      *
-     * @throws \RuntimeException If no auth user or no company
+     * @throws NotificationToolRecipientException If no auth user or no company
      */
     private function resolveAllCompanyUsers(): \Illuminate\Database\Eloquent\Collection
     {
         $authUser = Auth::user();
 
         if (! $authUser instanceof User) {
-            throw new \RuntimeException('No authenticated user. Cannot resolve company users.');
+            throw new NotificationToolRecipientException('No authenticated user. Cannot resolve company users.');
         }
 
         $companyId = $authUser->getCompanyId();
 
         if ($companyId === null) {
-            throw new \RuntimeException('Authenticated user has no company. Cannot broadcast to all.');
+            throw new NotificationToolRecipientException('Authenticated user has no company. Cannot broadcast to all.');
         }
 
         $users = User::query()->where('company_id', $companyId)->get();
 
         if ($users->isEmpty()) {
-            throw new \RuntimeException('No users found in company ID '.$companyId.'.');
+            throw new NotificationToolRecipientException('No users found in company ID '.$companyId.'.');
         }
 
         return $users;
@@ -248,6 +232,27 @@ class NotificationTool extends AbstractTool
     }
 
     /**
+     * @param  iterable<int, User>  $users
+     *
+     * @throws NotificationToolDeliveryException
+     */
+    private function sendNotification(iterable $users, Notification $notification): void
+    {
+        try {
+            NotificationFacade::send($users, $notification);
+        } catch (\Throwable $e) {
+            if ($this->isTableMissing($e)) {
+                throw new NotificationToolDeliveryException(
+                    'The notifications table does not exist. Run "php artisan notifications:table" and "php artisan migrate" to create it.',
+                    previous: $e,
+                );
+            }
+
+            throw new NotificationToolDeliveryException('Failed to send notification — '.$e->getMessage(), previous: $e);
+        }
+    }
+
+    /**
      * Check whether a throwable indicates a missing database table.
      */
     private function isTableMissing(\Throwable $e): bool
@@ -261,3 +266,7 @@ class NotificationTool extends AbstractTool
         );
     }
 }
+
+final class NotificationToolRecipientException extends \RuntimeException {}
+
+final class NotificationToolDeliveryException extends \RuntimeException {}

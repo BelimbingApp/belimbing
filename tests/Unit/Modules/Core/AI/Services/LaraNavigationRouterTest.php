@@ -6,13 +6,10 @@ use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\DTO\ResourceContext;
 use App\Base\Authz\Enums\AuthorizationReasonCode;
 use App\Modules\Core\AI\Services\LaraNavigationRouter;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Collection;
-use Tests\TestCase;
 use Tests\Support\CreatesLaraFixtures;
+use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, CreatesLaraFixtures::class);
 
@@ -20,7 +17,7 @@ const AI_PROVIDERS_URL = '/admin/ai/providers';
 
 function makeAuthorizationService(bool $allowed): AuthorizationService
 {
-    return new class ($allowed) implements AuthorizationService
+    return new class($allowed) implements AuthorizationService
     {
         public function __construct(
             private readonly bool $allowed

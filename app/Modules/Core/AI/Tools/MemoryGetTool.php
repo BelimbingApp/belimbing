@@ -87,53 +87,19 @@ class MemoryGetTool extends AbstractTool
         $scope = $this->requireEnum($arguments, 'scope', ['docs', 'workspace'], 'docs');
         $from = $this->optionalInt($arguments, 'from', 1, min: 1);
         $maxLines = $this->optionalInt($arguments, 'lines', self::MAX_LINES, min: 1, max: self::MAX_LINES);
+        $readResult = $this->readRequestedFile($path, $scope, $from, $maxLines);
 
-        $basePath = $this->resolveBasePath($scope);
-        $fullPath = $basePath.'/'.ltrim($path, '/');
-        $realBase = realpath($basePath);
-        $realFull = realpath($fullPath);
-
-        if ($realBase === false) {
-            return 'Error: Scope directory does not exist.';
+        if (isset($readResult['error'])) {
+            return $readResult['error'];
         }
 
-        if ($realFull === false || ! is_file($realFull)) {
-            return 'Error: File not found: '.$path;
-        }
-
-        // Ensure resolved path is within the scope directory
-        if (! str_starts_with($realFull, $realBase.'/')) {
-            return 'Error: Invalid path: directory traversal is not allowed.';
-        }
-
-        if ($this->isBinary($realFull)) {
-            return 'Error: Cannot read binary file: '.$path;
-        }
-
-        $allLines = file($realFull, FILE_IGNORE_NEW_LINES);
-
-        if ($allLines === false) {
-            return 'Error: Unable to read file: '.$path;
-        }
-
-        $totalLines = count($allLines);
-
-        if ($from > $totalLines) {
-            return 'Error: Start line '.$from.' exceeds file length ('.$totalLines.' lines).';
-        }
-
-        $selectedLines = array_slice($allLines, $from - 1, $maxLines);
-        $content = implode("\n", $selectedLines);
-        $returnedCount = count($selectedLines);
-
-        $footer = $returnedCount.' lines';
-        if ($from > 1 || $returnedCount < $totalLines) {
-            $endLine = $from + $returnedCount - 1;
-            $footer .= ' (lines '.$from.'-'.$endLine.' of '.$totalLines.')';
-        }
-        $footer .= ' from '.$scope.':'.$path;
-
-        return '# '.basename($path)."\n\n".$content."\n\n---\n".$footer;
+        return $this->formatReadResult(
+            path: $path,
+            scope: $scope,
+            from: $from,
+            totalLines: $readResult['total_lines'],
+            selectedLines: $readResult['selected_lines'],
+        );
     }
 
     /**
@@ -174,6 +140,72 @@ class MemoryGetTool extends AbstractTool
         }
 
         return base_path('docs');
+    }
+
+    /**
+     * @return array{selected_lines?: list<string>, total_lines?: int, error?: string}
+     */
+    private function readRequestedFile(string $path, string $scope, int $from, int $maxLines): array
+    {
+        $basePath = $this->resolveBasePath($scope);
+        $fullPath = $basePath.'/'.ltrim($path, '/');
+        $realBase = realpath($basePath);
+        $realFull = realpath($fullPath);
+
+        if ($realBase === false) {
+            return ['error' => 'Error: Scope directory does not exist.'];
+        }
+
+        if ($realFull === false || ! is_file($realFull)) {
+            return ['error' => 'Error: File not found: '.$path];
+        }
+
+        if (! str_starts_with($realFull, $realBase.'/')) {
+            return ['error' => 'Error: Invalid path: directory traversal is not allowed.'];
+        }
+
+        if ($this->isBinary($realFull)) {
+            return ['error' => 'Error: Cannot read binary file: '.$path];
+        }
+
+        $allLines = file($realFull, FILE_IGNORE_NEW_LINES);
+
+        if ($allLines === false) {
+            return ['error' => 'Error: Unable to read file: '.$path];
+        }
+
+        $totalLines = count($allLines);
+
+        if ($from > $totalLines) {
+            return ['error' => 'Error: Start line '.$from.' exceeds file length ('.$totalLines.' lines).'];
+        }
+
+        /** @var list<string> $selectedLines */
+        $selectedLines = array_slice($allLines, $from - 1, $maxLines);
+
+        return [
+            'selected_lines' => $selectedLines,
+            'total_lines' => $totalLines,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $selectedLines
+     */
+    private function formatReadResult(string $path, string $scope, int $from, int $totalLines, array $selectedLines): string
+    {
+        $content = implode("\n", $selectedLines);
+        $returnedCount = count($selectedLines);
+        $footer = $returnedCount.' lines';
+
+        if ($from > 1 || $returnedCount < $totalLines) {
+            $endLine = $from + $returnedCount - 1;
+            $footer .= ' (lines '.$from.'-'.$endLine.' of '.$totalLines.')';
+        }
+
+        $footer .= ' from '.$scope.':'.$path;
+
+        return '# '.basename($path)."\n\n".$content."\n\n---\n".$footer;
     }
 
     /**

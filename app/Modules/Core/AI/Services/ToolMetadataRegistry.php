@@ -5,9 +5,9 @@
 
 namespace App\Modules\Core\AI\Services;
 
-use App\Modules\Core\AI\DTO\ToolMetadata;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
+use App\Modules\Core\AI\DTO\ToolMetadata;
 
 /**
  * Rich UI metadata registry for Digital Worker tools.

@@ -7,7 +7,6 @@ namespace App\Base\AI\Tools;
 
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
-use InvalidArgumentException;
 
 /**
  * Base class for AI tools providing common boilerplate.
@@ -57,12 +56,12 @@ abstract class AbstractTool implements Tool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    public final function execute(array $arguments): string
+    final public function execute(array $arguments): string
     {
         try {
             return $this->handle($arguments);
         } catch (ToolArgumentException $e) {
-            return 'Error: ' . $e->getMessage();
+            return 'Error: '.$e->getMessage();
         }
     }
 
@@ -190,7 +189,7 @@ abstract class AbstractTool implements Tool
             }
 
             throw new ToolArgumentException(
-                "\"{$key}\" must be one of: " . implode(', ', $allowed) . '.'
+                "\"{$key}\" must be one of: ".implode(', ', $allowed).'.'
             );
         }
 

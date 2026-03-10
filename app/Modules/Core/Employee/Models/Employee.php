@@ -50,7 +50,7 @@ class Employee extends Model
 
         static::deleting(function (Employee $employee): void {
             if ($employee->isLara()) {
-                throw new SystemEmployeeDeletionException();
+                throw new SystemEmployeeDeletionException;
             }
         });
     }

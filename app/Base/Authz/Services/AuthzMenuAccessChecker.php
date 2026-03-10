@@ -6,9 +6,9 @@
 namespace App\Base\Authz\Services;
 
 use App\Base\Authz\Contracts\AuthorizationService;
-use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Base\Menu\Contracts\MenuAccessChecker;
 use App\Base\Menu\MenuItem;
 use Illuminate\Contracts\Auth\Authenticatable;

@@ -94,7 +94,7 @@ class Company extends Model
 
         static::deleting(function ($company): void {
             if ($company->id === self::LICENSEE_ID) {
-                throw new LicenseeCompanyDeletionException();
+                throw new LicenseeCompanyDeletionException;
             }
         });
     }

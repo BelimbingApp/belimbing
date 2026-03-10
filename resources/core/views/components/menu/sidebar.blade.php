@@ -213,6 +213,7 @@
                             class="flex items-center justify-center w-full h-8 rounded-none transition text-link hover:bg-surface-subtle"
                         >
                             <x-icon name="heroicon-o-pin" class="w-[1.125rem] h-[1.125rem]" />
+                            <span class="sr-only" x-text="pin.label"></span>
                         </a>
 
                         {{-- Expanded view: drag handle + label + unpin button --}}
@@ -229,10 +230,12 @@
                             >&#x2801;&#x2801;</span>
                             <a
                                 :href="pin.url"
+                                :aria-label="pin.label"
                                 class="truncate flex-1"
-                                x-text="pin.label"
                                 @click.stop
-                            ></a>
+                            >
+                                <span x-text="pin.label"></span>
+                            </a>
                             <button
                                 type="button"
                                 @click.prevent.stop="unpinFromSidebar(pin)"

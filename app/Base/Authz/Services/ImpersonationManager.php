@@ -29,8 +29,8 @@ class ImpersonationManager
         }
 
         session([
-            self::SESSION_KEY . '.original_user_id' => $impersonator->id,
-            self::SESSION_KEY . '.original_user_name' => $impersonator->name,
+            self::SESSION_KEY.'.original_user_id' => $impersonator->id,
+            self::SESSION_KEY.'.original_user_name' => $impersonator->name,
         ]);
 
         Auth::login($target);
@@ -41,7 +41,7 @@ class ImpersonationManager
      */
     public function stop(): void
     {
-        $originalId = session(self::SESSION_KEY . '.original_user_id');
+        $originalId = session(self::SESSION_KEY.'.original_user_id');
 
         if ($originalId === null) {
             return;
@@ -57,7 +57,7 @@ class ImpersonationManager
      */
     public function isImpersonating(): bool
     {
-        return session()->has(self::SESSION_KEY . '.original_user_id');
+        return session()->has(self::SESSION_KEY.'.original_user_id');
     }
 
     /**
@@ -65,7 +65,7 @@ class ImpersonationManager
      */
     public function getImpersonatorId(): ?int
     {
-        $id = session(self::SESSION_KEY . '.original_user_id');
+        $id = session(self::SESSION_KEY.'.original_user_id');
 
         return $id !== null ? (int) $id : null;
     }
@@ -75,6 +75,6 @@ class ImpersonationManager
      */
     public function getImpersonatorName(): ?string
     {
-        return session(self::SESSION_KEY . '.original_user_name');
+        return session(self::SESSION_KEY.'.original_user_name');
     }
 }

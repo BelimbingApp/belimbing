@@ -200,21 +200,19 @@ class LaraChatOverlay extends Component
 
     private function isLaraActivated(): bool
     {
-        if (! Employee::query()->whereKey(Employee::LARA_ID)->exists()) {
-            return false;
+        $isActivated = false;
+
+        if (Employee::query()->whereKey(Employee::LARA_ID)->exists()) {
+            $resolver = app(ConfigResolver::class);
+            $configs = $resolver->resolve(Employee::LARA_ID);
+            $isActivated = count($configs) > 0;
+
+            if (! $isActivated && Company::query()->whereKey(Company::LICENSEE_ID)->exists()) {
+                $isActivated = $resolver->resolveDefault(Company::LICENSEE_ID) !== null;
+            }
         }
 
-        $resolver = app(ConfigResolver::class);
-        $configs = $resolver->resolve(Employee::LARA_ID);
-        if (count($configs) > 0) {
-            return true;
-        }
-
-        if (! Company::query()->whereKey(Company::LICENSEE_ID)->exists()) {
-            return false;
-        }
-
-        return $resolver->resolveDefault(Company::LICENSEE_ID) !== null;
+        return $isActivated;
     }
 
     /**

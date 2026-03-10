@@ -34,10 +34,12 @@ source "$SCRIPTS_DIR/shared/caddy.sh"
 
 # Environment (default to local if not provided, using Laravel standard)
 APP_ENV="${1:-local}"
+readonly FRONTEND_DOMAIN_KEY="FRONTEND_DOMAIN"
+readonly BACKEND_DOMAIN_KEY="BACKEND_DOMAIN"
 
 # Prompt user for custom domains with defaults
 # Returns: frontend_domain|backend_domain (only this goes to stdout)
-# Defaults: from .env (FRONTEND_DOMAIN, BACKEND_DOMAIN) if set, else from get_default_domains.
+# Defaults: from .env ($FRONTEND_DOMAIN_KEY, $BACKEND_DOMAIN_KEY) if set, else from get_default_domains.
 prompt_for_domains() {
     local default_domains
     default_domains=$(get_default_domains "$APP_ENV")
@@ -47,8 +49,8 @@ prompt_for_domains() {
     default_backend=$(echo "$default_domains" | cut -d'|' -f2)
 
     # Prefer .env / setup state if present
-    default_frontend=$(get_env_var "FRONTEND_DOMAIN" "$default_frontend")
-    default_backend=$(get_env_var "BACKEND_DOMAIN" "$default_backend")
+    default_frontend=$(get_env_var "$FRONTEND_DOMAIN_KEY" "$default_frontend")
+    default_backend=$(get_env_var "$BACKEND_DOMAIN_KEY" "$default_backend")
 
     if [[ -t 0 ]]; then
         # All informational output goes to stderr so only the result goes to stdout
@@ -283,8 +285,8 @@ main() {
                     # Even when keeping the previous choice, ensure hosts are configured
                     local defaults frontend_domain backend_domain
                     defaults=$(get_default_domains "$APP_ENV")
-                    frontend_domain=$(get_env_var "FRONTEND_DOMAIN" "$(echo "$defaults" | cut -d'|' -f1)")
-                    backend_domain=$(get_env_var "BACKEND_DOMAIN" "$(echo "$defaults" | cut -d'|' -f2)")
+                    frontend_domain=$(get_env_var "$FRONTEND_DOMAIN_KEY" "$(echo "$defaults" | cut -d'|' -f1)")
+                    backend_domain=$(get_env_var "$BACKEND_DOMAIN_KEY" "$(echo "$defaults" | cut -d'|' -f2)")
 
                     # Add hosts entries if missing
                     if [[ "$PROXY_TYPE" != "none" ]]; then
@@ -303,8 +305,8 @@ main() {
                 # Even when keeping the previous choice, ensure hosts are configured
                 local defaults frontend_domain backend_domain
                 defaults=$(get_default_domains "$APP_ENV")
-                frontend_domain=$(get_env_var "FRONTEND_DOMAIN" "$(echo "$defaults" | cut -d'|' -f1)")
-                backend_domain=$(get_env_var "BACKEND_DOMAIN" "$(echo "$defaults" | cut -d'|' -f2)")
+                frontend_domain=$(get_env_var "$FRONTEND_DOMAIN_KEY" "$(echo "$defaults" | cut -d'|' -f1)")
+                backend_domain=$(get_env_var "$BACKEND_DOMAIN_KEY" "$(echo "$defaults" | cut -d'|' -f2)")
 
                 # Add hosts entries if missing
                 if [[ "$PROXY_TYPE" != "none" ]]; then
@@ -339,10 +341,10 @@ main() {
             backend_domain=$(echo "$domains" | cut -d'|' -f2)
 
             # Save domains to setup state and .env
-            save_to_setup_state "FRONTEND_DOMAIN" "$frontend_domain"
-            save_to_setup_state "BACKEND_DOMAIN" "$backend_domain"
-            update_env_file "FRONTEND_DOMAIN" "$frontend_domain"
-            update_env_file "BACKEND_DOMAIN" "$backend_domain"
+            save_to_setup_state "$FRONTEND_DOMAIN_KEY" "$frontend_domain"
+            save_to_setup_state "$BACKEND_DOMAIN_KEY" "$backend_domain"
+            update_env_file "$FRONTEND_DOMAIN_KEY" "$frontend_domain"
+            update_env_file "$BACKEND_DOMAIN_KEY" "$backend_domain"
 
             # Add domains to /etc/hosts if missing
             echo ""
@@ -408,10 +410,10 @@ EOF
                             BACKEND_DOMAIN=$(echo "$domains" | cut -d'|' -f2)
 
                             # Save domains to setup state and .env
-                            save_to_setup_state "FRONTEND_DOMAIN" "$FRONTEND_DOMAIN"
-                            save_to_setup_state "BACKEND_DOMAIN" "$BACKEND_DOMAIN"
-                            update_env_file "FRONTEND_DOMAIN" "$FRONTEND_DOMAIN"
-                            update_env_file "BACKEND_DOMAIN" "$BACKEND_DOMAIN"
+                            save_to_setup_state "$FRONTEND_DOMAIN_KEY" "$FRONTEND_DOMAIN"
+                            save_to_setup_state "$BACKEND_DOMAIN_KEY" "$BACKEND_DOMAIN"
+                            update_env_file "$FRONTEND_DOMAIN_KEY" "$FRONTEND_DOMAIN"
+                            update_env_file "$BACKEND_DOMAIN_KEY" "$BACKEND_DOMAIN"
 
                             # Add domains to /etc/hosts if missing
                             echo ""
@@ -469,10 +471,10 @@ EOF
             BACKEND_DOMAIN=$(echo "$domains" | cut -d'|' -f2)
 
             # Save domains to setup state and .env
-            save_to_setup_state "FRONTEND_DOMAIN" "$FRONTEND_DOMAIN"
-            save_to_setup_state "BACKEND_DOMAIN" "$BACKEND_DOMAIN"
-            update_env_file "FRONTEND_DOMAIN" "$FRONTEND_DOMAIN"
-            update_env_file "BACKEND_DOMAIN" "$BACKEND_DOMAIN"
+            save_to_setup_state "$FRONTEND_DOMAIN_KEY" "$FRONTEND_DOMAIN"
+            save_to_setup_state "$BACKEND_DOMAIN_KEY" "$BACKEND_DOMAIN"
+            update_env_file "$FRONTEND_DOMAIN_KEY" "$FRONTEND_DOMAIN"
+            update_env_file "$BACKEND_DOMAIN_KEY" "$BACKEND_DOMAIN"
         fi
 
         # Always ensure domains are in hosts file (even if domains were already set)

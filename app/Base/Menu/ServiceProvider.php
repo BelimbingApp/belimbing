@@ -8,6 +8,7 @@ namespace App\Base\Menu;
 use App\Base\Menu\Contracts\MenuAccessChecker;
 use App\Base\Menu\Services\DefaultMenuAccessChecker;
 use App\Base\Menu\Services\MenuDiscoveryService;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
@@ -38,104 +39,115 @@ class ServiceProvider extends BaseServiceProvider
     protected function registerViewComposer(): void
     {
         View::composer(['components.layouts.app', 'layouts::app'], function ($view): void {
-            // Skip if not authenticated (avoid redirect loop on login pages)
             if (! auth()->check()) {
                 $view->with('menuTree', []);
 
                 return;
             }
+
             $registry = $this->app->make(MenuRegistry::class);
-            $discovery = $this->app->make(MenuDiscoveryService::class);
             $builder = $this->app->make(MenuBuilder::class);
             $menuAccessChecker = $this->app->make(MenuAccessChecker::class);
-
-            // Environment-aware caching
-            if ($this->app->environment('local')) {
-                // Development: Always discover fresh (no cache)
-                $registry->registerFromDiscovery($discovery->discover());
-                $errors = $registry->validate();
-
-                if (! empty($errors)) {
-                    logger()->error('Menu validation errors', ['errors' => $errors]);
-                }
-            } else {
-                // Production/Staging: Use cache
-                if (! $registry->loadFromCache()) {
-                    // Cache miss: discover and persist
-                    $registry->registerFromDiscovery($discovery->discover());
-                    $errors = $registry->validate();
-
-                    if (! empty($errors)) {
-                        logger()->error('Menu validation errors', ['errors' => $errors]);
-                    }
-
-                    $registry->persist();
-                }
-            }
-
-            // Build tree with current route for active marking
-            $currentRoute = request()->route()?->getName();
             $user = auth()->user();
 
-            $filteredItems = $registry->getAll()->filter(function (MenuItem $item) use ($menuAccessChecker, $user): bool {
-                return $menuAccessChecker->canView($item, $user);
-            });
+            $this->ensureMenuRegistryIsLoaded($registry);
 
-            $menuTree = $builder->build($filteredItems, $currentRoute);
+            $filteredItems = $this->filterVisibleMenuItems($registry, $menuAccessChecker, $user);
 
-            // Flat map of all navigable items for pinned section lookup.
-            // Keyed by item ID, value is a simple array with label, icon, route/url.
-            // pinLabel shows parent path but omits the level-0 (top-level) segment
-            // so pinned items read e.g. "Employees/Kiat" or "AI/Tools/Artisan".
-            $allItems = $registry->getAll();
-            $menuItemsFlat = $filteredItems
-                ->filter(fn (MenuItem $item) => $item->hasRoute())
-                ->mapWithKeys(function (MenuItem $item) use ($allItems) {
-                    $segments = [];
-                    $current = $item;
-                    while ($current) {
-                        array_unshift($segments, $current->label);
-                        $current = $current->parent ? $allItems->get($current->parent) : null;
-                    }
-
-                    $pinLabel = implode('/', $segments);
-                    $firstSlash = strpos($pinLabel, '/');
-                    if ($firstSlash !== false) {
-                        $pinLabel = substr($pinLabel, $firstSlash + 1);
-                    }
-
-                    return [
-                        $item->id => [
-                            'label' => $item->label,
-                            'pinLabel' => $pinLabel,
-                            'icon' => $item->icon ?? 'heroicon-o-squares-2x2',
-                            'href' => $item->route ? route($item->route) : $item->url,
-                            'route' => $item->route,
-                        ],
-                    ];
-                })
-                ->all();
-
-            $view->with('menuTree', $menuTree);
-            $view->with('menuItemsFlat', $menuItemsFlat);
-
-            // Load user's pinned items (ordered by sort_order).
-            // Uses duck-typing: calls getPins() on the User model without
-            // importing it (Base cannot depend on Modules). Falls back to
-            // empty array if the method doesn't exist (e.g., during tests
-            // with a stub user) or if the table hasn't been migrated yet.
-            // Labels are stored in canonical form at save time (PinController::dropTopLevelSegment).
-            $pins = [];
-
-            try {
-                $pins = method_exists($user, 'getPins')
-                    ? $user->getPins()
-                    : [];
-            } catch (\Throwable) {
-                // Table may not exist yet (pre-migration). Degrade gracefully.
-            }
-
-            $view->with('pins', $pins);
+            $view->with('menuTree', $builder->build($filteredItems, request()->route()?->getName()));
+            $view->with('menuItemsFlat', $this->buildMenuItemsFlat($registry->getAll(), $filteredItems));
+            $view->with('pins', $this->resolvePins($user));
         });
+    }
+
+    private function ensureMenuRegistryIsLoaded(MenuRegistry $registry): void
+    {
+        if ($this->app->environment('local')) {
+            $this->refreshMenuRegistry($registry, persist: false);
+
+            return;
+        }
+
+        if (! $registry->loadFromCache()) {
+            $this->refreshMenuRegistry($registry, persist: true);
+        }
+    }
+
+    private function refreshMenuRegistry(MenuRegistry $registry, bool $persist): void
+    {
+        $discovery = $this->app->make(MenuDiscoveryService::class);
+        $registry->registerFromDiscovery($discovery->discover());
+
+        $errors = $registry->validate();
+
+        if (! empty($errors)) {
+            logger()->error('Menu validation errors', ['errors' => $errors]);
+        }
+
+        if ($persist) {
+            $registry->persist();
+        }
+    }
+
+    private function filterVisibleMenuItems(MenuRegistry $registry, MenuAccessChecker $menuAccessChecker, mixed $user): Collection
+    {
+        return $registry->getAll()->filter(function (MenuItem $item) use ($menuAccessChecker, $user): bool {
+            return $menuAccessChecker->canView($item, $user);
+        });
+    }
+
+    /**
+     * @param  Collection<int, MenuItem>  $allItems
+     * @param  Collection<int, MenuItem>  $filteredItems
+     * @return array<string, array{label: string, pinLabel: string, icon: string, href: string|null, route: string|null}>
+     */
+    private function buildMenuItemsFlat(Collection $allItems, Collection $filteredItems): array
+    {
+        return $filteredItems
+            ->filter(fn (MenuItem $item) => $item->hasRoute())
+            ->mapWithKeys(fn (MenuItem $item) => [
+                $item->id => [
+                    'label' => $item->label,
+                    'pinLabel' => $this->buildPinLabel($item, $allItems),
+                    'icon' => $item->icon ?? 'heroicon-o-squares-2x2',
+                    'href' => $item->route ? route($item->route) : $item->url,
+                    'route' => $item->route,
+                ],
+            ])
+            ->all();
+    }
+
+    /**
+     * @param  Collection<int, MenuItem>  $allItems
+     */
+    private function buildPinLabel(MenuItem $item, Collection $allItems): string
+    {
+        $segments = [];
+        $current = $item;
+
+        while ($current !== null) {
+            array_unshift($segments, $current->label);
+            $current = $current->parent ? $allItems->get($current->parent) : null;
+        }
+
+        $pinLabel = implode('/', $segments);
+        $firstSlash = strpos($pinLabel, '/');
+
+        if ($firstSlash !== false) {
+            $pinLabel = substr($pinLabel, $firstSlash + 1);
+        }
+
+        return $pinLabel;
+    }
+
+    private function resolvePins(mixed $user): array
+    {
+        try {
+            return method_exists($user, 'getPins')
+                ? $user->getPins()
+                : [];
+        } catch (\Throwable) {
+            return [];
+        }
     }
 }

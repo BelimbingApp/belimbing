@@ -3,8 +3,8 @@
 use App\Base\AI\Services\KnowledgeNavigator;
 use App\Modules\Core\AI\Tools\GuideTool;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
 

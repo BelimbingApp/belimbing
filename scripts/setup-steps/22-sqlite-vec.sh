@@ -86,16 +86,16 @@ verify_extension() {
 
     # Determine the correct extension filename
     local ext_file="vec0"
-    if [ -f "$install_dir/vec0.so" ]; then
+    if [[ -f "$install_dir/vec0.so" ]]; then
         ext_file="vec0.so"
-    elif [ -f "$install_dir/vec0.dylib" ]; then
+    elif [[ -f "$install_dir/vec0.dylib" ]]; then
         ext_file="vec0.dylib"
     fi
 
     local version_output
     version_output=$(php -d "sqlite3.extension_dir=$install_dir" -r "\$db = new SQLite3(':memory:'); \$db->loadExtension('$ext_file'); echo \$db->querySingle('SELECT vec_version()');" 2>/dev/null) || return 1
 
-    if [ -n "$version_output" ]; then
+    if [[ -n "$version_output" ]]; then
         echo "$version_output"
         return 0
     fi
@@ -104,12 +104,12 @@ verify_extension() {
 
 # Check if already installed and working
 check_existing() {
-    if [ ! -d "$INSTALL_DIR" ]; then
+    if [[ ! -d "$INSTALL_DIR" ]]; then
         return 1
     fi
 
     # Check for extension file (either .so or .dylib)
-    if [ ! -f "$INSTALL_DIR/vec0.so" ] && [ ! -f "$INSTALL_DIR/vec0.dylib" ]; then
+    if [[ ! -f "$INSTALL_DIR/vec0.so" && ! -f "$INSTALL_DIR/vec0.dylib" ]]; then
         return 1
     fi
 
@@ -158,7 +158,7 @@ download_extension() {
     local ext_file
     ext_file=$(find "$tmp_dir" -name "vec0.${ext_suffix}" -type f | head -1)
 
-    if [ -z "$ext_file" ]; then
+    if [[ -z "$ext_file" ]]; then
         echo -e "${RED}${CROSS_MARK} Extension file vec0.${ext_suffix} not found in archive${NC}" >&2
         echo -e "  Archive contents:" >&2
         ls -la "$tmp_dir"/ >&2

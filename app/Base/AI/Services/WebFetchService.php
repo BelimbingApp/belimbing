@@ -45,23 +45,16 @@ class WebFetchService
             hostnameAllowlist: $hostnameAllowlist,
         );
 
-        if ($safeCheck !== true) {
-            return ['validation_error' => $safeCheck];
+        $result = $safeCheck === true
+            ? $this->requestContent($url, $timeoutSeconds)
+            : ['validation_error' => $safeCheck];
+
+        if (! isset($result['response'])) {
+            return $result;
         }
 
-        try {
-            $response = Http::timeout($timeoutSeconds)
-                ->maxRedirects(self::MAX_REDIRECTS)
-                ->withHeaders(['User-Agent' => 'BLB/1.0 (Digital Worker)'])
-                ->get($url);
-        } catch (\Throwable $e) {
-            return ['request_error' => $e->getMessage()];
-        }
-
-        if (! $response->successful()) {
-            return ['http_status' => $response->status()];
-        }
-
+        /** @var \Illuminate\Http\Client\Response $response */
+        $response = $result['response'];
         $body = $response->body();
 
         if (strlen($body) > $maxResponseBytes) {
@@ -87,6 +80,27 @@ class WebFetchService
             'char_count' => mb_strlen($content),
             'truncated' => $truncated,
         ];
+    }
+
+    /**
+     * @return array{response?: \Illuminate\Http\Client\Response, request_error?: string, http_status?: int}
+     */
+    private function requestContent(string $url, int $timeoutSeconds): array
+    {
+        try {
+            $response = Http::timeout($timeoutSeconds)
+                ->maxRedirects(self::MAX_REDIRECTS)
+                ->withHeaders(['User-Agent' => 'BLB/1.0 (Digital Worker)'])
+                ->get($url);
+        } catch (\Throwable $e) {
+            return ['request_error' => $e->getMessage()];
+        }
+
+        if (! $response->successful()) {
+            return ['http_status' => $response->status()];
+        }
+
+        return ['response' => $response];
     }
 
     private function extractHtml(string $html, string $mode): string

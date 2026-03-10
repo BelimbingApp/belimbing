@@ -43,51 +43,14 @@ class LaraNavigationRouter
             return null;
         }
 
-        if ($target === '') {
-            return [
-                'status' => 'invalid_navigation_command',
-                'message' => __('Use "/go <target>" — available: :targets.', [
-                    'targets' => implode(', ', $this->availableTargetNames()),
-                ]),
-            ];
+        $response = $this->invalidTargetResponse($target);
+
+        if ($response === null) {
+            $config = $this->targets()[$target] ?? null;
+            $response = $this->configuredTargetResponse($target, $config);
         }
 
-        $config = $this->targets()[$target] ?? null;
-
-        if ($config === null) {
-            return [
-                'status' => 'unknown_navigation_target',
-                'target' => $target,
-                'message' => __('Unknown target ":target". Available: :targets.', [
-                    'target' => $target,
-                    'targets' => implode(', ', $this->availableTargetNames()),
-                ]),
-            ];
-        }
-
-        if ($config['capability'] !== null && ! $this->currentUserCan($config['capability'])) {
-            return [
-                'status' => 'navigation_denied',
-                'target' => $target,
-                'message' => __('You don\'t have permission to access :label.', [
-                    'label' => $config['label'],
-                ]),
-            ];
-        }
-
-        $url = route($config['route'], [], false);
-
-        return [
-            'status' => 'navigation',
-            'target' => $target,
-            'navigation' => [
-                'strategy' => 'js_go_to_url',
-                'url' => $url,
-                'label' => $config['label'],
-                'target' => $target,
-            ],
-            'message' => __('Navigating to :label.', ['label' => $config['label']]),
-        ];
+        return $response;
     }
 
     /**
@@ -142,6 +105,63 @@ class LaraNavigationRouter
         );
 
         return $this->authorizationService->can($actor, $capability)->allowed;
+    }
+
+    /**
+     * @return array{status: string, message: string, target?: string}|null
+     */
+    private function invalidTargetResponse(string $target): ?array
+    {
+        if ($target === '') {
+            return [
+                'status' => 'invalid_navigation_command',
+                'message' => __('Use "/go <target>" — available: :targets.', [
+                    'targets' => implode(', ', $this->availableTargetNames()),
+                ]),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{route: string, label: string, capability: string|null}|null  $config
+     * @return array{status: string, target?: string, navigation?: array{strategy: string, url: string, label: string, target: string}, message: string}
+     */
+    private function configuredTargetResponse(string $target, ?array $config): array
+    {
+        if ($config === null) {
+            return [
+                'status' => 'unknown_navigation_target',
+                'target' => $target,
+                'message' => __('Unknown target ":target". Available: :targets.', [
+                    'target' => $target,
+                    'targets' => implode(', ', $this->availableTargetNames()),
+                ]),
+            ];
+        }
+
+        if ($config['capability'] !== null && ! $this->currentUserCan($config['capability'])) {
+            return [
+                'status' => 'navigation_denied',
+                'target' => $target,
+                'message' => __('You don\'t have permission to access :label.', [
+                    'label' => $config['label'],
+                ]),
+            ];
+        }
+
+        return [
+            'status' => 'navigation',
+            'target' => $target,
+            'navigation' => [
+                'strategy' => 'js_go_to_url',
+                'url' => route($config['route'], [], false),
+                'label' => $config['label'],
+                'target' => $target,
+            ],
+            'message' => __('Navigating to :label.', ['label' => $config['label']]),
+        ];
     }
 
     /**

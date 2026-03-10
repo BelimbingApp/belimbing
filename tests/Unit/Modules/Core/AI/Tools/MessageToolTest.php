@@ -10,6 +10,9 @@ use Tests\TestCase;
 uses(TestCase::class, AssertsToolBehavior::class);
 
 const UPDATED_MESSAGE_TEXT = 'Updated text';
+const TELEGRAM_TARGET = '+1234567890';
+const EMAIL_TARGET = 'user@example.com';
+const LUNCH_QUESTION = 'Lunch?';
 
 dataset('message actions requiring message_id', [
     ['reply', ['text' => 'Reply text']],
@@ -135,7 +138,7 @@ describe('send action', function () {
         $this->assertToolError([
             'action' => 'send',
             'channel' => 'telegram',
-            'target' => '+1234567890',
+            'target' => TELEGRAM_TARGET,
         ], 'text');
     });
 
@@ -143,7 +146,7 @@ describe('send action', function () {
         $result = $this->tool->execute([
             'action' => 'send',
             'channel' => 'telegram',
-            'target' => '+1234567890',
+            'target' => TELEGRAM_TARGET,
             'text' => str_repeat('x', 50001),
         ]);
         expect($result)->toContain('Error')
@@ -154,7 +157,7 @@ describe('send action', function () {
         $result = $this->tool->execute([
             'action' => 'send',
             'channel' => 'telegram',
-            'target' => '+1234567890',
+            'target' => TELEGRAM_TARGET,
             'text' => str_repeat('x', 4097),
         ]);
         expect($result)->toContain('Error')
@@ -171,7 +174,7 @@ describe('send action', function () {
 
         expect($data['action'])->toBe('send')
             ->and($data['channel'])->toBe('telegram')
-            ->and($data['target'])->toBe('+1234567890')
+            ->and($data['target'])->toBe(TELEGRAM_TARGET)
             ->and($data['text'])->toBe('Hello there!')
             ->and($data['status'])->toBe('sent');
     });
@@ -180,7 +183,7 @@ describe('send action', function () {
         $data = $this->decodeToolExecution([
             'action' => 'send',
             'channel' => 'telegram',
-            'target' => '+1234567890',
+            'target' => TELEGRAM_TARGET,
             'text' => 'See attachment',
             'media_path' => '/storage/uploads/image.png',
         ]);
@@ -191,7 +194,7 @@ describe('send action', function () {
         $data = $this->decodeToolExecution([
             'action' => 'send',
             'channel' => 'telegram',
-            'target' => '+1234567890',
+            'target' => TELEGRAM_TARGET,
             'text' => 'No attachment',
         ]);
         expect($data['media_path'])->toBeNull();
@@ -202,7 +205,7 @@ describe('send action', function () {
         $data = $this->decodeToolExecution([
             'action' => 'send',
             'channel' => 'email',
-            'target' => 'user@example.com',
+            'target' => EMAIL_TARGET,
             'text' => $longText,
         ]);
         expect($data['status'])->toBe('sent');
@@ -312,7 +315,7 @@ describe('poll action', function () {
         $this->assertToolError([
             'action' => 'poll',
             'channel' => 'telegram',
-            'question' => 'Lunch?',
+            'question' => LUNCH_QUESTION,
             'options' => ['Pizza', 'Sushi'],
         ], 'target');
     });
@@ -331,7 +334,7 @@ describe('poll action', function () {
             'action' => 'poll',
             'channel' => 'telegram',
             'target' => 'chat-123',
-            'question' => 'Lunch?',
+            'question' => LUNCH_QUESTION,
             'options' => ['Pizza'],
         ]);
         expect($result)->toContain('Error')
@@ -355,7 +358,7 @@ describe('poll action', function () {
             'action' => 'poll',
             'channel' => 'telegram',
             'target' => 'chat-123',
-            'question' => 'Lunch?',
+            'question' => LUNCH_QUESTION,
             'options' => ['Pizza', ''],
         ]);
         expect($result)->toContain('Error')
@@ -367,13 +370,13 @@ describe('poll action', function () {
             'action' => 'poll',
             'channel' => 'telegram',
             'target' => 'chat-123',
-            'question' => 'Lunch?',
+            'question' => LUNCH_QUESTION,
             'options' => ['Pizza', 'Sushi', 'Tacos'],
         ], 'created');
 
         expect($data['action'])->toBe('poll')
             ->and($data['channel'])->toBe('telegram')
-            ->and($data['question'])->toBe('Lunch?')
+            ->and($data['question'])->toBe(LUNCH_QUESTION)
             ->and($data['options'])->toBe(['Pizza', 'Sushi', 'Tacos']);
     });
 
@@ -381,8 +384,8 @@ describe('poll action', function () {
         $result = $this->tool->execute([
             'action' => 'poll',
             'channel' => 'email',
-            'target' => 'user@example.com',
-            'question' => 'Lunch?',
+            'target' => EMAIL_TARGET,
+            'question' => LUNCH_QUESTION,
             'options' => ['Pizza', 'Sushi'],
         ]);
         expect($result)->toContain('Error')
@@ -515,7 +518,7 @@ describe('channel adapter registry integration', function () {
         $data = $this->decodeToolExecution([
             'action' => 'send',
             'channel' => 'email',
-            'target' => 'user@example.com',
+            'target' => EMAIL_TARGET,
             'text' => 'Hello via email',
         ]);
         expect($data['channel'])->toBe('email');

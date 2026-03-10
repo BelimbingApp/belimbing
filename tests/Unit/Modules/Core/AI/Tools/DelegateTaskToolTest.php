@@ -4,10 +4,16 @@ use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use App\Modules\Core\AI\Tools\DelegateTaskTool;
 use Illuminate\Auth\Access\AuthorizationException;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, AssertsToolBehavior::class);
+
+const DISPATCH_SUCCESS = 'dispatched successfully';
+const ANALYZE_SALES_DATA = 'Analyze sales data';
+const REPORT_TIMESTAMP = '2026-03-08T12:00:00+00:00';
+const GENERATE_MONTHLY_REPORT = 'Generate monthly report';
+const REPORT_GENERATOR = 'Report Generator';
 
 beforeEach(function () {
     $this->dispatcher = Mockery::mock(LaraTaskDispatcher::class);
@@ -56,7 +62,7 @@ describe('input validation', function () {
             'worker_id' => 1,
         ]);
 
-        expect($result)->toContain('dispatched successfully');
+        expect($result)->toContain(DISPATCH_SUCCESS);
     });
 });
 
@@ -64,24 +70,24 @@ describe('dispatch with explicit worker_id', function () {
     it('dispatches to specified worker', function () {
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
-            ->with(42, 'Analyze sales data')
+            ->with(42, ANALYZE_SALES_DATA)
             ->andReturn([
                 'dispatch_id' => 'dw_dispatch_test123',
                 'status' => 'queued',
                 'employee_id' => 42,
                 'employee_name' => 'Data Analyst',
-                'task' => 'Analyze sales data',
+                'task' => ANALYZE_SALES_DATA,
                 'acting_for_user_id' => 10,
-                'created_at' => '2026-03-08T12:00:00+00:00',
+                'created_at' => REPORT_TIMESTAMP,
             ]);
 
-        $result = $this->tool->execute(['task' => 'Analyze sales data', 'worker_id' => 42]);
+        $result = $this->tool->execute(['task' => ANALYZE_SALES_DATA, 'worker_id' => 42]);
 
-        expect($result)->toContain('dispatched successfully')
+        expect($result)->toContain(DISPATCH_SUCCESS)
             ->and($result)->toContain('dw_dispatch_test123')
             ->and($result)->toContain('Data Analyst')
             ->and($result)->toContain('ID: 42')
-            ->and($result)->toContain('Analyze sales data')
+            ->and($result)->toContain(ANALYZE_SALES_DATA)
             ->and($result)->toContain('delegation_status');
     });
 
@@ -101,31 +107,31 @@ describe('dispatch with auto-matching', function () {
     it('auto-matches best worker when no worker_id given', function () {
         $this->matcher->shouldReceive('matchBestForTask')
             ->once()
-            ->with('Generate monthly report')
+            ->with(GENERATE_MONTHLY_REPORT)
             ->andReturn([
                 'employee_id' => 7,
-                'name' => 'Report Generator',
+                'name' => REPORT_GENERATOR,
                 'capability_summary' => 'Generates reports and summaries',
                 'match_score' => 3,
             ]);
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
-            ->with(7, 'Generate monthly report')
+            ->with(7, GENERATE_MONTHLY_REPORT)
             ->andReturn([
                 'dispatch_id' => 'dw_dispatch_auto456',
                 'status' => 'queued',
                 'employee_id' => 7,
-                'employee_name' => 'Report Generator',
-                'task' => 'Generate monthly report',
+                'employee_name' => REPORT_GENERATOR,
+                'task' => GENERATE_MONTHLY_REPORT,
                 'acting_for_user_id' => 10,
-                'created_at' => '2026-03-08T12:00:00+00:00',
+                'created_at' => REPORT_TIMESTAMP,
             ]);
 
-        $result = $this->tool->execute(['task' => 'Generate monthly report']);
+        $result = $this->tool->execute(['task' => GENERATE_MONTHLY_REPORT]);
 
-        expect($result)->toContain('dispatched successfully')
-            ->and($result)->toContain('Report Generator');
+        expect($result)->toContain(DISPATCH_SUCCESS)
+            ->and($result)->toContain(REPORT_GENERATOR);
     });
 
     it('returns error when no worker matches the task', function () {

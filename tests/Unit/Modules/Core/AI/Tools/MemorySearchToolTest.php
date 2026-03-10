@@ -2,8 +2,8 @@
 
 use App\Modules\Core\AI\Tools\MemorySearchTool;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
 

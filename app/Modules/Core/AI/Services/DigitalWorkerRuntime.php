@@ -98,6 +98,8 @@ class DigitalWorkerRuntime
      */
     private function resolveDefaultConfigsForEmployee(int $employeeId): array
     {
+        $default = null;
+
         try {
             $employee = \App\Modules\Core\Employee\Models\Employee::query()->find($employeeId);
         } catch (\Throwable) {
@@ -106,17 +108,11 @@ class DigitalWorkerRuntime
 
         $companyId = $employee?->company_id ? (int) $employee->company_id : null;
 
-        if ($companyId === null) {
-            return [];
+        if ($companyId !== null) {
+            $default = $this->configResolver->resolveDefault($companyId);
         }
 
-        $default = $this->configResolver->resolveDefault($companyId);
-
-        if ($default === null) {
-            return [];
-        }
-
-        return [$default];
+        return $default === null ? [] : [$default];
     }
 
     /**

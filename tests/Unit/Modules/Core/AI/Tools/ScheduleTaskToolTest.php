@@ -1,10 +1,13 @@
 <?php
 
 use App\Modules\Core\AI\Tools\ScheduleTaskTool;
-use Tests\TestCase;
 use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
 
 uses(TestCase::class, AssertsToolBehavior::class);
+
+const SCHEDULE_TEST_TASK = 'Test task';
+const WEEKLY_CRON = '0 9 * * 1';
 
 beforeEach(function () {
     $this->tool = new ScheduleTaskTool;
@@ -78,8 +81,8 @@ describe('add action', function () {
     it('accepts valid 5-field cron expression', function () {
         $result = $this->tool->execute([
             'action' => 'add',
-            'description' => 'Test task',
-            'cron_expression' => '0 9 * * 1',
+            'description' => SCHEDULE_TEST_TASK,
+            'cron_expression' => WEEKLY_CRON,
         ]);
         $data = json_decode($result, true);
 
@@ -91,8 +94,8 @@ describe('add action', function () {
     it('includes worker_id when provided', function () {
         $result = $this->tool->execute([
             'action' => 'add',
-            'description' => 'Test task',
-            'cron_expression' => '0 9 * * 1',
+            'description' => SCHEDULE_TEST_TASK,
+            'cron_expression' => WEEKLY_CRON,
             'worker_id' => 42,
         ]);
         $data = json_decode($result, true);
@@ -103,8 +106,8 @@ describe('add action', function () {
     it('defaults enabled to true', function () {
         $result = $this->tool->execute([
             'action' => 'add',
-            'description' => 'Test task',
-            'cron_expression' => '0 9 * * 1',
+            'description' => SCHEDULE_TEST_TASK,
+            'cron_expression' => WEEKLY_CRON,
         ]);
         $data = json_decode($result, true);
 
@@ -114,8 +117,8 @@ describe('add action', function () {
     it('respects enabled false', function () {
         $result = $this->tool->execute([
             'action' => 'add',
-            'description' => 'Test task',
-            'cron_expression' => '0 9 * * 1',
+            'description' => SCHEDULE_TEST_TASK,
+            'cron_expression' => WEEKLY_CRON,
             'enabled' => false,
         ]);
         $data = json_decode($result, true);
@@ -187,7 +190,7 @@ describe('cron expression validation', function () {
     it('accepts standard cron patterns', function () {
         $patterns = [
             '* * * * *',
-            '0 9 * * 1',
+            WEEKLY_CRON,
             '*/5 * * * *',
             '0 0 1,15 * *',
             '30 6 * * 1-5',
@@ -196,7 +199,7 @@ describe('cron expression validation', function () {
         foreach ($patterns as $pattern) {
             $result = $this->tool->execute([
                 'action' => 'add',
-                'description' => 'Test task',
+                'description' => SCHEDULE_TEST_TASK,
                 'cron_expression' => $pattern,
             ]);
             $data = json_decode($result, true);
@@ -209,7 +212,7 @@ describe('cron expression validation', function () {
     it('rejects cron with wrong field count', function () {
         $result = $this->tool->execute([
             'action' => 'add',
-            'description' => 'Test task',
+            'description' => SCHEDULE_TEST_TASK,
             'cron_expression' => '* * *',
         ]);
 
@@ -219,7 +222,7 @@ describe('cron expression validation', function () {
     it('rejects cron with letters', function () {
         $result = $this->tool->execute([
             'action' => 'add',
-            'description' => 'Test task',
+            'description' => SCHEDULE_TEST_TASK,
             'cron_expression' => 'a b c d e',
         ]);
 

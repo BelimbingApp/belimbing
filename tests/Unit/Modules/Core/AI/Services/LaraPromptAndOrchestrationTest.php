@@ -3,14 +3,14 @@
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
-use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
-use Tests\TestCase;
 use Tests\Support\CreatesLaraFixtures;
+use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, CreatesLaraFixtures::class);
+
+const CODE_WORKER = 'Code Worker';
 
 function createLaraOrchestrationFixture(object $testCase): array
 {
@@ -20,8 +20,8 @@ function createLaraOrchestrationFixture(object $testCase): array
 
     foreach ([
         [
-            'full_name' => 'Code Worker',
-            'short_name' => 'Code Worker',
+            'full_name' => CODE_WORKER,
+            'short_name' => CODE_WORKER,
             'designation' => 'Code Engineer',
             'job_description' => 'Builds modules and writes PHP code.',
         ],
@@ -69,7 +69,7 @@ it('builds Lara prompt with runtime context and delegation metadata', function (
         ->and($prompt)->toContain('"/go <target>"')
         ->and($prompt)->toContain('"/models <filter>"')
         ->and($prompt)->toContain('"/guide <topic>"')
-        ->and($prompt)->toContain('Code Worker');
+        ->and($prompt)->toContain(CODE_WORKER);
 });
 
 it('appends configured Lara prompt extension as additive guidance', function (): void {
