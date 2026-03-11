@@ -52,7 +52,7 @@
                 </x-ui.button>
                 <x-ui.button variant="primary" href="{{ route('admin.ai.providers.browse') }}" wire:navigate>
                     <x-icon name="heroicon-m-sparkles" class="w-4 h-4" />
-                    {{ __('Browse Providers') }}
+                    {{ __('Browse AI Providers') }}
                 </x-ui.button>
             </x-slot>
         </x-ui.page-header>
@@ -299,7 +299,7 @@
                                         <p class="text-sm text-muted">{{ __('No providers connected yet.') }}</p>
                                         <x-ui.button variant="primary" href="{{ route('admin.ai.providers.browse') }}" wire:navigate>
                                             <x-icon name="heroicon-m-sparkles" class="w-4 h-4" />
-                                            {{ __('Browse Providers') }}
+                                            {{ __('Browse AI Providers') }}
                                         </x-ui.button>
                                         @if (! $laraActivated)
                                             <p class="text-xs text-muted mt-2">

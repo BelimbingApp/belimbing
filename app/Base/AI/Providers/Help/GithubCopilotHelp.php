@@ -11,8 +11,8 @@ final class GithubCopilotHelp implements ProviderHelpContract
     {
         return [
             __('Ensure you have an active GitHub Copilot Individual or Business subscription at github.com/settings/copilot.'),
-            __('Click "Browse Providers" on the LLM Providers page and select "GitHub Copilot".'),
-            __('On the connect step, click "Sign in with GitHub" — a device code will be displayed.'),
+            __('Browse AI Providers and click "Connect" on "GitHub Copilot".'),
+            __('On the setup page, click "Sign in with GitHub" — a device code will be displayed.'),
             __('Open the verification URL shown on screen, enter the device code, and approve the access request.'),
             __('BLB will detect the approval automatically and import the available models.'),
         ];
@@ -21,7 +21,7 @@ final class GithubCopilotHelp implements ProviderHelpContract
     public function troubleshootingTips(): array
     {
         return [
-            __('Your authorization token may have expired. Remove and re-add GitHub Copilot via the "Browse Providers" wizard to get a fresh token.'),
+            __('Your authorization token may have expired. Remove and re-add GitHub Copilot via "Browse AI Providers" to get a fresh token.'),
             __('Ensure your Copilot subscription is active and not paused — check github.com/settings/copilot.'),
             __('If device flow authorization timed out (codes expire after ~15 minutes), start the wizard again and approve promptly.'),
             __('Enterprise accounts may require an administrator to enable Copilot API access.'),
@@ -35,6 +35,6 @@ final class GithubCopilotHelp implements ProviderHelpContract
 
     public function connectionErrorAdvice(): string
     {
-        return __('Your GitHub Copilot token may have expired. Re-add the provider via "Browse Providers" to re-authorize.');
+        return __('Your GitHub Copilot token may have expired. Re-add the provider via "Browse AI Providers" to re-authorize.');
     }
 }

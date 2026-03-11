@@ -47,7 +47,7 @@
 
                     <x-ui.button variant="primary" href="{{ route('admin.ai.providers.browse') }}" wire:navigate>
                         <x-icon name="heroicon-o-magnifying-glass" class="w-4 h-4" />
-                        {{ __('Browse Providers') }}
+                        {{ __('Browse AI Providers') }}
                     </x-ui.button>
                 </x-ui.card>
             @else

@@ -12,9 +12,6 @@ use Livewire\Component;
 
 class Catalog extends Component
 {
-    /** @var list<string> Selected template keys for onboarding */
-    public array $selectedTemplates = [];
-
     /** @var string|null Which catalog provider row is expanded */
     public ?string $expandedCatalogProvider = null;
 
@@ -33,15 +30,13 @@ class Catalog extends Component
     }
 
     /**
-     * Toggle selection of a template provider in the catalog.
+     * Navigate to the setup page for a single provider.
+     *
+     * @param  string  $key  Provider key to connect
      */
-    public function toggleSelectTemplate(string $key): void
+    public function connectProvider(string $key): void
     {
-        if (in_array($key, $this->selectedTemplates, true)) {
-            $this->selectedTemplates = array_values(array_diff($this->selectedTemplates, [$key]));
-        } else {
-            $this->selectedTemplates[] = $key;
-        }
+        $this->redirectRoute('admin.ai.providers.setup', ['providerKey' => $key], navigate: true);
     }
 
     /**
@@ -92,18 +87,6 @@ class Catalog extends Component
             'documentation_url' => $help->documentationUrl(),
             'connection_error_advice' => $help->connectionErrorAdvice(),
         ];
-    }
-
-    /**
-     * Dispatch event to proceed to the connect step with selected templates.
-     */
-    public function proceedToConnect(): void
-    {
-        if ($this->selectedTemplates === []) {
-            return;
-        }
-
-        $this->dispatch('wizard-proceed-to-connect', templates: $this->selectedTemplates);
     }
 
     /**
@@ -195,7 +178,6 @@ class Catalog extends Component
             'catalog' => $catalog->all(),
             'categoryOptions' => $catalog->pluck('category')->flatten()->unique()->sort()->values()->all(),
             'regionOptions' => $catalog->pluck('region')->flatten()->unique()->sort()->values()->all(),
-            'connectedProviderNames' => $connectedNames,
             'hasProviders' => $connectedNames !== [],
         ]);
     }

@@ -10,8 +10,8 @@ final class DeviceFlowHelp implements ProviderHelpContract
     public function setupSteps(): array
     {
         return [
-            __('Click "Browse Providers" and select this provider from the catalog.'),
-            __('On the connect step, click the sign-in button — a one-time device code will appear.'),
+            __('Browse AI Providers and click "Connect" on this provider.'),
+            __('On the setup page, click the sign-in button — a one-time device code will appear.'),
             __('Open the verification URL shown on screen and enter the device code.'),
             __('Approve the authorization request in your browser.'),
             __('BLB will detect the approval automatically and complete the connection.'),
@@ -33,6 +33,6 @@ final class DeviceFlowHelp implements ProviderHelpContract
 
     public function connectionErrorAdvice(): string
     {
-        return __('Your authorization token may have expired. Re-add this provider via "Browse Providers" to re-authorize.');
+        return __('Your authorization token may have expired. Re-add this provider via "Browse AI Providers" to re-authorize.');
     }
 }

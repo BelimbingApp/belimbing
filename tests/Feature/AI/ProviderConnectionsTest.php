@@ -9,7 +9,7 @@ test('provider connections empty state shows browse CTA and lara activation hint
 
     get(route('admin.ai.providers.connections'))
         ->assertOk()
-        ->assertSee('Browse Providers')
+        ->assertSee('Browse AI Providers')
         ->assertSee('activate Lara')
         ->assertSee(route('admin.setup.lara'), false);
 });
