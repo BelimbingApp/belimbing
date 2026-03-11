@@ -80,23 +80,25 @@ class PinController
     /**
      * Reorder the current user's pinned items.
      *
-     * Accepts an ordered array of pinnable_ids. Each item's sort_order
+     * Accepts an ordered array of pin references. Each item's sort_order
      * is updated to match its array index.
      */
     public function reorder(Request $request): JsonResponse
     {
         $request->validate([
-            'ids' => ['required', 'array', 'min:1'],
-            'ids.*' => ['required', 'string', 'max:150'],
+            'pins' => ['required', 'array', 'min:1'],
+            'pins.*.type' => ['required', 'string', 'in:menu_item,page'],
+            'pins.*.pinnable_id' => ['required', 'string', 'max:150'],
         ]);
 
         $user = $request->user();
-        $ids = $request->input('ids');
+        $pins = $request->input('pins');
 
-        foreach ($ids as $index => $pinnableId) {
+        foreach ($pins as $index => $pin) {
             UserPin::query()
                 ->where('user_id', $user->id)
-                ->where('pinnable_id', $pinnableId)
+                ->where('type', $pin['type'])
+                ->where('pinnable_id', $pin['pinnable_id'])
                 ->update(['sort_order' => $index]);
         }
 

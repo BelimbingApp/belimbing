@@ -1,15 +1,18 @@
 <?php
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+
+use App\Base\Menu\Services\PagePinResolver;
 ?>
 
 @props(['title', 'subtitle' => null, 'actions' => null, 'help' => null, 'pinnable' => null])
 
 @php
-    $hasInteractive = $help || $pinnable;
+    $resolvedPinnable = app(PagePinResolver::class)->resolve((string) $title, $pinnable);
+    $hasInteractive = $help || $resolvedPinnable;
     $alpineData = [];
     if ($help) $alpineData[] = 'helpOpen: false';
-    if ($pinnable) $alpineData[] = 'pinData: ' . json_encode($pinnable, JSON_UNESCAPED_SLASHES);
+    if ($resolvedPinnable) $alpineData[] = 'pinData: ' . json_encode($resolvedPinnable, JSON_UNESCAPED_SLASHES);
 @endphp
 
 <div @if($hasInteractive) x-data="{ {{ implode(', ', $alpineData) }} }" @endif>
@@ -17,7 +20,7 @@
         <div>
             <div class="flex items-center gap-2">
                 <h1 class="text-xl font-medium tracking-tight text-ink">{{ $title }}</h1>
-                @if($pinnable)
+                @if($resolvedPinnable)
                     <button
                         type="button"
                         @click="$dispatch('toggle-page-pin', pinData)"

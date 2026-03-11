@@ -1,3 +1,7 @@
+<?php
+// SPDX-License-Identifier: AGPL-3.0-only
+// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+?>
 @props(['menuTree', 'menuItemsFlat' => [], 'pins' => []])
 
 <aside
@@ -11,12 +15,16 @@
         _dragIdx: null,
         _dropIdx: null,
 
-        get pinnedIds() {
-            return this.pins.map(p => p.pinnable_id);
+        pinKey(type, pinnableId) {
+            return `${type}:${pinnableId}`;
         },
 
-        isPinned(id) {
-            return this.pins.some(p => p.pinnable_id === id);
+        get pinnedKeys() {
+            return this.pins.map(p => this.pinKey(p.type, p.pinnable_id));
+        },
+
+        isPinned(id, type = 'menu_item') {
+            return this.pins.some(p => p.type === type && p.pinnable_id === id);
         },
 
         _acquireLock() {
@@ -34,15 +42,16 @@
             if (!this._acquireLock()) return;
 
             {{-- Optimistic UI: update Alpine state immediately --}}
-            const wasPinned = this.isPinned(id);
+            const pinType = 'menu_item';
+            const wasPinned = this.isPinned(id, pinType);
             const prevPins = [...this.pins];
             if (wasPinned) {
-                this.pins = this.pins.filter(p => p.pinnable_id !== id);
+                this.pins = this.pins.filter(p => !(p.type === pinType && p.pinnable_id === id));
             } else {
                 const item = this.menuItemsFlat[id];
                 if (item) {
                     this.pins.push({
-                        type: 'menu_item',
+                        type: pinType,
                         pinnable_id: id,
                         label: item.pinLabel,
                         url: item.href,
@@ -61,7 +70,7 @@
                     'Accept': 'application/json',
                 },
                 body: JSON.stringify({
-                    type: 'menu_item',
+                    type: pinType,
                     pinnable_id: id,
                     label: item?.pinLabel ?? id,
                     url: item?.href ?? '',
@@ -106,13 +115,14 @@
             if (!this._acquireLock()) return;
 
             const { pinnableId, label, url, icon } = detail;
-            const wasPinned = this.isPinned(pinnableId);
+            const pinType = 'page';
+            const wasPinned = this.isPinned(pinnableId, pinType);
             const prevPins = [...this.pins];
 
             if (wasPinned) {
-                this.pins = this.pins.filter(p => p.pinnable_id !== pinnableId);
+                this.pins = this.pins.filter(p => !(p.type === pinType && p.pinnable_id === pinnableId));
             } else {
-                this.pins.push({ type: 'page', pinnable_id: pinnableId, label, url, icon: icon ?? null });
+                this.pins.push({ type: pinType, pinnable_id: pinnableId, label, url, icon: icon ?? null });
             }
 
             fetch('{{ route('pins.toggle') }}', {
@@ -122,7 +132,7 @@
                     'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content ?? '',
                     'Accept': 'application/json',
                 },
-                body: JSON.stringify({ type: 'page', pinnable_id: pinnableId, label, url, icon: icon ?? null }),
+                body: JSON.stringify({ type: pinType, pinnable_id: pinnableId, label, url, icon: icon ?? null }),
             })
             .then(r => r.ok ? r.json() : Promise.reject(r))
             .then(data => { this._syncPins(data.pins); })
@@ -130,10 +140,8 @@
             .finally(() => { this._releaseLock(); });
         },
 
-        reorderPins(orderedIds) {
-            {{-- Optimistic UI: reorder pins array to match --}}
-            const pinMap = Object.fromEntries(this.pins.map(p => [p.pinnable_id, p]));
-            this.pins = orderedIds.map(id => pinMap[id]).filter(Boolean);
+        reorderPins(orderedPins) {
+            this.pins = orderedPins;
 
             fetch('{{ route('pins.reorder') }}', {
                 method: 'POST',
@@ -142,7 +150,12 @@
                     'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content ?? '',
                     'Accept': 'application/json',
                 },
-                body: JSON.stringify({ ids: orderedIds }),
+                body: JSON.stringify({
+                    pins: orderedPins.map(pin => ({
+                        type: pin.type,
+                        pinnable_id: pin.pinnable_id,
+                    })),
+                }),
             })
             .then(r => r.ok ? r.json() : Promise.reject(r))
             .then(data => {
@@ -170,12 +183,12 @@
                 this._dropIdx = null;
                 return;
             }
-            const ids = [...this.pinnedIds];
-            const [moved] = ids.splice(this._dragIdx, 1);
-            ids.splice(idx, 0, moved);
+            const reorderedPins = [...this.pins];
+            const [moved] = reorderedPins.splice(this._dragIdx, 1);
+            reorderedPins.splice(idx, 0, moved);
             this._dragIdx = null;
             this._dropIdx = null;
-            this.reorderPins(ids);
+            this.reorderPins(reorderedPins);
         },
         pinDragEnd() {
             this._dragIdx = null;
@@ -191,7 +204,7 @@
             <div x-show="!sidebarRail" x-cloak class="px-1 pt-0.5 pb-px">
                 <span class="text-[10px] uppercase tracking-wider text-muted font-medium select-none">{{ __('Pinned') }}</span>
             </div>
-            <template x-for="(pin, idx) in pins" :key="'pinned-' + pin.pinnable_id">
+            <template x-for="(pin, idx) in pins" :key="'pinned-' + pin.type + '-' + pin.pinnable_id">
                     <div
                         :draggable="!sidebarRail"
                         @dragstart="!sidebarRail && pinDragStart(idx, $event)"

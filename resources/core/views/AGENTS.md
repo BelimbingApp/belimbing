@@ -47,6 +47,42 @@ Use semantic spacing from `resources/core/css/tokens.css` (role-based, not densi
 - **Labels:** `text-[11px] uppercase tracking-wider font-semibold text-muted`.
 - **Data:** `text-sm font-normal text-ink` (primary); `text-muted` (secondary). Tables: `tabular-nums`; header row `bg-surface-subtle/80`; placeholders `placeholder:text-muted`.
 
+## Blade File Preamble
+
+For Blade/Livewire view files that use a PHP preamble:
+
+1. **Always include legal header comments**:
+	- `// SPDX-License-Identifier: AGPL-3.0-only`
+	- project copyright notice
+2. **Use `@var` only when it adds real type context**:
+	- Livewire views: annotate `$this` with the Livewire class
+	- Blade components/views with `@props`: add `@var` only for complex/non-obvious types where `@props` alone is insufficient
+	- Do **not** add placeholder annotations such as `/** @var $this */` without a type
+	- If props are simple and obvious from `@props`, skip `@var` (YAGNI)
+
+Livewire example:
+
+```php
+<?php
+// SPDX-License-Identifier: AGPL-3.0-only
+// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+
+/** @var \App\Modules\Core\AI\Livewire\LaraChatOverlay $this */
+?>
+```
+
+Blade component example (only when extra type clarity is useful):
+
+```php
+<?php
+// SPDX-License-Identifier: AGPL-3.0-only
+// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+
+/** @var array<int, mixed> $menuTree */
+/** @var array<string, mixed> $menuItemsFlat */
+?>
+```
+
 ## Component Inventory
 
 Canonical primitives in `resources/core/views/components/ui/`. **Always use these instead of raw markup:**
