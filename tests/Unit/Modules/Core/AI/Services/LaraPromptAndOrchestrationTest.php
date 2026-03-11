@@ -156,7 +156,7 @@ it('returns navigation metadata for /go command', function (): void {
     expect($result)->not->toBeNull()
         ->and($result['meta']['orchestration']['status'])->toBe('navigation')
         ->and($result['meta']['orchestration']['navigation']['strategy'])->toBe('js_go_to_url')
-        ->and($result['meta']['orchestration']['navigation']['url'])->toBe('/admin/ai/providers/connections');
+        ->and($result['meta']['orchestration']['navigation']['url'])->toBe('/admin/ai/providers');
 });
 
 it('returns unknown target status for unsupported /go target', function (): void {

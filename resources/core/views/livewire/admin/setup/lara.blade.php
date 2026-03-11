@@ -136,7 +136,7 @@
                     <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Connect a Provider') }}</h3>
                     <p class="text-xs text-muted mb-4">{{ __('No AI providers are configured yet. Connect your first provider and model, then return to activate Lara.') }}</p>
 
-                    <x-ui.button variant="primary" href="{{ route('admin.ai.providers.browse') }}" wire:navigate>
+                    <x-ui.button variant="primary" href="{{ route('admin.ai.providers') }}" wire:navigate>
                         <x-icon name="heroicon-o-magnifying-glass" class="w-4 h-4" />
                         {{ __('Browse AI Providers') }}
                     </x-ui.button>
@@ -202,8 +202,8 @@
                         <x-ui.button wire:click="activateLara" variant="primary">
                             {{ __('Activate Lara') }}
                         </x-ui.button>
-                        <x-ui.button variant="ghost" href="{{ route('admin.ai.providers.connections') }}" wire:navigate>
-                            {{ __('Manage Provider Connections') }}
+                        <x-ui.button variant="ghost" href="{{ route('admin.ai.providers') }}" wire:navigate>
+                            {{ __('Manage Providers') }}
                         </x-ui.button>
                     </div>
                 </x-ui.card>

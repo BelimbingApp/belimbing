@@ -13,7 +13,7 @@ use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, CreatesLaraFixtures::class);
 
-const AI_PROVIDERS_URL = '/admin/ai/providers/connections';
+const AI_PROVIDERS_URL = '/admin/ai/providers';
 
 function makeAuthorizationService(bool $allowed): AuthorizationService
 {

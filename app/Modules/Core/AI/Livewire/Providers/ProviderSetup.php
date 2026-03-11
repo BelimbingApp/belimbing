@@ -49,7 +49,7 @@ class ProviderSetup extends Component
         $tpl = $allProviders[$providerKey] ?? null;
 
         if ($tpl === null) {
-            $this->redirectRoute('admin.ai.providers.browse', navigate: true);
+            $this->redirectRoute('admin.ai.providers', navigate: true);
 
             return;
         }
@@ -132,7 +132,7 @@ class ProviderSetup extends Component
         try {
             $this->connectProvider($companyId);
             $this->cleanupAuthFlows();
-            $this->redirectRoute('admin.ai.providers.connections', navigate: true);
+            $this->redirectRoute('admin.ai.providers', navigate: true);
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             $this->connectError = __('Could not connect to :url — is the server running?', [
                 'url' => $this->baseUrl,
@@ -161,7 +161,7 @@ class ProviderSetup extends Component
     public function backToCatalog(): void
     {
         $this->cleanupAuthFlows();
-        $this->redirectRoute('admin.ai.providers.browse', navigate: true);
+        $this->redirectRoute('admin.ai.providers', navigate: true);
     }
 
     public function render(): \Illuminate\Contracts\View\View

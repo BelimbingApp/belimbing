@@ -26,9 +26,7 @@ return [
         $item('ai', 'AI', 'heroicon-o-cpu-chip', 'admin', 200),
         $item('ai.lara', 'Lara', 'heroicon-o-sparkles', 'ai', 10, 'admin.setup.lara'),
         $item('ai.playground', 'DW Playground', 'heroicon-o-chat-bubble-left-right', 'ai', 20, 'admin.ai.playground'),
-        $item('ai.providers', 'AI Providers', 'heroicon-o-server-stack', 'ai', 30),
-        $item('ai.providers.browse', 'Browse', 'heroicon-o-rectangle-stack', 'ai.providers', 10, 'admin.ai.providers.browse'),
-        $item('ai.providers.connections', 'Connections', 'heroicon-o-link', 'ai.providers', 20, 'admin.ai.providers.connections'),
+        $item('ai.providers', 'AI Providers', 'heroicon-o-server-stack', 'ai', 30, 'admin.ai.providers'),
         $item('ai.tools', 'Tools', 'heroicon-o-wrench-screwdriver', 'ai', 40, 'admin.ai.tools'),
     ],
 ];

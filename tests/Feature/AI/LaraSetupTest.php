@@ -1,8 +1,8 @@
 <?php
 
+use App\Modules\Core\AI\Livewire\Setup\Lara as LaraSetup;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\AI\Livewire\Setup\Lara as LaraSetup;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Support\Facades\File;
@@ -15,7 +15,7 @@ test('ai menu exposes lara entry point', function (): void {
 
     $this->actingAs($user);
 
-    get(route('admin.ai.providers.connections'))
+    get(route('admin.ai.providers'))
         ->assertOk()
         ->assertSee('Lara')
         ->assertSee(route('admin.setup.lara'), false);
@@ -35,8 +35,8 @@ test('lara setup shows provider onboarding step when no providers exist', functi
     get(route('admin.setup.lara'))
         ->assertOk()
         ->assertSee('Connect a Provider')
-        ->assertDontSee('<button href="'.route('admin.ai.providers.browse').'"', false)
-        ->assertSee(route('admin.ai.providers.browse'), false);
+        ->assertDontSee('<button href="'.route('admin.ai.providers').'"', false)
+        ->assertSee(route('admin.ai.providers'), false);
 });
 
 test('lara setup shows activation step when providers exist but no model is ready', function (): void {
@@ -61,7 +61,7 @@ test('lara setup shows activation step when providers exist but no model is read
         ->assertOk()
         ->assertSee('Activate Lara')
         ->assertSee('No active models found for this provider. Add one in provider connections, then come back.')
-        ->assertSee('Manage Provider Connections');
+        ->assertSee('Manage Providers');
 });
 
 test('lara activation rejects inactive provider and does not write config', function (): void {
@@ -106,4 +106,3 @@ function resetLaraWorkspace(): void
         File::deleteDirectory($path);
     }
 }
-

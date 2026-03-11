@@ -4,8 +4,7 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Modules\Core\AI\Livewire\Playground;
-use App\Modules\Core\AI\Livewire\Providers\Catalog;
-use App\Modules\Core\AI\Livewire\Providers\Connections;
+use App\Modules\Core\AI\Livewire\Providers\Providers;
 use App\Modules\Core\AI\Livewire\Providers\ProviderSetup;
 use App\Modules\Core\AI\Livewire\Setup\Lara;
 use App\Modules\Core\AI\Livewire\Tools;
@@ -18,12 +17,19 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('admin/ai/playground', Playground::class)
         ->name('admin.ai.playground');
-    Route::get('admin/ai/providers/browse', Catalog::class)
-        ->name('admin.ai.providers.browse');
+
+    // Unified AI Providers page (management + catalog)
+    Route::get('admin/ai/providers', Providers::class)
+        ->name('admin.ai.providers');
     Route::get('admin/ai/providers/setup/{providerKey}', ProviderSetup::class)
         ->name('admin.ai.providers.setup');
-    Route::get('admin/ai/providers/connections', Connections::class)
+
+    // Legacy redirects — old Browse and Connections URLs point to the unified page.
+    Route::redirect('admin/ai/providers/browse', '/admin/ai/providers')
+        ->name('admin.ai.providers.browse');
+    Route::redirect('admin/ai/providers/connections', '/admin/ai/providers')
         ->name('admin.ai.providers.connections');
+
     Route::get('admin/ai/tools/{toolName?}', Tools::class)
         ->name('admin.ai.tools');
 });
