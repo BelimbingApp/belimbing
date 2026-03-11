@@ -3,18 +3,9 @@
 
     $licenseeExists = \App\Modules\Core\Company\Models\Company::query()->where('id', \App\Modules\Core\Company\Models\Company::LICENSEE_ID)->exists();
 
-    $laraExists = \App\Modules\Core\Employee\Models\Employee::query()->where('id', \App\Modules\Core\Employee\Models\Employee::LARA_ID)->exists();
-    $laraActivated = false;
-    if ($laraExists && $licenseeExists) {
-        $resolver = app(\App\Modules\Core\AI\Services\ConfigResolver::class);
-        $configs = $resolver->resolve(\App\Modules\Core\Employee\Models\Employee::LARA_ID);
-        if ($configs === []) {
-            $default = $resolver->resolveDefault(\App\Modules\Core\Company\Models\Company::LICENSEE_ID);
-            $laraActivated = $default !== null;
-        } else {
-            $laraActivated = true;
-        }
-    }
+    $laraState = \App\Modules\Core\Employee\Models\Employee::laraActivationState();
+    $laraExists = $laraState !== null;
+    $laraActivated = $laraState === true;
 @endphp
 
 <div class="h-6 bg-surface-bar border-t border-border-default flex items-center justify-between px-4 text-xs text-muted shrink-0">

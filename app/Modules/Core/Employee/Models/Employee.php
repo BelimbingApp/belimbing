@@ -177,6 +177,30 @@ class Employee extends Model
     }
 
     /**
+     * Whether Lara is provisioned (Employee record exists) and activated
+     * (has a resolvable LLM config — either workspace-level or company default).
+     *
+     * Returns a tri-state: null = not provisioned, false = provisioned but
+     * not activated, true = fully activated.
+     */
+    public static function laraActivationState(): ?bool
+    {
+        if (! static::query()->whereKey(self::LARA_ID)->exists()) {
+            return null;
+        }
+
+        $resolver = app(\App\Modules\Core\AI\Services\ConfigResolver::class);
+
+        if ($resolver->resolve(self::LARA_ID) !== []) {
+            return true;
+        }
+
+        return $resolver->resolveDefault(
+            \App\Modules\Core\Company\Models\Company::LICENSEE_ID,
+        ) !== null;
+    }
+
+    /**
      * Ensure Lara (the system Digital Worker) exists.
      *
      * Idempotent — safe to call from migrations, setup scripts, and UI.

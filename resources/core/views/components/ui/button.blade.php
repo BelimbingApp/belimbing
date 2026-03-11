@@ -25,7 +25,7 @@ $sizeClasses = match($size) {
 };
 @endphp
 
-@if($as === 'a')
+@if($as === 'a' || $href !== null)
     <a
         href="{{ $href }}"
         {{ $attributes->merge(['class' => "inline-flex items-center justify-center gap-2 rounded-2xl font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 {$variantClasses} {$sizeClasses}"]) }}

@@ -3,6 +3,7 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 /** @var \App\Modules\Core\AI\Livewire\Providers\Connections $this */
+/** @var bool $laraActivated */
 ?>
 <div>
     <x-slot name="title">{{ __('Provider Connections') }}</x-slot>
@@ -50,7 +51,7 @@
                     {{ __('Manual Add') }}
                 </x-ui.button>
                 <x-ui.button variant="primary" href="{{ route('admin.ai.providers.browse') }}" wire:navigate>
-                    <x-icon name="heroicon-m-rectangle-stack" class="w-4 h-4" />
+                    <x-icon name="heroicon-m-sparkles" class="w-4 h-4" />
                     {{ __('Browse Providers') }}
                 </x-ui.button>
             </x-slot>
@@ -117,7 +118,7 @@
                                         @endif
                                     </div>
                                 </td>
-                                <td class="hidden md:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted font-mono text-xs truncate max-w-[200px]">{{ $provider->base_url }}</td>
+                                <td class="hidden md:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-xs text-muted font-mono truncate max-w-[200px]">{{ $provider->base_url }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $provider->models_count }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <div class="flex items-center gap-1.5">
@@ -297,9 +298,16 @@
                                     <div class="space-y-2">
                                         <p class="text-sm text-muted">{{ __('No providers connected yet.') }}</p>
                                         <x-ui.button variant="primary" href="{{ route('admin.ai.providers.browse') }}" wire:navigate>
-                                             <x-icon name="heroicon-o-rectangle-stack" class="w-4 h-4" />
-                                             {{ __('Browse Provider Catalog') }}
-                                         </x-ui.button>
+                                            <x-icon name="heroicon-m-sparkles" class="w-4 h-4" />
+                                            {{ __('Browse Providers') }}
+                                        </x-ui.button>
+                                        @if (! $laraActivated)
+                                            <p class="text-xs text-muted mt-2">
+                                                {{ __('Once you\'ve connected a provider,') }}
+                                                <a href="{{ route('admin.setup.lara') }}" wire:navigate class="text-accent hover:underline">{{ __('activate Lara') }}</a>
+                                                {{ __('to start chatting.') }}
+                                            </p>
+                                        @endif
                                     </div>
                                 </td>
                             </tr>

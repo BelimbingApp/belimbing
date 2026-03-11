@@ -11,6 +11,7 @@ use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 class Lara extends Component
@@ -21,23 +22,25 @@ class Lara extends Component
 
     public function mount(): void
     {
-        $laraExists = Employee::query()->where('id', Employee::LARA_ID)->exists();
-        $licenseeExists = Company::query()->where('id', Company::LICENSEE_ID)->exists();
-
-        if ($laraExists && $licenseeExists) {
-            $resolver = app(ConfigResolver::class);
-            $configs = $resolver->resolve(Employee::LARA_ID);
-            $activated = count($configs) > 0;
-
-            if (! $activated) {
-                $default = $resolver->resolveDefault(Company::LICENSEE_ID);
-                $activated = $default !== null;
-            }
-
-            if ($activated) {
-                $this->redirect(route('admin.ai.playground'), navigate: true);
-            }
+        if (! Company::query()->whereKey(Company::LICENSEE_ID)->exists()) {
+            return;
         }
+
+        // Already activated — nothing to set up.
+        if (Employee::laraActivationState() === true) {
+            $this->redirect(route('admin.ai.playground'), navigate: true);
+
+            return;
+        }
+
+        $this->selectedProviderId = AiProvider::query()
+            ->forCompany(Company::LICENSEE_ID)
+            ->active()
+            ->orderBy('priority')
+            ->orderBy('display_name')
+            ->value('id');
+
+        $this->hydrateSelectedModel();
     }
 
     /**
@@ -53,16 +56,40 @@ class Lara extends Component
     }
 
     /**
+     * Keep model selection in sync when provider selection changes.
+     */
+    public function updatedSelectedProviderId(): void
+    {
+        $this->hydrateSelectedModel();
+    }
+
+    /**
      * Activate Lara by writing workspace config with selected provider and model.
      */
     public function activateLara(): void
     {
         $this->validate([
-            'selectedProviderId' => ['required', 'integer', 'exists:ai_providers,id'],
-            'selectedModelId' => ['required', 'string'],
+            'selectedProviderId' => [
+                'required',
+                'integer',
+                Rule::exists('ai_providers', 'id')
+                    ->where('company_id', Company::LICENSEE_ID)
+                    ->where('is_active', true),
+            ],
+            'selectedModelId' => [
+                'required',
+                'string',
+                Rule::exists('ai_provider_models', 'model_id')
+                    ->where('ai_provider_id', $this->selectedProviderId)
+                    ->where('is_active', true),
+            ],
         ]);
 
-        $provider = AiProvider::query()->findOrFail($this->selectedProviderId);
+        $provider = AiProvider::query()
+            ->whereKey($this->selectedProviderId)
+            ->forCompany(Company::LICENSEE_ID)
+            ->active()
+            ->firstOrFail();
 
         $config = [
             'llm' => [
@@ -87,20 +114,8 @@ class Lara extends Component
      */
     public function render(): \Illuminate\Contracts\View\View
     {
-        $laraExists = Employee::query()->where('id', Employee::LARA_ID)->exists();
-        $licenseeExists = Company::query()->where('id', Company::LICENSEE_ID)->exists();
-
-        $laraActivated = false;
-        if ($laraExists && $licenseeExists) {
-            $resolver = app(ConfigResolver::class);
-            $configs = $resolver->resolve(Employee::LARA_ID);
-            if (count($configs) > 0) {
-                $laraActivated = true;
-            } else {
-                $default = $resolver->resolveDefault(Company::LICENSEE_ID);
-                $laraActivated = $default !== null;
-            }
-        }
+        $activationState = Employee::laraActivationState();
+        $licenseeExists = Company::query()->whereKey(Company::LICENSEE_ID)->exists();
 
         $providers = collect();
         $models = collect();
@@ -122,11 +137,40 @@ class Lara extends Component
         }
 
         return view('livewire.admin.setup.lara', [
-            'laraExists' => $laraExists,
+            'laraExists' => $activationState !== null,
             'licenseeExists' => $licenseeExists,
-            'laraActivated' => $laraActivated,
+            'laraActivated' => $activationState === true,
             'providers' => $providers,
             'models' => $models,
         ]);
+    }
+
+    private function hydrateSelectedModel(): void
+    {
+        if ($this->selectedProviderId === null) {
+            $this->selectedModelId = null;
+
+            return;
+        }
+
+        $providerExists = AiProvider::query()
+            ->whereKey($this->selectedProviderId)
+            ->forCompany(Company::LICENSEE_ID)
+            ->active()
+            ->exists();
+
+        if (! $providerExists) {
+            $this->selectedProviderId = null;
+            $this->selectedModelId = null;
+
+            return;
+        }
+
+        $this->selectedModelId = AiProviderModel::query()
+            ->where('ai_provider_id', $this->selectedProviderId)
+            ->active()
+            ->orderByDesc('is_default')
+            ->orderBy('model_id')
+            ->value('model_id');
     }
 }

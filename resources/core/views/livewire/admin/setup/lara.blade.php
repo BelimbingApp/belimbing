@@ -1,13 +1,19 @@
+<?php
+// SPDX-License-Identifier: AGPL-3.0-only
+// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+
+/** @var \App\Modules\Core\AI\Livewire\Setup\Lara $this */
+?>
 <div>
     <x-slot name="title">{{ __('Set Up Lara') }}</x-slot>
 
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Set Up Lara')" :subtitle="__('Activate BLB\'s built-in AI assistant')">
             <x-slot name="actions">
-                <a href="{{ route('admin.ai.playground') }}" wire:navigate class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-accent hover:bg-surface-subtle transition-colors">
+                <x-ui.button variant="ghost" href="{{ route('admin.ai.playground') }}" wire:navigate>
                     <x-icon name="heroicon-o-arrow-left" class="w-5 h-5" />
                     {{ __('Back') }}
-                </a>
+                </x-ui.button>
             </x-slot>
         </x-ui.page-header>
 
@@ -18,7 +24,9 @@
         @if (! $licenseeExists)
             <x-ui.alert variant="warning">
                 {{ __('The Licensee company must be set up before Lara can be provisioned.') }}
-                <a href="{{ route('admin.setup.licensee') }}" wire:navigate class="text-accent hover:underline">{{ __('Set up Licensee') }}</a>
+                <a href="{{ route('admin.setup.licensee') }}" wire:navigate class="text-accent hover:underline">
+                    {{ __('Set up Licensee') }}
+                </a>
             </x-ui.alert>
         @elseif (! $laraExists)
             <x-ui.card>
@@ -33,11 +41,15 @@
             </x-ui.card>
         @elseif (! $laraActivated)
             @if ($providers->isEmpty())
-                <x-ui.alert variant="info">
-                    {{ __('No AI providers are configured for the Licensee company. You need to set up at least one provider before activating Lara.') }}
-                    <br><br>
-                    <a href="{{ route('admin.ai.providers.connections') }}" wire:navigate class="text-accent hover:underline">{{ __('Configure AI Providers') }}</a>
-                </x-ui.alert>
+                <x-ui.card>
+                    <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Connect a Provider') }}</h3>
+                    <p class="text-xs text-muted mb-4">{{ __('No AI providers are configured yet. Connect your first provider and model, then return to activate Lara.') }}</p>
+
+                    <x-ui.button variant="primary" href="{{ route('admin.ai.providers.browse') }}" wire:navigate>
+                        <x-icon name="heroicon-o-magnifying-glass" class="w-4 h-4" />
+                        {{ __('Browse Providers') }}
+                    </x-ui.button>
+                </x-ui.card>
             @else
                 <x-ui.card>
                     <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Activate Lara') }}</h3>
@@ -53,7 +65,9 @@
 
                         @if ($selectedProviderId)
                             @if ($models->isEmpty())
-                                <p class="text-xs text-muted">{{ __('No active models found for this provider. Please add models in the provider settings.') }}</p>
+                                <p class="text-xs text-muted">
+                                    {{ __('No active models found for this provider. Add one in provider connections, then come back.') }}
+                                </p>
                             @else
                                 <x-ui.select wire:model="selectedModelId" label="{{ __('Model') }}" :error="$errors->first('selectedModelId')">
                                     <option value="">{{ __('Select a model...') }}</option>
@@ -67,6 +81,9 @@
                         <div class="flex items-center gap-4">
                             <x-ui.button type="submit" variant="primary">
                                 {{ __('Activate Lara') }}
+                            </x-ui.button>
+                            <x-ui.button variant="ghost" href="{{ route('admin.ai.providers.connections') }}" wire:navigate>
+                                {{ __('Manage Provider Connections') }}
                             </x-ui.button>
                         </div>
                     </form>

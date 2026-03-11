@@ -11,6 +11,8 @@ $iconPaths = [
     'heroicon-m-information-circle' => ['viewBox' => '0 0 20 20', 'fill' => 'currentColor', 'path' => 'M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm.75-13a.75.75 0 0 0-1.5 0v5a.75.75 0 0 0 1.5 0v-5ZM10 14a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z'],
     'heroicon-m-arrow-up' => ['viewBox' => '0 0 20 20', 'fill' => 'currentColor', 'path' => 'M10 17a.75.75 0 0 1-.75-.75V5.612L5.29 9.573a.75.75 0 0 1-1.08-1.04l5.25-5.5a.75.75 0 0 1 1.08 0l5.25 5.5a.75.75 0 1 1-1.08 1.04l-3.96-3.961V16.25A.75.75 0 0 1 10 17Z'],
     'heroicon-m-chevron-right' => ['viewBox' => '0 0 20 20', 'fill' => 'currentColor', 'path' => 'M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z'],
+    'heroicon-m-magnifying-glass' => ['viewBox' => '0 0 20 20', 'fill' => 'currentColor', 'path' => 'M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z'],
+
     'heroicon-o-arrow-down-tray' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M3 16.5V18.75C3 19.9926 4.00736 21 5.25 21H18.75C19.9926 21 21 19.9926 21 18.75V16.5M16.5 12L12 16.5M12 16.5L7.5 12M12 16.5V3'],
     'heroicon-o-arrow-left' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18'],
     'heroicon-o-chevron-left' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M15.75 19.5L8.25 12l7.5-7.5'],

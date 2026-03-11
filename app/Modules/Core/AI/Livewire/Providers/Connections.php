@@ -15,6 +15,7 @@ use App\Modules\Core\AI\Livewire\Concerns\ManagesProviders;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesSync;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Modules\Core\Employee\Models\Employee;
 use Livewire\Component;
 
 class Connections extends Component
@@ -91,6 +92,7 @@ class Connections extends Component
             'providers' => $providers,
             'expandedModels' => $expandedModels,
             'templateOptions' => $templates,
+            'laraActivated' => Employee::laraActivationState() === true,
         ]);
     }
 
