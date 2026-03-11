@@ -24,6 +24,12 @@ class Workspace extends Component
     /** @var string|null Result from the last Try It execution */
     public ?string $tryItResult = null;
 
+    /** @var bool Whether the last Try It result was an error */
+    public bool $tryItIsError = false;
+
+    /** @var array{code: string, message: string, hint?: string, action?: array{label: string, suggested_prompt: string}}|null Structured error data from last Try It */
+    public ?array $tryItErrorPayload = null;
+
     /** @var bool Whether the Try It execution is in progress */
     public bool $tryItLoading = false;
 
@@ -90,6 +96,8 @@ class Workspace extends Component
 
         if (! $metadata || ! isset($metadata->testExamples[$exampleIndex])) {
             $this->tryItResult = __('Example not found.');
+            $this->tryItIsError = true;
+            $this->tryItErrorPayload = null;
 
             return;
         }
@@ -99,23 +107,32 @@ class Workspace extends Component
 
         if (! $registry->isRegistered($this->toolName)) {
             $this->tryItResult = __('Error: This tool is not configured yet. Set the required API key and provider in the Configuration panel, then try again.');
+            $this->tryItIsError = true;
+            $this->tryItErrorPayload = null;
 
             return;
         }
 
         try {
-            $this->tryItResult = $registry->execute($this->toolName, $example['input']);
+            $result = $registry->execute($this->toolName, $example['input']);
+            $this->tryItResult = (string) $result;
+            $this->tryItIsError = $result->isError;
+            $this->tryItErrorPayload = $this->serializeErrorPayload($result);
         } catch (\Throwable $e) {
             $this->tryItResult = __('Error: :message', ['message' => $e->getMessage()]);
+            $this->tryItIsError = true;
+            $this->tryItErrorPayload = null;
         }
 
         $this->verificationError = null;
-        $this->storeVerification($this->tryItResult);
+        $this->storeVerification($this->tryItIsError);
     }
 
     public function clearTryItResult(): void
     {
         $this->tryItResult = null;
+        $this->tryItIsError = false;
+        $this->tryItErrorPayload = null;
     }
 
     public function render(): \Illuminate\Contracts\View\View
@@ -166,23 +183,52 @@ class Workspace extends Component
 
     /**
      * Store verification result from a Try It execution.
+     *
+     * @param  bool  $isError  Whether the tool result was an error
      */
-    private function storeVerification(string $result): void
+    private function storeVerification(bool $isError): void
     {
-        $isSuccess = ! str_starts_with($result, 'Error:')
-            && ! str_starts_with($result, 'Search failed:');
-
         try {
             $settings = app(SettingsService::class);
 
             $settings->set("ai.tools.{$this->toolName}.last_verified_at", now()->toIso8601String());
-            $settings->set("ai.tools.{$this->toolName}.last_verified_success", $isSuccess);
+            $settings->set("ai.tools.{$this->toolName}.last_verified_success", ! $isError);
         } catch (\Throwable $e) {
             report($e);
             $this->verificationError = __('Could not save verification status. The error was: :message. If the settings table is out of date, run: php artisan migrate', [
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Serialize a ToolResult's error payload for Livewire public property storage.
+     *
+     * @return array{code: string, message: string, hint?: string, action?: array{label: string, suggested_prompt: string}}|null
+     */
+    private function serializeErrorPayload(ToolResult $result): ?array
+    {
+        if (! $result->isError || $result->errorPayload === null) {
+            return null;
+        }
+
+        $payload = [
+            'code' => $result->errorPayload->code,
+            'message' => $result->errorPayload->message,
+        ];
+
+        if ($result->errorPayload->hint !== null) {
+            $payload['hint'] = $result->errorPayload->hint;
+        }
+
+        if ($result->errorPayload->action !== null) {
+            $payload['action'] = [
+                'label' => $result->errorPayload->action->label,
+                'suggested_prompt' => $result->errorPayload->action->suggestedPrompt,
+            ];
+        }
+
+        return $payload;
     }
 
     /**

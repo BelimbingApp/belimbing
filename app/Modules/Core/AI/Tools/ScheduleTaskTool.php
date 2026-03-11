@@ -10,6 +10,7 @@ use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractActionTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
+use App\Base\AI\Tools\ToolResult;
 use Illuminate\Support\Str;
 
 /**
@@ -96,7 +97,7 @@ class ScheduleTaskTool extends AbstractActionTool
             ->boolean('enabled', 'Whether the scheduled task is enabled. Defaults to true for add. Optional for update.');
     }
 
-    protected function handleAction(string $action, array $arguments): string
+    protected function handleAction(string $action, array $arguments): ToolResult
     {
         return match ($action) {
             'list' => $this->handleList(),
@@ -113,15 +114,15 @@ class ScheduleTaskTool extends AbstractActionTool
      * Returns all scheduled tasks. Currently returns an empty stub since
      * the scheduled_tasks table is not yet implemented.
      */
-    private function handleList(): string
+    private function handleList(): ToolResult
     {
-        return json_encode([
+        return ToolResult::success(json_encode([
             'tasks' => [],
             'total' => 0,
             'message' => 'Scheduled task persistence is pending. '
                 .'No tasks are stored yet. The scheduled_tasks DB table '
                 .'and scheduler integration are not yet implemented.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -132,22 +133,24 @@ class ScheduleTaskTool extends AbstractActionTool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    private function handleAdd(array $arguments): string
+    private function handleAdd(array $arguments): ToolResult
     {
         $description = $this->requireString($arguments, 'description');
         $cronExpression = $this->requireString($arguments, 'cron_expression');
 
         if (! $this->isValidCronExpression($cronExpression)) {
-            return 'Error: Invalid cron_expression format. '
-                .'Expected 5-field cron format: "minute hour day month weekday". '
-                .'Example: "0 9 * * 1" for every Monday at 9am.';
+            throw new ToolArgumentException(
+                'Invalid cron_expression format. '
+                    .'Expected 5-field cron format: "minute hour day month weekday". '
+                    .'Example: "0 9 * * 1" for every Monday at 9am.'
+            );
         }
 
         $taskId = self::TASK_ID_PREFIX.Str::random(12);
         $workerId = $arguments['worker_id'] ?? null;
         $enabled = $this->optionalBool($arguments, 'enabled', true);
 
-        return json_encode([
+        return ToolResult::success(json_encode([
             'task_id' => $taskId,
             'description' => $description,
             'cron_expression' => $cronExpression,
@@ -158,7 +161,7 @@ class ScheduleTaskTool extends AbstractActionTool
                 .'will not survive restarts until the scheduled_tasks DB table '
                 .'and scheduler integration are implemented.',
             'created_at' => now()->toIso8601String(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -169,25 +172,27 @@ class ScheduleTaskTool extends AbstractActionTool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    private function handleUpdate(array $arguments): string
+    private function handleUpdate(array $arguments): ToolResult
     {
         $taskId = $this->requireValidTaskId($arguments);
         $cronExpression = $this->optionalString($arguments, 'cron_expression');
 
         if ($cronExpression !== null && ! $this->isValidCronExpression($cronExpression)) {
-            return 'Error: Invalid cron_expression format. '
-                .'Expected 5-field cron format: "minute hour day month weekday". '
-                .'Example: "0 9 * * 1" for every Monday at 9am.';
+            throw new ToolArgumentException(
+                'Invalid cron_expression format. '
+                    .'Expected 5-field cron format: "minute hour day month weekday". '
+                    .'Example: "0 9 * * 1" for every Monday at 9am.'
+            );
         }
 
-        return json_encode([
+        return ToolResult::success(json_encode([
             'task_id' => $taskId,
             'status' => 'updated',
             'message' => 'Task updated (stub). Persistence is pending — changes '
                 .'will not take effect until the scheduled_tasks DB table '
                 .'and scheduler integration are implemented.',
             'updated_at' => now()->toIso8601String(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -197,18 +202,18 @@ class ScheduleTaskTool extends AbstractActionTool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    private function handleRemove(array $arguments): string
+    private function handleRemove(array $arguments): ToolResult
     {
         $taskId = $this->requireValidTaskId($arguments);
 
-        return json_encode([
+        return ToolResult::success(json_encode([
             'task_id' => $taskId,
             'status' => 'removed',
             'message' => 'Task removed (stub). Persistence is pending — this '
                 .'is a no-op until the scheduled_tasks DB table and scheduler '
                 .'integration are implemented.',
             'removed_at' => now()->toIso8601String(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -218,11 +223,11 @@ class ScheduleTaskTool extends AbstractActionTool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    private function handleStatus(array $arguments): string
+    private function handleStatus(array $arguments): ToolResult
     {
         $taskId = $this->requireValidTaskId($arguments);
 
-        return json_encode([
+        return ToolResult::success(json_encode([
             'task_id' => $taskId,
             'status' => 'unknown',
             'enabled' => null,
@@ -231,7 +236,7 @@ class ScheduleTaskTool extends AbstractActionTool
             'message' => 'Task status lookup is pending. The scheduled_tasks DB table '
                 .'and scheduler integration are not yet implemented.',
             'checked_at' => now()->toIso8601String(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**

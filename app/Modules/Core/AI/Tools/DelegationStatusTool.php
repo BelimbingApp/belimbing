@@ -10,6 +10,7 @@ use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
+use App\Base\AI\Tools\ToolResult;
 
 /**
  * Delegation status polling tool for Digital Workers.
@@ -68,7 +69,7 @@ class DelegationStatusTool extends AbstractTool
         return 'ai.tool_delegation_status.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $dispatchId = $this->requireString($arguments, 'dispatch_id');
 
@@ -79,7 +80,7 @@ class DelegationStatusTool extends AbstractTool
             );
         }
 
-        return $this->lookupStatus($dispatchId);
+        return ToolResult::success($this->lookupStatus($dispatchId));
     }
 
     /**

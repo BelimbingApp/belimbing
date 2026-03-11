@@ -32,7 +32,7 @@ describe('SQL validation', function () {
     });
 
     it('rejects write statements', function (string $query, string $keyword) {
-        $result = $this->tool->execute(['query' => $query]);
+        $result = (string) $this->tool->execute(['query' => $query]);
         expect($result)->toContain($keyword)
             ->and($result)->toContain(QUERY_NOT_ALLOWED);
     })->with([
@@ -46,17 +46,17 @@ describe('SQL validation', function () {
     ]);
 
     it('rejects multi-statement queries', function () {
-        $result = $this->tool->execute(['query' => 'SELECT 1; DROP TABLE users']);
+        $result = (string) $this->tool->execute(['query' => 'SELECT 1; DROP TABLE users']);
         expect($result)->toContain('not allowed');
     });
 
     it('rejects queries not starting with SELECT or WITH', function () {
-        $result = $this->tool->execute(['query' => 'SHOW TABLES']);
+        $result = (string) $this->tool->execute(['query' => 'SHOW TABLES']);
         expect($result)->toContain('Only SELECT');
     });
 
     it('rejects SELECT with embedded write in subquery', function () {
-        $result = $this->tool->execute(['query' => 'SELECT * FROM (DELETE FROM users RETURNING *) AS x']);
+        $result = (string) $this->tool->execute(['query' => 'SELECT * FROM (DELETE FROM users RETURNING *) AS x']);
         expect($result)->toContain('DELETE')
             ->and($result)->toContain('not allowed');
     });
@@ -64,7 +64,7 @@ describe('SQL validation', function () {
 
 describe('query execution', function () {
     it('executes a simple SELECT and returns formatted results', function () {
-        $result = $this->tool->execute(['query' => "SELECT 1 AS id, 'hello' AS greeting"]);
+        $result = (string) $this->tool->execute(['query' => "SELECT 1 AS id, 'hello' AS greeting"]);
 
         expect($result)->toContain('id')
             ->and($result)->toContain('greeting')
@@ -73,7 +73,7 @@ describe('query execution', function () {
     });
 
     it('returns row count message for empty results', function () {
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'query' => 'SELECT 1 AS id WHERE 1 = 0',
         ]);
 
@@ -83,7 +83,7 @@ describe('query execution', function () {
     it('respects limit parameter', function () {
         // Build a UNION ALL query that produces more rows than the limit
         $unions = implode(' UNION ALL ', array_fill(0, 10, 'SELECT 1 AS n'));
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'query' => $unions,
             'limit' => 3,
         ]);
@@ -94,7 +94,7 @@ describe('query execution', function () {
 
     it('caps limit at maximum', function () {
         // Request a limit above MAX_ROWS; tool should cap it at 100
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'query' => 'SELECT 1 AS n',
             'limit' => 999,
         ]);
@@ -105,7 +105,7 @@ describe('query execution', function () {
     });
 
     it('handles NULL values', function () {
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'query' => 'SELECT NULL AS empty_col',
         ]);
 
@@ -113,17 +113,17 @@ describe('query execution', function () {
     });
 
     it('strips trailing semicolons', function () {
-        $result = $this->tool->execute(['query' => 'SELECT 1 AS test;']);
+        $result = (string) $this->tool->execute(['query' => 'SELECT 1 AS test;']);
         expect($result)->not->toContain('Error');
     });
 
     it('reports query errors gracefully', function () {
-        $result = $this->tool->execute(['query' => 'SELECT * FROM nonexistent_table_xyz']);
+        $result = (string) $this->tool->execute(['query' => 'SELECT * FROM nonexistent_table_xyz']);
         expect($result)->toContain('error');
     });
 
     it('allows WITH (CTE) queries', function () {
-        $result = $this->tool->execute(['query' => 'WITH cte AS (SELECT 1 AS val) SELECT * FROM cte']);
+        $result = (string) $this->tool->execute(['query' => 'WITH cte AS (SELECT 1 AS val) SELECT * FROM cte']);
         expect($result)->toContain('val')
             ->and($result)->toContain(ONE_ROW);
     });

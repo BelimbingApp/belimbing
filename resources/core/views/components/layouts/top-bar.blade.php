@@ -1,4 +1,4 @@
-<div class="h-11 bg-surface-bar border-b border-border-default flex items-center justify-between px-4 shrink-0 z-10">
+<div class="h-7 bg-surface-bar border-b border-border-default flex items-center justify-between px-2 shrink-0 z-10">
     {{-- Left: Sidebar toggle + App title --}}
     <div class="flex items-center gap-4">
         <button
@@ -15,7 +15,7 @@
         </h1>
     </div>
 
-    {{-- Right: Theme toggle + Lara trigger --}}
+    {{-- Right: Theme toggle --}}
     <div class="flex items-center gap-3" x-data="{
         theme: localStorage.getItem('theme') || 'light',
         init() {
@@ -44,20 +44,5 @@
             ></span>
         </button>
 
-        {{-- Lara Chat trigger --}}
-        @auth
-            <button
-                type="button"
-                @click="$dispatch('open-lara-chat')"
-                class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-sm text-muted hover:text-ink hover:bg-surface-subtle transition"
-                title="{{ __('Open Lara chat (Ctrl+K)') }}"
-                aria-label="{{ __('Open Lara chat') }}"
-            >
-                <x-ai.lara-identity compact :show-role="false" />
-                <kbd class="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-muted bg-surface-subtle border border-border-default rounded">
-                    <span class="text-[9px]">⌘</span>K
-                </kbd>
-            </button>
-        @endauth
     </div>
 </div>

@@ -45,7 +45,7 @@ describe('input validation', function () {
 
         $result = $this->tool->execute(['action' => 'navigate', 'url' => EXAMPLE_URL]);
 
-        expect($result)->toContain('not available');
+        expect((string) $result)->toContain('not available');
     });
 });
 
@@ -61,8 +61,8 @@ describe('navigate action', function () {
 
         $result = $this->tool->execute(['action' => 'navigate', 'url' => 'https://evil.internal']);
 
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('Blocked');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('Blocked');
     });
 
     it('navigates successfully', function () {
@@ -100,7 +100,7 @@ describe('act action', function () {
 
     it('rejects invalid kind', function () {
         $result = $this->tool->execute(['action' => 'act', 'kind' => 'bogus']);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('rejects missing ref', function () {
@@ -144,8 +144,8 @@ describe('evaluate action', function () {
 
         $result = $this->tool->execute(['action' => 'evaluate', 'script' => 'alert(1)']);
 
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('disabled');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('disabled');
     });
 
     it('rejects missing script when enabled', function () {
@@ -153,8 +153,8 @@ describe('evaluate action', function () {
 
         $result = $this->tool->execute(['action' => 'evaluate']);
 
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('script');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('script');
     });
 
     it('evaluates when enabled', function () {
@@ -173,13 +173,13 @@ describe('pdf action', function () {
 describe('cookies action', function () {
     it('rejects missing cookie_action', function () {
         $result = $this->tool->execute(['action' => 'cookies']);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('cookie_action');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('cookie_action');
     });
 
     it('rejects invalid cookie_action', function () {
         $result = $this->tool->execute(['action' => 'cookies', 'cookie_action' => 'bogus']);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('gets cookies', function () {
@@ -188,7 +188,7 @@ describe('cookies action', function () {
 
     it('rejects set without name', function () {
         $result = $this->tool->execute(['action' => 'cookies', 'cookie_action' => 'set']);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('sets cookie', function () {
@@ -208,8 +208,8 @@ describe('cookies action', function () {
 describe('wait action', function () {
     it('rejects when no condition specified', function () {
         $result = $this->tool->execute(['action' => 'wait']);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('At least one');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('At least one');
     });
 
     it('accepts text condition', function () {

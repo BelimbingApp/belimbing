@@ -98,7 +98,7 @@ describe('output format', function () {
     });
 
     it('returns pretty-printed JSON', function () {
-        $result = $this->tool->execute([]);
+        $result = (string) $this->tool->execute([]);
 
         expect($result)->toContain("\n");
     });

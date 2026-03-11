@@ -9,6 +9,7 @@ use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
+use App\Base\AI\Tools\ToolResult;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -75,7 +76,7 @@ class SystemInfoTool extends AbstractTool
         return 'ai.tool_system_info.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $section = $this->requireEnum($arguments, 'section', self::SECTIONS, 'all');
 
@@ -83,7 +84,7 @@ class SystemInfoTool extends AbstractTool
             ? $this->gatherAll()
             : [$section => $this->gatherSection($section)];
 
-        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        return ToolResult::success(json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**

@@ -5,17 +5,18 @@
 
 namespace App\Base\AI\Tools\Concerns;
 
+use App\Base\AI\Tools\ToolResult;
 use Illuminate\Contracts\Process\ProcessResult;
 
 /**
- * Formats process execution results for tool output.
+ * Formats process execution results into ToolResult instances.
  *
  * Used by tools that execute system processes (bash, artisan) to produce
  * consistent, LLM-readable output from success and failure cases.
  */
 trait FormatsProcessResult
 {
-    protected function formatProcessResult(ProcessResult $result): string
+    protected function formatProcessResult(ProcessResult $result): ToolResult
     {
         $output = trim($result->output());
         $errorOutput = trim($result->errorOutput());
@@ -31,13 +32,13 @@ trait FormatsProcessResult
                 $message .= "\n".$output;
             }
 
-            return $message;
+            return ToolResult::error($message, 'command_failed');
         }
 
         if ($output === '' && $errorOutput === '') {
-            return 'Command completed successfully (no output).';
+            return ToolResult::success('Command completed successfully (no output).');
         }
 
-        return $output !== '' ? $output : $errorOutput;
+        return ToolResult::success($output !== '' ? $output : $errorOutput);
     }
 }

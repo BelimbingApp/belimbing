@@ -8,6 +8,7 @@ use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Base\AI\Services\LlmClient;
+use App\Base\AI\Tools\ToolResult;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Modules\Core\AI\DTO\Message;
@@ -60,13 +61,13 @@ class TestTool implements Tool
         return ToolRiskClass::READ_ONLY;
     }
 
-    public function execute(array $arguments): string
+    public function execute(array $arguments): ToolResult
     {
         if (empty($arguments)) {
-            return $this->toolResult;
+            return ToolResult::success($this->toolResult);
         }
 
-        return $this->toolResult.json_encode($arguments);
+        return ToolResult::success($this->toolResult.json_encode($arguments));
     }
 }
 

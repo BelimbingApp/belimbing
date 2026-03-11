@@ -9,7 +9,10 @@ use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractActionTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
+use App\Base\AI\Tools\SetupAction;
 use App\Base\AI\Tools\ToolArgumentException;
+use App\Base\AI\Tools\ToolResult;
+use App\Base\AI\Tools\ToolUnavailableException;
 use App\Modules\Core\AI\Services\Browser\BrowserPoolManager;
 use App\Modules\Core\AI\Services\Browser\BrowserSsrfGuard;
 
@@ -33,8 +36,6 @@ use App\Modules\Core\AI\Services\Browser\BrowserSsrfGuard;
  */
 class BrowserTool extends AbstractActionTool
 {
-    private const ERROR_PREFIX = 'Error: ';
-
     /**
      * Valid actions for browser automation.
      *
@@ -147,15 +148,30 @@ class BrowserTool extends AbstractActionTool
     /**
      * Dispatch to the appropriate browser action handler.
      *
+     * Overrides parent to check browser availability before dispatch.
+     * Throws ToolUnavailableException with a Lara handoff action if
+     * Playwright is not installed or browser automation is disabled.
+     *
      * @param  string  $action  The validated action name
      * @param  array<string, mixed>  $arguments  Full arguments (including 'action')
+     *
+     * @throws ToolUnavailableException If browser automation is not available
      */
-    protected function handleAction(string $action, array $arguments): string
+    protected function handleAction(string $action, array $arguments): ToolResult
     {
         if (! $this->poolManager->isAvailable()) {
-            return self::ERROR_PREFIX.'Browser automation is not available. '
-                .'The browser tool is either disabled or Playwright is not installed. '
-                .'Contact an administrator to enable it.';
+            throw new ToolUnavailableException(
+                errorCode: 'browser_unavailable',
+                message: 'Browser automation is not available. '
+                    .'The browser tool is either disabled or Playwright is not installed.',
+                hint: 'An administrator needs to install Playwright and enable the browser tool.',
+                action: new SetupAction(
+                    label: __('Ask Lara to set up browser'),
+                    suggestedPrompt: 'Help me set up the browser tool. Playwright may not be installed '
+                        .'or the browser tool may be disabled in the configuration. '
+                        .'Please diagnose and fix the issue.',
+                ),
+            );
         }
 
         return match ($action) {
@@ -176,13 +192,13 @@ class BrowserTool extends AbstractActionTool
     /**
      * @param  array<string, mixed>  $arguments
      */
-    private function handleNavigation(string $action, string $status, array $arguments): string
+    private function handleNavigation(string $action, string $status, array $arguments): ToolResult
     {
         $url = $this->requireString($arguments, 'url');
         $ssrfCheck = $this->ssrfGuard->validate($url);
 
         if ($ssrfCheck !== true) {
-            return self::ERROR_PREFIX.$ssrfCheck;
+            return ToolResult::error($ssrfCheck, 'ssrf_blocked');
         }
 
         $payload = [
@@ -202,7 +218,7 @@ class BrowserTool extends AbstractActionTool
             $payload['tab_id'] = '';
         }
 
-        return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        return ToolResult::success(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -212,11 +228,11 @@ class BrowserTool extends AbstractActionTool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    private function handleSnapshot(array $arguments): string
+    private function handleSnapshot(array $arguments): ToolResult
     {
         $format = $this->requireEnum($arguments, 'format', ['ai', 'aria'], 'ai');
 
-        return json_encode([
+        return ToolResult::success(json_encode([
             'action' => 'snapshot',
             'format' => $format,
             'interactive' => $this->optionalBool($arguments, 'interactive', true),
@@ -224,7 +240,7 @@ class BrowserTool extends AbstractActionTool
             'content' => '',
             'status' => 'captured',
             'message' => 'Snapshot captured (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -234,9 +250,9 @@ class BrowserTool extends AbstractActionTool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    private function handleScreenshot(array $arguments): string
+    private function handleScreenshot(array $arguments): ToolResult
     {
-        return json_encode([
+        return ToolResult::success(json_encode([
             'action' => 'screenshot',
             'full_page' => $this->optionalBool($arguments, 'full_page'),
             'ref' => $this->optionalString($arguments, 'ref'),
@@ -244,7 +260,7 @@ class BrowserTool extends AbstractActionTool
             'image_base64' => '',
             'status' => 'captured',
             'message' => 'Screenshot captured (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -254,9 +270,9 @@ class BrowserTool extends AbstractActionTool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    private function handleAct(array $arguments): string
+    private function handleAct(array $arguments): ToolResult
     {
-        return json_encode([
+        return ToolResult::success(json_encode([
             'action' => 'act',
             'kind' => $this->requireEnum($arguments, 'kind', self::ACT_KINDS),
             'ref' => $this->requireString($arguments, 'ref'),
@@ -264,7 +280,7 @@ class BrowserTool extends AbstractActionTool
             'submit' => $this->optionalBool($arguments, 'submit'),
             'status' => 'performed',
             'message' => 'Action performed (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -272,14 +288,14 @@ class BrowserTool extends AbstractActionTool
      *
      * Lists all open browser tabs.
      */
-    private function handleTabs(): string
+    private function handleTabs(): ToolResult
     {
-        return json_encode([
+        return ToolResult::success(json_encode([
             'action' => 'tabs',
             'tabs' => [],
             'status' => 'listed',
             'message' => 'Tabs listed (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -289,14 +305,14 @@ class BrowserTool extends AbstractActionTool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    private function handleClose(array $arguments): string
+    private function handleClose(array $arguments): ToolResult
     {
-        return json_encode([
+        return ToolResult::success(json_encode([
             'action' => 'close',
             'tab_id' => $this->requireString($arguments, 'tab_id'),
             'status' => 'closed',
             'message' => 'Tab closed (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -307,21 +323,31 @@ class BrowserTool extends AbstractActionTool
      * This is a high-trust action with a separate authz capability.
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
+     *
+     * @throws ToolUnavailableException If JS evaluation is disabled
      */
-    private function handleEvaluate(array $arguments): string
+    private function handleEvaluate(array $arguments): ToolResult
     {
         if (! config('ai.tools.browser.evaluate_enabled', false)) {
-            return self::ERROR_PREFIX.'JavaScript evaluation is disabled. '
-                .'An administrator must enable it via config("ai.tools.browser.evaluate_enabled").';
+            throw new ToolUnavailableException(
+                errorCode: 'browser_evaluate_disabled',
+                message: 'JavaScript evaluation is disabled.',
+                hint: 'An administrator must enable it via config("ai.tools.browser.evaluate_enabled").',
+                action: new SetupAction(
+                    label: __('Ask Lara to enable JS evaluation'),
+                    suggestedPrompt: 'Help me enable JavaScript evaluation in the browser tool. '
+                        .'The config key ai.tools.browser.evaluate_enabled needs to be set to true.',
+                ),
+            );
         }
 
-        return json_encode([
+        return ToolResult::success(json_encode([
             'action' => 'evaluate',
             'script' => $this->requireString($arguments, 'script'),
             'result' => null,
             'status' => 'evaluated',
             'message' => 'Script evaluated (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -329,14 +355,14 @@ class BrowserTool extends AbstractActionTool
      *
      * Exports the current page as a PDF document.
      */
-    private function handlePdf(): string
+    private function handlePdf(): ToolResult
     {
-        return json_encode([
+        return ToolResult::success(json_encode([
             'action' => 'pdf',
             'path' => '',
             'status' => 'exported',
             'message' => 'PDF exported (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -346,7 +372,7 @@ class BrowserTool extends AbstractActionTool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    private function handleCookies(array $arguments): string
+    private function handleCookies(array $arguments): ToolResult
     {
         $cookieAction = $this->requireEnum($arguments, 'cookie_action', self::COOKIE_ACTIONS);
         $payload = [
@@ -380,7 +406,7 @@ class BrowserTool extends AbstractActionTool
             $payload['message'] = 'Cookies cleared (stub). Playwright integration pending.';
         }
 
-        return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        return ToolResult::success(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -390,7 +416,7 @@ class BrowserTool extends AbstractActionTool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    private function handleWait(array $arguments): string
+    private function handleWait(array $arguments): ToolResult
     {
         $text = $this->optionalString($arguments, 'text');
         $selector = $this->optionalString($arguments, 'selector');
@@ -402,7 +428,7 @@ class BrowserTool extends AbstractActionTool
             );
         }
 
-        return json_encode([
+        return ToolResult::success(json_encode([
             'action' => 'wait',
             'text' => $text,
             'selector' => $selector,
@@ -410,6 +436,6 @@ class BrowserTool extends AbstractActionTool
             'timeout_ms' => $this->optionalInt($arguments, 'timeout_ms', 5000, 100),
             'status' => 'waited',
             'message' => 'Wait completed (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 }

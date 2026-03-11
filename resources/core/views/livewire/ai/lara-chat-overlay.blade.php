@@ -4,7 +4,7 @@
 
 /** @var \App\Modules\Core\AI\Livewire\LaraChatOverlay $this */
 ?>
-<div class="h-full flex flex-col" x-data @lara-focus-composer.window="$nextTick(() => $refs.laraComposer?.focus())">
+<div class="h-full flex flex-col" x-data @lara-focus-composer.window="$nextTick(() => $refs.laraComposer?.focus())" @lara-chat-opened.window="if ($event.detail?.prompt) { $wire.set('messageInput', $event.detail.prompt); $nextTick(() => $refs.laraComposer?.focus()); }">
     <div class="h-11 px-4 border-b border-border-default bg-surface-bar flex items-center justify-between shrink-0">
         <div class="flex items-center gap-2">
             <x-ai.lara-identity :status="$laraActivated ? 'online' : null" />

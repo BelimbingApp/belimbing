@@ -3,6 +3,7 @@
 namespace Tests\Support;
 
 use App\Base\AI\Contracts\Tool;
+use App\Base\AI\Tools\ToolResult;
 
 trait AssertsToolBehavior
 {
@@ -32,7 +33,7 @@ trait AssertsToolBehavior
 
     protected function assertToolError(array $arguments, string ...$expectedFragments): string
     {
-        $result = $this->tool->execute($arguments);
+        $result = (string) $this->tool->execute($arguments);
 
         expect($result)->toContain('Error');
 
@@ -54,7 +55,7 @@ trait AssertsToolBehavior
 
     protected function decodeToolExecution(array $arguments): array
     {
-        return $this->decodeToolResult($this->tool->execute($arguments));
+        return $this->decodeToolResult((string) $this->tool->execute($arguments));
     }
 
     protected function assertToolExecutionStatus(array $arguments, string $expectedStatus): array
@@ -66,9 +67,9 @@ trait AssertsToolBehavior
         return $data;
     }
 
-    protected function decodeToolResult(string $result): array
+    protected function decodeToolResult(ToolResult|string $result): array
     {
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data)->toBeArray();
 

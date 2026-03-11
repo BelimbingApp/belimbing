@@ -46,7 +46,7 @@ describe('input validation', function () {
 
     it('rejects non-string path', function () {
         $result = $this->tool->execute(['path' => 42, 'prompt' => IMAGE_ANALYSIS_PROMPT]);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('rejects prompt exceeding max length', function () {
@@ -54,8 +54,8 @@ describe('input validation', function () {
             'path' => IMAGE_ANALYSIS_PATH,
             'prompt' => str_repeat('x', 5001),
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('exceed');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('exceed');
     });
 
     it('rejects unsupported image extension', function () {
@@ -63,8 +63,8 @@ describe('input validation', function () {
             'path' => '/images/photo.bmp',
             'prompt' => IMAGE_ANALYSIS_GENERIC_PROMPT,
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('Unsupported');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('Unsupported');
     });
 
     it('rejects unsupported extension with uppercase', function () {
@@ -72,7 +72,7 @@ describe('input validation', function () {
             'path' => '/images/photo.BMP',
             'prompt' => IMAGE_ANALYSIS_GENERIC_PROMPT,
         ]);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('rejects file with no extension', function () {
@@ -80,7 +80,7 @@ describe('input validation', function () {
             'path' => '/images/photo',
             'prompt' => 'Describe this',
         ]);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 });
 

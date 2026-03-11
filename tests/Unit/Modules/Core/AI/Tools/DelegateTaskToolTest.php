@@ -40,8 +40,8 @@ describe('input validation', function () {
 
     it('rejects task exceeding max length', function () {
         $result = $this->tool->execute(['task' => str_repeat('x', 5001)]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('maximum length');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('maximum length');
     });
 
     it('accepts task at max length', function () {
@@ -62,7 +62,7 @@ describe('input validation', function () {
             'worker_id' => 1,
         ]);
 
-        expect($result)->toContain(DISPATCH_SUCCESS);
+        expect((string) $result)->toContain(DISPATCH_SUCCESS);
     });
 });
 
@@ -83,12 +83,12 @@ describe('dispatch with explicit worker_id', function () {
 
         $result = $this->tool->execute(['task' => ANALYZE_SALES_DATA, 'worker_id' => 42]);
 
-        expect($result)->toContain(DISPATCH_SUCCESS)
-            ->and($result)->toContain('dw_dispatch_test123')
-            ->and($result)->toContain('Data Analyst')
-            ->and($result)->toContain('ID: 42')
-            ->and($result)->toContain(ANALYZE_SALES_DATA)
-            ->and($result)->toContain('delegation_status');
+        expect((string) $result)->toContain(DISPATCH_SUCCESS)
+            ->and((string) $result)->toContain('dw_dispatch_test123')
+            ->and((string) $result)->toContain('Data Analyst')
+            ->and((string) $result)->toContain('ID: 42')
+            ->and((string) $result)->toContain(ANALYZE_SALES_DATA)
+            ->and((string) $result)->toContain('delegation_status');
     });
 
     it('returns error when dispatcher throws authorization exception', function () {
@@ -98,8 +98,8 @@ describe('dispatch with explicit worker_id', function () {
 
         $result = $this->tool->execute(['task' => 'Test task', 'worker_id' => 999]);
 
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('Unauthorized');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('Unauthorized');
     });
 });
 
@@ -130,8 +130,8 @@ describe('dispatch with auto-matching', function () {
 
         $result = $this->tool->execute(['task' => GENERATE_MONTHLY_REPORT]);
 
-        expect($result)->toContain(DISPATCH_SUCCESS)
-            ->and($result)->toContain(REPORT_GENERATOR);
+        expect((string) $result)->toContain(DISPATCH_SUCCESS)
+            ->and((string) $result)->toContain(REPORT_GENERATOR);
     });
 
     it('returns error when no worker matches the task', function () {
@@ -141,8 +141,8 @@ describe('dispatch with auto-matching', function () {
 
         $result = $this->tool->execute(['task' => 'Something obscure']);
 
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('No suitable Digital Worker');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('No suitable Digital Worker');
     });
 });
 
@@ -162,10 +162,10 @@ describe('output format', function () {
 
         $result = $this->tool->execute(['task' => 'Do something', 'worker_id' => 1]);
 
-        expect($result)->toContain('**Dispatch ID:**')
-            ->and($result)->toContain('**Status:**')
-            ->and($result)->toContain('**Assigned to:**')
-            ->and($result)->toContain('**Task:**')
-            ->and($result)->toContain('**Created:**');
+        expect((string) $result)->toContain('**Dispatch ID:**')
+            ->and((string) $result)->toContain('**Status:**')
+            ->and((string) $result)->toContain('**Assigned to:**')
+            ->and((string) $result)->toContain('**Task:**')
+            ->and((string) $result)->toContain('**Created:**');
     });
 });

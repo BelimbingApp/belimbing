@@ -10,7 +10,7 @@ uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
 
 beforeEach(function () {
     $this->tool = new WebFetchTool;
-    $this->executeTool = fn (array $arguments): string => $this->tool->execute($arguments);
+    $this->executeTool = fn (array $arguments): string => (string) $this->tool->execute($arguments);
     $this->fakeHttpResponse = function (
         string $body,
         array $arguments = [],
@@ -21,7 +21,7 @@ beforeEach(function () {
             '*' => Http::response($body, $status, ['Content-Type' => $contentType]),
         ]);
 
-        return $this->tool->execute(array_merge([
+        return (string) $this->tool->execute(array_merge([
             'url' => 'http://example.com/page',
         ], $arguments));
     };

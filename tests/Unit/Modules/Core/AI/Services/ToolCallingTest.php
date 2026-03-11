@@ -6,6 +6,7 @@
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
+use App\Base\AI\Tools\ToolResult;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\Enums\AuthorizationReasonCode;
@@ -90,9 +91,9 @@ function makeSimpleTool(string $name, ?string $capability = null): Tool
             return ToolRiskClass::READ_ONLY;
         }
 
-        public function execute(array $arguments): string
+        public function execute(array $arguments): ToolResult
         {
-            return 'executed:'.$this->toolName.':'.(string) ($arguments['input'] ?? 'no-input');
+            return ToolResult::success('executed:'.$this->toolName.':'.(string) ($arguments['input'] ?? 'no-input'));
         }
     };
 }
@@ -122,7 +123,7 @@ describe('DigitalWorkerToolRegistry', function () {
 
         $result = $registry->execute('echo', ['input' => 'hello']);
 
-        expect($result)->toBe('executed:echo:hello');
+        expect((string) $result)->toBe('executed:echo:hello');
     });
 
     it('returns error for unknown tool', function () {
@@ -130,7 +131,8 @@ describe('DigitalWorkerToolRegistry', function () {
 
         $result = $registry->execute('nonexistent', []);
 
-        expect($result)->toContain('Error: Unknown tool');
+        expect((string) $result)->toContain('Error: Unknown tool');
+        expect($result->isError)->toBeTrue();
     });
 
     it('filters tools by user authz capabilities', function () {
@@ -151,7 +153,7 @@ describe('DigitalWorkerToolRegistry', function () {
 
         $result = $registry->execute('restricted', ['input' => 'test']);
 
-        expect($result)->toContain('do not have permission');
+        expect((string) $result)->toContain('do not have permission');
     });
 
     it('catches exceptions during tool execution', function () {
@@ -187,7 +189,7 @@ describe('DigitalWorkerToolRegistry', function () {
                 return ToolRiskClass::READ_ONLY;
             }
 
-            public function execute(array $arguments): string
+            public function execute(array $arguments): ToolResult
             {
                 throw new ToolExecutionFailure('Boom!');
             }
@@ -198,8 +200,8 @@ describe('DigitalWorkerToolRegistry', function () {
 
         $result = $registry->execute('fails', []);
 
-        expect($result)->toContain('Error executing "fails"');
-        expect($result)->toContain('Boom!');
+        expect((string) $result)->toContain('Error executing "fails"');
+        expect((string) $result)->toContain('Boom!');
     });
 });
 
@@ -214,8 +216,8 @@ describe('ArtisanTool', function () {
     it('returns error for empty command', function () {
         $tool = new ArtisanTool;
 
-        expect($tool->execute([]))->toContain(NO_COMMAND_PROVIDED);
-        expect($tool->execute(['command' => '']))->toContain(NO_COMMAND_PROVIDED);
+        expect((string) $tool->execute([]))->toContain(NO_COMMAND_PROVIDED);
+        expect((string) $tool->execute(['command' => '']))->toContain(NO_COMMAND_PROVIDED);
     });
 
     it('strips php artisan prefix if LLM included it', function () {
@@ -224,7 +226,7 @@ describe('ArtisanTool', function () {
         // This will run 'php artisan list' — should work without error
         $result = $tool->execute(['command' => 'php artisan list --raw']);
 
-        expect($result)->not->toContain('Error');
+        expect((string) $result)->not->toContain('Error');
     });
 });
 
@@ -241,23 +243,23 @@ describe('NavigateTool', function () {
 
         $result = $tool->execute(['url' => '/admin/users']);
 
-        expect($result)->toContain('<lara-action>');
-        expect($result)->toContain("Livewire.navigate('/admin/users')");
-        expect($result)->toContain('Navigation initiated');
+        expect((string) $result)->toContain('<lara-action>');
+        expect((string) $result)->toContain("Livewire.navigate('/admin/users')");
+        expect((string) $result)->toContain('Navigation initiated');
     });
 
     it('rejects URLs not starting with slash', function () {
         $tool = new NavigateTool;
 
-        expect($tool->execute(['url' => 'admin/users']))->toContain('Error');
-        expect($tool->execute(['url' => 'https://evil.com']))->toContain('Error');
+        expect((string) $tool->execute(['url' => 'admin/users']))->toContain('Error');
+        expect((string) $tool->execute(['url' => 'https://evil.com']))->toContain('Error');
     });
 
     it('rejects URLs with invalid characters', function () {
         $tool = new NavigateTool;
 
-        expect($tool->execute(['url' => '/admin/<script>']))->toContain('Error');
-        expect($tool->execute(['url' => "/admin/users' OR 1=1"]))->toContain('Error');
+        expect((string) $tool->execute(['url' => '/admin/<script>']))->toContain('Error');
+        expect((string) $tool->execute(['url' => "/admin/users' OR 1=1"]))->toContain('Error');
     });
 });
 
@@ -272,8 +274,8 @@ describe('BashTool', function () {
     it('returns error for empty command', function () {
         $tool = new BashTool;
 
-        expect($tool->execute([]))->toContain(NO_COMMAND_PROVIDED);
-        expect($tool->execute(['command' => '']))->toContain(NO_COMMAND_PROVIDED);
+        expect((string) $tool->execute([]))->toContain(NO_COMMAND_PROVIDED);
+        expect((string) $tool->execute(['command' => '']))->toContain(NO_COMMAND_PROVIDED);
     });
 
     it('executes a simple command successfully', function () {
@@ -281,7 +283,7 @@ describe('BashTool', function () {
 
         $result = $tool->execute(['command' => 'echo hello-bash-tool']);
 
-        expect($result)->toBe('hello-bash-tool');
+        expect((string) $result)->toBe('hello-bash-tool');
     });
 
     it('returns failure message for bad command', function () {
@@ -289,7 +291,7 @@ describe('BashTool', function () {
 
         $result = $tool->execute(['command' => 'cat /nonexistent/file/path']);
 
-        expect($result)->toContain('Command failed');
+        expect((string) $result)->toContain('Command failed');
     });
 
     it('returns success message when command produces no output', function () {
@@ -297,7 +299,7 @@ describe('BashTool', function () {
 
         $result = $tool->execute(['command' => 'true']);
 
-        expect($result)->toBe('Command completed successfully (no output).');
+        expect((string) $result)->toBe('Command completed successfully (no output).');
     });
 });
 
@@ -318,9 +320,9 @@ describe('DelegateTaskTool', function () {
             Mockery::mock(LaraCapabilityMatcher::class),
         );
 
-        expect($tool->execute([]))->toContain(NO_TASK_DESCRIPTION_PROVIDED);
-        expect($tool->execute(['task' => '']))->toContain(NO_TASK_DESCRIPTION_PROVIDED);
-        expect($tool->execute(['task' => '   ']))->toContain(NO_TASK_DESCRIPTION_PROVIDED);
+        expect((string) $tool->execute([]))->toContain(NO_TASK_DESCRIPTION_PROVIDED);
+        expect((string) $tool->execute(['task' => '']))->toContain(NO_TASK_DESCRIPTION_PROVIDED);
+        expect((string) $tool->execute(['task' => '   ']))->toContain(NO_TASK_DESCRIPTION_PROVIDED);
     });
 
     it('returns error when no worker is available', function () {
@@ -331,8 +333,8 @@ describe('DelegateTaskTool', function () {
 
         $result = $tool->execute(['task' => 'Generate a report']);
 
-        expect($result)->toContain('Error');
-        expect($result)->toContain('No suitable Digital Worker');
+        expect((string) $result)->toContain('Error');
+        expect((string) $result)->toContain('No suitable Digital Worker');
     });
 
     it('dispatches task to best matching worker when no worker_id is given', function () {
@@ -358,8 +360,8 @@ describe('DelegateTaskTool', function () {
 
         $result = $tool->execute(['task' => GENERATE_Q1_REPORT]);
 
-        expect($result)->toContain(REPORT_BOT);
-        expect($result)->toContain('dw_dispatch_abc123');
+        expect((string) $result)->toContain(REPORT_BOT);
+        expect((string) $result)->toContain('dw_dispatch_abc123');
     });
 
     it('dispatches to a specific worker when worker_id is given', function () {
@@ -385,8 +387,8 @@ describe('DelegateTaskTool', function () {
 
         $result = $tool->execute(['task' => 'Run analytics', 'worker_id' => 7]);
 
-        expect($result)->toContain(DATA_ANALYST);
-        expect($result)->toContain('dw_dispatch_xyz');
+        expect((string) $result)->toContain(DATA_ANALYST);
+        expect((string) $result)->toContain('dw_dispatch_xyz');
     });
 
     it('returns error when dispatcher throws', function () {
@@ -405,8 +407,8 @@ describe('DelegateTaskTool', function () {
 
         $result = $tool->execute(['task' => 'some task']);
 
-        expect($result)->toContain('Error');
-        expect($result)->toContain('Dispatch unavailable');
+        expect((string) $result)->toContain('Error');
+        expect((string) $result)->toContain('Dispatch unavailable');
     });
 });
 
@@ -421,9 +423,9 @@ describe('DocumentAnalysisTool', function () {
     it('returns error for empty or missing path', function () {
         $tool = new DocumentAnalysisTool;
 
-        expect($tool->execute([]))->toContain(PATH_REQUIRED_ERROR);
-        expect($tool->execute(['path' => '']))->toContain(PATH_REQUIRED_ERROR);
-        expect($tool->execute(['path' => '   ']))->toContain(PATH_REQUIRED_ERROR);
+        expect((string) $tool->execute([]))->toContain(PATH_REQUIRED_ERROR);
+        expect((string) $tool->execute(['path' => '']))->toContain(PATH_REQUIRED_ERROR);
+        expect((string) $tool->execute(['path' => '   ']))->toContain(PATH_REQUIRED_ERROR);
     });
 
     it('returns structured payload for a valid request', function () {
@@ -434,9 +436,9 @@ describe('DocumentAnalysisTool', function () {
             'prompt' => 'Summarize this document.',
         ]);
 
-        expect($result)->toContain('"action": "document_analysis"');
-        expect($result)->toContain('"path": "README.md"');
-        expect($result)->toContain('"prompt": "Summarize this document."');
+        expect((string) $result)->toContain('"action": "document_analysis"');
+        expect((string) $result)->toContain('"path": "README.md"');
+        expect((string) $result)->toContain('"prompt": "Summarize this document."');
     });
 
     it('returns error for a path that does not exist', function () {
@@ -447,7 +449,7 @@ describe('DocumentAnalysisTool', function () {
             'prompt' => 'Summarize this document.',
         ]);
 
-        expect($result)->toContain('"path": "non-existent-file-xyz.txt"');
+        expect((string) $result)->toContain('"path": "non-existent-file-xyz.txt"');
     });
 
     it('returns error for missing prompt', function () {
@@ -455,7 +457,7 @@ describe('DocumentAnalysisTool', function () {
 
         $result = $tool->execute(['path' => 'README.md']);
 
-        expect($result)->toContain('No prompt provided');
+        expect((string) $result)->toContain('No prompt provided');
     });
 
     it('returns file content and header for a created temp file', function () {
@@ -470,8 +472,8 @@ describe('DocumentAnalysisTool', function () {
 
         @unlink($tmpPath);
 
-        expect($result)->toContain('"path": "storage/app/test_doc_analysis_tool.txt"');
-        expect($result)->toContain('"prompt": "Summarize this document."');
+        expect((string) $result)->toContain('"path": "storage/app/test_doc_analysis_tool.txt"');
+        expect((string) $result)->toContain('"prompt": "Summarize this document."');
     });
 });
 
@@ -486,9 +488,9 @@ describe('ImageAnalysisTool', function () {
     it('returns error for empty or missing path', function () {
         $tool = new ImageAnalysisTool;
 
-        expect($tool->execute([]))->toContain(PATH_REQUIRED_ERROR);
-        expect($tool->execute(['path' => '']))->toContain(PATH_REQUIRED_ERROR);
-        expect($tool->execute(['path' => '   ']))->toContain(PATH_REQUIRED_ERROR);
+        expect((string) $tool->execute([]))->toContain(PATH_REQUIRED_ERROR);
+        expect((string) $tool->execute(['path' => '']))->toContain(PATH_REQUIRED_ERROR);
+        expect((string) $tool->execute(['path' => '   ']))->toContain(PATH_REQUIRED_ERROR);
     });
 
     it('returns error for a path that does not exist', function () {
@@ -499,7 +501,7 @@ describe('ImageAnalysisTool', function () {
             'prompt' => 'Describe this image.',
         ]);
 
-        expect($result)->toContain('"path": "non-existent-image-xyz.png"');
+        expect((string) $result)->toContain('"path": "non-existent-image-xyz.png"');
     });
 
     it('returns error for an unsupported file type', function () {
@@ -511,7 +513,7 @@ describe('ImageAnalysisTool', function () {
             'prompt' => 'Describe this image.',
         ]);
 
-        expect($result)->toContain('Unsupported image format');
+        expect((string) $result)->toContain('Unsupported image format');
     });
 
     it('returns metadata for a valid PNG image', function () {
@@ -530,8 +532,8 @@ describe('ImageAnalysisTool', function () {
 
         @unlink($tmpPath);
 
-        expect($result)->toContain('"action": "image_analysis"');
-        expect($result)->toContain('"path": "storage/app/test_image_analysis_tool.png"');
-        expect($result)->toContain('"prompt": "Describe this image."');
+        expect((string) $result)->toContain('"action": "image_analysis"');
+        expect((string) $result)->toContain('"path": "storage/app/test_image_analysis_tool.png"');
+        expect((string) $result)->toContain('"prompt": "Describe this image."');
     });
 });

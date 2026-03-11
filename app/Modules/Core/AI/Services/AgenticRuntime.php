@@ -209,9 +209,13 @@ class AgenticRuntime
     /**
      * Execute a single tool call and format the follow-up metadata.
      *
+     * Receives a ToolResult from the registry and casts to string for the
+     * LLM tool message. Structured error data is preserved in the action
+     * metadata for downstream UI consumption.
+     *
      * @param  array<string, mixed>  $toolCall
      * @return array{
-     *     action: array{tool: string, arguments: array<string, mixed>, result_preview: string},
+     *     action: array{tool: string, arguments: array<string, mixed>, result_preview: string, error_payload?: array<string, mixed>},
      *     client_actions: list<string>,
      *     message: array{role: string, tool_call_id: string, content: string}
      * }
@@ -222,18 +226,41 @@ class AgenticRuntime
         $arguments = $this->decodeToolArguments($toolCall);
         $toolCallId = (string) ($toolCall['id'] ?? '');
         $toolResult = $this->toolRegistry->execute($functionName, $arguments);
+        $resultString = (string) $toolResult;
+
+        $action = [
+            'tool' => $functionName,
+            'arguments' => $arguments,
+            'result_preview' => Str::limit($resultString, 200),
+        ];
+
+        if ($toolResult->isError && $toolResult->errorPayload !== null) {
+            $errorData = [
+                'code' => $toolResult->errorPayload->code,
+                'message' => $toolResult->errorPayload->message,
+            ];
+
+            if ($toolResult->errorPayload->hint !== null) {
+                $errorData['hint'] = $toolResult->errorPayload->hint;
+            }
+
+            if ($toolResult->errorPayload->action !== null) {
+                $errorData['setup_action'] = [
+                    'label' => $toolResult->errorPayload->action->label,
+                    'suggested_prompt' => $toolResult->errorPayload->action->suggestedPrompt,
+                ];
+            }
+
+            $action['error_payload'] = $errorData;
+        }
 
         return [
-            'action' => [
-                'tool' => $functionName,
-                'arguments' => $arguments,
-                'result_preview' => Str::limit($toolResult, 200),
-            ],
-            'client_actions' => $this->extractClientActions($toolResult),
+            'action' => $action,
+            'client_actions' => $this->extractClientActions($resultString),
             'message' => [
                 'role' => 'tool',
                 'tool_call_id' => $toolCallId,
-                'content' => $toolResult,
+                'content' => $resultString,
             ],
         ];
     }

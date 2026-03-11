@@ -15,6 +15,10 @@ use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
  * argument extraction, and a schema builder API. Concrete tools implement
  * `handle()` with only their domain logic.
  *
+ * Error handling catches two exception types:
+ *  - ToolArgumentException    → ToolResult::error()      (bad LLM input)
+ *  - ToolUnavailableException → ToolResult::unavailable() (setup/infra problem)
+ *
  * Tools that do not fit this pattern can implement the `Tool` interface directly.
  */
 abstract class AbstractTool implements Tool
@@ -56,12 +60,19 @@ abstract class AbstractTool implements Tool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    final public function execute(array $arguments): string
+    final public function execute(array $arguments): ToolResult
     {
         try {
             return $this->handle($arguments);
         } catch (ToolArgumentException $e) {
-            return 'Error: '.$e->getMessage();
+            return ToolResult::error($e->getMessage());
+        } catch (ToolUnavailableException $e) {
+            return ToolResult::unavailable(
+                $e->errorCode,
+                $e->getMessage(),
+                $e->hint,
+                $e->action,
+            );
         }
     }
 
@@ -70,11 +81,12 @@ abstract class AbstractTool implements Tool
      *
      * Implement this instead of `execute()`. Throw `ToolArgumentException`
      * for input validation errors — they'll be caught and formatted by
-     * `execute()`. Other exceptions propagate to the registry's error handler.
+     * `execute()`. Throw `ToolUnavailableException` for infrastructure or
+     * setup problems. Other exceptions propagate to the registry's handler.
      *
      * @param  array<string, mixed>  $arguments  Parsed and validated arguments from LLM
      */
-    abstract protected function handle(array $arguments): string;
+    abstract protected function handle(array $arguments): ToolResult;
 
     // ─── Typed argument extractors ──────────────────────────────────
 

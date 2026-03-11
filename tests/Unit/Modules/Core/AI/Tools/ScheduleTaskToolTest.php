@@ -32,15 +32,15 @@ describe('input validation', function () {
 
     it('rejects invalid action', function () {
         $result = $this->tool->execute(['action' => 'bogus']);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('must be one of');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('must be one of');
     });
 });
 
 describe('list action', function () {
     it('returns task list with total', function () {
         $result = $this->tool->execute(['action' => 'list']);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data)->not->toBeNull()
             ->and($data)->toHaveKeys(['tasks', 'total', 'message']);
@@ -48,7 +48,7 @@ describe('list action', function () {
 
     it('returns empty tasks array', function () {
         $result = $this->tool->execute(['action' => 'list']);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data['tasks'])->toBe([])
             ->and($data['total'])->toBe(0);
@@ -74,8 +74,8 @@ describe('add action', function () {
             'cron_expression' => 'not valid',
         ]);
 
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('cron');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('cron');
     });
 
     it('accepts valid 5-field cron expression', function () {
@@ -84,7 +84,7 @@ describe('add action', function () {
             'description' => SCHEDULE_TEST_TASK,
             'cron_expression' => WEEKLY_CRON,
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data)->not->toBeNull()
             ->and($data['status'])->toBe('created')
@@ -98,7 +98,7 @@ describe('add action', function () {
             'cron_expression' => WEEKLY_CRON,
             'worker_id' => 42,
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data['worker_id'])->toBe(42);
     });
@@ -109,7 +109,7 @@ describe('add action', function () {
             'description' => SCHEDULE_TEST_TASK,
             'cron_expression' => WEEKLY_CRON,
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data['enabled'])->toBeTrue();
     });
@@ -121,7 +121,7 @@ describe('add action', function () {
             'cron_expression' => WEEKLY_CRON,
             'enabled' => false,
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data['enabled'])->toBeFalse();
     });
@@ -134,13 +134,13 @@ describe('update action', function () {
 
     it('rejects invalid task_id format', function () {
         $result = $this->tool->execute(['action' => 'update', 'task_id' => 'bad_id']);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('Invalid task_id');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('Invalid task_id');
     });
 
     it('accepts valid task_id', function () {
         $result = $this->tool->execute(['action' => 'update', 'task_id' => 'sched_abc123def456']);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data)->not->toBeNull()
             ->and($data['status'])->toBe('updated');
@@ -153,7 +153,7 @@ describe('update action', function () {
             'cron_expression' => 'bad',
         ]);
 
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 });
 
@@ -164,7 +164,7 @@ describe('remove action', function () {
 
     it('accepts valid task_id', function () {
         $result = $this->tool->execute(['action' => 'remove', 'task_id' => 'sched_abc123def456']);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data)->not->toBeNull()
             ->and($data['status'])->toBe('removed');
@@ -178,7 +178,7 @@ describe('status action', function () {
 
     it('returns status for valid task_id', function () {
         $result = $this->tool->execute(['action' => 'status', 'task_id' => 'sched_abc123def456']);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data)->not->toBeNull()
             ->and($data['status'])->toBe('unknown')
@@ -202,7 +202,7 @@ describe('cron expression validation', function () {
                 'description' => SCHEDULE_TEST_TASK,
                 'cron_expression' => $pattern,
             ]);
-            $data = json_decode($result, true);
+            $data = json_decode((string) $result, true);
 
             expect($data)->not->toBeNull("Failed for pattern: {$pattern}")
                 ->and($data['status'])->toBe('created', "Failed for pattern: {$pattern}");
@@ -216,7 +216,7 @@ describe('cron expression validation', function () {
             'cron_expression' => '* * *',
         ]);
 
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('rejects cron with letters', function () {
@@ -226,6 +226,6 @@ describe('cron expression validation', function () {
             'cron_expression' => 'a b c d e',
         ]);
 
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 });

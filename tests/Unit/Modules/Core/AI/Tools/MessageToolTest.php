@@ -112,8 +112,8 @@ describe('input validation', function () {
 
     it('lists available channels when channel unavailable', function () {
         $result = $this->tool->execute(['action' => 'send', 'channel' => 'discord']);
-        expect($result)->toContain('telegram')
-            ->and($result)->toContain('email');
+        expect((string) $result)->toContain('telegram')
+            ->and((string) $result)->toContain('email');
     });
 
     it('handles no registered channels gracefully', function () {
@@ -121,7 +121,7 @@ describe('input validation', function () {
         $tool = new MessageTool($emptyRegistry);
 
         $result = $tool->execute(['action' => 'send', 'channel' => 'whatsapp']);
-        expect($result)->toContain('No channels are configured');
+        expect((string) $result)->toContain('No channels are configured');
     });
 });
 
@@ -149,8 +149,8 @@ describe('send action', function () {
             'target' => TELEGRAM_TARGET,
             'text' => str_repeat('x', 50001),
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('50000');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('50000');
     });
 
     it('rejects text exceeding channel limit', function () {
@@ -160,8 +160,8 @@ describe('send action', function () {
             'target' => TELEGRAM_TARGET,
             'text' => str_repeat('x', 4097),
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('4096');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('4096');
     });
 
     it('sends successfully', function () {
@@ -256,8 +256,8 @@ describe('react action', function () {
             'message_id' => 'msg-123',
             'emoji' => '👍',
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('does not support reactions');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('does not support reactions');
     });
 });
 
@@ -282,8 +282,8 @@ describe('edit action', function () {
             'message_id' => 'msg-123',
             'text' => UPDATED_MESSAGE_TEXT,
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('does not support message editing');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('does not support message editing');
     });
 });
 
@@ -305,8 +305,8 @@ describe('delete action', function () {
             'channel' => 'email',
             'message_id' => 'msg-123',
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('does not support message deletion');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('does not support message deletion');
     });
 });
 
@@ -337,8 +337,8 @@ describe('poll action', function () {
             'question' => LUNCH_QUESTION,
             'options' => ['Pizza'],
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('at least 2');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('at least 2');
     });
 
     it('rejects more than 10 options', function () {
@@ -349,8 +349,8 @@ describe('poll action', function () {
             'question' => 'Pick one?',
             'options' => array_fill(0, 11, 'Option'),
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('10');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('10');
     });
 
     it('rejects empty option strings', function () {
@@ -361,8 +361,8 @@ describe('poll action', function () {
             'question' => LUNCH_QUESTION,
             'options' => ['Pizza', ''],
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('non-empty string');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('non-empty string');
     });
 
     it('creates poll successfully on supported channel', function () {
@@ -388,8 +388,8 @@ describe('poll action', function () {
             'question' => LUNCH_QUESTION,
             'options' => ['Pizza', 'Sushi'],
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('does not support polls');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('does not support polls');
     });
 });
 
@@ -481,8 +481,8 @@ describe('search action', function () {
             'channel' => 'nosearch',
             'query' => 'test',
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('does not support message search');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('does not support message search');
     });
 });
 
@@ -510,8 +510,8 @@ describe('channel adapter registry integration', function () {
             'action' => 'send',
             'channel' => 'unknown',
         ]);
-        expect($result)->toContain('telegram')
-            ->and($result)->toContain('email');
+        expect((string) $result)->toContain('telegram')
+            ->and((string) $result)->toContain('email');
     });
 
     it('routes to correct channel', function () {

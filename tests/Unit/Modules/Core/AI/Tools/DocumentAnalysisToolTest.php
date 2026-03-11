@@ -46,7 +46,7 @@ describe('input validation', function () {
 
     it('rejects non-string path', function () {
         $result = $this->tool->execute(['path' => 123, 'prompt' => DOCUMENT_ANALYSIS_PROMPT]);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('rejects prompt exceeding max length', function () {
@@ -54,8 +54,8 @@ describe('input validation', function () {
             'path' => DOCUMENT_ANALYSIS_PATH,
             'prompt' => str_repeat('x', 5001),
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('exceed');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('exceed');
     });
 
     it('rejects invalid pages format with letters', function () {
@@ -64,8 +64,8 @@ describe('input validation', function () {
             'prompt' => DOCUMENT_ANALYSIS_PROMPT,
             'pages' => 'abc',
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('pages');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('pages');
     });
 
     it('rejects invalid pages format with spaces', function () {
@@ -74,7 +74,7 @@ describe('input validation', function () {
             'prompt' => DOCUMENT_ANALYSIS_PROMPT,
             'pages' => '1 - 5',
         ]);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('rejects pages exceeding max length', function () {
@@ -83,8 +83,8 @@ describe('input validation', function () {
             'prompt' => DOCUMENT_ANALYSIS_PROMPT,
             'pages' => str_repeat('1,', 60).'1',
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('exceed');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('exceed');
     });
 
     it('ignores non-string pages', function () {
@@ -94,8 +94,8 @@ describe('input validation', function () {
             'pages' => 5,
         ]);
         // optionalString() treats non-string values as absent — no pages filter applied
-        expect($result)->not->toContain('Error')
-            ->and($result)->not->toContain('"pages"');
+        expect((string) $result)->not->toContain('Error')
+            ->and((string) $result)->not->toContain('"pages"');
     });
 });
 
@@ -163,7 +163,7 @@ describe('stub execution', function () {
             'prompt' => 'Summarize',
             'model' => 'claude-3-opus',
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data)->toHaveKey('model')
             ->and($data['model'])->toBe('claude-3-opus');
@@ -174,7 +174,7 @@ describe('stub execution', function () {
             'path' => DOCUMENT_ANALYSIS_PATH,
             'prompt' => 'Summarize',
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data)->not->toHaveKey('model');
     });
@@ -184,7 +184,7 @@ describe('stub execution', function () {
             'path' => DOCUMENT_ANALYSIS_PATH,
             'prompt' => 'Summarize',
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data['message'])->toContain('stub');
     });
@@ -194,7 +194,7 @@ describe('stub execution', function () {
             'path' => '  '.DOCUMENT_ANALYSIS_PATH.'  ',
             'prompt' => '  '.DOCUMENT_ANALYSIS_PROMPT.'  ',
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data['path'])->toBe(DOCUMENT_ANALYSIS_PATH)
             ->and($data['prompt'])->toBe(DOCUMENT_ANALYSIS_PROMPT);
@@ -206,7 +206,7 @@ describe('stub execution', function () {
             'prompt' => 'Summarize',
             'pages' => '  ',
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data)->not->toHaveKey('pages');
     });

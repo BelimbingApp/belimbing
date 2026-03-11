@@ -42,38 +42,38 @@ describe('input validation', function () {
 describe('search results', function () {
     it('finds matches for architecture topics', function () {
         $result = $this->tool->execute(['query' => 'architecture module']);
-        expect($result)->toContain('match');
+        expect((string) $result)->toContain('match');
     });
 
     it('finds matches for database topics', function () {
         $result = $this->tool->execute(['query' => 'database migration']);
-        expect($result)->toContain('match');
+        expect((string) $result)->toContain('match');
     });
 
     it('returns no matches for nonsense query', function () {
         $result = $this->tool->execute(['query' => 'xyzzy12345nonexistent']);
-        expect($result)->toContain('No matches');
+        expect((string) $result)->toContain('No matches');
     });
 
     it('respects max_results parameter', function () {
         $result = $this->tool->execute(['query' => 'the', 'max_results' => 3]);
 
-        expect($result)->not->toBeEmpty();
+        expect((string) $result)->not->toBeEmpty();
     });
 
     it('includes score in results', function () {
         $result = $this->tool->execute(['query' => 'authorization']);
-        expect($result)->toContain('[')
-            ->and($result)->toContain(']');
+        expect((string) $result)->toContain('[')
+            ->and((string) $result)->toContain(']');
     });
 
     it('includes section headings', function () {
         $result = $this->tool->execute(['query' => 'authorization']);
-        expect($result)->toContain('Section:');
+        expect((string) $result)->toContain('Section:');
     });
 
     it('includes file path in results', function () {
         $result = $this->tool->execute(['query' => 'authorization']);
-        expect($result)->toContain('docs/');
+        expect((string) $result)->toContain('docs/');
     });
 });

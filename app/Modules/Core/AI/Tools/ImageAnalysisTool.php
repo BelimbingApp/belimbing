@@ -10,6 +10,7 @@ use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
+use App\Base\AI\Tools\ToolResult;
 
 /**
  * Image analysis tool for Digital Workers.
@@ -77,7 +78,7 @@ class ImageAnalysisTool extends AbstractTool
         return 'ai.tool_image_analysis.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $path = $this->requireString($arguments, 'path');
         $prompt = $this->requireString($arguments, 'prompt');
@@ -101,12 +102,12 @@ class ImageAnalysisTool extends AbstractTool
             }
         }
 
-        return json_encode([
+        return ToolResult::success(json_encode([
             'action' => 'image_analysis',
             'path' => $path,
             'prompt' => $prompt,
             'status' => 'analyzed',
             'message' => 'Image analyzed (stub). Vision model integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 }

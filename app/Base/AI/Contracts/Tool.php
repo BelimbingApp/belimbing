@@ -7,6 +7,7 @@ namespace App\Base\AI\Contracts;
 
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
+use App\Base\AI\Tools\ToolResult;
 
 /**
  * Contract for AI tool implementations.
@@ -57,8 +58,11 @@ interface Tool
     /**
      * Execute the tool with the given arguments.
      *
+     * Returns a structured ToolResult that carries success/error state,
+     * optional error payload with remediation data, and a string
+     * representation for LLM consumption.
+     *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
-     * @return string Tool result (will be sent back to LLM as tool message content)
      */
-    public function execute(array $arguments): string;
+    public function execute(array $arguments): ToolResult;
 }

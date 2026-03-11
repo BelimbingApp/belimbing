@@ -10,6 +10,7 @@ use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
+use App\Base\AI\Tools\ToolResult;
 
 /**
  * Browser navigation tool for Digital Workers.
@@ -57,7 +58,7 @@ class NavigateTool extends AbstractTool
         return 'ai.tool_navigate.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $url = $this->requireString($arguments, 'url');
 
@@ -70,6 +71,6 @@ class NavigateTool extends AbstractTool
             throw new ToolArgumentException('URL contains invalid characters.');
         }
 
-        return '<lara-action>Livewire.navigate(\''.$url.'\')</lara-action>Navigation initiated to '.$url.'.';
+        return ToolResult::success('<lara-action>Livewire.navigate(\''.$url.'\')</lara-action>Navigation initiated to '.$url.'.');
     }
 }

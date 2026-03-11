@@ -10,6 +10,8 @@ use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Concerns\FormatsProcessResult;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
+use App\Base\AI\Tools\ToolArgumentException;
+use App\Base\AI\Tools\ToolResult;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -97,7 +99,7 @@ class ArtisanTool extends AbstractTool
         return 'ai.tool_artisan.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $command = $this->requireString($arguments, 'command');
 
@@ -105,13 +107,13 @@ class ArtisanTool extends AbstractTool
         $command = preg_replace('/^(php\s+)?artisan\s+/', '', $command) ?? $command;
 
         if ($command === '') {
-            throw new \App\Base\AI\Tools\ToolArgumentException('Empty command after parsing.');
+            throw new ToolArgumentException('Empty command after parsing.');
         }
 
         $background = $this->optionalBool($arguments, 'background');
 
         if ($background) {
-            return $this->executeBackground($command);
+            return ToolResult::success($this->executeBackground($command));
         }
 
         return $this->executeForeground($command, $arguments);
@@ -122,7 +124,7 @@ class ArtisanTool extends AbstractTool
      *
      * @param  array<string, mixed>  $arguments  Original arguments for timeout extraction
      */
-    private function executeForeground(string $command, array $arguments): string
+    private function executeForeground(string $command, array $arguments): ToolResult
     {
         $timeout = $this->optionalInt(
             $arguments,

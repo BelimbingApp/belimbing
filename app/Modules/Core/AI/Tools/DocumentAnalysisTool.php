@@ -10,6 +10,7 @@ use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
+use App\Base\AI\Tools\ToolResult;
 
 /**
  * Document analysis tool for Digital Workers.
@@ -89,7 +90,7 @@ class DocumentAnalysisTool extends AbstractTool
         return 'ai.tool_document_analysis.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $path = $this->requireString($arguments, 'path');
         $prompt = $this->requireString($arguments, 'prompt');
@@ -124,7 +125,7 @@ class DocumentAnalysisTool extends AbstractTool
         $data['status'] = 'analyzed';
         $data['message'] = 'Document analyzed (stub). PDF parser and LLM integration pending.';
 
-        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        return ToolResult::success(json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**

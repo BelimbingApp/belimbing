@@ -9,6 +9,8 @@ use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
+use App\Base\AI\Tools\ToolArgumentException;
+use App\Base\AI\Tools\ToolResult;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -107,22 +109,18 @@ class QueryDataTool extends AbstractTool
         return 'ai.tool_query_data.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $query = $this->requireString($arguments, 'query');
 
         // Remove trailing semicolons (prevents multi-statement injection)
         $query = rtrim($query, ';');
 
-        $response = $this->validateQuery($query);
+        $this->validateQuery($query);
 
         $limit = $this->optionalInt($arguments, 'limit', self::DEFAULT_LIMIT, min: 1, max: self::MAX_ROWS);
 
-        if ($response === null) {
-            $response = $this->runValidatedQuery($query, $limit);
-        }
-
-        return $response;
+        return $this->runValidatedQuery($query, $limit);
     }
 
     /**
@@ -131,18 +129,22 @@ class QueryDataTool extends AbstractTool
      * Checks are ordered to produce the most specific error message:
      * forbidden keywords first (names the offending operation), then
      * structural checks (multi-statement, must start with SELECT/WITH).
+     *
+     * @throws ToolArgumentException If the query is not a safe SELECT
      */
-    private function validateQuery(string $query): ?string
+    private function validateQuery(string $query): void
     {
         // Reject semicolons within the query (multi-statement)
         if (str_contains($query, ';')) {
-            return 'Error: Multiple statements are not allowed.';
+            throw new ToolArgumentException('Multiple statements are not allowed.');
         }
 
         // Scan for forbidden keywords at word boundaries
         foreach (self::FORBIDDEN_KEYWORDS as $keyword) {
             if (preg_match('/\b'.$keyword.'\b/i', $query)) {
-                return 'Error: '.$keyword.' operations are not allowed. Only SELECT queries are permitted.';
+                throw new ToolArgumentException(
+                    $keyword.' operations are not allowed. Only SELECT queries are permitted.'
+                );
             }
         }
 
@@ -150,10 +152,10 @@ class QueryDataTool extends AbstractTool
         $normalised = strtoupper(ltrim($query));
 
         if (! str_starts_with($normalised, 'SELECT') && ! str_starts_with($normalised, 'WITH')) {
-            return 'Error: Only SELECT queries are allowed. Your query must start with SELECT or WITH.';
+            throw new ToolArgumentException(
+                'Only SELECT queries are allowed. Your query must start with SELECT or WITH.'
+            );
         }
-
-        return null;
     }
 
     /**
@@ -167,7 +169,7 @@ class QueryDataTool extends AbstractTool
         return 'SELECT * FROM ('.$query.') AS _blb_limited LIMIT '.$limit;
     }
 
-    private function runValidatedQuery(string $query, int $limit): string
+    private function runValidatedQuery(string $query, int $limit): ToolResult
     {
         $limitedQuery = $this->applyLimit($query, $limit);
 
@@ -181,14 +183,16 @@ class QueryDataTool extends AbstractTool
             /** @var list<array<string, mixed>> $rows */
             $rows = $results->fetchAll(\PDO::FETCH_ASSOC);
         } catch (\PDOException $e) {
-            return 'Query error: '.$e->getMessage();
+            return ToolResult::error('Query error: '.$e->getMessage(), 'query_error');
         } catch (\Throwable $e) {
-            return 'Error: '.$e->getMessage();
+            return ToolResult::error($e->getMessage());
         }
 
-        return $rows === []
+        $content = $rows === []
             ? 'Query returned 0 rows.'
             : $this->formatResults($rows, $limit);
+
+        return ToolResult::success($content);
     }
 
     /**

@@ -10,6 +10,7 @@ use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
+use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 
@@ -79,7 +80,7 @@ class DelegateTaskTool extends AbstractTool
         return 'ai.tool_delegate.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $task = $this->requireString($arguments, 'task');
 
@@ -91,23 +92,23 @@ class DelegateTaskTool extends AbstractTool
 
         $workerId = $this->resolveWorkerId($arguments, $task);
 
-        $response = 'Error: No suitable Digital Worker found for this task. '
-            .'Use worker_list to see available workers, then specify a worker_id explicitly.';
-
         if ($workerId === null) {
-            return $response;
+            return ToolResult::error(
+                'No suitable Digital Worker found for this task. '
+                    .'Use worker_list to see available workers, then specify a worker_id explicitly.',
+                'no_worker_match',
+            );
         }
 
         try {
             $result = $this->dispatcher->dispatchForCurrentUser($workerId, $task);
-            $response = $this->formatDispatchResult($result);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
-            $response = 'Error: '.$e->getMessage();
-        } catch (\Throwable $e) {
-            $response = 'Error dispatching task: '.$e->getMessage();
-        }
 
-        return $response;
+            return ToolResult::success($this->formatDispatchResult($result));
+        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            return ToolResult::error($e->getMessage(), 'authorization_error');
+        } catch (\Throwable $e) {
+            return ToolResult::error('Dispatching task failed: '.$e->getMessage(), 'dispatch_error');
+        }
     }
 
     /**

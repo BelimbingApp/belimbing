@@ -45,12 +45,12 @@ describe('input validation', function () {
 
     it('rejects non-string command', function () {
         $result = $this->tool->execute(['command' => 42]);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('rejects whitespace-only command', function () {
         $result = $this->tool->execute(['command' => '   ']);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('strips php artisan prefix', function () {
@@ -59,7 +59,7 @@ describe('input validation', function () {
         ]);
 
         $result = $this->tool->execute(['command' => 'php artisan route:list']);
-        expect($result)->toBe(ROUTES_OUTPUT);
+        expect((string) $result)->toBe(ROUTES_OUTPUT);
     });
 
     it('strips artisan prefix without php', function () {
@@ -68,7 +68,7 @@ describe('input validation', function () {
         ]);
 
         $result = $this->tool->execute(['command' => 'artisan route:list']);
-        expect($result)->toBe(ROUTES_OUTPUT);
+        expect((string) $result)->toBe(ROUTES_OUTPUT);
     });
 
     it('rejects artisan-only command that becomes empty after parsing', function () {
@@ -81,7 +81,7 @@ describe('input validation', function () {
         ]);
 
         $result = $this->tool->execute(['command' => '  ']);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 });
 
@@ -92,7 +92,7 @@ describe('foreground execution', function () {
         ]);
 
         $result = $this->tool->execute(['command' => 'route:list']);
-        expect($result)->toBe('Routes listed');
+        expect((string) $result)->toBe('Routes listed');
     });
 
     it('returns error output on failure', function () {
@@ -105,8 +105,8 @@ describe('foreground execution', function () {
         ]);
 
         $result = $this->tool->execute(['command' => 'bad:command']);
-        expect($result)->toContain('failed')
-            ->and($result)->toContain(COMMAND_NOT_FOUND);
+        expect((string) $result)->toContain('failed')
+            ->and((string) $result)->toContain(COMMAND_NOT_FOUND);
     });
 
     it('returns success message for empty output', function () {
@@ -115,7 +115,7 @@ describe('foreground execution', function () {
         ]);
 
         $result = $this->tool->execute(['command' => 'cache:clear']);
-        expect($result)->toContain('successfully');
+        expect((string) $result)->toContain('successfully');
     });
 
     it('returns error output on failure with both outputs', function () {
@@ -128,9 +128,9 @@ describe('foreground execution', function () {
         ]);
 
         $result = $this->tool->execute(['command' => 'fail:cmd']);
-        expect($result)->toContain('failed')
-            ->and($result)->toContain('error details')
-            ->and($result)->toContain('partial output');
+        expect((string) $result)->toContain('failed')
+            ->and((string) $result)->toContain('error details')
+            ->and((string) $result)->toContain('partial output');
     });
 
     it('uses default timeout of 30 seconds', function () {
@@ -157,7 +157,7 @@ describe('timeout parameter', function () {
             'timeout' => 120,
         ]);
 
-        expect($result)->toBe('done');
+        expect((string) $result)->toBe('done');
     });
 
     it('clamps timeout to minimum of 1 second', function () {
@@ -170,7 +170,7 @@ describe('timeout parameter', function () {
             'timeout' => 0,
         ]);
 
-        expect($result)->toBe('done');
+        expect((string) $result)->toBe('done');
     });
 
     it('clamps timeout to maximum of 300 seconds', function () {
@@ -183,7 +183,7 @@ describe('timeout parameter', function () {
             'timeout' => 999,
         ]);
 
-        expect($result)->toBe('done');
+        expect((string) $result)->toBe('done');
     });
 
     it('falls back to default for non-integer timeout', function () {
@@ -196,7 +196,7 @@ describe('timeout parameter', function () {
             'timeout' => 'fast',
         ]);
 
-        expect($result)->toBe('done');
+        expect((string) $result)->toBe('done');
     });
 });
 
@@ -206,7 +206,7 @@ describe('background execution', function () {
             'command' => 'migrate',
             'background' => true,
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data)->not->toBeNull()
             ->and($data['status'])->toBe('dispatched')
@@ -219,7 +219,7 @@ describe('background execution', function () {
             'command' => 'migrate',
             'background' => true,
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data['message'])->toContain('stub')
             ->and($data['message'])->toContain('delegation_status');
@@ -240,8 +240,8 @@ describe('background execution', function () {
         $result1 = $this->tool->execute(['command' => 'cmd1', 'background' => true]);
         $result2 = $this->tool->execute(['command' => 'cmd2', 'background' => true]);
 
-        $data1 = json_decode($result1, true);
-        $data2 = json_decode($result2, true);
+        $data1 = json_decode((string) $result1, true);
+        $data2 = json_decode((string) $result2, true);
 
         expect($data1['dispatch_id'])->not->toBe($data2['dispatch_id']);
     });
@@ -251,7 +251,7 @@ describe('background execution', function () {
             'command' => 'php artisan migrate --seed',
             'background' => true,
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data['command'])->toBe('migrate --seed');
     });
@@ -262,7 +262,7 @@ describe('background execution', function () {
             'background' => true,
             'timeout' => 120,
         ]);
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data['status'])->toBe('dispatched');
     });
@@ -275,7 +275,7 @@ describe('output format', function () {
         ]);
 
         $result = $this->tool->execute(['command' => 'test:cmd']);
-        expect($result)->toBe('output with spaces');
+        expect((string) $result)->toBe('output with spaces');
     });
 
     it('prefers stdout over stderr for successful commands', function () {
@@ -287,7 +287,7 @@ describe('output format', function () {
         ]);
 
         $result = $this->tool->execute(['command' => 'test:cmd']);
-        expect($result)->toBe('stdout content');
+        expect((string) $result)->toBe('stdout content');
     });
 
     it('falls back to stderr when stdout is empty', function () {
@@ -299,7 +299,7 @@ describe('output format', function () {
         ]);
 
         $result = $this->tool->execute(['command' => 'test:cmd']);
-        expect($result)->toBe('stderr only');
+        expect((string) $result)->toBe('stderr only');
     });
 
     it('returns valid JSON for background execution', function () {
@@ -308,6 +308,6 @@ describe('output format', function () {
             'background' => true,
         ]);
 
-        expect(json_decode($result, true))->not->toBeNull();
+        expect(json_decode((string) $result, true))->not->toBeNull();
     });
 });

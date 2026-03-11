@@ -9,6 +9,7 @@ use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
+use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 
 /**
@@ -64,13 +65,15 @@ class WorkerListTool extends AbstractTool
         return 'ai.tool_worker_list.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $workers = $this->capabilityMatcher->discoverDelegableWorkersForCurrentUser();
 
         if ($workers === []) {
-            return 'No Digital Workers available for delegation. '
-                .'The current user has no accessible Digital Workers.';
+            return ToolResult::success(
+                'No Digital Workers available for delegation. '
+                    .'The current user has no accessible Digital Workers.'
+            );
         }
 
         $filter = $this->optionalString($arguments, 'capability_filter');
@@ -79,12 +82,14 @@ class WorkerListTool extends AbstractTool
             $workers = $this->filterWorkers($workers, $filter);
 
             if ($workers === []) {
-                return 'No Digital Workers match the filter "'.$filter.'". '
-                    .'Try again without a filter to see all available workers.';
+                return ToolResult::success(
+                    'No Digital Workers match the filter "'.$filter.'". '
+                        .'Try again without a filter to see all available workers.'
+                );
             }
         }
 
-        return $this->formatWorkerList($workers);
+        return ToolResult::success($this->formatWorkerList($workers));
     }
 
     /**

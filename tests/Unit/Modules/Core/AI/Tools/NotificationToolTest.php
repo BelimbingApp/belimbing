@@ -41,12 +41,12 @@ describe('input validation', function () {
 
     it('rejects invalid user_id type', function () {
         $result = $this->tool->execute(['user_id' => 'invalid', 'subject' => 'Test', 'body' => NOTIFICATION_TEST_BODY]);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('rejects negative user_id', function () {
         $result = $this->tool->execute(['user_id' => -1, 'subject' => 'Test', 'body' => NOTIFICATION_TEST_BODY]);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('rejects missing or empty required string fields', function (array $arguments, string $fragment) {
@@ -59,8 +59,8 @@ describe('input validation', function () {
             'subject' => str_repeat('x', 256),
             'body' => NOTIFICATION_TEST_BODY,
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('exceed');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('exceed');
     });
 
     it('rejects body exceeding max length', function () {
@@ -69,8 +69,8 @@ describe('input validation', function () {
             'subject' => 'Test',
             'body' => str_repeat('x', 5001),
         ]);
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('exceed');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('exceed');
     });
 
     it('rejects invalid channel', function () {
@@ -80,7 +80,7 @@ describe('input validation', function () {
             'body' => NOTIFICATION_TEST_BODY,
             'channel' => 'sms',
         ]);
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 
     it('defaults channel to database', function () {
@@ -100,8 +100,8 @@ describe('recipient resolution', function () {
             'body' => NOTIFICATION_TEST_BODY,
         ]);
 
-        expect($result)->toContain('Error')
-            ->and($result)->toContain('not found');
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('not found');
     });
 
     it('sends notification to specific user', function () {
@@ -128,7 +128,7 @@ describe('recipient resolution', function () {
             'body' => 'Message to everyone',
         ]);
 
-        expect($result)->toContain('Error');
+        expect((string) $result)->toContain('Error');
     });
 });
 
@@ -189,7 +189,7 @@ describe('notification sending', function () {
             'body' => 'Checking keys',
         ]);
 
-        $data = json_decode($result, true);
+        $data = json_decode((string) $result, true);
 
         expect($data)->toHaveKeys(['status', 'recipients', 'channel', 'subject', 'sent_at']);
     });

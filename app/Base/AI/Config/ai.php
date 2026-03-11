@@ -115,30 +115,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Tool Configuration
-    |--------------------------------------------------------------------------
-    |
-    | Per-tool settings. Tools read from config('ai.tools.*') as defaults;
-    | per-company overrides may be stored in `ai_tool_configs` (future).
-    |
-    */
-    'tools' => [
-        'browser' => [
-            'enabled' => env('AI_BROWSER_ENABLED', false),
-            'executable_path' => env('AI_BROWSER_PATH', null),
-            'headless' => true,
-            'max_contexts_per_company' => 3,
-            'context_idle_timeout_seconds' => 300,
-            'evaluate_enabled' => false,
-            'ssrf_policy' => [
-                'allow_private_network' => false,
-                'hostname_allowlist' => [],
-            ],
-        ],
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
     | Provider Overlay
     |--------------------------------------------------------------------------
     |

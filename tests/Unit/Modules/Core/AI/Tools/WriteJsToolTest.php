@@ -28,7 +28,7 @@ describe('input validation', function () {
     });
 
     it('rejects non-string script', function () {
-        $result = $this->tool->execute(['script' => 42, 'description' => 'Test']);
+        $result = (string) $this->tool->execute(['script' => 42, 'description' => 'Test']);
         expect($result)->toContain('Error');
     });
 
@@ -37,7 +37,7 @@ describe('input validation', function () {
     });
 
     it('rejects script exceeding max length', function () {
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'script' => str_repeat('x', 10001),
             'description' => 'Test',
         ]);
@@ -46,7 +46,7 @@ describe('input validation', function () {
     });
 
     it('rejects description exceeding max length', function () {
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'script' => 'console.log("hi")',
             'description' => str_repeat('x', 501),
         ]);
@@ -57,7 +57,7 @@ describe('input validation', function () {
 
 describe('security validation', function () {
     it('blocks unsafe script patterns', function (string $script, string $description) {
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'script' => $script,
             'description' => $description,
         ]);
@@ -77,7 +77,7 @@ describe('security validation', function () {
 
 describe('lara-action execution', function () {
     it('returns lara-action block with script', function () {
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'script' => 'console.log("hello")',
             'description' => 'Log a greeting',
         ]);
@@ -88,7 +88,7 @@ describe('lara-action execution', function () {
     });
 
     it('includes description in response text', function () {
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'script' => 'alert("hi")',
             'description' => 'Show an alert',
         ]);
@@ -97,7 +97,7 @@ describe('lara-action execution', function () {
     });
 
     it('follows NavigateTool lara-action pattern', function () {
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'script' => 'document.title = "New Title"',
             'description' => 'Change page title',
         ]);
@@ -109,7 +109,7 @@ describe('lara-action execution', function () {
 
     it('allows safe DOM manipulation', function () {
         $script = 'document.getElementById("app").classList.add("dark")';
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'script' => $script,
             'description' => 'Enable dark mode',
         ]);
@@ -121,7 +121,7 @@ describe('lara-action execution', function () {
 
     it('allows clipboard API', function () {
         $script = 'navigator.clipboard.writeText("copied text")';
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'script' => $script,
             'description' => 'Copy text to clipboard',
         ]);
@@ -132,7 +132,7 @@ describe('lara-action execution', function () {
 
     it('allows fetch API', function () {
         $script = 'fetch("/api/status").then(r => r.json())';
-        $result = $this->tool->execute([
+        $result = (string) $this->tool->execute([
             'script' => $script,
             'description' => 'Check API status',
         ]);

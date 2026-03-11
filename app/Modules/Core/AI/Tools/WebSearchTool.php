@@ -10,6 +10,7 @@ use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Services\WebSearchService;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
+use App\Base\AI\Tools\ToolResult;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -123,7 +124,7 @@ class WebSearchTool extends AbstractTool
         return 'ai.tool_web_search.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $query = $this->requireString($arguments, 'query', 'search query');
         $count = $this->optionalInt($arguments, 'count', self::DEFAULT_COUNT, min: 1, max: self::MAX_COUNT);
@@ -136,13 +137,19 @@ class WebSearchTool extends AbstractTool
         // Cache key only — not used for crypto; md5 is sufficient and more efficient.
         $cacheKey = 'lara_tool:web_search:'.md5($query.$count.$freshness);
 
-        return Cache::remember($cacheKey, $this->cacheTtlMinutes * 60, function () use ($query, $count, $freshness): string {
+        /** @var string $cached */
+        $cached = Cache::remember($cacheKey, $this->cacheTtlMinutes * 60, function () use ($query, $count, $freshness): string {
             return $this->performSearch($query, $count, $freshness);
         });
+
+        return ToolResult::success($cached);
     }
 
     /**
      * Dispatch to the appropriate provider and return formatted results.
+     *
+     * Returns a plain string for cache storage. The calling method wraps
+     * the cached string in ToolResult::success().
      */
     private function performSearch(string $query, int $count, ?string $freshness): string
     {

@@ -77,7 +77,7 @@
                                             wire:click="tryIt({{ $index }})"
                                             wire:loading.attr="disabled"
                                         >
-                                            <x-icon name="heroicon-o-play" class="w-4 h-4 mr-1" />
+                                            <x-icon name="heroicon-m-play" class="w-4 h-4" />
                                             {{ __('Run') }}
                                         </x-ui.button>
                                     </div>
@@ -98,9 +98,39 @@
                                         {{ __('Clear') }}
                                     </button>
                                 </div>
-                                <div class="rounded-lg bg-surface-subtle border border-border-default p-3 max-h-64 overflow-y-auto">
-                                    <pre class="text-xs text-ink whitespace-pre-wrap break-words font-mono">{{ $tryItResult }}</pre>
-                                </div>
+
+                                @if($tryItIsError)
+                                    {{-- Error result with structured display --}}
+                                    <div class="rounded-lg border border-status-danger-border bg-status-danger-subtle p-3 space-y-2">
+                                        <div class="flex items-start gap-2">
+                                            <x-icon name="heroicon-o-exclamation-triangle" class="w-4 h-4 text-status-danger shrink-0 mt-0.5" />
+                                            <pre class="text-xs text-ink whitespace-pre-wrap break-words font-mono flex-1">{{ $tryItResult }}</pre>
+                                        </div>
+
+                                        @if($tryItErrorPayload && isset($tryItErrorPayload['hint']))
+                                            <p class="text-xs text-muted ml-6">{{ $tryItErrorPayload['hint'] }}</p>
+                                        @endif
+
+                                        @if($tryItErrorPayload && isset($tryItErrorPayload['action']))
+                                            <div class="ml-6">
+                                                <x-ui.button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    x-data
+                                                    x-on:click="$dispatch('open-lara-chat', { prompt: {{ json_encode($tryItErrorPayload['action']['suggested_prompt']) }} })"
+                                                >
+                                                    <x-icon name="heroicon-o-chat-bubble-left-ellipsis" class="w-4 h-4" />
+                                                    {{ $tryItErrorPayload['action']['label'] }}
+                                                </x-ui.button>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @else
+                                    {{-- Success result --}}
+                                    <div class="rounded-lg bg-surface-subtle border border-border-default p-3 max-h-64 overflow-y-auto">
+                                        <pre class="text-xs text-ink whitespace-pre-wrap break-words font-mono">{{ $tryItResult }}</pre>
+                                    </div>
+                                @endif
                             </div>
                         @endif
 

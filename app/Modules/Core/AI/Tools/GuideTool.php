@@ -10,6 +10,7 @@ use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Services\KnowledgeNavigator;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
+use App\Base\AI\Tools\ToolResult;
 
 /**
  * BLB framework documentation guide tool for Digital Workers.
@@ -64,7 +65,7 @@ class GuideTool extends AbstractTool
         return 'ai.tool_guide.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $topic = $this->requireString($arguments, 'topic');
         $maxSections = $this->optionalInt($arguments, 'max_sections', 5, min: 1, max: self::MAX_SECTIONS_LIMIT);
@@ -72,10 +73,10 @@ class GuideTool extends AbstractTool
         $results = $this->navigator->search($topic, $maxSections);
 
         if ($results === []) {
-            return $this->formatNoResults($topic);
+            return ToolResult::success($this->formatNoResults($topic));
         }
 
-        return $this->formatResults($results, $topic);
+        return ToolResult::success($this->formatResults($results, $topic));
     }
 
     /**

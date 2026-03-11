@@ -10,6 +10,7 @@ use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Concerns\FormatsProcessResult;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
+use App\Base\AI\Tools\ToolResult;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -64,7 +65,7 @@ class BashTool extends AbstractTool
         return 'ai.tool_bash.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $command = $this->requireString($arguments, 'command');
 

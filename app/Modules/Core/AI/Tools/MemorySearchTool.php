@@ -9,6 +9,7 @@ use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
+use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\Employee\Models\Employee;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -115,7 +116,7 @@ class MemorySearchTool extends AbstractTool
         return 'ai.tool_memory_search.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $query = $this->requireString($arguments, 'query', 'search query');
         $maxResults = $this->optionalInt($arguments, 'max_results', self::DEFAULT_MAX_RESULTS, min: 1, max: self::MAX_RESULTS_LIMIT);
@@ -123,10 +124,10 @@ class MemorySearchTool extends AbstractTool
         $matches = $this->searchFiles($query, $maxResults);
 
         if ($matches === []) {
-            return 'No matches found for "'.$query.'".';
+            return ToolResult::success('No matches found for "'.$query.'".');
         }
 
-        return $this->formatResults($matches, $query);
+        return ToolResult::success($this->formatResults($matches, $query));
     }
 
     /**

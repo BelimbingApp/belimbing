@@ -9,6 +9,8 @@ use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
+use App\Base\AI\Tools\ToolArgumentException;
+use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\Employee\Models\Employee;
 
 /**
@@ -75,14 +77,11 @@ class MemoryGetTool extends AbstractTool
         return 'ai.tool_memory_get.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $path = $this->requireString($arguments, 'path');
 
-        $pathError = $this->validatePath($path);
-        if ($pathError !== null) {
-            return $pathError;
-        }
+        $this->validatePath($path);
 
         $scope = $this->requireEnum($arguments, 'scope', ['docs', 'workspace'], 'docs');
         $from = $this->optionalInt($arguments, 'from', 1, min: 1);
@@ -90,16 +89,16 @@ class MemoryGetTool extends AbstractTool
         $readResult = $this->readRequestedFile($path, $scope, $from, $maxLines);
 
         if (isset($readResult['error'])) {
-            return $readResult['error'];
+            return ToolResult::error($readResult['error']);
         }
 
-        return $this->formatReadResult(
+        return ToolResult::success($this->formatReadResult(
             path: $path,
             scope: $scope,
             from: $from,
             totalLines: $readResult['total_lines'],
             selectedLines: $readResult['selected_lines'],
-        );
+        ));
     }
 
     /**
@@ -108,23 +107,22 @@ class MemoryGetTool extends AbstractTool
      * Rejects absolute paths, directory traversal sequences, and null bytes.
      *
      * @param  string  $path  The relative path to validate
-     * @return string|null Error message if invalid, null if valid
+     *
+     * @throws ToolArgumentException If the path is invalid
      */
-    private function validatePath(string $path): ?string
+    private function validatePath(string $path): void
     {
         if (str_starts_with($path, '/')) {
-            return 'Error: Invalid path: absolute paths are not allowed.';
+            throw new ToolArgumentException('Invalid path: absolute paths are not allowed.');
         }
 
         if (str_contains($path, '..')) {
-            return 'Error: Invalid path: directory traversal is not allowed.';
+            throw new ToolArgumentException('Invalid path: directory traversal is not allowed.');
         }
 
         if (str_contains($path, "\0")) {
-            return 'Error: Invalid path: null bytes are not allowed.';
+            throw new ToolArgumentException('Invalid path: null bytes are not allowed.');
         }
-
-        return null;
     }
 
     /**
@@ -153,31 +151,31 @@ class MemoryGetTool extends AbstractTool
         $realFull = realpath($fullPath);
 
         if ($realBase === false) {
-            return ['error' => 'Error: Scope directory does not exist.'];
+            return ['error' => 'Scope directory does not exist.'];
         }
 
         if ($realFull === false || ! is_file($realFull)) {
-            return ['error' => 'Error: File not found: '.$path];
+            return ['error' => 'File not found: '.$path];
         }
 
         if (! str_starts_with($realFull, $realBase.'/')) {
-            return ['error' => 'Error: Invalid path: directory traversal is not allowed.'];
+            return ['error' => 'Invalid path: directory traversal is not allowed.'];
         }
 
         if ($this->isBinary($realFull)) {
-            return ['error' => 'Error: Cannot read binary file: '.$path];
+            return ['error' => 'Cannot read binary file: '.$path];
         }
 
         $allLines = file($realFull, FILE_IGNORE_NEW_LINES);
 
         if ($allLines === false) {
-            return ['error' => 'Error: Unable to read file: '.$path];
+            return ['error' => 'Unable to read file: '.$path];
         }
 
         $totalLines = count($allLines);
 
         if ($from > $totalLines) {
-            return ['error' => 'Error: Start line '.$from.' exceeds file length ('.$totalLines.' lines).'];
+            return ['error' => 'Start line '.$from.' exceeds file length ('.$totalLines.' lines).'];
         }
 
         /** @var list<string> $selectedLines */

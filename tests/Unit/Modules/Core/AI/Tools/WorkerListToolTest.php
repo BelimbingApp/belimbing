@@ -35,7 +35,7 @@ describe('worker discovery', function () {
 
         $result = $this->tool->execute([]);
 
-        expect($result)->toContain('No Digital Workers available');
+        expect((string) $result)->toContain('No Digital Workers available');
     });
 
     it('lists available workers', function () {
@@ -48,12 +48,12 @@ describe('worker discovery', function () {
 
         $result = $this->tool->execute([]);
 
-        expect($result)->toContain('2 Digital Workers available')
-            ->and($result)->toContain(WORKER_LIST_DATA_ANALYST)
-            ->and($result)->toContain('ID: 1')
-            ->and($result)->toContain(WORKER_LIST_CODE_REVIEWER)
-            ->and($result)->toContain('ID: 2')
-            ->and($result)->toContain('Analyzes data');
+        expect((string) $result)->toContain('2 Digital Workers available')
+            ->and((string) $result)->toContain(WORKER_LIST_DATA_ANALYST)
+            ->and((string) $result)->toContain('ID: 1')
+            ->and((string) $result)->toContain(WORKER_LIST_CODE_REVIEWER)
+            ->and((string) $result)->toContain('ID: 2')
+            ->and((string) $result)->toContain('Analyzes data');
     });
 
     it('shows singular form for one worker', function () {
@@ -65,8 +65,8 @@ describe('worker discovery', function () {
 
         $result = $this->tool->execute([]);
 
-        expect($result)->toContain('1 Digital Worker available')
-            ->and($result)->not->toContain('Workers available');
+        expect((string) $result)->toContain('1 Digital Worker available')
+            ->and((string) $result)->not->toContain('Workers available');
     });
 });
 
@@ -81,8 +81,8 @@ describe('capability filtering', function () {
 
         $result = $this->tool->execute(['capability_filter' => 'data']);
 
-        expect($result)->toContain(WORKER_LIST_DATA_ANALYST)
-            ->and($result)->not->toContain(WORKER_LIST_CODE_REVIEWER);
+        expect((string) $result)->toContain(WORKER_LIST_DATA_ANALYST)
+            ->and((string) $result)->not->toContain(WORKER_LIST_CODE_REVIEWER);
     });
 
     it('performs case-insensitive filtering', function () {
@@ -94,7 +94,7 @@ describe('capability filtering', function () {
 
         $result = $this->tool->execute(['capability_filter' => 'data']);
 
-        expect($result)->toContain(WORKER_LIST_DATA_ANALYST);
+        expect((string) $result)->toContain(WORKER_LIST_DATA_ANALYST);
     });
 
     it('returns no match message when filter excludes all workers', function () {
@@ -106,7 +106,7 @@ describe('capability filtering', function () {
 
         $result = $this->tool->execute(['capability_filter' => 'nonexistent']);
 
-        expect($result)->toContain('No Digital Workers match the filter');
+        expect((string) $result)->toContain('No Digital Workers match the filter');
     });
 
     it('ignores empty capability filter', function () {
@@ -118,7 +118,7 @@ describe('capability filtering', function () {
 
         $result = $this->tool->execute(['capability_filter' => '']);
 
-        expect($result)->toContain('Worker');
+        expect((string) $result)->toContain('Worker');
     });
 
     it('ignores non-string capability filter', function () {
@@ -130,6 +130,6 @@ describe('capability filtering', function () {
 
         $result = $this->tool->execute(['capability_filter' => 123]);
 
-        expect($result)->toContain('Worker');
+        expect((string) $result)->toContain('Worker');
     });
 });

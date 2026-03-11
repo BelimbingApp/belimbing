@@ -11,6 +11,7 @@ use App\Base\AI\Services\UrlSafetyGuard;
 use App\Base\AI\Services\WebFetchService;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
+use App\Base\AI\Tools\ToolResult;
 
 /**
  * Web page fetching and content extraction tool for Digital Workers.
@@ -84,7 +85,7 @@ class WebFetchTool extends AbstractTool
         return 'ai.tool_web_fetch.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $url = $this->requireString($arguments, 'url', 'URL');
         $maxChars = $this->optionalInt($arguments, 'max_chars', self::DEFAULT_MAX_CHARS, min: 1);
@@ -108,18 +109,21 @@ class WebFetchTool extends AbstractTool
     /**
      * @param  array{validation_error?: string, request_error?: string, http_status?: int, content?: string, char_count?: int, truncated?: bool}  $result
      */
-    private function formatFetchResponse(array $result, string $url, int $maxChars): string
+    private function formatFetchResponse(array $result, string $url, int $maxChars): ToolResult
     {
         if (isset($result['validation_error'])) {
-            return 'Error: '.$result['validation_error'];
+            return ToolResult::error($result['validation_error'], 'validation_error');
         }
 
         if (isset($result['request_error'])) {
-            return 'Error: Failed to fetch URL: '.$result['request_error'];
+            return ToolResult::error('Failed to fetch URL: '.$result['request_error'], 'request_error');
         }
 
         if (isset($result['http_status'])) {
-            return 'Failed to fetch URL: HTTP '.$result['http_status'];
+            return ToolResult::error(
+                'Failed to fetch URL: HTTP '.$result['http_status'],
+                'http_error',
+            );
         }
 
         $content = $result['content'] ?? '';
@@ -130,6 +134,8 @@ class WebFetchTool extends AbstractTool
 
         $charCount = (int) ($result['char_count'] ?? mb_strlen($content));
 
-        return "# Content from {$url}\n\n{$content}\n\n---\nFetched {$charCount} characters from {$url}";
+        return ToolResult::success(
+            "# Content from {$url}\n\n{$content}\n\n---\nFetched {$charCount} characters from {$url}"
+        );
     }
 }

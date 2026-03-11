@@ -30,6 +30,7 @@
 
         {{-- Lara chat --}}
         laraChatOpen: false,
+        laraPrefillPrompt: null,
 
         {{-- Initialize sidebar from persisted state --}}
         initSidebar() {
@@ -105,9 +106,10 @@
 
             return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
         },
-        openLaraChat() {
+        openLaraChat(prompt = null) {
+            this.laraPrefillPrompt = prompt;
             this.laraChatOpen = true;
-            this.$nextTick(() => window.dispatchEvent(new CustomEvent('lara-chat-opened')));
+            this.$nextTick(() => window.dispatchEvent(new CustomEvent('lara-chat-opened', { detail: { prompt: prompt } })));
         },
         toggleLaraChat(event) {
             if (this.isTypingTarget(event)) {
@@ -133,7 +135,7 @@
     }"
     x-init="initSidebar()"
     @toggle-sidebar.window="toggleSidebar()"
-    @open-lara-chat.window="openLaraChat()"
+    @open-lara-chat.window="openLaraChat($event.detail?.prompt ?? null)"
     @close-lara-chat.window="laraChatOpen = false"
     @lara-execute-js.window="executeLaraJs($event.detail?.js ?? '')"
     @keydown.ctrl.k.window.prevent="toggleLaraChat($event)"
@@ -190,7 +192,7 @@
             <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" />
         </div>
 
-        <main class="flex-1 overflow-y-auto bg-surface-page p-3 sm:p-4">
+        <main class="flex-1 overflow-y-auto bg-surface-page px-1 py-2 sm:px-4 sm:py-1">
             {{ $slot }}
         </main>
     </div>

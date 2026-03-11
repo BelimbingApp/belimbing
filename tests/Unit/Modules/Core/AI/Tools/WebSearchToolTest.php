@@ -91,10 +91,10 @@ describe('parallel provider', function () {
 
         $result = $this->tool->execute(['query' => SEARCH_QUERY]);
 
-        expect($result)->toContain('1. First Result')
-            ->and($result)->toContain('2. Second Result')
-            ->and($result)->toContain(SEARCH_EXAMPLE_URL.'/1')
-            ->and($result)->toContain('First snippet');
+        expect((string) $result)->toContain('1. First Result')
+            ->and((string) $result)->toContain('2. Second Result')
+            ->and((string) $result)->toContain(SEARCH_EXAMPLE_URL.'/1')
+            ->and((string) $result)->toContain('First snippet');
     });
 
     it('handles empty results', function () {
@@ -106,7 +106,7 @@ describe('parallel provider', function () {
 
         $result = $this->tool->execute(['query' => 'obscure query']);
 
-        expect($result)->toContain('No results found');
+        expect((string) $result)->toContain('No results found');
     });
 
     it('handles API errors', function () {
@@ -116,7 +116,7 @@ describe('parallel provider', function () {
 
         $result = $this->tool->execute(['query' => SEARCH_QUERY]);
 
-        expect($result)->toContain('Search failed');
+        expect((string) $result)->toContain('Search failed');
     });
 });
 
@@ -183,7 +183,7 @@ describe('caching', function () {
         $firstResult = $tool->execute(['query' => 'cached query']);
         $secondResult = $tool->execute(['query' => 'cached query']);
 
-        expect($firstResult)->toBe($secondResult)
-            ->and($firstResult)->toContain('First Call');
+        expect((string) $firstResult)->toBe((string) $secondResult)
+            ->and((string) $firstResult)->toContain('First Call');
     });
 });

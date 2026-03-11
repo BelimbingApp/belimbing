@@ -30,7 +30,7 @@ abstract class AbstractActionTool extends AbstractTool
      * @param  string  $action  The validated action name
      * @param  array<string, mixed>  $arguments  Full arguments (including 'action')
      */
-    abstract protected function handleAction(string $action, array $arguments): string;
+    abstract protected function handleAction(string $action, array $arguments): ToolResult;
 
     /**
      * Dispatch to the appropriate action handler.
@@ -39,7 +39,7 @@ abstract class AbstractActionTool extends AbstractTool
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    final protected function handle(array $arguments): string
+    final protected function handle(array $arguments): ToolResult
     {
         $action = $this->requireEnum($arguments, 'action', $this->actions());
 

@@ -10,6 +10,7 @@ use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
+use App\Base\AI\Tools\ToolResult;
 
 /**
  * Client-side JavaScript execution tool for Digital Workers.
@@ -79,7 +80,7 @@ class WriteJsTool extends AbstractTool
         return 'ai.tool_write_js.execute';
     }
 
-    protected function handle(array $arguments): string
+    protected function handle(array $arguments): ToolResult
     {
         $script = $this->requireString($arguments, 'script');
         $description = $this->requireString($arguments, 'description');
@@ -98,6 +99,6 @@ class WriteJsTool extends AbstractTool
             }
         }
 
-        return '<lara-action>'.$script.'</lara-action>Script executed: '.$description.'.';
+        return ToolResult::success('<lara-action>'.$script.'</lara-action>Script executed: '.$description.'.');
     }
 }
