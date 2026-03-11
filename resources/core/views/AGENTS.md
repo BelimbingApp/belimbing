@@ -91,9 +91,13 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 |-----------|-------|
 | `x-ui.button` | All buttons (supports variants, sizes) |
 | `x-ui.input` | Text/email/password inputs with label + error |
+| `x-ui.select` | Select dropdowns with label + error |
+| `x-ui.combobox` | Searchable select/lookup inputs |
+| `x-ui.textarea` | Multi-line text inputs with label + error |
 | `x-ui.search-input` | Search fields with magnifying-glass icon |
 | `x-ui.checkbox` | Checkbox inputs |
 | `x-ui.radio` | Radio inputs |
+| `x-ui.alert` | Informational, warning, success, or danger notices |
 | `x-ui.badge` | Status badges |
 | `x-ui.card` | Card containers |
 | `x-ui.modal` | Modal dialogs |
@@ -101,6 +105,7 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.help` | Standalone "?" toggle button for contextual help |
 | `x-ui.tabs` | Page-level tab container (underline/pill variants, URL hash, ARIA, keyboard nav) |
 | `x-ui.tab` | Individual tab panel (child of `x-ui.tabs`) |
+| `x-icon` | Canonical icon component for all UI icons |
 
 When a needed primitive doesn't exist, create it in `resources/core/views/components/ui/` following the patterns of existing components (props via `@props`, class merging via `$attributes->class([...])`, semantic tokens).
 
