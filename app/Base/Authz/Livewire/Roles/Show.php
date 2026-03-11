@@ -13,6 +13,7 @@ use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Authz\Models\RoleCapability;
+use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\Session;
@@ -21,6 +22,7 @@ use Livewire\Component;
 class Show extends Component
 {
     use ChecksCapabilityAuthorization;
+    use SavesValidatedFields;
 
     public Role $role;
 
@@ -53,14 +55,7 @@ class Show extends Component
             'description' => ['nullable', 'string', 'max:1000'],
         ];
 
-        if (! isset($rules[$field])) {
-            return;
-        }
-
-        $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
-
-        $this->role->$field = $validated[$field];
-        $this->role->save();
+        $this->saveValidatedField($this->role, $field, $value, $rules);
     }
 
     /**

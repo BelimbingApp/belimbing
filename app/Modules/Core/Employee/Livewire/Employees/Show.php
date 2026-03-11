@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\Employee\Livewire\Employees;
 
+use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Company\Models\Department;
 use App\Modules\Core\Employee\Models\Employee;
@@ -15,6 +16,8 @@ use Livewire\Component;
 
 class Show extends Component
 {
+    use SavesValidatedFields;
+
     public Employee $employee;
 
     public int $attach_address_id = 0;
@@ -51,14 +54,7 @@ class Show extends Component
             'employee_number' => ['required', 'string', 'max:255'],
         ];
 
-        if (! isset($rules[$field])) {
-            return;
-        }
-
-        $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
-
-        $this->employee->$field = $validated[$field];
-        $this->employee->save();
+        $this->saveValidatedField($this->employee, $field, $value, $rules);
     }
 
     public function saveStatus(string $status): void

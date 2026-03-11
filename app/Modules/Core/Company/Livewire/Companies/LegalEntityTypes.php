@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\Company\Livewire\Companies;
 
+use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Core\Company\Models\LegalEntityType;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
@@ -13,6 +14,7 @@ use Livewire\WithPagination;
 
 class LegalEntityTypes extends Component
 {
+    use SavesValidatedFields;
     use WithPagination;
 
     public bool $showCreateModal = false;
@@ -54,15 +56,8 @@ class LegalEntityTypes extends Component
             'description' => ['nullable', 'string'],
         ];
 
-        if (! isset($rules[$field])) {
-            return;
-        }
-
-        $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
-
         $type = LegalEntityType::query()->findOrFail($typeId);
-        $type->$field = $validated[$field];
-        $type->save();
+        $this->saveValidatedField($type, $field, $value, $rules);
     }
 
     public function toggleActive(int $typeId): void

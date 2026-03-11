@@ -14,6 +14,7 @@ use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Authz\Services\EffectivePermissions;
+use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
@@ -26,6 +27,7 @@ use Livewire\Component;
 class Show extends Component
 {
     use ChecksCapabilityAuthorization;
+    use SavesValidatedFields;
 
     public User $user;
 
@@ -79,19 +81,17 @@ class Show extends Component
             ],
         ];
 
-        if (! isset($rules[$field])) {
-            return;
-        }
-
-        $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
-
-        $this->user->$field = $validated[$field];
-
-        if ($field === 'email' && $this->user->isDirty('email')) {
-            $this->user->email_verified_at = null;
-        }
-
-        $this->user->save();
+        $this->saveValidatedField(
+            $this->user,
+            $field,
+            $value,
+            $rules,
+            function (User $user, string $validatedField): void {
+                if ($validatedField === 'email' && $user->isDirty('email')) {
+                    $user->email_verified_at = null;
+                }
+            }
+        );
     }
 
     /**

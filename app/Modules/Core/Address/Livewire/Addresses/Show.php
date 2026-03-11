@@ -5,12 +5,15 @@
 
 namespace App\Modules\Core\Address\Livewire\Addresses;
 
+use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Core\Address\Livewire\AbstractAddressForm;
 use App\Modules\Core\Address\Models\Address;
 use Illuminate\Support\Facades\DB;
 
 class Show extends AbstractAddressForm
 {
+    use SavesValidatedFields;
+
     public Address $address;
 
     public function mount(Address $address): void
@@ -28,16 +31,7 @@ class Show extends AbstractAddressForm
 
     public function saveField(string $field, mixed $value): void
     {
-        $rules = Address::fieldRules();
-
-        if (! isset($rules[$field])) {
-            return;
-        }
-
-        $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
-
-        $this->address->$field = $validated[$field];
-        $this->address->save();
+        $this->saveValidatedField($this->address, $field, $value, Address::fieldRules());
     }
 
     public function saveCountry(string $iso): void

@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\Company\Livewire\Companies;
 
+use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Core\Address\Livewire\AbstractAddressForm;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Company\Models\Company;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\Session;
 
 class Show extends AbstractAddressForm
 {
+    use SavesValidatedFields;
+
     public Company $company;
 
     public int $attach_address_id = 0;
@@ -76,14 +79,7 @@ class Show extends AbstractAddressForm
             'jurisdiction' => ['nullable', 'string', 'max:2', 'exists:geonames_countries,iso'],
         ];
 
-        if (! isset($rules[$field])) {
-            return;
-        }
-
-        $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
-
-        $this->company->$field = $validated[$field];
-        $this->company->save();
+        $this->saveValidatedField($this->company, $field, $value, $rules);
     }
 
     public function saveStatus(string $status): void
