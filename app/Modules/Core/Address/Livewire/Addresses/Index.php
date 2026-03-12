@@ -36,7 +36,7 @@ class Index extends Component
         ];
     }
 
-    public function statusVariant(string $status): string
+    public function statusVariant(?string $status): string
     {
         return match ($status) {
             'verified' => 'success',

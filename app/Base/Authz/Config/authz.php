@@ -1,6 +1,7 @@
 <?php
 
 $digitalWorkerOperatorCapabilities = [
+    'ai.chat_attachments.manage',
     'ai.digital_worker.view',
     'ai.digital_worker.execute',
     'ai.tool_delegation_status.execute',
@@ -20,6 +21,7 @@ $digitalWorkerOperatorCapabilities = [
 ];
 
 $dwPowerUserAdditionalCapabilities = [
+    'ai.chat_model.manage',
     'ai.tool_artisan.execute',
     'ai.tool_bash.execute',
     'ai.tool_browser.execute',
@@ -66,6 +68,8 @@ return [
     // Module-owned capabilities live in each module's Config/authz.php
     // and are auto-discovered by App\Base\Authz\ServiceProvider.
     'capabilities' => [
+        'ai.chat_attachments.manage',
+        'ai.chat_model.manage',
         'ai.digital_worker.view',
         'ai.digital_worker.execute',
         'ai.tool_artisan.execute',

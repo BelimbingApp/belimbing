@@ -223,6 +223,41 @@ class SessionManager
     }
 
     /**
+     * Store a user-selected model override in the session's LLM state.
+     *
+     * @param  int  $employeeId  Digital Worker employee ID
+     * @param  string  $sessionId  Session ID
+     * @param  string  $modelId  Model ID to override with
+     */
+    public function updateModelOverride(int $employeeId, string $sessionId, string $modelId): void
+    {
+        $session = $this->get($employeeId, $sessionId);
+
+        if ($session === null) {
+            return;
+        }
+
+        $llm = $session->llm ?? [];
+        $llm['model_override'] = $modelId;
+
+        $updated = new Session(
+            id: $session->id,
+            employeeId: $session->employeeId,
+            channelType: $session->channelType,
+            title: $session->title,
+            createdAt: $session->createdAt,
+            lastActivityAt: $session->lastActivityAt,
+            runs: $session->runs,
+            llm: $llm,
+        );
+
+        file_put_contents(
+            $this->metaPath($employeeId, $sessionId),
+            json_encode($updated->toMeta(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
+    }
+
+    /**
      * Delete a session and its transcript.
      *
      * @param  int  $employeeId  Digital Worker employee ID

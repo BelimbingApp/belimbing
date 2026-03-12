@@ -6,21 +6,48 @@
 namespace App\Modules\Core\AI\Livewire;
 
 use App\Base\AI\Services\LlmClient;
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
+use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\AgenticRuntime;
+use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
+use App\Modules\Core\AI\Services\QuickActionRegistry;
 use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
 use App\Modules\Core\AI\Services\RuntimeMessageBuilder;
 use App\Modules\Core\AI\Services\SessionManager;
-use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
+use Illuminate\Support\Str;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 
 class LaraChatOverlay extends Component
 {
+    use WithFileUploads;
+
+    /**
+     * Allowed MIME types for chat attachments.
+     */
+    private const ATTACHMENT_MIMES = [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'text/plain', 'text/csv', 'text/markdown',
+        'application/pdf',
+        'application/json',
+    ];
+
+    /**
+     * Maximum attachment file size in bytes (10 MB).
+     */
+    private const ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024;
+
+    public int $employeeId = Employee::LARA_ID;
+
     public string $messageInput = '';
 
     public ?string $selectedSessionId = null;
@@ -30,17 +57,29 @@ class LaraChatOverlay extends Component
     /** @var array<string, mixed>|null */
     public ?array $lastRunMeta = null;
 
+    public ?string $selectedModel = null;
+
     public ?string $editingSessionId = null;
 
     public string $editingTitle = '';
 
-    public function mount(): void
+    /** @var list<TemporaryUploadedFile> */
+    public array $attachments = [];
+
+    public string $searchQuery = '';
+
+    /** @var list<array{session_id: string, title: string|null, snippet: string}> */
+    public array $searchResults = [];
+
+    public function mount(int $employeeId = Employee::LARA_ID): void
     {
-        if (! $this->isLaraActivated()) {
+        $this->employeeId = $employeeId;
+
+        if (! $this->isDwActivated()) {
             return;
         }
 
-        $sessions = app(SessionManager::class)->list(Employee::LARA_ID);
+        $sessions = app(SessionManager::class)->list($this->employeeId);
         if (! empty($sessions)) {
             $this->selectedSessionId = $sessions[0]->id;
         }
@@ -49,12 +88,12 @@ class LaraChatOverlay extends Component
     #[On('lara-chat-opened')]
     public function onLaraChatOpened(): void
     {
-        if (! $this->isLaraActivated()) {
+        if (! $this->isDwActivated()) {
             return;
         }
 
         if ($this->selectedSessionId === null) {
-            $sessions = app(SessionManager::class)->list(Employee::LARA_ID);
+            $sessions = app(SessionManager::class)->list($this->employeeId);
             if (! empty($sessions)) {
                 $this->selectedSessionId = $sessions[0]->id;
             }
@@ -65,13 +104,14 @@ class LaraChatOverlay extends Component
 
     public function createSession(): void
     {
-        if (! $this->isLaraActivated()) {
+        if (! $this->isDwActivated()) {
             return;
         }
 
-        $session = app(SessionManager::class)->create(Employee::LARA_ID);
+        $session = app(SessionManager::class)->create($this->employeeId);
         $this->selectedSessionId = $session->id;
         $this->lastRunMeta = null;
+        $this->selectedModel = null;
         $this->dispatch('lara-focus-composer');
     }
 
@@ -79,19 +119,39 @@ class LaraChatOverlay extends Component
     {
         $this->selectedSessionId = $sessionId;
         $this->lastRunMeta = null;
+
+        $session = app(SessionManager::class)->get($this->employeeId, $sessionId);
+        $this->selectedModel = $session?->llm['model_override'] ?? null;
+
         $this->dispatch('lara-focus-composer');
+    }
+
+    /**
+     * Change the model for the current session.
+     */
+    public function selectModel(string $modelId): void
+    {
+        $this->selectedModel = $modelId;
+
+        if ($this->selectedSessionId !== null) {
+            app(SessionManager::class)->updateModelOverride(
+                $this->employeeId,
+                $this->selectedSessionId,
+                $modelId,
+            );
+        }
     }
 
     public function deleteSession(string $sessionId): void
     {
-        if (! $this->isLaraActivated()) {
+        if (! $this->isDwActivated()) {
             return;
         }
 
-        app(SessionManager::class)->delete(Employee::LARA_ID, $sessionId);
+        app(SessionManager::class)->delete($this->employeeId, $sessionId);
 
         if ($this->selectedSessionId === $sessionId) {
-            $sessions = app(SessionManager::class)->list(Employee::LARA_ID);
+            $sessions = app(SessionManager::class)->list($this->employeeId);
             $this->selectedSessionId = empty($sessions) ? null : $sessions[0]->id;
         }
 
@@ -103,7 +163,7 @@ class LaraChatOverlay extends Component
      */
     public function startEditingTitle(string $sessionId): void
     {
-        $session = app(SessionManager::class)->get(Employee::LARA_ID, $sessionId);
+        $session = app(SessionManager::class)->get($this->employeeId, $sessionId);
         $this->editingSessionId = $sessionId;
         $this->editingTitle = $session?->title ?? '';
     }
@@ -120,7 +180,7 @@ class LaraChatOverlay extends Component
         $title = trim($this->editingTitle);
 
         if ($title !== '') {
-            app(SessionManager::class)->updateTitle(Employee::LARA_ID, $this->editingSessionId, $title);
+            app(SessionManager::class)->updateTitle($this->employeeId, $this->editingSessionId, $title);
         }
 
         $this->editingSessionId = null;
@@ -137,20 +197,20 @@ class LaraChatOverlay extends Component
     }
 
     /**
-     * Ask Lara to generate a session title from the conversation history.
+     * Ask the DW to generate a session title from the conversation history.
      */
     public function generateSessionTitle(string $sessionId): void
     {
-        if (! $this->isLaraActivated()) {
+        if (! $this->isDwActivated()) {
             return;
         }
 
-        $messages = app(MessageManager::class)->read(Employee::LARA_ID, $sessionId);
+        $messages = app(MessageManager::class)->read($this->employeeId, $sessionId);
         if ($messages === []) {
             return;
         }
 
-        $config = app(ConfigResolver::class)->resolvePrimaryWithDefaultFallback(Employee::LARA_ID);
+        $config = app(ConfigResolver::class)->resolvePrimaryWithDefaultFallback($this->employeeId);
         if ($config === null) {
             return;
         }
@@ -165,22 +225,90 @@ class LaraChatOverlay extends Component
             return;
         }
 
-        app(SessionManager::class)->updateTitle(Employee::LARA_ID, $sessionId, $title);
+        app(SessionManager::class)->updateTitle($this->employeeId, $sessionId, $title);
 
         if ($this->editingSessionId === $sessionId) {
             $this->editingTitle = $title;
         }
     }
 
+    /**
+     * Auto-search when searchQuery property is updated via live binding.
+     */
+    public function updatedSearchQuery(): void
+    {
+        $this->searchSessions();
+    }
+
+    /**
+     * Search across all sessions for messages matching the query.
+     */
+    public function searchSessions(): void
+    {
+        $query = trim($this->searchQuery);
+
+        if ($query === '' || mb_strlen($query) < 2) {
+            $this->searchResults = [];
+
+            return;
+        }
+
+        $results = app(MessageManager::class)->searchSessions($this->employeeId, $query);
+
+        $this->searchResults = array_map(fn (array $r): array => [
+            'session_id' => $r['session_id'],
+            'title' => $r['title'],
+            'snippet' => $r['snippet'],
+        ], $results);
+    }
+
+    /**
+     * Clear search query and results, return to session list.
+     */
+    public function clearSearch(): void
+    {
+        $this->searchQuery = '';
+        $this->searchResults = [];
+    }
+
+    /**
+     * Remove a pending attachment by index before sending.
+     */
+    public function removeAttachment(int $index): void
+    {
+        if (isset($this->attachments[$index])) {
+            unset($this->attachments[$index]);
+            $this->attachments = array_values($this->attachments);
+        }
+    }
+
+    /**
+     * Check if the current user has attachment upload capability.
+     */
+    public function canAttachFiles(): bool
+    {
+        $user = auth()->user();
+        if (! $user instanceof \App\Modules\Core\User\Models\User) {
+            return false;
+        }
+
+        $actor = Actor::forUser($user);
+
+        return app(AuthorizationService::class)->can($actor, 'ai.chat_attachments.manage')->allowed;
+    }
+
     public function sendMessage(): void
     {
-        if (! $this->isLaraActivated() || trim($this->messageInput) === '') {
+        $hasAttachments = $this->attachments !== [] && $this->canAttachFiles();
+        $hasText = trim($this->messageInput) !== '';
+
+        if (! $this->isDwActivated() || (! $hasText && ! $hasAttachments)) {
             return;
         }
 
         $sessionManager = app(SessionManager::class);
         if ($this->selectedSessionId === null) {
-            $session = $sessionManager->create(Employee::LARA_ID);
+            $session = $sessionManager->create($this->employeeId);
             $this->selectedSessionId = $session->id;
         }
 
@@ -188,11 +316,23 @@ class LaraChatOverlay extends Component
         $content = trim($this->messageInput);
         $this->messageInput = '';
 
-        $messageManager = app(MessageManager::class);
-        $messageManager->appendUserMessage(Employee::LARA_ID, $this->selectedSessionId, $content);
+        $attachmentMeta = $hasAttachments
+            ? $this->processAttachments($this->selectedSessionId)
+            : [];
+        $this->attachments = [];
 
-        $messages = $messageManager->read(Employee::LARA_ID, $this->selectedSessionId);
-        $orchestration = app(LaraOrchestrationService::class)->dispatchFromMessage($content);
+        $userMeta = $attachmentMeta !== [] ? ['attachments' => $attachmentMeta] : [];
+
+        $messageManager = app(MessageManager::class);
+        $messageManager->appendUserMessage($this->employeeId, $this->selectedSessionId, $content, $userMeta);
+
+        $messages = $messageManager->read($this->employeeId, $this->selectedSessionId);
+
+        // Skip orchestration shortcuts when attachments are present
+        $orchestration = null;
+        if ($this->employeeId === Employee::LARA_ID && ! $hasAttachments) {
+            $orchestration = app(LaraOrchestrationService::class)->dispatchFromMessage($content);
+        }
 
         if ($orchestration !== null) {
             $result = [
@@ -202,10 +342,13 @@ class LaraChatOverlay extends Component
             ];
         } else {
             $runtime = app(AgenticRuntime::class);
-            $systemPrompt = app(LaraPromptFactory::class)->buildForCurrentUser($content);
-            $result = $runtime->run($messages, Employee::LARA_ID, $systemPrompt);
 
-            // Extract <lara-action> JS blocks from response (may come from NavigateTool or direct LLM).
+            $systemPrompt = $this->employeeId === Employee::LARA_ID
+                ? app(LaraPromptFactory::class)->buildForCurrentUser($content)
+                : null;
+
+            $result = $runtime->run($messages, $this->employeeId, $systemPrompt, $this->selectedModel);
+
             $actionJs = $this->extractLaraAction($result['content']);
             if ($actionJs !== null) {
                 $result['content'] = $actionJs['clean_content'];
@@ -217,7 +360,7 @@ class LaraChatOverlay extends Component
         }
 
         $messageManager->appendAssistantMessage(
-            Employee::LARA_ID,
+            $this->employeeId,
             $this->selectedSessionId,
             $result['content'],
             $result['run_id'],
@@ -244,41 +387,250 @@ class LaraChatOverlay extends Component
         $this->dispatch('lara-focus-composer');
     }
 
+    /**
+     * Prepare a streaming run: persist user message, return SSE URL.
+     *
+     * The client opens an EventSource to the returned URL. The SSE endpoint
+     * streams the response and persists the assistant message on completion.
+     * Falls back to synchronous sendMessage() if streaming is unavailable.
+     *
+     * @return array{url: string, session_id: string}|null Null signals fallback to sync
+     */
+    public function prepareStreamingRun(): ?array
+    {
+        $hasAttachments = $this->attachments !== [] && $this->canAttachFiles();
+        $hasText = trim($this->messageInput) !== '';
+
+        if (! $this->isDwActivated() || (! $hasText && ! $hasAttachments)) {
+            return null;
+        }
+
+        $sessionManager = app(SessionManager::class);
+        if ($this->selectedSessionId === null) {
+            $session = $sessionManager->create($this->employeeId);
+            $this->selectedSessionId = $session->id;
+        }
+
+        $content = trim($this->messageInput);
+        $this->messageInput = '';
+
+        $attachmentMeta = $hasAttachments
+            ? $this->processAttachments($this->selectedSessionId)
+            : [];
+        $this->attachments = [];
+
+        $userMeta = $attachmentMeta !== [] ? ['attachments' => $attachmentMeta] : [];
+
+        // Check for orchestration shortcuts (sync-only, no streaming)
+        if ($this->employeeId === Employee::LARA_ID && ! $hasAttachments) {
+            $orchestration = app(LaraOrchestrationService::class)->dispatchFromMessage($content);
+            if ($orchestration !== null) {
+                // Fall through to sync path — return null to signal caller
+                $messageManager = app(MessageManager::class);
+                $messageManager->appendUserMessage($this->employeeId, $this->selectedSessionId, $content, $userMeta);
+
+                $messageManager->appendAssistantMessage(
+                    $this->employeeId,
+                    $this->selectedSessionId,
+                    $orchestration['assistant_content'],
+                    $orchestration['run_id'],
+                    $orchestration['meta'],
+                );
+
+                $this->lastRunMeta = [
+                    'run_id' => $orchestration['run_id'],
+                    ...$orchestration['meta'],
+                ];
+
+                $this->dispatch('lara-response-ready');
+                $this->dispatch('lara-focus-composer');
+
+                $navigationUrl = $orchestration['meta']['orchestration']['navigation']['url'] ?? null;
+                if (is_string($navigationUrl) && str_starts_with($navigationUrl, '/')) {
+                    $this->dispatch('lara-execute-js', js: "Livewire.navigate('".$navigationUrl."')");
+                }
+
+                return null;
+            }
+        }
+
+        $messageManager = app(MessageManager::class);
+        $messageManager->appendUserMessage($this->employeeId, $this->selectedSessionId, $content, $userMeta);
+
+        $url = route('ai.chat.stream', array_filter([
+            'employee_id' => $this->employeeId,
+            'session_id' => $this->selectedSessionId,
+            'model' => $this->selectedModel,
+        ]));
+
+        return [
+            'url' => $url,
+            'session_id' => $this->selectedSessionId,
+        ];
+    }
+
+    /**
+     * Finalize a completed streaming run by refreshing component state.
+     */
+    public function finalizeStreamingRun(): void
+    {
+        $this->isLoading = false;
+        $this->dispatch('lara-response-ready');
+        $this->dispatch('lara-focus-composer');
+    }
+
+    /**
+     * Get identity display data for the current Digital Worker.
+     *
+     * @return array{name: string, role: string, icon: string, shortcut: string|null}
+     */
+    public function dwIdentity(): array
+    {
+        if ($this->employeeId === Employee::LARA_ID) {
+            return [
+                'name' => 'Lara',
+                'role' => __('System DW'),
+                'icon' => 'heroicon-o-sparkles',
+                'shortcut' => 'Ctrl+K',
+            ];
+        }
+
+        $employee = Employee::query()->find($this->employeeId);
+
+        return [
+            'name' => $employee?->short_name ?? __('Digital Worker'),
+            'role' => $employee?->designation ?? __('Digital Worker'),
+            'icon' => 'heroicon-o-cpu-chip',
+            'shortcut' => null,
+        ];
+    }
+
     public function render(): \Illuminate\Contracts\View\View
     {
-        $laraExists = Employee::query()->whereKey(Employee::LARA_ID)->exists();
-        $laraActivated = $this->isLaraActivated();
+        $dwExists = Employee::query()->whereKey($this->employeeId)->exists();
+        $dwActivated = $this->isDwActivated();
 
         $sessions = [];
         $messages = [];
 
-        if ($laraActivated) {
-            $sessions = app(SessionManager::class)->list(Employee::LARA_ID);
+        if ($dwActivated) {
+            $sessions = app(SessionManager::class)->list($this->employeeId);
         }
 
-        if ($laraActivated && $this->selectedSessionId !== null) {
-            $messages = app(MessageManager::class)->read(Employee::LARA_ID, $this->selectedSessionId);
+        if ($dwActivated && $this->selectedSessionId !== null) {
+            $messages = app(MessageManager::class)->read($this->employeeId, $this->selectedSessionId);
         }
+
+        $markdown = app(ChatMarkdownRenderer::class);
+
+        $canAttach = $this->canAttachFiles();
+
+        $quickActions = ($dwActivated && $messages === [])
+            ? app(QuickActionRegistry::class)->forRoute(request()->route()?->getName())
+            : [];
 
         return view('livewire.ai.lara-chat-overlay', [
-            'laraExists' => $laraExists,
-            'laraActivated' => $laraActivated,
+            'dwExists' => $dwExists,
+            'dwActivated' => $dwActivated,
+            'dwIdentity' => $this->dwIdentity(),
             'sessions' => $sessions,
             'messages' => $messages,
+            'isLara' => $this->employeeId === Employee::LARA_ID,
+            'canSelectModel' => $this->canSelectModel(),
+            'canAttachFiles' => $canAttach,
+            'availableModels' => $this->canSelectModel() ? $this->availableModels() : [],
+            'currentModel' => $this->resolveCurrentModelLabel(),
+            'markdown' => $markdown,
+            'quickActions' => $quickActions,
         ]);
     }
 
-    private function isLaraActivated(): bool
+    /**
+     * Check if the current user has model selection capability.
+     */
+    public function canSelectModel(): bool
+    {
+        $user = auth()->user();
+        if (! $user instanceof \App\Modules\Core\User\Models\User) {
+            return false;
+        }
+
+        $actor = Actor::forUser($user);
+
+        return app(AuthorizationService::class)->can($actor, 'ai.chat_model.manage')->allowed;
+    }
+
+    /**
+     * Get available models for the model picker dropdown.
+     *
+     * @return list<array{id: string, label: string, provider: string}>
+     */
+    public function availableModels(): array
+    {
+        $employee = Employee::query()->find($this->employeeId);
+        $companyId = $employee?->company_id ? (int) $employee->company_id : null;
+
+        if ($companyId === null) {
+            return [];
+        }
+
+        $providers = AiProvider::query()
+            ->forCompany($companyId)
+            ->active()
+            ->orderBy('priority')
+            ->orderBy('display_name')
+            ->get();
+
+        $models = [];
+        foreach ($providers as $provider) {
+            $providerModels = AiProviderModel::query()
+                ->where('ai_provider_id', $provider->id)
+                ->active()
+                ->orderBy('model_id')
+                ->get();
+
+            foreach ($providerModels as $model) {
+                $models[] = [
+                    'id' => $model->model_id,
+                    'label' => $model->model_id,
+                    'provider' => $provider->display_name,
+                ];
+            }
+        }
+
+        return $models;
+    }
+
+    /**
+     * Get the display label for the currently active model.
+     */
+    private function resolveCurrentModelLabel(): string
+    {
+        if ($this->selectedModel !== null) {
+            return $this->selectedModel;
+        }
+
+        $config = app(ConfigResolver::class)->resolvePrimaryWithDefaultFallback($this->employeeId);
+
+        return $config['model'] ?? __('Default');
+    }
+
+    private function isDwActivated(): bool
     {
         $isActivated = false;
 
-        if (Employee::query()->whereKey(Employee::LARA_ID)->exists()) {
+        if (Employee::query()->whereKey($this->employeeId)->exists()) {
             $resolver = app(ConfigResolver::class);
-            $configs = $resolver->resolve(Employee::LARA_ID);
+            $configs = $resolver->resolve($this->employeeId);
             $isActivated = count($configs) > 0;
 
-            if (! $isActivated && Company::query()->whereKey(Company::LICENSEE_ID)->exists()) {
-                $isActivated = $resolver->resolveDefault(Company::LICENSEE_ID) !== null;
+            if (! $isActivated) {
+                $employee = Employee::query()->find($this->employeeId);
+                $companyId = $employee?->company_id ? (int) $employee->company_id : null;
+
+                if ($companyId !== null) {
+                    $isActivated = $resolver->resolveDefault($companyId) !== null;
+                }
             }
         }
 
@@ -334,5 +686,108 @@ class LaraChatOverlay extends Component
         }
 
         return ['js' => $js, 'clean_content' => $clean ?: $js];
+    }
+
+    /**
+     * Process pending attachments: validate, store to session workspace, extract text for documents.
+     *
+     * @return list<array{id: string, original_name: string, stored_path: string, mime_type: string, size: int, kind: string, extracted_text_path: string|null}>
+     */
+    private function processAttachments(string $sessionId): array
+    {
+        $sessionManager = app(SessionManager::class);
+        $basePath = $sessionManager->sessionsPath($this->employeeId);
+        $attachDir = $basePath.'/attachments/'.$sessionId;
+
+        if (! is_dir($attachDir)) {
+            mkdir($attachDir, 0755, true);
+        }
+
+        $processed = [];
+
+        foreach ($this->attachments as $file) {
+            if (! $file instanceof TemporaryUploadedFile) {
+                continue;
+            }
+
+            $mime = $file->getMimeType() ?? '';
+            $size = $file->getSize() ?? 0;
+
+            if (! in_array($mime, self::ATTACHMENT_MIMES, true) || $size > self::ATTACHMENT_MAX_SIZE) {
+                continue;
+            }
+
+            $id = 'att_'.Str::random(12);
+            $originalName = $file->getClientOriginalName();
+            $storedPath = $attachDir.'/'.$id.'_'.$originalName;
+
+            $file->storeAs(
+                path: '',
+                name: $id.'_'.$originalName,
+                options: ['disk' => 'local', 'path' => $attachDir],
+            );
+
+            // Livewire storeAs uses the configured disk; copy to workspace directly
+            copy($file->getRealPath(), $storedPath);
+
+            $isImage = str_starts_with($mime, 'image/');
+            $extractedTextPath = null;
+
+            if (! $isImage) {
+                $extractedTextPath = $this->extractTextFromFile($storedPath, $mime, $attachDir, $id);
+            }
+
+            $processed[] = [
+                'id' => $id,
+                'original_name' => $originalName,
+                'stored_path' => $storedPath,
+                'mime_type' => $mime,
+                'size' => $size,
+                'kind' => $isImage ? 'image' : 'document',
+                'extracted_text_path' => $extractedTextPath,
+            ];
+        }
+
+        return $processed;
+    }
+
+    /**
+     * Extract readable text from a document file and write a sidecar .txt file.
+     */
+    private function extractTextFromFile(string $filePath, string $mimeType, string $attachDir, string $id): ?string
+    {
+        $text = null;
+
+        if (in_array($mimeType, ['text/plain', 'text/csv', 'text/markdown', 'application/json'], true)) {
+            $text = file_get_contents($filePath);
+        } elseif ($mimeType === 'application/pdf') {
+            $text = $this->extractPdfText($filePath);
+        }
+
+        if ($text === null || $text === false || trim($text) === '') {
+            return null;
+        }
+
+        $sidecarPath = $attachDir.'/'.$id.'.extracted.txt';
+        file_put_contents($sidecarPath, $text);
+
+        return $sidecarPath;
+    }
+
+    /**
+     * Extract text from a PDF file using pdftotext if available.
+     */
+    private function extractPdfText(string $filePath): ?string
+    {
+        $binary = trim((string) shell_exec('which pdftotext 2>/dev/null'));
+
+        if ($binary === '') {
+            return null;
+        }
+
+        $escaped = escapeshellarg($filePath);
+        $output = shell_exec("{$binary} {$escaped} - 2>/dev/null");
+
+        return is_string($output) && trim($output) !== '' ? $output : null;
     }
 }

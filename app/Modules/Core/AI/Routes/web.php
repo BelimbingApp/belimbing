@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
+use App\Modules\Core\AI\Http\Controllers\ChatStreamController;
 use App\Modules\Core\AI\Livewire\Playground;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
 use App\Modules\Core\AI\Livewire\Providers\ProviderSetup;
@@ -11,6 +12,9 @@ use App\Modules\Core\AI\Livewire\Tools;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {
+    // DW chat streaming (SSE)
+    Route::get('api/ai/chat/stream', ChatStreamController::class)
+        ->name('ai.chat.stream');
     // Lara setup
     Route::get('admin/setup/lara', Lara::class)
         ->name('admin.setup.lara');

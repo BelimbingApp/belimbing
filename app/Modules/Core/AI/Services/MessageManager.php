@@ -40,13 +40,15 @@ class MessageManager
      * @param  int  $employeeId  Digital Worker employee ID
      * @param  string  $sessionId  Session UUID
      * @param  string  $content  Message content
+     * @param  array<string, mixed>  $meta  Optional metadata (e.g., attachment references)
      */
-    public function appendUserMessage(int $employeeId, string $sessionId, string $content): Message
+    public function appendUserMessage(int $employeeId, string $sessionId, string $content, array $meta = []): Message
     {
         $message = new Message(
             role: 'user',
             content: $content,
             timestamp: new DateTimeImmutable,
+            meta: $meta,
         );
 
         $this->append($employeeId, $sessionId, $message);
@@ -93,6 +95,107 @@ class MessageManager
             runId: $runId,
             meta: $meta,
         );
+    }
+
+    /**
+     * Search across all session transcripts for messages matching a query.
+     *
+     * Returns sessions that contain at least one message matching the query,
+     * with a snippet from the first matching message.
+     *
+     * @param  int  $employeeId  Digital Worker employee ID
+     * @param  string  $query  Search query (case-insensitive substring match)
+     * @return list<array{session_id: string, title: string|null, snippet: string, matched_at: \DateTimeImmutable}>
+     */
+    public function searchSessions(int $employeeId, string $query): array
+    {
+        $sessions = $this->sessionManager->list($employeeId);
+        $results = [];
+
+        foreach ($sessions as $session) {
+            $path = $this->sessionManager->transcriptPath($employeeId, $session->id);
+
+            if (! file_exists($path)) {
+                continue;
+            }
+
+            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+            if ($lines === false) {
+                continue;
+            }
+
+            foreach ($lines as $line) {
+                $data = json_decode($line, true);
+
+                if (! is_array($data)) {
+                    continue;
+                }
+
+                $content = $data['content'] ?? null;
+
+                if (! is_string($content)) {
+                    continue;
+                }
+
+                $matchPos = mb_stripos($content, $query);
+
+                if ($matchPos === false) {
+                    continue;
+                }
+
+                $snippet = $this->extractSnippet($content, $matchPos);
+                $timestamp = isset($data['timestamp'])
+                    ? new DateTimeImmutable($data['timestamp'])
+                    : $session->lastActivityAt;
+
+                $results[] = [
+                    'session_id' => $session->id,
+                    'title' => $session->title,
+                    'snippet' => $snippet,
+                    'matched_at' => $timestamp,
+                ];
+
+                break;
+            }
+        }
+
+        usort($results, fn (array $a, array $b) => $b['matched_at'] <=> $a['matched_at']);
+
+        return $results;
+    }
+
+    /**
+     * Extract a snippet of ~120 characters centered around the match position.
+     */
+    private function extractSnippet(string $content, int $matchPos): string
+    {
+        $snippetLength = 120;
+        $contentLength = mb_strlen($content);
+
+        if ($contentLength <= $snippetLength) {
+            return $content;
+        }
+
+        $halfWindow = (int) floor($snippetLength / 2);
+        $start = max(0, $matchPos - $halfWindow);
+        $end = min($contentLength, $start + $snippetLength);
+
+        if ($end === $contentLength) {
+            $start = max(0, $end - $snippetLength);
+        }
+
+        $snippet = mb_substr($content, $start, $end - $start);
+
+        if ($start > 0) {
+            $snippet = '…'.$snippet;
+        }
+
+        if ($end < $contentLength) {
+            $snippet .= '…';
+        }
+
+        return $snippet;
     }
 
     /**

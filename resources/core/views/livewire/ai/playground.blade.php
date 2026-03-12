@@ -89,7 +89,11 @@
                                         ? 'bg-accent text-accent-on'
                                         : 'bg-surface-subtle text-ink' }}"
                                 >
-                                    <div class="whitespace-pre-wrap break-words">{{ $message->content }}</div>
+                                    @if ($message->role === 'assistant')
+                                        <div class="dw-prose">{!! $markdown->render($message->content) !!}</div>
+                                    @else
+                                        <div class="whitespace-pre-wrap break-words">{{ $message->content }}</div>
+                                    @endif
                                     <div class="text-[10px] mt-1 {{ $message->role === 'user' ? 'text-accent-on/70' : 'text-muted' }} tabular-nums">
                                         {{ $message->timestamp->format('H:i:s') }}
                                     </div>

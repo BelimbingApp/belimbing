@@ -43,6 +43,96 @@
     }
 }
 
+/*
+ * DW chat prose — Markdown rendering for Digital Worker chat bubbles.
+ *
+ * Scoped via .dw-prose so it doesn't leak into other views.
+ * Uses semantic tokens (ink, muted, accent, surface-subtle, border-default).
+ * Compact spacing tuned for chat context (tighter than full-page prose).
+ */
+@layer components {
+    .dw-prose {
+        @apply text-sm leading-relaxed break-words;
+    }
+
+    .dw-prose p {
+        @apply my-1.5 first:mt-0 last:mb-0;
+    }
+
+    .dw-prose h1,
+    .dw-prose h2,
+    .dw-prose h3,
+    .dw-prose h4,
+    .dw-prose h5,
+    .dw-prose h6 {
+        @apply font-medium tracking-tight mt-3 mb-1.5 first:mt-0;
+    }
+
+    .dw-prose h1 { @apply text-base; }
+    .dw-prose h2 { @apply text-sm; }
+    .dw-prose h3,
+    .dw-prose h4,
+    .dw-prose h5,
+    .dw-prose h6 { @apply text-sm; }
+
+    .dw-prose strong { @apply font-semibold; }
+    .dw-prose em { @apply italic; }
+    .dw-prose del { @apply line-through text-muted; }
+
+    .dw-prose a {
+        @apply text-accent underline underline-offset-2 hover:text-accent-hover;
+    }
+
+    .dw-prose code {
+        @apply text-[0.8125rem] font-mono bg-surface-subtle rounded px-1 py-0.5;
+    }
+
+    .dw-prose pre {
+        @apply my-2 rounded-lg bg-surface-subtle border border-border-default overflow-x-auto first:mt-0 last:mb-0;
+    }
+
+    .dw-prose pre code {
+        @apply block p-2.5 bg-transparent text-xs leading-relaxed;
+    }
+
+    .dw-prose ul {
+        @apply my-1.5 ml-4 list-disc space-y-0.5 first:mt-0 last:mb-0;
+    }
+
+    .dw-prose ol {
+        @apply my-1.5 ml-4 list-decimal space-y-0.5 first:mt-0 last:mb-0;
+    }
+
+    .dw-prose li > ul,
+    .dw-prose li > ol {
+        @apply my-0.5;
+    }
+
+    .dw-prose blockquote {
+        @apply my-2 pl-3 border-l-2 border-accent/40 text-muted italic first:mt-0 last:mb-0;
+    }
+
+    .dw-prose table {
+        @apply my-2 w-full text-xs border-collapse first:mt-0 last:mb-0;
+    }
+
+    .dw-prose th {
+        @apply text-left font-semibold text-muted px-2 py-1 border-b border-border-default bg-surface-subtle/80;
+    }
+
+    .dw-prose td {
+        @apply px-2 py-1 border-b border-border-default;
+    }
+
+    .dw-prose hr {
+        @apply my-3 border-t border-border-default;
+    }
+
+    .dw-prose img {
+        @apply max-w-full rounded my-2;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .combobox-dropdown {
         transition: none !important;

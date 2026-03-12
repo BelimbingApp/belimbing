@@ -39,15 +39,20 @@ class AgenticRuntime
      * @param  list<Message>  $messages  Conversation history
      * @param  int  $employeeId  Lara's employee ID
      * @param  string|null  $systemPrompt  System prompt
+     * @param  string|null  $modelOverride  Optional model ID to override the resolved config
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
-    public function run(array $messages, int $employeeId, ?string $systemPrompt = null): array
+    public function run(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null): array
     {
         $runId = 'run_'.Str::random(12);
         $config = $this->configResolver->resolvePrimaryWithDefaultFallback($employeeId);
 
         if ($config === null) {
             return $this->responseFactory->error($runId, 'unknown', 'unknown', 0, __('No LLM configuration available.'));
+        }
+
+        if ($modelOverride !== null) {
+            $config['model'] = $modelOverride;
         }
 
         $credentials = $this->credentialResolver->resolve($config);
@@ -64,6 +69,44 @@ class AgenticRuntime
         }
 
         return $this->runToolCallingLoop($runId, $config, $credentials, $messages, $systemPrompt);
+    }
+
+    /**
+     * Run an agentic conversation turn with streaming for the final response.
+     *
+     * Tool-calling iterations run synchronously. Only the final text response
+     * is streamed as SSE-compatible events. Yields arrays with 'event' and 'data' keys.
+     *
+     * @param  list<Message>  $messages  Conversation history
+     * @param  int  $employeeId  Digital Worker employee ID
+     * @param  string|null  $systemPrompt  System prompt
+     * @param  string|null  $modelOverride  Optional model ID override
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    public function runStream(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null): \Generator
+    {
+        $runId = 'run_'.Str::random(12);
+        $config = $this->configResolver->resolvePrimaryWithDefaultFallback($employeeId);
+
+        if ($config === null) {
+            yield ['event' => 'error', 'data' => ['message' => __('No LLM configuration available.'), 'run_id' => $runId]];
+
+            return;
+        }
+
+        if ($modelOverride !== null) {
+            $config['model'] = $modelOverride;
+        }
+
+        $credentials = $this->credentialResolver->resolve($config);
+
+        if (isset($credentials['error'])) {
+            yield ['event' => 'error', 'data' => ['message' => $credentials['error'], 'run_id' => $runId]];
+
+            return;
+        }
+
+        yield from $this->runStreamingToolLoop($runId, $config, $credentials, $messages, $systemPrompt);
     }
 
     /**
@@ -326,5 +369,158 @@ class AgenticRuntime
             $toolActions !== [] ? ['tool_actions' => $toolActions] : [],
             $content,
         );
+    }
+
+    /**
+     * Execute the tool-calling loop with streaming on the final response.
+     *
+     * Intermediate tool-call iterations use synchronous chat. The final
+     * text response iteration uses the streaming client and yields delta events.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array{api_key: string, base_url: string}  $credentials
+     * @param  list<Message>  $messages
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function runStreamingToolLoop(
+        string $runId,
+        array $config,
+        array $credentials,
+        array $messages,
+        ?string $systemPrompt,
+    ): \Generator {
+        $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
+        $tools = $this->toolRegistry->toolDefinitionsForCurrentUser();
+        $toolActions = [];
+        $clientActions = [];
+
+        yield ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => $runId]];
+
+        for ($iteration = 0; $iteration < self::MAX_ITERATIONS; $iteration++) {
+            $result = $this->chatWithTools($credentials, $config, $apiMessages, $tools);
+
+            if (isset($result['error'])) {
+                yield ['event' => 'error', 'data' => ['message' => (string) $result['error'], 'run_id' => $runId]];
+
+                return;
+            }
+
+            if ($this->hasNoToolCalls($result)) {
+                yield from $this->streamFinalResponse(
+                    $runId, $config, $credentials, $apiMessages, $tools, $toolActions, $clientActions,
+                );
+
+                return;
+            }
+
+            $this->appendAssistantToolCallMessage($apiMessages, $result);
+
+            foreach ($result['tool_calls'] as $toolCall) {
+                $functionName = (string) ($toolCall['function']['name'] ?? '');
+
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'tool_started',
+                    'tool' => $functionName,
+                    'run_id' => $runId,
+                ]];
+
+                $toolExecution = $this->executeToolCall($toolCall);
+                $toolActions[] = $toolExecution['action'];
+                array_push($clientActions, ...$toolExecution['client_actions']);
+                $apiMessages[] = $toolExecution['message'];
+
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'tool_finished',
+                    'tool' => $functionName,
+                    'run_id' => $runId,
+                ]];
+            }
+        }
+
+        yield ['event' => 'error', 'data' => [
+            'message' => __('Maximum tool-calling iterations reached.'),
+            'run_id' => $runId,
+        ]];
+    }
+
+    /**
+     * Stream the final text response from the LLM after all tool calls are resolved.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array{api_key: string, base_url: string}  $credentials
+     * @param  list<array<string, mixed>>  $apiMessages
+     * @param  list<array<string, mixed>>  $tools
+     * @param  list<array<string, mixed>>  $toolActions
+     * @param  list<string>  $clientActions
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function streamFinalResponse(
+        string $runId,
+        array $config,
+        array $credentials,
+        array $apiMessages,
+        array $tools,
+        array $toolActions,
+        array $clientActions,
+    ): \Generator {
+        $fullContent = '';
+        $usage = null;
+        $latencyMs = 0;
+
+        $stream = $this->llmClient->chatStream(
+            baseUrl: $credentials['base_url'],
+            apiKey: $credentials['api_key'],
+            model: $config['model'],
+            messages: $apiMessages,
+            maxTokens: $config['max_tokens'],
+            temperature: $config['temperature'],
+            timeout: $config['timeout'],
+            providerName: $config['provider_name'],
+            tools: $tools !== [] ? $tools : null,
+            toolChoice: $tools !== [] ? 'auto' : null,
+        );
+
+        foreach ($stream as $event) {
+            if ($event['type'] === 'content_delta') {
+                $fullContent .= $event['text'];
+                yield ['event' => 'delta', 'data' => ['text' => $event['text']]];
+            } elseif ($event['type'] === 'done') {
+                $usage = $event['usage'] ?? null;
+                $latencyMs = $event['latency_ms'] ?? 0;
+            } elseif ($event['type'] === 'error') {
+                yield ['event' => 'error', 'data' => ['message' => $event['message'], 'run_id' => $runId]];
+
+                return;
+            }
+        }
+
+        if ($clientActions !== []) {
+            $fullContent = implode("\n", $clientActions)."\n".$fullContent;
+        }
+
+        $meta = [
+            'model' => $config['model'],
+            'provider_name' => $config['provider_name'],
+            'llm' => [
+                'provider' => (string) ($config['provider_name'] ?? 'unknown'),
+                'model' => $config['model'],
+            ],
+            'latency_ms' => $latencyMs,
+            'tokens' => [
+                'prompt' => $usage['prompt_tokens'] ?? null,
+                'completion' => $usage['completion_tokens'] ?? null,
+            ],
+            'fallback_attempts' => [],
+        ];
+
+        if ($toolActions !== []) {
+            $meta['tool_actions'] = $toolActions;
+        }
+
+        yield ['event' => 'done', 'data' => [
+            'run_id' => $runId,
+            'content' => $fullContent,
+            'meta' => $meta,
+        ]];
     }
 }

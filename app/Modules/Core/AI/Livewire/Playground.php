@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Livewire;
 
+use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\DigitalWorkerRuntime;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
@@ -398,6 +399,7 @@ class Playground extends Component
             'messages' => $messages,
             'availableProviders' => $availableProviders,
             'providerModelsMap' => $providerModelsMap,
+            'markdown' => app(ChatMarkdownRenderer::class),
         ]);
     }
 

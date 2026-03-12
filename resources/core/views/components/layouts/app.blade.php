@@ -29,8 +29,15 @@
         COLLAPSE_THRESHOLD: 80,
 
         {{-- Lara chat --}}
-        laraChatOpen: false,
+        laraChatOpen: (localStorage.getItem('dw-chat-1-open') ?? '0') === '1',
+        laraChatMode: localStorage.getItem('dw-chat-1-mode') || 'overlay',
         laraPrefillPrompt: null,
+
+        {{-- Docked panel drag-resize --}}
+        laraDockWidth: parseInt(localStorage.getItem('dw-chat-1-dock-width')) || 448,
+        _laraDockDragging: false,
+        DOCK_MIN: 320,
+        DOCK_MAX: Math.floor(window.innerWidth * 0.6),
 
         {{-- Initialize sidebar from persisted state --}}
         initSidebar() {
@@ -96,6 +103,32 @@
             localStorage.setItem('sidebarRail', this.sidebarRail ? '1' : '0');
         },
 
+        {{-- Dock panel drag --}}
+        startDockDrag(e) {
+            this._laraDockDragging = true;
+            const startX = e.clientX;
+            const startWidth = this.laraDockWidth;
+            document.documentElement.style.cursor = 'col-resize';
+            document.documentElement.style.userSelect = 'none';
+
+            const onMove = (e) => {
+                const delta = startX - e.clientX;
+                this.laraDockWidth = Math.max(this.DOCK_MIN, Math.min(this.DOCK_MAX, startWidth + delta));
+            };
+
+            const onUp = () => {
+                this._laraDockDragging = false;
+                document.documentElement.style.cursor = '';
+                document.documentElement.style.userSelect = '';
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                localStorage.setItem('dw-chat-1-dock-width', this.laraDockWidth);
+            };
+
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        },
+
         {{-- Lara chat helpers --}}
         isTypingTarget(event) {
             const target = event.target;
@@ -109,7 +142,12 @@
         openLaraChat(prompt = null) {
             this.laraPrefillPrompt = prompt;
             this.laraChatOpen = true;
+            localStorage.setItem('dw-chat-1-open', '1');
             this.$nextTick(() => window.dispatchEvent(new CustomEvent('lara-chat-opened', { detail: { prompt: prompt } })));
+        },
+        closeLaraChat() {
+            this.laraChatOpen = false;
+            localStorage.setItem('dw-chat-1-open', '0');
         },
         toggleLaraChat(event) {
             if (this.isTypingTarget(event)) {
@@ -117,9 +155,14 @@
             }
 
             this.laraChatOpen = !this.laraChatOpen;
+            localStorage.setItem('dw-chat-1-open', this.laraChatOpen ? '1' : '0');
             if (this.laraChatOpen) {
                 this.$nextTick(() => window.dispatchEvent(new CustomEvent('lara-chat-opened')));
             }
+        },
+        toggleLaraChatMode() {
+            this.laraChatMode = this.laraChatMode === 'overlay' ? 'docked' : 'overlay';
+            localStorage.setItem('dw-chat-1-mode', this.laraChatMode);
         },
         executeLaraJs(js) {
             if (typeof js !== 'string' || js.trim() === '') {
@@ -136,11 +179,14 @@
     x-init="initSidebar()"
     @toggle-sidebar.window="toggleSidebar()"
     @open-lara-chat.window="openLaraChat($event.detail?.prompt ?? null)"
-    @close-lara-chat.window="laraChatOpen = false"
+    @close-lara-chat.window="closeLaraChat()"
     @lara-execute-js.window="executeLaraJs($event.detail?.js ?? '')"
+    @toggle-lara-chat-mode.window="toggleLaraChatMode()"
     @keydown.ctrl.k.window.prevent="toggleLaraChat($event)"
     @keydown.meta.k.window.prevent="toggleLaraChat($event)"
-    @keydown.escape.window="laraChatOpen = false"
+    @keydown.ctrl.shift.k.window.prevent="toggleLaraChatMode()"
+    @keydown.meta.shift.k.window.prevent="toggleLaraChatMode()"
+    @keydown.escape.window="closeLaraChat()"
     class="h-screen overflow-hidden bg-surface-page flex flex-col"
 >
     {{-- Top Bar --}}
@@ -195,63 +241,77 @@
         <main class="flex-1 overflow-y-auto bg-surface-page px-1 py-2 sm:px-4 sm:py-1">
             {{ $slot }}
         </main>
+
+        @auth
+            {{-- Docked mode: right-side panel inside the layout flow (drag-resizable) --}}
+            <aside
+                x-show="laraChatOpen && laraChatMode === 'docked'"
+                x-cloak
+                class="hidden sm:flex shrink-0 border-l border-border-default bg-surface-card overflow-hidden relative"
+                :style="'width: ' + laraDockWidth + 'px'"
+            >
+                {{-- Drag handle (left edge) --}}
+                <div
+                    @mousedown.prevent="startDockDrag($event)"
+                    class="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize z-10 group"
+                >
+                    <div
+                        class="w-full h-full transition-colors"
+                        :class="_laraDockDragging ? 'bg-accent' : 'group-hover:bg-border-default'"
+                    ></div>
+                </div>
+                {{-- Teleport target for docked mode --}}
+                <div class="flex-1 min-w-0 h-full" x-ref="laraDockTarget"></div>
+            </aside>
+        @endauth
     </div>
 
     @auth
-        {{-- Lara chat panel (non-blocking — page remains interactive) --}}
-        {{-- Desktop: floating overlay. Mobile: full-screen takeover. --}}
-        <template x-if="laraChatOpen">
-            <div>
-                {{-- Desktop overlay --}}
-                <div
-                    x-show="laraChatOpen"
-                    x-transition:enter="transition ease-out duration-200"
-                    x-transition:enter-start="opacity-0 translate-y-2"
-                    x-transition:enter-end="opacity-100 translate-y-0"
-                    x-transition:leave="transition ease-in duration-150"
-                    x-transition:leave-start="opacity-100 translate-y-0"
-                    x-transition:leave-end="opacity-0 translate-y-2"
-                    class="hidden sm:block fixed right-3 sm:right-4 bottom-8 z-50"
-                >
-                    <section class="w-[min(56rem,calc(100vw-2rem))] h-[min(80vh,46rem)] bg-surface-card border border-border-default rounded-2xl shadow-lg overflow-hidden">
-                        <livewire:ai.lara-chat-overlay />
-                    </section>
-                </div>
+        {{-- Overlay mode: floating card (desktop only) --}}
+        <div
+            x-show="laraChatOpen && laraChatMode === 'overlay'"
+            x-cloak
+            class="hidden sm:block fixed right-3 sm:right-4 bottom-8 z-50"
+        >
+            <section class="w-[min(56rem,calc(100vw-2rem))] h-[min(80vh,46rem)] bg-surface-card border border-border-default rounded-2xl shadow-lg overflow-hidden">
+                {{-- Teleport target for overlay mode --}}
+                <div class="h-full" x-ref="laraOverlayTarget"></div>
+            </section>
+        </div>
 
-                {{-- Mobile full-screen takeover --}}
-                <div
-                    x-show="laraChatOpen"
-                    x-transition:enter="transition ease-out duration-200"
-                    x-transition:enter-start="opacity-0 translate-y-4"
-                    x-transition:enter-end="opacity-100 translate-y-0"
-                    x-transition:leave="transition ease-in duration-150"
-                    x-transition:leave-start="opacity-100 translate-y-0"
-                    x-transition:leave-end="opacity-0 translate-y-4"
-                    class="sm:hidden fixed inset-x-0 top-11 bottom-6 z-50 bg-surface-card"
-                >
-                    <div class="h-full flex flex-col">
-                        {{-- Mobile chat header with close button --}}
-                        <div class="flex items-center justify-between px-3 py-2 border-b border-border-default shrink-0">
-                            <div class="flex items-center gap-2">
-                                <x-ai.lara-identity compact :show-role="false" />
-                                <span class="text-sm font-medium text-ink">{{ __('Lara') }}</span>
-                            </div>
-                            <button
-                                type="button"
-                                @click="laraChatOpen = false"
-                                class="inline-flex items-center justify-center w-8 h-8 rounded-sm text-muted hover:text-ink hover:bg-surface-subtle transition"
-                                aria-label="{{ __('Close chat') }}"
-                            >
-                                <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div class="flex-1 overflow-hidden">
-                            <livewire:ai.lara-chat-overlay />
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </template>
+        {{-- Mobile: full-screen takeover --}}
+        <div
+            x-show="laraChatOpen"
+            x-cloak
+            class="sm:hidden fixed inset-x-0 top-11 bottom-6 z-50 bg-surface-card overflow-hidden"
+        >
+            {{-- Teleport target for mobile mode --}}
+            <div class="h-full" x-ref="laraMobileTarget"></div>
+        </div>
+
+        {{-- Single Livewire instance — Alpine moves it into the active target --}}
+        <div
+            x-ref="laraChatInstance"
+            x-effect="
+                const el = $refs.laraChatInstance;
+                if (!el) return;
+                const isMobile = window.innerWidth < 640;
+                let target;
+                if (isMobile) {
+                    target = $refs.laraMobileTarget;
+                } else if (laraChatMode === 'docked') {
+                    target = $refs.laraDockTarget;
+                } else {
+                    target = $refs.laraOverlayTarget;
+                }
+                if (target && el.parentNode !== target) {
+                    target.appendChild(el);
+                }
+            "
+            class="h-full"
+        >
+            <livewire:ai.lara-chat-overlay />
+        </div>
     @endauth
 
     {{-- Status Bar --}}
