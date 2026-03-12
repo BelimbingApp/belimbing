@@ -40,9 +40,12 @@ abstract class SearchablePaginatedList extends Component
 
         $this->sortQuery($query);
 
-        return view($this->viewName(), [
-            $this->viewDataKey() => $query->paginate($this->perPage()),
-        ]);
+        return view($this->viewName(), array_merge(
+            [
+                $this->viewDataKey() => $query->paginate($this->perPage()),
+            ],
+            $this->extraViewData(),
+        ));
     }
 
     abstract protected function query(): EloquentBuilder|QueryBuilder;
@@ -81,5 +84,13 @@ abstract class SearchablePaginatedList extends Component
     protected function perPage(): int
     {
         return 25;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function extraViewData(): array
+    {
+        return [];
     }
 }
