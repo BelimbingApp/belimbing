@@ -45,7 +45,7 @@ test('address can be created from create page component', function (): void {
         ->set('line1', '88 River Road')
         ->set('locality', 'Boston')
         ->set('postcode', '02110')
-        ->set('country_iso', 'us')
+        ->set('countryIso', 'us')
         ->set('verificationStatus', 'verified')
         ->call('store')
         ->assertRedirect(route('admin.addresses.index'));

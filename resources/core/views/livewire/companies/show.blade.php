@@ -538,16 +538,16 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <x-ui.combobox
-                        wire:model.live="country_iso"
+                        wire:model.live="countryIso"
                         label="{{ __('Country') }}"
                         placeholder="{{ __('Search country...') }}"
                         :options="$countries->map(fn($c) => ['value' => $c->iso, 'label' => $c->country])->all()"
-                        :error="$errors->first('country_iso')"
+                        :error="$errors->first('countryIso')"
                     />
 
                     <x-ui.combobox
                         wire:model.live="admin1Code"
-                        wire:key="modal-admin1-{{ $country_iso ?? 'none' }}"
+                        wire:key="modal-admin1-{{ $countryIso ?? 'none' }}"
                         label="{{ __('State / Province') }}"
                         :hint="$admin1IsAuto ? __('(from postcode)') : null"
                         placeholder="{{ __('Search state...') }}"
@@ -559,12 +559,12 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <x-ui.combobox
                         wire:model.live="postcode"
-                        wire:key="modal-postcode-{{ $country_iso ?? 'none' }}"
+                        wire:key="modal-postcode-{{ $countryIso ?? 'none' }}"
                         label="{{ __('Postcode') }}"
                         placeholder="{{ __('Search postcode...') }}"
                         :options="$postcodeOptions"
                         :editable="true"
-                        search-url="{{ route('admin.addresses.postcodes.search') }}?country={{ $country_iso ?? '' }}"
+                        search-url="{{ route('admin.addresses.postcodes.search') }}?country={{ $countryIso ?? '' }}"
                         :error="$errors->first('postcode')"
                     />
 
@@ -600,7 +600,7 @@
                         </div>
                     </div>
                     <div class="mt-3">
-                        <x-ui.checkbox wire:model="is_primary" label="{{ __('Primary Address') }}" />
+                        <x-ui.checkbox wire:model="isPrimary" label="{{ __('Primary Address') }}" />
                     </div>
                 </div>
                 @endif

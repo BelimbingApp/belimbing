@@ -112,7 +112,7 @@
                 </div>
                 <div>
                     <x-ui.combobox
-                        wire:model.live="country_iso"
+                        wire:model.live="countryIso"
                         label="{{ __('Country') }}"
                         placeholder="{{ __('Search country...') }}"
                         :options="$countryOptions"
@@ -121,7 +121,7 @@
                 <div>
                     <x-ui.combobox
                         wire:model.live="admin1Code"
-                        wire:key="show-admin1-{{ $country_iso ?? 'none' }}"
+                        wire:key="show-admin1-{{ $countryIso ?? 'none' }}"
                         label="{{ __('State / Province') }}"
                         :hint="$admin1IsAuto ? __('(from postcode)') : null"
                         placeholder="{{ __('Search state...') }}"
@@ -131,12 +131,12 @@
                 <div>
                     <x-ui.combobox
                         wire:model.live="postcode"
-                        wire:key="show-postcode-{{ $country_iso ?? 'none' }}"
+                        wire:key="show-postcode-{{ $countryIso ?? 'none' }}"
                         label="{{ __('Postcode') }}"
                         placeholder="{{ __('Search postcode...') }}"
                         :options="$postcodeOptions"
                         :editable="true"
-                        search-url="{{ route('admin.addresses.postcodes.search') }}?country={{ $country_iso ?? '' }}"
+                        search-url="{{ route('admin.addresses.postcodes.search') }}?country={{ $countryIso ?? '' }}"
                     />
                 </div>
                 <div>

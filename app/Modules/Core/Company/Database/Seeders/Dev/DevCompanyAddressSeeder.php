@@ -290,7 +290,7 @@ class DevCompanyAddressSeeder extends DevSeeder
             [6, 5, ['headquarters'], true, 0, '2022-11-01', null],
         ];
 
-        foreach ($links as [$companyIdx, $addressIdx, $kind, $is_primary, $priority, $validFrom, $validTo]) {
+        foreach ($links as [$companyIdx, $addressIdx, $kind, $isPrimary, $priority, $validFrom, $validTo]) {
             if (! isset($companies[$companyIdx], $addresses[$addressIdx])) {
                 continue;
             }
@@ -305,7 +305,7 @@ class DevCompanyAddressSeeder extends DevSeeder
             if (! $exists) {
                 $company->addresses()->attach($address->id, [
                     'kind' => $kind,
-                    'is_primary' => $is_primary,
+                    'is_primary' => $isPrimary,
                     'priority' => $priority,
                     'valid_from' => $validFrom,
                     'valid_to' => $validTo,

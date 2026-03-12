@@ -19,13 +19,13 @@ class Show extends AbstractAddressForm
     public function mount(Address $address): void
     {
         $this->address = $address->load(['country', 'admin1']);
-        $this->country_iso = $address->country_iso;
+        $this->countryIso = $address->country_iso;
         $this->admin1Code = $address->admin1Code;
         $this->postcode = $address->postcode;
         $this->locality = $address->locality;
 
-        if ($this->country_iso) {
-            $this->admin1Options = $this->loadAdmin1ForCountry($this->country_iso);
+        if ($this->countryIso) {
+            $this->admin1Options = $this->loadAdmin1ForCountry($this->countryIso);
         }
     }
 
@@ -40,11 +40,11 @@ class Show extends AbstractAddressForm
             $this->address->country_iso = null;
         } else {
             $validated = validator(
-                ['country_iso' => $iso],
-                ['country_iso' => ['string', 'size:2']]
+                ['countryIso' => $iso],
+                ['countryIso' => ['string', 'size:2']]
             )->validate();
 
-            $this->address->country_iso = strtoupper($validated['country_iso']);
+            $this->address->country_iso = strtoupper($validated['countryIso']);
         }
 
         $this->address->save();
