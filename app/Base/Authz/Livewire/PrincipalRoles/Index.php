@@ -6,44 +6,52 @@
 namespace App\Base\Authz\Livewire\PrincipalRoles;
 
 use App\Base\Authz\Models\PrincipalRole;
-use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
-use Livewire\Component;
-use Livewire\WithPagination;
+use App\Base\Foundation\Livewire\SearchablePaginatedList;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 
-class Index extends Component
+class Index extends SearchablePaginatedList
 {
-    use ResetsPaginationOnSearch;
-    use WithPagination;
-
-    public string $search = '';
-
-    public function render(): \Illuminate\Contracts\View\View
+    protected function query(): EloquentBuilder|QueryBuilder
     {
-        return view('livewire.admin.authz.principal-roles.index', [
-            'assignments' => PrincipalRole::query()
-                ->with('role')
-                ->leftJoin('users', function ($join): void {
-                    $join->on('base_authz_principal_roles.principal_id', '=', 'users.id')
-                        ->where('base_authz_principal_roles.principal_type', '=', 'human_user');
-                })
-                ->leftJoin('companies', 'base_authz_principal_roles.company_id', '=', 'companies.id')
-                ->select(
-                    'base_authz_principal_roles.*',
-                    'users.name as principal_name',
-                    'users.email as principal_email',
-                    'companies.name as company_name'
-                )
-                ->when($this->search, function ($query, $search): void {
-                    $query->where(function ($q) use ($search): void {
-                        $q->where('users.name', 'like', '%'.$search.'%')
-                            ->orWhere('users.email', 'like', '%'.$search.'%')
-                            ->orWhereHas('role', function ($rq) use ($search): void {
-                                $rq->where('name', 'like', '%'.$search.'%');
-                            });
-                    });
-                })
-                ->orderByDesc('base_authz_principal_roles.created_at')
-                ->paginate(25),
-        ]);
+        return PrincipalRole::query()
+            ->with('role')
+            ->leftJoin('users', function ($join): void {
+                $join->on('base_authz_principal_roles.principal_id', '=', 'users.id')
+                    ->where('base_authz_principal_roles.principal_type', '=', 'human_user');
+            })
+            ->leftJoin('companies', 'base_authz_principal_roles.company_id', '=', 'companies.id')
+            ->select(
+                'base_authz_principal_roles.*',
+                'users.name as principal_name',
+                'users.email as principal_email',
+                'companies.name as company_name'
+            );
+    }
+
+    protected function viewName(): string
+    {
+        return 'livewire.admin.authz.principal-roles.index';
+    }
+
+    protected function viewDataKey(): string
+    {
+        return 'assignments';
+    }
+
+    protected function applySearch(EloquentBuilder|QueryBuilder $query, string $search): void
+    {
+        $query->where(function ($builder) use ($search): void {
+            $builder->where('users.name', 'like', '%'.$search.'%')
+                ->orWhere('users.email', 'like', '%'.$search.'%')
+                ->orWhereHas('role', function ($roleQuery) use ($search): void {
+                    $roleQuery->where('name', 'like', '%'.$search.'%');
+                });
+        });
+    }
+
+    protected function sortQuery(EloquentBuilder|QueryBuilder $query): void
+    {
+        $query->orderByDesc('base_authz_principal_roles.created_at');
     }
 }

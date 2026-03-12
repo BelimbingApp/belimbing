@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Tools;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
+use App\Base\AI\Tools\Concerns\HasToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
@@ -23,6 +24,8 @@ use App\Base\AI\Tools\ToolResult;
  */
 class WriteJsTool extends AbstractTool
 {
+    use HasToolMetadata;
+
     private const int MAX_SCRIPT_LENGTH = 10000;
 
     private const int MAX_DESCRIPTION_LENGTH = 500;
@@ -80,66 +83,33 @@ class WriteJsTool extends AbstractTool
         return 'ai.tool_write_js.execute';
     }
 
-    /**
-     * Human-friendly display name for UI surfaces.
-     */
-    public function displayName(): string
-    {
-        return 'Write JS';
-    }
-
-    /**
-     * One-sentence plain-language summary for humans.
-     */
-    public function summary(): string
-    {
-        return 'Execute JavaScript in the user\'s browser.';
-    }
-
-    /**
-     * Longer explanation of what this tool does and does not do.
-     */
-    public function explanation(): string
-    {
-        return 'Sends JavaScript code to be executed client-side in the user\'s browser session. '
-            .'Useful for UI interactions and dynamic page modifications.';
-    }
-
-    /**
-     * Sample inputs for the Try-It console.
-     *
-     * @return list<array{label: string, input: array<string, mixed>, runnable?: bool}>
-     */
-    public function testExamples(): array
+    protected function metadata(): array
     {
         return [
-            [
-                'label' => 'Scroll to top',
-                'input' => [
-                    'script' => 'window.scrollTo({top: 0, behavior: "smooth"})',
-                    'description' => 'Scroll the page to the top',
+            'display_name' => 'Write JS',
+            'summary' => 'Execute JavaScript in the user\'s browser.',
+            'explanation' => 'Sends JavaScript code to be executed client-side in the user\'s browser session. '
+                .'Useful for UI interactions and dynamic page modifications.',
+            'test_examples' => [
+                [
+                    'label' => 'Scroll to top',
+                    'input' => [
+                        'script' => 'window.scrollTo({top: 0, behavior: "smooth"})',
+                        'description' => 'Scroll the page to the top',
+                    ],
+                ],
+                [
+                    'label' => '⚠ Redirect user to another page',
+                    'input' => [
+                        'script' => 'window.location.href = "/dashboard"',
+                        'description' => 'Navigate user away from current page',
+                    ],
+                    'runnable' => false,
                 ],
             ],
-            [
-                'label' => '⚠ Redirect user to another page',
-                'input' => [
-                    'script' => 'window.location.href = "/dashboard"',
-                    'description' => 'Navigate user away from current page',
-                ],
-                'runnable' => false,
+            'limits' => [
+                'Executes in the user\'s browser context',
             ],
-        ];
-    }
-
-    /**
-     * Known safety limits users should understand.
-     *
-     * @return list<string>
-     */
-    public function limits(): array
-    {
-        return [
-            'Executes in the user\'s browser context',
         ];
     }
 

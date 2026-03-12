@@ -5,18 +5,13 @@
 
 namespace App\Base\Queue\Livewire\JobBatches;
 
-use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\SearchablePaginatedList;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
-use Livewire\Component;
-use Livewire\WithPagination;
 
-class Index extends Component
+class Index extends SearchablePaginatedList
 {
-    use ResetsPaginationOnSearch;
-    use WithPagination;
-
-    public string $search = '';
-
     public function cancelBatch(string $id): void
     {
         DB::table('job_batches')
@@ -33,18 +28,31 @@ class Index extends Component
             ->delete();
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    protected function query(): EloquentBuilder|QueryBuilder
     {
-        return view('livewire.admin.system.job-batches.index', [
-            'batches' => DB::table('job_batches')
-                ->when($this->search, function ($query, $search): void {
-                    $query->where(function ($q) use ($search): void {
-                        $q->where('name', 'like', '%'.$search.'%')
-                            ->orWhere('id', 'like', '%'.$search.'%');
-                    });
-                })
-                ->orderByDesc('created_at')
-                ->paginate(25),
-        ]);
+        return DB::table('job_batches');
+    }
+
+    protected function viewName(): string
+    {
+        return 'livewire.admin.system.job-batches.index';
+    }
+
+    protected function viewDataKey(): string
+    {
+        return 'batches';
+    }
+
+    protected function applySearch(EloquentBuilder|QueryBuilder $query, string $search): void
+    {
+        $query->where(function ($builder) use ($search): void {
+            $builder->where('name', 'like', '%'.$search.'%')
+                ->orWhere('id', 'like', '%'.$search.'%');
+        });
+    }
+
+    protected function sortQuery(EloquentBuilder|QueryBuilder $query): void
+    {
+        $query->orderByDesc('created_at');
     }
 }

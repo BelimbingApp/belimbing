@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Tools;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
+use App\Base\AI\Tools\Concerns\HasToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
@@ -28,6 +29,8 @@ use Illuminate\Support\Facades\Notification as NotificationFacade;
  */
 class NotificationTool extends AbstractTool
 {
+    use HasToolMetadata;
+
     /**
      * Maximum length for the notification subject.
      */
@@ -95,64 +98,22 @@ class NotificationTool extends AbstractTool
         return 'ai.tool_notification.execute';
     }
 
-    /**
-     * Human-friendly display name for UI surfaces.
-     */
-    public function displayName(): string
-    {
-        return 'Notification';
-    }
-
-    /**
-     * One-sentence plain-language summary for humans.
-     */
-    public function summary(): string
-    {
-        return 'Send notifications to BLB users via internal channels.';
-    }
-
-    /**
-     * Longer explanation of what this tool does and does not do.
-     */
-    public function explanation(): string
-    {
-        return 'Sends notifications via Laravel\'s notification system (database, email, broadcast). '
-            .'Targeted at internal BLB notifications — not an external messaging platform.';
-    }
-
-    /**
-     * Human-readable setup checklist items.
-     *
-     * @return list<string>
-     */
-    public function setupRequirements(): array
+    protected function metadata(): array
     {
         return [
-            'Notification channels configured',
-        ];
-    }
-
-    /**
-     * Descriptions of health probes this tool supports.
-     *
-     * @return list<string>
-     */
-    public function healthChecks(): array
-    {
-        return [
-            'Notification system available',
-        ];
-    }
-
-    /**
-     * Known safety limits users should understand.
-     *
-     * @return list<string>
-     */
-    public function limits(): array
-    {
-        return [
-            'Internal BLB users only',
+            'display_name' => 'Notification',
+            'summary' => 'Send notifications to BLB users via internal channels.',
+            'explanation' => 'Sends notifications via Laravel\'s notification system (database, email, broadcast). '
+                .'Targeted at internal BLB notifications — not an external messaging platform.',
+            'setup_requirements' => [
+                'Notification channels configured',
+            ],
+            'health_checks' => [
+                'Notification system available',
+            ],
+            'limits' => [
+                'Internal BLB users only',
+            ],
         ];
     }
 

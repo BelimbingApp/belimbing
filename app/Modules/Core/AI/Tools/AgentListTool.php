@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Tools;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
+use App\Base\AI\Tools\Concerns\HasToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
@@ -23,6 +24,8 @@ use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
  */
 class AgentListTool extends AbstractTool
 {
+    use HasToolMetadata;
+
     public function __construct(
         private readonly LaraCapabilityMatcher $capabilityMatcher,
     ) {}
@@ -65,40 +68,16 @@ class AgentListTool extends AbstractTool
         return 'ai.tool_agent_list.execute';
     }
 
-    /**
-     * Human-friendly display name for UI surfaces.
-     */
-    public function displayName(): string
-    {
-        return 'Agent List';
-    }
-
-    /**
-     * One-sentence plain-language summary for humans.
-     */
-    public function summary(): string
-    {
-        return 'List available Agents that can receive delegated tasks.';
-    }
-
-    /**
-     * Longer explanation of what this tool does and does not do.
-     */
-    public function explanation(): string
-    {
-        return 'Returns a list of Agents the current user supervises, along with '
-            .'their capabilities and status. Useful for deciding which agent to delegate a task to.';
-    }
-
-    /**
-     * Known safety limits users should understand.
-     *
-     * @return list<string>
-     */
-    public function limits(): array
+    protected function metadata(): array
     {
         return [
-            'Shows supervised agents only',
+            'display_name' => 'Agent List',
+            'summary' => 'List available Agents that can receive delegated tasks.',
+            'explanation' => 'Returns a list of Agents the current user supervises, along with '
+                .'their capabilities and status. Useful for deciding which agent to delegate a task to.',
+            'limits' => [
+                'Shows supervised agents only',
+            ],
         ];
     }
 

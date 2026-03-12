@@ -5,19 +5,14 @@
 
 namespace App\Base\Queue\Livewire\FailedJobs;
 
-use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\SearchablePaginatedList;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use Livewire\Component;
-use Livewire\WithPagination;
 
-class Index extends Component
+class Index extends SearchablePaginatedList
 {
-    use ResetsPaginationOnSearch;
-    use WithPagination;
-
-    public string $search = '';
-
     public function retryJob(string $uuid): void
     {
         Artisan::call('queue:retry', ['id' => [$uuid]]);
@@ -33,19 +28,32 @@ class Index extends Component
         DB::table('failed_jobs')->where('id', $id)->delete();
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    protected function query(): EloquentBuilder|QueryBuilder
     {
-        return view('livewire.admin.system.failed-jobs.index', [
-            'failedJobs' => DB::table('failed_jobs')
-                ->when($this->search, function ($query, $search): void {
-                    $query->where(function ($q) use ($search): void {
-                        $q->where('queue', 'like', '%'.$search.'%')
-                            ->orWhere('uuid', 'like', '%'.$search.'%')
-                            ->orWhere('exception', 'like', '%'.$search.'%');
-                    });
-                })
-                ->orderByDesc('failed_at')
-                ->paginate(25),
-        ]);
+        return DB::table('failed_jobs');
+    }
+
+    protected function viewName(): string
+    {
+        return 'livewire.admin.system.failed-jobs.index';
+    }
+
+    protected function viewDataKey(): string
+    {
+        return 'failedJobs';
+    }
+
+    protected function applySearch(EloquentBuilder|QueryBuilder $query, string $search): void
+    {
+        $query->where(function ($builder) use ($search): void {
+            $builder->where('queue', 'like', '%'.$search.'%')
+                ->orWhere('uuid', 'like', '%'.$search.'%')
+                ->orWhere('exception', 'like', '%'.$search.'%');
+        });
+    }
+
+    protected function sortQuery(EloquentBuilder|QueryBuilder $query): void
+    {
+        $query->orderByDesc('failed_at');
     }
 }

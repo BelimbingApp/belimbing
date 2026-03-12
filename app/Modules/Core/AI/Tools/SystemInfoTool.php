@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Tools;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
+use App\Base\AI\Tools\Concerns\HasToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolResult;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,8 @@ use Illuminate\Support\Facades\DB;
  */
 class SystemInfoTool extends AbstractTool
 {
+    use HasToolMetadata;
+
     /**
      * Valid section names that can be requested.
      *
@@ -76,89 +79,38 @@ class SystemInfoTool extends AbstractTool
         return 'ai.tool_system_info.execute';
     }
 
-    /**
-     * Human-friendly display name for UI surfaces.
-     */
-    public function displayName(): string
-    {
-        return 'System Info';
-    }
-
-    /**
-     * One-sentence plain-language summary for humans.
-     */
-    public function summary(): string
-    {
-        return 'Inspect non-sensitive BLB system state for diagnostics.';
-    }
-
-    /**
-     * Longer explanation of what this tool does and does not do.
-     */
-    public function explanation(): string
-    {
-        return 'Reports structured information about the BLB instance: framework versions, active modules, '
-            .'configured AI providers (keys masked), and health status. Useful for diagnostics and system awareness. '
-            .'This tool cannot modify system configuration or expose secrets.';
-    }
-
-    /**
-     * Human-readable setup checklist items.
-     *
-     * @return list<string>
-     */
-    public function setupRequirements(): array
+    protected function metadata(): array
     {
         return [
-            'No external configuration required',
-        ];
-    }
-
-    /**
-     * Sample inputs for the Try-It console.
-     *
-     * @return list<array{label: string, input: array<string, mixed>, runnable?: bool}>
-     */
-    public function testExamples(): array
-    {
-        return [
-            [
-                'label' => 'Full overview',
-                'input' => ['section' => 'all'],
+            'display_name' => 'System Info',
+            'summary' => 'Inspect non-sensitive BLB system state for diagnostics.',
+            'explanation' => 'Reports structured information about the BLB instance: framework versions, active modules, '
+                .'configured AI providers (keys masked), and health status. Useful for diagnostics and system awareness. '
+                .'This tool cannot modify system configuration or expose secrets.',
+            'setup_requirements' => [
+                'No external configuration required',
             ],
-            [
-                'label' => 'Health check',
-                'input' => ['section' => 'health'],
+            'test_examples' => [
+                [
+                    'label' => 'Full overview',
+                    'input' => ['section' => 'all'],
+                ],
+                [
+                    'label' => 'Health check',
+                    'input' => ['section' => 'health'],
+                ],
+                [
+                    'label' => 'Active modules',
+                    'input' => ['section' => 'modules'],
+                ],
             ],
-            [
-                'label' => 'Active modules',
-                'input' => ['section' => 'modules'],
+            'health_checks' => [
+                'System data providers available',
             ],
-        ];
-    }
-
-    /**
-     * Descriptions of health probes this tool supports.
-     *
-     * @return list<string>
-     */
-    public function healthChecks(): array
-    {
-        return [
-            'System data providers available',
-        ];
-    }
-
-    /**
-     * Known safety limits users should understand.
-     *
-     * @return list<string>
-     */
-    public function limits(): array
-    {
-        return [
-            'API keys and secrets are always masked',
-            'Read-only — cannot modify system state',
+            'limits' => [
+                'API keys and secrets are always masked',
+                'Read-only — cannot modify system state',
+            ],
         ];
     }
 

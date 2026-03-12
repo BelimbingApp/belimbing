@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Tools;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
+use App\Base\AI\Tools\Concerns\HasToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
@@ -28,6 +29,8 @@ use Illuminate\Support\Facades\DB;
  */
 class QueryDataTool extends AbstractTool
 {
+    use HasToolMetadata;
+
     private const MAX_ROWS = 100;
 
     private const DEFAULT_LIMIT = 50;
@@ -107,89 +110,38 @@ class QueryDataTool extends AbstractTool
         return 'ai.tool_query_data.execute';
     }
 
-    /**
-     * Human-friendly display name for UI surfaces.
-     */
-    public function displayName(): string
-    {
-        return 'Query Data';
-    }
-
-    /**
-     * One-sentence plain-language summary for humans.
-     */
-    public function summary(): string
-    {
-        return 'Read data from BLB using safe, read-only SQL.';
-    }
-
-    /**
-     * Longer explanation of what this tool does and does not do.
-     */
-    public function explanation(): string
-    {
-        return 'Executes SELECT queries against the application database to answer data questions. '
-            .'Only read-only operations are allowed — write statements (INSERT, UPDATE, DELETE, DROP, etc.) '
-            .'are rejected at the SQL parsing level. Results are returned as formatted tables. '
-            .'This tool cannot modify data or schema.';
-    }
-
-    /**
-     * Human-readable setup checklist items.
-     *
-     * @return list<string>
-     */
-    public function setupRequirements(): array
+    protected function metadata(): array
     {
         return [
-            'No external API key required',
-            'Database connection must be available',
-        ];
-    }
-
-    /**
-     * Sample inputs for the Try-It console.
-     *
-     * @return list<array{label: string, input: array<string, mixed>, runnable?: bool}>
-     */
-    public function testExamples(): array
-    {
-        return [
-            [
-                'label' => 'Count employees',
-                'input' => ['query' => 'SELECT count(*) AS total FROM employees'],
+            'display_name' => 'Query Data',
+            'summary' => 'Read data from BLB using safe, read-only SQL.',
+            'explanation' => 'Executes SELECT queries against the application database to answer data questions. '
+                .'Only read-only operations are allowed — write statements (INSERT, UPDATE, DELETE, DROP, etc.) '
+                .'are rejected at the SQL parsing level. Results are returned as formatted tables. '
+                .'This tool cannot modify data or schema.',
+            'setup_requirements' => [
+                'No external API key required',
+                'Database connection must be available',
             ],
-            [
-                'label' => 'List tables',
-                'input' => ['query' => "SELECT tablename FROM pg_tables WHERE schemaname = 'public' LIMIT 10"],
+            'test_examples' => [
+                [
+                    'label' => 'Count employees',
+                    'input' => ['query' => 'SELECT count(*) AS total FROM employees'],
+                ],
+                [
+                    'label' => 'List tables',
+                    'input' => ['query' => "SELECT tablename FROM pg_tables WHERE schemaname = 'public' LIMIT 10"],
+                ],
             ],
-        ];
-    }
-
-    /**
-     * Descriptions of health probes this tool supports.
-     *
-     * @return list<string>
-     */
-    public function healthChecks(): array
-    {
-        return [
-            'Database reachable',
-            'Read-only SQL validator active',
-        ];
-    }
-
-    /**
-     * Known safety limits users should understand.
-     *
-     * @return list<string>
-     */
-    public function limits(): array
-    {
-        return [
-            'Maximum 100 rows per query',
-            '10-second statement timeout',
-            'SELECT and WITH statements only',
+            'health_checks' => [
+                'Database reachable',
+                'Read-only SQL validator active',
+            ],
+            'limits' => [
+                'Maximum 100 rows per query',
+                '10-second statement timeout',
+                'SELECT and WITH statements only',
+            ],
         ];
     }
 

@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Tools;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
+use App\Base\AI\Tools\Concerns\HasToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
@@ -22,6 +23,8 @@ use App\Base\AI\Tools\ToolResult;
  */
 class NavigateTool extends AbstractTool
 {
+    use HasToolMetadata;
+
     public function name(): string
     {
         return 'navigate';
@@ -58,41 +61,17 @@ class NavigateTool extends AbstractTool
         return 'ai.tool_navigate.execute';
     }
 
-    /**
-     * Human-friendly display name for UI surfaces.
-     */
-    public function displayName(): string
-    {
-        return 'Navigate';
-    }
-
-    /**
-     * One-sentence plain-language summary for humans.
-     */
-    public function summary(): string
-    {
-        return 'Navigate the user to a page within BLB.';
-    }
-
-    /**
-     * Longer explanation of what this tool does and does not do.
-     */
-    public function explanation(): string
-    {
-        return 'Triggers client-side SPA navigation to a BLB page. '
-            .'The LLM uses this to direct users to relevant screens. '
-            .'Navigation is limited to internal BLB routes.';
-    }
-
-    /**
-     * Known safety limits users should understand.
-     *
-     * @return list<string>
-     */
-    public function limits(): array
+    protected function metadata(): array
     {
         return [
-            'Internal BLB routes only',
+            'display_name' => 'Navigate',
+            'summary' => 'Navigate the user to a page within BLB.',
+            'explanation' => 'Triggers client-side SPA navigation to a BLB page. '
+                .'The LLM uses this to direct users to relevant screens. '
+                .'Navigation is limited to internal BLB routes.',
+            'limits' => [
+                'Internal BLB routes only',
+            ],
         ];
     }
 

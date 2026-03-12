@@ -5,35 +5,43 @@
 
 namespace App\Base\Queue\Livewire\Jobs;
 
-use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\SearchablePaginatedList;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
-use Livewire\Component;
-use Livewire\WithPagination;
 
-class Index extends Component
+class Index extends SearchablePaginatedList
 {
-    use ResetsPaginationOnSearch;
-    use WithPagination;
-
-    public string $search = '';
-
     public function deleteJob(int $id): void
     {
         DB::table('jobs')->where('id', $id)->delete();
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    protected function query(): EloquentBuilder|QueryBuilder
     {
-        return view('livewire.admin.system.jobs.index', [
-            'jobs' => DB::table('jobs')
-                ->when($this->search, function ($query, $search): void {
-                    $query->where(function ($q) use ($search): void {
-                        $q->where('queue', 'like', '%'.$search.'%')
-                            ->orWhere('payload', 'like', '%'.$search.'%');
-                    });
-                })
-                ->orderByDesc('id')
-                ->paginate(25),
-        ]);
+        return DB::table('jobs');
+    }
+
+    protected function viewName(): string
+    {
+        return 'livewire.admin.system.jobs.index';
+    }
+
+    protected function viewDataKey(): string
+    {
+        return 'jobs';
+    }
+
+    protected function applySearch(EloquentBuilder|QueryBuilder $query, string $search): void
+    {
+        $query->where(function ($builder) use ($search): void {
+            $builder->where('queue', 'like', '%'.$search.'%')
+                ->orWhere('payload', 'like', '%'.$search.'%');
+        });
+    }
+
+    protected function sortQuery(EloquentBuilder|QueryBuilder $query): void
+    {
+        $query->orderByDesc('id');
     }
 }

@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Tools;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
+use App\Base\AI\Tools\Concerns\HasToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
@@ -28,6 +29,8 @@ use App\Modules\Core\AI\Services\LaraTaskDispatcher;
  */
 class DelegateTaskTool extends AbstractTool
 {
+    use HasToolMetadata;
+
     private const MAX_TASK_LENGTH = 5000;
 
     public function __construct(
@@ -80,83 +83,32 @@ class DelegateTaskTool extends AbstractTool
         return 'ai.tool_delegate.execute';
     }
 
-    /**
-     * Human-friendly display name for UI surfaces.
-     */
-    public function displayName(): string
-    {
-        return 'Delegate Task';
-    }
-
-    /**
-     * One-sentence plain-language summary for humans.
-     */
-    public function summary(): string
-    {
-        return 'Dispatch work to another Agent.';
-    }
-
-    /**
-     * Longer explanation of what this tool does and does not do.
-     */
-    public function explanation(): string
-    {
-        return 'Queues a task for execution by another Agent. Returns a dispatch ID '
-            .'immediately. The dispatched agent runs asynchronously via Laravel queues. '
-            .'This tool can only delegate to agents the current user supervises.';
-    }
-
-    /**
-     * Human-readable setup checklist items.
-     *
-     * @return list<string>
-     */
-    public function setupRequirements(): array
+    protected function metadata(): array
     {
         return [
-            'At least one other Agent configured',
-            'Laravel queue worker running',
-        ];
-    }
-
-    /**
-     * Sample inputs for the Try-It console.
-     *
-     * @return list<array{label: string, input: array<string, mixed>, runnable?: bool}>
-     */
-    public function testExamples(): array
-    {
-        return [
-            [
-                'label' => 'Delegate a task',
-                'input' => ['task' => 'Summarize today\'s activity'],
+            'display_name' => 'Delegate Task',
+            'summary' => 'Dispatch work to another Agent.',
+            'explanation' => 'Queues a task for execution by another Agent. Returns a dispatch ID '
+                .'immediately. The dispatched agent runs asynchronously via Laravel queues. '
+                .'This tool can only delegate to agents the current user supervises.',
+            'setup_requirements' => [
+                'At least one other Agent configured',
+                'Laravel queue worker running',
             ],
-        ];
-    }
-
-    /**
-     * Descriptions of health probes this tool supports.
-     *
-     * @return list<string>
-     */
-    public function healthChecks(): array
-    {
-        return [
-            'Queue connection active',
-            'Delegable agents available',
-        ];
-    }
-
-    /**
-     * Known safety limits users should understand.
-     *
-     * @return list<string>
-     */
-    public function limits(): array
-    {
-        return [
-            'Default 300-second timeout per delegation',
-            'Scoped to supervised agents',
+            'test_examples' => [
+                [
+                    'label' => 'Delegate a task',
+                    'input' => ['task' => 'Summarize today\'s activity'],
+                ],
+            ],
+            'health_checks' => [
+                'Queue connection active',
+                'Delegable agents available',
+            ],
+            'limits' => [
+                'Default 300-second timeout per delegation',
+                'Scoped to supervised agents',
+            ],
         ];
     }
 
