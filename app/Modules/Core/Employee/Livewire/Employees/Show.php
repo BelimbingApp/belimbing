@@ -158,18 +158,22 @@ class Show extends Component
 
     public function updateAddressPivot(int $addressId, string $field, mixed $value): void
     {
-        $allowed = ['is_primary', 'priority'];
+        // UI sends camelCase field names; DB uses snake_case column names.
+        $allowed = ['isPrimary', 'priority'];
         if (! in_array($field, $allowed)) {
             return;
         }
 
-        if ($field === 'is_primary') {
+        if ($field === 'isPrimary') {
             $value = (bool) $value;
         } elseif ($field === 'priority') {
             $value = (int) $value;
         }
 
-        $this->employee->addresses()->updateExistingPivot($addressId, [$field => $value]);
+        // Map UI field to DB column
+        $column = $field === 'isPrimary' ? 'is_primary' : $field;
+
+        $this->employee->addresses()->updateExistingPivot($addressId, [$column => $value]);
         $this->employee->load('addresses');
     }
 
