@@ -5,11 +5,7 @@
 
 namespace App\Modules\Core\AI\Tools;
 
-use App\Base\AI\Enums\ToolCategory;
-use App\Base\AI\Enums\ToolRiskClass;
-use App\Base\AI\Tools\AbstractTool;
-use App\Base\AI\Tools\Concerns\FormatsProcessResult;
-use App\Base\AI\Tools\Concerns\HasToolMetadata;
+use App\Base\AI\Tools\AbstractHighImpactProcessTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolResult;
 use Illuminate\Support\Facades\Process;
@@ -23,11 +19,8 @@ use Illuminate\Support\Facades\Process;
  * Safety: Timeout enforced per execution. Authz gating is the primary
  * control — only users with explicit bash capability can trigger this.
  */
-class BashTool extends AbstractTool
+class BashTool extends AbstractHighImpactProcessTool
 {
-    use FormatsProcessResult;
-    use HasToolMetadata;
-
     private const TIMEOUT_SECONDS = 30;
 
     public function name(): string
@@ -50,16 +43,6 @@ class BashTool extends AbstractTool
                 'The bash command to execute. '
                     .'Examples: "ls -la storage/app", "cat .env | grep DB_", "git log --oneline -5".'
             )->required();
-    }
-
-    public function category(): ToolCategory
-    {
-        return ToolCategory::SYSTEM;
-    }
-
-    public function riskClass(): ToolRiskClass
-    {
-        return ToolRiskClass::HIGH_IMPACT;
     }
 
     public function requiredCapability(): ?string

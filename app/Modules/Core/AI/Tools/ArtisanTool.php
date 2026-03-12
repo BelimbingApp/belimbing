@@ -5,11 +5,7 @@
 
 namespace App\Modules\Core\AI\Tools;
 
-use App\Base\AI\Enums\ToolCategory;
-use App\Base\AI\Enums\ToolRiskClass;
-use App\Base\AI\Tools\AbstractTool;
-use App\Base\AI\Tools\Concerns\FormatsProcessResult;
-use App\Base\AI\Tools\Concerns\HasToolMetadata;
+use App\Base\AI\Tools\AbstractHighImpactProcessTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
@@ -28,11 +24,8 @@ use Illuminate\Support\Facades\Process;
  * class uses proc_open without shell invocation, so metacharacters
  * have no shell-level effect. Timeout enforced per execution.
  */
-class ArtisanTool extends AbstractTool
+class ArtisanTool extends AbstractHighImpactProcessTool
 {
-    use FormatsProcessResult;
-    use HasToolMetadata;
-
     /**
      * Default timeout in seconds for foreground execution.
      */
@@ -84,16 +77,6 @@ class ArtisanTool extends AbstractTool
                 'Run the command in the background via Laravel queues. '
                     .'Returns a dispatch_id immediately for polling with delegation_status tool.'
             );
-    }
-
-    public function category(): ToolCategory
-    {
-        return ToolCategory::SYSTEM;
-    }
-
-    public function riskClass(): ToolRiskClass
-    {
-        return ToolRiskClass::HIGH_IMPACT;
     }
 
     public function requiredCapability(): ?string

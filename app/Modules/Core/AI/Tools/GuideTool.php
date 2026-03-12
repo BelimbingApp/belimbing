@@ -5,11 +5,8 @@
 
 namespace App\Modules\Core\AI\Tools;
 
-use App\Base\AI\Enums\ToolCategory;
-use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Services\KnowledgeNavigator;
-use App\Base\AI\Tools\AbstractTool;
-use App\Base\AI\Tools\Concerns\HasToolMetadata;
+use App\Base\AI\Tools\AbstractReadOnlyMemoryTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolResult;
 
@@ -22,10 +19,8 @@ use App\Base\AI\Tools\ToolResult;
  *
  * Gated by `ai.tool_guide.execute` authz capability.
  */
-class GuideTool extends AbstractTool
+class GuideTool extends AbstractReadOnlyMemoryTool
 {
-    use HasToolMetadata;
-
     private const MAX_LINES = 200;
 
     private const MAX_SECTIONS_LIMIT = 10;
@@ -51,16 +46,6 @@ class GuideTool extends AbstractTool
         return ToolSchemaBuilder::make()
             ->string('topic', 'Topic to search BLB framework documentation for.')->required()
             ->integer('max_sections', 'Maximum number of relevant sections to return (default 5, max 10).', min: 1, max: self::MAX_SECTIONS_LIMIT);
-    }
-
-    public function category(): ToolCategory
-    {
-        return ToolCategory::MEMORY;
-    }
-
-    public function riskClass(): ToolRiskClass
-    {
-        return ToolRiskClass::READ_ONLY;
     }
 
     public function requiredCapability(): ?string

@@ -5,10 +5,7 @@
 
 namespace App\Modules\Core\AI\Tools;
 
-use App\Base\AI\Enums\ToolCategory;
-use App\Base\AI\Enums\ToolRiskClass;
-use App\Base\AI\Tools\AbstractTool;
-use App\Base\AI\Tools\Concerns\HasToolMetadata;
+use App\Base\AI\Tools\AbstractReadOnlyMemoryTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
@@ -26,10 +23,8 @@ use App\Modules\Core\Employee\Models\Employee;
  *
  * Gated by `ai.tool_memory_get.execute` authz capability.
  */
-class MemoryGetTool extends AbstractTool
+class MemoryGetTool extends AbstractReadOnlyMemoryTool
 {
-    use HasToolMetadata;
-
     private const MAX_LINES = 500;
 
     private const BINARY_CHECK_BYTES = 1024;
@@ -63,16 +58,6 @@ class MemoryGetTool extends AbstractTool
             )
             ->integer('from', 'Start reading from this line number (1-indexed, default: 1).', min: 1)
             ->integer('lines', 'Maximum number of lines to return (default: all, capped at 500).', min: 1, max: self::MAX_LINES);
-    }
-
-    public function category(): ToolCategory
-    {
-        return ToolCategory::MEMORY;
-    }
-
-    public function riskClass(): ToolRiskClass
-    {
-        return ToolRiskClass::READ_ONLY;
     }
 
     public function requiredCapability(): ?string
