@@ -43,8 +43,8 @@ class QuickActionRegistry
     private function defaults(): array
     {
         return [
-            ['label' => __('What can you do?'), 'prompt' => 'What can you help me with?', 'icon' => 'heroicon-o-light-bulb'],
-            ['label' => __('Navigate to...'), 'prompt' => '/go ', 'icon' => 'heroicon-o-arrow-right'],
+            ['label' => __('What can you do?'), 'prompt' => 'What can you help me with?', 'icon' => 'heroicon-o-question-mark-circle'],
+            ['label' => __('Navigate to...'), 'prompt' => '/go ', 'icon' => 'heroicon-o-arrow-top-right-on-square'],
         ];
     }
 
@@ -58,7 +58,7 @@ class QuickActionRegistry
         return [
             'admin.ai.providers' => [
                 ['label' => __('Sync models'), 'prompt' => 'Sync all provider models', 'icon' => 'heroicon-o-arrow-path'],
-                ['label' => __('Add provider'), 'prompt' => 'Help me set up a new AI provider', 'icon' => 'heroicon-o-plus-circle'],
+                ['label' => __('Add provider'), 'prompt' => 'Help me set up a new AI provider', 'icon' => 'heroicon-o-plus'],
                 ['label' => __('Compare providers'), 'prompt' => 'Compare my configured AI providers', 'icon' => 'heroicon-o-scale'],
             ],
             'admin.ai.playground' => [

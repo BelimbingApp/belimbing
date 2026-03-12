@@ -3,7 +3,7 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 /**
- * Help toggle button ("?" icon).
+ * Help toggle button (customizable icon).
  *
  * A small circular button for triggering contextual help. Typically used
  * inside x-ui.page-header (which handles the panel), but can also be
@@ -22,7 +22,10 @@
  */
 ?>
 
-@props(['size' => 'md'])
+@props([
+    'size' => 'md',
+    'icon' => 'heroicon-o-question-mark-circle',
+])
 
 @php
     $sizeClasses = match($size) {
@@ -42,5 +45,5 @@
     ]) }}
     aria-label="{{ __('Help') }}"
 >
-    <x-icon name="heroicon-o-question-mark-circle" class="{{ $sizeClasses }}" />
+    <x-icon :name="$icon" class="{{ $sizeClasses }}" />
 </button>
