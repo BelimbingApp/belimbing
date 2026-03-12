@@ -17,17 +17,18 @@ use App\Base\Authz\Services\EffectivePermissions;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules;
 use Livewire\Component;
 
 class Show extends Component
 {
     use ChecksCapabilityAuthorization;
     use SavesValidatedFields;
+    use ValidatesPasswordConfirmation;
 
     public User $user;
 
@@ -109,10 +110,7 @@ class Show extends Component
      */
     public function updatePassword(): void
     {
-        $validated = $this->validate([
-            'password' => ['required', 'string', Rules\Password::defaults()],
-            'passwordConfirmation' => ['required', 'same:password'],
-        ]);
+        $validated = $this->validate($this->passwordValidationRules());
 
         $this->user->password = Hash::make($validated['password']);
         $this->user->save();

@@ -6,15 +6,17 @@
 namespace App\Modules\Core\User\Livewire\Users;
 
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules;
 use Livewire\Component;
 
 class Create extends Component
 {
+    use ValidatesPasswordConfirmation;
+
     /** @var int|string|null */
     public $companyId = null;
 
@@ -39,8 +41,7 @@ class Create extends Component
             'companyId' => ['nullable', 'integer', Rule::exists(Company::class, 'id')],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
-            'password' => ['required', 'string', Rules\Password::defaults()],
-            'passwordConfirmation' => ['required', 'same:password'],
+            ...$this->passwordValidationRules(),
         ]);
 
         User::create([

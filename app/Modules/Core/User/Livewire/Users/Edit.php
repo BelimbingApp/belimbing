@@ -6,15 +6,17 @@
 namespace App\Modules\Core\User\Livewire\Users;
 
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules;
 use Livewire\Component;
 
 class Edit extends Component
 {
+    use ValidatesPasswordConfirmation;
+
     public User $user;
 
     /** @var int|string|null */
@@ -59,8 +61,7 @@ class Edit extends Component
         ];
 
         if (! empty($this->password)) {
-            $rules['password'] = ['required', 'string', Rules\Password::defaults()];
-            $rules['passwordConfirmation'] = ['required', 'same:password'];
+            $rules += $this->passwordValidationRules();
         }
 
         $validated = $this->validate($rules);

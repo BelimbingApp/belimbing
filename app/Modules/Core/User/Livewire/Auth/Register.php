@@ -5,17 +5,19 @@
 
 namespace App\Modules\Core\User\Livewire\Auth;
 
+use App\Modules\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 #[Layout('components.layouts.auth')]
 class Register extends Component
 {
+    use ValidatesPasswordConfirmation;
+
     public string $name = '';
 
     public string $email = '';
@@ -32,8 +34,7 @@ class Register extends Component
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
-            'password' => ['required', 'string', Rules\Password::defaults()],
-            'passwordConfirmation' => ['required', 'same:password'],
+            ...$this->passwordValidationRules(),
         ]);
 
         $validated['password'] = Hash::make($validated['password']);

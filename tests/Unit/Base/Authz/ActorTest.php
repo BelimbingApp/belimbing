@@ -2,49 +2,12 @@
 
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
-use App\Base\Foundation\Contracts\CompanyScoped;
-use Illuminate\Contracts\Auth\Authenticatable;
+
+require_once __DIR__.'/../../../Support/Auth/FakeAuthenticatable.php';
+require_once __DIR__.'/../../../Support/Auth/FakeCompanyScopedAuthenticatable.php';
 
 it('builds a human user actor from a company scoped user', function (): void {
-    $user = new class implements Authenticatable, CompanyScoped
-    {
-        public function getAuthIdentifierName(): string
-        {
-            return 'id';
-        }
-
-        public function getAuthIdentifier(): int
-        {
-            return 42;
-        }
-
-        public function getAuthPassword(): string
-        {
-            return '';
-        }
-
-        public function getAuthPasswordName(): string
-        {
-            return 'password';
-        }
-
-        public function getRememberToken(): ?string
-        {
-            return null;
-        }
-
-        public function setRememberToken($value): void {}
-
-        public function getRememberTokenName(): string
-        {
-            return 'remember_token';
-        }
-
-        public function getCompanyId(): ?int
-        {
-            return 7;
-        }
-    };
+    $user = new FakeCompanyScopedAuthenticatable(42, 7);
 
     $actor = Actor::forUser($user);
 
@@ -55,45 +18,7 @@ it('builds a human user actor from a company scoped user', function (): void {
 });
 
 it('builds an actor from a user company_id attribute when company scoped is unavailable', function (): void {
-    $user = new class implements Authenticatable
-    {
-        public function getAuthIdentifierName(): string
-        {
-            return 'id';
-        }
-
-        public function getAuthIdentifier(): int
-        {
-            return 99;
-        }
-
-        public function getAuthPassword(): string
-        {
-            return '';
-        }
-
-        public function getAuthPasswordName(): string
-        {
-            return 'password';
-        }
-
-        public function getRememberToken(): ?string
-        {
-            return null;
-        }
-
-        public function setRememberToken($value): void {}
-
-        public function getRememberTokenName(): string
-        {
-            return 'remember_token';
-        }
-
-        public function getAttribute(string $key): mixed
-        {
-            return $key === 'company_id' ? '15' : null;
-        }
-    };
+    $user = new FakeAuthenticatable(99, ['company_id' => '15']);
 
     $actor = Actor::forUser($user, PrincipalType::DIGITAL_WORKER, actingForUserId: 5, attributes: ['source' => 'test']);
 
