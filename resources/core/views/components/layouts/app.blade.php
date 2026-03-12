@@ -31,6 +31,7 @@
         {{-- Lara chat --}}
         laraChatOpen: (localStorage.getItem('agent-chat-1-open') ?? '0') === '1',
         laraChatMode: localStorage.getItem('agent-chat-1-mode') || 'overlay',
+        laraChatFullscreen: (localStorage.getItem('agent-chat-1-fullscreen') ?? '0') === '1',
         laraPrefillPrompt: null,
 
         {{-- Docked panel drag-resize --}}
@@ -161,8 +162,17 @@
             }
         },
         toggleLaraChatMode() {
+            if (this.laraChatFullscreen) {
+                this.laraChatFullscreen = false;
+                localStorage.setItem('agent-chat-1-fullscreen', '0');
+            }
+
             this.laraChatMode = this.laraChatMode === 'overlay' ? 'docked' : 'overlay';
             localStorage.setItem('agent-chat-1-mode', this.laraChatMode);
+        },
+        toggleLaraFullscreen() {
+            this.laraChatFullscreen = !this.laraChatFullscreen;
+            localStorage.setItem('agent-chat-1-fullscreen', this.laraChatFullscreen ? '1' : '0');
         },
         executeLaraJs(js) {
             if (typeof js !== 'string' || js.trim() === '') {
@@ -182,10 +192,13 @@
     @close-agent-chat.window="closeLaraChat()"
     @agent-chat-execute-js.window="executeLaraJs($event.detail?.js ?? '')"
     @toggle-agent-chat-mode.window="toggleLaraChatMode()"
+    @toggle-agent-chat-fullscreen.window="toggleLaraFullscreen()"
     @keydown.ctrl.k.window.prevent="toggleLaraChat($event)"
     @keydown.meta.k.window.prevent="toggleLaraChat($event)"
     @keydown.ctrl.shift.k.window.prevent="toggleLaraChatMode()"
     @keydown.meta.shift.k.window.prevent="toggleLaraChatMode()"
+    @keydown.ctrl.shift.f.window.prevent="toggleLaraFullscreen()"
+    @keydown.meta.shift.f.window.prevent="toggleLaraFullscreen()"
     @keydown.escape.window="closeLaraChat()"
     class="h-screen overflow-hidden bg-surface-page flex flex-col"
 >
@@ -238,14 +251,25 @@
             <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" />
         </div>
 
-        <main class="flex-1 overflow-y-auto bg-surface-page px-1 py-2 sm:px-4 sm:py-1">
+        <main class="relative flex-1 overflow-y-auto bg-surface-page px-1 py-2 sm:px-4 sm:py-1">
             {{ $slot }}
+
+            @auth
+                {{-- Fullscreen mode: take over the main content box (desktop only) --}}
+                <div
+                    x-show="laraChatOpen && laraChatFullscreen"
+                    x-cloak
+                    class="hidden sm:block absolute inset-0 z-50 bg-surface-card border border-border-default rounded-2xl overflow-hidden"
+                >
+                    <div class="h-full" x-ref="laraFullscreenTarget"></div>
+                </div>
+            @endauth
         </main>
 
         @auth
             {{-- Docked mode: right-side panel inside the layout flow (drag-resizable) --}}
             <aside
-                x-show="laraChatOpen && laraChatMode === 'docked'"
+                x-show="laraChatOpen && !laraChatFullscreen && laraChatMode === 'docked'"
                 x-cloak
                 class="hidden sm:flex shrink-0 border-l border-border-default bg-surface-card overflow-hidden relative"
                 :style="'width: ' + laraDockWidth + 'px'"
@@ -269,7 +293,7 @@
     @auth
         {{-- Overlay mode: floating card (desktop only) --}}
         <div
-            x-show="laraChatOpen && laraChatMode === 'overlay'"
+            x-show="laraChatOpen && !laraChatFullscreen && laraChatMode === 'overlay'"
             x-cloak
             class="hidden sm:block fixed right-3 sm:right-4 bottom-8 z-50"
         >
@@ -299,6 +323,8 @@
                 let target;
                 if (isMobile) {
                     target = $refs.laraMobileTarget;
+                } else if (laraChatFullscreen) {
+                    target = $refs.laraFullscreenTarget;
                 } else if (laraChatMode === 'docked') {
                     target = $refs.laraDockTarget;
                 } else {

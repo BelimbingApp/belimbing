@@ -55,19 +55,37 @@
             >
                 <x-icon name="heroicon-o-chat-bubble-left-right" class="w-4 h-4" />
             </button>
-            <x-ai.agent-identity
-                :name="$agentIdentity['name']"
-                :role="$agentIdentity['role']"
-                :icon="$agentIdentity['icon']"
-                :show-role="false"
-            />
+            @if ($settingsUrl !== null)
+                <a
+                    href="{{ $settingsUrl }}"
+                    wire:navigate
+                    class="text-ink hover:text-accent transition-colors"
+                    title="{{ __('Open Lara settings') }}"
+                    aria-label="{{ __('Open Lara settings') }}"
+                >
+                    <x-ai.agent-identity
+                        :name="$agentIdentity['name']"
+                        :role="$agentIdentity['role']"
+                        :icon="$agentIdentity['icon']"
+                        :show-role="false"
+                    />
+                </a>
+            @else
+                <x-ai.agent-identity
+                    :name="$agentIdentity['name']"
+                    :role="$agentIdentity['role']"
+                    :icon="$agentIdentity['icon']"
+                    :show-role="false"
+                />
+            @endif
         </div>
 
         <div class="flex items-center gap-1">
             {{-- Keyboard shortcuts cheatsheet --}}
             <div x-data="{ shortcutsOpen: false, _mod: navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl' }" class="relative">
                 <x-ui.help
-                    size="sm"
+                    size="md"
+                    icon="heroicon-o-keyboard-keys"
                     x-on:click="shortcutsOpen = !shortcutsOpen"
                     title="{{ __('Keyboard shortcuts') }}"
                     aria-label="{{ __('Keyboard shortcuts') }}"
@@ -84,6 +102,7 @@
                     <template x-for="s in [
                         { keys: _mod + '+K', label: '{{ __('Toggle chat') }}' },
                         { keys: _mod + '+Shift+K', label: '{{ __('Toggle docked mode') }}' },
+                        { keys: _mod + '+Shift+F', label: '{{ __('Toggle fullscreen mode') }}' },
                         { keys: 'Escape', label: '{{ __('Close chat') }}' },
                         { keys: 'Enter', label: '{{ __('Send message') }}' },
                         { keys: 'Shift+Enter', label: '{{ __('New line') }}' },
@@ -103,19 +122,19 @@
                 title="{{ __('Toggle docked mode') }}"
                 aria-label="{{ __('Toggle docked mode') }}"
             >
-                <x-icon name="heroicon-o-arrows-right-left" class="w-4 h-4" />
+                <x-icon name="heroicon-o-dock-right" class="w-4 h-4" x-show="laraChatMode === 'overlay'" x-cloak />
+                <x-icon name="heroicon-o-undock-overlay" class="w-4 h-4" x-show="laraChatMode === 'docked'" x-cloak />
             </button>
-            @if ($settingsUrl !== null)
-                <a
-                    href="{{ $settingsUrl }}"
-                    wire:navigate
-                    class="text-muted hover:text-ink transition-colors p-0.5"
-                    title="{{ __('Settings') }}"
-                    aria-label="{{ __('Settings') }}"
-                >
-                    <x-icon name="heroicon-o-cog-6-tooth" class="w-4 h-4" />
-                </a>
-            @endif
+            <button
+                type="button"
+                x-on:click="$dispatch('toggle-agent-chat-fullscreen')"
+                class="hidden sm:inline-flex text-muted hover:text-ink transition-colors p-0.5"
+                title="{{ __('Toggle fullscreen mode') }}"
+                aria-label="{{ __('Toggle fullscreen mode') }}"
+            >
+                <x-icon name="heroicon-o-fullscreen" class="w-4 h-4" x-show="!laraChatFullscreen" x-cloak />
+                <x-icon name="heroicon-o-fullscreen-exit" class="w-4 h-4" x-show="laraChatFullscreen" x-cloak />
+            </button>
             <button
                 type="button"
                 x-on:click="$dispatch('close-agent-chat')"
@@ -217,7 +236,7 @@
                 @else
                     {{-- Session list --}}
                     @forelse($sessions as $session)
-                        <div class="group flex items-start gap-1" wire:key="agent-session-{{ $session->id }}">
+                        <div class="group" wire:key="agent-session-{{ $session->id }}">
                             @if ($editingSessionId === $session->id)
                                 <div class="flex-1 px-2 py-1.5 space-y-1">
                                     <div class="flex items-center gap-1">
@@ -247,28 +266,27 @@
                                     </div>
                                 </div>
                             @else
-                                <button
+                                <div
                                     wire:click="selectSession('{{ $session->id }}')"
-                                    class="flex-1 text-left px-2 py-1.5 rounded-lg text-sm transition-colors
+                                    class="w-full flex items-start gap-1 rounded-lg px-2 py-1.5 text-sm transition-colors cursor-pointer
                                         {{ $selectedSessionId === $session->id ? 'bg-surface-subtle text-ink' : 'text-muted hover:bg-surface-subtle/60 hover:text-ink' }}"
                                 >
-                                    <div class="truncate font-medium">{{ $session->title ?? __('Untitled') }}</div>
-                                    <div class="text-xs text-muted tabular-nums">{{ $session->lastActivityAt->format('M j, H:i') }}</div>
-                                </button>
-                                <div class="flex items-center mt-1">
+                                    <div class="flex-1 min-w-0">
+                                        <button
+                                            type="button"
+                                            wire:click.stop="startEditingTitle('{{ $session->id }}')"
+                                            class="w-full text-left truncate font-medium hover:text-ink"
+                                            title="{{ __('Edit title') }}"
+                                            aria-label="{{ __('Edit title') }}"
+                                        >
+                                            {{ $session->title ?? __('Untitled') }}
+                                        </button>
+                                        <div class="text-xs text-muted tabular-nums">{{ $session->lastActivityAt->format('M j, H:i') }}</div>
+                                    </div>
                                     <button
                                         type="button"
-                                        wire:click="startEditingTitle('{{ $session->id }}')"
-                                        class="text-muted hover:text-ink p-1"
-                                        title="{{ __('Edit title') }}"
-                                        aria-label="{{ __('Edit title') }}"
-                                    >
-                                        <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        wire:click="deleteSession('{{ $session->id }}')"
-                                        class="text-muted hover:text-ink p-1"
+                                        wire:click.stop="deleteSession('{{ $session->id }}')"
+                                        class="text-muted hover:text-ink p-1 shrink-0"
                                         title="{{ __('Delete session') }}"
                                         aria-label="{{ __('Delete session') }}"
                                     >
@@ -296,7 +314,7 @@
             </aside>
 
             {{-- Chat area --}}
-            <section class="flex-1 min-h-0 flex flex-col"
+            <section class="flex-1 min-w-0 min-h-0 flex flex-col"
                 x-data="{
                     pendingMessage: null,
                     streamingContent: '',
@@ -306,7 +324,7 @@
                 x-on:agent-chat-response-ready.window="pendingMessage = null; streamingContent = ''; streamingStatus = null"
             >
                 <div
-                    class="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3"
+                    class="flex-1 min-w-0 min-h-0 overflow-y-auto px-4 py-3 space-y-3"
                     x-ref="agentScroll"
                     x-init="$nextTick(() => $el.scrollTop = $el.scrollHeight)"
                     x-effect="$nextTick(() => $refs.agentScroll.scrollTop = $refs.agentScroll.scrollHeight)"
@@ -320,7 +338,7 @@
                                         <x-icon name="heroicon-o-bolt" class="w-3.5 h-3.5 text-accent" />
                                         <span class="text-[10px] font-semibold uppercase tracking-wider text-accent">{{ __('Action') }}</span>
                                     </div>
-                                    <div class="agent-prose">{!! $markdown->render($message->content) !!}</div>
+                                    <div class="agent-prose max-w-full overflow-x-auto">{!! $markdown->render($message->content) !!}</div>
                                     <div class="text-[10px] mt-1 text-muted tabular-nums">
                                         {{ $message->timestamp->format('H:i:s') }}
                                     </div>
@@ -330,7 +348,7 @@
                                     {{ $message->role === 'user' ? 'bg-accent text-accent-on' : 'bg-surface-subtle text-ink' }}"
                                 >
                                     @if ($message->role === 'assistant')
-                                        <div class="agent-prose">{!! $markdown->render($message->content) !!}</div>
+                                        <div class="agent-prose max-w-full overflow-x-auto">{!! $markdown->render($message->content) !!}</div>
                                     @else
                                         <div class="whitespace-pre-wrap break-words">{{ $message->content }}</div>
                                     @endif
@@ -373,7 +391,7 @@
                     <template x-if="streamingContent">
                         <div class="flex justify-start">
                             <div class="max-w-[80%] rounded-2xl px-3 py-2 text-sm bg-surface-subtle text-ink">
-                                <div class="agent-prose whitespace-pre-wrap break-words" x-text="streamingContent"></div>
+                                <div class="agent-prose max-w-full overflow-x-auto whitespace-pre-wrap break-words" x-text="streamingContent"></div>
                             </div>
                         </div>
                     </template>
@@ -447,61 +465,16 @@
                         x-on:submit="onSubmit($refs.agentComposer, $refs.agentScroll)"
                         class="space-y-2"
                     >
-                        {{-- Attachment preview pills --}}
-                        @if ($canAttachFiles && count($this->attachments) > 0)
-                            <div class="flex flex-wrap gap-1.5">
-                                @foreach ($this->attachments as $index => $file)
-                                    <div class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-surface-subtle border border-border-default text-xs text-ink" wire:key="att-{{ $index }}">
-                                        @if ($file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile && str_starts_with($file->getMimeType() ?? '', 'image/'))
-                                            <x-icon name="heroicon-o-photo" class="w-3.5 h-3.5 text-muted shrink-0" />
-                                        @else
-                                            <x-icon name="heroicon-o-document" class="w-3.5 h-3.5 text-muted shrink-0" />
-                                        @endif
-                                        <span class="truncate max-w-[8rem]">{{ $file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile ? $file->getClientOriginalName() : __('File') }}</span>
-                                        <button
-                                            type="button"
-                                            wire:click="removeAttachment({{ $index }})"
-                                            class="text-muted hover:text-ink transition-colors shrink-0"
-                                            aria-label="{{ __('Remove attachment') }}"
-                                        >
-                                            <x-icon name="heroicon-o-x-mark" class="w-3 h-3" />
-                                        </button>
-                                    </div>
-                                @endforeach
-                            </div>
-                        @endif
-
-                        <div class="flex items-end gap-2">
-                            @if ($canAttachFiles)
-                                <label class="shrink-0 mb-px cursor-pointer text-muted hover:text-ink transition-colors p-1" title="{{ __('Attach file') }}" aria-label="{{ __('Attach file') }}">
-                                    <x-icon name="heroicon-o-paper-clip" class="w-4 h-4" />
-                                    <input
-                                        type="file"
-                                        wire:model="attachments"
-                                        multiple
-                                        accept="image/*,.pdf,.txt,.csv,.md,.json"
-                                        class="hidden"
-                                    />
-                                </label>
-                            @endif
-                            <div class="flex-1 min-w-0">
-                                <textarea
-                                    x-ref="agentComposer"
-                                    wire:model="messageInput"
-                                    x-on:keydown="onKeydown($event)"
-                                    x-on:input="autoResize($el)"
-                                    x-init="autoResize($el)"
-                                    placeholder="{{ __('Message :name...', ['name' => $agentIdentity['name']]) }}"
-                                    autocomplete="off"
-                                    x-bind:disabled="!!pendingMessage"
-                                    rows="1"
-                                    class="w-full px-input-x py-input-y text-sm border rounded-2xl transition-colors border-border-input bg-surface-card text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-hidden"
-                                ></textarea>
-                            </div>
-                            <x-ui.button type="submit" variant="primary" x-bind:disabled="!!pendingMessage" class="shrink-0 mb-px">
-                                <x-icon name="heroicon-o-paper-airplane" class="w-4 h-4" />
-                            </x-ui.button>
-                        </div>
+                        <x-ai.chat-composer-fields
+                            :can-attach-files="$canAttachFiles"
+                            :attachments="$this->attachments"
+                            attachments-model="attachments"
+                            remove-attachment-action="removeAttachment"
+                            message-model="messageInput"
+                            placeholder="{{ __('Message :name...', ['name' => $agentIdentity['name']]) }}"
+                            composer-ref="agentComposer"
+                            pending-expression="!!pendingMessage"
+                        />
                     </form>
                 </div>
             </section>
@@ -512,15 +485,6 @@
 @script
 <script>
     Alpine.data('agentChatComposer', () => ({
-        maxRows: 6,
-
-        onKeydown(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                this.$el.closest('form').requestSubmit();
-            }
-        },
-
         async onSubmit(textarea, scrollContainer) {
             const value = textarea.value.trim();
             const hasAttachments = document.querySelectorAll('[wire\\:key^="att-"]').length > 0;
@@ -627,14 +591,6 @@
             });
         },
 
-        autoResize(el) {
-            el.style.height = 'auto';
-            const lineHeight = parseInt(getComputedStyle(el).lineHeight) || 20;
-            const maxHeight = lineHeight * this.maxRows;
-            const newHeight = Math.min(el.scrollHeight, maxHeight);
-            el.style.height = newHeight + 'px';
-            el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
-        },
     }));
 </script>
 @endscript

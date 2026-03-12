@@ -113,7 +113,7 @@
     }
 
     .agent-prose table {
-        @apply my-2 w-full text-xs border-collapse first:mt-0 last:mb-0;
+        @apply my-2 text-xs border-collapse first:mt-0 last:mb-0 min-w-full w-max;
     }
 
     .agent-prose th {
