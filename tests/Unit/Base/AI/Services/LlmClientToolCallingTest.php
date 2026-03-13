@@ -45,6 +45,8 @@ describe('LlmClient tool calling', function () {
             'test-key',
             'gpt-4',
             [['role' => 'user', 'content' => 'Hi']],
+            tools: $tools,
+            toolChoice: 'auto',
         ));
 
         expect($result)->toHaveKey('content', 'Hello!');
