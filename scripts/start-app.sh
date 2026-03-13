@@ -353,6 +353,9 @@ deregister_caddy() {
 
 # Set up cleanup handler
 cleanup() {
+    local exit_code="${1:-0}"
+    local failure_reason="${2:-}"
+
     echo ""
     echo -e "${YELLOW}Stopping services...${NC}"
 
@@ -372,7 +375,34 @@ cleanup() {
     rm -f "$PROJECT_ROOT/storage/app/.devops/ports.env"
 
     log "Services stopped"
-    exit 0
+
+    if [[ "$exit_code" -ne 0 ]]; then
+        echo ""
+        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${RED}✗ Failed to start app${NC}"
+        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        if [[ -n "$failure_reason" ]]; then
+            echo ""
+            echo -e "${YELLOW}Reason:${NC} $failure_reason"
+        fi
+        if [[ -n "${BLB_CADDY_LAST_OUTPUT:-}" ]]; then
+            echo ""
+            echo -e "${CYAN}Caddy output:${NC}"
+            echo "$BLB_CADDY_LAST_OUTPUT" | tail -n 10 | while IFS= read -r line; do
+                echo -e "  ${BULLET} $line"
+            done
+        fi
+        echo ""
+        echo -e "${CYAN}Troubleshooting:${NC}"
+        echo -e "  ${BULLET} Validate config:  ${YELLOW}caddy validate --config $BLB_CADDY_MAIN --adapter caddyfile${NC}"
+        echo -e "  ${BULLET} Check port 443:   ${YELLOW}sudo lsof -i :443${NC}"
+        echo -e "  ${BULLET} Caddy privileges:  ${YELLOW}sudo setcap 'cap_net_bind_service=+ep' \$(command -v caddy)${NC}"
+        if [[ -n "$LOG_FILE" ]]; then
+            echo -e "  ${BULLET} Log file:          ${YELLOW}$LOG_FILE${NC}"
+        fi
+    fi
+
+    exit "$exit_code"
 }
 
 # Wait for services to start (with health check)
@@ -429,9 +459,9 @@ start_caddy() {
     log "Wrote Caddy site fragment: $fragment_file"
 
     ensure_shared_caddy || {
-        log "ERROR: Failed to start/reload shared Caddy"
-        cleanup
-        exit 1
+        local reason="${BLB_CADDY_LAST_ERROR:-Failed to start/reload shared Caddy}"
+        log "ERROR: $reason"
+        cleanup 1 "$reason"
     }
 
     log "Shared Caddy ready (sites on :443)"

@@ -22,6 +22,51 @@ BLB_CADDY_HOME="${BLB_CADDY_HOME:-$HOME/.blb/caddy}"
 BLB_CADDY_SITES="$BLB_CADDY_HOME/sites"
 BLB_CADDY_MAIN="$BLB_CADDY_HOME/Caddyfile"
 BLB_CADDY_ADMIN_SOCK="/tmp/caddy-blb-admin.sock"
+BLB_CADDY_LAST_ERROR=""
+BLB_CADDY_LAST_OUTPUT=""
+
+# Diagnose a Caddy failure from its captured output and set BLB_CADDY_LAST_ERROR
+# with a human-readable reason and actionable hint.
+# Usage: diagnose_caddy_failure <rc> <captured_output> <context>
+#   rc:              exit code from caddy command
+#   captured_output: combined stdout+stderr from the failed command
+#   context:         short label like "start" or "reload" for the error message
+diagnose_caddy_failure() {
+    local rc=$1
+    local output=$2
+    local context=$3
+
+    BLB_CADDY_LAST_OUTPUT="$output"
+
+    local reason="Failed to ${context} Caddy (rc=$rc)"
+    local hint=""
+
+    if [[ "$output" == *"address already in use"* ]]; then
+        reason="Port 443 is already in use by another process"
+        hint="Stop the process occupying port 443 (sudo lsof -i :443) or change HTTPS_PORT"
+    elif [[ "$output" == *"permission denied"* ]] || [[ "$output" == *"operation not permitted"* ]]; then
+        reason="Caddy lacks permission to bind port 443"
+        hint="Run: sudo setcap 'cap_net_bind_service=+ep' \$(command -v caddy)"
+    elif [[ "$output" == *"parsing caddyfile"* ]] || [[ "$output" == *"Caddyfile:"* ]] || [[ "$output" == *"unexpected"* ]]; then
+        reason="Invalid Caddyfile configuration"
+        hint="Check generated config: $BLB_CADDY_MAIN and site fragments in $BLB_CADDY_SITES/"
+    elif [[ "$output" == *"no such file or directory"* ]] && [[ "$output" == *"admin"* || "$output" == *"sock"* ]]; then
+        reason="Stale Caddy admin socket"
+        hint="Remove the socket and retry: rm -f $BLB_CADDY_ADMIN_SOCK"
+    elif [[ "$output" == *"no such host"* ]] || [[ "$output" == *"dial"* ]]; then
+        reason="Caddy cannot reach upstream (DNS or network issue)"
+        hint="Verify FRONTEND_DOMAIN / BACKEND_DOMAIN resolve and upstream ports are correct"
+    elif [[ "$output" == *"loading"* ]] && [[ "$output" == *"module"* ]]; then
+        reason="Caddy module/plugin loading error"
+        hint="Reinstall Caddy or check if required plugins are available"
+    fi
+
+    if [[ -n "$hint" ]]; then
+        BLB_CADDY_LAST_ERROR="${reason}. ${hint}"
+    else
+        BLB_CADDY_LAST_ERROR="$reason"
+    fi
+}
 
 ensure_blb_caddy_dirs() {
     mkdir -p "$BLB_CADDY_SITES"
@@ -123,33 +168,52 @@ remove_site_fragment() {
 
 # Start the shared Caddy if not running, or reload if already running.
 ensure_shared_caddy() {
+    BLB_CADDY_LAST_ERROR=""
+    BLB_CADDY_LAST_OUTPUT=""
     create_main_caddyfile
 
     if ! command_exists caddy; then
-        install_caddy || return 1
+        install_caddy || {
+            BLB_CADDY_LAST_ERROR="Caddy is not available after installation attempt"
+            return 1
+        }
     fi
 
-    ensure_caddy_privileges || return 1
+    ensure_caddy_privileges || {
+        BLB_CADDY_LAST_ERROR="Caddy cannot bind privileged ports (need cap_net_bind_service). Run: sudo setcap 'cap_net_bind_service=+ep' \$(command -v caddy)"
+        return 1
+    }
+
+    local caddy_output rc
 
     if pgrep -x "caddy" > /dev/null; then
-        caddy reload --config "$BLB_CADDY_MAIN" --adapter caddyfile 2>/dev/null
-        local rc=$?
+        caddy_output=$(caddy reload --config "$BLB_CADDY_MAIN" --adapter caddyfile 2>&1)
+        rc=$?
         if [[ $rc -eq 0 ]]; then
             echo -e "${GREEN}✓${NC} Caddy reloaded with updated sites"
         else
             echo -e "${YELLOW}⚠${NC} Caddy reload failed (rc=$rc); attempting restart..." >&2
             caddy stop 2>/dev/null || true
             sleep 1
-            caddy start --config "$BLB_CADDY_MAIN" --adapter caddyfile 2>/dev/null
+            caddy_output=$(caddy start --config "$BLB_CADDY_MAIN" --adapter caddyfile 2>&1)
+            rc=$?
+            if [[ $rc -eq 0 ]]; then
+                echo -e "${GREEN}✓${NC} Caddy restarted with updated sites"
+            else
+                echo -e "${RED}✗${NC} Failed to restart Caddy (rc=$rc)" >&2
+                diagnose_caddy_failure "$rc" "$caddy_output" "restart"
+                return 1
+            fi
         fi
     else
         echo -e "${GREEN}Starting shared Caddy on :443...${NC}"
-        caddy start --config "$BLB_CADDY_MAIN" --adapter caddyfile 2>/dev/null
-        local rc=$?
+        caddy_output=$(caddy start --config "$BLB_CADDY_MAIN" --adapter caddyfile 2>&1)
+        rc=$?
         if [[ $rc -eq 0 ]]; then
             echo -e "${GREEN}✓${NC} Caddy started"
         else
             echo -e "${RED}✗${NC} Failed to start Caddy (rc=$rc)" >&2
+            diagnose_caddy_failure "$rc" "$caddy_output" "start"
             return 1
         fi
     fi
