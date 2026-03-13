@@ -15,6 +15,8 @@ class ImpersonationManager
 
     private const SESSION_KEY_USER_ID = '.original_user_id';
 
+    private const SESSION_KEY_USER_NAME = '.original_user_name';
+
     /**
      * Start impersonating the target user.
      *
@@ -32,7 +34,7 @@ class ImpersonationManager
 
         session([
             self::SESSION_KEY.self::SESSION_KEY_USER_ID => $impersonator->id,
-            self::SESSION_KEY.'.original_user_name' => $impersonator->name,
+            self::SESSION_KEY.self::SESSION_KEY_USER_NAME => $impersonator->name,
         ]);
 
         Auth::login($target);
@@ -59,7 +61,7 @@ class ImpersonationManager
      */
     public function isImpersonating(): bool
     {
-        return session()->has(self::SESSION_KEY.'.original_user_id');
+        return session()->has(self::SESSION_KEY.self::SESSION_KEY_USER_ID);
     }
 
     /**
@@ -67,7 +69,7 @@ class ImpersonationManager
      */
     public function getImpersonatorId(): ?int
     {
-        $id = session(self::SESSION_KEY.'.original_user_id');
+        $id = session(self::SESSION_KEY.self::SESSION_KEY_USER_ID);
 
         return $id !== null ? (int) $id : null;
     }
@@ -77,6 +79,6 @@ class ImpersonationManager
      */
     public function getImpersonatorName(): ?string
     {
-        return session(self::SESSION_KEY.'.original_user_name');
+        return session(self::SESSION_KEY.self::SESSION_KEY_USER_NAME);
     }
 }

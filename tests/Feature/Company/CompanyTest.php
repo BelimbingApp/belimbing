@@ -136,7 +136,7 @@ test('company can have relationships with other companies', function (): void {
     $company2 = Company::factory()->create();
     $relationshipType = RelationshipType::factory()->create();
 
-    $_relationship = CompanyRelationship::create([
+    CompanyRelationship::create([
         'company_id' => $company1->id,
         'related_company_id' => $company2->id,
         'relationship_type_id' => $relationshipType->id,

@@ -6,7 +6,6 @@
 namespace App\Providers;
 
 use Illuminate\Queue\Events\JobFailed;
-use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
@@ -67,10 +66,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // Monitor successful jobs
-        Queue::after(function (JobProcessed $_event) {
-            // Reset failure counter on success
-            Cache::decrement('queue_failures');
-        });
+        Queue::after(fn () => Cache::decrement('queue_failures'));
     }
 
     /**
