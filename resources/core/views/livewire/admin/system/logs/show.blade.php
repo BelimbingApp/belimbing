@@ -10,6 +10,11 @@
 
     @php
         $deleteLinesCount = $this->deleteLines > 0 ? $this->deleteLines : 10;
+        $windowLabelStart = $windowEnd > 0 ? $windowStart + 1 : 0;
+        $nextLabel = $this->mode === 'top' ? __('Next') : __('Older');
+        $nextTooltip = $this->mode === 'top'
+            ? __('Show the next chunk of lines further into the file.')
+            : __('Show an older chunk of lines.');
     @endphp
 
     <div class="space-y-section-gap">
@@ -25,20 +30,23 @@
         {{-- Toolbar --}}
         <x-ui.card>
             <div class="flex flex-wrap items-end gap-3">
-                {{-- Tail Lines --}}
+                {{-- Lines per chunk --}}
                 <div class="flex flex-col gap-1">
-                    <label for="tail-input" class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Tail :count lines', ['count' => number_format($this->tail)]) }}</label>
+                    <label for="lines-input" class="text-[11px] uppercase tracking-wider font-semibold text-muted">
+                        {{ __($this->mode === 'top' ? 'Top :count lines' : 'Tail :count lines', ['count' => number_format($this->lines)]) }}
+                    </label>
                     <x-ui.input
                         type="number"
-                        id="tail-input"
-                        wire:model.live.debounce.500ms="tail"
+                        id="lines-input"
+                        wire:model.live.debounce.500ms="lines"
                         min="1"
-                        class="w-24 !py-1 text-xs"
+                        max="1000"
+                        class="w-24 py-1! text-xs"
                     />
                 </div>
 
                 {{-- Search --}}
-                <div class="flex flex-col gap-1 flex-1 min-w-[12rem]">
+                <div class="flex flex-col gap-1 flex-1 min-w-48">
                     <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Search') }}</span>
                     <x-ui.search-input
                         wire:model.live.debounce.300ms="search"
@@ -63,7 +71,7 @@
                             id="delete-lines-input"
                             wire:model.live.debounce.200ms="deleteLines"
                             min="0"
-                            class="w-24 !py-1 text-xs"
+                            class="w-24 py-1! text-xs"
                         />
                     </div>
                 </div>
@@ -80,18 +88,6 @@
                 >
                     <x-icon name="heroicon-o-clock" class="w-4 h-4" />
                     <span x-text="localTime ? '{{ __('Local Time') }}' : '{{ __('UTC') }}'"></span>
-                </x-ui.button>
-
-                {{-- Show All --}}
-                <x-ui.button
-                    variant="{{ $this->showAll ? 'outline' : 'ghost' }}"
-                    size="sm"
-                    wire:click="$toggle('showAll')"
-                    title="{{ __('Toggle between showing all lines and tail lines.') }}"
-                    aria-label="{{ __('Toggle between showing all lines and tail lines.') }}"
-                >
-                    <x-icon name="heroicon-o-document-text" class="w-4 h-4" />
-                    {{ __('Show All') }}
                 </x-ui.button>
 
                 {{-- Refresh --}}
@@ -121,24 +117,63 @@
             </div>
         </x-ui.card>
 
-        {{-- Status Bar --}}
-        <div class="flex items-center gap-3 text-xs text-muted">
-            <span>{{ __('Showing :displayed of :total lines', ['displayed' => number_format($displayedCount), 'total' => number_format($totalLines)]) }}</span>
-            @if($search)
-                <span>· {{ __('filtered by ":search"', ['search' => $search]) }}</span>
-            @endif
-            @if(! $this->showAll)
-                <span>· {{ __('tail :n', ['n' => $this->tail]) }}</span>
-            @endif
+        {{-- Status & Navigation Bar --}}
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            {{-- Status --}}
+            <div class="flex items-center gap-3 text-xs text-muted">
+                <span>{{ __('Showing :displayed of :total lines', ['displayed' => number_format($displayedCount), 'total' => number_format($totalLines)]) }}</span>
+                <span>· {{ __('lines :start–:end', ['start' => number_format($windowLabelStart), 'end' => number_format($windowEnd)]) }}</span>
+                @if($search)
+                    <span>· {{ __('filtered by ":search"', ['search' => $search]) }}</span>
+                @endif
+            </div>
+
+            {{-- Page Navigation --}}
+            <div class="flex items-center gap-1">
+                <x-ui.button
+                    variant="{{ $this->mode === 'top' ? 'outline' : 'ghost' }}"
+                    size="xs"
+                    wire:click="switchMode('top')"
+                    title="{{ __('Show the first chunk of lines from the file.') }}"
+                >
+                    <x-icon name="heroicon-m-arrow-up" class="w-3.5 h-3.5" />
+                    {{ __('Top') }}
+                </x-ui.button>
+
+                <x-ui.button
+                    variant="{{ $this->mode === 'tail' ? 'outline' : 'ghost' }}"
+                    size="xs"
+                    wire:click="switchMode('tail')"
+                    title="{{ __('Show the latest chunk of lines from the file.') }}"
+                >
+                    <x-icon name="heroicon-o-arrow-down-tray" class="w-3.5 h-3.5" />
+                    {{ __('Tail') }}
+                </x-ui.button>
+
+                <span class="text-border-default mx-0.5">|</span>
+
+                <x-ui.button
+                    variant="ghost"
+                    size="xs"
+                    wire:click="nextWindow"
+                    :disabled="!$hasMore"
+                    title="{{ $nextTooltip }}"
+                >
+                    <x-icon name="{{ $this->mode === 'top' ? 'heroicon-o-chevron-down' : 'heroicon-o-chevron-up' }}" class="w-3.5 h-3.5" />
+                    {{ $nextLabel }}
+                </x-ui.button>
+
+                <span class="text-xs tabular-nums text-muted">{{ $this->window + 1 }}/{{ max($totalWindows, 1) }}</span>
+            </div>
         </div>
 
         {{-- Log Content --}}
         <x-ui.card>
             <div class="overflow-x-auto -mx-card-inner">
-                @if(count($lines) > 0)
+                @if(count($logLines) > 0)
                     <table class="min-w-full text-xs font-mono">
                         <tbody>
-                            @foreach($lines as $line)
+                            @foreach($logLines as $line)
                                 <tr wire:key="line-{{ $line['number'] }}" class="hover:bg-surface-subtle/50 group border-b border-border-default/30 last:border-b-0">
                                     <td class="px-3 py-0.5 text-right text-muted select-none w-1 whitespace-nowrap tabular-nums align-top">{{ $line['number'] }}</td>
                                     <td

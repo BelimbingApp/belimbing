@@ -8,19 +8,26 @@ namespace App\Base\Log\Livewire\Logs;
 use Illuminate\Support\Facades\File;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use SplFileObject;
 
 class Show extends Component
 {
+    private const DEFAULT_CHUNK_SIZE = 100;
+    private const MAX_CHUNK_SIZE = 1000;
+
     public string $filename = '';
 
     #[Url]
-    public int $tail = 100;
+    public int $lines = self::DEFAULT_CHUNK_SIZE;
 
     #[Url]
     public string $search = '';
 
     #[Url]
-    public bool $showAll = false;
+    public string $mode = 'tail';
+
+    #[Url]
+    public int $window = 0;
 
     public int $deleteLines = 10;
 
@@ -39,20 +46,69 @@ class Show extends Component
     }
 
     /**
+     * Switch between top and tail windowing modes, resetting to first window.
+     */
+    public function switchMode(string $mode): void
+    {
+        if (! in_array($mode, ['tail', 'top'], true)) {
+            return;
+        }
+
+        $this->mode = $mode;
+        $this->window = 0;
+    }
+
+    /**
+     * Advance to the next window away from the anchor.
+     *
+     * In tail mode this means older lines; in top mode this means further into the file.
+     */
+    public function nextWindow(): void
+    {
+        $this->window = max(0, $this->window + 1);
+    }
+
+    /**
+     * Normalize the lines-per-chunk input and reset window.
+     */
+    public function updatedLines(): void
+    {
+        $this->lines = $this->normalizedChunkSize();
+        $this->window = 0;
+    }
+
+    /**
      * Delete a number of lines from the top of the log file.
+     *
+     * Uses streaming read/write to avoid loading the entire file into memory.
      */
     public function deleteLinesFromTop(): void
     {
-        $deleteLines = $this->normalizedDeleteLines();
+        $count = $this->normalizedDeleteLines();
 
         $path = $this->resolvedPath();
         if ($path === null) {
             return;
         }
 
-        $lines = file($path, FILE_IGNORE_NEW_LINES);
-        $remaining = array_slice($lines, $deleteLines);
-        File::put($path, implode("\n", $remaining).($remaining ? "\n" : ''));
+        $tmpPath = $path.'.tmp';
+        $source = new SplFileObject($path, 'r');
+        $dest = new SplFileObject($tmpPath, 'w');
+
+        $lineIndex = 0;
+
+        while (! $source->eof()) {
+            $line = $source->fgets();
+
+            if ($lineIndex >= $count) {
+                $dest->fwrite($line);
+            }
+
+            $lineIndex++;
+        }
+
+        unset($source, $dest);
+        rename($tmpPath, $path);
         $this->deleteLines = 10;
     }
 
@@ -71,46 +127,38 @@ class Show extends Component
 
     public function render(): \Illuminate\Contracts\View\View
     {
-        $lines = [];
+        $logLines = [];
         $totalLines = 0;
         $fileSize = 0;
+        $windowStart = 0;
+        $windowEnd = 0;
+        $totalWindows = 0;
+        $hasMore = false;
 
         $path = $this->resolvedPath();
 
         if ($path !== null && File::exists($path)) {
             $fileSize = File::size($path);
-            $allLines = file($path, FILE_IGNORE_NEW_LINES);
-            $totalLines = count($allLines);
+            $totalLines = $this->countLines($path);
+            $chunkSize = $this->normalizedChunkSize();
+            $totalWindows = max(1, (int) ceil($totalLines / $chunkSize));
+            $this->window = min(max(0, $this->window), $totalWindows - 1);
 
-            // Apply tail or show all
-            if (! $this->showAll && $this->tail > 0) {
-                $startIndex = max(0, $totalLines - $this->tail);
-                $sliced = array_slice($allLines, $startIndex, null, true);
-            } else {
-                $sliced = $allLines;
-                $startIndex = 0;
-            }
+            [$windowStart, $windowEnd] = $this->resolveWindowBounds($totalLines, $chunkSize);
+            $logLines = $this->readWindowLines($path, $windowStart, $windowEnd);
 
-            // Build numbered lines with search filtering.
-            foreach ($sliced as $index => $line) {
-                $lineNumber = $index + 1;
-
-                if ($this->search !== '' && stripos($line, $this->search) === false) {
-                    continue;
-                }
-
-                $lines[] = [
-                    'number' => $lineNumber,
-                    'content' => $line,
-                ];
-            }
+            $hasMore = $this->window < ($totalWindows - 1);
         }
 
         return view('livewire.admin.system.logs.show', [
-            'lines' => $lines,
+            'logLines' => $logLines,
             'totalLines' => $totalLines,
             'fileSize' => $fileSize,
-            'displayedCount' => count($lines),
+            'displayedCount' => count($logLines),
+            'windowStart' => $windowStart,
+            'windowEnd' => $windowEnd,
+            'totalWindows' => $totalWindows,
+            'hasMore' => $hasMore,
         ]);
     }
 
@@ -151,5 +199,93 @@ class Show extends Component
         }
 
         return $this->deleteLines;
+    }
+
+    /**
+     * Normalize lines-per-chunk value.
+     */
+    private function normalizedChunkSize(): int
+    {
+        return min(self::MAX_CHUNK_SIZE, max(1, $this->lines));
+    }
+
+    /**
+     * Count total lines without loading entire file into memory.
+     */
+    private function countLines(string $path): int
+    {
+        $file = new SplFileObject($path, 'r');
+        $file->seek(PHP_INT_MAX);
+
+        $count = $file->key() + 1;
+
+        if ($count === 1) {
+            $file->rewind();
+
+            if ($file->eof() || $file->current() === false || $file->current() === '') {
+                return 0;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Resolve [start, endExclusive] line indices for current mode/window.
+     *
+     * @return array{0:int,1:int}
+     */
+    private function resolveWindowBounds(int $totalLines, int $chunkSize): array
+    {
+        if ($totalLines === 0) {
+            return [0, 0];
+        }
+
+        if ($this->mode === 'top') {
+            $start = $this->window * $chunkSize;
+            $end = min($totalLines, $start + $chunkSize);
+
+            return [$start, $end];
+        }
+
+        $end = max(0, $totalLines - ($this->window * $chunkSize));
+        $start = max(0, $end - $chunkSize);
+
+        return [$start, $end];
+    }
+
+    /**
+     * Read and optionally filter lines in the given window bounds.
+     *
+     * @return array<int, array{number:int, content:string}>
+     */
+    private function readWindowLines(string $path, int $start, int $end): array
+    {
+        if ($start >= $end) {
+            return [];
+        }
+
+        $file = new SplFileObject($path, 'r');
+        $file->seek($start);
+
+        $lines = [];
+
+        for ($index = $start; $index < $end && ! $file->eof(); $index++) {
+            $line = rtrim((string) $file->current(), "\r\n");
+
+            if ($this->search !== '' && stripos($line, $this->search) === false) {
+                $file->next();
+                continue;
+            }
+
+            $lines[] = [
+                'number' => $index + 1,
+                'content' => $line,
+            ];
+
+            $file->next();
+        }
+
+        return $lines;
     }
 }
