@@ -119,6 +119,69 @@ class TableInspector
     }
 
     /**
+     * Get foreign key relationships for a table.
+     *
+     * Returns both outgoing (this table references others) and incoming
+     * (other tables reference this one) foreign keys.
+     *
+     * @return array{outgoing: list<array{column: string, foreign_table: string, foreign_column: string}>, incoming: list<array{table: string, column: string, local_column: string}>}
+     */
+    public function foreignKeys(string $table): array
+    {
+        $outgoing = [];
+        foreach (Schema::getForeignKeys($table) as $fk) {
+            foreach ($fk['columns'] as $i => $column) {
+                $outgoing[] = [
+                    'column' => $column,
+                    'foreign_table' => $fk['foreign_table'],
+                    'foreign_column' => $fk['foreign_columns'][$i],
+                ];
+            }
+        }
+
+        $incoming = [];
+        $registeredTables = TableRegistry::query()->pluck('table_name')->all();
+
+        foreach ($registeredTables as $otherTable) {
+            if ($otherTable === $table) {
+                continue;
+            }
+
+            foreach (Schema::getForeignKeys($otherTable) as $fk) {
+                if ($fk['foreign_table'] !== $table) {
+                    continue;
+                }
+
+                foreach ($fk['columns'] as $i => $column) {
+                    $incoming[] = [
+                        'table' => $otherTable,
+                        'column' => $column,
+                        'local_column' => $fk['foreign_columns'][$i],
+                    ];
+                }
+            }
+        }
+
+        return ['outgoing' => $outgoing, 'incoming' => $incoming];
+    }
+
+    /**
+     * Get all registered tables grouped by module name.
+     *
+     * @return array<string, list<array{table_name: string}>>
+     */
+    public function allTablesGroupedByModule(): array
+    {
+        return TableRegistry::query()
+            ->orderBy('module_name')
+            ->orderBy('table_name')
+            ->get(['table_name', 'module_name'])
+            ->groupBy(fn ($row) => $row->module_name ?? __('Laravel'))
+            ->map(fn ($group) => $group->map(fn ($row) => ['table_name' => $row->table_name])->values()->all())
+            ->all();
+    }
+
+    /**
      * Check if a column exists in a table.
      */
     private function columnExists(string $table, string $column): bool

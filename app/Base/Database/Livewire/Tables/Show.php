@@ -14,11 +14,14 @@ use Livewire\WithPagination;
  * Generic table viewer — displays contents of any registered database table.
  *
  * Read-only. Supports search across string/text columns, sortable column
- * headers, and pagination. Table must exist in the TableRegistry.
+ * headers, pagination, a collapsible table navigator sidebar grouped by
+ * module, and foreign key relationship links.
  */
 class Show extends Component
 {
     private const MAX_CELL_LENGTH = 120;
+
+    private const MAX_RECENT_TABLES = 8;
 
     use ResetsPaginationOnSearch;
     use WithPagination;
@@ -31,10 +34,13 @@ class Show extends Component
 
     public string $sortDirection = 'asc';
 
+    public bool $navigatorOpen = true;
+
     /**
      * Initialize with the table name from the route parameter.
      *
      * Aborts with 404 if the table is not in the registry.
+     * Tracks recently viewed tables in the session.
      */
     public function mount(string $tableName): void
     {
@@ -45,6 +51,10 @@ class Show extends Component
         }
 
         $this->tableName = $tableName;
+        $this->navigatorOpen = session('table_navigator_open', true);
+        $this->search = request()->query('search', '');
+
+        $this->trackRecentTable($tableName);
     }
 
     /**
@@ -60,6 +70,15 @@ class Show extends Component
         }
 
         $this->resetPage();
+    }
+
+    /**
+     * Toggle the table navigator panel visibility.
+     */
+    public function toggleNavigator(): void
+    {
+        $this->navigatorOpen = ! $this->navigatorOpen;
+        session(['table_navigator_open' => $this->navigatorOpen]);
     }
 
     /**
@@ -84,11 +103,26 @@ class Show extends Component
             : $stringValue;
     }
 
+    /**
+     * Track a table in the recently viewed session list.
+     */
+    private function trackRecentTable(string $tableName): void
+    {
+        $recent = session('recent_tables', []);
+        $recent = array_values(array_filter($recent, fn ($t) => $t !== $tableName));
+        array_unshift($recent, $tableName);
+        $recent = array_slice($recent, 0, self::MAX_RECENT_TABLES);
+        session(['recent_tables' => $recent]);
+    }
+
     public function render(): \Illuminate\Contracts\View\View
     {
         $inspector = app(TableInspector::class);
         $columns = $inspector->columns($this->tableName);
         $rowCount = $inspector->rowCount($this->tableName);
+        $foreignKeys = $inspector->foreignKeys($this->tableName);
+        $tablesGrouped = $inspector->allTablesGroupedByModule();
+        $recentTables = session('recent_tables', []);
 
         return view('livewire.admin.system.tables.show', [
             'columns' => $columns,
@@ -99,6 +133,9 @@ class Show extends Component
                 $this->sortDirection,
             ),
             'rowCount' => $rowCount,
+            'foreignKeys' => $foreignKeys,
+            'tablesGrouped' => $tablesGrouped,
+            'recentTables' => $recentTables,
         ]);
     }
 }
