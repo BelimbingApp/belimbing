@@ -19,7 +19,12 @@ Think of Laravel as the Level 0 foundation and BLB as a Level 1 framework built 
 **No MVP mindset.** Build production-grade from day one. Scope may be small, but the bar is high: deep modules, clear contracts, zero tolerance for tech debt. If an approach would be unacceptable in production, it is unacceptable in the initialization phase too.
 
 ### Core Principles
-- **Boy-Scout Rule:** Leave the codebase better than you found it. When editing a file or area, fix nearby issues (naming, dead code, missing tests, unclear comments) in the same change — small, scoped improvements compound.
+- **Boy-Scout Rule:** Leave the codebase better than you found it. When editing a file or area, fix nearby issues (naming, dead code, missing tests, unclear comments) in the same change — small, scoped improvements compound. Specifically:
+  - **After iterative changes**, verify the final state is clean: grep for stale references, orphaned entries, or commented-out cruft from earlier attempts.
+  - **After moving or restructuring code**, confirm the old location has no leftover wrappers, empty containers, or dangling logic.
+  - **After changing approach**, remove all artifacts of the abandoned path — dead branches, unused variables, stale TODO comments.
+  - **In templates**, hunt cruft: stale Tailwind classes, unused Alpine `x-data` props, orphaned `wire:model` bindings, unreachable `@if` blocks.
+  - **In PHP**, hunt cruft: unused `use` imports, unreachable `catch` blocks, dead methods, properties that lost their only caller.
 - **Destructive Evolution:** Prioritize the best current design over backward compatibility. Drop tables, refactor schemas, and rewrite APIs freely — no migration paths for data. Use this freedom for structural improvement, not for cutting corners.
 - **Strategic Programming:** Prefer structural solutions over tactical patches. Refactor immediately upon discovering design flaws (zero tolerance for tech debt); resist quick fixes and aim for simplicity to lower future costs.
 - **Deep Modules:** Modules should provide powerful functionality through simple interfaces. Hide complexity; do not leak implementation details.
