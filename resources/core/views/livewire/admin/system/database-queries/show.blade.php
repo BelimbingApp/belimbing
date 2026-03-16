@@ -92,7 +92,7 @@
             />
 
             @if(count($availableModels) > 0)
-                <div class="mt-3 flex flex-wrap items-center gap-2">
+                <div class="mt-2 flex flex-wrap items-center gap-2">
                     <select
                         wire:model.live="selectedModelId"
                         class="rounded-lg border border-border-input bg-surface-card text-xs text-ink px-input-x py-input-y focus:border-accent focus:ring-0 transition-colors max-w-xs"
@@ -111,7 +111,7 @@
                         @endforeach
                     </select>
                     <x-ui.button
-                        variant="secondary"
+                        variant="primary"
                         size="sm"
                         wire:click="generateSql"
                         wire:loading.attr="disabled"
@@ -119,14 +119,9 @@
                         :disabled="$isGenerating"
                         class="whitespace-nowrap"
                     >
-                        <span wire:loading.remove wire:target="generateSql" class="inline-flex items-center gap-1 whitespace-nowrap">
-                            <x-icon name="heroicon-o-sparkles" class="w-4 h-4" />
-                            {{ __('Generate') }}
-                        </span>
-                        <span wire:loading wire:target="generateSql" class="inline-flex items-center gap-1 whitespace-nowrap">
-                            <x-icon name="heroicon-o-arrow-path" class="w-4 h-4 animate-spin" />
-                            {{ __('Generating…') }}
-                        </span>
+                        <x-icon name="heroicon-o-paper-airplane" class="w-4 h-4" wire:loading.remove wire:target="generateSql" />
+                        <x-icon name="heroicon-o-arrow-path" class="w-4 h-4 animate-spin" wire:loading wire:target="generateSql" />
+                        {{ __('Generate') }}
                     </x-ui.button>
                 </div>
 
@@ -136,35 +131,38 @@
             @endif
         </x-ui.card>
 
-        {{-- SQL (collapsible disclosure) --}}
-        <div x-data="{ sqlOpen: false }">
-            <button
-                type="button"
-                x-on:click="sqlOpen = !sqlOpen"
-                class="inline-flex items-center gap-1.5 text-xs text-muted hover:text-ink transition-colors"
-                :aria-expanded="sqlOpen"
-            >
-                <x-icon name="heroicon-m-chevron-right" class="w-3.5 h-3.5 transition-transform duration-200" ::class="sqlOpen && 'rotate-90'" />
-                <span class="text-[11px] uppercase tracking-wider font-semibold">{{ __('SQL Query') }}</span>
-            </button>
-            <div
-                x-show="sqlOpen"
-                x-cloak
-                x-transition:enter="transition ease-out duration-200"
-                x-transition:enter-start="opacity-0 -translate-y-1"
-                x-transition:enter-end="opacity-100 translate-y-0"
-                x-transition:leave="transition ease-in duration-150"
-                x-transition:leave-start="opacity-100 translate-y-0"
-                x-transition:leave-end="opacity-0 -translate-y-1"
-                class="mt-2"
-            >
-                <x-ui.textarea
-                    wire:model="editSql"
-                    rows="6"
-                    class="font-mono text-xs"
-                    aria-label="{{ __('SQL Query') }}"
-                />
+        {{-- SQL Query (click-to-edit) --}}
+        <div x-data="{ editingSql: false }">
+            <div class="flex items-center gap-1.5 mb-1">
+                <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('SQL Query') }}</span>
+                <button
+                    type="button"
+                    x-on:click="editingSql = true; $nextTick(() => $refs.sqlInput.focus())"
+                    class="text-muted hover:text-ink transition-colors"
+                    title="{{ __('Edit SQL') }}"
+                    aria-label="{{ __('Edit SQL') }}"
+                >
+                    <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5" />
+                </button>
             </div>
+            <span
+                x-show="!editingSql"
+                x-on:click="editingSql = true; $nextTick(() => $refs.sqlInput.focus())"
+                x-text="$wire.editSql || '{{ __('No SQL yet — generate from prompt or click to write') }}'"
+                class="font-mono text-xs cursor-text"
+                :class="$wire.editSql ? 'text-ink' : 'text-muted'"
+            ></span>
+            <textarea
+                x-ref="sqlInput"
+                x-show="editingSql"
+                x-cloak
+                x-on:blur="editingSql = false"
+                x-on:keydown.escape="editingSql = false"
+                wire:model="editSql"
+                rows="6"
+                class="w-full font-mono text-xs border rounded-lg border-border-input bg-surface-card text-ink px-input-x py-input-y focus:border-accent focus:ring-0 transition-colors"
+                aria-label="{{ __('SQL Query') }}"
+            ></textarea>
         </div>
 
         {{-- Action row: Run --}}
@@ -263,7 +261,7 @@
                             :disabled="$currentPage >= $lastPage"
                         >
                             {{ __('Next') }}
-                            <x-icon name="heroicon-o-chevron-right" class="w-4 h-4" />
+                            <x-icon name="heroicon-m-chevron-right" class="w-4 h-4" />
                         </x-ui.button>
                     </div>
                 </div>

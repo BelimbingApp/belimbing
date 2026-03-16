@@ -44,7 +44,7 @@ use App\Base\Menu\Services\PinMetadataNormalizer;
                         class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-sm transition-colors"
                         :class="pagePinned ? 'text-accent' : 'text-muted hover:text-accent'"
                         :title="pagePinned ? '{{ __('Unpin from sidebar') }}' : '{{ __('Pin to sidebar') }}'"
-                        :aria-label="pagePinned ? '{{ __('Unpin :page from sidebar', ['page' => $title]) }}' : '{{ __('Pin :page to sidebar', ['page' => $title]) }}'"
+                        :aria-label="pagePinned ? '{{ __('Unpin :page from sidebar', ['page' => e($resolvedPinnable['label'])]) }}' : '{{ __('Pin :page to sidebar', ['page' => e($resolvedPinnable['label'])]) }}'"
                     >
                         <x-icon name="heroicon-o-pin" class="w-4 h-4" />
                     </button>
