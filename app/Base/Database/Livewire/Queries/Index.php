@@ -19,20 +19,13 @@ class Index extends Component
     public string $search = '';
 
     /**
-     * Create a new blank query and redirect to its show page.
+     * Redirect to the Show page in "new" mode without persisting a record.
+     *
+     * The record is only created when the user explicitly saves.
      */
     public function createView(): void
     {
-        $userId = auth()->id();
-
-        $view = Query::query()->create([
-            'user_id' => $userId,
-            'name' => __('Untitled Query'),
-            'slug' => Query::generateSlug(__('Untitled Query'), $userId),
-            'sql_query' => 'SELECT 1',
-        ]);
-
-        $this->redirect(route('admin.system.database-queries.show', $view->slug), navigate: true);
+        $this->redirect(route('admin.system.database-queries.show', '_new'), navigate: true);
     }
 
     /**

@@ -37,6 +37,9 @@ class Workspace extends Component
     /** @var string|null Flash message for config save (success or error) */
     public ?string $configSaved = null;
 
+    /** @var bool Whether the last config save was an error */
+    public bool $configSaveError = false;
+
     /** @var string|null Error message when saving verification status (e.g. DB schema mismatch) */
     public ?string $verificationError = null;
 
@@ -85,6 +88,7 @@ class Workspace extends Component
 
         $this->configSaveError = false;
         $this->configSaved = __('Configuration saved.');
+        $this->clearTryItResult();
         $this->loadConfigValues();
     }
 

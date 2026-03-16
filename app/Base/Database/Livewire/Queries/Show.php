@@ -12,6 +12,7 @@ use App\Base\Database\Exceptions\BlbQueryException;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\QueryExecutor;
 use App\Modules\Core\User\Models\Query;
+use App\Modules\Core\User\Models\User;
 use App\Modules\Core\User\Models\UserPin;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
@@ -30,7 +31,9 @@ class Show extends Component
     use ResolvesAvailableModels;
     use WithPagination;
 
-    public Query $query;
+    public ?Query $query = null;
+
+    public bool $isNew = false;
 
     public string $error = '';
 
@@ -48,25 +51,39 @@ class Show extends Component
 
     public string $aiError = '';
 
+    public bool $shareOpen = false;
+
+    public string $shareSearch = '';
+
+    public string $shareSuccess = '';
+
     /**
-     * Initialize the component by loading the query for the authenticated user.
+     * Initialize the component.
      *
-     * Sets the default AI model to the first active model of the highest-priority
-     * provider for the user's company.
+     * When the slug is `_new`, enters creation mode with empty defaults
+     * and no database record. Otherwise loads the existing query.
      *
-     * @param  string  $slug  The URL slug identifying the query
+     * @param  string  $slug  The URL slug identifying the query, or `_new`
      */
     public function mount(string $slug): void
     {
-        $this->query = Query::query()
-            ->where('user_id', auth()->id())
-            ->where('slug', $slug)
-            ->firstOrFail();
+        if ($slug === '_new') {
+            $this->isNew = true;
+            $this->editName = __('Untitled Query');
+            $this->editSql = '';
+            $this->editDescription = '';
+            $this->editPrompt = '';
+        } else {
+            $this->query = Query::query()
+                ->where('user_id', auth()->id())
+                ->where('slug', $slug)
+                ->firstOrFail();
 
-        $this->editName = $this->query->name;
-        $this->editSql = $this->query->sql_query;
-        $this->editDescription = $this->query->description ?? '';
-        $this->editPrompt = $this->query->prompt ?? '';
+            $this->editName = $this->query->name;
+            $this->editSql = $this->query->sql_query;
+            $this->editDescription = $this->query->description ?? '';
+            $this->editPrompt = $this->query->prompt ?? '';
+        }
 
         $this->selectedModelId = $this->resolveDefaultCompositeModelId(
             (int) auth()->user()?->getCompanyId()
@@ -75,6 +92,9 @@ class Show extends Component
 
     /**
      * Persist all editable fields to the database.
+     *
+     * For new queries, creates the record and redirects to the proper URL.
+     * For existing queries, updates in place.
      */
     public function save(): void
     {
@@ -82,13 +102,34 @@ class Show extends Component
             'name' => $this->editName,
             'prompt' => $this->editPrompt ?: null,
             'description' => $this->editDescription ?: null,
-            'sql_query' => $this->editSql,
+            'sql_query' => $this->editSql ?: '',
         ], [
             'name' => ['required', 'string', 'max:255'],
             'prompt' => ['nullable', 'string'],
             'description' => ['nullable', 'string', 'max:1000'],
             'sql_query' => ['required', 'string'],
         ])->validate();
+
+        if ($this->isNew) {
+            $userId = (int) auth()->id();
+
+            $this->query = Query::query()->create([
+                'user_id' => $userId,
+                'name' => $validated['name'],
+                'slug' => Query::generateSlug($validated['name'], $userId),
+                'prompt' => $validated['prompt'],
+                'description' => $validated['description'],
+                'sql_query' => $validated['sql_query'],
+            ]);
+
+            $this->isNew = false;
+            $this->redirect(
+                route('admin.system.database-queries.show', $this->query->slug),
+                navigate: true,
+            );
+
+            return;
+        }
 
         $this->query->name = $validated['name'];
         $this->query->slug = Query::generateSlug($validated['name'], $this->query->user_id);
@@ -100,10 +141,17 @@ class Show extends Component
 
     /**
      * Delete this query and remove any associated user pins, then redirect to the index.
+     *
+     * For unsaved queries, simply redirects without deleting.
      */
     public function delete(): void
     {
-        $queryId = $this->query->id;
+        if ($this->isNew || $this->query === null) {
+            $this->redirect(route('admin.system.database-queries.index'), navigate: true);
+
+            return;
+        }
+
         $slug = $this->query->slug;
 
         UserPin::query()
@@ -112,7 +160,7 @@ class Show extends Component
             ->delete();
 
         Query::query()
-            ->where('id', $queryId)
+            ->where('id', $this->query->id)
             ->where('user_id', auth()->id())
             ->delete();
 
@@ -121,9 +169,18 @@ class Show extends Component
 
     /**
      * Run the current SQL query — persists first, then re-renders results.
+     *
+     * For new queries, save() creates the record and redirects; on the
+     * redirected page the SQL is executed automatically in render().
      */
     public function runQuery(): void
     {
+        if (trim($this->editSql) === '') {
+            $this->error = __('Please enter or generate a SQL query first.');
+
+            return;
+        }
+
         $this->save();
         $this->error = '';
         $this->resetPage();
@@ -246,6 +303,10 @@ class Show extends Component
      */
     public function shareWith(int $userId): void
     {
+        if ($this->isNew || $this->query === null) {
+            return;
+        }
+
         $newQuery = Query::query()->create([
             'user_id' => $userId,
             'name' => $this->query->name,
@@ -267,6 +328,41 @@ class Show extends Component
             'icon' => $newQuery->icon ?? 'heroicon-o-circle-stack',
             'sort_order' => (UserPin::query()->where('user_id', $userId)->max('sort_order') ?? -1) + 1,
         ]);
+
+        $targetUser = User::query()->find($userId);
+        $this->shareSuccess = __('Shared with :name.', ['name' => $targetUser?->name ?? __('user')]);
+        $this->shareOpen = false;
+        $this->shareSearch = '';
+    }
+
+    /**
+     * Get users that this query can be shared with.
+     *
+     * @return list<array{id: int, name: string, email: string}>
+     */
+    public function shareableUsers(): array
+    {
+        if ($this->shareSearch === '') {
+            return [];
+        }
+
+        $search = $this->shareSearch;
+
+        return User::query()
+            ->where('id', '!=', auth()->id())
+            ->where(function ($q) use ($search): void {
+                $q->where('name', 'like', '%'.$search.'%')
+                    ->orWhere('email', 'like', '%'.$search.'%');
+            })
+            ->orderBy('name')
+            ->limit(10)
+            ->get()
+            ->map(fn (User $u): array => [
+                'id' => (int) $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+            ])
+            ->all();
     }
 
     public function render(): \Illuminate\Contracts\View\View
@@ -278,19 +374,25 @@ class Show extends Component
         $currentPage = 1;
         $lastPage = 1;
 
-        try {
-            $executor = app(QueryExecutor::class);
-            $result = $executor->execute($this->query->sql_query, $this->getPage());
+        $hasSql = ! $this->isNew
+            && $this->query !== null
+            && trim($this->query->sql_query) !== '';
 
-            $columns = $result['columns'];
-            $rows = $result['rows'];
-            $total = $result['total'];
-            $perPage = $result['per_page'];
-            $currentPage = $result['current_page'];
-            $lastPage = $result['last_page'];
-            $this->error = '';
-        } catch (BlbQueryException $e) {
-            $this->error = $e->getMessage();
+        if ($hasSql) {
+            try {
+                $executor = app(QueryExecutor::class);
+                $result = $executor->execute($this->query->sql_query, $this->getPage());
+
+                $columns = $result['columns'];
+                $rows = $result['rows'];
+                $total = $result['total'];
+                $perPage = $result['per_page'];
+                $currentPage = $result['current_page'];
+                $lastPage = $result['last_page'];
+                $this->error = '';
+            } catch (BlbQueryException $e) {
+                $this->error = $e->getMessage();
+            }
         }
 
         return view('livewire.admin.system.database-queries.show', [
@@ -309,9 +411,15 @@ class Show extends Component
 
     /**
      * Check whether any editable field differs from the persisted model.
+     *
+     * Always true for unsaved queries since nothing has been persisted.
      */
     public function getIsDirtyProperty(): bool
     {
+        if ($this->isNew || $this->query === null) {
+            return true;
+        }
+
         return $this->editName !== $this->query->name
             || $this->editSql !== $this->query->sql_query
             || $this->editDescription !== ($this->query->description ?? '')
