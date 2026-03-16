@@ -93,23 +93,12 @@
 
             @if(count($availableModels) > 0)
                 <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <select
+                    <x-ai.model-selector
+                        :models="$availableModels"
                         wire:model.live="selectedModelId"
-                        class="rounded-lg border border-border-input bg-surface-card text-xs text-ink px-input-x py-input-y focus:border-accent focus:ring-0 transition-colors max-w-xs"
+                        class="max-w-xs"
                         aria-label="{{ __('AI model') }}"
-                    >
-                        <option value="">{{ __('Select model…') }}</option>
-                        @php
-                            $grouped = collect($availableModels)->groupBy('provider');
-                        @endphp
-                        @foreach($grouped as $providerName => $models)
-                            <optgroup label="{{ $providerName }}">
-                                @foreach($models as $model)
-                                    <option value="{{ $model['id'] }}">{{ $model['label'] }}</option>
-                                @endforeach
-                            </optgroup>
-                        @endforeach
-                    </select>
+                    />
                     <x-ui.button
                         variant="primary"
                         size="sm"

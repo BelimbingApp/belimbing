@@ -5,11 +5,10 @@
 
 namespace App\Modules\Core\AI\Livewire;
 
+use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -29,6 +28,7 @@ use Livewire\WithFileUploads;
 
 class Chat extends Component
 {
+    use ResolvesAvailableModels;
     use WithFileUploads;
 
     /**
@@ -127,17 +127,18 @@ class Chat extends Component
     }
 
     /**
-     * Change the model for the current session.
+     * Persist the model override to the session when the user picks a model.
+     *
+     * Livewire lifecycle hook — called automatically when $selectedModel
+     * is updated via wire:model.live on the model selector.
      */
-    public function selectModel(string $modelId): void
+    public function updatedSelectedModel(): void
     {
-        $this->selectedModel = $modelId;
-
-        if ($this->selectedSessionId !== null) {
+        if ($this->selectedSessionId !== null && $this->selectedModel !== null) {
             app(SessionManager::class)->updateModelOverride(
                 $this->employeeId,
                 $this->selectedSessionId,
-                $modelId,
+                $this->selectedModel,
             );
         }
     }
@@ -565,7 +566,11 @@ class Chat extends Component
     /**
      * Get available models for the model picker dropdown.
      *
-     * @return list<array{id: string, label: string, provider: string}>
+     * Delegates to the shared ResolvesAvailableModels concern, returning
+     * composite "providerId:::modelId" identifiers for correct cross-provider
+     * model overrides.
+     *
+     * @return list<array{id: string, label: string, provider: string, providerId: int}>
      */
     public function availableModels(): array
     {
@@ -576,40 +581,19 @@ class Chat extends Component
             return [];
         }
 
-        $providers = AiProvider::query()
-            ->forCompany($companyId)
-            ->active()
-            ->orderBy('priority')
-            ->orderBy('display_name')
-            ->get();
-
-        $models = [];
-        foreach ($providers as $provider) {
-            $providerModels = AiProviderModel::query()
-                ->where('ai_provider_id', $provider->id)
-                ->active()
-                ->orderBy('model_id')
-                ->get();
-
-            foreach ($providerModels as $model) {
-                $models[] = [
-                    'id' => $model->model_id,
-                    'label' => $model->model_id,
-                    'provider' => $provider->display_name,
-                ];
-            }
-        }
-
-        return $models;
+        return $this->loadAvailableModels($companyId);
     }
 
     /**
      * Get the display label for the currently active model.
+     *
+     * Extracts the model_id from a composite "providerId:::modelId" string
+     * when a model override is set.
      */
     private function resolveCurrentModelLabel(): string
     {
         if ($this->selectedModel !== null) {
-            return $this->selectedModel;
+            return $this->extractModelId($this->selectedModel) ?? $this->selectedModel;
         }
 
         $config = app(ConfigResolver::class)->resolvePrimaryWithDefaultFallback($this->employeeId);

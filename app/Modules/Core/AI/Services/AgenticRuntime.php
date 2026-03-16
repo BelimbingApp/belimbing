@@ -51,9 +51,7 @@ class AgenticRuntime
             return $this->responseFactory->error($runId, 'unknown', 'unknown', 0, __('No LLM configuration available.'));
         }
 
-        if ($modelOverride !== null) {
-            $config['model'] = $modelOverride;
-        }
+        $config = $this->applyModelOverride($config, $modelOverride);
 
         $credentials = $this->credentialResolver->resolve($config);
 
@@ -94,9 +92,7 @@ class AgenticRuntime
             return;
         }
 
-        if ($modelOverride !== null) {
-            $config['model'] = $modelOverride;
-        }
+        $config = $this->applyModelOverride($config, $modelOverride);
 
         $credentials = $this->credentialResolver->resolve($config);
 
@@ -107,6 +103,41 @@ class AgenticRuntime
         }
 
         yield from $this->runStreamingToolLoop($runId, $config, $credentials, $messages, $systemPrompt);
+    }
+
+    /**
+     * Apply a model override to the resolved config.
+     *
+     * Supports composite "providerId:::modelId" format to resolve the full
+     * provider config (api_key, base_url, etc.) for cross-provider overrides.
+     * Plain model IDs just override the model name within the existing config.
+     *
+     * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}  $config
+     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}
+     */
+    private function applyModelOverride(array $config, ?string $modelOverride): array
+    {
+        if ($modelOverride === null) {
+            return $config;
+        }
+
+        if (str_contains($modelOverride, ':::')) {
+            [$providerId, $modelId] = explode(':::', $modelOverride, 2);
+            $providerConfig = $this->configResolver->resolveForProvider((int) $providerId, $modelId);
+
+            if ($providerConfig !== null) {
+                return $providerConfig;
+            }
+
+            // Fallback: use the model ID only if provider resolution fails
+            $config['model'] = $modelId;
+
+            return $config;
+        }
+
+        $config['model'] = $modelOverride;
+
+        return $config;
     }
 
     /**

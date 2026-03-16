@@ -420,37 +420,15 @@
                 <div class="border-t border-border-default px-4 py-3 space-y-2">
                     {{-- Model picker (authz-gated) --}}
                     @if ($canSelectModel && count($availableModels) > 0)
-                        <div x-data="{ modelPickerOpen: false }" class="relative">
-                            <button
-                                type="button"
-                                x-on:click="modelPickerOpen = !modelPickerOpen"
-                                class="inline-flex items-center gap-1 text-[11px] text-muted hover:text-ink transition-colors"
-                            >
-                                <x-icon name="heroicon-o-cpu-chip" class="w-3 h-3" />
-                                <span class="truncate max-w-[12rem]">{{ $currentModel }}</span>
-                                <x-icon name="heroicon-o-chevron-up" class="w-3 h-3" />
-                            </button>
-
-                            <div
-                                x-show="modelPickerOpen"
-                                x-on:click.outside="modelPickerOpen = false"
-                                x-transition.opacity.duration.100ms
-                                x-cloak
-                                class="absolute bottom-full left-0 mb-1 w-72 max-h-48 overflow-y-auto bg-surface-card border border-border-default rounded-xl shadow-lg z-20"
-                            >
-                                @foreach ($availableModels as $model)
-                                    <button
-                                        type="button"
-                                        wire:click="selectModel('{{ $model['id'] }}')"
-                                        x-on:click="modelPickerOpen = false"
-                                        class="w-full text-left px-3 py-1.5 text-sm hover:bg-surface-subtle transition-colors flex items-center justify-between gap-2
-                                            {{ ($selectedModel ?? '') === $model['id'] ? 'text-accent font-medium' : 'text-ink' }}"
-                                    >
-                                        <span class="truncate">{{ $model['label'] }}</span>
-                                        <span class="text-[10px] text-muted shrink-0">{{ $model['provider'] }}</span>
-                                    </button>
-                                @endforeach
-                            </div>
+                        <div class="flex items-center gap-1">
+                            <x-icon name="heroicon-o-cpu-chip" class="w-3 h-3 text-muted shrink-0" />
+                            <x-ai.model-selector
+                                :models="$availableModels"
+                                wire:model.live="selectedModel"
+                                class="max-w-xs !py-0.5 !text-[11px]"
+                                aria-label="{{ __('AI model') }}"
+                                :empty-label="$currentModel"
+                            />
                         </div>
                     @else
                         <div class="inline-flex items-center gap-1 text-[11px] text-muted">

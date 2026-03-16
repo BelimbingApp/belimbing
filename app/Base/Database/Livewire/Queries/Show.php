@@ -6,13 +6,11 @@
 namespace App\Base\Database\Livewire\Queries;
 
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Database\Exceptions\BlbQueryException;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\QueryExecutor;
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
 use App\Modules\Core\User\Models\Query;
 use App\Modules\Core\User\Models\UserPin;
 use Illuminate\Support\Facades\Schema;
@@ -29,6 +27,7 @@ use Livewire\WithPagination;
  */
 class Show extends Component
 {
+    use ResolvesAvailableModels;
     use WithPagination;
 
     public Query $query;
@@ -69,7 +68,9 @@ class Show extends Component
         $this->editDescription = $this->query->description ?? '';
         $this->editPrompt = $this->query->prompt ?? '';
 
-        $this->selectedModelId = $this->resolveDefaultModelId();
+        $this->selectedModelId = $this->resolveDefaultCompositeModelId(
+            (int) auth()->user()?->getCompanyId()
+        );
     }
 
     /**
@@ -300,7 +301,9 @@ class Show extends Component
             'currentPage' => $currentPage,
             'lastPage' => $lastPage,
             'error' => $this->error,
-            'availableModels' => $this->getAvailableModels(),
+            'availableModels' => $this->loadAvailableModels(
+                (int) auth()->user()?->getCompanyId()
+            ),
         ]);
     }
 
@@ -316,156 +319,24 @@ class Show extends Component
     }
 
     /**
-     * Get active AI models grouped by provider for the current user's company.
-     *
-     * @return list<array{id: string, label: string, provider: string, providerId: int}>
-     */
-    private function getAvailableModels(): array
-    {
-        $companyId = auth()->user()?->getCompanyId();
-
-        if ($companyId === null) {
-            return [];
-        }
-
-        $providers = AiProvider::query()
-            ->forCompany($companyId)
-            ->active()
-            ->orderBy('priority')
-            ->orderBy('display_name')
-            ->get();
-
-        $models = [];
-        foreach ($providers as $provider) {
-            $providerModels = AiProviderModel::query()
-                ->where('ai_provider_id', $provider->id)
-                ->active()
-                ->orderBy('model_id')
-                ->get();
-
-            foreach ($providerModels as $model) {
-                $models[] = [
-                    'id' => $provider->id.':::'.$model->model_id,
-                    'label' => $model->model_id,
-                    'provider' => $provider->display_name,
-                    'providerId' => (int) $provider->id,
-                ];
-            }
-        }
-
-        return $models;
-    }
-
-    /**
-     * Resolve the default model ID from the highest-priority active provider.
-     */
-    private function resolveDefaultModelId(): string
-    {
-        $companyId = auth()->user()?->getCompanyId();
-
-        if ($companyId === null) {
-            return '';
-        }
-
-        $provider = AiProvider::query()
-            ->forCompany($companyId)
-            ->active()
-            ->prioritized()
-            ->first();
-
-        if ($provider === null) {
-            $provider = AiProvider::query()
-                ->forCompany($companyId)
-                ->active()
-                ->orderBy('display_name')
-                ->first();
-        }
-
-        if ($provider === null) {
-            return '';
-        }
-
-        $model = AiProviderModel::query()
-            ->where('ai_provider_id', $provider->id)
-            ->active()
-            ->default()
-            ->first();
-
-        if ($model === null) {
-            $model = AiProviderModel::query()
-                ->where('ai_provider_id', $provider->id)
-                ->active()
-                ->orderBy('model_id')
-                ->first();
-        }
-
-        return $model !== null
-            ? $provider->id.':::'.$model->model_id
-            : '';
-    }
-
-    /**
      * Resolve provider credentials and model for the selected model ID.
+     *
+     * Delegates to the shared ResolvesAvailableModels concern and maps
+     * errors to the component's $aiError property.
      *
      * @return array{api_key: string, base_url: string, model: string, provider_name: string|null}|null
      */
     private function resolveModelConfig(): ?array
     {
-        $parts = explode(':::', $this->selectedModelId, 2);
+        $result = $this->resolveModelConfigFromComposite($this->selectedModelId);
 
-        if (count($parts) !== 2) {
-            $this->aiError = __('Invalid model selection. Please choose a model and try again.');
-
-            return null;
-        }
-
-        [$providerId, $modelId] = $parts;
-
-        $provider = AiProvider::query()
-            ->where('id', $providerId)
-            ->active()
-            ->first();
-
-        if ($provider === null) {
-            $this->aiError = __('The selected AI provider is no longer available. Please choose another model.');
+        if (isset($result['error'])) {
+            $this->aiError = $result['error'];
 
             return null;
         }
 
-        // Verify the model belongs to this provider
-        $modelExists = AiProviderModel::query()
-            ->where('ai_provider_id', $provider->id)
-            ->where('model_id', $modelId)
-            ->active()
-            ->exists();
-
-        if (! $modelExists) {
-            $this->aiError = __('Model ":model" is not available on provider ":provider". Please re-select the model.', [
-                'model' => $modelId,
-                'provider' => $provider->display_name,
-            ]);
-
-            return null;
-        }
-
-        $credentials = app(RuntimeCredentialResolver::class)->resolve([
-            'api_key' => $provider->api_key,
-            'base_url' => $provider->base_url,
-            'provider_name' => $provider->name,
-        ]);
-
-        if (isset($credentials['error'])) {
-            $this->aiError = $credentials['error'];
-
-            return null;
-        }
-
-        return [
-            'api_key' => $credentials['api_key'],
-            'base_url' => $credentials['base_url'],
-            'model' => $modelId,
-            'provider_name' => $provider->name,
-        ];
+        return $result;
     }
 
     /**

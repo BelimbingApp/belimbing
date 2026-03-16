@@ -237,6 +237,40 @@ class ConfigResolver
     }
 
     /**
+     * Resolve LLM config for a specific provider and model by provider ID.
+     *
+     * Used when a model selector provides a composite "providerId:::modelId"
+     * override that should target a different provider than the primary config.
+     *
+     * @param  int  $providerId  Provider database ID
+     * @param  string  $modelId  Model identifier
+     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}|null
+     */
+    public function resolveForProvider(int $providerId, string $modelId): ?array
+    {
+        $provider = AiProvider::query()
+            ->where('id', $providerId)
+            ->active()
+            ->first();
+
+        if ($provider === null) {
+            return null;
+        }
+
+        $defaults = $this->runtimeDefaults();
+
+        return [
+            'api_key' => $provider->api_key,
+            'base_url' => $provider->base_url,
+            'model' => $modelId,
+            'max_tokens' => $defaults['max_tokens'],
+            'temperature' => $defaults['temperature'],
+            'timeout' => $defaults['timeout'],
+            'provider_name' => $provider->name,
+        ];
+    }
+
+    /**
      * Get runtime parameter defaults from application config.
      *
      * @return array{max_tokens: int, temperature: float, timeout: int}
