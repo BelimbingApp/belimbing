@@ -30,14 +30,8 @@
 - **Strategic over tactical:** Invest in design quality; resist quick fixes
 
 **Development Commands:**
-```bash
-# migrate:fresh allowed in development; MUST follow with --seed (runs production + dev seeders)
-php artisan migrate:fresh --seed
+see `app/Base/Database/AGENTS.md` for the migration guide.
 
-# Module-specific testing
-php artisan migrate:rollback --module=Company
-php artisan migrate --module=Company --seed
-```
 
 ---
 
@@ -151,9 +145,9 @@ app/Modules/Business/{Module}/        # Business modules (Layer0/Layer1/Module)
 
 **BLB will diverge from Laravel defaults when necessary to uphold architectural principles.**
 
-**Example (Already Implemented):** Module-aware migrations
+**Example (Already Implemented):** Migration-file-aware migrations
 - Laravel: Migrations in `database/migrations/` only
-- BLB: Auto-discover from module directories, support `--module` flag, seeder registry
+- BLB: Auto-discover from module directories, per-migration-file registry (`base_database_tables`), seeder registry, table stability system
 
 ### Agent Responsibility
 
@@ -177,7 +171,6 @@ app/Modules/Business/{Module}/        # Business modules (Layer0/Layer1/Module)
 
 - Modules provide powerful functionality through simple interfaces
 - Hide complexity; don't leak implementation details
-- Example: `php artisan migrate --module=Company` (simple) hides complex auto-discovery logic (deep)
 
 ### Define Errors Out of Existence
 
@@ -214,8 +207,8 @@ When creating implementation plans:
 - **Not in modules** (too difficult for self-contained module ideal)
 
 ### Migration Philosophy
-- **`migrate:fresh --seed`** is the primary development workflow
-- **Rework original migrations** in early stage (no migration-to-migration needed)
+
+See **`app/Base/Database/AGENTS.md`** for the full migration philosophy, command decision guide, table stability system, and seeder registration patterns.
 
 ### String Literals
 - **Single quotes** (`'`) for literals

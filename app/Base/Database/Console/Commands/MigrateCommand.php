@@ -29,22 +29,13 @@ class MigrateCommand extends IlluminateMigrateCommand
     protected $description = 'Run the database migrations (with module support)';
 
     /**
-     * Configure the command options by adding --module and --dev to the parent definition.
+     * Configure the command options by adding --dev to the parent definition.
      *
      * {@inheritdoc}
      */
     protected function configure(): void
     {
         parent::configure();
-
-        $this->getDefinition()->addOption(
-            new InputOption(
-                'module',
-                null,
-                InputOption::VALUE_REQUIRED,
-                'Load migrations by module(s) (comma-delimited, case-sensitive)',
-            ),
-        );
 
         $this->getDefinition()->addOption(
             new InputOption(
@@ -59,8 +50,7 @@ class MigrateCommand extends IlluminateMigrateCommand
     /**
      * Execute the console command.
      *
-     * Extends parent by loading module-specific migrations before running.
-     * If --module option is provided, migrations are loaded from specified modules.
+     * Loads all module migrations before running.
      */
     public function handle(): int
     {
@@ -126,11 +116,10 @@ class MigrateCommand extends IlluminateMigrateCommand
     }
 
     /**
-     * Run seeders with module-aware registry-based execution.
+     * Run seeders with registry-based execution.
      *
      * If --seeder is provided, uses that seeder (overrides registry).
-     * If --module is provided, only seeds matching modules.
-     * Otherwise, seeds all pending seeders from registry.
+     * Otherwise, runs all pending seeders from registry in migration order.
      */
     protected function runModuleSeeders(): void
     {
@@ -150,7 +139,6 @@ class MigrateCommand extends IlluminateMigrateCommand
         // Query registry for runnable seeders (pending or failed)
         // Order by migration_file to ensure correct execution order
         $seedersToRun = SeederRegistry::runnable()
-            ->forModules($this->getModules())
             ->inMigrationOrder()
             ->get();
 

@@ -9,11 +9,10 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Guards against unscoped global database reset/refresh.
+ * Guards against global database reset/refresh.
  *
- * Blocks `migrate:refresh` and `migrate:reset` when run without `--module`
- * or `--force-wipe`, preventing accidental full database wipes. Module-scoped
- * operations and in-memory test databases are always allowed.
+ * Blocks `migrate:refresh` and `migrate:reset` unless `--force-wipe` is
+ * passed or the database is an in-memory SQLite test database.
  *
  * `migrate:fresh --seed --dev` is the blessed full-reset workflow because it
  * respects table stability. `refresh`/`reset` operate at the migration level
@@ -22,7 +21,7 @@ use Illuminate\Support\Facades\DB;
 trait GuardsGlobalReset
 {
     /**
-     * Block global reset/refresh unless explicitly scoped or overridden.
+     * Block reset/refresh unless explicitly overridden.
      *
      * Returns null when the operation is allowed, or Command::FAILURE
      * when it should be blocked.
@@ -35,24 +34,23 @@ trait GuardsGlobalReset
             return null;
         }
 
-        if ($this->option('module') || $this->option('force-wipe')) {
+        if ($this->option('force-wipe')) {
             return null;
         }
 
         $this->components->error(
-            'Global ' . $this->name . ' is blocked — it bypasses table stability and would wipe the entire database.'
+            $this->name . ' is blocked — it bypasses table stability and would wipe the entire database.'
         );
         $this->line('');
         $this->line('  Use one of these instead:');
         $this->line('');
-        $this->line('    <comment>php artisan migrate:fresh --seed --dev</comment>              Full rebuild (respects table stability)');
-        $this->line('    <comment>php artisan ' . $this->name . ' --module=Name</comment>             Module-scoped reset/refresh');
-        $this->line('    <comment>php artisan ' . $this->name . ' --force-wipe</comment>               Intentional full reset (dangerous)');
+        $this->line('    <comment>php artisan migrate:fresh --seed --dev</comment>        Full rebuild (respects table stability)');
+        $this->line('    <comment>php artisan ' . $this->name . ' --force-wipe</comment>          Intentional full reset (dangerous)');
         $this->line('');
         $this->line('  To mark specific tables unstable before migrate:fresh:');
         $this->line('');
-        $this->line('    <comment>php artisan blb:table:unstable table_name</comment>          Mark one table');
-        $this->line('    <comment>php artisan blb:table:unstable --module=AI</comment>         Mark all tables in a module');
+        $this->line('    <comment>php artisan blb:table:unstable table_name</comment>     Mark one table');
+        $this->line('    <comment>php artisan blb:table:unstable table_a table_b</comment> Mark multiple tables');
         $this->line('');
 
         return Command::FAILURE;

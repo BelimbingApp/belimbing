@@ -17,29 +17,17 @@ class StatusCommand extends IlluminateStatusCommand
      *
      * @var string
      */
-    protected $description = 'Show the status of each migration (with module support)';
+    protected $description = 'Show the status of each migration';
 
     /**
      * Execute the console command.
      *
-     * Extends parent by loading module-specific migrations before reporting status.
+     * Loads all module migrations before reporting status.
      */
     public function handle(): int
     {
         $this->loadAllModuleMigrations();
 
         return (int) parent::handle();
-    }
-
-    /**
-     * Get the console command options.
-     *
-     * Extends parent by adding --module option.
-     *
-     * {@inheritdoc}
-     */
-    protected function getOptions(): array
-    {
-        return $this->addModuleOption(parent::getOptions());
     }
 }

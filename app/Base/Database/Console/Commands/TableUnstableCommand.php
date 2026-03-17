@@ -17,7 +17,6 @@ class TableUnstableCommand extends Command
 {
     protected $signature = 'blb:table:unstable
                             {tables?* : Table name(s) to mark unstable}
-                            {--module= : Mark all tables in a module unstable (e.g. --module=AI)}
                             {--list : Show current stable/unstable status of all tables}';
 
     protected $description = 'Mark database tables as unstable so migrate:fresh will drop them';
@@ -29,29 +28,19 @@ class TableUnstableCommand extends Command
         }
 
         $tables = $this->argument('tables');
-        $module = $this->option('module');
 
-        if (empty($tables) && ! $module) {
-            $this->components->error('Provide table name(s) or --module=Name.');
+        if (empty($tables)) {
+            $this->components->error('Provide one or more table name(s).');
             $this->line('');
             $this->line('  <comment>php artisan blb:table:unstable users</comment>              Mark one table');
             $this->line('  <comment>php artisan blb:table:unstable users companies</comment>    Mark multiple tables');
-            $this->line('  <comment>php artisan blb:table:unstable --module=AI</comment>        Mark all tables in a module');
             $this->line('  <comment>php artisan blb:table:unstable --list</comment>             Show table stability status');
             $this->line('');
 
             return Command::FAILURE;
         }
 
-        $query = TableRegistry::query()->stable();
-
-        if ($module) {
-            $query->forModules($module);
-        }
-
-        if (! empty($tables)) {
-            $query->whereIn('table_name', $tables);
-        }
+        $query = TableRegistry::query()->stable()->whereIn('table_name', $tables);
 
         $rows = $query->get();
 

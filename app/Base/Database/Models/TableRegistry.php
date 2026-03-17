@@ -17,7 +17,6 @@ use Illuminate\Database\Eloquent\Model;
  *
  * @method static \Illuminate\Database\Eloquent\Builder|static stable() Query tables marked as stable
  * @method static \Illuminate\Database\Eloquent\Builder|static unstable() Query tables not marked as stable
- * @method static \Illuminate\Database\Eloquent\Builder|static forModules(array|string $modules) Filter tables by module name(s)
  *
  * @property int $id
  * @property string $table_name Physical database table name
@@ -90,21 +89,6 @@ class TableRegistry extends Model
     protected function unstable(Builder $query): Builder
     {
         return $query->where('is_stable', false);
-    }
-
-    /**
-     * Scope to filter tables by module name(s).
-     */
-    #[Scope]
-    protected function forModules(Builder $query, array|string $modules): Builder
-    {
-        $modules = (array) $modules;
-
-        if ($modules === [] || in_array('*', $modules, true)) {
-            return $query;
-        }
-
-        return $query->whereIn('module_name', $modules);
     }
 
     /**

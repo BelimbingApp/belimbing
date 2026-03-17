@@ -1,10 +1,10 @@
 # Database Module (app/Base/Database)
 
-This module provides **module-aware migration infrastructure** extending Laravel's migration commands. It enables selective migration/rollback by module and automatic seeder discovery.
+Migration-file-aware infrastructure on top of Laravel. Provides table stability (`is_stable`), automatic seeder discovery, and module migration auto-loading.
 
 **Full architecture:** [docs/architecture/database.md](../../../docs/architecture/database.md) — naming conventions, migration registry, table naming, dependency graph.
 
-## Table naming (brief)
+## Table Naming
 
 | Layer | Pattern | Example |
 |-------|---------|---------|
@@ -12,61 +12,44 @@ This module provides **module-aware migration infrastructure** extending Laravel
 | **Core/Business** | `{module}_{entity}` | `users`, `user_pins`, `companies` |
 | **Vendor** | `{vendor}_{module}_{entity}` | `sbg_companies_ext` |
 
-The module prefix prevents name collisions. See `docs/architecture/database.md` §Table Naming Conventions for rationale.
-
-## Migration file names (brief)
+## Migration File Names
 
 - **Format:** `YYYY_MM_DD_HHMMSS_description.php`
 - **Layer prefixes (year):** `0001` Laravel core · `0100` Base · `0200` Core · `0300+` Business · `2026+` Extensions
 - **Module id:** Within a layer, `MM_DD` identifies the module (e.g. `0200_01_03_*` = Geonames). See the **Migration Registry** in `docs/architecture/database.md` for assigned prefixes and dependencies.
-- **Hard rule:** For `app/Base/*` and `app/Modules/*/*`, do **not** use real calendar year prefixes. Use layered prefixes (`0100`, `0200`, `0300+`) only. Real years (`2026+`) are for extensions.
+- **Hard rule:** For `app/Base/*` and `app/Modules/*/*`, use layered prefixes (`0100`, `0200`, `0300+`) only. Real years (`2026+`) are for extensions only.
 
-### Naming examples
+### Examples
 
 - **Base module:** `0100_01_11_000000_create_base_authz_roles_table.php`
 - **Core module:** `0200_01_20_000000_create_users_table.php`
 - **Extension module:** `2026_01_15_000000_create_vendor_feature_table.php`
 
-### Prefix reservation (required)
+Before creating a new module migration series, reserve the `MM_DD` prefix in the **Migration Registry** at `docs/architecture/database.md`.
 
-Before creating a new module migration series, reserve/confirm the module `MM_DD` prefix in the **Migration Registry** at `docs/architecture/database.md` to avoid collisions and to document dependencies.
+## Migration Auto-Discovery Paths
 
-## Key Components
-
-### Commands (Override Laravel)
-
-All commands support `--module=<name>` for selective operation:
-
-| Command | Description |
-|---------|-------------|
-| `MigrateCommand` | Runs migrations with module filtering and seeder registry support |
-| `RollbackCommand` | Rolls back migrations, optionally filtered by module |
-| `ResetCommand` | Resets all migrations (**blocked without `--module` or `--force-wipe`**) |
-| `RefreshCommand` | Refreshes migrations with module-aware seeding (**blocked without `--module` or `--force-wipe`**) |
-| `StatusCommand` | Shows migration status, optionally filtered by module |
-| `TableUnstableCommand` | `blb:table:unstable` — mark tables unstable by name or module |
-
-```bash
-# Default: all modules (module-first architecture)
-php artisan migrate
-# Or the following, which is equivalent:
-php artisan migrate --module=*
-
-# Module-specific operations (case-sensitive)
-php artisan migrate --module=Geonames
-php artisan migrate --module=Geonames,Company
-php artisan migrate:rollback --module=Geonames
+```
+app/Base/*/Database/Migrations/
+app/Modules/*/*/Database/Migrations/
 ```
 
-### SeederRegistry Model
+## The `base_database_tables` Registry
 
-Tracks seeder execution state. Seeders are registered by migrations using `RegistersSeeders` trait and executed automatically during `migrate --seed`.
+Every migration that creates a table registers it here via `RegistersSeeders`. Each row links back to the exact migration file, enabling per-migration scoping for stability toggles, seeder runs, and selective rebuilds.
 
-**Statuses:** `pending` → `running` → `completed` | `failed` | `skipped`
+| Column | Purpose |
+|--------|---------|
+| `table_name` | Unique table name |
+| `module_name` | Owning module (e.g. `Geonames`) |
+| `module_path` | Module path (e.g. `app/Modules/Core/Geonames`) |
+| `migration_file` | Migration filename that created this table — the key for per-migration scoping |
+| `is_stable` | Whether `migrate:fresh` preserves this table (default: `true`) |
+| `stabilized_at` / `stabilized_by` | Audit trail for stability changes |
 
-### RegistersSeeders Trait
+## Seeder Registration
 
-Used by migrations to register seeders for automatic execution:
+Migrations register their seeders via `RegistersSeeders`:
 
 ```php
 use App\Base\Database\RegistersSeeders;
@@ -78,213 +61,83 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('geonames_countries', ...);
-
-        // Register seeder for automatic execution
         $this->registerSeeder(CountriesSeeder::class);
+    }
+
+    public function down(): void
+    {
+        $this->unregisterSeeder(CountriesSeeder::class);
+        Schema::dropIfExists('geonames_countries');
     }
 };
 ```
 
-**App-level seeders** (non-module): Same pattern as modules — the migration that creates the tables registers the seeder in `up()` and unregisters in `down()` (use `RegistersSeeders`). Migration in `database/migrations/`, seeder class in `database/seeders/`. They get `module_name`/`module_path` = null and run with `migrate --seed` in migration order. Do not add seeders to `DatabaseSeeder::run()`.
-
-### Concerns
-
-- **InteractsWithModuleOption**: Parses `--module` option (comma-delimited, case-sensitive)
-- **InteractsWithModuleMigrations**: Loads migrations from module directories
-
-## Module Auto-Discovery Paths
-
-Migrations are discovered from:
-- `app/Base/*/Database/Migrations/`
-- `app/Modules/*/*/Database/Migrations/`
-
-## Implementation Notes
-
-### ServiceProvider Pattern
-
-Commands are registered via Laravel's `extend()` method in a deferred service provider. This overrides Laravel's migration commands while preserving the container's deferred loading.
-
-```php
-// ServiceProvider.php
-$this->app->extend('command.migrate', fn ($command, $app) =>
-    new MigrateCommand($app['migrator'], $app['events'])
-);
-```
-
-### Seeding Behavior
-
-Seeder registration is done in migrations via `registerSeeder()`. Seeders under `app/Base/*/Database/Seeders/` and `app/Modules/*/*/Database/Seeders/` are also discovered when you pass `--seed`: any not yet in the registry are added then, so they run even if the migration did not call `registerSeeder()`. Plain `migrate` (no `--seed`) never runs seeders. If a migration does not register its seeder, pass `--seed` (e.g. below).
+Seeders under `app/Base/*/Database/Seeders/` and `app/Modules/*/*/Database/Seeders/` are also auto-discovered on `--seed` even without `registerSeeder()`. Plain `migrate` (no `--seed`) never runs seeders.
 
 ```bash
-# Run all pending seeders (after migrations)
+# Run all pending seeders
 php artisan migrate --seed
 
-# Seed only one module (case-sensitive)
-php artisan migrate --seed --module=Company
-
-# Run a single seeder (short form: Module/SeederClass or Module/Sub/SeederClass)
+# Run a single seeder (short form: Module/SeederClass)
 php artisan migrate --seed --seeder=Company/RelationshipTypeSeeder
-# Or FQCN with single quotes so backslashes are preserved
-php artisan migrate --seed --seeder='App\Modules\Core\Company\Database\Seeders\RelationshipTypeSeeder'
 ```
 
-### Development vs. Production Seeders
+**App-level seeders** (non-module): same `RegistersSeeders` pattern. Migration in `database/migrations/`, seeder in `database/seeders/`. Do not add to `DatabaseSeeder::run()`.
 
-| Category | Location | Naming | Registered in migration? |
-|----------|----------|--------|--------------------------|
+### Production vs. Development Seeders
+
+| Category | Location | Naming | Auto-registered? |
+|----------|----------|--------|-----------------|
 | **Production** | `Database/Seeders/` | `{Entity}Seeder` | Yes (`registerSeeder()`) |
-| **Development** | `Database/Seeders/Dev/` | `Dev{Description}Seeder` | No (run explicitly) |
+| **Development** | `Database/Seeders/Dev/` | `Dev{Description}Seeder` | No — run explicitly |
 
-- **Production seeders** populate reference/config data needed in all environments.
-- **Development seeders** create fake data for UI work and manual testing. They extend `App\Base\Database\Seeders\DevSeeder`, implement `seed()` (not `run()`), and live in `Dev/` subdirectory with a `Dev` class prefix. DevSeeder may only run when `APP_ENV=local` (throws otherwise).
+Dev seeders extend `App\Base\Database\Seeders\DevSeeder`, implement `seed()` (not `run()`), and only run when `APP_ENV=local`.
 
-```bash
-# Run a dev seeder explicitly (note the Dev/ subdirectory in the path)
-php artisan migrate --seed --seeder=Company/Dev/DevCompanyAddressSeeder
-```
+## Table Stability
 
-## Table Stability Registry
+Every table defaults to `is_stable = true`. **Only `migrate:fresh` checks this flag** — all other commands ignore it.
 
-**All tables default to stable.** When a table is registered (via migration or auto-discovery), it starts with `is_stable = true`. This means a fresh BLB install has all tables stable out of the box — `migrate:fresh` preserves them by default.
+| `is_stable` | `migrate:fresh` behaviour |
+|-------------|----------------------------------|
+| `true` | Table and its data are **preserved** |
+| `false` | Table is **dropped and rebuilt** from its migration |
 
-**Stability is a development-only concept.** It controls whether `migrate:fresh` preserves a table's data. The stability column is hidden in the admin UI outside `APP_ENV=local` since `migrate:fresh` should never run in production/staging.
+### Schema change workflow
 
-### How destructive commands interact with stability
-
-| Command | Behavior |
-|---------|----------|
-| `migrate:fresh --seed --dev` | Preserves stable tables, drops only unstable ones |
-| `migrate:fresh --seed --dev --force-wipe` | Ignores stability — drops ALL tables (true nuclear reset) |
-| `migrate:refresh` | **Blocked** — bypasses stability. Use `migrate:fresh --seed --dev` or scope with `--module` |
-| `migrate:reset` | **Blocked** — bypasses stability. Use `migrate:fresh --seed --dev` or scope with `--module` |
-| `migrate:refresh --module=Name` | Allowed — module-scoped refresh |
-| `migrate:reset --module=Name` | Allowed — module-scoped reset |
-| `migrate:refresh --force-wipe` | Allowed — explicit override for intentional full reset |
-
-### When to mark a table unstable
-
-Mark a table unstable before editing a migration that **alters its schema** (adding/removing/renaming columns, changing indexes, modifying column types):
+To edit an existing migration's schema (add/remove/rename columns, change indexes):
 
 ```bash
-# Mark a single table unstable
+# 1. Mark the table(s) unstable
 php artisan blb:table:unstable ai_providers
+php artisan blb:table:unstable ai_providers ai_provider_models  # multiple
 
-# Mark multiple tables
-php artisan blb:table:unstable ai_providers ai_provider_models
+# 2. Edit the migration file
 
-# Mark all tables in a module
-php artisan blb:table:unstable --module=AI
-
-# Show current stability status of all tables
-php artisan blb:table:unstable --list
-```
-
-Or toggle it off in the admin UI at `admin/system/database-tables` (local env only).
-
-**Rule:** Never modify the schema of a stable table without first marking it unstable. `migrate:fresh` skips stable tables — if the schema is outdated, the migration will fail or produce silent data corruption.
-
-### Custom/extension modules
-
-New tables added by custom or extension modules also default to stable on registration. If a module is under active schema development, mark its tables unstable until the schema is finalized.
-
-## Database Portability
-
-**All database operations must be DB-agnostic.** Never use raw SQL that targets a specific database engine (MySQL, PostgreSQL, SQLite). Use Laravel's Schema Builder and Query Builder abstractions instead.
-
-| Instead of | Use |
-|------------|-----|
-| `DB::statement('SET FOREIGN_KEY_CHECKS=0')` | `Schema::disableForeignKeyConstraints()` |
-| `DB::statement('SET FOREIGN_KEY_CHECKS=1')` | `Schema::enableForeignKeyConstraints()` |
-| `DB::statement("SET session_replication_role = 'replica'")` | `Schema::disableForeignKeyConstraints()` |
-| `DB::statement('DROP TABLE ...')` | `Schema::dropIfExists('table')` |
-| `DB::statement('ALTER TABLE ...')` | `Schema::table('table', fn ($t) => ...)` |
-| `DB::statement('CREATE INDEX ...')` | Use `$table->index()` in migrations |
-
-If a raw statement is truly unavoidable, document why and guard it with a driver check:
-
-```php
-$driver = DB::connection()->getDriverName(); // 'pgsql', 'mysql', 'sqlite'
-```
-
-## Database ID Standards
-
-- **Primary Keys**: Use `id()` (UNSIGNED BIGINT auto-increment)
-- **Foreign Keys**: Use `foreignId()` (UNSIGNED BIGINT)
-- **No UUIDs** for primary keys unless explicitly required
-
-## Development Workflow
-
-### Reseeding in Development
-
-**Primary approach — add `--dev` to any migrate command:**
-
-```bash
-# Full wipe + reseed (most common)
+# 3. Rebuild
 php artisan migrate:fresh --seed --dev
-
-# Layer dev data onto current DB (no wipe)
-php artisan migrate --seed --dev
-
-# Dev seed only one module
-php artisan migrate --seed --dev --module=Company
 ```
 
-`--dev` implies `--seed`, creates the licensee company (id=1) if needed, then runs all dev seeders in dependency order. Only works when `APP_ENV=local`.
+The admin UI at `admin/system/database-tables` (local env only) also lets you toggle stability per-table.
 
-**Manual fallback** (if you need more control, e.g., only re-run specific dev seeders):
+## Local Development — Command Decision Guide
 
-```bash
-# Step 1: Fresh migrate + production seeders
-php artisan migrate:fresh --seed
+**`migrate:fresh --seed --dev` is the primary local tool.** Use it for almost everything.
 
-# Step 2: Create licensee company (required before any dev seeder)
-php artisan tinker --execute="App\Modules\Core\Company\Models\Company::create(['name' => 'My Company', 'status' => 'active']);"
+| Situation | Command |
+|-----------|---------|
+| New migration or schema change (after marking unstable) | `migrate:fresh --seed --dev` |
+| Apply pending migrations without wiping | `migrate --seed --dev` |
+| Run a specific dev seeder | `migrate --seed --seeder=Company/Dev/DevCompanyAddressSeeder` |
+| Nuclear reset — wipe everything including stable tables | `migrate:fresh --seed --dev --force-wipe` |
+| Production / staging deploy | `migrate` — never `migrate:fresh` |
 
-# Step 3: Run dev seeders in dependency order
-php artisan migrate --seed --seeder=Company/Dev/DevCompanyAddressSeeder
-php artisan migrate --seed --seeder=Company/Dev/DevDepartmentSeeder
-php artisan migrate --seed --seeder=Employee/Dev/DevEmployeeSeeder
-php artisan migrate --seed --seeder=User/Dev/DevUserSeeder
-php artisan migrate --seed --seeder='App\Base\Authz\Database\Seeders\Dev\DevAuthzCompanyAssignmentSeeder'
-```
+`--dev` implies `--seed`, creates the licensee company (id=1) if absent, then runs all dev seeders in dependency order. `APP_ENV=local` only.
 
-**⚠️ Agent rule:** `migrate:refresh` and `migrate:reset` without `--module` are **blocked at the command level** — they bypass table stability and would wipe the entire database. Use `migrate:fresh --seed --dev` for full rebuilds. After running `migrate:fresh` or any operation that truncates tables on the local dev database, **always add `--dev`** (or run the manual steps above) to restore working dev data. An empty database is not usable for local testing.
+`migrate:refresh` and `migrate:reset` are **blocked** in Belimbing — they bypass table stability. Pass `--force-wipe` to override intentionally.
 
-If automated tests run on in-memory SQLite (`DB_CONNECTION=sqlite`, `DB_DATABASE=:memory:`), this rule does not apply because those test refreshes do not modify the local dev database.
+## Refactoring Dependencies
 
-### Rollback by Batch (Preserve Data)
-
-When you have development data to preserve, use batch rollback instead of migrate:fresh:
-
-```bash
-# Check batch numbers
-php artisan migrate:status
-
-# Rollback specific batch
-php artisan migrate:rollback --batch=2
-
-# Edit migrations, then re-run
-php artisan migrate --seed
-```
-
-### Module-Specific Testing
-
-```bash
-# Rollback and re-run single module
-php artisan migrate:rollback --module=Geonames
-php artisan migrate --module=Geonames --seed
-```
-
-### Refactoring Dependencies
-
-**Key Principles:**
-1. Base modules first
-2. Core modules next
-3. Business modules next
-4. Extension modules last
-5. Migration dates enforce load order
-6. Foreign key constraints respect dependency order
-7. No circular dependencies allowed
+Migration load order: Base → Core → Business → Extensions. Foreign keys must respect this order. No circular dependencies.
 
 If you need to break a circular dependency:
 

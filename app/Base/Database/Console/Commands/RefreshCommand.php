@@ -6,7 +6,6 @@
 namespace App\Base\Database\Console\Commands;
 
 use App\Base\Database\Concerns\GuardsGlobalReset;
-use App\Base\Database\Concerns\InteractsWithModuleOption;
 use Illuminate\Console\Command;
 use Illuminate\Database\Console\Migrations\RefreshCommand as IlluminateRefreshCommand;
 use Symfony\Component\Console\Input\InputOption;
@@ -14,20 +13,18 @@ use Symfony\Component\Console\Input\InputOption;
 class RefreshCommand extends IlluminateRefreshCommand
 {
     use GuardsGlobalReset;
-    use InteractsWithModuleOption;
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Reset and re-run all migrations (with module support)';
+    protected $description = 'Reset and re-run all migrations';
 
     /**
      * Execute the console command.
      *
-     * Extends parent by passing through --module to migrate:reset / migrate:rollback / migrate.
-     * Blocks unscoped global refresh to prevent accidental full database wipes.
+     * Blocks global refresh unless --force-wipe is explicitly passed.
      */
     public function handle(): int
     {
@@ -35,9 +32,7 @@ class RefreshCommand extends IlluminateRefreshCommand
             return $result;
         }
 
-        $moduleOption = $this->option('module');
-
-        // Re-implement parent flow so we can pass --module through.
+        // Re-implement parent flow so we can pass --dev and --force-wipe through.
         if ($this->isProhibited() || ! $this->confirmToProceed()) {
             return Command::FAILURE;
         }
@@ -46,12 +41,6 @@ class RefreshCommand extends IlluminateRefreshCommand
         $path = $this->input->getOption('path');
         $step = $this->input->getOption('step') ?: 0;
 
-        // In module mode, --step is ambiguous (it targets global order). Prefer a full
-        // module reset, then migrate.
-        if ($moduleOption && $step > 0) {
-            $step = 0;
-        }
-
         if ($step > 0) {
             $this->call('migrate:rollback', array_filter([
                 '--database' => $database,
@@ -59,7 +48,6 @@ class RefreshCommand extends IlluminateRefreshCommand
                 '--realpath' => $this->input->getOption('realpath'),
                 '--step' => $step,
                 '--force' => true,
-                '--module' => $moduleOption,
             ]));
         } else {
             $this->call('migrate:reset', array_filter([
@@ -67,7 +55,7 @@ class RefreshCommand extends IlluminateRefreshCommand
                 '--path' => $path,
                 '--realpath' => $this->input->getOption('realpath'),
                 '--force' => true,
-                '--module' => $moduleOption,
+                '--force-wipe' => true,
             ]));
         }
 
@@ -76,7 +64,6 @@ class RefreshCommand extends IlluminateRefreshCommand
             '--path' => $path,
             '--realpath' => $this->input->getOption('realpath'),
             '--force' => true,
-            '--module' => $moduleOption,
             '--seed' => $this->needsSeeding(),
             '--seeder' => $this->option('seeder'),
             '--dev' => $this->option('dev'),
@@ -94,13 +81,13 @@ class RefreshCommand extends IlluminateRefreshCommand
     /**
      * Get the console command options.
      *
-     * Extends parent by adding --module option.
+     * Adds --dev and --force-wipe to the parent options.
      *
      * {@inheritdoc}
      */
     protected function getOptions(): array
     {
-        $options = $this->addModuleOption(parent::getOptions());
+        $options = parent::getOptions();
 
         $options[] = [
             'dev',

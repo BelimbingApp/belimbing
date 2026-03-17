@@ -20,13 +20,13 @@ class ResetCommand extends IlluminateResetCommand
      *
      * @var string
      */
-    protected $description = 'Rollback all database migrations (with module support)';
+    protected $description = 'Rollback all database migrations';
 
     /**
      * Execute the console command.
      *
-     * Extends parent by loading module-specific migrations before resetting.
-     * Blocks unscoped global reset to prevent accidental full database wipes.
+     * Loads all module migrations before resetting. Blocks unscoped reset
+     * unless --force-wipe is explicitly passed.
      */
     public function handle(): int
     {
@@ -42,13 +42,13 @@ class ResetCommand extends IlluminateResetCommand
     /**
      * Get the console command options.
      *
-     * Extends parent by adding --module option.
+     * Adds --force-wipe to the parent options.
      *
      * {@inheritdoc}
      */
     protected function getOptions(): array
     {
-        $options = $this->addModuleOption(parent::getOptions());
+        $options = parent::getOptions();
 
         $options[] = [
             'force-wipe',

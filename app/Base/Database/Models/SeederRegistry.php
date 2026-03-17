@@ -19,7 +19,6 @@ use Illuminate\Database\Eloquent\Model;
  * @method static \Illuminate\Database\Eloquent\Builder|static failed() Query seeders that failed execution
  * @method static \Illuminate\Database\Eloquent\Builder|static completed() Query seeders that completed successfully
  * @method static \Illuminate\Database\Eloquent\Builder|static runnable() Query seeders that are pending or failed (ready to run/retry)
- * @method static \Illuminate\Database\Eloquent\Builder|static forModules(array|string $modules) Filter seeders by module name(s)
  * @method static \Illuminate\Database\Eloquent\Builder|static inMigrationOrder() Order seeders by migration file for execution order
  *
  * @property int $id
@@ -128,22 +127,6 @@ class SeederRegistry extends Model
             self::STATUS_PENDING,
             self::STATUS_FAILED,
         ]);
-    }
-
-    /**
-     * Scope to filter seeders by module name(s).
-     */
-    #[Scope]
-    protected function forModules(Builder $query, array|string $modules): Builder
-    {
-        $modules = (array) $modules;
-
-        // If empty array or wildcard '*' is present, don't filter
-        if ($modules === [] || in_array('*', $modules, true)) {
-            return $query;
-        }
-
-        return $query->whereIn('module_name', $modules);
     }
 
     /**

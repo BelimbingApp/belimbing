@@ -26,7 +26,7 @@ class TestingBaselineSeeder extends Seeder
 
         $seedersToRun = SeederRegistry::query()
             ->runnable()
-            ->forModules($modules)
+            ->whereIn('module_name', $modules)
             ->inMigrationOrder()
             ->get();
 

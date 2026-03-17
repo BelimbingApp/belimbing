@@ -17,42 +17,21 @@ namespace App\Base\Database\Concerns;
  */
 trait InteractsWithModuleMigrations
 {
-    use InteractsWithModuleOption;
-
     /**
-     * Load migrations for a specific module with case-sensitive matching.
-     * Searches in Base and Modules layers for the specified module name.
+     * Load migrations from all module discovery paths.
      *
-     * @param  string  $moduleName  case-sensitive, "*" for all modules
-     */
-    protected function loadModuleMigrations(string $moduleName): void
-    {
-        $migrationPaths = [];
-
-        $layers = [
-            app_path('Base') => "/$moduleName/Database/Migrations",
-            app_path('Modules') => "/*/$moduleName/Database/Migrations",
-        ];
-
-        foreach ($layers as $appPath => $pattern) {
-            $paths = glob($appPath.$pattern, GLOB_ONLYDIR) ?: [];
-            $migrationPaths = array_merge($migrationPaths, $paths);
-        }
-
-        foreach ($migrationPaths as $path) {
-            $this->migrator->path($path);
-        }
-    }
-
-    /**
-     * Load migrations for all specified modules.
-     *
-     * Iterates through modules from --module option and loads their migrations.
+     * Scans Base and Modules layers for Database/Migrations directories
+     * and registers each with the migrator.
      */
     protected function loadAllModuleMigrations(): void
     {
-        foreach ($this->getModules() as $module) {
-            $this->loadModuleMigrations($module);
+        $paths = array_merge(
+            glob(app_path('Base/*/Database/Migrations'), GLOB_ONLYDIR) ?: [],
+            glob(app_path('Modules/*/*/Database/Migrations'), GLOB_ONLYDIR) ?: [],
+        );
+
+        foreach ($paths as $path) {
+            $this->migrator->path($path);
         }
     }
 
