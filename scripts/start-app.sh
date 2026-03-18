@@ -435,20 +435,40 @@ wait_for_service() {
 # All BLB instances share one Caddy process on :443 via host-based routing.
 start_caddy() {
     export APP_DOMAIN="$FRONTEND_DOMAIN"
-    export BACKEND_DOMAIN="$BACKEND_DOMAIN"
     export APP_PORT="$APP_PORT"
     export APP_HOST="127.0.0.1"
     export VITE_PORT="$VITE_PORT"
     export VITE_HOST="127.0.0.1"
     export HTTPS_PORT="$HTTPS_PORT"
 
-    local tls_mode
+    local tls_mode tls_directive
+    local mkcert_cert="$PROJECT_ROOT/certs/${APP_DOMAIN}.pem"
+    local mkcert_key="$PROJECT_ROOT/certs/${APP_DOMAIN}-key.pem"
+
     if [[ "$APP_ENV" = "local" ]] || [[ "$APP_ENV" = "testing" ]]; then
-        tls_mode="internal"
+        if command_exists mkcert && [[ -f "$mkcert_cert" ]] && [[ -f "$mkcert_key" ]]; then
+            tls_mode="mkcert"
+            tls_directive="tls $mkcert_cert $mkcert_key"
+            # Ensure mkcert CA is trusted in all stores (system, NSS db, Windows on WSL2)
+            mkcert -install > /dev/null 2>&1 || true
+        else
+            tls_mode="internal"
+            tls_directive="tls internal"
+            echo -e "${YELLOW}⚠${NC} mkcert certs not found — falling back to Caddy internal CA (browser warnings expected)"
+            echo -e "  Run ${CYAN}./scripts/setup-steps/70-caddy.sh${NC} to generate mkcert certs"
+        fi
     else
         tls_mode=$(get_env_var "TLS_MODE" "internal")
+        if [[ "$tls_mode" = "mkcert" ]] && [[ -f "$mkcert_cert" ]] && [[ -f "$mkcert_key" ]]; then
+            tls_directive="tls $mkcert_cert $mkcert_key"
+            # Ensure mkcert CA is trusted in all stores (system, NSS db, Windows on WSL2)
+            mkcert -install > /dev/null 2>&1 || true
+        else
+            tls_directive="tls internal"
+        fi
     fi
     export TLS_MODE="$tls_mode"
+    export TLS_DIRECTIVE="$tls_directive"
     export CADDY_LOG_DIR="$PROJECT_ROOT/.caddy/logs"
 
     mkdir -p "$CADDY_LOG_DIR"

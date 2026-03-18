@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
 # scripts/setup-steps/75-ssl-trust.sh
-# Title: SSL Certificate Trust Setup
-# Purpose: Set up SSL certificate trust for self-signed HTTPS certificates (TLS_MODE=internal)
+# Title: SSL Certificate Trust Setup (tls internal fallback)
+# Purpose: Install Caddy's self-signed root CA into the system trust store.
+#          Only needed when BLB falls back to `tls internal` (i.e., mkcert certs
+#          are missing). The normal dev path uses mkcert, which handles trust
+#          automatically via `mkcert -install` at start time.
 # Usage: ./scripts/setup-steps/75-ssl-trust.sh [local|staging|production|testing]
 # Can be run standalone or called by main setup.sh
-#
-# This script:
-# - Waits for Caddy to generate SSL certificates
-# - Exports Caddy root CA to project storage
-# - Installs certificate to system trust store (one-time)
-# - Provides instructions for manual installation if needed
 
 set -euo pipefail
 
@@ -52,10 +49,11 @@ main() {
         exit 0
     fi
 
-    echo -e "${CYAN}This step configures your system to trust Caddy's SSL certificates.${NC}"
+    echo -e "${CYAN}This step installs Caddy's internal CA into the system trust store${NC}"
+    echo -e "${CYAN}so browsers stop warning about self-signed certificates.${NC}"
     echo ""
-    echo -e "${YELLOW}Note:${NC} This is a one-time setup. Once configured, you won't see"
-    echo -e "browser warnings when accessing ${CYAN}https://*.blb.lara${NC}"
+    echo -e "${YELLOW}Note:${NC} The preferred approach is mkcert — run ${CYAN}./scripts/setup-steps/70-caddy.sh${NC}"
+    echo -e "to generate mkcert certs, which are trusted automatically at start time."
     echo ""
 
     # Check if Caddy is running (needed to generate certificates)
@@ -95,21 +93,19 @@ main() {
     if type setup_ssl_trust >/dev/null 2>&1; then
         if setup_ssl_trust "$PROJECT_ROOT"; then
             echo ""
-            echo -e "${GREEN}✓ SSL certificate trust setup complete!${NC}"
+            echo -e "${GREEN}✓ Caddy root CA trust setup complete!${NC}"
             echo ""
             echo -e "${CYAN}Next steps:${NC}"
             echo -e "  • Start the app: ${CYAN}./scripts/start-app.sh${NC}"
             echo -e "  • Access: ${CYAN}https://local.blb.lara${NC} (or your configured domain)"
-            echo -e "  • No browser warnings! 🎉"
             echo ""
         else
             echo ""
             echo -e "${YELLOW}⚠${NC} SSL trust setup incomplete"
             echo ""
-            echo -e "${CYAN}This is OK for self-signed certificates!${NC}"
             echo -e "You can:"
-            echo -e "  • Accept the browser warning when accessing your app (safe for self-signed certs)"
-            echo -e "  • Manually install the certificate from: ${CYAN}storage/app/ssl/caddy-root-ca.crt${NC}"
+            echo -e "  • Switch to mkcert: ${CYAN}./scripts/setup-steps/70-caddy.sh${NC} (recommended)"
+            echo -e "  • Manually install the CA from: ${CYAN}storage/app/ssl/caddy-root-ca.crt${NC}"
             echo -e "  • Re-run this script later: ${CYAN}./scripts/setup-steps/75-ssl-trust.sh${NC}"
             echo ""
         fi

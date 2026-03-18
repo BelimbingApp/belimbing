@@ -2,7 +2,7 @@
 # {$VAR:default} placeholders are substituted at start time; the shared Caddy imports fragments.
 
 {$APP_DOMAIN:local.blb.lara} {
-	tls {$TLS_MODE:internal}
+	{$TLS_DIRECTIVE:tls internal}
 
 	log {
 		output file {$CADDY_LOG_DIR:.caddy/logs}/access.log
@@ -57,7 +57,7 @@
 }
 
 {$BACKEND_DOMAIN:local.api.blb.lara} {
-	tls {$TLS_MODE:internal}
+	{$TLS_DIRECTIVE:tls internal}
 
 	log {
 		output file {$CADDY_LOG_DIR:.caddy/logs}/access.log

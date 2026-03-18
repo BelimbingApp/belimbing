@@ -66,6 +66,7 @@ diagnose_caddy_failure() {
     else
         BLB_CADDY_LAST_ERROR="$reason"
     fi
+    return 0
 }
 
 ensure_blb_caddy_dirs() {
@@ -93,7 +94,7 @@ EOF
 # Uses pure bash string ops to avoid sed escaping issues with {$...} syntax.
 resolve_caddyfile_vars() {
     local input_file=$1
-    local vars=(APP_DOMAIN BACKEND_DOMAIN APP_HOST APP_PORT VITE_HOST VITE_PORT HTTPS_PORT TLS_MODE CADDY_LOG_DIR)
+    local vars=(APP_DOMAIN BACKEND_DOMAIN APP_HOST APP_PORT VITE_HOST VITE_PORT HTTPS_PORT TLS_DIRECTIVE CADDY_LOG_DIR)
     local content
     content=$(<"$input_file")
 
@@ -310,12 +311,13 @@ is_caddy_enabled() {
     [[ "$proxy_type" = "caddy" ]]
 }
 
-# Setup SSL certificate trust for self-signed certificates (TLS_MODE=internal)
-# Use in any environment: local, staging, or production behind proxy/internal network
-# Works with both native Caddy and Docker Caddy
+# Install Caddy's internal CA into the system trust store (tls internal fallback only).
+# This is only needed when BLB is running with `tls internal` — the normal dev path uses
+# mkcert certs whose CA is trusted by `mkcert -install` at start time. Call this manually
+# via scripts/setup-steps/75-ssl-trust.sh if you encounter browser warnings with tls internal.
 # Usage: setup_ssl_trust [project_root] [container_name]
 #   project_root: Project root directory (default: current directory)
-#   container_name: Docker container name if using Docker (optional)
+#   container_name: Docker container name if using Docker Caddy (optional)
 setup_ssl_trust() {
     local project_root="${1:-$(pwd)}"
     local container_name="${2:-}"
@@ -436,38 +438,29 @@ setup_ssl_trust() {
         fi
     fi
 
-    # On WSL2, provide instructions for Windows trust
-    if is_wsl2; then
-        echo ""
-        echo -e "${CYAN}For Windows browser support:${NC}"
-        echo -e "  Certificate location: ${CYAN}storage/app/ssl/caddy-root-ca.crt${NC}"
-        echo -e "  To install:"
-        echo -e "    1. Open Windows Explorer and navigate to: ${CYAN}storage/app/ssl${NC}"
-        echo -e "       (In WSL2, access via: ${CYAN}\\\\wsl$\\\\<distro>\\\\<project_path>\\\\storage\\\\app\\\\ssl${NC})"
-        echo -e "    2. Double-click ${CYAN}caddy-root-ca.crt${NC}"
-        echo -e "    3. Click 'Install Certificate' → 'Local Machine' → Next"
-        echo -e "    4. Select 'Place all certificates in the following store'"
-        echo -e "    5. Browse → 'Trusted Root Certification Authorities' → OK → Next → Finish"
-        echo -e "    6. Restart your browser"
-        echo ""
-    fi
-
     if [[ "$installed" = false ]]; then
         echo -e "${YELLOW}Note:${NC} Certificate not auto-installed to system trust store"
         echo -e "  You can manually install: ${CYAN}$root_ca_file${NC}"
-        echo -e "  Or accept the browser warning (safe for self-signed development certificates)"
+        echo -e "  Or switch to mkcert certs: ${CYAN}./scripts/setup-steps/70-caddy.sh${NC}"
     fi
 
     return 0
 }
 
-# High-level orchestration to ensure SSL trust is set up if needed
-# Checks TLS_MODE and whether cert is already installed before attempting setup
+# High-level orchestration to ensure SSL trust is set up if needed.
+# mkcert is the primary dev path — `mkcert -install` (called in start_caddy) handles all
+# trust stores atomically, so this function returns immediately for TLS_MODE=mkcert.
+# For the tls internal fallback, installs Caddy's root CA into the system trust store.
 # Usage: ensure_ssl_trust [project_root] [tls_mode] [container_name]
 ensure_ssl_trust() {
     local project_root="${1:-$(pwd)}"
     local tls_mode="${2:-internal}"
     local container_name="${3:-}"
+
+    # mkcert handles its own trust stores via `mkcert -install` (called at start time)
+    if [[ "${tls_mode}" = "mkcert" ]]; then
+        return 0
+    fi
 
     # Production environments with real certificates (TLS_MODE != "internal") don't need this
     if [[ "${tls_mode}" != "internal" ]]; then
