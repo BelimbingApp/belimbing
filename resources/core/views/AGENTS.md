@@ -109,6 +109,8 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 
 When a needed primitive doesn't exist, create it in `resources/core/views/components/ui/` following the patterns of existing components (props via `@props`, class merging via `$attributes->class([...])`, semantic tokens).
 
+**Always set an explicit `id`** on form controls and form components such as `x-ui.input`, `x-ui.select`, `x-ui.textarea`, `x-ui.checkbox`, and `x-ui.radio`.
+
 ## Elevating to Modern Sleek
 
 - **Layered depth** — Page: `bg-surface-page`. Cards/panels: `bg-surface-card` with `border-border-default` and `rounded-2xl shadow-sm`. Primary actions: `bg-accent` / `text-accent-on`.
