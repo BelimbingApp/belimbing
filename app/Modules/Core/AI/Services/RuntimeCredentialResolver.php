@@ -36,6 +36,17 @@ class RuntimeCredentialResolver
             return $configurationError;
         }
 
+        return $this->resolveCredentials($config);
+    }
+
+    /**
+     * Resolve provider-specific credentials after basic configuration is validated.
+     *
+     * @param  array{api_key: string, base_url: string, provider_name: string|null}  $config
+     * @return array{api_key: string, base_url: string}|array{error: string, error_type: string}
+     */
+    private function resolveCredentials(array $config): array
+    {
         $apiKey = $config['api_key'];
         $baseUrl = $config['base_url'];
 

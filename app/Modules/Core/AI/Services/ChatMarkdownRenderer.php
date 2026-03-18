@@ -124,37 +124,56 @@ class ChatMarkdownRenderer
     private function processNode(\DOMNode $node): void
     {
         if ($node instanceof \DOMElement) {
-            $tagName = strtolower($node->tagName);
-            $allowed = self::ALLOWED_ATTRIBUTES[$tagName] ?? [];
+            $this->sanitizeAttributes($node);
 
-            $toRemove = [];
-            foreach ($node->attributes as $attr) {
-                if (! in_array($attr->name, $allowed, true)) {
-                    $toRemove[] = $attr->name;
-                }
-            }
-
-            foreach ($toRemove as $attrName) {
-                $node->removeAttribute($attrName);
-            }
-
-            // Validate link protocols — only http(s), mailto, relative, and fragment allowed.
-            if ($tagName === 'a' && $node->hasAttribute('href')) {
-                $href = trim($node->getAttribute('href'));
-                if (! preg_match('#^(https?://|mailto:|/|\#)#i', $href)) {
-                    $node->removeAttribute('href');
-                }
-
-                // External links open in new tab.
-                if ($node->hasAttribute('href')) {
-                    $node->setAttribute('target', '_blank');
-                    $node->setAttribute('rel', 'noopener noreferrer');
-                }
+            if (strtolower($node->tagName) === 'a') {
+                $this->validateLink($node);
             }
         }
 
         foreach ($node->childNodes as $child) {
             $this->processNode($child);
+        }
+    }
+
+    /**
+     * Remove any attributes not in the element's allowlist.
+     */
+    private function sanitizeAttributes(\DOMElement $el): void
+    {
+        $allowed = self::ALLOWED_ATTRIBUTES[strtolower($el->tagName)] ?? [];
+
+        $toRemove = [];
+        foreach ($el->attributes as $attr) {
+            if (! in_array($attr->name, $allowed, true)) {
+                $toRemove[] = $attr->name;
+            }
+        }
+
+        foreach ($toRemove as $attrName) {
+            $el->removeAttribute($attrName);
+        }
+    }
+
+    /**
+     * Validate link href protocol; set target/rel for external links.
+     */
+    private function validateLink(\DOMElement $el): void
+    {
+        if (! $el->hasAttribute('href')) {
+            return;
+        }
+
+        $href = trim($el->getAttribute('href'));
+
+        if (! preg_match('#^(https?://|mailto:|/|\#)#i', $href)) {
+            $el->removeAttribute('href');
+        }
+
+        // External links open in new tab.
+        if ($el->hasAttribute('href')) {
+            $el->setAttribute('target', '_blank');
+            $el->setAttribute('rel', 'noopener noreferrer');
         }
     }
 }

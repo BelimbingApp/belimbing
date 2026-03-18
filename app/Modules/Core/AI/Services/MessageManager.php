@@ -105,7 +105,7 @@ class MessageManager
      *
      * @param  int  $employeeId  Agent employee ID
      * @param  string  $query  Search query (case-insensitive substring match)
-     * @return list<array{session_id: string, title: string|null, snippet: string, matched_at: \DateTimeImmutable}>
+     * @return list<array{session_id: string, title: string|null, snippet: string, matched_at: DateTimeImmutable}>
      */
     public function searchSessions(int $employeeId, string $query): array
     {
@@ -115,54 +115,70 @@ class MessageManager
         foreach ($sessions as $session) {
             $path = $this->sessionManager->transcriptPath($employeeId, $session->id);
 
-            if (! file_exists($path)) {
+            $match = $this->findFirstMatchInFile($path, $query);
+
+            if ($match === null) {
                 continue;
             }
 
-            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            $snippet = $this->extractSnippet($match['content'], $match['matchPos']);
+            $timestamp = $match['timestamp'] !== null
+                ? new DateTimeImmutable($match['timestamp'])
+                : $session->lastActivityAt;
 
-            if ($lines === false) {
-                continue;
-            }
-
-            foreach ($lines as $line) {
-                $data = json_decode($line, true);
-
-                if (! is_array($data)) {
-                    continue;
-                }
-
-                $content = $data['content'] ?? null;
-
-                if (! is_string($content)) {
-                    continue;
-                }
-
-                $matchPos = mb_stripos($content, $query);
-
-                if ($matchPos === false) {
-                    continue;
-                }
-
-                $snippet = $this->extractSnippet($content, $matchPos);
-                $timestamp = isset($data['timestamp'])
-                    ? new DateTimeImmutable($data['timestamp'])
-                    : $session->lastActivityAt;
-
-                $results[] = [
-                    'session_id' => $session->id,
-                    'title' => $session->title,
-                    'snippet' => $snippet,
-                    'matched_at' => $timestamp,
-                ];
-
-                break;
-            }
+            $results[] = [
+                'session_id' => $session->id,
+                'title' => $session->title,
+                'snippet' => $snippet,
+                'matched_at' => $timestamp,
+            ];
         }
 
         usort($results, fn (array $a, array $b) => $b['matched_at'] <=> $a['matched_at']);
 
         return $results;
+    }
+
+    /**
+     * Find the first message in a transcript file that matches the query.
+     *
+     * @return array{content: string, matchPos: int, timestamp: string|null}|null
+     */
+    private function findFirstMatchInFile(string $path, string $query): ?array
+    {
+        if (! file_exists($path)) {
+            return null;
+        }
+
+        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+        if ($lines === false) {
+            return null;
+        }
+
+        foreach ($lines as $line) {
+            $data = json_decode($line, true);
+
+            if (! is_array($data)) {
+                continue;
+            }
+
+            $content = $data['content'] ?? null;
+
+            if (! is_string($content)) {
+                continue;
+            }
+
+            $matchPos = mb_stripos($content, $query);
+
+            if ($matchPos === false) {
+                continue;
+            }
+
+            return ['content' => $content, 'matchPos' => $matchPos, 'timestamp' => $data['timestamp'] ?? null];
+        }
+
+        return null;
     }
 
     /**

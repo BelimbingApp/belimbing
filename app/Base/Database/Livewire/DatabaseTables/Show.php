@@ -7,6 +7,7 @@ namespace App\Base\Database\Livewire\DatabaseTables;
 
 use App\Base\Database\Services\TableInspector;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -104,7 +105,11 @@ class Show extends Component
         }
 
         if (is_bool($value) || $typeName === 'bool' || $typeName === 'boolean') {
-            return $this->rawValues ? ($value ? 'true' : 'false') : ($value ? '✓' : '✗');
+            if ($this->rawValues) {
+                return $value ? 'true' : 'false';
+            }
+
+            return $value ? '✓' : '✗';
         }
 
         $stringValue = (string) $value;
@@ -126,7 +131,7 @@ class Show extends Component
         session(['recent_tables' => $recent]);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $inspector = app(TableInspector::class);
         $columns = $inspector->columns($this->tableName);

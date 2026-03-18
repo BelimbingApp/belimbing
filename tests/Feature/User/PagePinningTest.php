@@ -3,13 +3,16 @@
 use App\Modules\Core\User\Models\User;
 use App\Modules\Core\User\Models\UserPin;
 
+const PAGE_PINNING_FIRST_LABEL = 'First Pin';
+const PAGE_PINNING_SECOND_LABEL = 'Second Pin';
+
 test('pin toggle and reorder use URL-based identity', function (): void {
     $user = User::factory()->create();
 
     // Pin two items with different URLs
     $this->actingAs($user)
         ->postJson(route('pins.toggle'), [
-            'label' => 'First Pin',
+            'label' => PAGE_PINNING_FIRST_LABEL,
             'url' => '/first',
             'icon' => null,
         ])
@@ -18,7 +21,7 @@ test('pin toggle and reorder use URL-based identity', function (): void {
 
     $this->actingAs($user)
         ->postJson(route('pins.toggle'), [
-            'label' => 'Second Pin',
+            'label' => PAGE_PINNING_SECOND_LABEL,
             'url' => '/second',
             'icon' => 'heroicon-o-table-cells',
         ])
@@ -31,8 +34,8 @@ test('pin toggle and reorder use URL-based identity', function (): void {
         ->get();
 
     expect($pins)->toHaveCount(2);
-    expect($pins[0]->label)->toBe('First Pin');
-    expect($pins[1]->label)->toBe('Second Pin');
+    expect($pins[0]->label)->toBe(PAGE_PINNING_FIRST_LABEL);
+    expect($pins[1]->label)->toBe(PAGE_PINNING_SECOND_LABEL);
 
     // Reorder by id
     $this->actingAs($user)
@@ -50,12 +53,12 @@ test('pin toggle and reorder use URL-based identity', function (): void {
         ->pluck('label')
         ->all();
 
-    expect($reordered)->toBe(['Second Pin', 'First Pin']);
+    expect($reordered)->toBe([PAGE_PINNING_SECOND_LABEL, PAGE_PINNING_FIRST_LABEL]);
 
     // Toggle same URL again unpins it
     $this->actingAs($user)
         ->postJson(route('pins.toggle'), [
-            'label' => 'First Pin',
+            'label' => PAGE_PINNING_FIRST_LABEL,
             'url' => '/first',
             'icon' => null,
         ])

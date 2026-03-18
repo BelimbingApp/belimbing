@@ -59,22 +59,7 @@ class RuntimeMessageBuilder
             return ['role' => 'user', 'content' => $message->content];
         }
 
-        $imageBlocks = [];
-        $documentTexts = [];
-
-        foreach ($attachments as $attachment) {
-            if (($attachment['kind'] ?? '') === 'image') {
-                $imageBlock = $this->buildImageBlock($attachment);
-                if ($imageBlock !== null) {
-                    $imageBlocks[] = $imageBlock;
-                }
-            } elseif (($attachment['kind'] ?? '') === 'document') {
-                $docText = $this->buildDocumentText($attachment);
-                if ($docText !== null) {
-                    $documentTexts[] = $docText;
-                }
-            }
-        }
+        [$imageBlocks, $documentTexts] = $this->partitionAttachments($attachments);
 
         // If we have images, use the multi-content vision format
         if ($imageBlocks !== []) {
@@ -101,6 +86,34 @@ class RuntimeMessageBuilder
         }
 
         return ['role' => 'user', 'content' => $textContent];
+    }
+
+    /**
+     * Split attachments into image blocks and document texts.
+     *
+     * @param  list<array<string, mixed>>  $attachments
+     * @return array{0: list<array<string, mixed>>, 1: list<string>}
+     */
+    private function partitionAttachments(array $attachments): array
+    {
+        $imageBlocks = [];
+        $documentTexts = [];
+
+        foreach ($attachments as $attachment) {
+            if (($attachment['kind'] ?? '') === 'image') {
+                $block = $this->buildImageBlock($attachment);
+                if ($block !== null) {
+                    $imageBlocks[] = $block;
+                }
+            } elseif (($attachment['kind'] ?? '') === 'document') {
+                $text = $this->buildDocumentText($attachment);
+                if ($text !== null) {
+                    $documentTexts[] = $text;
+                }
+            }
+        }
+
+        return [$imageBlocks, $documentTexts];
     }
 
     /**

@@ -1,12 +1,16 @@
 <?php
 
 use App\Base\Database\Exceptions\BlbQueryException;
+use App\Base\Database\Livewire\Queries\Index;
+use App\Base\Database\Livewire\Queries\Show;
 use App\Base\Database\Services\QueryExecutor;
 use App\Modules\Core\User\Models\Query;
 use App\Modules\Core\User\Models\User;
 use App\Modules\Core\User\Models\UserPin;
 
 const QUERY_TEST_SQL = 'SELECT 1 AS id, \'hello\' AS name';
+const QUERY_TEST_ACTIVE_USERS = 'Active Users';
+const QUERY_TEST_VIEW_NAME = 'Test View';
 
 // ─── Slug generation ────────────────────────────────────────────────
 
@@ -15,19 +19,19 @@ test('slug generation handles collisions per user', function (): void {
 
     $first = Query::query()->create([
         'user_id' => $user->id,
-        'name' => 'Active Users',
-        'slug' => Query::generateSlug('Active Users', $user->id),
+        'name' => QUERY_TEST_ACTIVE_USERS,
+        'slug' => Query::generateSlug(QUERY_TEST_ACTIVE_USERS, $user->id),
         'sql_query' => QUERY_TEST_SQL,
     ]);
 
-    $secondSlug = Query::generateSlug('Active Users', $user->id);
+    $secondSlug = Query::generateSlug(QUERY_TEST_ACTIVE_USERS, $user->id);
 
     expect($first->slug)->toBe('active-users');
     expect($secondSlug)->toBe('active-users-2');
 
     // Different user can have the same slug
     $otherUser = User::factory()->create();
-    $otherSlug = Query::generateSlug('Active Users', $otherUser->id);
+    $otherSlug = Query::generateSlug(QUERY_TEST_ACTIVE_USERS, $otherUser->id);
 
     expect($otherSlug)->toBe('active-users');
 });
@@ -81,8 +85,8 @@ test('query CRUD operations and sharing', function (): void {
     // Create a saved query
     $view = Query::query()->create([
         'user_id' => $owner->id,
-        'name' => 'Test View',
-        'slug' => Query::generateSlug('Test View', $owner->id),
+        'name' => QUERY_TEST_VIEW_NAME,
+        'slug' => Query::generateSlug(QUERY_TEST_VIEW_NAME, $owner->id),
         'prompt' => 'Show me a test row',
         'sql_query' => QUERY_TEST_SQL,
         'description' => 'Original description',
@@ -101,12 +105,12 @@ test('query CRUD operations and sharing', function (): void {
 
     // Share creates independent copy + auto-pin for recipient
     Livewire\Livewire::actingAs($owner)
-        ->test(\App\Base\Database\Livewire\Queries\Show::class, ['slug' => $view->slug])
+        ->test(Show::class, ['slug' => $view->slug])
         ->call('shareWith', $recipient->id);
 
     $sharedView = Query::query()
         ->where('user_id', $recipient->id)
-        ->where('name', 'Test View')
+        ->where('name', QUERY_TEST_VIEW_NAME)
         ->first();
 
     expect($sharedView)->not->toBeNull();
@@ -120,7 +124,7 @@ test('query CRUD operations and sharing', function (): void {
         ->first();
 
     expect($recipientPin)->not->toBeNull();
-    expect($recipientPin->label)->toBe('Test View');
+    expect($recipientPin->label)->toBe(QUERY_TEST_VIEW_NAME);
 
     // Recipient can now access their own copy
     $this->actingAs($recipient)
@@ -129,7 +133,7 @@ test('query CRUD operations and sharing', function (): void {
 
     // Owner deletes original — recipient's copy is unaffected
     Livewire\Livewire::actingAs($owner)
-        ->test(\App\Base\Database\Livewire\Queries\Index::class)
+        ->test(Index::class)
         ->call('deleteView', $view->id);
 
     expect(Query::query()->find($view->id))->toBeNull();

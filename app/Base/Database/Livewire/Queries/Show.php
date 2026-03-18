@@ -198,16 +198,10 @@ class Show extends Component
      */
     public function generateSql(): void
     {
-        $prompt = trim($this->editPrompt);
+        $error = $this->validateGenerateSqlInput();
 
-        if ($prompt === '') {
-            $this->aiError = __('Please enter a prompt first.');
-
-            return;
-        }
-
-        if ($this->selectedModelId === '') {
-            $this->aiError = __('Please select an AI model.');
+        if ($error !== null) {
+            $this->aiError = $error;
 
             return;
         }
@@ -254,7 +248,7 @@ class Show extends Component
                     ],
                     [
                         'role' => 'user',
-                        'content' => $prompt,
+                        'content' => trim($this->editPrompt),
                     ],
                 ],
                 maxTokens: 1024,
@@ -295,6 +289,24 @@ class Show extends Component
         } finally {
             $this->isGenerating = false;
         }
+    }
+
+    /**
+     * Validate user inputs before generating SQL.
+     *
+     * Returns an error string if invalid, or null if inputs are valid.
+     */
+    private function validateGenerateSqlInput(): ?string
+    {
+        if (trim($this->editPrompt) === '') {
+            return __('Please enter a prompt first.');
+        }
+
+        if ($this->selectedModelId === '') {
+            return __('Please select an AI model.');
+        }
+
+        return null;
     }
 
     /**

@@ -18,6 +18,9 @@ use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 
 class ProviderSetup extends Component
@@ -144,12 +147,12 @@ class ProviderSetup extends Component
             $provider = $this->connectProvider($companyId);
             $this->cleanupAuthFlows();
             $this->connectedProviderId = $provider->id;
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        } catch (ConnectionException $e) {
             $this->connectError = __('Could not connect to :url — is the server running?', [
                 'url' => $this->baseUrl,
             ]);
 
-            \Illuminate\Support\Facades\Log::warning('Provider connect failed', [
+            Log::warning('Provider connect failed', [
                 'provider' => $this->providerKey,
                 'base_url' => $this->baseUrl,
                 'error' => $e->getMessage(),
@@ -159,7 +162,7 @@ class ProviderSetup extends Component
                 'message' => $e->getMessage(),
             ]);
 
-            \Illuminate\Support\Facades\Log::warning('Provider connect failed', [
+            Log::warning('Provider connect failed', [
                 'provider' => $this->providerKey,
                 'error' => $e->getMessage(),
             ]);
@@ -175,10 +178,6 @@ class ProviderSetup extends Component
      */
     public function updatedApiKey(): void
     {
-        if ($this->connectedProviderId !== null || $this->authType === 'device_flow') {
-            return;
-        }
-
         $this->tryAutoConnect();
     }
 
@@ -190,10 +189,6 @@ class ProviderSetup extends Component
      */
     public function updatedBaseUrl(): void
     {
-        if ($this->connectedProviderId !== null || $this->authType === 'device_flow') {
-            return;
-        }
-
         $this->tryAutoConnect();
     }
 
@@ -202,6 +197,10 @@ class ProviderSetup extends Component
      */
     protected function tryAutoConnect(): void
     {
+        if ($this->connectedProviderId !== null || $this->authType === 'device_flow') {
+            return;
+        }
+
         if ($this->baseUrl === '') {
             return;
         }
@@ -228,7 +227,7 @@ class ProviderSetup extends Component
             return null;
         }
 
-        return mb_substr($this->apiKey, 0, 7) . '…' . mb_substr($this->apiKey, -4);
+        return mb_substr($this->apiKey, 0, 7).'…'.mb_substr($this->apiKey, -4);
     }
 
     /**
@@ -248,7 +247,7 @@ class ProviderSetup extends Component
         $this->redirectRoute('admin.ai.providers', navigate: true);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $connectedProvider = null;
         $models = collect();

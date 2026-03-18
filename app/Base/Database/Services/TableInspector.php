@@ -7,6 +7,7 @@ namespace App\Base\Database\Services;
 
 use App\Base\Database\Models\TableRegistry;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -59,16 +60,7 @@ class TableInspector
         $query = DB::table($table);
 
         if ($search !== null && $search !== '') {
-            $searchable = $this->searchableColumns($table);
-
-            if ($searchable !== []) {
-                $query->where(function ($q) use ($searchable, $search): void {
-                    foreach ($searchable as $index => $column) {
-                        $method = $index === 0 ? 'where' : 'orWhere';
-                        $q->{$method}($column, 'like', '%'.$search.'%');
-                    }
-                });
-            }
+            $this->applySearch($query, $table, $search);
         }
 
         if ($sortColumn !== null && $sortColumn !== '' && $this->columnExists($table, $sortColumn)) {
@@ -76,6 +68,26 @@ class TableInspector
         }
 
         return $query->paginate($perPage);
+    }
+
+    /**
+     * Apply a LIKE search across all searchable columns.
+     */
+    private function applySearch(Builder $query, string $table, string $search): void
+    {
+        $searchable = $this->searchableColumns($table);
+
+        if ($searchable === []) {
+            return;
+        }
+
+        $query->where(function ($q) use ($searchable, $search): void {
+            foreach ($searchable as $index => $column) {
+                $index === 0
+                    ? $q->where($column, 'like', '%'.$search.'%')
+                    : $q->orWhere($column, 'like', '%'.$search.'%');
+            }
+        });
     }
 
     /**

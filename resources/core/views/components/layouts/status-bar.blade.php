@@ -53,7 +53,7 @@
                     wire:navigate
                     class="text-status-warning hover:underline inline-flex items-center gap-1"
                     title="{{ __('Set up Lara') }}"
-                    aria-label="{{ __('Set up Lara') }}"
+                    aria-label="{{ __('Activate Lara') }}"
                 >
                     <x-icon name="heroicon-o-sparkles" class="w-4 h-4" />
                     {{ __('Activate Lara') }}

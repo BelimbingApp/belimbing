@@ -172,6 +172,12 @@
             <div class="overflow-x-auto -mx-card-inner">
                 @if(count($logLines) > 0)
                     <table class="min-w-full text-xs font-mono">
+                        <thead class="sr-only">
+                            <tr>
+                                <th scope="col">{{ __('Line') }}</th>
+                                <th scope="col">{{ __('Content') }}</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             @foreach($logLines as $line)
                                 <tr wire:key="line-{{ $line['number'] }}" class="hover:bg-surface-subtle/50 group border-b border-border-default/30 last:border-b-0">

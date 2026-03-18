@@ -16,6 +16,7 @@ use App\Base\Authz\Models\RoleCapability;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 
@@ -71,6 +72,7 @@ class Show extends Component
             } elseif ($this->role->principalRoles()->exists()) {
                 Session::flash('error', __('Cannot change scope while users are assigned to this role.'));
             } elseif ($this->isInvalidScopeCompany($newCompanyId)) {
+                Session::flash('error', __('The selected company is not valid for this role scope.'));
             } elseif ($this->scopeConflictExists($newCompanyId)) {
                 Session::flash('error', __('A role with this code already exists in the selected scope.'));
             } else {
@@ -230,7 +232,7 @@ class Show extends Component
             ->delete();
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $authUser = auth()->user();
 

@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\DTO\Message;
 use Illuminate\Support\Str;
@@ -121,21 +122,32 @@ class AgenticRuntime
             return $config;
         }
 
-        if (str_contains($modelOverride, ':::')) {
-            [$providerId, $modelId] = explode(':::', $modelOverride, 2);
-            $providerConfig = $this->configResolver->resolveForProvider((int) $providerId, $modelId);
+        return $this->applyCompositeOrSimpleOverride($config, $modelOverride);
+    }
 
-            if ($providerConfig !== null) {
-                return $providerConfig;
-            }
-
-            // Fallback: use the model ID only if provider resolution fails
-            $config['model'] = $modelId;
+    /**
+     * Apply a composite (providerId:::modelId) or plain model override.
+     *
+     * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}  $config
+     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}
+     */
+    private function applyCompositeOrSimpleOverride(array $config, string $modelOverride): array
+    {
+        if (! str_contains($modelOverride, ':::')) {
+            $config['model'] = $modelOverride;
 
             return $config;
         }
 
-        $config['model'] = $modelOverride;
+        [$providerId, $modelId] = explode(':::', $modelOverride, 2);
+        $providerConfig = $this->configResolver->resolveForProvider((int) $providerId, $modelId);
+
+        if ($providerConfig !== null) {
+            return $providerConfig;
+        }
+
+        // Fallback: use the model ID only if provider resolution fails
+        $config['model'] = $modelId;
 
         return $config;
     }
@@ -196,7 +208,7 @@ class AgenticRuntime
      */
     private function chatWithTools(array $credentials, array $config, array $apiMessages, array $tools): array
     {
-        return $this->llmClient->chat(new \App\Base\AI\DTO\ChatRequest(
+        return $this->llmClient->chat(new ChatRequest(
             $credentials['base_url'],
             $credentials['api_key'],
             $config['model'],
@@ -498,7 +510,7 @@ class AgenticRuntime
         $usage = null;
         $latencyMs = 0;
 
-        $stream = $this->llmClient->chatStream(
+        $stream = $this->llmClient->chatStream(new ChatRequest(
             baseUrl: $credentials['base_url'],
             apiKey: $credentials['api_key'],
             model: $config['model'],
@@ -509,7 +521,7 @@ class AgenticRuntime
             providerName: $config['provider_name'],
             tools: $tools !== [] ? $tools : null,
             toolChoice: $tools !== [] ? 'auto' : null,
-        );
+        ));
 
         foreach ($stream as $event) {
             if ($event['type'] === 'content_delta') {
