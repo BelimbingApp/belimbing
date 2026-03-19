@@ -39,8 +39,7 @@ class ProviderRegistry
      */
     public static function discoverModuleProviders(): array
     {
-        $pattern = app_path('Modules/*/*/ServiceProvider.php');
-        $paths = glob($pattern) ?: [];
+        $paths = glob(app_path('Modules/*/*/ServiceProvider.php')) ?: [];
 
         sort($paths);
 

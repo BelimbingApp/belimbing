@@ -102,6 +102,16 @@ Every table defaults to `is_stable = true`. **Only `migrate:fresh` checks this f
 | `true` | Table and its data are **preserved** |
 | `false` | Table is **dropped and rebuilt** from its migration |
 
+### Mark newly-created tables unstable
+
+When you add new migrations that create new tables and you want the next `migrate:fresh` to rebuild them by default, run:
+
+```bash
+php artisan migrate --unstable
+```
+
+This keeps existing table stability unchanged and marks **only newly discovered/registered tables** as `is_stable=false` (in `base_database_tables`).
+
 ### Schema change workflow
 
 To edit an existing migration's schema (add/remove/rename columns, change indexes):
@@ -110,6 +120,7 @@ To edit an existing migration's schema (add/remove/rename columns, change indexe
 # 1. Mark the table(s) unstable
 php artisan blb:table:unstable ai_providers
 php artisan blb:table:unstable ai_providers ai_provider_models  # multiple
+php artisan blb:table:unstable ai_*  # trailing wildcard (prefix match)
 
 # 2. Edit the migration file
 

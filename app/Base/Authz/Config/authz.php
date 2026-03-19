@@ -41,6 +41,7 @@ return [
         'ai' => 'AI and agent capabilities',
         'messaging' => 'Multi-channel messaging capabilities',
         'admin' => 'Administrative operations',
+        'it_ticket' => 'IT support ticket management',
     ],
 
     'verbs' => [
@@ -63,6 +64,7 @@ return [
         'media',
         'poll',
         'search',
+        'assign',
     ],
 
     // Capabilities owned by the base framework (no module to host them yet).

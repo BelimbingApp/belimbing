@@ -13,6 +13,7 @@ use App\Base\Database\Seeders\DevSeeder;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Database\Console\Migrations\MigrateCommand as IlluminateMigrateCommand;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputOption;
 
@@ -43,6 +44,15 @@ class MigrateCommand extends IlluminateMigrateCommand
                 null,
                 InputOption::VALUE_NONE,
                 'Run dev seeders after production seeders (APP_ENV=local only). Implies --seed.',
+            ),
+        );
+
+        $this->getDefinition()->addOption(
+            new InputOption(
+                'unstable',
+                null,
+                InputOption::VALUE_NONE,
+                'Register newly discovered tables as unstable (is_stable=false) so migrate:fresh will rebuild them.',
             ),
         );
     }
@@ -95,8 +105,32 @@ class MigrateCommand extends IlluminateMigrateCommand
                     return;
                 }
 
+                $existingRegistry = [];
+                if ($this->option('unstable') && Schema::hasTable('base_database_tables')) {
+                    $existingRegistry = TableRegistry::query()->pluck('table_name')->all();
+                }
+
                 // Auto-discover and register tables from migration files
                 TableRegistry::ensureDiscoveredRegistered();
+
+                if ($this->option('unstable') && Schema::hasTable('base_database_tables')) {
+                    $newTables = array_values(array_diff(
+                        TableRegistry::query()->pluck('table_name')->all(),
+                        $existingRegistry,
+                    ));
+
+                    $newTables = array_values(array_diff($newTables, TableRegistry::INFRASTRUCTURE_TABLES));
+
+                    if ($newTables !== []) {
+                        TableRegistry::query()
+                            ->whereIn('table_name', $newTables)
+                            ->update([
+                                'is_stable' => false,
+                                'stabilized_at' => null,
+                                'stabilized_by' => null,
+                            ]);
+                    }
+                }
 
                 // Handle seeding with module-aware auto-discovery
                 if ($this->option('seed')) {

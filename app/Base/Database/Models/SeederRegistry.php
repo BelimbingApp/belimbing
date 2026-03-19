@@ -175,14 +175,14 @@ class SeederRegistry extends Model
      */
     public static function ensureDiscoveredRegistered(): void
     {
-        $layers = [
-            app_path('Base') => '/*/Database/Seeders/*.php',
-            app_path('Modules') => '/*/*/Database/Seeders/*.php',
+        $patterns = [
+            app_path('Base/*/Database/Seeders/*.php'),
+            app_path('Modules/*/*/Database/Seeders/*.php'),
         ];
 
         $files = [];
-        foreach ($layers as $appPath => $pattern) {
-            $files = array_merge($files, glob($appPath.$pattern) ?: []);
+        foreach ($patterns as $pattern) {
+            $files = array_merge($files, glob($pattern) ?: []);
         }
         foreach ($files as $file) {
             self::registerDiscoveredFile($file);

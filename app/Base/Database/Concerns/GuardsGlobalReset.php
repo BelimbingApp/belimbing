@@ -5,6 +5,7 @@
 
 namespace App\Base\Database\Concerns;
 
+use App\Base\Database\Console\Concerns\PrintsTableUnstableUsage;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +21,8 @@ use Illuminate\Support\Facades\DB;
  */
 trait GuardsGlobalReset
 {
+    use PrintsTableUnstableUsage;
+
     /**
      * Block reset/refresh unless explicitly overridden.
      *
@@ -47,11 +50,7 @@ trait GuardsGlobalReset
         $this->line('    <comment>php artisan migrate:fresh --seed --dev</comment>        Full rebuild (respects table stability)');
         $this->line('    <comment>php artisan ' . $this->name . ' --force-wipe</comment>          Intentional full reset (dangerous)');
         $this->line('');
-        $this->line('  To mark specific tables unstable before migrate:fresh:');
-        $this->line('');
-        $this->line('    <comment>php artisan blb:table:unstable table_name</comment>     Mark one table');
-        $this->line('    <comment>php artisan blb:table:unstable table_a table_b</comment> Mark multiple tables');
-        $this->line('');
+        $this->printTableUnstableUsage('  To mark specific tables unstable before migrate:fresh:');
 
         return Command::FAILURE;
     }
