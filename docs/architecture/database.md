@@ -120,25 +120,26 @@ This registry tracks the YYYY_MM_DD prefixes assigned to each module to prevent 
 | `0200_01_09_*` | Modules/Core | Employee | Company, Address |
 | `0200_01_20_*` | Modules/Core | User | Company, Employee |
 | `0200_02_01_*` | Modules/Core | AI | Company, Employee |
+| `0300_01_01_*` | Modules/Business | IT/Ticket | Company, User |
 
 ### Business Module Categories (0300+)
 
 **Format:** `YYYY_MM_DD_HHMMSS_description.php`
 
-Years are grouped by business domain category.
+Years are grouped by business domain category (to be determined).
 
 | Year Range | Category | Reserved For | Status |
 |------------|----------|--------------|--------|
-| `0300` | ERP | Enterprise Resource Planning | 📂 Available |
-| `0400` | CRM | Customer Relationship Management | 📂 Available |
-| `0500` | HR | Human Resources | 📂 Available |
-| `0600` | Finance | Financial Management | 📂 Available |
-| `0700` | Inventory | Inventory Management | 📂 Available |
-| `0800` | Manufacturing | Manufacturing/Production | 📂 Available |
-| `0900` | Logistics | Shipping/Logistics | 📂 Available |
-| `0910` | Analytics | Business Intelligence | 📂 Available |
-| `0920` | Marketing | Marketing Automation | 📂 Available |
-| `0930+` | Custom | Custom Business Modules | 📂 Available |
+| `03xx` | ERP | Enterprise Resource Planning | 📂 Available |
+| `03xx` | CRM | Customer Relationship Management | 📂 Available |
+| `03xx` | HR | Human Resources | 📂 Available |
+| `03xx` | Finance | Financial Management | 📂 Available |
+| `03xx` | Inventory | Inventory Management | 📂 Available |
+| `03xx` | Manufacturing | Manufacturing/Production | 📂 Available |
+| `03xx` | Logistics | Shipping/Logistics | 📂 Available |
+| `03xx` | Analytics | Business Intelligence | 📂 Available |
+| `03xx` | Marketing | Marketing Automation | 📂 Available |
+| `1000+` | Custom | Custom Business Modules | 📂 Available |
 
 ### Extensions (2026+)
 
@@ -171,7 +172,7 @@ Core Layer (0200)
   └─ AI (02_01) → [depends on: Company, Employee]
 
 Business Layer (0300+)
-  └─ (modules depend on Core modules)
+  └─ IT/Ticket (01_01) → [depends on: Company, User]
 ```
 
 ### Adding New Modules

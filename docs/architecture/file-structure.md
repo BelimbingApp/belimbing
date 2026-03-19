@@ -25,8 +25,8 @@ BLB uses a layered directory naming convention to define architectural boundarie
 ### Layer Hierarchy
 
 ```
-app/{Layer0}/{Module}/...              # For Base (shallow)
-app/{Layer0}/{Layer1}/{Module}/...     # For Modules (deeper)
+app/{Layer0}/{Module}/...                    # For Base (shallow)
+app/{Layer0}/{Layer1}/{Module}/...           # For Core and Business modules
 ```
 
 **Key Principle:** Stop labeling at the Module boundary. Subdirectories within a module are implementation details, not architectural layers.
@@ -43,7 +43,7 @@ app/{Layer0}/{Layer1}/{Module}/...     # For Modules (deeper)
 | `app/Modules/Core` | Layer1 | Core module category |
 | `app/Modules/Business` | Layer1 | Business module category |
 | `app/Modules/Core/Geonames` | Module | `Layer0/Layer1/Module` |
-| `app/Modules/Business/ERP` | Module | `Layer0/Layer1/Module` |
+| `app/Modules/Business/IT` | Module | `Layer0/Layer1/Module` |
 
 ### Module Internals (Not Layered)
 
@@ -74,6 +74,10 @@ root Layer0 Module     Class
 App\Modules\Core\Geonames\Models\Country
 └┬─┘└──┬──┘└─┬──┘└───┬───┘└──┬──┘└──┬──┘
 root Layer0 Layer1 Module Internal Class
+
+App\Modules\Business\IT\Models\Ticket
+└┬─┘└──┬──┘└──┬───┘└─┬┘└──┬──┘└──┬──┘
+root Layer0  Layer1 Module Internal Class
 ```
 
 ### Rationale
@@ -274,10 +278,11 @@ app/Modules/
 │       └── Deployment/
 │
 └── Business/                # Business process modules (examples)
-    ├── ERP/                 # Database/ (Migrations/, Seeders/, Factories/)
-    ├── CRM/                 # Database/Migrations/
-    ├── HR/                  # Database/Migrations/
-    └── Custom/
+    ├── IT/                  # IT support module
+    ├── HR/                  # HR module
+    ├── Finance/             # Finance module
+    ├── Sales/               # Sales / CRM module
+    └── Logistics/           # Logistics / shipping module
 ```
 
 **Module Structure Template (for `app/Modules/{Layer1}/{Module}/`):**
@@ -330,7 +335,7 @@ Core and Business (Layer1 categories) differ in fundamental ways:
 
 5. **Namespace Organization** (Layer0/Layer1/Module)
    - Core modules: `App\Modules\Core\User\` → `Layer0\Layer1\Module`
-   - Business modules: `App\Modules\Business\ERP\` → `Layer0\Layer1\Module`
+   - Business modules: `App\Modules\Business\IT\` → `Layer0\Layer1\Module`
 
 #### Why Directory Structure Over Metadata?
 
@@ -345,7 +350,7 @@ Directory structure prevents mistakes:
 **Example:**
 ```php
 // With directory structure - compiler/static analysis can catch:
-namespace App\Modules\Business\ERP;
+namespace App\Modules\Business\IT;
 
 use App\Modules\Core\User\Models\User; // ✅ Valid
 use App\Modules\Core\Workflow\Models\StatusConfig; // ✅ Valid
@@ -353,7 +358,7 @@ use App\Modules\Core\Workflow\Models\StatusConfig; // ✅ Valid
 // But this would be caught:
 namespace App\Modules\Core\User;
 
-use App\Modules\Business\ERP\Models\Order; // ❌ Error: Core can't depend on Business
+use App\Modules\Business\IT\Models\Ticket; // ❌ Error: Core can't depend on Business
 ```
 
 **2. Reduce Cognitive Load**
