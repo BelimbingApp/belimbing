@@ -3,7 +3,7 @@
 **Document Type:** Architecture Specification
 **Purpose:** Define the file and directory structure for Belimbing framework
 **Based On:** Project Brief v1.0.0, Ousterhout's "A Philosophy of Software Design"
-**Last Updated:** 2026-02-07
+**Last Updated:** 2026-03-20
 
 ---
 
@@ -99,12 +99,8 @@ belimbing/
 │   └── deployment/          # Deployment state, rollback points
 │
 ├── app/                     # Core application code (Layer0 directories)
-│   ├── Base/                # Framework infrastructure
-│   ├── Modules/             # Business process modules
-│   ├── Extensions/          # [Fluid] Extension integration layer
-│   ├── AI/                  # [Fluid] AI services and code generation
-│   ├── Infrastructure/      # [Fluid] Infrastructure services (cache, queue, etc.)
-│   └── Support/             # [Fluid] Helpers, utilities, base classes
+│   ├── Base/                # Framework infrastructure (AI, Cache, Database, etc.)
+│   └── Modules/             # Business process modules (Core, Business)
 │
 ├── bootstrap/               # Framework bootstrapping
 │   ├── app.php              # Application configuration (middleware, exceptions)
@@ -180,7 +176,6 @@ Directories under `app/` are Layer0. See [Directory Layer Convention](#directory
 
 **Fluidity Status:**
 - **Less Fluid** (`Base/`, `Modules/`): Active implementation; structure is stabilizing but still subject to refinement per `AGENTS.md`.
-- **Fluid** (`Extensions/`, `Admin/`, `AI/`, `Infrastructure/`, `Support/`): Speculative; not yet implemented. Structure may change significantly.
 
 ---
 
@@ -456,78 +451,6 @@ app/Admin/
     └── Backup/
 ```
 
-### `app/AI/` - AI Services (Layer0)
-
-**Fluidity:** Fluid — not yet implemented.
-
-```
-app/AI/
-├── Services/
-│   ├── CodeGenerator.php    # AI code generation service
-│   ├── ModelManager.php     # AI model management (local models)
-│   ├── TemplateEngine.php   # Code template system
-│   └── SafetyValidator.php  # AI code safety validation
-│
-├── Models/                  # AI model integrations
-│   ├── LocalModel.php       # Local model interface
-│   └── Adapters/            # Model adapters (llama.cpp, ONNX, etc.)
-│
-├── Templates/               # Code generation templates
-│   ├── Module/
-│   ├── Service/
-│   ├── Controller/
-│   └── Livewire/
-│
-├── Sandbox/                 # AI code sandboxing
-│   ├── DevSandbox.php       # Development environment
-│   ├── TestRunner.php       # Automated testing
-│   └── ReviewSystem.php     # Code review workflow
-│
-└── Workflows/               # AI-assisted workflows
-    ├── Development.php      # Dev → Staging → Prod workflow
-    └── Review.php           # Code review workflow
-```
-
-### `app/Infrastructure/` - Infrastructure Services (Layer0)
-
-**Fluidity:** Fluid — not yet implemented.
-
-```
-app/Infrastructure/
-├── Cache/                   # Caching layer
-│   ├── CacheManager.php
-│   └── Strategies/          # Memory, disk, distributed
-│
-├── Queue/                   # Queue system
-│   ├── QueueManager.php
-│   └── Workers/
-│
-├── Storage/                 # Storage abstraction
-│   └── StorageManager.php
-│
-├── Monitoring/              # Health monitoring
-│   ├── HealthChecker.php
-│   └── MetricsCollector.php
-│
-└── Remote/                   # Remote management
-    ├── TunnelManager.php     # Secure tunneling
-    ├── Diagnostics.php       # Remote diagnostics
-    └── UpdateManager.php     # Remote updates
-```
-
-### `app/Support/` - Support Classes (Layer0)
-
-**Fluidity:** Fluid — not yet implemented.
-
-```
-app/Support/
-├── Helpers/                  # Helper functions
-├── Traits/                   # Reusable traits
-├── Exceptions/               # Custom exceptions
-├── Validators/               # Custom validators
-└── Utilities/                # Utility classes
-```
-
 ---
 
 ## Extension Structure (`extensions/`)
@@ -685,36 +608,43 @@ tests/
 
 ## Frontend Structure (`resources/`)
 
+Resources live under `resources/core/` (the Core view namespace). Livewire view folders mirror the sidebar navigation domains — see `resources/core/views/AGENTS.md` for the full placement rules.
+
 ```
-resources/
+resources/core/
 ├── views/
 │   ├── layouts/             # Layout templates
 │   │   ├── app.blade.php
-│   │   ├── admin.blade.php
 │   │   └── auth.blade.php
 │   │
-│   ├── livewire/            # Livewire component Blade templates
-│   │   ├── admin/
-│   │   ├── modules/
-│   │   └── extensions/
+│   ├── livewire/            # Livewire view templates (mirrors navigation)
+│   │   ├── admin/           # Administration menu items
+│   │   │   ├── addresses/
+│   │   │   ├── ai/
+│   │   │   ├── authz/
+│   │   │   ├── companies/
+│   │   │   ├── employee-types/
+│   │   │   ├── employees/
+│   │   │   ├── geonames/
+│   │   │   ├── roles/
+│   │   │   ├── setup/
+│   │   │   ├── system/
+│   │   │   ├── users/
+│   │   │   └── workflows/
+│   │   ├── auth/            # Guest authentication flow
+│   │   ├── it/              # Business Operations → IT
+│   │   └── profile/         # Current user's own settings
 │   │
 │   └── components/          # Blade components
-│       ├── flux/            # Flux UI overrides
-│       └── custom/          # Custom components
-│
-├── js/
-│   ├── app.js               # Main application
-│   ├── admin.js             # Admin panel
-│   ├── modules/             # Module-specific JS
-│   └── wasm/                # WebAssembly bindings
+│       ├── menu/            # Sidebar navigation components
+│       └── ui/              # Reusable UI primitives (x-ui.*)
 │
 ├── css/
-│   ├── app.css              # Main stylesheet
-│   └── admin.css            # Admin styles
+│   ├── app.css              # Main stylesheet (imports tokens)
+│   ├── tokens.css           # Design tokens (colors, spacing)
+│   └── components.css       # Component-level styles
 │
-└── wasm/                    # WebAssembly modules
-    ├── performance/         # Performance-critical operations
-    └── calculations/        # Complex calculations
+└── js/                      # JavaScript assets
 ```
 
 ---
