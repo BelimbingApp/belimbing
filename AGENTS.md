@@ -9,7 +9,7 @@ Belimbing (BLB) is an enterprise-grade **framework** built on Laravel, leveragin
 - **Linting:** Laravel Pint
 - **Dependencies:** Always on the latest available minor/patch within each major version.
 
-BLB is a higher-order framework layered on top of Laravel. It preserves compatibility where practical but will intentionally diverge when necessary to uphold BLB’s architectural principles. BLB extends and adapts Laravel internals accordingly, guided by Ousterhout’s design tenets: deep modules, simple interfaces, and clear boundaries.
+BLB is a higher-order framework layered on top of Laravel. It preserves compatibility where practical but will intentionally diverge when necessary to uphold BLB's architectural principles. BLB extends and adapts Laravel internals accordingly, guided by Ousterhout's design tenets: deep modules, simple interfaces, and clear boundaries.
 
 Think of Laravel as the Level 0 foundation and BLB as a Level 1 framework built atop it — cohesive, opinionated, and extensible. BLB is not a mere Laravel application; it has no qualms about customizing Laravel to align with its architectural principles.
 
@@ -32,32 +32,22 @@ Think of Laravel as the Level 0 foundation and BLB as a Level 1 framework built 
 
 ## 3. Laravel Customization: Embrace When Needed
 
-**BLB is NOT a pure Laravel application.** It's a framework built on Laravel.
-
-### When to Customize Laravel
-
-**BLB will diverge from Laravel defaults when necessary to uphold architectural principles.**
-
-**Example (Already Implemented):** Module-aware migrations
-- Laravel: Migrations in `database/migrations/` only
-- BLB: Auto-discover from module directories, support `--module` flag, seeder registry
-
-### Agent Responsibility
+**BLB is NOT a pure Laravel application.** It's a framework built on Laravel. BLB will diverge from Laravel defaults when necessary to uphold architectural principles.
 
 **When you see opportunities to improve Laravel defaults for framework needs:**
-1. **Flag it immediately** - Discuss with user before implementing
-2. **Consider framework perspective** - How does this help adopters?
-3. **Document the divergence** - Why BLB does it differently
+1. **Flag it immediately** — Discuss with user before implementing
+2. **Consider framework perspective** — How does this help adopters?
+3. **Document the divergence** — Why BLB does it differently
 
 ## 4. Top-Down Planning
 When you are tasked to create a plan:
-- **State the problem’s essence in one sentence.** If you cannot, the design is fuzzy.
+- **State the problem's essence in one sentence.** If you cannot, the design is fuzzy.
 - **Define the public interface first.** What operations exist, what they promise, and what they will not do.
 - **Decompose into major responsibilities.** Identify 2–4 top-level components; defer internal details.
-- **Sketch each component’s contract.** Inputs, outputs, invariants; avoid implementation details.
+- **Sketch each component's contract.** Inputs, outputs, invariants; avoid implementation details.
 - **Define module-level policies.** Document whether the module retries, propagates, or wraps errors.
 - **Identify expected uses and call patterns.** Understanding callers helps you choose interfaces that feel obvious.
-- **Spot potential “complexity hotspots.”** Note inputs that may grow, error cases, or cross-cutting concerns.
+- **Spot potential "complexity hotspots."** Note inputs that may grow, error cases, or cross-cutting concerns.
 - **Stop before coding.** Planning ends at contracts and structure; implementation comes after approval.
 
 ## 5. PHP Coding Conventions
@@ -65,298 +55,89 @@ When you are tasked to create a plan:
 ### PHPDoc
 
 #### Overridden Methods
-- **Always document overridden methods** that change or extend parent behavior
-- Use `{@inheritdoc}` **only** when implementing abstract methods with identical behavior
-- **Explain what changed** compared to the parent implementation
+- **Always document overridden methods** that change or extend parent behavior.
+- Use `{@inheritdoc}` **only** when implementing abstract methods with identical behavior.
+- **Explain what changed** compared to the parent implementation.
 
 ```php
-// ✅ Good - Documents the override's purpose
+// ✅ Documents the override's purpose
 /**
  * Run the pending migrations.
  *
  * Overrides parent to handle module-aware seeding.
  */
 protected function runMigrations(): void
-{
-    // ... implementation
-}
 
-// ✅ Good - Extends parent behavior
-/**
- * Configure the command options by adding --module to the parent definition.
- *
- * {@inheritdoc}
- */
-protected function configure(): void
-{
-    parent::configure();
-    // ... add custom options
-}
-
-// ❌ Avoid - No explanation of what changed
-/**
- * {@inheritdoc}
- */
+// ❌ No explanation of what changed
+/** {@inheritdoc} */
 protected function runMigrations(): void
-{
-    // ... completely different implementation
-}
 ```
-
-**Rationale:** Explicit documentation makes the override's purpose clear and helps maintainers understand what differs from the parent. This aligns with the "Deep Modules" principle of clear interfaces.
 
 #### Annotations Formatting
-- **Use double spaces** in PHPDoc `@param` annotations for alignment
+- **Use double spaces** in PHPDoc `@param` annotations for alignment.
 - Format: `@param  type  $paramName  Description`
-- Double spaces improve readability, especially with multiple parameters of different type lengths
 
 ```php
-// ✅ Good - Double spaces for alignment
 /**
- * Register a seeder in the registry.
- *
  * @param  string  $seederClass  Fully qualified seeder class name
  * @param  string  $moduleName  Module name (e.g., 'Geonames')
- * @param  string  $modulePath  Module path (e.g., 'app/Modules/Core/Geonames')
- * @param  string  $migrationFile  Migration file that registered this seeder
- */
-public static function register(
-    string $seederClass,
-    string $moduleName,
-    string $modulePath,
-    string $migrationFile
-): void {
-    // ... implementation
-}
-
-// ❌ Avoid - Single space (inconsistent alignment)
-/**
- * Extract module path from migration file path.
- *
- * @param string $migrationPath Full path to migration file
- * @return string|null Module path (e.g., 'app/Modules/Core/Geonames')
  */
 ```
-
-**Rationale:** Double spaces provide visual alignment that makes PHPDoc blocks easier to scan, especially with multiple parameters. This follows Laravel's convention and improves code readability.
 
 ### Return Types
-- **Always add return type declarations** to methods wherever possible
-- Explicit return types improve type safety, IDE support, and static analysis
-- Use `: void` for methods that don't return a value, `: int` for exit codes (e.g., command handlers), and specific types for all other methods
-
-```php
-// ✅ Good - Explicit return type
-public function handle(): int
-{
-    return parent::handle();
-}
-
-public function getModules(): array
-{
-    return $this->modules;
-}
-
-public function loadMigrations(): void
-{
-    // ... implementation
-}
-
-// ❌ Avoid - Missing return type
-public function handle()
-{
-    return parent::handle();
-}
-
-public function getModules()
-{
-    return $this->modules;
-}
-```
-
-**Rationale:** Return type declarations provide compile-time type checking, better IDE autocomplete, and make method contracts explicit. This reduces bugs, improves code clarity, and enables better static analysis tooling.
+- **Always add return type declarations** to methods wherever possible.
+- Use `: void` for methods that don't return a value, `: int` for exit codes, and specific types for all other methods.
 
 ### String Literals
-- **Use single quotes (`'`) for string literals** unless interpolation or escape sequences are needed
-- Use double quotes (`"`) only when:
-  - Variable interpolation is required: `"Hello $name"`
-  - Escape sequences are needed: `"\n"`, `"\t"`
-
-```php
-// ✅ Preferred
-$name = 'John';
-$class = 'App\Models\User';
-$sql = 'SELECT * FROM users WHERE active = 1';
-
-// ❌ Avoid (unless interpolation needed)
-$name = "John";
-$class = "App\Models\User";
-
-// ✅ Acceptable (interpolation/escapes)
-$greeting = "Hello $name";
-$message = "Line 1\nLine 2";
-```
+- **Use single quotes (`'`)** unless interpolation or escape sequences are needed.
 
 ### Debug Logging
-- **Use `blb_log_var()` for temporary, workflow-specific debugging** when output should go to a dedicated file under `storage/logs/` instead of `laravel.log`
-- Signature: `blb_log_var(mixed $value, string $file = 'debug.log', array $context = [], string $level = 'info'): void`
-- Prefer a stable, specific filename such as `web-search` or `imports`, and add a short context label like `['label' => 'parallel_response']`
-- **Do not log secrets, tokens, passwords, or personal data** with this helper
-- **Remove temporary `blb_log_var()` calls once the issue is understood**; it is a debugging aid, not permanent instrumentation
-
-```php
-blb_log_var($payload, 'web-search', ['label' => 'parallel_request_payload']);
-blb_log_var($response->body(), 'web-search', ['label' => 'parallel_response'], 'debug');
-```
+- **Use `blb_log_var()` for temporary debugging** — output goes to a dedicated file under `storage/logs/` instead of `laravel.log`.
+- Signature: `blb_log_var(mixed $value, string $file = 'debug.log', array $context = [], string $level = 'info')`
+- **Do not log secrets, tokens, passwords, or personal data.**
+- **Remove temporary `blb_log_var()` calls once the issue is understood.**
 
 ### Avoiding Magic Methods
-- **Prefer direct method calls over magic methods** when alternatives are available
-- Magic methods (`__call`, `__callStatic`) reduce IDE support, type safety, and static analysis capabilities
-- Use direct method calls or explicit interfaces instead of relying on Laravel's magic method system
+- **Prefer direct method calls over magic methods** when alternatives are available.
 
-#### Eloquent Models
-Use `query()` to bypass magic methods for static Eloquent calls:
-
+#### Eloquent Models — use `query()`:
 ```php
-// ✅ Preferred - Direct method call, better IDE support
-// Builder methods
-self::query()->updateOrCreate(
-    ['seeder_class' => $seederClass],
-    ['status' => self::STATUS_PENDING]
-);
-
-// Scope methods
-SeederRegistry::query()->pending()->get();
-SeederRegistry::query()->runnable()->forModules(['Geonames'])->get();
-
-// ❌ Avoid - Magic method, requires @method annotation for IDE support
-self::updateOrCreate(
-    ['seeder_class' => $seederClass],
-    ['status' => self::STATUS_PENDING]
-);
-SeederRegistry::pending()->get();
+self::query()->updateOrCreate([...], [...]);       // ✅
+SeederRegistry::query()->pending()->get();          // ✅
+self::updateOrCreate([...], [...]);                 // ❌ magic __callStatic
 ```
 
-#### Facades
-Prefer dependency injection over Facades when possible. If Facades are necessary, use `Facade::getFacadeRoot()` for direct access:
-
+#### Facades — prefer dependency injection:
 ```php
-// ✅ Preferred - Dependency injection
 public function __construct(
-    private readonly \Illuminate\Cache\Repository $cache
+    private readonly \Illuminate\Cache\Repository $cache  // ✅ DI
 ) {}
-
-public function get(string $key): mixed
-{
-    return $this->cache->get($key);
-}
-
-// ✅ Acceptable - Facade with direct root access (when DI not feasible)
-use Illuminate\Support\Facades\Cache;
-
-$cache = Cache::getFacadeRoot();
-$value = $cache->get($key);
-
-// ❌ Avoid - Magic method via Facade
-$value = Cache::get($key);  // Requires IDE helper or @method annotations
 ```
 
-#### Collections
-Use direct method calls on Collection instances:
-
-```php
-// ✅ Preferred - Direct method call
-$collection = collect([1, 2, 3]);
-$filtered = $collection->filter(fn($item) => $item > 1);
-
-// ❌ Avoid - Magic method (if applicable)
-// Note: Most Collection methods are direct, but be aware of any magic method usage
-```
-
-**Rationale:** Direct method calls provide better IDE autocomplete, "Go to Definition" support, type checking, and static analysis. This improves code clarity, reduces the need for `@method` PHPDoc annotations, and makes refactoring safer. While Laravel's magic methods are convenient, they come at the cost of developer experience and tooling support.
-
-### Reducing Duplication and Maintainability Issues
-- **Extract repeated Livewire glue code into shared concerns or base classes** when the same behavior appears in three or more components.
-- Reuse existing shared primitives before adding new code, especially for:
-  - search-driven pagination resets (`ResetsPaginationOnSearch`)
-  - searchable paginated index pages (`SearchablePaginatedList`)
-  - JSON field decoding in create forms (`DecodesJsonFields`)
-  - inline validated field saves (`SavesValidatedFields`)
-- **Reuse existing authz construction helpers** such as `Actor::forUser()` and existing authz concerns instead of rebuilding actor or capability-check logic inline.
-- **Reuse existing tool metadata concerns** for AI tools instead of repeating near-identical metadata methods across tool classes.
-- **Do not force abstractions for tiny duplication.** Extract only when the shared code improves clarity and meaningfully reduces repetition; otherwise keep logic local and obvious.
-- **When loading PHP config files that return arrays, prefer `require` over `require_once`** if the same file may be loaded in multiple places. `require_once` can return `true` on later loads instead of the config array.
-
-**Rationale:** The recurring code quality issues in this repository have mostly been duplication and weak local abstractions, not lack of cleverness. Reusing the established shared concerns and helpers keeps modules deep, interfaces small, and Sonar/static-analysis noise low without hiding intent.
-
-### Console Commands
-
-**BLB framework commands must use the `blb:` prefix** to distinguish them from Laravel built-ins and third-party packages.
-
-#### Command Naming Convention
-
-```php
-// ✅ Good - BLB-specific command with blb: prefix
-#[AsCommand(name: 'blb:ai:catalog:sync')]
-class AiCatalogSyncCommand extends Command
-{
-    protected $signature = 'blb:ai:catalog:sync
-                            {--force : Force re-download}';
-    // ...
-}
-
-// ✅ Good - Intentional Laravel override (no prefix)
-#[AsCommand(name: 'migrate')]
-class MigrateCommand extends \Illuminate\Database\Console\Migrations\MigrateCommand
-{
-    // Extends Laravel's migrate with module awareness
-}
-
-// ❌ Avoid - No prefix on new BLB command
-#[AsCommand(name: 'ai:catalog:sync')]  // Could clash with packages
-```
-
-**Rules:**
-- **New BLB commands:** Always use `blb:` prefix (e.g., `blb:ai:catalog:sync`, `blb:module:scaffold`)
-- **Laravel overrides:** No prefix when intentionally replacing Laravel built-ins (e.g., `migrate`, `db:seed`)
-- **Discoverability:** Users can run `php artisan list blb` to see all framework commands grouped together
-
-**Rationale:** The `blb:` namespace prevents command name collisions with Laravel core and third-party packages, signals framework ownership, and improves command discoverability. BLB is a framework, not an application — its commands should be clearly identifiable as framework infrastructure.
+### Reducing Duplication
+- **Extract repeated Livewire glue code into shared concerns** when the same behavior appears in three or more components.
+- Reuse existing shared primitives: `ResetsPaginationOnSearch`, `SearchablePaginatedList`, `DecodesJsonFields`, `SavesValidatedFields`.
+- Reuse `Actor::forUser()` and existing authz concerns instead of rebuilding inline.
+- **Do not force abstractions for tiny duplication.** Extract only when it meaningfully reduces repetition.
+- **Prefer `require` over `require_once`** for PHP config files that return arrays.
 
 ## 6. Nested AGENTS.md Files
-This project uses nested AGENTS.md files for specialized guidance. Agents should read the nearest AGENTS.md in the directory tree for context-specific instructions:
 
-| Scope | File | Covers |
-|-------|------|--------|
-| UI / Blade | `resources/core/views/AGENTS.md` | Component-first design, semantic tokens, spacing, typography, accessibility, i18n, performance, component inventory |
-| Database | `app/Base/Database/AGENTS.md` | Module-aware migrations, seeder registry, ID standards, development workflow |
-| Docs | `docs/AGENTS.md` | Documentation directory structure and placement |
+Agents should read the nearest AGENTS.md in the directory tree for context-specific instructions:
 
-**Cursor users:** `.cursor/rules/ui-architect.mdc` is a thin adapter that triggers on `*.blade.php` and references `resources/core/views/AGENTS.md`. The AGENTS.md file is the canonical source; do not duplicate rules in `.cursor/rules/`.
+| Scope | File |
+|-------|------|
+| UI / Blade | `resources/core/views/AGENTS.md` |
+| Database | `app/Base/Database/AGENTS.md` |
+| Authz | `app/Base/Authz/AGENTS.md` |
+| Foundation | `app/Base/Foundation/AGENTS.md` |
+| Docs | `docs/AGENTS.md` |
 
-## 7. Worktree Strategy
+## 7. Playbook-First Implementation Guard
 
-BLB uses git worktrees to isolate parallel workstreams. Active worktrees:
-
-| Worktree | Branch | Path | Purpose |
-|----------|--------|------|---------|
-| Main | `main` | `blb` | Docs, architecture specs, shared contracts |
-| Amp tools | `lara-tools` | `blb-amp-tree` | Lara tool implementations (Phase 1+) |
-| Quality | `sonar-gate` | `blb-quality-tree` | Static analysis & quality gates |
-
-**Rules for worktree-based development:**
-- **Docs stay in main** — Architecture specs, blueprints, and AGENTS.md files live in `main` so all worktrees and collaborators can reference them.
-- **Rebase frequently** — Feature worktrees should rebase onto `main` regularly to pick up shared contract changes (interfaces, authz config, registry wiring).
-- **Merge when stable** — Tool implementations merge back to `main` once they pass tests and authz seeder is synced.
-- **Don't duplicate infrastructure** — Tools depend on existing interfaces (`DigitalWorkerTool`, `DigitalWorkerToolRegistry`, authz config) in `main`. If a tool requires infrastructure changes, land those in `main` first, then rebase the feature branch.
+Before implementing any feature, read `.agents/playbooks/README.md` and route to the matching playbook. The playbook provides the file pack, invariants, and skeletons needed — eliminating broad codebase sweeps. If no playbook matches, implement using the nearest existing pattern and create a new playbook afterward.
 
 ## 8. Module-First Placement Guard
 
 Before creating new framework/module assets, verify placement against `docs/architecture/file-structure.md`.
 If the task touches module config, migrations, or seeders, **stop and verify placement/prefix/registration rules first** before creating or moving files.
-
-**Pre-implementation checklist for new module work:**
-
-- **Config:** Module config in module `Config/` (not root `config/`); register with `mergeConfigFrom(__DIR__.'/Config/<name>.php', '<name>')` in the module service provider; keep key stable (`config('<name>...')`). Use root `config/*.php` only for framework-wide defaults.
-- **Authz:** If modifying any `Config/authz.php`, sync database via `php artisan db:seed --class="App\Base\Authz\Database\Seeders\AuthzRoleCapabilitySeeder"`.
-- **Migrations & seeders:** Migration location/prefix and seeder strategy → `app/Base/Database/AGENTS.md` and `docs/architecture/database.md`.
