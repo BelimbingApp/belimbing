@@ -18,7 +18,19 @@ Meet **Lara** — the built-in system agent. She is the orchestrator: managing y
 
 ## Status
 
-Belimbing is in active development and not yet ready for production. Everyone is welcome to look around, install, and test.
+Belimbing is in active development and not yet ready for production. However, you are welcome to look around, install, and test. The setup script creates sample companies, employees, and reference data so you have something to explore out of the box.
+
+### What's Built
+
+**Agent tool surface** — 21 tools available to AI agents: shell execution, data operations, web capabilities, browser automation, multi-channel messaging, memory and knowledge, delegation , media analysis, and system operations. Every tool is authz-gated — supervisors control exactly which tools each agent can use.
+
+**Workflow engine** — Status lifecycle management with configurable statuses, guarded transitions, full history tracking, and kanban column mapping. Any business module can plug into the workflow system for auditable state machines.
+
+**Layered module architecture** — Three layers: Base (framework infrastructure — AI, Authz, Workflow, Database, Settings, and 10 more), Core (governance modules — Company, User, Employee, AI, Geonames, Address, Workflow), and Business (domain modules — IT). Each layer has clear boundaries and discovery-driven registration.
+
+**Playbook-driven development** — 7 structured playbooks that guide both human developers and AI coding agents through common tasks (new modules, schema changes, features, workflow integration, console commands, inline editing, discovery infrastructure). Convention over configuration, enforced by the playbooks themselves.
+
+**Authorization system** — Capability-based RBAC with delegation constraints, principal types for both humans and agents, policy engine, and middleware. The same system that governs human users governs AI agents — no separate permission model.
 
 ## Getting Started
 
@@ -35,6 +47,8 @@ cd belimbing
 ./scripts/setup.sh local
 ./scripts/start-app.sh
 ```
+
+The `local` argument triggers dev mode: installs dependencies, configures PostgreSQL, and runs `migrate --seed --dev` to populate the database with sample companies, employees, and reference data so you can explore immediately.
 
 ## Documentation
 
