@@ -1,23 +1,24 @@
 # Belimbing (BLB)
 
-An open-source framework where AI is a first-class citizen. Build, customize, and own your operational systems — ERP, CRM, HR, logistics, or any custom process — with a team of AI agents working alongside you.
+An open-source business process framework where AI is a first-class citizen.
 
-Everyone can vibe code today, but it takes an expert to vibe engineer a production-grade business system. Belimbing handles the complexity so you can focus on what your business actually needs — robust, secure, and exactly right.
+## The Workforce Model
 
-## How It Works
+Belimbing treats AI agents as employees. Assign them roles, supervisors, and permissions. They follow your org structure, respect delegation rules, and can never exceed their supervisor's authority. Every action is auditable.
 
-Meet **Lara**, the built-in system agent. She guides setup, explains features, troubleshoots issues, and orchestrates work across your AI team. Connect any LLM provider to activate her.
+Meet **Lara** — the built-in system agent. She is the orchestrator: managing your AI team, guiding setup, and keeping operations running.
 
-AI agents in Belimbing are **employees** — managed through the same workforce model as humans. Assign them supervisors, roles, and permissions. They follow your org structure, respect delegation rules, and can never exceed their supervisor's authority. Every action is auditable.
+## What You Get
 
-Belimbing ships with foundational modules (Company, Employee, User, AI) and a structured, convention-driven codebase designed for AI agents to extend. Use your favorite coding agent, ask Lara to build what you need, or both.
-
-## Why Belimbing
-
-- **Self-hosted, open source forever** — Your code, your data, your infrastructure. No vendor lock-in, no per-seat fees.
+- **Self-hosted, open source** — Your code, your data, your infrastructure. No vendor lock-in, no per-seat fees.
 - **Bring your own model** — OpenAI, Anthropic, Google, Ollama, or any compatible endpoint. Mix providers across agents. Ordered fallback built in.
 - **Real tools, real guardrails** — Agents can run commands, query data, search the web, navigate the UI, and more. Every action gated by the same authorization system that governs human users.
-- **Built on Laravel** — PHP 8.2+, PostgreSQL, Livewire, Tailwind CSS, Alpine.js. Battle-tested stack, massive ecosystem.
+- **Convention-driven codebase** — Foundational modules (Company, Employee, User, AI, Workflow) and a structured architecture designed to be extended — by you, by your coding agent, or both.
+- **Built on Laravel** — PHP 8.5+, PostgreSQL. Battle-tested stack, massive ecosystem.
+
+## Status
+
+Belimbing is in active development and not yet ready for production. Everyone is welcome to look around, install, and test.
 
 ## Getting Started
 
