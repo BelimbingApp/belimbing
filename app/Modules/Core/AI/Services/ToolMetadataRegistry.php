@@ -139,7 +139,7 @@ class ToolMetadataRegistry
                     key: 'ai.tools.browser.enabled',
                     label: 'Enable Browser Tool',
                     type: 'boolean',
-                    help: 'Whether headless browser automation is enabled.',
+                    help: 'Whether browser automation is enabled.',
                 ),
                 new ToolConfigField(
                     key: 'ai.tools.browser.executable_path',

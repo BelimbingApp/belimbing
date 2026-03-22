@@ -60,7 +60,7 @@ return [
         'browser' => [
             'enabled' => env('AI_BROWSER_ENABLED', false),
             'executable_path' => env('AI_BROWSER_PATH', null),
-            'headless' => true,
+            'headless' => env('AI_BROWSER_HEADLESS', env('APP_ENV', 'production') !== 'local'),
             'max_contexts_per_company' => 3,
             'context_idle_timeout_seconds' => 300,
             'evaluate_enabled' => false,

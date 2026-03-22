@@ -26,6 +26,11 @@
         display: none !important;
     }
 
+    /* Inline code — base style for all code outside prose/pre contexts */
+    :where(code:not(pre code)) {
+        @apply font-mono text-[0.8125rem] bg-surface-subtle rounded px-1 py-0.5;
+    }
+
     * {
         border-color: rgb(203 197 187 / 0.5);
     }

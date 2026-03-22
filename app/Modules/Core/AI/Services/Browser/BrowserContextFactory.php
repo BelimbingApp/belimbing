@@ -6,10 +6,11 @@
 namespace App\Modules\Core\AI\Services\Browser;
 
 /**
- * Manages isolated browser context creation for headless browser automation.
+ * Manages isolated browser context creation for browser automation.
  *
  * Handles Playwright CLI resolution and produces unique context identifiers
- * scoped by company and session. Actual Chromium process lifecycle is
+ * scoped by company and session. Supports both headful and headless modes
+ * based on environment configuration. Actual Chromium process lifecycle is
  * delegated to BrowserPoolManager.
  */
 class BrowserContextFactory
@@ -40,11 +41,16 @@ class BrowserContextFactory
     }
 
     /**
-     * Check whether the Playwright CLI is available.
+     * Check whether the browser automation infrastructure is available.
+     *
+     * Requires the tool to be enabled, Playwright installed, and the
+     * Node.js runner script present.
      */
     public function isAvailable(): bool
     {
-        return config('ai.tools.browser.enabled', false) && $this->resolvePlaywrightPath() !== null;
+        return config('ai.tools.browser.enabled', false)
+            && $this->resolvePlaywrightPath() !== null
+            && file_exists(resource_path('core/scripts/browser-runner.mjs'));
     }
 
     /**

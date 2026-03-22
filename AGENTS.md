@@ -5,7 +5,7 @@ Belimbing (BLB) is an enterprise-grade **framework** built on Laravel, leveragin
 - **PHP:** 8.5+
 - **Framework:** Laravel 12
 - **Frontend/Logic:** Livewire 4 + Tailwind CSS 4 + Alpine.js 3
-- **Testing:** Pest PHP 4
+- **Testing:** Pest 4
 - **Linting:** Laravel Pint
 - **Dependencies:** Always on the latest available minor/patch within each major version.
 
