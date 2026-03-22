@@ -4,16 +4,46 @@ description: >
   Use this skill when the user asks to fix SonarQube or Sonar issues, clean up
   static analysis findings, or address code quality warnings from SonarCloud.
   This skill handles triaging issues (false positives vs real problems),
-  applying fixes while preserving behavior, and creating quality improvement PRs.
+  marking false positives on SonarCloud via API, applying code fixes that
+  preserve behavior, and creating quality improvement PRs.
   Activate even if they say "clean up quality issues" or "fix linter warnings"
   without explicitly mentioning "Sonar" or "SonarQube".
 ---
 
 # SonarQube Issue Fixer
 
-You will retrieve open SonarCloud issues for the BLB project, triage them using
-BLB-specific rules, apply fixes that improve code quality without changing behavior,
-validate the changes, and create a PR on the `sonar-gate` branch.
+Retrieve open SonarCloud issues for the BLB project, triage them using
+BLB-specific rules, **mark false positives on SonarCloud via API**, apply code
+fixes to real issues, validate, and create a PR. All in one pass — no user
+prompts needed.
+
+## Authentication
+
+The SonarCloud API requires a **user token** for write operations (marking false positives,
+reviewing hotspots).
+
+**Token location:** `SONAR_TOKEN` in the project `.env` file (gitignored, never committed).
+
+```bash
+# Read the token from .env
+SONAR_TOKEN=$(grep '^SONAR_TOKEN=' /home/kiat/repo/laravel/blb/.env | cut -d= -f2)
+```
+
+If `SONAR_TOKEN` is empty or missing, ask the user to add it to `.env`. Do **not** ask them
+to paste the token into chat.
+
+Use the token as the username in HTTP Basic Auth with an empty password:
+
+```bash
+curl -sS -u "$SONAR_TOKEN:" "https://sonarcloud.io/api/..."
+```
+
+Validate the token before proceeding:
+
+```bash
+curl -sS -u "$SONAR_TOKEN:" "https://sonarcloud.io/api/authentication/validate"
+# Expected: {"valid":true}
+```
 
 ## Step 1: Switch to quality worktree
 
@@ -58,14 +88,16 @@ From each issue record, capture:
 
 Sort by severity descending (BLOCKER first) before proceeding to triage.
 
-## Step 3: Triage issues (fix vs skip)
+## Step 3: Triage issues (fix vs false positive)
 
 Apply this decision framework to every issue **before touching any code**.
+Partition all issues into two buckets: **false positives** (mark on SonarCloud) and **fixable** (apply code changes).
 
-### Always skip (false positives)
+### Always false positive — mark on SonarCloud
 
 - **`php:S4144` on Livewire `updated{Property}()` hooks** — Different event handlers, identical bodies are intentional
 - **`php:S1192` on i18n keys** (`__('some.key')`) — Translation keys are not duplicate string literals
+- **`php:S1192` in Laravel config files** (`config/*.php`) — Each config block (database connection, logging channel) is independent and self-contained. Extracting literals to constants breaks Laravel conventions.
 - **`php:S107` on Laravel constructor DI** (≥8 injected services) — Container-resolved DI is not the same problem as arbitrary parameters
 - **`php:S1142` ("too many returns") on straightforward guard-clause flow** — Early returns are intentional; leave them alone
 - **Complexity flags on `render()`, Eloquent model definitions, or migration `up()`** — Framework-driven, structurally unavoidable
@@ -73,6 +105,12 @@ Apply this decision framework to every issue **before touching any code**.
 
 **BLB-specific gotchas:**
 - `md5()` is often used as a **non-cryptographic shortener** (cache keys / stable identifiers). This is safe when not used for passwords, signatures, auth tokens, integrity checks, or any security boundary.
+
+**BLB-specific hotspot safe patterns:**
+- **`php:S4790` (`sha1`/`md5`) in test files** — Often required to match Laravel's own framework conventions (e.g. email verification URLs use `sha1($user->email)`). Safe when mirroring framework behavior, not implementing security.
+- **`Web:S5725` (missing SRI) on CDN font stylesheets** — SRI is impractical for CDN-served CSS that may update content hashes. Font stylesheets carry no executable code risk.
+- **`php:S5042` (archive expansion) on trusted data sources** — Safe when extracting known data files from official sources (e.g. GeoNames). No user-supplied archives.
+- **`githubactions:S7637` (version tags instead of SHA)** — Safe for well-known, high-profile GitHub Actions (e.g. `actions/checkout`, `shivammathur/setup-php`). Version tags are the standard practice recommended by GitHub.
 
 ### Fix with confidence
 
@@ -98,10 +136,65 @@ For each `SECURITY_HOTSPOT`:
 1. Read the flagged code carefully.
 2. Assess whether the risk is real in BLB's context (self-hosted, no untrusted user-supplied commands, internal API, etc.).
 3. If real: fix it and document *why* in the commit message.
-4. If not real: add a `// NOSONAR — <reason>` comment and mark as "Acknowledged" in SonarCloud.
+4. If not real: mark as safe on SonarCloud via API (Step 4).
 5. Never mark a hotspot as safe without reading the code.
 
-## Step 4: Apply fixes
+## Step 4: Mark false positives on SonarCloud
+
+After triaging (Step 3), immediately mark all false positives on SonarCloud via API
+**before** applying any code fixes.
+
+### Marking issues as false positive
+
+For each triaged false-positive **issue** (CODE_SMELL, BUG, VULNERABILITY):
+
+```bash
+# 1. Add a comment explaining why it's a false positive
+curl -sS -u "$SONAR_TOKEN:" -X POST "https://sonarcloud.io/api/issues/add_comment" \
+  --data-urlencode "issue=$ISSUE_KEY" \
+  --data-urlencode "text=$REASON"
+
+# 2. Transition to false positive
+curl -sS -u "$SONAR_TOKEN:" -X POST "https://sonarcloud.io/api/issues/do_transition" \
+  --data-urlencode "issue=$ISSUE_KEY" \
+  --data-urlencode "transition=falsepositive"
+```
+
+### Marking hotspots as safe
+
+For each triaged safe **security hotspot**:
+
+```bash
+curl -sS -u "$SONAR_TOKEN:" -X POST "https://sonarcloud.io/api/hotspots/change_status" \
+  --data-urlencode "hotspot=$HOTSPOT_KEY" \
+  --data-urlencode "status=REVIEWED" \
+  --data-urlencode "resolution=SAFE" \
+  --data-urlencode "comment=$REASON"
+```
+
+### Comment guidelines
+
+Each comment must explain **why** the issue is a false positive in BLB's context. Examples:
+
+| Rule | Comment template |
+|------|-----------------|
+| `php:S1142` | "False positive: This method uses straightforward guard-clause flow with early returns. Each return handles a distinct precondition check. This is an intentional, readable pattern — not excessive complexity." |
+| `php:S1192` (config) | "False positive: This is a standard Laravel config file. Each block is independent and self-contained — extracting the literal to a constant would break Laravel conventions." |
+| `php:S4790` (test sha1) | "Safe: sha1() is used here to construct Laravel's email verification URL, matching the framework's own implementation. Not a security context." |
+| `Web:S5725` (SRI) | "Safe: Font stylesheet from external CDN. SRI is impractical for CDN-served CSS. No executable code risk." |
+| `php:S5042` (zip) | "Safe: Extracts trusted archive from official data source. No user-supplied archives are processed." |
+| `githubactions:S7637` | "Safe: Well-known GitHub Action referenced by major version tag, which is standard practice." |
+
+### Batch processing
+
+Process issues in batches by rule. For each batch:
+1. Verify the first issue's code to confirm the pattern
+2. Apply the same comment and transition to all matching issues
+3. Check each API response — skip issues that return errors (already resolved, not found)
+
+## Step 5: Apply code fixes
+
+After marking false positives, apply code fixes to the remaining fixable issues.
 
 ### Boy-Scout Rule
 
@@ -134,7 +227,7 @@ skip the issue and note it for human review.
 
 If you cannot satisfy all four, **skip the issue** and note it for a human review.
 
-## Step 5: Validate
+## Step 6: Validate
 
 After applying fixes, run validation in this exact order:
 
@@ -151,9 +244,9 @@ npm run build
 
 If any step fails, **revert the specific fix that caused the failure** and note the issue.
 
-Do **not** proceed to Step 6 until all validation passes.
+Do **not** proceed to Step 7 until all validation passes.
 
-## Step 6: Commit and create PR
+## Step 7: Commit and create PR
 
 ```bash
 # Ensure you are on the quality branch
@@ -179,9 +272,11 @@ EOF
 )"
 ```
 
-## Step 7: Report results
+## Step 8: Report results
 
-After completing all steps, provide a summary with:
+After completing all steps, provide a summary table with:
+- **Marked as false positive:** count by rule, with comment reason used
+- **Marked as safe (hotspots):** count by rule, with comment reason used
 - **Issues fixed:** rule, file, brief description of fix
 - **Issues skipped:** rule, file, reason skipped
 - **Issues requiring human review:** rule, file, why you couldn't fix it (behavior change needed, architectural question, etc.)
