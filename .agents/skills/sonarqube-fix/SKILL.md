@@ -1,5 +1,5 @@
 ---
-name: SonarQube-fix
+name: sonarqube-fix
 description: >
   Use this skill when the user asks to fix SonarQube or Sonar issues, clean up
   static analysis findings, or address code quality warnings from SonarCloud.
