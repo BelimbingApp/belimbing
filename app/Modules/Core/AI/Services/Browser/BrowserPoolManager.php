@@ -6,11 +6,12 @@
 namespace App\Modules\Core\AI\Services\Browser;
 
 /**
- * Manages a pool of headless browser contexts with per-company concurrency limits.
+ * Manages a pool of browser contexts with per-company concurrency limits.
  *
- * Each agent session gets an isolated browser context. Currently tracks contexts
- * in-memory; future versions will persist context state for cross-process
- * coordination.
+ * Each agent session gets an isolated browser context. Supports both headful
+ * (visible window) and headless (no GUI) modes based on environment config.
+ * Currently tracks contexts in-memory; future versions will persist context
+ * state for cross-process coordination.
  */
 class BrowserPoolManager
 {

@@ -1,8 +1,11 @@
 <?php
+
+use App\Modules\Core\AI\Livewire\Tools\Workspace;
+
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-/** @var \App\Modules\Core\AI\Livewire\Tools\Workspace $this */
+/** @var Workspace $this */
 ?>
 <div>
     {{-- Breadcrumb navigation --}}
@@ -57,7 +60,7 @@
                 {{-- About this tool --}}
                 <x-ui.card>
                     <h3 class="text-base font-semibold text-ink mb-2">{{ __('About this Tool') }}</h3>
-                    <p class="text-sm text-muted leading-relaxed">{{ $metadata->explanation }}</p>
+                    <p class="text-sm text-muted leading-relaxed">{!! $metadata->explanation !!}</p>
                 </x-ui.card>
 
                 {{-- Try It Console --}}

@@ -16,21 +16,29 @@ use App\Base\AI\Tools\ToolResult;
 use App\Base\AI\Tools\ToolUnavailableException;
 use App\Modules\Core\AI\Services\Browser\BrowserPoolManager;
 use App\Modules\Core\AI\Services\Browser\BrowserSsrfGuard;
+use App\Modules\Core\AI\Services\Browser\PlaywrightRunner;
+use RuntimeException;
 
 /**
- * Headless browser automation tool for Agents.
+ * Browser automation tool for Agents — headful or headless.
  *
- * Provides enterprise-grade browser automation via server-side headless
- * Chromium managed through a pool of isolated browser contexts. Supports
- * navigation, page snapshots, screenshots, interaction, tab management,
- * JS evaluation (opt-in), PDF export, cookie management, and wait conditions.
+ * Provides enterprise-grade browser automation via Chromium driven by
+ * a Playwright Node.js subprocess. Supports navigation, page snapshots,
+ * screenshots, interaction, tab management, JS evaluation (opt-in), PDF
+ * export, cookie management, and wait conditions.
  *
- * Each action is dispatched through a single deep tool interface. Browser
- * contexts are company-scoped and session-isolated via BrowserPoolManager.
- * All navigation is SSRF-guarded.
+ * Runs in headful mode (visible browser window) in local environments and
+ * headless mode (no GUI) in production/staging. The mode is determined by
+ * APP_ENV and can be overridden via AI_BROWSER_HEADLESS.
  *
- * Note: Currently returns stub responses. Full Playwright CLI subprocess
- * integration will be implemented once the browser infrastructure is deployed.
+ * Each action is dispatched through a single deep tool interface. PHP
+ * handles argument validation, SSRF guarding, and config gating; the
+ * actual browser work is delegated to PlaywrightRunner which launches
+ * a per-command Chromium process.
+ *
+ * Session-dependent actions (act, tabs, open, close) require a persistent
+ * browser process and are not yet supported — the runner returns a clear
+ * session_required error for these.
  *
  * Gated by `ai.tool_browser.execute` authz capability.
  * The `evaluate` action additionally requires `ai.tool_browser_evaluate.execute`.
@@ -85,9 +93,17 @@ class BrowserTool extends AbstractActionTool
         'clear',
     ];
 
+    /**
+     * Per-call headless override, set by handleAction() from the input
+     * arguments and injected into executeRunner() calls. Null means
+     * "use global config" (no override). Reset after each action dispatch.
+     */
+    private ?bool $headlessOverride = null;
+
     public function __construct(
         private readonly BrowserPoolManager $poolManager,
         private readonly BrowserSsrfGuard $ssrfGuard,
+        private readonly PlaywrightRunner $runner,
     ) {}
 
     public function name(): string
@@ -97,7 +113,8 @@ class BrowserTool extends AbstractActionTool
 
     public function description(): string
     {
-        return 'Automate a headless browser for web scraping, form filling, and page inspection. '
+        return 'Automate a browser for web scraping, form filling, and page inspection. '
+            .'Runs headful (visible window) in local environments or headless (no GUI) in production. '
             .'Supports navigation, page snapshots (structured text), screenshots, interaction '
             .'(click, type, select, fill), tab management, PDF export, cookie management, '
             .'and waiting for page state. Each agent session gets an isolated browser context.';
@@ -122,19 +139,29 @@ class BrowserTool extends AbstractActionTool
     {
         return [
             'displayName' => 'Browser',
-            'summary' => 'Automate headless browser actions for web scraping and RPA.',
-            'explanation' => 'Server-side headless Chromium automation for navigating, capturing snapshots, '
-                .'clicking, typing, and extracting content from external websites. '
-                .'Enterprise-grade RPA capability. This tool can interact with external websites '
-                .'on behalf of the business.',
+            'summary' => 'Automate browser actions for web scraping, RPA, and human-AI collaboration.',
+            'explanation' => 'Chromium-based browser automation with two operating modes. '
+                .'<strong>Headful</strong> mode opens a visible browser window — the human can watch the AI '
+                .'navigate, click, and fill forms in real time, enabling collaborative workflows '
+                .'where the AI drives and the human supervises or intervenes. '
+                .'<strong>Headless</strong> mode runs without a GUI, optimized for server-side scraping and RPA '
+                .'where no visual feedback is needed. '
+                .'The mode is determined automatically by environment: '
+                .'<code>APP_ENV=local</code> defaults to headful for development and collaboration; '
+                .'production and staging default to headless. '
+                .'Set <code>AI_BROWSER_HEADLESS=true</code> or <code>false</code> to override.',
             'setupRequirements' => [
-                'Headless browser configured',
+                'Chromium browser available',
                 'Browser pool available',
             ],
             'testExamples' => [
                 [
-                    'label' => 'Navigate to URL',
+                    'label' => 'Headful — Navigate to URL',
                     'input' => ['action' => 'navigate', 'url' => 'https://example.com'],
+                ],
+                [
+                    'label' => 'Headless — Snapshot',
+                    'input' => ['action' => 'snapshot', 'headless' => true],
                 ],
             ],
             'healthChecks' => [
@@ -207,25 +234,41 @@ class BrowserTool extends AbstractActionTool
             );
         }
 
-        return match ($action) {
-            'navigate' => $this->handleNavigation('navigate', 'navigated', $arguments),
-            'snapshot' => $this->handleSnapshot($arguments),
-            'screenshot' => $this->handleScreenshot($arguments),
-            'act' => $this->handleAct($arguments),
-            'tabs' => $this->handleTabs(),
-            'open' => $this->handleNavigation('open', 'opened', $arguments),
-            'close' => $this->handleClose($arguments),
-            'evaluate' => $this->handleEvaluate($arguments),
-            'pdf' => $this->handlePdf(),
-            'cookies' => $this->handleCookies($arguments),
-            'wait' => $this->handleWait($arguments),
-        };
+        // Capture per-call headless override from input arguments.
+        // This is consumed by executeRunner() and cleared after dispatch
+        // so it doesn't bleed into subsequent calls on the same instance.
+        $this->headlessOverride = array_key_exists('headless', $arguments)
+            ? (bool) $arguments['headless']
+            : null;
+
+        try {
+            return match ($action) {
+                'navigate' => $this->handleNavigate($arguments),
+                'snapshot' => $this->handleSnapshot($arguments),
+                'screenshot' => $this->handleScreenshot($arguments),
+                'act' => $this->handleAct($arguments),
+                'tabs' => $this->handleTabs(),
+                'open' => $this->handleOpen($arguments),
+                'close' => $this->handleClose($arguments),
+                'evaluate' => $this->handleEvaluate($arguments),
+                'pdf' => $this->handlePdf($arguments),
+                'cookies' => $this->handleCookies($arguments),
+                'wait' => $this->handleWait($arguments),
+            };
+        } finally {
+            $this->headlessOverride = null;
+        }
     }
 
     /**
+     * Handle the "navigate" action.
+     *
+     * Validates the URL against the SSRF guard, then delegates to the
+     * Playwright runner to perform actual navigation.
+     *
      * @param  array<string, mixed>  $arguments
      */
-    private function handleNavigation(string $action, string $status, array $arguments): ToolResult
+    private function handleNavigate(array $arguments): ToolResult
     {
         $url = $this->requireString($arguments, 'url');
         $ssrfCheck = $this->ssrfGuard->validate($url);
@@ -234,30 +277,35 @@ class BrowserTool extends AbstractActionTool
             return ToolResult::error($ssrfCheck, 'ssrf_blocked');
         }
 
-        $payload = [
-            'action' => $action,
-            'url' => $url,
-            'status' => $status,
-            'message' => $action === 'navigate'
-                ? 'Navigation completed (stub). Playwright integration pending.'
-                : 'New tab opened (stub). Playwright integration pending.',
-        ];
+        return $this->executeRunner('navigate', ['url' => $url]);
+    }
 
-        if ($action === 'navigate') {
-            $payload['title'] = '';
+    /**
+     * Handle the "open" action (new tab).
+     *
+     * Validates the URL against the SSRF guard, then delegates to the
+     * Playwright runner. Currently returns session_required since tab
+     * management needs a persistent browser process.
+     *
+     * @param  array<string, mixed>  $arguments
+     */
+    private function handleOpen(array $arguments): ToolResult
+    {
+        $url = $this->requireString($arguments, 'url');
+        $ssrfCheck = $this->ssrfGuard->validate($url);
+
+        if ($ssrfCheck !== true) {
+            return ToolResult::error($ssrfCheck, 'ssrf_blocked');
         }
 
-        if ($action === 'open') {
-            $payload['tab_id'] = '';
-        }
-
-        return ToolResult::success(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        return $this->executeRunner('open', ['url' => $url]);
     }
 
     /**
      * Handle the "snapshot" action.
      *
      * Returns a structured text representation of the page for LLM consumption.
+     * Delegates to the Playwright runner for actual page content extraction.
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
@@ -265,15 +313,11 @@ class BrowserTool extends AbstractActionTool
     {
         $format = $this->requireEnum($arguments, 'format', ['ai', 'aria'], 'ai');
 
-        return ToolResult::success(json_encode([
-            'action' => 'snapshot',
+        return $this->executeRunner('snapshot', [
             'format' => $format,
             'interactive' => $this->optionalBool($arguments, 'interactive', true),
             'compact' => $this->optionalBool($arguments, 'compact'),
-            'content' => '',
-            'status' => 'captured',
-            'message' => 'Snapshot captured (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        ]);
     }
 
     /**
@@ -285,67 +329,59 @@ class BrowserTool extends AbstractActionTool
      */
     private function handleScreenshot(array $arguments): ToolResult
     {
-        return ToolResult::success(json_encode([
-            'action' => 'screenshot',
+        return $this->executeRunner('screenshot', [
             'full_page' => $this->optionalBool($arguments, 'full_page'),
             'ref' => $this->optionalString($arguments, 'ref'),
             'selector' => $this->optionalString($arguments, 'selector'),
-            'image_base64' => '',
-            'status' => 'captured',
-            'message' => 'Screenshot captured (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        ]);
     }
 
     /**
      * Handle the "act" action.
      *
-     * Performs an interaction on a page element using snapshot refs.
+     * Validates interaction parameters in PHP, then delegates to the runner.
+     * Currently returns session_required since element interaction needs
+     * a persistent browser session with prior page state.
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
     private function handleAct(array $arguments): ToolResult
     {
-        return ToolResult::success(json_encode([
-            'action' => 'act',
-            'kind' => $this->requireEnum($arguments, 'kind', self::ACT_KINDS),
-            'ref' => $this->requireString($arguments, 'ref'),
+        $kind = $this->requireEnum($arguments, 'kind', self::ACT_KINDS);
+        $ref = $this->requireString($arguments, 'ref');
+
+        return $this->executeRunner('act', [
+            'kind' => $kind,
+            'ref' => $ref,
             'text' => $this->optionalString($arguments, 'text'),
             'submit' => $this->optionalBool($arguments, 'submit'),
-            'status' => 'performed',
-            'message' => 'Action performed (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        ]);
     }
 
     /**
      * Handle the "tabs" action.
      *
-     * Lists all open browser tabs.
+     * Lists all open browser tabs. Currently returns session_required
+     * since tab management needs a persistent browser process.
      */
     private function handleTabs(): ToolResult
     {
-        return ToolResult::success(json_encode([
-            'action' => 'tabs',
-            'tabs' => [],
-            'status' => 'listed',
-            'message' => 'Tabs listed (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        return $this->executeRunner('tabs');
     }
 
     /**
      * Handle the "close" action.
      *
-     * Closes a browser tab by tab ID.
+     * Closes a browser tab by tab ID. Currently returns session_required
+     * since tab management needs a persistent browser process.
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
     private function handleClose(array $arguments): ToolResult
     {
-        return ToolResult::success(json_encode([
-            'action' => 'close',
-            'tab_id' => $this->requireString($arguments, 'tab_id'),
-            'status' => 'closed',
-            'message' => 'Tab closed (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $tabId = $this->requireString($arguments, 'tab_id');
+
+        return $this->executeRunner('close', ['tab_id' => $tabId]);
     }
 
     /**
@@ -374,51 +410,36 @@ class BrowserTool extends AbstractActionTool
             );
         }
 
-        return ToolResult::success(json_encode([
-            'action' => 'evaluate',
-            'script' => $this->requireString($arguments, 'script'),
-            'result' => null,
-            'status' => 'evaluated',
-            'message' => 'Script evaluated (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $script = $this->requireString($arguments, 'script');
+
+        return $this->executeRunner('evaluate', ['script' => $script]);
     }
 
     /**
      * Handle the "pdf" action.
      *
      * Exports the current page as a PDF document.
+     *
+     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
-    private function handlePdf(): ToolResult
+    private function handlePdf(array $arguments): ToolResult
     {
-        return ToolResult::success(json_encode([
-            'action' => 'pdf',
-            'path' => '',
-            'status' => 'exported',
-            'message' => 'PDF exported (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        return $this->executeRunner('pdf', [
+            'url' => $this->optionalString($arguments, 'url'),
+        ]);
     }
 
     /**
      * Handle the "cookies" action.
      *
-     * Manages cookies for the current browser context.
+     * Validates cookie parameters in PHP, then delegates to the runner.
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
     private function handleCookies(array $arguments): ToolResult
     {
         $cookieAction = $this->requireEnum($arguments, 'cookie_action', self::COOKIE_ACTIONS);
-        $payload = [
-            'action' => 'cookies',
-            'cookie_action' => $cookieAction,
-            'cookie_name' => $this->optionalString($arguments, 'cookie_name'),
-        ];
-
-        if ($cookieAction === 'get') {
-            $payload['cookies'] = [];
-            $payload['status'] = 'retrieved';
-            $payload['message'] = 'Cookies retrieved (stub). Playwright integration pending.';
-        }
+        $runnerArgs = ['cookie_action' => $cookieAction];
 
         if ($cookieAction === 'set') {
             $cookieValue = $arguments['cookie_value'] ?? '';
@@ -427,19 +448,14 @@ class BrowserTool extends AbstractActionTool
                 throw new ToolArgumentException('"cookie_value" is required to set a cookie.');
             }
 
-            $payload['cookie_name'] = $this->requireString($arguments, 'cookie_name');
-            $payload['cookie_value'] = $cookieValue;
-            $payload['cookie_url'] = $this->optionalString($arguments, 'cookie_url');
-            $payload['status'] = 'set';
-            $payload['message'] = 'Cookie set (stub). Playwright integration pending.';
+            $runnerArgs['cookie_name'] = $this->requireString($arguments, 'cookie_name');
+            $runnerArgs['cookie_value'] = $cookieValue;
+            $runnerArgs['cookie_url'] = $this->optionalString($arguments, 'cookie_url');
+        } else {
+            $runnerArgs['cookie_name'] = $this->optionalString($arguments, 'cookie_name');
         }
 
-        if ($cookieAction === 'clear') {
-            $payload['status'] = 'cleared';
-            $payload['message'] = 'Cookies cleared (stub). Playwright integration pending.';
-        }
-
-        return ToolResult::success(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        return $this->executeRunner('cookies', $runnerArgs);
     }
 
     /**
@@ -461,14 +477,65 @@ class BrowserTool extends AbstractActionTool
             );
         }
 
-        return ToolResult::success(json_encode([
-            'action' => 'wait',
+        return $this->executeRunner('wait', [
             'text' => $text,
             'selector' => $selector,
             'url' => $url,
             'timeout_ms' => $this->optionalInt($arguments, 'timeout_ms', 5000, 100),
-            'status' => 'waited',
-            'message' => 'Wait completed (stub). Playwright integration pending.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        ]);
+    }
+
+    // ─── Runner integration ─────────────────────────────────────────
+
+    /**
+     * Execute a browser action via the Playwright runner and convert the result.
+     *
+     * Catches RuntimeException from the runner (process failures, timeouts,
+     * invalid output) and converts them to ToolResult errors.
+     *
+     * @param  string  $action  The browser action name
+     * @param  array<string, mixed>  $arguments  Action-specific arguments (without 'action')
+     */
+    private function executeRunner(string $action, array $arguments = []): ToolResult
+    {
+        // Forward per-call headless override to the runner, which will
+        // use it instead of the global config value.
+        if ($this->headlessOverride !== null) {
+            $arguments['headless'] = $this->headlessOverride;
+        }
+
+        try {
+            $result = $this->runner->execute($action, $arguments);
+        } catch (RuntimeException $e) {
+            return ToolResult::error(
+                'Browser action failed: '.$e->getMessage(),
+                'browser_process_error',
+            );
+        }
+
+        return $this->runnerResultToToolResult($result);
+    }
+
+    /**
+     * Convert a runner result array to a ToolResult.
+     *
+     * The runner returns {ok: bool, action: string, ...}. On success, the
+     * full result is JSON-encoded for the LLM. On failure, the error message
+     * is extracted and returned as a ToolResult error.
+     *
+     * @param  array{ok: bool, action: string, error?: string, message?: string}  $result
+     */
+    private function runnerResultToToolResult(array $result): ToolResult
+    {
+        if ($result['ok']) {
+            return ToolResult::success(
+                json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+            );
+        }
+
+        $errorCode = $result['error'] ?? 'browser_error';
+        $message = $result['message'] ?? 'Browser action failed.';
+
+        return ToolResult::error($message, $errorCode);
     }
 }
