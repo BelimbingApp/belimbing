@@ -16,6 +16,8 @@
 
 set -euo pipefail
 
+readonly UNKNOWN_VALUE="unknown"
+
 # Get script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -466,7 +468,7 @@ cleanup_volumes() {
         echo "$conflicting_volumes" | while read -r volume; do
             if [[ -n "$volume" ]]; then
                 local created
-                created=$(docker volume inspect "$volume" --format '{{.CreatedAt}}' 2>/dev/null | cut -d'T' -f1 || echo "unknown")
+                created=$(docker volume inspect "$volume" --format '{{.CreatedAt}}' 2>/dev/null | cut -d'T' -f1 || echo "$UNKNOWN_VALUE")
                 echo -e "  • ${CYAN}${volume}${NC} (created: ${created})"
             fi
         done
@@ -617,11 +619,11 @@ main() {
     print_subsection_header "Docker Check"
     if check_docker; then
         local docker_version compose_version docker_type
-        docker_version=$(docker --version 2>/dev/null | head -1 || echo "unknown")
+        docker_version=$(docker --version 2>/dev/null | head -1 || echo "$UNKNOWN_VALUE")
         if docker compose version >/dev/null 2>&1; then
-            compose_version=$(docker compose version 2>/dev/null | head -1 || echo "unknown")
+            compose_version=$(docker compose version 2>/dev/null | head -1 || echo "$UNKNOWN_VALUE")
         else
-            compose_version=$(docker-compose --version 2>/dev/null | head -1 || echo "unknown")
+            compose_version=$(docker-compose --version 2>/dev/null | head -1 || echo "$UNKNOWN_VALUE")
         fi
 
         # Detect Docker type

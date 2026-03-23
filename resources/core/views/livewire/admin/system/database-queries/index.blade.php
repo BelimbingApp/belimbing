@@ -90,7 +90,7 @@
                                         }
                                     "
                                 >{{ $view->updated_at->format('Y-m-d H:i') }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm" onclick="event.stopPropagation()">
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
                                     <div class="flex items-center gap-2">
                                         <button
                                             wire:click="duplicateView({{ $view->id }})"

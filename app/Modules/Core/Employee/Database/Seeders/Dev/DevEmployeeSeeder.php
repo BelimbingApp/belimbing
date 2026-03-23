@@ -6,6 +6,7 @@
 namespace App\Modules\Core\Employee\Database\Seeders\Dev;
 
 use App\Base\Database\Seeders\DevSeeder;
+use App\Modules\Core\Company\Database\Seeders\Dev\DevDepartmentSeeder;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\Department;
 use App\Modules\Core\Employee\Models\Employee;
@@ -13,7 +14,7 @@ use App\Modules\Core\Employee\Models\Employee;
 class DevEmployeeSeeder extends DevSeeder
 {
     protected array $dependencies = [
-        \App\Modules\Core\Company\Database\Seeders\Dev\DevDepartmentSeeder::class,
+        DevDepartmentSeeder::class,
     ];
 
     /**

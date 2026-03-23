@@ -13,6 +13,8 @@
 
 set -euo pipefail
 
+readonly UNKNOWN_VERSION="unknown"
+
 # Get script directory and project root
 SETUP_STEPS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "$SETUP_STEPS_DIR/.." && pwd)"
@@ -102,7 +104,7 @@ install_bun() {
         # Add to PATH for this session
         export PATH="$HOME/.bun/bin:$PATH"
         local bun_version
-        bun_version=$("$HOME/.bun/bin/bun" --version 2>/dev/null || echo "unknown")
+        bun_version=$("$HOME/.bun/bin/bun" --version 2>/dev/null || echo "$UNKNOWN_VERSION")
         echo -e "${GREEN}✓${NC} Bun version: $bun_version"
 
         # Check if Bun is in PATH, if not add it permanently
@@ -116,7 +118,7 @@ install_bun() {
     # Check if Bun is already in PATH
     if command_exists bun; then
         local bun_version
-        bun_version=$(bun --version 2>/dev/null || echo "unknown")
+        bun_version=$(bun --version 2>/dev/null || echo "$UNKNOWN_VERSION")
         echo -e "${GREEN}✓${NC} Bun already installed: $bun_version"
         return 0
     fi
@@ -162,7 +164,7 @@ install_bun() {
     # Verify installation - check both PATH and default location
     if command_exists bun; then
         local bun_version
-        bun_version=$(bun --version 2>/dev/null || echo "unknown")
+        bun_version=$(bun --version 2>/dev/null || echo "$UNKNOWN_VERSION")
         echo ""
         echo -e "${GREEN}✓${NC} Bun installed successfully: $bun_version"
         return 0
@@ -170,7 +172,7 @@ install_bun() {
         # Bun installed but not in PATH - add it permanently
         export PATH="$HOME/.bun/bin:$PATH"
         local bun_version
-        bun_version=$("$HOME/.bun/bin/bun" --version 2>/dev/null || echo "unknown")
+        bun_version=$("$HOME/.bun/bin/bun" --version 2>/dev/null || echo "$UNKNOWN_VERSION")
         echo ""
         echo -e "${GREEN}✓${NC} Bun installed successfully: $bun_version"
         echo -e "${CYAN}Adding Bun to PATH permanently...${NC}"
@@ -186,11 +188,11 @@ install_bun() {
 # Get Bun version (centralized logic)
 get_bun_version() {
     if command_exists bun; then
-        bun --version 2>/dev/null || echo "unknown"
+        bun --version 2>/dev/null || echo "$UNKNOWN_VERSION"
     elif [[ -f "$HOME/.bun/bin/bun" ]]; then
-        "$HOME/.bun/bin/bun" --version 2>/dev/null || echo "unknown"
+        "$HOME/.bun/bin/bun" --version 2>/dev/null || echo "$UNKNOWN_VERSION"
     else
-        echo "unknown"
+        echo "$UNKNOWN_VERSION"
     fi
     return 0
 }
@@ -219,8 +221,8 @@ check_node_as_fallback() {
 # Handle successful Node.js setup/installation
 handle_node_success() {
     local node_version npm_version
-    node_version=$(node --version 2>/dev/null || echo "unknown")
-    npm_version=$(npm --version 2>/dev/null || echo "unknown")
+    node_version=$(node --version 2>/dev/null || echo "$UNKNOWN_VERSION")
+    npm_version=$(npm --version 2>/dev/null || echo "$UNKNOWN_VERSION")
     save_to_setup_state "JS_RUNTIME" "node"
     save_to_setup_state "NODE_VERSION" "$node_version"
     save_to_setup_state "NPM_VERSION" "$npm_version"
@@ -299,8 +301,8 @@ install_nodejs() {
     # Verify installation
     if command_exists node && command_exists npm; then
         local node_version npm_version
-        node_version=$(node --version 2>/dev/null || echo "unknown")
-        npm_version=$(npm --version 2>/dev/null || echo "unknown")
+        node_version=$(node --version 2>/dev/null || echo "$UNKNOWN_VERSION")
+        npm_version=$(npm --version 2>/dev/null || echo "$UNKNOWN_VERSION")
         echo ""
         echo -e "${GREEN}✓${NC} Node.js installed successfully: $node_version"
         echo -e "${GREEN}✓${NC} npm installed successfully: $npm_version"
@@ -350,7 +352,7 @@ main() {
 
     if [[ "$has_node" = true ]]; then
         local node_version
-        node_version=$(node --version 2>/dev/null || echo "unknown")
+        node_version=$(node --version 2>/dev/null || echo "$UNKNOWN_VERSION")
         echo -e "${GREEN}✓${NC} Node.js already installed: $node_version"
         echo ""
         echo -e "${YELLOW}ℹ${NC} Note: Bun is the preferred runtime for this project (offers better performance and a built-in package manager)"
@@ -388,7 +390,7 @@ main() {
             1|bun|Bun)
                 if [[ "$has_node" = true ]]; then
                     local node_version
-                    node_version=$(node --version 2>/dev/null || echo "unknown")
+                    node_version=$(node --version 2>/dev/null || echo "$UNKNOWN_VERSION")
                     echo -e "${YELLOW}ℹ${NC} Node.js $node_version detected"
                     echo -e "${CYAN}ℹ${NC} Bun will be used instead of Node.js for this project"
                     echo -e "${CYAN}ℹ${NC} Node.js will remain installed but won't be used by Belimbing"
@@ -440,7 +442,7 @@ main() {
         # Non-interactive mode - default to Bun
         if [[ "$has_node" = true ]]; then
             local node_version
-            node_version=$(node --version 2>/dev/null || echo "unknown")
+            node_version=$(node --version 2>/dev/null || echo "$UNKNOWN_VERSION")
             echo -e "${YELLOW}ℹ${NC} Node.js $node_version detected"
             echo -e "${CYAN}ℹ${NC} Installing Bun (will replace Node.js for this project)...${NC}"
         else

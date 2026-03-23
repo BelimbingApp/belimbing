@@ -293,8 +293,6 @@ class LlmClient
             ];
 
             $finishReason = '__done__';
-
-            return;
         }
     }
 
