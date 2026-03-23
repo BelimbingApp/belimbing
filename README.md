@@ -66,6 +66,8 @@ cd belimbing
 
 All contributors must agree to the [CLA](./CLA.md).
 
+For the complete workflow and remote strategy, see [docs/guide/contributing.md](./docs/guide/contributing.md).
+
 ## License
 
 [GNU Affero General Public License v3.0 (AGPL-3.0)](./LICENSE) — see [LICENSE](./LICENSE) for license terms and [NOTICE](./NOTICE) for third-party attributions.
