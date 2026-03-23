@@ -40,6 +40,7 @@ readonly BACKEND_DOMAIN_KEY="BACKEND_DOMAIN"
 # Prompt user for custom domains with defaults
 # Returns: frontend_domain|backend_domain (only this goes to stdout)
 # Defaults: from .env ($FRONTEND_DOMAIN_KEY, $BACKEND_DOMAIN_KEY) if set, else from get_default_domains.
+# When both domains are already set in .env, returns them without prompting.
 prompt_for_domains() {
     local default_domains
     default_domains=$(get_default_domains "$APP_ENV")
@@ -51,6 +52,16 @@ prompt_for_domains() {
     # Prefer .env / setup state if present
     default_frontend=$(get_env_var "$FRONTEND_DOMAIN_KEY" "$default_frontend")
     default_backend=$(get_env_var "$BACKEND_DOMAIN_KEY" "$default_backend")
+
+    # If both domains are already configured (e.g., by 05-environment.sh), reuse silently.
+    local existing_frontend existing_backend
+    existing_frontend=$(get_env_var "$FRONTEND_DOMAIN_KEY" "")
+    existing_backend=$(get_env_var "$BACKEND_DOMAIN_KEY" "")
+    if [[ -n "$existing_frontend" ]] && [[ -n "$existing_backend" ]]; then
+        echo -e "${GREEN}✓${NC} Using domains from .env: ${CYAN}${existing_frontend}${NC} / ${CYAN}${existing_backend}${NC}" >&2
+        echo "${existing_frontend}|${existing_backend}"
+        return 0
+    fi
 
     if [[ -t 0 ]]; then
         # All informational output goes to stderr so only the result goes to stdout
@@ -272,11 +283,11 @@ main() {
         fi
 
         if [[ "$should_prompt" = true ]]; then
-            echo -e "${CYAN}ℹ${NC} You previously chose: ${YELLOW}$PROXY_TYPE${NC} as your reverse proxy"
+            echo -e "${CYAN}ℹ${NC} ${YELLOW}$PROXY_TYPE${NC} is the reverse proxy"
             echo ""
 
             if [[ -t 0 ]]; then
-                if ask_yes_no "Use the same choice again?" "y"; then
+                if ask_yes_no "Use the same choice?" "y"; then
                     echo -e "${GREEN}✓${NC} Keeping your choice: ${CYAN}$PROXY_TYPE${NC}"
 
                     # Even when keeping the previous choice, ensure hosts are configured
@@ -337,11 +348,10 @@ main() {
             frontend_domain=$(echo "$domains" | cut -d'|' -f1)
             backend_domain=$(echo "$domains" | cut -d'|' -f2)
 
-            # Save domains to setup state and .env
+            # Save domains to setup state and .env (also derives APP_URL)
             save_to_setup_state "$FRONTEND_DOMAIN_KEY" "$frontend_domain"
             save_to_setup_state "$BACKEND_DOMAIN_KEY" "$backend_domain"
-            update_env_file "$FRONTEND_DOMAIN_KEY" "$frontend_domain"
-            update_env_file "$BACKEND_DOMAIN_KEY" "$backend_domain"
+            save_domains_to_env "$frontend_domain" "$backend_domain"
 
             # Add domains to /etc/hosts if missing
             echo ""
@@ -406,11 +416,10 @@ EOF
                             FRONTEND_DOMAIN=$(echo "$domains" | cut -d'|' -f1)
                             BACKEND_DOMAIN=$(echo "$domains" | cut -d'|' -f2)
 
-                            # Save domains to setup state and .env
+                            # Save domains to setup state and .env (also derives APP_URL)
                             save_to_setup_state "$FRONTEND_DOMAIN_KEY" "$FRONTEND_DOMAIN"
                             save_to_setup_state "$BACKEND_DOMAIN_KEY" "$BACKEND_DOMAIN"
-                            update_env_file "$FRONTEND_DOMAIN_KEY" "$FRONTEND_DOMAIN"
-                            update_env_file "$BACKEND_DOMAIN_KEY" "$BACKEND_DOMAIN"
+                            save_domains_to_env "$FRONTEND_DOMAIN" "$BACKEND_DOMAIN"
 
                             # Add domains to /etc/hosts if missing
                             echo ""
@@ -467,11 +476,10 @@ EOF
             FRONTEND_DOMAIN=$(echo "$domains" | cut -d'|' -f1)
             BACKEND_DOMAIN=$(echo "$domains" | cut -d'|' -f2)
 
-            # Save domains to setup state and .env
+            # Save domains to setup state and .env (also derives APP_URL)
             save_to_setup_state "$FRONTEND_DOMAIN_KEY" "$FRONTEND_DOMAIN"
             save_to_setup_state "$BACKEND_DOMAIN_KEY" "$BACKEND_DOMAIN"
-            update_env_file "$FRONTEND_DOMAIN_KEY" "$FRONTEND_DOMAIN"
-            update_env_file "$BACKEND_DOMAIN_KEY" "$BACKEND_DOMAIN"
+            save_domains_to_env "$FRONTEND_DOMAIN" "$BACKEND_DOMAIN"
         fi
 
         # Always ensure domains are in hosts file (even if domains were already set)

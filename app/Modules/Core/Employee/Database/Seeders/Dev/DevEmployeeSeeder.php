@@ -10,6 +10,7 @@ use App\Modules\Core\Company\Database\Seeders\Dev\DevDepartmentSeeder;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\Department;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Models\User;
 
 class DevEmployeeSeeder extends DevSeeder
 {
@@ -22,7 +23,7 @@ class DevEmployeeSeeder extends DevSeeder
      *
      * Creates realistic employee records for existing companies with
      * department placements and supervisor hierarchies. Also seeds a
-     * licensee employee from DEV_ADMIN_NAME / DEV_ADMIN_EMAIL.
+     * licensee employee from the admin user created by framework primitives.
      */
     protected function seed(): void
     {
@@ -55,8 +56,16 @@ class DevEmployeeSeeder extends DevSeeder
      */
     protected function seedLicenseeEmployee(Company $company): void
     {
-        $fullName = env('DEV_ADMIN_NAME', 'Administrator');
-        $email = env('DEV_ADMIN_EMAIL', 'admin@example.com');
+        $admin = User::query()
+            ->where('company_id', Company::LICENSEE_ID)
+            ->first();
+
+        if ($admin === null) {
+            return;
+        }
+
+        $fullName = $admin->name;
+        $email = $admin->email;
         $shortName = str_contains($fullName, ' ') ? explode(' ', $fullName, 2)[0] : $fullName;
 
         $deptMap = $this->getDepartmentMap($company);

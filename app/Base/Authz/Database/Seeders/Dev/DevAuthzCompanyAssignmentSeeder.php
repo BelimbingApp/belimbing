@@ -9,6 +9,7 @@ use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Database\Seeders\DevSeeder;
+use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
 
 class DevAuthzCompanyAssignmentSeeder extends DevSeeder
@@ -20,7 +21,7 @@ class DevAuthzCompanyAssignmentSeeder extends DevSeeder
     /**
      * Seed the database.
      *
-     * 1. Grants the dev admin user (DEV_ADMIN_EMAIL) all system roles for full access.
+     * 1. Grants the licensee admin user all system roles for full access.
      * 2. Assigns the first user in each remaining company to core_admin for basic testing.
      */
     protected function seed(): void
@@ -39,17 +40,14 @@ class DevAuthzCompanyAssignmentSeeder extends DevSeeder
     }
 
     /**
-     * Grant core_admin (grant_all) role to the dev admin user identified by DEV_ADMIN_EMAIL.
+     * Grant core_admin (grant_all) role to the licensee admin user.
      *
      * @param  \Illuminate\Database\Eloquent\Collection<int, Role>  $systemRoles
      */
     private function grantDevAdminFullAccess($systemRoles): void
     {
-        $adminEmail = env('DEV_ADMIN_EMAIL', 'admin@example.com');
-
         $adminUser = User::query()
-            ->where('email', $adminEmail)
-            ->whereNotNull('company_id')
+            ->where('company_id', Company::LICENSEE_ID)
             ->first();
 
         if ($adminUser === null) {
@@ -83,11 +81,9 @@ class DevAuthzCompanyAssignmentSeeder extends DevSeeder
             return;
         }
 
-        $adminEmail = env('DEV_ADMIN_EMAIL', 'admin@example.com');
-
         $users = User::query()
             ->whereNotNull('company_id')
-            ->where('email', '!=', $adminEmail)
+            ->where('company_id', '!=', Company::LICENSEE_ID)
             ->orderBy('id')
             ->get()
             ->groupBy('company_id')

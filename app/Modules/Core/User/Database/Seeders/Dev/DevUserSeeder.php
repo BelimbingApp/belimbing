@@ -23,7 +23,7 @@ class DevUserSeeder extends DevSeeder
      * Creates realistic dev users across seeded companies.
      * Each user gets password 'password' for easy local login.
      * Idempotent via firstOrCreate on email.
-     * Assigns employee_id to admin user by DEV_ADMIN_EMAIL.
+     * Links admin user to their employee record.
      */
     protected function seed(): void
     {
@@ -64,26 +64,20 @@ class DevUserSeeder extends DevSeeder
     }
 
     /**
-     * Assign employee_id to admin user by DEV_ADMIN_EMAIL. Creates admin user if missing.
+     * Link the admin user (created by framework primitives) to their licensee employee record.
      */
     protected function assignAdminEmployeeId(): void
     {
-        $name = env('DEV_ADMIN_NAME', 'Administrator');
-        $email = env('DEV_ADMIN_EMAIL', 'admin@example.com');
-        $password = env('DEV_ADMIN_PASSWORD', 'password');
+        $user = User::query()
+            ->where('company_id', Company::LICENSEE_ID)
+            ->first();
 
-        $user = User::query()->firstOrCreate(
-            ['email' => $email],
-            [
-                'company_id' => Company::LICENSEE_ID,
-                'name' => $name,
-                'password' => $password,
-                'email_verified_at' => now(),
-            ]
-        );
+        if ($user === null) {
+            return;
+        }
 
         $employee = Employee::query()
-            ->where('email', $email)
+            ->where('email', $user->email)
             ->where('company_id', Company::LICENSEE_ID)
             ->first();
 

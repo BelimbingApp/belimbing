@@ -387,7 +387,6 @@ main() {
     load_setup_state
 
     # Check PHP
-    print_subsection_header "PHP Installation"
     local required_php_version
     required_php_version=$(get_required_php_version)
 
@@ -454,19 +453,18 @@ main() {
     echo ""
 
     # Check Composer
-    print_subsection_header "Composer Installation"
     if command_exists composer; then
         local composer_version
         composer_version=$(composer --version 2>/dev/null | head -1 || echo "$UNKNOWN_VERSION")
         echo -e "${GREEN}✓${NC} Composer already installed: $composer_version"
 
-        # Update Composer to latest version
-        echo -e "${CYAN}Updating Composer to latest version...${NC}"
-        composer self-update --quiet 2>/dev/null || sudo composer self-update --quiet 2>/dev/null || true
-        local updated_version
-        updated_version=$(composer --version 2>/dev/null | head -1 || echo "$UNKNOWN_VERSION")
-        if [[ "$composer_version" != "$updated_version" ]]; then
-            echo -e "${GREEN}✓${NC} Composer updated: $updated_version"
+        # Try to update Composer; may fail if installed system-wide without write access
+        if composer self-update --quiet 2>/dev/null || sudo composer self-update --quiet 2>/dev/null; then
+            local updated_version
+            updated_version=$(composer --version 2>/dev/null | head -1 || echo "$UNKNOWN_VERSION")
+            if [[ "$composer_version" != "$updated_version" ]]; then
+                echo -e "${GREEN}✓${NC} Composer updated: $updated_version"
+            fi
         fi
     else
         echo -e "${YELLOW}ℹ${NC} Composer not found"
@@ -502,16 +500,8 @@ main() {
         save_to_setup_state "COMPOSER_VERSION" "$(composer --version 2>/dev/null | head -1 || echo "$UNKNOWN_VERSION")"
     fi
 
-    print_divider
     echo ""
     echo -e "${GREEN}✓ PHP & Composer setup complete!${NC}"
-    echo ""
-    if command_exists php && command_exists composer; then
-        echo -e "${CYAN}Installed:${NC}"
-        echo -e "  • PHP: $(php -r "$PHP_VERSION_COMMAND")"
-        echo -e "  • Composer: $(composer --version 2>/dev/null | head -1)"
-    fi
-    echo ""
     return 0
 }
 

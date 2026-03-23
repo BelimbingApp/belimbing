@@ -11,7 +11,7 @@ Common issues and solutions during installation and operation.
 **Solution:**
 ```bash
 # Run requirements check first
-./scripts/check-requirements.sh local
+./scripts/setup-steps/01-requirements.sh local
 
 # Install missing dependencies
 ./scripts/setup-steps/20-php.sh local  # For PHP/Composer
@@ -139,7 +139,7 @@ php artisan key:generate
 
 1. **Check all dependencies:**
    ```bash
-   ./scripts/check-requirements.sh local
+   ./scripts/setup-steps/01-requirements.sh local
    ```
 
 2. **Check logs:**
@@ -415,7 +415,7 @@ If you're still experiencing issues:
 
 2. **Run diagnostics:**
    ```bash
-   ./scripts/check-requirements.sh local
+   ./scripts/setup-steps/01-requirements.sh local
    curl http://localhost:8000/health
    php artisan belimbing:health
    ```

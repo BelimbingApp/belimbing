@@ -39,10 +39,10 @@ REQUIRED_PHP_MINOR=5
 # These define the latest stable versions recommended for installation
 
 # Git: Latest stable version
-LATEST_GIT_VERSION="2.52.0"
+LATEST_GIT_VERSION="2.53.0"
 
 # Bun: Latest stable version (without 'v' prefix for consistency)
-LATEST_BUN_VERSION="1.3.5"
+LATEST_BUN_VERSION="1.3.11"
 
 # === Service Versions ===
 # Versions for services that are installed
@@ -52,6 +52,9 @@ POSTGRESQL_VERSION="18"
 
 # Redis: Version to install
 REDIS_VERSION="8"
+
+# sqlite-vec: Pinned fallback version (used when GitHub API is unreachable)
+SQLITE_VEC_VERSION="v0.1.7"
 
 # === Package Manager Specific Versions ===
 # These are generated from the base versions above to maintain single source of truth
@@ -65,24 +68,66 @@ get_required_php_version() {
     return 0
 }
 
-# Get latest Git version
+# Get latest Git version (pinned fallback)
 # Usage: version=$(get_latest_git_version)
 get_latest_git_version() {
     echo "$LATEST_GIT_VERSION"
     return 0
 }
 
-# Get latest Bun version (with 'v' prefix if needed)
+# Resolve latest Git version from the GitHub tags API.
+# Falls back to the pinned LATEST_GIT_VERSION if the API is unreachable.
+# Usage: version=$(resolve_latest_git_version)
+resolve_latest_git_version() {
+    local fallback
+    fallback=$(get_latest_git_version)
+
+    local latest
+    latest=$(curl -fsSL --max-time 5 \
+        'https://api.github.com/repos/git/git/tags?per_page=10' 2>/dev/null \
+        | grep '"name"' \
+        | grep -v '\-rc' \
+        | head -1 \
+        | sed 's/.*"name": *"v\([^"]*\)".*/\1/')
+
+    if [[ -n "$latest" ]]; then
+        echo "$latest"
+    else
+        echo "$fallback"
+    fi
+}
+
+# Resolve latest Bun version from the GitHub releases API.
+# Falls back to the pinned LATEST_BUN_VERSION if the API is unreachable.
+# Usage: version=$(resolve_latest_bun_version)
+resolve_latest_bun_version() {
+    local fallback
+    fallback="$LATEST_BUN_VERSION"
+
+    local latest
+    latest=$(curl -fsSL --max-time 5 \
+        'https://api.github.com/repos/oven-sh/bun/releases/latest' 2>/dev/null \
+        | grep '"tag_name"' \
+        | sed 's/.*"tag_name": *"\(bun-\)\{0,1\}v\{0,1\}\([^"]*\)".*/\2/')
+
+    if [[ -n "$latest" ]]; then
+        echo "$latest"
+    else
+        echo "$fallback"
+    fi
+}
+
+# Get latest Bun version (resolved via API with pinned fallback)
 # Usage: version=$(get_latest_bun_version)
 get_latest_bun_version() {
-    echo "$LATEST_BUN_VERSION"
+    resolve_latest_bun_version
     return 0
 }
 
 # Get Bun version with 'v' prefix for display
 # Usage: display_version=$(get_latest_bun_version_with_prefix)
 get_latest_bun_version_with_prefix() {
-    echo "v${LATEST_BUN_VERSION}"
+    echo "v$(get_latest_bun_version)"
     return 0
 }
 
@@ -104,6 +149,13 @@ get_postgresql_brew_version() {
 # Usage: version=$(get_redis_version)
 get_redis_version() {
     echo "$REDIS_VERSION"
+    return 0
+}
+
+# Get sqlite-vec pinned fallback version
+# Usage: version=$(get_sqlite_vec_version)
+get_sqlite_vec_version() {
+    echo "$SQLITE_VEC_VERSION"
     return 0
 }
 

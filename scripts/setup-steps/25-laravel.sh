@@ -36,7 +36,7 @@ APP_ENV="${1:-local}"
 check_env_file() {
     if [[ ! -f "$PROJECT_ROOT/.env" ]]; then
         echo -e "${RED}✗${NC} .env file not found" >&2
-        echo -e "  Run ${CYAN}./scripts/setup-steps/00-environment.sh${NC} first" >&2
+        echo -e "  Run ${CYAN}./scripts/setup-steps/05-environment.sh${NC} first" >&2
         return 1
     fi
     return 0
@@ -112,42 +112,24 @@ main() {
     # Load existing configuration
     load_setup_state
 
-    # Check prerequisites
-    print_subsection_header "Prerequisites"
-    if ! command_exists php; then
-        echo -e "${RED}✗${NC} PHP not found" >&2
+    # Check prerequisites (php/composer verified by 20-php.sh; guard for standalone runs)
+    if ! command_exists php || ! command_exists composer; then
+        echo -e "${RED}✗${NC} PHP and Composer are required" >&2
         echo -e "  Run ${CYAN}./scripts/setup-steps/20-php.sh${NC} first" >&2
         exit 1
     fi
 
-    if ! command_exists composer; then
-        echo -e "${RED}✗${NC} Composer not found" >&2
-        echo -e "  Run ${CYAN}./scripts/setup-steps/20-php.sh${NC} first" >&2
-        exit 1
-    fi
-
-    local php_version composer_version
-    php_version=$(php -r "echo PHP_VERSION;" 2>/dev/null || echo "unknown")
-    composer_version=$(composer --version 2>/dev/null | head -1 || echo "unknown")
-    echo -e "${GREEN}✓${NC} PHP: $php_version"
-    echo -e "${GREEN}✓${NC} Composer: $composer_version"
-    echo ""
-
-    # Check .env file
     if ! check_env_file; then
         exit 1
     fi
-    echo ""
 
     # Install Composer dependencies
-    print_subsection_header "Composer Dependencies"
     if ! install_dependencies; then
         exit 1
     fi
     echo ""
 
     # Generate APP_KEY
-    print_subsection_header "Laravel APP_KEY"
     if ! generate_app_key; then
         exit 1
     fi
@@ -161,7 +143,6 @@ main() {
     fi
     save_to_setup_state "LARAVEL_CONFIGURED" "true"
 
-    print_divider
     echo ""
     echo -e "${GREEN}✓ Laravel application configuration complete!${NC}"
     echo ""

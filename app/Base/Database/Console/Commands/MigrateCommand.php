@@ -12,6 +12,7 @@ use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Seeders\DevSeeder;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Models\User;
 use Illuminate\Database\Console\Migrations\MigrateCommand as IlluminateMigrateCommand;
 use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -229,28 +230,64 @@ class MigrateCommand extends IlluminateMigrateCommand
 
         $this->newLine();
         $this->info('✓ Dev seeders complete.');
-        $this->line('  Admin: '.env('DEV_ADMIN_EMAIL', 'admin@example.com').' / password');
+        $admin = User::query()->where('company_id', Company::LICENSEE_ID)->first();
+        if ($admin) {
+            $this->line("  Admin: {$admin->email}");
+        }
     }
 
     /**
-     * Ensure framework primitives exist: Licensee company (id=1) and Lara (employee id=1).
+     * Ensure framework primitives exist: Licensee company (id=1), admin user, and Lara (employee id=1).
      *
-     * Both are idempotent — safe to call on every migrate. Ordering matters:
-     * Licensee must exist before Lara (Lara belongs to the Licensee company).
+     * All three are idempotent — safe to call on every migrate. Ordering matters:
+     * Licensee must exist before admin user (user belongs to licensee company),
+     * and Lara runs last (Lara belongs to the licensee company).
      *
-     * Delegates to each model's canonical provisioning method so setup scripts,
-     * the admin UI, and this command all share the same logic.
+     * Values are read from env vars (passed transiently by the setup script).
+     * Defaults allow day-to-day `migrate:fresh --seed --dev` to work without
+     * env vars since `is_stable` preserves the users table across fresh runs.
      */
     private function ensureFrameworkPrimitives(): void
     {
-        $name = env('LICENSEE_COMPANY_NAME', 'My Company');
+        $companyName = env('LICENSEE_COMPANY_NAME', 'My Company');
 
-        if (Company::provisionLicensee($name)) {
-            $this->line("  Created licensee company: {$name}");
+        if (Company::provisionLicensee($companyName)) {
+            $this->line("  Created licensee company: {$companyName}");
         }
+
+        $this->ensureAdminUser();
 
         if (Employee::provisionLara()) {
             $this->line('  Created Lara (system Agent)');
+        }
+    }
+
+    /**
+     * Ensure the initial admin user exists in the licensee company.
+     *
+     * Reads ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD from env vars.
+     * On first setup these are provided transiently by 60-migrations.sh.
+     * On subsequent migrate:fresh runs the users table is stable (is_stable=true)
+     * so the row survives and this is a no-op.
+     */
+    private function ensureAdminUser(): void
+    {
+        $email = env('ADMIN_EMAIL', 'admin@example.com');
+        $name = env('ADMIN_NAME', 'Administrator');
+        $password = env('ADMIN_PASSWORD', 'password');
+
+        $user = User::query()->firstOrCreate(
+            ['email' => $email],
+            [
+                'company_id' => Company::LICENSEE_ID,
+                'name' => $name,
+                'password' => $password,
+                'email_verified_at' => now(),
+            ],
+        );
+
+        if ($user->wasRecentlyCreated) {
+            $this->line("  Created admin user: {$email}");
         }
     }
 

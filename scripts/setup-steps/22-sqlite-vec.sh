@@ -32,9 +32,28 @@ source "$SCRIPTS_DIR/shared/interactive.sh" 2>/dev/null || true
 # Environment (default to local if not provided, using Laravel standard)
 APP_ENV="${1:-local}"
 
-SQLITE_VEC_VERSION="v0.1.6"
 INSTALL_DIR="$PROJECT_ROOT/storage/app/sqlite-ext"
 GITHUB_RELEASE_URL="https://github.com/asg017/sqlite-vec/releases/download"
+
+# Resolve the target sqlite-vec version by querying the GitHub releases API.
+# Falls back to the pinned SQLITE_VEC_VERSION from versions.sh if the API is
+# unreachable (e.g. air-gapped environments or CI without network access).
+resolve_sqlite_vec_version() {
+    local fallback
+    fallback=$(get_sqlite_vec_version)
+
+    local latest
+    latest=$(curl -fsSL --max-time 5 \
+        'https://api.github.com/repos/asg017/sqlite-vec/releases/latest' 2>/dev/null \
+        | grep '"tag_name"' \
+        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+
+    if [[ -n "$latest" ]]; then
+        echo "$latest"
+    else
+        echo "$fallback"
+    fi
+}
 
 # Detect platform and set archive/extension names
 detect_platform() {
@@ -102,7 +121,7 @@ verify_extension() {
     return 1
 }
 
-# Check if already installed and working
+# Check if already installed at the target version
 check_existing() {
     if [[ ! -d "$INSTALL_DIR" ]]; then
         return 1
@@ -113,12 +132,12 @@ check_existing() {
         return 1
     fi
 
-    # Verify it actually loads
-    if verify_extension "$INSTALL_DIR" >/dev/null 2>&1; then
-        return 0
-    fi
+    # Verify it loads and compare version against target (strip leading 'v')
+    local installed_version
+    installed_version=$(verify_extension "$INSTALL_DIR" 2>/dev/null) || return 1
 
-    return 1
+    local target_version="${SQLITE_VEC_VERSION#v}"
+    [[ "$installed_version" == "$target_version" ]]
 }
 
 # Download and install the extension
@@ -178,7 +197,9 @@ main() {
     # Load existing configuration
     load_setup_state
 
-    print_subsection_header "SQLite-Vec Installation"
+    # Resolve target version (GitHub API with pinned fallback)
+    local SQLITE_VEC_VERSION
+    SQLITE_VEC_VERSION=$(resolve_sqlite_vec_version)
 
     # Check if already installed
     if check_existing; then
@@ -189,7 +210,6 @@ main() {
 
         save_to_setup_state "SQLITE_VEC_VERSION" "$SQLITE_VEC_VERSION"
 
-        print_divider
         echo ""
         echo -e "${GREEN}${CHECK_MARK} SQLite-Vec setup complete!${NC}"
         echo ""
@@ -216,7 +236,6 @@ main() {
     echo ""
 
     # Verify the extension loads in PHP
-    print_subsection_header "Verification"
     echo -e "${CYAN}Verifying extension loads in PHP...${NC}"
 
     local vec_version
@@ -234,7 +253,6 @@ main() {
     # Save state
     save_to_setup_state "SQLITE_VEC_VERSION" "$SQLITE_VEC_VERSION"
 
-    print_divider
     echo ""
     echo -e "${GREEN}${CHECK_MARK} SQLite-Vec setup complete!${NC}"
     echo ""

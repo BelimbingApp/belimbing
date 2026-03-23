@@ -444,7 +444,59 @@ setup_ssl_trust() {
         echo -e "  Or switch to mkcert certs: ${CYAN}./scripts/setup-steps/70-caddy.sh${NC}"
     fi
 
+    # Install into NSS databases used by Chromium/Firefox.
+    # System trust store alone is not enough — browsers maintain their own cert stores.
+    install_cert_to_nss_databases "$root_ca_file"
+
     return 0
+}
+
+# Install a CA certificate into all discoverable NSS databases (Chromium, Firefox, Snap).
+# Chromium and Firefox on Linux use NSS cert9.db databases, not the system trust store.
+# Usage: install_cert_to_nss_databases /path/to/ca.crt
+install_cert_to_nss_databases() {
+    local cert_file="$1"
+
+    if ! command_exists certutil; then
+        echo -e "${YELLOW}ℹ${NC} certutil not found — install ${CYAN}libnss3-tools${NC} for browser trust"
+        return 0
+    fi
+
+    local nss_label="Caddy BLB Local CA"
+    local found_any=false
+
+    # Collect NSS database directories: ~/.pki/nssdb (shared), plus per-browser/snap paths
+    local nss_dirs=()
+    [[ -d "$HOME/.pki/nssdb" ]] && nss_dirs+=("$HOME/.pki/nssdb")
+
+    # Snap-installed Chromium keeps its own nssdb per revision
+    while IFS= read -r db_dir; do
+        nss_dirs+=("$db_dir")
+    done < <(find "$HOME/snap" -path "*/chromium/*/nssdb" -type d 2>/dev/null)
+
+    # Firefox profiles (classic and snap)
+    while IFS= read -r db_dir; do
+        nss_dirs+=("$db_dir")
+    done < <(find "$HOME/.mozilla/firefox" "$HOME/snap/firefox" -name "cert9.db" -type f 2>/dev/null | xargs -I{} dirname {} 2>/dev/null)
+
+    for nss_dir in "${nss_dirs[@]}"; do
+        [[ -f "$nss_dir/cert9.db" ]] || continue
+
+        # Check if already installed
+        if certutil -L -d "sql:$nss_dir" -n "$nss_label" >/dev/null 2>&1; then
+            found_any=true
+            continue
+        fi
+
+        if certutil -A -d "sql:$nss_dir" -t "C,," -n "$nss_label" -i "$cert_file" 2>/dev/null; then
+            found_any=true
+            echo -e "${GREEN}✓${NC} Certificate installed to NSS database: ${CYAN}${nss_dir/#$HOME/\~}${NC}"
+        fi
+    done
+
+    if [[ "$found_any" = false ]]; then
+        echo -e "${YELLOW}ℹ${NC} No NSS databases found — browser certificate trust not configured"
+    fi
 }
 
 # High-level orchestration to ensure SSL trust is set up if needed.

@@ -42,13 +42,10 @@ Belimbing is in active development and not yet ready for production. However, yo
 ### Quick Install
 
 ```bash
-git clone https://github.com/BelimbingApp/belimbing.git belimbing
+git clone https://github.com/BelimbingApp/belimbing.git
 cd belimbing
-./scripts/setup.sh local
-./scripts/start-app.sh
+./scripts/setup.sh
 ```
-
-The `local` argument triggers dev mode: installs dependencies, configures PostgreSQL, and runs `migrate --seed --dev` to populate the database with sample companies, employees, and reference data so you can explore immediately.
 
 ## Documentation
 

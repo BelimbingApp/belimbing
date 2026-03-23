@@ -8,8 +8,7 @@
 # This script:
 # - Auto-detects existing PostgreSQL/Redis installations
 # - Installs PostgreSQL/Redis if needed
-# - Creates database and user automatically
-# - Generates secure random passwords
+# - Creates database and user automatically when local admin access is available
 # - Saves credentials to .env automatically
 # - Supports SQLite fallback for minimal deployments
 
@@ -38,17 +37,193 @@ APP_ENV="${1:-local}"
 # Constants for .env keys
 readonly ENV_KEY_DB_DATABASE="DB_DATABASE"
 readonly ENV_KEY_DB_CONNECTION="DB_CONNECTION"
+readonly LOCAL_DB_HOST="127.0.0.1"
+readonly POSTGRES_ADMIN_MODE_NONE="none"
+readonly POSTGRES_ADMIN_MODE_CURRENT_OS_USER="current-os-user"
+readonly POSTGRES_ADMIN_MODE_POSTGRES_OS_USER="postgres-os-user"
 
-# Generate secure random password
-generate_password() {
-    if command -v openssl >/dev/null 2>&1; then
-        openssl rand -base64 32 | tr -d "=+/" | cut -c1-24
-    else
-        # Fallback: use /dev/urandom
-        head -c 24 /dev/urandom 2>/dev/null | base64 | tr -d "=+/" | cut -c1-24 || \
-        head -c 24 /dev/urandom 2>/dev/null | xxd -p | tr -d '\n' | cut -c1-24
+POSTGRES_ADMIN_MODE="$POSTGRES_ADMIN_MODE_NONE"
+
+escape_postgresql_literal() {
+    printf "%s" "$1" | sed "s/'/''/g"
+}
+
+escape_postgresql_identifier() {
+    printf "%s" "$1" | sed 's/"/""/g'
+}
+
+has_existing_postgresql_config() {
+    local db_port db_name db_user db_password
+    db_port=$(get_env_var "DB_PORT" "")
+    db_name=$(get_env_var "$ENV_KEY_DB_DATABASE" "")
+    db_user=$(get_env_var "DB_USERNAME" "")
+    db_password=$(get_env_var "DB_PASSWORD" "")
+
+    [[ -n "$db_port" ]] && [[ -n "$db_name" ]] && [[ -n "$db_user" ]] && [[ -n "$db_password" ]]
+}
+
+prompt_database_password() {
+    local prompt=$1
+    local saved_password=${2:-}
+    local response
+
+    while true; do
+        if [[ -n "$saved_password" ]]; then
+            response=$(ask_password "$prompt (press Enter to keep saved value)")
+            if [[ -n "$response" ]]; then
+                echo "$response"
+                return 0
+            fi
+
+            echo "$saved_password"
+            return 0
+        fi
+
+        response=$(ask_password "$prompt")
+        if [[ -n "$response" ]]; then
+            echo "$response"
+            return 0
+        fi
+
+        echo -e "${YELLOW}This field is required${NC}" >&2
+    done
+}
+
+describe_postgresql_admin_mode() {
+    case "$POSTGRES_ADMIN_MODE" in
+        "$POSTGRES_ADMIN_MODE_CURRENT_OS_USER") echo 'your current OS user via local socket auth' ;;
+        "$POSTGRES_ADMIN_MODE_POSTGRES_OS_USER") echo 'the local postgres OS user via sudo' ;;
+        *) echo 'no local PostgreSQL admin path detected' ;;
+    esac
+}
+
+detect_postgresql_admin_mode() {
+    POSTGRES_ADMIN_MODE="$POSTGRES_ADMIN_MODE_NONE"
+
+    if psql -w -d postgres -c "SELECT 1" >/dev/null 2>&1; then
+        POSTGRES_ADMIN_MODE="$POSTGRES_ADMIN_MODE_CURRENT_OS_USER"
+        return 0
     fi
+
+    if ! command_exists sudo; then
+        return 1
+    fi
+
+    if [[ -t 0 ]]; then
+        if sudo -u postgres psql -d postgres -c "SELECT 1" >/dev/null 2>&1; then
+            POSTGRES_ADMIN_MODE="$POSTGRES_ADMIN_MODE_POSTGRES_OS_USER"
+            return 0
+        fi
+    elif sudo -n -u postgres psql -d postgres -c "SELECT 1" >/dev/null 2>&1; then
+        POSTGRES_ADMIN_MODE="$POSTGRES_ADMIN_MODE_POSTGRES_OS_USER"
+        return 0
+    fi
+
+    return 1
+}
+
+run_postgresql_admin_sql() {
+    local sql=$1
+
+    case "$POSTGRES_ADMIN_MODE" in
+        "$POSTGRES_ADMIN_MODE_CURRENT_OS_USER")
+            psql -v ON_ERROR_STOP=1 -w -d postgres -c "$sql"
+            ;;
+        "$POSTGRES_ADMIN_MODE_POSTGRES_OS_USER")
+            if [[ -t 0 ]]; then
+                sudo -u postgres psql -v ON_ERROR_STOP=1 -d postgres -c "$sql"
+            else
+                sudo -n -u postgres psql -v ON_ERROR_STOP=1 -d postgres -c "$sql"
+            fi
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+save_postgresql_credentials() {
+    local db_host=$1
+    local db_port=$2
+    local db_name=$3
+    local db_user=$4
+    local db_password=$5
+
+    if [[ ! -f "$PROJECT_ROOT/.env" ]]; then
+        return 0
+    fi
+
+    update_env_file "DB_CONNECTION" "pgsql"
+    update_env_file "DB_HOST" "$db_host"
+    update_env_file "DB_PORT" "$db_port"
+    update_env_file "$ENV_KEY_DB_DATABASE" "$db_name"
+    update_env_file "DB_USERNAME" "$db_user"
+    update_env_file "DB_PASSWORD" "$db_password"
+}
+
+reuse_existing_postgresql_config_if_working() {
+    if ! has_existing_postgresql_config; then
+        return 1
+    fi
+
+    if ! command_exists psql; then
+        return 1
+    fi
+
+    echo -e "${CYAN}Checking PostgreSQL configuration from .env...${NC}"
+    if verify_postgresql_connection; then
+        echo -e "${GREEN}✓${NC} Reusing existing PostgreSQL configuration"
+        return 0
+    fi
+
+    echo -e "${YELLOW}⚠${NC} Existing PostgreSQL configuration in .env could not be verified" >&2
+    diagnose_postgresql_connection || true
+    return 1
+}
+
+setup_existing_postgresql_connection() {
+    local default_db_name
+    default_db_name=$(get_default_database_name "$APP_ENV")
+
+    echo ""
+    echo -e "${CYAN}Belimbing could not get local PostgreSQL admin access.${NC}"
+    echo -e "${CYAN}Provide credentials for an existing PostgreSQL database and user.${NC}"
+    echo -e "${CYAN}Belimbing will verify them, then save them to .env.${NC}"
+    echo ""
+
+    local db_host db_port db_name db_user existing_password db_password
+    db_host=$(ask_input "DB_HOST" "$(get_env_var "DB_HOST" "$LOCAL_DB_HOST")")
+    db_port=$(ask_input "DB_PORT" "$(get_env_var "DB_PORT" "$DEFAULT_DB_PORT")")
+    db_name=$(ask_input "DB_DATABASE" "$(get_env_var "$ENV_KEY_DB_DATABASE" "$default_db_name")")
+    db_user=$(ask_input "DB_USERNAME" "$(get_env_var "DB_USERNAME" "$DEFAULT_DB_USER")")
+    existing_password=$(get_env_var "DB_PASSWORD" "")
+    db_password=$(prompt_database_password "DB_PASSWORD" "$existing_password")
+
+    echo ""
+    echo -e "${CYAN}Verifying database connection...${NC}"
+
+    if ! verify_postgresql_connection "$db_host" "$db_port" "$db_name" "$db_user" "$db_password"; then
+        echo -e "${RED}✗${NC} Could not verify the provided PostgreSQL credentials" >&2
+        return 1
+    fi
+
+    save_postgresql_credentials "$db_host" "$db_port" "$db_name" "$db_user" "$db_password"
+    echo -e "${GREEN}✓${NC} Database connection verified successfully"
+    echo -e "${GREEN}✓${NC} Database credentials saved to .env"
     return 0
+}
+
+configure_postgresql_database() {
+    if reuse_existing_postgresql_config_if_working; then
+        return 0
+    fi
+
+    if detect_postgresql_admin_mode; then
+        setup_postgresql_database
+        return $?
+    fi
+
+    setup_existing_postgresql_connection
 }
 
 # Check if PostgreSQL is installed and running
@@ -281,60 +456,85 @@ verify_postgresql_connection() {
     fi
 }
 
-# Create PostgreSQL database and user
+# Use local admin access to create/update a PostgreSQL database and role for Laravel.
+# Shows defaults in a summary block, asks one Y/n. Expands to individual prompts on "n".
+# Auto-generates a password when the default (postgres) user is kept.
 setup_postgresql_database() {
-    local db_name
-    local db_user
-    db_name=$(get_env_var "$ENV_KEY_DB_DATABASE" "blb")
-    db_user=$(get_env_var "DB_USERNAME" "belimbing_app")
-    local db_password
-    db_password=$(generate_password)
+    local default_db_name
+    default_db_name=$(get_default_database_name "$APP_ENV")
+
+    local admin_description
+    admin_description=$(describe_postgresql_admin_mode)
+
+    local db_host="$LOCAL_DB_HOST"
+    local db_port db_name db_user db_password
+    db_port=$(get_env_var "DB_PORT" "$DEFAULT_DB_PORT")
+    db_name=$(get_env_var "$ENV_KEY_DB_DATABASE" "$default_db_name")
+    db_user=$(get_env_var "DB_USERNAME" "$DEFAULT_DB_USER")
+    db_password=$(get_env_var "DB_PASSWORD" "")
+
+    # Auto-generate password when empty (admin mode can ALTER USER to set it)
+    local password_auto_generated=false
+    if [[ -z "$db_password" ]]; then
+        db_password=$(generate_random_token 24)
+        password_auto_generated=true
+    fi
+
+    echo ""
+    echo -e "${CYAN}Belimbing detected local PostgreSQL admin access via ${admin_description}.${NC}"
+    echo -e "${CYAN}It will create or update the database and role for Laravel automatically.${NC}"
+    echo ""
+    echo -e "  DB_PORT      = ${CYAN}${db_port}${NC}"
+    echo -e "  DB_DATABASE   = ${CYAN}${db_name}${NC}"
+    echo -e "  DB_USERNAME   = ${CYAN}${db_user}${NC}"
+    if [[ "$password_auto_generated" = true ]]; then
+        echo -e "  DB_PASSWORD   = ${DIM}(auto-generated)${NC}"
+    else
+        echo -e "  DB_PASSWORD   = ${DIM}(from .env)${NC}"
+    fi
+    echo ""
+
+    if [[ -t 0 ]] && ! ask_yes_no "Use these settings?" "y"; then
+        # Expand to individual prompts
+        db_port=$(ask_input "DB_PORT" "$db_port")
+        db_name=$(ask_input "DB_DATABASE" "$db_name")
+        db_user=$(ask_input "DB_USERNAME" "$db_user")
+
+        echo -e "${CYAN}This password is for Laravel's TCP connection to PostgreSQL, not for the OS install.${NC}"
+        local existing_password
+        existing_password=$(get_env_var "DB_PASSWORD" "")
+        db_password=$(prompt_database_password "DB_PASSWORD" "$existing_password")
+    fi
+
+    local escaped_db_user escaped_db_name escaped_db_password
+    escaped_db_user=$(escape_postgresql_identifier "$db_user")
+    escaped_db_name=$(escape_postgresql_identifier "$db_name")
+    escaped_db_password=$(escape_postgresql_literal "$db_password")
 
     echo -e "${CYAN}Setting up PostgreSQL database...${NC}"
 
-    # Try to connect as postgres user
-    if sudo -u postgres psql -c "SELECT 1" >/dev/null 2>&1; then
-        # Create user if it doesn't exist
-        sudo -u postgres psql -c "CREATE USER $db_user WITH PASSWORD '$db_password';" 2>/dev/null || \
-        sudo -u postgres psql -c "ALTER USER $db_user WITH PASSWORD '$db_password';" 2>/dev/null || true
+    # CREATE USER fails if the role exists; fall back to ALTER to update the password.
+    run_postgresql_admin_sql "CREATE USER \"$escaped_db_user\" WITH PASSWORD '$escaped_db_password';" 2>/dev/null || \
+    run_postgresql_admin_sql "ALTER USER \"$escaped_db_user\" WITH PASSWORD '$escaped_db_password';" 2>/dev/null || true
 
-        # Create database if it doesn't exist
-        sudo -u postgres psql -c "CREATE DATABASE $db_name OWNER $db_user;" 2>/dev/null || true
+    # CREATE DATABASE is best-effort — may already exist from a previous run.
+    run_postgresql_admin_sql "CREATE DATABASE \"$escaped_db_name\" OWNER \"$escaped_db_user\";" 2>/dev/null || true
+    run_postgresql_admin_sql "GRANT ALL PRIVILEGES ON DATABASE \"$escaped_db_name\" TO \"$escaped_db_user\";" 2>/dev/null || true
 
-        # Grant privileges
-        sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $db_name TO $db_user;" 2>/dev/null || true
+    echo -e "${GREEN}✓${NC} Database '$db_name' and user '$db_user' configured"
 
-        echo -e "${GREEN}✓${NC} Database '$db_name' and user '$db_user' created"
+    save_postgresql_credentials "$db_host" "$db_port" "$db_name" "$db_user" "$db_password"
+    echo -e "${GREEN}✓${NC} Database credentials saved to .env"
 
-        # Save to .env
-        if [[ -f "$PROJECT_ROOT/.env" ]]; then
-            update_env_file "DB_CONNECTION" "pgsql"
-            update_env_file "DB_HOST" "127.0.0.1"
-            update_env_file "DB_PORT" "5432"
-            update_env_file "$ENV_KEY_DB_DATABASE" "$db_name"
-            update_env_file "DB_USERNAME" "$db_user"
-            update_env_file "DB_PASSWORD" "$db_password"
-
-            echo -e "${GREEN}✓${NC} Database credentials saved to .env"
-
-            # Verify connection using the saved credentials
-            echo -e "${CYAN}Verifying database connection...${NC}"
-            if verify_postgresql_connection "127.0.0.1" "5432" "$db_name" "$db_user" "$db_password"; then
-                echo -e "${GREEN}✓${NC} Database connection verified successfully"
-            else
-                echo -e "${YELLOW}⚠${NC} Could not verify database connection with saved credentials" >&2
-                echo -e "  ${YELLOW}Note:${NC} Connection may require additional configuration" >&2
-                # Don't fail here, as the database was created successfully
-                # The issue might be with local authentication settings
-            fi
-        fi
-
+    echo -e "${CYAN}Verifying database connection...${NC}"
+    if verify_postgresql_connection "$db_host" "$db_port" "$db_name" "$db_user" "$db_password"; then
+        echo -e "${GREEN}✓${NC} Database connection verified successfully"
         return 0
-    else
-        echo -e "${YELLOW}⚠${NC} Cannot connect as postgres user" >&2
-        echo -e "  ${YELLOW}Note:${NC} You may need to configure database manually" >&2
-        return 1
     fi
+
+    echo -e "${YELLOW}⚠${NC} Could not verify database connection with saved credentials" >&2
+    echo -e "  ${YELLOW}Note:${NC} Connection may require additional PostgreSQL authentication configuration" >&2
+    return 0
 }
 
 # Check if Redis is installed and running
@@ -483,26 +683,55 @@ install_redis() {
     return 1
 }
 
-# PostgreSQL is running: create database if missing, otherwise verify connection.
+# Diagnose why a PostgreSQL connection failed and print actionable guidance.
+# Checks service, credentials, and database existence individually.
+diagnose_postgresql_connection() {
+    local db_host db_port db_name db_user db_password
+    db_host=$(get_env_var "DB_HOST" "127.0.0.1")
+    db_port=$(get_env_var "DB_PORT" "5432")
+    db_name=$(get_env_var "$ENV_KEY_DB_DATABASE" "")
+    db_user=$(get_env_var "DB_USERNAME" "")
+    db_password=$(get_env_var "DB_PASSWORD" "")
+
+    echo ""
+    echo -e "${RED}✗${NC} Database connection failed. Diagnosing..." >&2
+    echo ""
+
+    # 1. Is PostgreSQL reachable at all?
+    if ! pg_isready -h "$db_host" -p "$db_port" >/dev/null 2>&1; then
+        echo -e "  ${RED}✗${NC} PostgreSQL is not reachable at ${CYAN}${db_host}:${db_port}${NC}" >&2
+        echo -e "    ${YELLOW}Fix:${NC} Start the service: ${CYAN}sudo systemctl start postgresql${NC}" >&2
+        return 1
+    fi
+    echo -e "  ${GREEN}✓${NC} PostgreSQL is reachable at ${db_host}:${db_port}"
+
+    # 2. Can we authenticate with these credentials?
+    if ! PGPASSWORD="$db_password" psql -h "$db_host" -p "$db_port" -U "$db_user" -d "postgres" -c "SELECT 1;" >/dev/null 2>&1; then
+        echo -e "  ${RED}✗${NC} Authentication failed for user ${CYAN}${db_user}${NC}" >&2
+        echo -e "    ${YELLOW}Fix:${NC} Check DB_USERNAME and DB_PASSWORD in ${CYAN}.env${NC}" >&2
+        echo -e "    ${YELLOW}Or reset:${NC} ${CYAN}sudo -u postgres psql -c \"ALTER USER ${db_user} WITH PASSWORD 'new_password';\"${NC}" >&2
+        return 1
+    fi
+    echo -e "  ${GREEN}✓${NC} Authentication successful for user ${db_user}"
+
+    # 3. Does the database exist?
+    if ! PGPASSWORD="$db_password" psql -h "$db_host" -p "$db_port" -U "$db_user" -d "$db_name" -c "SELECT 1;" >/dev/null 2>&1; then
+        echo -e "  ${RED}✗${NC} Database ${CYAN}${db_name}${NC} does not exist or is not accessible" >&2
+        echo -e "    ${YELLOW}Fix:${NC} ${CYAN}sudo -u postgres psql -c \"CREATE DATABASE ${db_name} OWNER ${db_user};\"${NC}" >&2
+        return 1
+    fi
+    echo -e "  ${GREEN}✓${NC} Database ${db_name} is accessible"
+
+    # If we got here, individual checks passed but verify_postgresql_connection failed — unexpected
+    echo -e "  ${YELLOW}⚠${NC} Individual checks passed but combined verification failed" >&2
+    return 1
+}
+
+# PostgreSQL is running: prompt for credentials, create database if needed.
 ensure_postgresql_database() {
     echo -e "${GREEN}✓${NC} PostgreSQL is installed and running"
-
-    local db_name
-    db_name=$(get_env_var "$ENV_KEY_DB_DATABASE" "")
-    if [[ -z "$db_name" ]]; then
-        echo -e "${CYAN}Creating database and user...${NC}"
-        setup_postgresql_database
-    else
-        echo -e "${GREEN}✓${NC} Database configuration found in .env"
-        echo -e "${CYAN}Verifying database connection...${NC}"
-        if verify_postgresql_connection; then
-            echo -e "${GREEN}✓${NC} Database connection verified successfully"
-        else
-            echo -e "${YELLOW}⚠${NC} Could not verify database connection" >&2
-            echo -e "  ${YELLOW}Note:${NC} Please check database credentials in .env" >&2
-        fi
-    fi
-    return 0
+    echo ""
+    configure_postgresql_database
 }
 
 # PostgreSQL is installed but not running: start service then create/verify database.
@@ -527,7 +756,7 @@ start_postgresql_service_then_setup() {
     esac
 
     if check_postgresql; then
-        setup_postgresql_database
+        configure_postgresql_database
     else
         echo -e "${RED}✗${NC} Failed to start PostgreSQL" >&2
         exit 1
@@ -542,7 +771,7 @@ install_postgresql_if_needed() {
     if [[ -t 0 ]]; then
         if ask_yes_no "Install PostgreSQL?" "y"; then
             if install_postgresql; then
-                setup_postgresql_database
+                configure_postgresql_database
             else
                 echo -e "${RED}✗${NC} PostgreSQL installation failed"
                 echo ""
@@ -558,7 +787,7 @@ install_postgresql_if_needed() {
         fi
     else
         if install_postgresql; then
-            setup_postgresql_database
+            configure_postgresql_database
         else
             exit 1
         fi
@@ -632,11 +861,9 @@ main() {
 
     if [[ "$db_connection" = "sqlite" ]]; then
         # SQLite: no server install, just .env and file path
-        print_subsection_header "SQLite"
         setup_sqlite "database/database.sqlite"
     else
         # PostgreSQL Setup
-        print_subsection_header "PostgreSQL"
         if check_postgresql; then
             ensure_postgresql_database
         elif command_exists psql; then
@@ -649,7 +876,6 @@ main() {
     echo ""
 
     # Redis Setup
-    print_subsection_header "Redis"
     if check_redis; then
         echo -e "${GREEN}✓${NC} Redis is installed and running"
     elif command_exists redis-cli; then
@@ -666,7 +892,6 @@ main() {
         save_to_setup_state "POSTGRESQL_INSTALLED" "true"
     fi
 
-    print_divider
     echo ""
     echo -e "${GREEN}✓ Database & Redis setup complete!${NC}"
     echo ""

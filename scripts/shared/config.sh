@@ -29,10 +29,22 @@ unset _CONFIG_DIR
 # === Setup Defaults ===
 # shellcheck disable=SC2034
 # Used by setup scripts to provide sensible defaults during interactive setup
-DEFAULT_DB_USER="belimbing_app"
-DEFAULT_DB_PASSWORD="v3ryL0ngP@55w0rd"
+DEFAULT_DB_USER="postgres"
 DEFAULT_DB_PORT="5432"
 DEFAULT_PROXY_TYPE="caddy"
+
+# Generate a random token for per-installation secrets (DB passwords, API keys, etc.).
+# Uses openssl if available, falls back to /dev/urandom.
+generate_random_token() {
+    local length="${1:-32}"
+
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -base64 48 | tr -d '=+/' | cut -c1-"$length"
+        return 0
+    fi
+
+    head -c 48 /dev/urandom 2>/dev/null | base64 | tr -d '=+/' | cut -c1-"$length"
+}
 
 # Default preferred ports (VITE_PORT|APP_PORT).
 # Only a starting hint — start-app auto-assigns free ports via next_free_port at runtime,
@@ -102,6 +114,30 @@ get_default_domains() {
             ;;
     esac
     return 0
+}
+
+# Derive the backend (API) domain from a frontend domain.
+# Convention: insert 'api.' after the first segment.
+# Example: local.blb.lara -> local.api.blb.lara
+derive_backend_domain() {
+    local frontend=$1
+    local first_segment="${frontend%%.*}"
+    local rest="${frontend#*.}"
+    echo "${first_segment}.api.${rest}"
+}
+
+# Save frontend and backend domains to .env, and derive APP_URL.
+# Keeps APP_URL in sync whenever domains change.
+# Usage: save_domains_to_env "frontend_domain" "backend_domain"
+save_domains_to_env() {
+    local frontend_domain=$1
+    local backend_domain=$2
+    local app_scheme
+    app_scheme=$(get_env_var "APP_SCHEME" "https")
+
+    update_env_file "FRONTEND_DOMAIN" "$frontend_domain"
+    update_env_file "BACKEND_DOMAIN" "$backend_domain"
+    update_env_file "APP_URL" "${app_scheme}://${frontend_domain}"
 }
 
 # Get default JWT expiration values

@@ -159,6 +159,11 @@ print_section_banner() {
     local title="$1"
     local color="${2:-$MAGENTA}"  # Default to magenta if no color specified
 
+    # Prepend step counter when run by setup.sh (exports BLB_STEP and BLB_STEP_TOTAL)
+    if [[ -n "${BLB_STEP:-}" ]] && [[ -n "${BLB_STEP_TOTAL:-}" ]]; then
+        title="[${BLB_STEP}/${BLB_STEP_TOTAL}] ${title}"
+    fi
+
     echo ""
     echo -e "${color}════════════════════════════════════════════════════════════${NC}"
     echo -e "${color}${BOLD}  ${title}${NC}"
