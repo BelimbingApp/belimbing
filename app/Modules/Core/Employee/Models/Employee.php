@@ -7,6 +7,7 @@ namespace App\Modules\Core\Employee\Models;
 
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Address\Models\Addressable;
+use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\Department;
 use App\Modules\Core\Employee\Database\Factories\EmployeeFactory;
@@ -22,12 +23,19 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
 class Employee extends Model
 {
     /**
-     * The well-known ID for Lara, BLB's system Agent.
+     * The well-known ID for Lara, BLB's system orchestrator Agent.
      *
      * Lara is provisioned at install time and cannot be deleted.
      * Mirrors the Licensee pattern (Company::LICENSEE_ID).
      */
     public const LARA_ID = 1;
+
+    /**
+     * The well-known ID for Kodi, BLB's system developer Agent.
+     *
+     * Kodi is provisioned at install time and cannot be deleted.
+     */
+    public const KODI_ID = 2;
 
     use HasFactory;
 
@@ -42,15 +50,15 @@ class Employee extends Model
     /**
      * Boot the model.
      *
-     * Prevents deletion of Lara, the system Agent.
+     * Prevents deletion of system Agents (Lara, Kodi).
      */
     protected static function boot(): void
     {
         parent::boot();
 
         static::deleting(function (Employee $employee): void {
-            if ($employee->isLara()) {
-                throw new SystemEmployeeDeletionException;
+            if ($employee->isSystemAgent()) {
+                throw new SystemEmployeeDeletionException($employee->id);
             }
         });
     }
@@ -169,11 +177,29 @@ class Employee extends Model
     }
 
     /**
-     * Whether this employee is Lara, BLB's system Agent.
+     * Whether this employee is Lara, BLB's system orchestrator Agent.
      */
     public function isLara(): bool
     {
         return $this->id === self::LARA_ID;
+    }
+
+    /**
+     * Whether this employee is Kodi, BLB's system developer Agent.
+     */
+    public function isKodi(): bool
+    {
+        return $this->id === self::KODI_ID;
+    }
+
+    /**
+     * Whether this employee is a system Agent (Lara or Kodi).
+     *
+     * System agents are provisioned at install time and cannot be deleted.
+     */
+    public function isSystemAgent(): bool
+    {
+        return $this->isLara() || $this->isKodi();
     }
 
     /**
@@ -189,14 +215,14 @@ class Employee extends Model
             return null;
         }
 
-        $resolver = app(\App\Modules\Core\AI\Services\ConfigResolver::class);
+        $resolver = app(ConfigResolver::class);
 
         if ($resolver->resolve(self::LARA_ID) !== []) {
             return true;
         }
 
         return $resolver->resolveDefault(
-            \App\Modules\Core\Company\Models\Company::LICENSEE_ID,
+            Company::LICENSEE_ID,
         ) !== null;
     }
 
@@ -234,6 +260,49 @@ class Employee extends Model
 
         // PostgreSQL sequences don't advance on explicit-ID inserts — reset to
         // avoid unique-constraint violations when subsequent inserts auto-increment.
+        $connection = static::resolveConnection();
+        if ($connection->getDriverName() === 'pgsql') {
+            $connection->statement(
+                "SELECT setval(pg_get_serial_sequence('employees', 'id'), (SELECT COALESCE(MAX(id), 0) FROM employees))"
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Ensure Kodi (the system developer Agent) exists.
+     *
+     * Idempotent — safe to call from migrations, setup scripts, and UI.
+     * Requires the Licensee company to exist first. Resets the PostgreSQL
+     * sequence after explicit-ID insert to avoid auto-increment collisions.
+     *
+     * @return bool Whether Kodi was created (false if already existed or Licensee missing).
+     */
+    public static function provisionKodi(): bool
+    {
+        if (static::query()->where('id', self::KODI_ID)->exists()) {
+            return false;
+        }
+
+        if (! Company::query()->where('id', Company::LICENSEE_ID)->exists()) {
+            return false;
+        }
+
+        static::unguarded(fn () => static::query()->create([
+            'id' => self::KODI_ID,
+            'company_id' => Company::LICENSEE_ID,
+            'supervisor_id' => self::LARA_ID,
+            'employee_type' => 'agent',
+            'employee_number' => 'SYS-002',
+            'full_name' => 'Kodi Belimbing',
+            'short_name' => 'Kodi',
+            'designation' => 'System Developer',
+            'job_description' => 'BLB\'s system developer Agent. Builds modules, writes migrations, models, tests, and Livewire components following framework conventions. Works through IT tickets assigned by supervisors.',
+            'status' => 'active',
+            'employment_start' => now()->toDateString(),
+        ]));
+
         $connection = static::resolveConnection();
         if ($connection->getDriverName() === 'pgsql') {
             $connection->statement(

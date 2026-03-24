@@ -258,7 +258,11 @@ class MigrateCommand extends IlluminateMigrateCommand
         $this->ensureAdminUser();
 
         if (Employee::provisionLara()) {
-            $this->line('  Created Lara (system Agent)');
+            $this->line('  Created Lara (system Agent — orchestrator)');
+        }
+
+        if (Employee::provisionKodi()) {
+            $this->line('  Created Kodi (system Agent — developer)');
         }
     }
 
@@ -299,7 +303,7 @@ class MigrateCommand extends IlluminateMigrateCommand
      *
      * @return array<int, class-string<DevSeeder>>
      *
-     * @throws \App\Base\Database\Exceptions\CircularSeederDependencyException If a circular dependency is detected.
+     * @throws CircularSeederDependencyException If a circular dependency is detected.
      */
     private function discoverDevSeeders(): array
     {
@@ -331,7 +335,7 @@ class MigrateCommand extends IlluminateMigrateCommand
      * @param  array<int, class-string<DevSeeder>>  $classes
      * @return array<int, class-string<DevSeeder>>
      *
-     * @throws \App\Base\Database\Exceptions\CircularSeederDependencyException If a circular dependency is detected.
+     * @throws CircularSeederDependencyException If a circular dependency is detected.
      */
     private function topologicalSort(array $classes): array
     {

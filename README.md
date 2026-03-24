@@ -6,7 +6,7 @@ An open-source business process framework where AI is a first-class citizen.
 
 Belimbing treats AI agents as employees. Assign them roles, supervisors, and permissions. They follow your org structure, respect delegation rules, and can never exceed their supervisor's authority. Every action is auditable.
 
-Meet **Lara** — the built-in system agent. She is the orchestrator: managing your AI team, guiding setup, and keeping operations running.
+Meet **Lara** — the built-in system orchestrator. She manages your AI team, guides setup, and keeps operations running. And **Kodi** — the system developer. He builds modules, writes code, and works through IT tickets assigned by supervisors.
 
 ## What You Get
 
