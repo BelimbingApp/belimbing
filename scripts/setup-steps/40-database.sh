@@ -37,6 +37,10 @@ APP_ENV="${1:-local}"
 # Constants for .env keys
 readonly ENV_KEY_DB_DATABASE="DB_DATABASE"
 readonly ENV_KEY_DB_CONNECTION="DB_CONNECTION"
+readonly ENV_KEY_DB_HOST="DB_HOST"
+readonly ENV_KEY_DB_PORT="DB_PORT"
+readonly ENV_KEY_DB_USERNAME="DB_USERNAME"
+readonly ENV_KEY_DB_PASSWORD="DB_PASSWORD"
 readonly LOCAL_DB_HOST="127.0.0.1"
 readonly POSTGRES_ADMIN_MODE_NONE="none"
 readonly POSTGRES_ADMIN_MODE_CURRENT_OS_USER="current-os-user"
@@ -46,19 +50,25 @@ readonly POSTGRES_SUPERUSER_ROLE="postgres"
 POSTGRES_ADMIN_MODE="$POSTGRES_ADMIN_MODE_NONE"
 
 escape_postgresql_literal() {
-    printf "%s" "$1" | sed "s/'/''/g"
+    local literal=$1
+
+    printf "%s" "$literal" | sed "s/'/''/g"
+    return 0
 }
 
 escape_postgresql_identifier() {
-    printf "%s" "$1" | sed 's/"/""/g'
+    local identifier=$1
+
+    printf "%s" "$identifier" | sed 's/"/""/g'
+    return 0
 }
 
 has_existing_postgresql_config() {
     local db_port db_name db_user db_password
-    db_port=$(get_env_var "DB_PORT" "")
+    db_port=$(get_env_var "$ENV_KEY_DB_PORT" "")
     db_name=$(get_env_var "$ENV_KEY_DB_DATABASE" "")
-    db_user=$(get_env_var "DB_USERNAME" "")
-    db_password=$(get_env_var "DB_PASSWORD" "")
+    db_user=$(get_env_var "$ENV_KEY_DB_USERNAME" "")
+    db_password=$(get_env_var "$ENV_KEY_DB_PASSWORD" "")
 
     [[ -n "$db_port" ]] && [[ -n "$db_name" ]] && [[ -n "$db_user" ]] && [[ -n "$db_password" ]]
 }
@@ -96,6 +106,8 @@ describe_postgresql_admin_mode() {
         "$POSTGRES_ADMIN_MODE_POSTGRES_OS_USER") echo 'the local postgres OS user via sudo' ;;
         *) echo 'no local PostgreSQL admin path detected' ;;
     esac
+
+    return 0
 }
 
 detect_postgresql_admin_mode() {
@@ -178,12 +190,12 @@ save_postgresql_credentials() {
         return 0
     fi
 
-    update_env_file "DB_CONNECTION" "pgsql"
-    update_env_file "DB_HOST" "$db_host"
-    update_env_file "DB_PORT" "$db_port"
+    update_env_file "$ENV_KEY_DB_CONNECTION" "pgsql"
+    update_env_file "$ENV_KEY_DB_HOST" "$db_host"
+    update_env_file "$ENV_KEY_DB_PORT" "$db_port"
     update_env_file "$ENV_KEY_DB_DATABASE" "$db_name"
-    update_env_file "DB_USERNAME" "$db_user"
-    update_env_file "DB_PASSWORD" "$db_password"
+    update_env_file "$ENV_KEY_DB_USERNAME" "$db_user"
+    update_env_file "$ENV_KEY_DB_PASSWORD" "$db_password"
 }
 
 reuse_existing_postgresql_config_if_working() {
@@ -217,12 +229,12 @@ setup_existing_postgresql_connection() {
     echo ""
 
     local db_host db_port db_name db_user existing_password db_password
-    db_host=$(ask_input "DB_HOST" "$(get_env_var "DB_HOST" "$LOCAL_DB_HOST")")
-    db_port=$(ask_input "DB_PORT" "$(get_env_var "DB_PORT" "$DEFAULT_DB_PORT")")
-    db_name=$(ask_input "DB_DATABASE" "$(get_env_var "$ENV_KEY_DB_DATABASE" "$default_db_name")")
-    db_user=$(ask_input "DB_USERNAME" "$(get_env_var "DB_USERNAME" "$DEFAULT_DB_USER")")
-    existing_password=$(get_env_var "DB_PASSWORD" "")
-    db_password=$(prompt_database_password "DB_PASSWORD" "$existing_password")
+    db_host=$(ask_input "$ENV_KEY_DB_HOST" "$(get_env_var "$ENV_KEY_DB_HOST" "$LOCAL_DB_HOST")")
+    db_port=$(ask_input "$ENV_KEY_DB_PORT" "$(get_env_var "$ENV_KEY_DB_PORT" "$DEFAULT_DB_PORT")")
+    db_name=$(ask_input "$ENV_KEY_DB_DATABASE" "$(get_env_var "$ENV_KEY_DB_DATABASE" "$default_db_name")")
+    db_user=$(ask_input "$ENV_KEY_DB_USERNAME" "$(get_env_var "$ENV_KEY_DB_USERNAME" "$DEFAULT_DB_USER")")
+    existing_password=$(get_env_var "$ENV_KEY_DB_PASSWORD" "")
+    db_password=$(prompt_database_password "$ENV_KEY_DB_PASSWORD" "$existing_password")
 
     echo ""
     echo -e "${CYAN}Verifying database connection...${NC}"
@@ -460,11 +472,11 @@ verify_postgresql_connection() {
 
     # If credentials not provided, try to read from .env
     if [[ (-z "$db_name" || -z "$db_user" || -z "$db_password") && -f "$PROJECT_ROOT/.env" ]]; then
-        db_host=$(get_env_var "DB_HOST" "127.0.0.1")
-        db_port=$(get_env_var "DB_PORT" "5432")
+        db_host=$(get_env_var "$ENV_KEY_DB_HOST" "127.0.0.1")
+        db_port=$(get_env_var "$ENV_KEY_DB_PORT" "5432")
         db_name=$(get_env_var "$ENV_KEY_DB_DATABASE" "")
-        db_user=$(get_env_var "DB_USERNAME" "")
-        db_password=$(get_env_var "DB_PASSWORD" "")
+        db_user=$(get_env_var "$ENV_KEY_DB_USERNAME" "")
+        db_password=$(get_env_var "$ENV_KEY_DB_PASSWORD" "")
     fi
 
     # Check if we have all required credentials
@@ -493,10 +505,10 @@ setup_postgresql_database() {
 
     local db_host="$LOCAL_DB_HOST"
     local db_port db_name db_user db_password
-    db_port=$(get_env_var "DB_PORT" "$DEFAULT_DB_PORT")
+    db_port=$(get_env_var "$ENV_KEY_DB_PORT" "$DEFAULT_DB_PORT")
     db_name=$(get_env_var "$ENV_KEY_DB_DATABASE" "$default_db_name")
-    db_user=$(get_env_var "DB_USERNAME" "$DEFAULT_DB_USER")
-    db_password=$(get_env_var "DB_PASSWORD" "")
+    db_user=$(get_env_var "$ENV_KEY_DB_USERNAME" "$DEFAULT_DB_USER")
+    db_password=$(get_env_var "$ENV_KEY_DB_PASSWORD" "")
 
     # Auto-generate password when empty so setup can provision a dedicated app role.
     local password_auto_generated=false
@@ -521,14 +533,14 @@ setup_postgresql_database() {
 
     if [[ -t 0 ]] && ! ask_yes_no "Use these settings?" "y"; then
         # Expand to individual prompts
-        db_port=$(ask_input "DB_PORT" "$db_port")
-        db_name=$(ask_input "DB_DATABASE" "$db_name")
-        db_user=$(ask_input "DB_USERNAME" "$db_user")
+        db_port=$(ask_input "$ENV_KEY_DB_PORT" "$db_port")
+        db_name=$(ask_input "$ENV_KEY_DB_DATABASE" "$db_name")
+        db_user=$(ask_input "$ENV_KEY_DB_USERNAME" "$db_user")
 
         echo -e "${CYAN}This password is for Laravel's TCP connection to PostgreSQL, not for the OS install.${NC}"
         local existing_password
-        existing_password=$(get_env_var "DB_PASSWORD" "")
-        db_password=$(prompt_database_password "DB_PASSWORD" "$existing_password")
+        existing_password=$(get_env_var "$ENV_KEY_DB_PASSWORD" "")
+        db_password=$(prompt_database_password "$ENV_KEY_DB_PASSWORD" "$existing_password")
     fi
 
     if ! confirm_postgresql_role_is_safe "$db_user"; then
@@ -716,11 +728,11 @@ install_redis() {
 # Checks service, credentials, and database existence individually.
 diagnose_postgresql_connection() {
     local db_host db_port db_name db_user db_password
-    db_host=$(get_env_var "DB_HOST" "127.0.0.1")
-    db_port=$(get_env_var "DB_PORT" "5432")
+    db_host=$(get_env_var "$ENV_KEY_DB_HOST" "127.0.0.1")
+    db_port=$(get_env_var "$ENV_KEY_DB_PORT" "5432")
     db_name=$(get_env_var "$ENV_KEY_DB_DATABASE" "")
-    db_user=$(get_env_var "DB_USERNAME" "")
-    db_password=$(get_env_var "DB_PASSWORD" "")
+    db_user=$(get_env_var "$ENV_KEY_DB_USERNAME" "")
+    db_password=$(get_env_var "$ENV_KEY_DB_PASSWORD" "")
 
     echo ""
     echo -e "${RED}✗${NC} Database connection failed. Diagnosing..." >&2

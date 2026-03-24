@@ -126,6 +126,7 @@ derive_backend_domain() {
     local first_segment="${frontend%%.*}"
     local rest="${frontend#*.}"
     echo "${first_segment}.api.${rest}"
+    return 0
 }
 
 # Save frontend and backend domains to .env, and derive APP_URL.
@@ -140,6 +141,7 @@ save_domains_to_env() {
     update_env_file "FRONTEND_DOMAIN" "$frontend_domain"
     update_env_file "BACKEND_DOMAIN" "$backend_domain"
     update_env_file "APP_URL" "${app_scheme}://${frontend_domain}"
+    return 0
 }
 
 # Get default JWT expiration values

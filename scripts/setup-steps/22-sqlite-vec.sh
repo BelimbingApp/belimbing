@@ -53,6 +53,8 @@ resolve_sqlite_vec_version() {
     else
         echo "$fallback"
     fi
+
+    return 0
 }
 
 # Detect platform and set archive/extension names
@@ -123,6 +125,8 @@ verify_extension() {
 
 # Check if already installed at the target version
 check_existing() {
+    local sqlite_vec_version=$1
+
     if [[ ! -d "$INSTALL_DIR" ]]; then
         return 1
     fi
@@ -136,7 +140,7 @@ check_existing() {
     local installed_version
     installed_version=$(verify_extension "$INSTALL_DIR" 2>/dev/null) || return 1
 
-    local target_version="${SQLITE_VEC_VERSION#v}"
+    local target_version="${sqlite_vec_version#v}"
     [[ "$installed_version" == "$target_version" ]]
 }
 
@@ -144,12 +148,13 @@ check_existing() {
 download_extension() {
     local platform="$1"
     local ext_suffix="$2"
+    local sqlite_vec_version="$3"
 
-    local version_no_v="${SQLITE_VEC_VERSION#v}"
+    local version_no_v="${sqlite_vec_version#v}"
     local archive_name="sqlite-vec-${version_no_v}-loadable-${platform}.tar.gz"
-    local download_url="${GITHUB_RELEASE_URL}/${SQLITE_VEC_VERSION}/${archive_name}"
+    local download_url="${GITHUB_RELEASE_URL}/${sqlite_vec_version}/${archive_name}"
 
-    echo -e "${CYAN}Downloading sqlite-vec ${SQLITE_VEC_VERSION} for ${platform}...${NC}"
+    echo -e "${CYAN}Downloading sqlite-vec ${sqlite_vec_version} for ${platform}...${NC}"
     echo -e "  ${CYAN}URL:${NC} $download_url"
 
     # Create install directory
@@ -198,17 +203,17 @@ main() {
     load_setup_state
 
     # Resolve target version (GitHub API with pinned fallback)
-    local SQLITE_VEC_VERSION
-    SQLITE_VEC_VERSION=$(resolve_sqlite_vec_version)
+    local sqlite_vec_version
+    sqlite_vec_version=$(resolve_sqlite_vec_version)
 
     # Check if already installed
-    if check_existing; then
+    if check_existing "$sqlite_vec_version"; then
         local installed_version
         installed_version=$(verify_extension "$INSTALL_DIR")
         echo -e "${GREEN}${CHECK_MARK}${NC} sqlite-vec already installed and working: ${GREEN}${installed_version}${NC}"
         echo -e "  ${CYAN}Location:${NC} $INSTALL_DIR"
 
-        save_to_setup_state "SQLITE_VEC_VERSION" "$SQLITE_VEC_VERSION"
+        save_to_setup_state "SQLITE_VEC_VERSION" "$sqlite_vec_version"
 
         echo ""
         echo -e "${GREEN}${CHECK_MARK} SQLite-Vec setup complete!${NC}"
@@ -228,7 +233,7 @@ main() {
     echo ""
 
     # Download and install
-    if ! download_extension "$platform" "$ext_suffix"; then
+    if ! download_extension "$platform" "$ext_suffix" "$sqlite_vec_version"; then
         echo -e "${RED}${CROSS_MARK} sqlite-vec installation failed${NC}" >&2
         exit 1
     fi
@@ -251,7 +256,7 @@ main() {
     echo ""
 
     # Save state
-    save_to_setup_state "SQLITE_VEC_VERSION" "$SQLITE_VEC_VERSION"
+    save_to_setup_state "SQLITE_VEC_VERSION" "$sqlite_vec_version"
 
     echo ""
     echo -e "${GREEN}${CHECK_MARK} SQLite-Vec setup complete!${NC}"

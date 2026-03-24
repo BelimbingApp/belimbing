@@ -32,7 +32,6 @@ function invokeEnsureAdminUser(): void
     $command->setOutput(new OutputStyle(new ArrayInput([]), new BufferedOutput));
 
     $method = new ReflectionMethod($command, 'ensureAdminUser');
-    $method->setAccessible(true);
     $method->invoke($command);
 }
 

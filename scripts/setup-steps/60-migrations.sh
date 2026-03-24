@@ -60,11 +60,14 @@ print_db_troubleshoot() {
     echo -e "    1. Is PostgreSQL running?  ${CYAN}pg_isready${NC}" >&2
     echo -e "    2. Are credentials correct? Check ${CYAN}.env${NC} (DB_USERNAME, DB_PASSWORD)" >&2
     echo -e "    3. Re-run database setup:   ${CYAN}./scripts/setup-steps/40-database.sh${NC}" >&2
+
+    return 0
 }
 
 # Detect default admin email from git config.
 detect_admin_email() {
     git config user.email 2>/dev/null || echo "admin@example.com"
+    return 0
 }
 
 # Rebuild application caches
@@ -82,6 +85,8 @@ rebuild_caches() {
         php artisan view:clear 2>/dev/null || true
         echo -e "${GREEN}✓${NC} Caches cleared (development mode)"
     fi
+
+    return 0
 }
 
 # Main setup function
@@ -158,6 +163,7 @@ main() {
     save_to_setup_state "MIGRATIONS_RUN" "true"
 
     echo -e "${GREEN}✓ Database migrations complete!${NC}"
+    return 0
 }
 
 # Run main function

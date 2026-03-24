@@ -102,6 +102,8 @@ resolve_latest_git_version() {
     else
         echo "$fallback"
     fi
+
+    return 0
 }
 
 # Resolve latest Bun version from the GitHub releases API.
@@ -122,6 +124,8 @@ resolve_latest_bun_version() {
     else
         echo "$fallback"
     fi
+
+    return 0
 }
 
 # Get latest Bun version (resolved via API with pinned fallback)
