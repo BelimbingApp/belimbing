@@ -61,6 +61,14 @@ SQLITE_VEC_VERSION="v0.1.7"
 
 # === Helper Functions ===
 
+# Fetch a GitHub API payload for best-effort version discovery.
+# Network/API failures are acceptable here because callers fall back to pinned versions.
+fetch_github_api_response() {
+    local url=$1
+
+    curl -fsSL --max-time 5 "$url" 2>/dev/null || true
+}
+
 # Get required PHP version string (e.g., "8.5")
 # Usage: version=$(get_required_php_version)
 get_required_php_version() {
@@ -83,18 +91,19 @@ resolve_latest_git_version() {
     fallback=$(get_latest_git_version)
 
     local latest
-    latest=$(curl -fsSL --max-time 5 \
-        'https://api.github.com/repos/git/git/tags?per_page=10' 2>/dev/null \
-        | grep '"name"' \
+    latest=$(fetch_github_api_response 'https://api.github.com/repos/git/git/tags?per_page=10' \
+        | sed -n 's/.*"name": *"v\([^"]*\)".*/\1/p' \
         | grep -v '\-rc' \
         | head -1 \
-        | sed 's/.*"name": *"v\([^"]*\)".*/\1/')
+    )
 
     if [[ -n "$latest" ]]; then
         echo "$latest"
     else
         echo "$fallback"
     fi
+
+    return 0
 }
 
 # Resolve latest Bun version from the GitHub releases API.
@@ -105,16 +114,18 @@ resolve_latest_bun_version() {
     fallback="$LATEST_BUN_VERSION"
 
     local latest
-    latest=$(curl -fsSL --max-time 5 \
-        'https://api.github.com/repos/oven-sh/bun/releases/latest' 2>/dev/null \
-        | grep '"tag_name"' \
-        | sed 's/.*"tag_name": *"\(bun-\)\{0,1\}v\{0,1\}\([^"]*\)".*/\2/')
+    latest=$(fetch_github_api_response 'https://api.github.com/repos/oven-sh/bun/releases/latest' \
+        | sed -n 's/.*"tag_name": *"\(bun-\)\{0,1\}v\{0,1\}\([^"]*\)".*/\2/p' \
+        | head -1
+    )
 
     if [[ -n "$latest" ]]; then
         echo "$latest"
     else
         echo "$fallback"
     fi
+
+    return 0
 }
 
 # Get latest Bun version (resolved via API with pinned fallback)

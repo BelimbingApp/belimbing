@@ -7,21 +7,21 @@
         "dev:all": "bunx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" \"php artisan serve --port=${APP_PORT:-8000}\" \"php artisan queue:listen --tries=1\" \"php artisan reverb:start\" \"bun run dev\" --names=server,queue,reverb,vite"
     },
     "dependencies": {
-        "@tailwindcss/vite": "^4.2.1",
+        "@tailwindcss/vite": "^4.2.2",
         "alpinejs": "^3.15.8",
         "autoprefixer": "^10.4.27",
         "axios": "^1.13.6",
         "concurrently": "^9.2.1",
         "laravel-echo": "^2.3.1",
-        "laravel-vite-plugin": "^2.1.0",
-        "pusher-js": "^8.4.0",
+        "laravel-vite-plugin": "^3.0.0",
+        "pusher-js": "^8.4.3",
         "sortablejs": "^1.15.7",
-        "tailwindcss": "^4.2.1",
-        "vite": "^7"
+        "tailwindcss": "^4.2.2",
+        "vite": "^8"
     },
     "optionalDependencies": {
-        "@rollup/rollup-linux-x64-gnu": "4.59.0",
-        "@tailwindcss/oxide-linux-x64-gnu": "^4.2.1",
+        "@rollup/rollup-linux-x64-gnu": "4.60.0",
+        "@tailwindcss/oxide-linux-x64-gnu": "^4.2.2",
         "lightningcss-linux-x64-gnu": "^1.32.0"
     }
 }

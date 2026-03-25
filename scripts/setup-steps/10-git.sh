@@ -8,7 +8,8 @@
 # This script:
 # - Checks for Git installation and version
 # - Compares installed version against latest available
-# - Installs or upgrades Git if needed (via Xcode CLI Tools on macOS, package manager on Linux)
+# - Auto-installs Git when missing (required prerequisite)
+# - Asks permission before optional upgrades
 # - Verifies Git installation and saves state
 
 set -euo pipefail
@@ -41,6 +42,24 @@ else
     CURRENT_GIT_VERSION="0"  # Not installed
 fi
 declare -A GIT_VERSION_CACHE  # Cache for check_git_version results (version -> result)
+
+confirm_git_system_change() {
+    local action=$1
+    local target_version="${2:-}"
+
+    local prompt="Allow Git ${action}? This changes system packages and may affect other applications"
+    if [[ -n "$target_version" ]]; then
+        prompt+=" (target: ${target_version})"
+    fi
+
+    if [[ -t 0 ]]; then
+        ask_yes_no "$prompt" "y"
+        return $?
+    fi
+
+    echo -e "${YELLOW}⚠${NC} Non-interactive mode: refusing Git ${action} without interactive confirmation"
+    return 1
+}
 
 # Check if Git version needs upgrade
 # Caches results based on git_version to avoid redundant comparisons
@@ -177,20 +196,17 @@ main() {
             echo -e "${YELLOW}⚠${NC} Git is installed: $CURRENT_GIT_VERSION (latest: ${LATEST_GIT_VERSION})"
             echo ""
 
-            if [[ -t 0 ]]; then
-                if ask_yes_no "Upgrade Git to ${LATEST_GIT_VERSION}?" "y"; then
-                    echo ""
-                    # Continue to installation/upgrade
-                else
-                    echo -e "${YELLOW}⚠${NC} Skipping Git upgrade"
-                    echo -e "${CYAN}ℹ${NC} You can upgrade Git later manually"
-                    exit 0
-                fi
-            else
-                echo -e "${CYAN}Non-interactive mode: Will upgrade Git...${NC}"
-                echo ""
+            if ! confirm_git_system_change 'upgrade' "$LATEST_GIT_VERSION"; then
+                echo -e "${YELLOW}⚠${NC} Skipping Git upgrade"
+                echo -e "${CYAN}ℹ${NC} You can upgrade Git later manually"
+                exit 0
             fi
+
+            echo ""
         fi
+    else
+        echo -e "${YELLOW}ℹ${NC} Git not found — installing required prerequisite"
+        echo ""
     fi
 
     # Install Git
@@ -209,7 +225,7 @@ main() {
     echo ""
 
     # Save state
-    save_to_setup_state "GIT_VERSION" "$CURRENT_GIT_VERSION" "$PROJECT_ROOT"
+    save_to_setup_state "GIT_VERSION" "$CURRENT_GIT_VERSION"
 
     echo -e "${GREEN}✓ Git setup complete!${NC}"
     echo -e "${CYAN}Installed:${NC}"

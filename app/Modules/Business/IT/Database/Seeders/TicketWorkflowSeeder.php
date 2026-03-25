@@ -56,9 +56,11 @@ class TicketWorkflowSeeder extends Seeder
             ['code' => 'open',           'label' => 'Open',           'position' => 0, 'kanban_code' => 'backlog'],
             ['code' => 'assigned',       'label' => 'Assigned',       'position' => 1, 'kanban_code' => 'active'],
             ['code' => 'in_progress',    'label' => 'In Progress',    'position' => 2, 'kanban_code' => 'active'],
-            ['code' => 'awaiting_parts', 'label' => 'Awaiting Parts', 'position' => 3, 'kanban_code' => 'active'],
-            ['code' => 'resolved',       'label' => 'Resolved',       'position' => 4, 'kanban_code' => 'done'],
-            ['code' => 'closed',         'label' => 'Closed',         'position' => 5, 'kanban_code' => 'done'],
+            ['code' => 'blocked',        'label' => 'Blocked',        'position' => 3, 'kanban_code' => 'active'],
+            ['code' => 'awaiting_parts', 'label' => 'Awaiting Parts', 'position' => 4, 'kanban_code' => 'active'],
+            ['code' => 'review',         'label' => 'Review',         'position' => 5, 'kanban_code' => 'active'],
+            ['code' => 'resolved',       'label' => 'Resolved',       'position' => 6, 'kanban_code' => 'done'],
+            ['code' => 'closed',         'label' => 'Closed',         'position' => 7, 'kanban_code' => 'done'],
         ];
 
         foreach ($statuses as $status) {
@@ -75,13 +77,18 @@ class TicketWorkflowSeeder extends Seeder
     private function seedTransitions(): void
     {
         $transitions = [
-            ['from_code' => 'open',        'to_code' => 'assigned',       'label' => 'Assign',      'capability' => 'workflow.it_ticket.assign', 'position' => 0],
-            ['from_code' => 'assigned',    'to_code' => 'in_progress',    'label' => 'Start Work',   'capability' => null, 'position' => 0],
-            ['from_code' => 'in_progress', 'to_code' => 'awaiting_parts', 'label' => 'Await Parts',  'capability' => null, 'position' => 0],
-            ['from_code' => 'awaiting_parts', 'to_code' => 'in_progress', 'label' => 'Resume',       'capability' => null, 'position' => 0],
-            ['from_code' => 'in_progress', 'to_code' => 'resolved',      'label' => 'Resolve',      'capability' => null, 'position' => 1],
-            ['from_code' => 'resolved',    'to_code' => 'closed',         'label' => 'Close',        'capability' => null, 'position' => 0],
-            ['from_code' => 'resolved',    'to_code' => 'open',           'label' => 'Reopen',       'capability' => null, 'position' => 1],
+            ['from_code' => 'open',            'to_code' => 'assigned',       'label' => 'Assign',              'capability' => 'workflow.it_ticket.assign', 'position' => 0],
+            ['from_code' => 'assigned',        'to_code' => 'in_progress',    'label' => 'Start Work',          'capability' => null, 'position' => 0],
+            ['from_code' => 'in_progress',     'to_code' => 'awaiting_parts', 'label' => 'Await Parts',         'capability' => null, 'position' => 0],
+            ['from_code' => 'awaiting_parts',  'to_code' => 'in_progress',    'label' => 'Resume',              'capability' => null, 'position' => 0],
+            ['from_code' => 'in_progress',     'to_code' => 'blocked',        'label' => 'Block — Needs Input', 'capability' => null, 'position' => 1],
+            ['from_code' => 'blocked',         'to_code' => 'in_progress',    'label' => 'Unblock',             'capability' => null, 'position' => 0],
+            ['from_code' => 'in_progress',     'to_code' => 'review',         'label' => 'Submit for Review',   'capability' => null, 'position' => 2],
+            ['from_code' => 'review',          'to_code' => 'resolved',       'label' => 'Approve',             'capability' => null, 'position' => 0],
+            ['from_code' => 'review',          'to_code' => 'in_progress',    'label' => 'Request Rework',      'capability' => null, 'position' => 1],
+            ['from_code' => 'in_progress',     'to_code' => 'resolved',       'label' => 'Resolve',             'capability' => null, 'position' => 3],
+            ['from_code' => 'resolved',        'to_code' => 'closed',         'label' => 'Close',               'capability' => null, 'position' => 0],
+            ['from_code' => 'resolved',        'to_code' => 'open',           'label' => 'Reopen',              'capability' => null, 'position' => 1],
         ];
 
         foreach ($transitions as $transition) {

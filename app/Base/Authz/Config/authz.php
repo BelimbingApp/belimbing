@@ -30,6 +30,8 @@ $agentPowerUserAdditionalCapabilities = [
     'ai.tool_edit_data.execute',
     'ai.tool_message.execute',
     'ai.tool_schedule.execute',
+    'ai.tool_ticket_update.execute',
+    'ai.tool_edit_file.execute',
     'ai.tool_workspace.manage',
     'ai.tool_write_js.execute',
 ];
@@ -96,6 +98,8 @@ return [
         'ai.tool_image_analysis.execute',
         'ai.tool_web_search.execute',
         'ai.tool_agent_list.execute',
+        'ai.tool_ticket_update.execute',
+        'ai.tool_edit_file.execute',
         'ai.tool_write_js.execute',
         'ai.tool_workspace.view',
         'ai.tool_workspace.manage',

@@ -9,16 +9,16 @@ use App\Base\Foundation\Enums\BlbErrorCode;
 use App\Base\Foundation\Exceptions\BlbInvariantViolationException;
 
 /**
- * Thrown when an attempt is made to delete the system Agent (Lara).
+ * Thrown when an attempt is made to delete a system Agent (Lara, Kodi).
  */
 final class SystemEmployeeDeletionException extends BlbInvariantViolationException
 {
-    public function __construct()
+    public function __construct(int $employeeId)
     {
         parent::__construct(
-            'Lara (the system Agent) cannot be deleted.',
+            'System Agents cannot be deleted.',
             BlbErrorCode::SYSTEM_EMPLOYEE_DELETION_FORBIDDEN,
-            ['employee_id' => 1],
+            ['employee_id' => $employeeId],
         );
     }
 }

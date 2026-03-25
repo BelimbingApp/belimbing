@@ -60,11 +60,25 @@ print_db_troubleshoot() {
     echo -e "    1. Is PostgreSQL running?  ${CYAN}pg_isready${NC}" >&2
     echo -e "    2. Are credentials correct? Check ${CYAN}.env${NC} (DB_USERNAME, DB_PASSWORD)" >&2
     echo -e "    3. Re-run database setup:   ${CYAN}./scripts/setup-steps/40-database.sh${NC}" >&2
+
+    return 0
 }
 
 # Detect default admin email from git config.
 detect_admin_email() {
     git config user.email 2>/dev/null || echo "admin@example.com"
+    return 0
+}
+
+# Derive a default company code from company name (snake_case).
+default_company_code_from_name() {
+    local company_name="${1:-}"
+
+    echo "$company_name" \
+        | tr '[:upper:]' '[:lower:]' \
+        | sed -E 's/[^a-z0-9]+/_/g; s/^_+//; s/_+$//'
+
+    return 0
 }
 
 # Rebuild application caches
@@ -82,6 +96,8 @@ rebuild_caches() {
         php artisan view:clear 2>/dev/null || true
         echo -e "${GREEN}✓${NC} Caches cleared (development mode)"
     fi
+
+    return 0
 }
 
 # Main setup function
@@ -118,8 +134,9 @@ main() {
 
     # Prompt for framework primitives (licensee company, admin user).
     # These are passed as transient env vars to php artisan migrate.
-    local company_name admin_name admin_email admin_password
+    local company_name company_code admin_name admin_email admin_password
     company_name=$(ask_input "Licensee company name" "My Company")
+    company_code=$(ask_input "Licensee company code" "$(default_company_code_from_name "$company_name")")
     admin_name=$(ask_input "Admin name" "Administrator")
     admin_email=$(ask_input "Admin email" "$(detect_admin_email)")
     admin_password=$(ask_password "Admin password (min 8 chars)")
@@ -141,6 +158,7 @@ main() {
     echo -e "${CYAN}ℹ${NC} migrate ${migrate_args[*]}"
 
     if ! LICENSEE_COMPANY_NAME="$company_name" \
+            LICENSEE_COMPANY_CODE="$company_code" \
          ADMIN_NAME="$admin_name" \
          ADMIN_EMAIL="$admin_email" \
          ADMIN_PASSWORD="$admin_password" \
@@ -158,6 +176,7 @@ main() {
     save_to_setup_state "MIGRATIONS_RUN" "true"
 
     echo -e "${GREEN}✓ Database migrations complete!${NC}"
+    return 0
 }
 
 # Run main function

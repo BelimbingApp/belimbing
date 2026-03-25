@@ -54,7 +54,7 @@
                                 <td class="px-table-cell-x py-table-cell-y">
                                     <a href="{{ route('it.tickets.show', $ticket) }}" wire:navigate class="text-sm font-medium text-accent hover:underline">{{ $ticket->title }}</a>
                                 </td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $ticket->reporter?->name ?? '—' }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $ticket->reporter?->displayName() ?? '—' }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <x-ui.badge :variant="$this->priorityVariant($ticket->priority)">{{ ucfirst($ticket->priority) }}</x-ui.badge>
                                 </td>

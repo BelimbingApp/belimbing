@@ -197,6 +197,86 @@ get_bun_version() {
     return 0
 }
 
+is_bun_up_to_date() {
+    local installed_version=$1
+    local latest_version=$2
+
+    installed_version="${installed_version#v}"
+    latest_version="${latest_version#v}"
+
+    compare_version "$installed_version" "$latest_version"
+    local result=$?
+
+    if [[ $result -eq 0 ]] || [[ $result -eq 1 ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+confirm_bun_upgrade() {
+    local current_version=$1
+    local latest_version=$2
+
+    local prompt="Upgrade Bun from ${current_version} to ${latest_version}? This may affect other applications"
+
+    if [[ -t 0 ]]; then
+        ask_yes_no "$prompt" "y"
+        return $?
+    fi
+
+    echo -e "${YELLOW}⚠${NC} Non-interactive mode: skipping Bun upgrade prompt"
+    return 1
+}
+
+upgrade_bun() {
+    local os_type
+    os_type=$(detect_os)
+
+    echo -e "${CYAN}Upgrading Bun...${NC}"
+    echo ""
+
+    case "$os_type" in
+        macos)
+            if command_exists brew; then
+                brew upgrade oven-sh/bun/bun 2>/dev/null || brew upgrade bun 2>/dev/null || brew install oven-sh/bun/bun 2>/dev/null || {
+                    echo -e "${RED}✗${NC} Failed to upgrade Bun via Homebrew" >&2
+                    return 1
+                }
+            else
+                curl -fsSL https://bun.sh/install | bash || {
+                    echo -e "${RED}✗${NC} Failed to upgrade Bun" >&2
+                    return 1
+                }
+            fi
+            ;;
+        linux|wsl2)
+            curl -fsSL https://bun.sh/install | bash || {
+                echo -e "${RED}✗${NC} Failed to upgrade Bun" >&2
+                return 1
+            }
+            ;;
+        *)
+            echo -e "${RED}✗${NC} OS not supported for Bun auto-upgrade" >&2
+            return 1
+            ;;
+    esac
+
+    if [[ -f "$HOME/.bun/bin/bun" ]]; then
+        export PATH="$HOME/.bun/bin:$PATH"
+    fi
+
+    if command_exists bun; then
+        local bun_version
+        bun_version=$(bun --version 2>/dev/null || echo "$UNKNOWN_VERSION")
+        echo -e "${GREEN}✓${NC} Bun upgraded: $bun_version"
+        return 0
+    fi
+
+    echo -e "${RED}✗${NC} Bun upgrade verification failed" >&2
+    return 1
+}
+
 # Install project JS dependencies using the active runtime.
 # Must be called after the runtime binary is confirmed available.
 install_js_dependencies() {
@@ -350,12 +430,28 @@ main() {
     # Load existing configuration
     load_setup_state
 
+    local latest_bun_version
+    latest_bun_version=$(get_latest_bun_version_with_prefix)
+
     # Step 1: Check if Bun exists (PATH or default location)
     if command_exists bun; then
         local bun_version
         bun_version=$(get_bun_version)
         echo -e "${GREEN}✓${NC} Bun already installed: $bun_version"
         echo -e "${CYAN}ℹ${NC} Bun will be used (replaces Node.js and npm)"
+
+        if [[ "$bun_version" != "$UNKNOWN_VERSION" ]] && ! is_bun_up_to_date "$bun_version" "$latest_bun_version"; then
+            echo -e "${YELLOW}⚠${NC} Bun is behind latest release (${latest_bun_version})"
+            if confirm_bun_upgrade "$bun_version" "$latest_bun_version"; then
+                echo ""
+                if ! upgrade_bun; then
+                    echo -e "${YELLOW}⚠${NC} Continuing with existing Bun version"
+                fi
+            else
+                echo -e "${YELLOW}⚠${NC} Skipping Bun upgrade"
+            fi
+        fi
+
         echo ""
         handle_bun_success
     elif [[ -f "$HOME/.bun/bin/bun" ]]; then
@@ -366,6 +462,19 @@ main() {
         bun_version=$(get_bun_version)
         echo -e "${GREEN}✓${NC} Bun already installed: $bun_version"
         echo -e "${CYAN}ℹ${NC} Bun will be used (replaces Node.js and npm)"
+
+        if [[ "$bun_version" != "$UNKNOWN_VERSION" ]] && ! is_bun_up_to_date "$bun_version" "$latest_bun_version"; then
+            echo -e "${YELLOW}⚠${NC} Bun is behind latest release (${latest_bun_version})"
+            if confirm_bun_upgrade "$bun_version" "$latest_bun_version"; then
+                echo ""
+                if ! upgrade_bun; then
+                    echo -e "${YELLOW}⚠${NC} Continuing with existing Bun version"
+                fi
+            else
+                echo -e "${YELLOW}⚠${NC} Skipping Bun upgrade"
+            fi
+        fi
+
         echo ""
         handle_bun_success
     fi
@@ -389,8 +498,6 @@ main() {
         echo ""
     fi
 
-    local latest_bun_version
-    latest_bun_version=$(get_latest_bun_version_with_prefix)
     echo -e "${CYAN}Options:${NC}"
     echo ""
     echo -e "  ${GREEN}1. Bun (Recommended - Latest: ${latest_bun_version})${NC}"
@@ -423,6 +530,7 @@ main() {
                     echo -e "${CYAN}ℹ${NC} Node.js will remain installed but won't be used by Belimbing"
                     echo ""
                 fi
+
                 echo -e "${CYAN}Installing Bun...${NC}"
                 echo ""
                 if install_bun; then
@@ -466,7 +574,7 @@ main() {
                 ;;
         esac
     else
-        # Non-interactive mode - default to Bun
+        # Non-interactive mode - default to Bun.
         if [[ "$has_node" = true ]]; then
             local node_version
             node_version=$(node --version 2>/dev/null || echo "$UNKNOWN_VERSION")

@@ -35,7 +35,9 @@ class Index extends Component
             'open' => 'info',
             'assigned' => 'accent',
             'in_progress' => 'warning',
+            'blocked' => 'danger',
             'awaiting_parts' => 'warning',
+            'review' => 'accent',
             'resolved' => 'success',
             'closed' => 'default',
             default => 'default',
@@ -53,7 +55,8 @@ class Index extends Component
                             ->orWhere('category', 'like', '%'.$search.'%')
                             ->orWhere('status', 'like', '%'.$search.'%')
                             ->orWhereHas('reporter', function ($rq) use ($search): void {
-                                $rq->where('name', 'like', '%'.$search.'%');
+                                $rq->where('full_name', 'like', '%'.$search.'%')
+                                    ->orWhere('short_name', 'like', '%'.$search.'%');
                             });
                     });
                 })

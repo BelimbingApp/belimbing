@@ -57,11 +57,11 @@
                     <dl class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
                         <div>
                             <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Reporter') }}</dt>
-                            <dd class="mt-1 text-sm text-ink">{{ $ticket->reporter?->name ?? '—' }}</dd>
+                            <dd class="mt-1 text-sm text-ink">{{ $ticket->reporter?->displayName() ?? '—' }}</dd>
                         </div>
                         <div>
                             <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Assignee') }}</dt>
-                            <dd class="mt-1 text-sm text-ink">{{ $ticket->assignee?->name ?? __('Unassigned') }}</dd>
+                            <dd class="mt-1 text-sm text-ink">{{ $ticket->assignee?->displayName() ?? __('Unassigned') }}</dd>
                         </div>
                         <div>
                             <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Created') }}</dt>

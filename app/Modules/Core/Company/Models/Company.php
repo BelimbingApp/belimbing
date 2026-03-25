@@ -314,17 +314,24 @@ class Company extends Model
      * auto-increment collisions.
      *
      * @param  string  $name  Display name for the licensee company
+     * @param  string|null  $code  Preferred company code (normalized to snake_case)
      * @return bool Whether the licensee was created (false if already existed).
      */
-    public static function provisionLicensee(string $name = 'My Company'): bool
+    public static function provisionLicensee(string $name = 'My Company', ?string $code = null): bool
     {
         if (static::query()->where('id', self::LICENSEE_ID)->exists()) {
             return false;
         }
 
+        $normalizedCode = null;
+        if (is_string($code) && trim($code) !== '') {
+            $normalizedCode = Str::lower(Str::slug($code, '_'));
+        }
+
         static::unguarded(fn () => static::query()->create([
             'id' => self::LICENSEE_ID,
             'name' => $name,
+            'code' => $normalizedCode,
             'status' => 'active',
         ]));
 

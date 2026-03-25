@@ -4,7 +4,7 @@ Licensee and third-party modules live here, following the `{owner}/{module}/` la
 
 ```
 extensions/
-├── sb-group/          # Licensee
+├── sb-group/          # Licensee, prefer kebab-case naming convention
 │   ├── quality/
 │   └── logistics/
 └── some-vendor/       # Third-party vendor

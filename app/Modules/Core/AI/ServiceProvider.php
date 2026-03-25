@@ -7,10 +7,13 @@ namespace App\Modules\Core\AI;
 
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\Services\WebSearchService;
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
+use App\Modules\Core\AI\Services\KodiPromptFactory;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraContextProvider;
 use App\Modules\Core\AI\Services\LaraNavigationRouter;
@@ -36,6 +39,7 @@ use App\Modules\Core\AI\Tools\DelegateTaskTool;
 use App\Modules\Core\AI\Tools\DelegationStatusTool;
 use App\Modules\Core\AI\Tools\DocumentAnalysisTool;
 use App\Modules\Core\AI\Tools\EditDataTool;
+use App\Modules\Core\AI\Tools\EditFileTool;
 use App\Modules\Core\AI\Tools\GuideTool;
 use App\Modules\Core\AI\Tools\ImageAnalysisTool;
 use App\Modules\Core\AI\Tools\MemoryGetTool;
@@ -46,9 +50,11 @@ use App\Modules\Core\AI\Tools\NotificationTool;
 use App\Modules\Core\AI\Tools\QueryDataTool;
 use App\Modules\Core\AI\Tools\ScheduleTaskTool;
 use App\Modules\Core\AI\Tools\SystemInfoTool;
+use App\Modules\Core\AI\Tools\TicketUpdateTool;
 use App\Modules\Core\AI\Tools\WebFetchTool;
 use App\Modules\Core\AI\Tools\WebSearchTool;
 use App\Modules\Core\AI\Tools\WriteJsTool;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -80,6 +86,8 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(LaraNavigationRouter::class);
         $this->app->singleton(LaraOrchestrationService::class);
         $this->app->singleton(LaraPromptFactory::class);
+        $this->app->singleton(KodiPromptFactory::class);
+        $this->app->singleton(AgentExecutionContext::class);
 
         $this->app->singleton(ChannelAdapterRegistry::class, function () {
             $registry = new ChannelAdapterRegistry;
@@ -103,7 +111,7 @@ class ServiceProvider extends BaseServiceProvider
      *
      * The execution registry (AgentToolRegistry) receives only tools
      * that pass runtime availability checks. The metadata registry
-     * (ToolMetadataRegistry) receives ALL 20 tools so the workspace UI can
+     * (ToolMetadataRegistry) receives ALL 23 tools so the workspace UI can
      * display setup instructions even for unconfigured tools.
      */
     private function registerToolRegistries(): void
@@ -111,7 +119,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(AgentToolRegistry::class, function ($app) {
             $tools = $this->resolveToolInstances($app);
             $registry = new AgentToolRegistry(
-                $app->make(\App\Base\Authz\Contracts\AuthorizationService::class),
+                $app->make(AuthorizationService::class),
             );
 
             foreach ($tools['always'] as $tool) {
@@ -143,10 +151,10 @@ class ServiceProvider extends BaseServiceProvider
     }
 
     /**
-     * Instantiate all 20 Agent tools (memoized).
+     * Instantiate all 23 Agent tools (memoized).
      *
      * Returns three groups:
-     * - 'always': Tools that are always available (18 tools)
+     * - 'always': Tools that are always available (21 tools)
      * - 'conditional': Tools that depend on runtime config (may be null)
      * - 'metadataFallbacks': Metadata-only instances for conditional tools
      *   that failed availability checks — safe to call metadata methods on
@@ -154,7 +162,7 @@ class ServiceProvider extends BaseServiceProvider
      *
      * @return array{always: list<Tool>, conditional: list<?Tool>, metadataFallbacks: list<Tool>}
      */
-    private function resolveToolInstances(\Illuminate\Contracts\Foundation\Application $app): array
+    private function resolveToolInstances(Application $app): array
     {
         if ($this->toolInstances !== null) {
             return $this->toolInstances;
@@ -168,6 +176,7 @@ class ServiceProvider extends BaseServiceProvider
             new DelegationStatusTool,
             new DocumentAnalysisTool,
             new EditDataTool,
+            new EditFileTool,
             $app->make(GuideTool::class),
             new ImageAnalysisTool,
             new MemoryGetTool,
@@ -177,6 +186,7 @@ class ServiceProvider extends BaseServiceProvider
             new QueryDataTool,
             new ScheduleTaskTool,
             new SystemInfoTool,
+            $app->make(TicketUpdateTool::class),
             $app->make(WebFetchTool::class),
             $app->make(AgentListTool::class),
             new WriteJsTool,

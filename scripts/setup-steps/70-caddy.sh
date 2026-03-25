@@ -528,7 +528,7 @@ EOF
     echo -e "${GREEN}✓${NC} Your choice saved: ${CYAN}$PROXY_TYPE${NC}"
 
     # Save state
-    save_to_setup_state "PROXY_TYPE" "$PROXY_TYPE" "$PROJECT_ROOT"
+    save_to_setup_state "PROXY_TYPE" "$PROXY_TYPE"
 
     # Update .env file with proxy configuration
     echo -n "Updating .env file with proxy settings... "
@@ -536,7 +536,7 @@ EOF
     echo -e "${GREEN}✓${NC}"
 
     echo ""
-    echo -e "Configuration saved to: ${CYAN}$(get_setup_state_file "$PROJECT_ROOT")${NC}"
+    echo -e "Configuration saved to: ${CYAN}$(get_setup_state_file)${NC}"
     echo -e "Proxy settings saved to: ${CYAN}$PROJECT_ROOT/.env${NC}"
     echo ""
     echo -e "${GREEN}✓ Reverse proxy setup complete!${NC}"

@@ -72,7 +72,7 @@ class DevEmployeeSeeder extends DevSeeder
         $execDeptId = $deptMap['exec'] ?? null;
         $itDeptId = $deptMap['it'] ?? null;
 
-        $admin = $this->createEmployee($company, [
+        $employee = $this->createEmployee($company, [
             'employee_number' => 'LIC-001',
             'full_name' => $fullName,
             'short_name' => $shortName,
@@ -83,6 +83,14 @@ class DevEmployeeSeeder extends DevSeeder
             'employment_start' => now()->toDateString(),
             'department_id' => $execDeptId,
         ]);
+
+        // Link admin user to their employee record. This lives in the dev
+        // seeder — not in framework primitives — because production admins
+        // are not necessarily employees of the licensee company (e.g. an
+        // indie developer who is the sole admin but has no employee record).
+        if ($employee) {
+            $admin->update(['employee_id' => $employee->id]);
+        }
 
         $agents = [
             [

@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Core\AI\Models\AgentTaskDispatch;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use App\Modules\Core\AI\Tools\DelegateTaskTool;
@@ -45,17 +46,18 @@ describe('input validation', function () {
     });
 
     it('accepts task at max length', function () {
+        $dispatch = new AgentTaskDispatch([
+            'id' => 'agent_dispatch_abc123',
+            'status' => 'queued',
+            'employee_id' => 1,
+            'task' => str_repeat('x', 5000),
+            'acting_for_user_id' => 10,
+            'meta' => ['employee_name' => 'Worker'],
+        ]);
+
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
-            ->andReturn([
-                'dispatch_id' => 'agent_dispatch_abc123',
-                'status' => 'queued',
-                'employee_id' => 1,
-                'employee_name' => 'Worker',
-                'task' => str_repeat('x', 5000),
-                'acting_for_user_id' => 10,
-                'created_at' => '2026-03-08T00:00:00+00:00',
-            ]);
+            ->andReturn($dispatch);
 
         $result = $this->tool->execute([
             'task' => str_repeat('x', 5000),
@@ -68,18 +70,19 @@ describe('input validation', function () {
 
 describe('dispatch with explicit agent_id', function () {
     it('dispatches to specified agent', function () {
+        $dispatch = new AgentTaskDispatch([
+            'id' => 'agent_dispatch_test123',
+            'status' => 'queued',
+            'employee_id' => 42,
+            'task' => ANALYZE_SALES_DATA,
+            'acting_for_user_id' => 10,
+            'meta' => ['employee_name' => 'Data Analyst'],
+        ]);
+
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
             ->with(42, ANALYZE_SALES_DATA)
-            ->andReturn([
-                'dispatch_id' => 'agent_dispatch_test123',
-                'status' => 'queued',
-                'employee_id' => 42,
-                'employee_name' => 'Data Analyst',
-                'task' => ANALYZE_SALES_DATA,
-                'acting_for_user_id' => 10,
-                'created_at' => REPORT_TIMESTAMP,
-            ]);
+            ->andReturn($dispatch);
 
         $result = $this->tool->execute(['task' => ANALYZE_SALES_DATA, 'agent_id' => 42]);
 
@@ -115,18 +118,19 @@ describe('dispatch with auto-matching', function () {
                 'match_score' => 3,
             ]);
 
+        $dispatch = new AgentTaskDispatch([
+            'id' => 'agent_dispatch_auto456',
+            'status' => 'queued',
+            'employee_id' => 7,
+            'task' => GENERATE_MONTHLY_REPORT,
+            'acting_for_user_id' => 10,
+            'meta' => ['employee_name' => REPORT_GENERATOR],
+        ]);
+
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
             ->with(7, GENERATE_MONTHLY_REPORT)
-            ->andReturn([
-                'dispatch_id' => 'agent_dispatch_auto456',
-                'status' => 'queued',
-                'employee_id' => 7,
-                'employee_name' => REPORT_GENERATOR,
-                'task' => GENERATE_MONTHLY_REPORT,
-                'acting_for_user_id' => 10,
-                'created_at' => REPORT_TIMESTAMP,
-            ]);
+            ->andReturn($dispatch);
 
         $result = $this->tool->execute(['task' => GENERATE_MONTHLY_REPORT]);
 
@@ -148,17 +152,18 @@ describe('dispatch with auto-matching', function () {
 
 describe('output format', function () {
     it('includes dispatch_id in result', function () {
+        $dispatch = new AgentTaskDispatch([
+            'id' => 'agent_dispatch_xyz789',
+            'status' => 'queued',
+            'employee_id' => 1,
+            'task' => 'Do something',
+            'acting_for_user_id' => 10,
+            'meta' => ['employee_name' => 'Worker'],
+        ]);
+
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
-            ->andReturn([
-                'dispatch_id' => 'agent_dispatch_xyz789',
-                'status' => 'queued',
-                'employee_id' => 1,
-                'employee_name' => 'Worker',
-                'task' => 'Do something',
-                'acting_for_user_id' => 10,
-                'created_at' => '2026-03-08T12:00:00+00:00',
-            ]);
+            ->andReturn($dispatch);
 
         $result = $this->tool->execute(['task' => 'Do something', 'agent_id' => 1]);
 
@@ -167,5 +172,24 @@ describe('output format', function () {
             ->and((string) $result)->toContain('**Assigned to:**')
             ->and((string) $result)->toContain('**Task:**')
             ->and((string) $result)->toContain('**Created:**');
+    });
+
+    it('falls back to agent id when dispatch meta is absent', function () {
+        $dispatch = new AgentTaskDispatch([
+            'id' => 'agent_dispatch_null_meta',
+            'status' => 'queued',
+            'employee_id' => 9,
+            'task' => 'Do something else',
+            'acting_for_user_id' => 10,
+            'meta' => null,
+        ]);
+
+        $this->dispatcher->shouldReceive('dispatchForCurrentUser')
+            ->once()
+            ->andReturn($dispatch);
+
+        $result = $this->tool->execute(['task' => 'Do something else', 'agent_id' => 9]);
+
+        expect((string) $result)->toContain('Agent #9');
     });
 });

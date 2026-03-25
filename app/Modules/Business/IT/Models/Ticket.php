@@ -8,7 +8,7 @@ namespace App\Modules\Business\IT\Models;
 use App\Base\Workflow\Concerns\HasWorkflowStatus;
 use App\Modules\Business\IT\Database\Factories\TicketFactory;
 use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -32,8 +32,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Company $company
- * @property-read User $reporter
- * @property-read User|null $assignee
+ * @property-read Employee $reporter
+ * @property-read Employee|null $assignee
  */
 class Ticket extends Model
 {
@@ -103,18 +103,18 @@ class Ticket extends Model
     }
 
     /**
-     * Get the user who reported this ticket.
+     * Get the employee who reported this ticket.
      */
     public function reporter(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'reporter_id');
+        return $this->belongsTo(Employee::class, 'reporter_id');
     }
 
     /**
-     * Get the user currently assigned to this ticket.
+     * Get the employee currently assigned to this ticket.
      */
     public function assignee(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'assignee_id');
+        return $this->belongsTo(Employee::class, 'assignee_id');
     }
 }

@@ -29,7 +29,9 @@ unset _CONFIG_DIR
 # === Setup Defaults ===
 # shellcheck disable=SC2034
 # Used by setup scripts to provide sensible defaults during interactive setup
-DEFAULT_DB_USER="postgres"
+# Use a dedicated application role by default so setup never modifies the
+# PostgreSQL superuser account unless the operator explicitly opts in.
+DEFAULT_DB_USER="belimbing_app"
 DEFAULT_DB_PORT="5432"
 DEFAULT_PROXY_TYPE="caddy"
 
@@ -124,6 +126,7 @@ derive_backend_domain() {
     local first_segment="${frontend%%.*}"
     local rest="${frontend#*.}"
     echo "${first_segment}.api.${rest}"
+    return 0
 }
 
 # Save frontend and backend domains to .env, and derive APP_URL.
@@ -138,6 +141,7 @@ save_domains_to_env() {
     update_env_file "FRONTEND_DOMAIN" "$frontend_domain"
     update_env_file "BACKEND_DOMAIN" "$backend_domain"
     update_env_file "APP_URL" "${app_scheme}://${frontend_domain}"
+    return 0
 }
 
 # Get default JWT expiration values

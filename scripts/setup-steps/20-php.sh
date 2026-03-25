@@ -7,9 +7,9 @@
 #
 # This script:
 # - Checks for PHP installation (requires PHP 8.5+)
-# - Installs PHP if needed (via package manager)
+# - Auto-installs PHP if missing (required prerequisite)
 # - Checks for Composer installation
-# - Installs Composer if needed
+# - Auto-installs Composer if missing
 # - Verifies PHP and Composer are available
 
 set -euo pipefail
@@ -426,26 +426,14 @@ main() {
         else
             echo -e "${YELLOW}ℹ${NC} PHP not found"
 
-            if [[ -t 0 ]]; then
-                if ask_yes_no "Install PHP ${required_php_version}+?" "y"; then
-                    if ! install_php; then
-                        echo -e "${RED}✗${NC} PHP installation failed"
-                        echo ""
-                        echo -e "${YELLOW}Please install PHP ${required_php_version}+ manually:${NC}"
-                        echo -e "  • macOS: ${CYAN}brew install php@${required_php_version}${NC}"
-                        echo -e "  • Linux: ${CYAN}sudo apt-get install php${required_php_version}${NC}"
-                        echo -e "  • Manual: ${CYAN}https://www.php.net/downloads${NC}"
-                        exit 1
-                    fi
-                else
-                    echo -e "${YELLOW}Skipping PHP installation${NC}"
-                    exit 1
-                fi
-            else
-                # Non-interactive mode
-                if ! install_php; then
-                    exit 1
-                fi
+            if ! install_php; then
+                echo -e "${RED}✗${NC} PHP installation failed"
+                echo ""
+                echo -e "${YELLOW}Please install PHP ${required_php_version}+ manually:${NC}"
+                echo -e "  • macOS: ${CYAN}brew install php@${required_php_version}${NC}"
+                echo -e "  • Linux: ${CYAN}sudo apt-get install php${required_php_version}${NC}"
+                echo -e "  • Manual: ${CYAN}https://www.php.net/downloads${NC}"
+                exit 1
             fi
         fi
     fi
@@ -469,24 +457,12 @@ main() {
     else
         echo -e "${YELLOW}ℹ${NC} Composer not found"
 
-        if [[ -t 0 ]]; then
-            if ask_yes_no "Install Composer?" "y"; then
-                if ! install_composer; then
-                    echo -e "${RED}✗${NC} Composer installation failed"
-                    echo ""
-                    echo -e "${YELLOW}Please install Composer manually:${NC}"
-                    echo -e "  ${CYAN}https://getcomposer.org/download/${NC}"
-                    exit 1
-                fi
-            else
-                echo -e "${YELLOW}Skipping Composer installation${NC}"
-                exit 1
-            fi
-        else
-            # Non-interactive mode
-            if ! install_composer; then
-                exit 1
-            fi
+        if ! install_composer; then
+            echo -e "${RED}✗${NC} Composer installation failed"
+            echo ""
+            echo -e "${YELLOW}Please install Composer manually:${NC}"
+            echo -e "  ${CYAN}https://getcomposer.org/download/${NC}"
+            exit 1
         fi
     fi
 

@@ -13,6 +13,16 @@
         if ($seconds >= 60) return round($seconds / 60) . 'm';
         return $seconds . 's';
     };
+
+    $agentTagStyle = function (?string $tag): ?array {
+        return match ($tag) {
+            'agent_progress'    => ['label' => 'Progress',    'class' => 'text-info'],
+            'agent_question'    => ['label' => 'Question',    'class' => 'text-warning'],
+            'agent_deliverable' => ['label' => 'Deliverable', 'class' => 'text-success'],
+            'agent_error'       => ['label' => 'Error',       'class' => 'text-danger'],
+            default             => null,
+        };
+    };
 @endphp
 
 <div class="flow-root">
@@ -52,8 +62,11 @@
                                 </time>
                             </div>
                             @if($entry->comment)
-                                <div class="mt-2 text-sm text-ink">
-                                    @if($entry->comment_tag)
+                                @php $agentStyle = $agentTagStyle($entry->comment_tag); @endphp
+                                <div class="mt-2 text-sm text-ink {{ $agentStyle !== null ? 'rounded-md border border-border-default bg-surface-subtle p-2' : '' }}">
+                                    @if($agentStyle !== null)
+                                        <span class="text-xs font-semibold uppercase tracking-wider {{ $agentStyle['class'] }}"><span aria-hidden="true">🤖</span> {{ $agentStyle['label'] }}:</span>
+                                    @elseif($entry->comment_tag)
                                         <span class="text-xs font-semibold text-muted uppercase tracking-wider">{{ $entry->comment_tag }}:</span>
                                     @endif
                                     {{ $entry->comment }}

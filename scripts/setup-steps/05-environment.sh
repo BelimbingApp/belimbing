@@ -50,6 +50,8 @@ detect_app_debug() {
         production) echo "false" ;;
         *)          echo "true" ;;
     esac
+
+    return 0
 }
 
 detect_reverb_app_id() {
@@ -61,6 +63,7 @@ detect_reverb_app_id() {
     normalized="${normalized:-belimbing}"
 
     printf '%s\n' "${normalized}-${APP_ENV}"
+    return 0
 }
 
 # Prepare .env and prompt user for configuration values.
@@ -112,6 +115,8 @@ create_env_file() {
     update_env_file_if_missing "REVERB_APP_ID" "$(detect_reverb_app_id "$app_name")"
     update_env_file_if_missing "REVERB_APP_KEY" "$(generate_random_token 24)"
     update_env_file_if_missing "REVERB_APP_SECRET" "$(generate_random_token 32)"
+
+    return 0
 }
 
 # === Main ===

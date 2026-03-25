@@ -6,8 +6,8 @@
 namespace App\Modules\Business\IT\Livewire\Tickets;
 
 use App\Base\Authz\DTO\Actor;
-use App\Base\Workflow\DTO\TransitionContext;
 use App\Modules\Business\IT\Models\Ticket;
+use App\Modules\Business\IT\Services\TicketService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
@@ -27,16 +27,17 @@ class Show extends Component
     /**
      * Transition the ticket to a new status via the workflow engine.
      */
-    public function transitionTo(string $toCode): void
+    public function transitionTo(string $toCode, TicketService $ticketService): void
     {
         $user = Auth::user();
+        $actor = Actor::forUser($user);
 
-        $context = new TransitionContext(
-            actor: Actor::forUser($user),
-            comment: $this->transitionComment ?: null,
+        $result = $ticketService->transition(
+            $this->ticket,
+            $actor,
+            $toCode,
+            $this->transitionComment ?: null,
         );
-
-        $result = $this->ticket->transitionTo($toCode, $context);
 
         if ($result->success) {
             $this->transitionComment = '';
@@ -64,7 +65,9 @@ class Show extends Component
             'open' => 'info',
             'assigned' => 'accent',
             'in_progress' => 'warning',
+            'blocked' => 'danger',
             'awaiting_parts' => 'warning',
+            'review' => 'accent',
             'resolved' => 'success',
             'closed' => 'default',
             default => 'default',

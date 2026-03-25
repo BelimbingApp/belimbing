@@ -5,10 +5,9 @@
 
 namespace App\Modules\Business\IT\Livewire\Tickets;
 
-use App\Base\Workflow\Models\StatusHistory;
-use App\Modules\Business\IT\Models\Ticket;
+use App\Base\Authz\DTO\Actor;
+use App\Modules\Business\IT\Services\TicketService;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
@@ -26,7 +25,7 @@ class Create extends Component
 
     public ?string $location = null;
 
-    public function store(): void
+    public function store(TicketService $ticketService): void
     {
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -37,29 +36,17 @@ class Create extends Component
         ]);
 
         $user = Auth::user();
+        $reporter = $user->employee;
 
-        $ticket = Ticket::query()->create([
-            'company_id' => $user->company_id,
-            'reporter_id' => $user->id,
-            'status' => 'open',
-            'title' => $validated['title'],
-            'priority' => $validated['priority'],
-            'category' => $validated['category'],
-            'description' => $validated['description'],
-            'location' => $validated['location'],
-        ]);
+        if (! $reporter) {
+            Session::flash('error', __('Your account must be linked to an employee record.'));
 
-        // Record initial status in workflow history
-        StatusHistory::query()->create([
-            'flow' => 'it_ticket',
-            'flow_id' => $ticket->id,
-            'status' => 'open',
-            'actor_id' => $user->id,
-            'comment' => $validated['description'],
-            'comment_tag' => 'report',
-            'metadata' => ['priority' => $validated['priority']],
-            'transitioned_at' => Carbon::now(),
-        ]);
+            return;
+        }
+
+        $actor = Actor::forUser($user);
+
+        $ticket = $ticketService->create($actor, $reporter, $validated);
 
         Session::flash('success', __('Ticket created successfully.'));
 

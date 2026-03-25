@@ -6,6 +6,12 @@
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\CompanyRelationship;
 use App\Modules\Core\Company\Models\RelationshipType;
+use Illuminate\Support\Facades\DB;
+
+function removeSeededLicenseeCompany(): void
+{
+    DB::table('companies')->where('id', Company::LICENSEE_ID)->delete();
+}
 
 test('company code is auto-generated from name', function (): void {
     $company = Company::factory()->create([
@@ -13,6 +19,26 @@ test('company code is auto-generated from name', function (): void {
     ]);
 
     expect($company->code)->toBe('my_great_company');
+});
+
+test('provision licensee uses preferred company code when provided', function (): void {
+    removeSeededLicenseeCompany();
+
+    Company::provisionLicensee('My Company', 'preferred_licensee');
+
+    $licensee = Company::query()->findOrFail(Company::LICENSEE_ID);
+
+    expect($licensee->code)->toBe('preferred_licensee');
+});
+
+test('provision licensee normalizes preferred company code', function (): void {
+    removeSeededLicenseeCompany();
+
+    Company::provisionLicensee('My Company', 'Preferred Code 2026');
+
+    $licensee = Company::query()->findOrFail(Company::LICENSEE_ID);
+
+    expect($licensee->code)->toBe('preferred_code_2026');
 });
 
 test('company can have parent company', function (): void {

@@ -12,8 +12,10 @@ use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
+use App\Modules\Core\AI\Models\AgentTaskDispatch;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
+use Illuminate\Auth\Access\AuthorizationException;
 
 /**
  * Task delegation tool for Agents.
@@ -135,7 +137,7 @@ class DelegateTaskTool extends AbstractTool
             try {
                 $dispatchResult = $this->dispatcher->dispatchForCurrentUser($agentId, $task);
                 $result = ToolResult::success($this->formatDispatchResult($dispatchResult));
-            } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+            } catch (AuthorizationException $e) {
                 $result = ToolResult::error($e->getMessage(), 'authorization_error');
             } catch (\Throwable $e) {
                 $result = ToolResult::error('Dispatching task failed: '.$e->getMessage(), 'dispatch_error');
@@ -162,18 +164,18 @@ class DelegateTaskTool extends AbstractTool
     }
 
     /**
-     * Format the dispatch result as a readable status message.
-     *
-     * @param  array{dispatch_id: string, status: string, employee_id: int, employee_name: string, task: string, acting_for_user_id: int, created_at: string}  $result
+     * Format the dispatch model as a readable status message.
      */
-    private function formatDispatchResult(array $result): string
+    private function formatDispatchResult(AgentTaskDispatch $dispatch): string
     {
+        $employeeName = data_get($dispatch->meta, 'employee_name') ?? 'Agent #'.$dispatch->employee_id;
+
         return 'Task dispatched successfully.'
-            ."\n\n".'**Dispatch ID:** '.$result['dispatch_id']
-            ."\n".'**Status:** '.$result['status']
-            ."\n".'**Assigned to:** '.$result['employee_name'].' (ID: '.$result['employee_id'].')'
-            ."\n".'**Task:** '.$result['task']
-            ."\n".'**Created:** '.$result['created_at']
+            ."\n\n".'**Dispatch ID:** '.$dispatch->id
+            ."\n".'**Status:** '.$dispatch->status
+            ."\n".'**Assigned to:** '.$employeeName.' (ID: '.$dispatch->employee_id.')'
+            ."\n".'**Task:** '.$dispatch->task
+            ."\n".'**Created:** '.$dispatch->created_at?->toIso8601String()
             ."\n\n".'Use delegation_status with this dispatch_id to check progress.';
     }
 }

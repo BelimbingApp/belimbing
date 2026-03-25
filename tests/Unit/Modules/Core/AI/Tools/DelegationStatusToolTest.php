@@ -1,10 +1,12 @@
 <?php
 
+use App\Modules\Core\AI\Models\AgentTaskDispatch;
 use App\Modules\Core\AI\Tools\DelegationStatusTool;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\Support\AssertsToolBehavior;
 use Tests\TestCase;
 
-uses(TestCase::class, AssertsToolBehavior::class);
+uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
 
 beforeEach(function () {
     $this->tool = new DelegationStatusTool;
@@ -41,41 +43,94 @@ describe('input validation', function () {
 });
 
 describe('status lookup', function () {
-    it('returns queued status for valid dispatch_id', function () {
+    it('returns not_found for unknown dispatch_id', function () {
+        $result = (string) $this->tool->execute(['dispatch_id' => 'agent_dispatch_unknown123']);
+        $data = json_decode($result, true);
+
+        expect($data)->not->toBeNull()
+            ->and($data['dispatch_id'])->toBe('agent_dispatch_unknown123')
+            ->and($data['status'])->toBe('not_found')
+            ->and($data)->toHaveKey('checked_at');
+    });
+
+    it('returns status for a persisted dispatch', function () {
+        AgentTaskDispatch::unguarded(fn () => AgentTaskDispatch::query()->create([
+            'id' => 'agent_dispatch_abc123xyz',
+            'employee_id' => 1,
+            'acting_for_user_id' => 1,
+            'task' => 'Test task',
+            'status' => 'queued',
+            'meta' => ['employee_name' => 'Kodi'],
+        ]));
+
         $result = (string) $this->tool->execute(['dispatch_id' => 'agent_dispatch_abc123xyz']);
         $data = json_decode($result, true);
 
         expect($data)->not->toBeNull()
             ->and($data['dispatch_id'])->toBe('agent_dispatch_abc123xyz')
             ->and($data['status'])->toBe('queued')
-            ->and($data)->toHaveKey('checked_at')
-            ->and($data)->toHaveKey('message');
+            ->and($data['employee_id'])->toBe(1)
+            ->and($data['task'])->toBe('Test task')
+            ->and($data)->toHaveKey('checked_at');
     });
 
-    it('returns valid JSON', function () {
-        $result = (string) $this->tool->execute(['dispatch_id' => 'agent_dispatch_test123']);
+    it('returns a null employee name when dispatch meta is absent', function () {
+        AgentTaskDispatch::unguarded(fn () => AgentTaskDispatch::query()->create([
+            'id' => 'agent_dispatch_no_meta',
+            'employee_id' => 1,
+            'acting_for_user_id' => 1,
+            'task' => 'Test task',
+            'status' => 'queued',
+            'meta' => null,
+        ]));
 
-        expect(json_decode($result, true))->not->toBeNull();
-    });
-
-    it('returns pretty-printed JSON', function () {
-        $result = (string) $this->tool->execute(['dispatch_id' => 'agent_dispatch_test123']);
-
-        expect($result)->toContain("\n");
-    });
-
-    it('preserves dispatch_id in response', function () {
-        $dispatchId = 'agent_dispatch_unique42';
-        $result = (string) $this->tool->execute(['dispatch_id' => $dispatchId]);
+        $result = (string) $this->tool->execute(['dispatch_id' => 'agent_dispatch_no_meta']);
         $data = json_decode($result, true);
 
-        expect($data['dispatch_id'])->toBe($dispatchId);
+        expect($data)->not->toBeNull()
+            ->and($data['employee_name'])->toBeNull();
     });
 
-    it('includes checked_at timestamp', function () {
-        $result = (string) $this->tool->execute(['dispatch_id' => 'agent_dispatch_time']);
+    it('includes result_summary for succeeded dispatch', function () {
+        AgentTaskDispatch::unguarded(fn () => AgentTaskDispatch::query()->create([
+            'id' => 'agent_dispatch_success',
+            'employee_id' => 1,
+            'acting_for_user_id' => 1,
+            'task' => 'Build feature',
+            'status' => 'succeeded',
+            'result_summary' => 'Feature built successfully.',
+            'meta' => ['employee_name' => 'Kodi'],
+        ]));
+
+        $result = (string) $this->tool->execute(['dispatch_id' => 'agent_dispatch_success']);
         $data = json_decode($result, true);
 
-        expect($data['checked_at'])->toMatch('/^\d{4}-\d{2}-\d{2}T/');
+        expect($data['status'])->toBe('succeeded')
+            ->and($data['result_summary'])->toBe('Feature built successfully.');
+    });
+
+    it('includes error_message for failed dispatch', function () {
+        AgentTaskDispatch::unguarded(fn () => AgentTaskDispatch::query()->create([
+            'id' => 'agent_dispatch_fail',
+            'employee_id' => 1,
+            'acting_for_user_id' => 1,
+            'task' => 'Broken task',
+            'status' => 'failed',
+            'error_message' => 'LLM timeout.',
+            'meta' => [],
+        ]));
+
+        $result = (string) $this->tool->execute(['dispatch_id' => 'agent_dispatch_fail']);
+        $data = json_decode($result, true);
+
+        expect($data['status'])->toBe('failed')
+            ->and($data['error_message'])->toBe('LLM timeout.');
+    });
+
+    it('returns valid pretty-printed JSON', function () {
+        $result = (string) $this->tool->execute(['dispatch_id' => 'agent_dispatch_test123']);
+
+        expect(json_decode($result, true))->not->toBeNull()
+            ->and($result)->toContain("\n");
     });
 });

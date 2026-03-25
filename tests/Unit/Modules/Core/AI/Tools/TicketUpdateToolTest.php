@@ -1,0 +1,51 @@
+<?php
+
+use App\Base\Workflow\Models\StatusHistory;
+use App\Modules\Business\IT\Models\Ticket;
+use App\Modules\Core\AI\Tools\TicketUpdateTool;
+use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Models\User;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Tests\Support\AssertsToolBehavior;
+use Tests\TestCase;
+
+uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
+
+beforeEach(function () {
+    $this->tool = app(TicketUpdateTool::class);
+});
+
+it('attributes ticket comments to the agent employee instead of the authenticated user id', function () {
+    $company = Company::factory()->create();
+    $employee = Employee::factory()->create([
+        'company_id' => $company->id,
+    ]);
+    $user = User::factory()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+    ]);
+    $ticket = Ticket::query()->create([
+        'company_id' => $company->id,
+        'reporter_id' => $employee->id,
+        'status' => 'open',
+        'priority' => 'medium',
+        'title' => 'Investigate agent attribution',
+    ]);
+
+    $this->actingAs($user);
+
+    $result = $this->tool->execute([
+        'ticket_id' => $ticket->id,
+        'action' => 'post_comment',
+        'comment' => 'Kodi is working on it.',
+        'comment_tag' => 'agent_progress',
+    ]);
+
+    $entry = StatusHistory::latest('it_ticket', $ticket->id);
+
+    expect((string) $result)->toContain("Comment posted to ticket #{$ticket->id}.")
+        ->and($entry)->not->toBeNull()
+        ->and($entry->actor_id)->toBe($employee->id)
+        ->and($entry->actor_id)->not->toBe($user->id);
+});

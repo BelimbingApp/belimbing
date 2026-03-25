@@ -23,6 +23,7 @@ BLB needs Agents to be managed as first-class employees under the same organizat
 6. Agent permissions are constrained by delegation and cannot exceed supervisor effective permissions.
 7. **Agent context for execution:** OpenClaw-style workspaces (IDENTITY, SOUL, AGENTS, etc.) define “who” and “how”; BLB keeps a single `job_description` field as a short role label for now; full workspace-based context is the target when integrating an OpenClaw-like runtime.
 8. **Per-agent LLM model selection:** Each Agent can use a different LLM provider and model, configured via workspace `config.json` with company-level provider credentials. This enables cost-optimized model assignment by job type (see §15).
+9. **Two system primitives:** Lara (`Employee::LARA_ID = 1`) is the system orchestrator — guides setup, delegates tasks, manages the AI workforce. Kodi (`Employee::KODI_ID = 2`) is the system developer — builds modules, writes code, works through IT tickets. Both are provisioned at install time and cannot be deleted.
 
 ---
 

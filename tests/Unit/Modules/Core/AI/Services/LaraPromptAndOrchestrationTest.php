@@ -180,8 +180,7 @@ it('queues delegation to the best matched agent', function (): void {
     expect($result)->not->toBeNull()
         ->and($result['meta']['orchestration']['status'])->toBe('queued')
         ->and($result['meta']['orchestration']['selected_agent']['name'])->toBe(CODE_WORKER)
-        ->and($result['meta']['orchestration']['dispatch']['employee_name'])->toBe(CODE_WORKER)
-        ->and($result['meta']['orchestration']['dispatch']['task'])->toBe('build a PHP module with tests');
+        ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('agent_dispatch_');
 });
 
 it('returns no_agents status when no delegated agents are available', function (): void {

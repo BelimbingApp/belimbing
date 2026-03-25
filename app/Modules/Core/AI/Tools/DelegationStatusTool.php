@@ -12,17 +12,14 @@ use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
+use App\Modules\Core\AI\Models\AgentTaskDispatch;
 
 /**
  * Delegation status polling tool for Agents.
  *
- * Checks the status of a previously dispatched task by its dispatch_id.
- * Returns current status, timing, and result preview when available.
- *
- * Note: Task dispatch is currently queued-only (not yet persisted to database).
- * This tool returns a "queued" status for any syntactically valid dispatch_id.
- * Full persistence and real status tracking will be implemented when
- * LaraTaskDispatcher is upgraded to use Laravel queues and database storage.
+ * Queries the ai_agent_task_dispatches table to check the status of a
+ * previously dispatched task. Returns current status, timing, assigned
+ * agent, and result summary when available.
  *
  * Gated by `ai.tool_delegation_status.execute` authz capability.
  */
@@ -72,13 +69,13 @@ class DelegationStatusTool extends AbstractTool
         return 'ai.tool_delegation_status.execute';
     }
 
-    protected function metadata(): array
+    protected function toolMetadata(): array
     {
         return [
-            'display_name' => 'Delegation Status',
+            'displayName' => 'Delegation Status',
             'summary' => 'Check the status of a previously dispatched task.',
             'explanation' => 'Queries the status of a task dispatched via Delegate Task by its dispatch ID. '
-                .'Returns status (queued/running/completed/failed), timing, and result preview.',
+                .'Returns status (queued/running/succeeded/failed), timing, and result summary.',
             'limits' => [
                 'Read-only status check',
             ],
@@ -109,20 +106,42 @@ class DelegationStatusTool extends AbstractTool
     }
 
     /**
-     * Look up the dispatch status.
-     *
-     * Currently returns a placeholder response since task dispatches are
-     * not yet persisted to database. When LaraTaskDispatcher is upgraded
-     * to queue real jobs, this method will query the dispatch store.
+     * Look up the dispatch status from the database.
      */
     private function lookupStatus(string $dispatchId): string
     {
-        return json_encode([
-            'dispatch_id' => $dispatchId,
-            'status' => 'queued',
-            'message' => 'Task dispatch is queued. Real-time status tracking will be available '
-                .'when the delegation execution pipeline is fully implemented.',
+        $dispatch = AgentTaskDispatch::query()->find($dispatchId);
+
+        if ($dispatch === null) {
+            return json_encode([
+                'dispatch_id' => $dispatchId,
+                'status' => 'not_found',
+                'message' => 'No dispatch record found for this ID.',
+                'checked_at' => now()->toIso8601String(),
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        }
+
+        $data = [
+            'dispatch_id' => $dispatch->id,
+            'status' => $dispatch->status,
+            'employee_id' => $dispatch->employee_id,
+            'employee_name' => data_get($dispatch->meta, 'employee_name'),
+            'task' => $dispatch->task,
+            'ticket_id' => $dispatch->ticket_id,
+            'created_at' => $dispatch->created_at?->toIso8601String(),
+            'started_at' => $dispatch->started_at?->toIso8601String(),
+            'finished_at' => $dispatch->finished_at?->toIso8601String(),
             'checked_at' => now()->toIso8601String(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ];
+
+        if ($dispatch->status === 'succeeded') {
+            $data['result_summary'] = $dispatch->result_summary;
+        }
+
+        if ($dispatch->status === 'failed') {
+            $data['error_message'] = $dispatch->error_message;
+        }
+
+        return json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 }

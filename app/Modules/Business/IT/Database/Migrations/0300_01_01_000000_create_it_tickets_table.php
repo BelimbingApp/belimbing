@@ -21,8 +21,8 @@ return new class extends Migration
         Schema::create('it_tickets', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('company_id')->index()->constrained('companies');
-            $table->foreignId('reporter_id')->index()->constrained('users');
-            $table->foreignId('assignee_id')->nullable()->index()->constrained('users');
+            $table->foreignId('reporter_id')->index()->constrained('employees');
+            $table->foreignId('assignee_id')->nullable()->index()->constrained('employees');
             $table->string('status')->default('open')->index();
             $table->string('priority')->default('medium'); // low, medium, high, critical
             $table->string('category')->nullable(); // hardware, software, network, access, other

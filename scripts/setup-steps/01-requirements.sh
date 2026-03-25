@@ -40,6 +40,8 @@ check_os() {
             has_failure=true
             ;;
     esac
+
+    return 0
 }
 
 check_disk_space() {
@@ -57,6 +59,8 @@ check_disk_space() {
         echo -e "${RED}✗${NC} Disk: ${available_gb}GB available (${MIN_DISK_GB}GB required)"
         has_failure=true
     fi
+
+    return 0
 }
 
 check_ram() {
@@ -83,6 +87,8 @@ check_ram() {
     else
         echo -e "${YELLOW}⚠${NC} RAM: Cannot detect"
     fi
+
+    return 0
 }
 
 check_network() {
@@ -91,6 +97,8 @@ check_network() {
     else
         echo -e "${YELLOW}⚠${NC} Network: Cannot reach internet (packages may fail to download)"
     fi
+
+    return 0
 }
 
 # === Main ===

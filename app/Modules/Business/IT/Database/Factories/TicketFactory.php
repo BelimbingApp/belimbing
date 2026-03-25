@@ -7,7 +7,7 @@ namespace App\Modules\Business\IT\Database\Factories;
 
 use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -32,7 +32,7 @@ class TicketFactory extends Factory
     {
         return [
             'company_id' => Company::factory(),
-            'reporter_id' => User::factory(),
+            'reporter_id' => Employee::factory(),
             'assignee_id' => null,
             'status' => 'open',
             'priority' => fake()->randomElement(['low', 'medium', 'high', 'critical']),
@@ -75,13 +75,13 @@ class TicketFactory extends Factory
     }
 
     /**
-     * Indicate that the ticket has been assigned to a user.
+     * Indicate that the ticket has been assigned to an employee.
      */
     public function assigned(): static
     {
         return $this->state(
             fn (array $attributes) => [
-                'assignee_id' => User::factory(),
+                'assignee_id' => Employee::factory(),
                 'status' => 'assigned',
             ],
         );

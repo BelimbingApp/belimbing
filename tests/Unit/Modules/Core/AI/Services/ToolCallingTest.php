@@ -10,6 +10,7 @@ use App\Base\AI\Tools\ToolResult;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\Enums\AuthorizationReasonCode;
+use App\Modules\Core\AI\Models\AgentTaskDispatch;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
@@ -415,16 +416,17 @@ describe('DelegateTaskTool', function () {
             'capability_summary' => 'Financial reporting',
         ]);
 
-        $dispatcher = Mockery::mock(LaraTaskDispatcher::class);
-        $dispatcher->shouldReceive('dispatchForCurrentUser')->with(42, GENERATE_Q1_REPORT)->andReturn([
-            'dispatch_id' => 'agent_dispatch_abc123',
+        $dispatch = new AgentTaskDispatch([
+            'id' => 'agent_dispatch_abc123',
             'status' => 'queued',
             'employee_id' => 42,
-            'employee_name' => REPORT_BOT,
             'task' => GENERATE_Q1_REPORT,
             'acting_for_user_id' => 1,
-            'created_at' => '2025-01-01T00:00:00+00:00',
+            'meta' => ['employee_name' => REPORT_BOT],
         ]);
+
+        $dispatcher = Mockery::mock(LaraTaskDispatcher::class);
+        $dispatcher->shouldReceive('dispatchForCurrentUser')->with(42, GENERATE_Q1_REPORT)->andReturn($dispatch);
 
         $tool = new DelegateTaskTool($dispatcher, $matcher);
 
@@ -442,16 +444,17 @@ describe('DelegateTaskTool', function () {
             'capability_summary' => 'Analytics',
         ]);
 
-        $dispatcher = Mockery::mock(LaraTaskDispatcher::class);
-        $dispatcher->shouldReceive('dispatchForCurrentUser')->andReturn([
-            'dispatch_id' => 'agent_dispatch_xyz',
+        $dispatch = new AgentTaskDispatch([
+            'id' => 'agent_dispatch_xyz',
             'status' => 'queued',
             'employee_id' => 7,
-            'employee_name' => DATA_ANALYST,
             'task' => 'Run analytics',
             'acting_for_user_id' => 1,
-            'created_at' => '2025-01-01T00:00:00+00:00',
+            'meta' => ['employee_name' => DATA_ANALYST],
         ]);
+
+        $dispatcher = Mockery::mock(LaraTaskDispatcher::class);
+        $dispatcher->shouldReceive('dispatchForCurrentUser')->andReturn($dispatch);
 
         $tool = new DelegateTaskTool($dispatcher, $matcher);
 
@@ -471,7 +474,7 @@ describe('DelegateTaskTool', function () {
 
         $dispatcher = Mockery::mock(LaraTaskDispatcher::class);
         $dispatcher->shouldReceive('dispatchForCurrentUser')
-            ->andThrow(new \RuntimeException('Dispatch unavailable'));
+            ->andThrow(new RuntimeException('Dispatch unavailable'));
 
         $tool = new DelegateTaskTool($dispatcher, $matcher);
 

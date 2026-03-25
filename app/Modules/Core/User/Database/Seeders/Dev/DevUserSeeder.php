@@ -6,7 +6,9 @@
 namespace App\Modules\Core\User\Database\Seeders\Dev;
 
 use App\Base\Database\Seeders\DevSeeder;
+use App\Modules\Core\Company\Database\Seeders\Dev\DevCompanyAddressSeeder;
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Employee\Database\Seeders\Dev\DevEmployeeSeeder;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 
@@ -15,15 +17,14 @@ class DevUserSeeder extends DevSeeder
     protected const COMPANY_STELLAR = 'Stellar Industries Sdn Bhd';
 
     protected array $dependencies = [
-        \App\Modules\Core\Company\Database\Seeders\Dev\DevCompanyAddressSeeder::class,
-        \App\Modules\Core\Employee\Database\Seeders\Dev\DevEmployeeSeeder::class,
+        DevCompanyAddressSeeder::class,
+        DevEmployeeSeeder::class,
     ];
 
     /**
      * Creates realistic dev users across seeded companies.
      * Each user gets password 'password' for easy local login.
      * Idempotent via firstOrCreate on email.
-     * Links admin user to their employee record.
      */
     protected function seed(): void
     {
@@ -58,31 +59,6 @@ class DevUserSeeder extends DevSeeder
             if ($employee) {
                 $user->update(['employee_id' => $employee->id]);
             }
-        }
-
-        $this->assignAdminEmployeeId();
-    }
-
-    /**
-     * Link the admin user (created by framework primitives) to their licensee employee record.
-     */
-    protected function assignAdminEmployeeId(): void
-    {
-        $user = User::query()
-            ->where('company_id', Company::LICENSEE_ID)
-            ->first();
-
-        if ($user === null) {
-            return;
-        }
-
-        $employee = Employee::query()
-            ->where('email', $user->email)
-            ->where('company_id', Company::LICENSEE_ID)
-            ->first();
-
-        if ($employee) {
-            $user->update(['employee_id' => $employee->id]);
         }
     }
 
