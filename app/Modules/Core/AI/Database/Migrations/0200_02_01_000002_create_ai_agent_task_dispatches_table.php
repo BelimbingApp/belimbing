@@ -17,8 +17,9 @@ return new class extends Migration
         Schema::create('ai_agent_task_dispatches', function (Blueprint $table): void {
             $table->string('id')->primary();
             $table->foreignId('employee_id')->constrained('employees');
-            $table->foreignId('acting_for_user_id')->constrained('users');
-            $table->unsignedBigInteger('ticket_id')->nullable();
+            $table->foreignId('acting_for_user_id')->nullable()->constrained('users');
+            $table->string('task_type', 60)->index();
+            $table->nullableMorphs('entity');
             $table->text('task');
             $table->string('status', 20)->default('queued');
             $table->string('run_id')->nullable();
@@ -29,7 +30,6 @@ return new class extends Migration
             $table->timestamp('finished_at')->nullable();
             $table->timestamps();
 
-            $table->foreign('ticket_id')->references('id')->on('it_tickets')->nullOnDelete();
             $table->index('status');
             $table->index(['employee_id', 'status']);
         });

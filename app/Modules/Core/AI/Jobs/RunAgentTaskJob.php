@@ -5,7 +5,6 @@
 
 namespace App\Modules\Core\AI\Jobs;
 
-use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\AgentTaskDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
@@ -24,10 +23,10 @@ use Illuminate\Support\Facades\Auth;
  *
  * Loads the dispatch record, authenticates as the acting user (so
  * capability-gated tools resolve correctly), sets the agent execution
- * context, builds the system prompt with ticket context, and runs
+ * context, builds the system prompt with entity context, and runs
  * the agentic tool-calling loop.
  *
- * Status lifecycle: queued → running → succeeded/failed.
+ * Status lifecycle: queued → running → succeeded/failed/cancelled.
  */
 class RunAgentTaskJob implements ShouldQueue
 {
@@ -79,20 +78,21 @@ class RunAgentTaskJob implements ShouldQueue
 
             $dispatch->markRunning();
 
-            Auth::loginUsingId($dispatch->acting_for_user_id);
+            if ($dispatch->acting_for_user_id !== null) {
+                Auth::loginUsingId($dispatch->acting_for_user_id);
+            }
 
             $context->set(
                 employeeId: $dispatch->employee_id,
                 actingForUserId: $dispatch->acting_for_user_id,
-                ticketId: $dispatch->ticket_id,
+                entityType: $dispatch->entity_type,
+                entityId: $dispatch->entity_id,
                 dispatchId: $dispatch->id,
             );
 
-            $ticket = $dispatch->ticket_id !== null
-                ? Ticket::query()->find($dispatch->ticket_id)
-                : null;
+            $entity = $dispatch->entity;
 
-            $systemPrompt = $promptFactory->buildForDispatch($dispatch, $ticket);
+            $systemPrompt = $promptFactory->buildForDispatch($dispatch, $entity);
 
             $messages = [new Message(
                 role: 'user',

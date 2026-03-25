@@ -10,6 +10,7 @@ use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Workflow\Models\StatusHistory;
 use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\AI\Models\AgentTaskDispatch;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * System prompt factory for Kodi, BLB's developer agent.
@@ -29,14 +30,14 @@ class KodiPromptFactory
      * Build the system prompt for a dispatched agent task.
      *
      * @param  AgentTaskDispatch  $dispatch  The dispatch record
-     * @param  Ticket|null  $ticket  Associated ticket (if ticket-driven)
+     * @param  Model|null  $entity  Associated domain entity (ticket, QAC case, etc.)
      */
-    public function buildForDispatch(AgentTaskDispatch $dispatch, ?Ticket $ticket = null): string
+    public function buildForDispatch(AgentTaskDispatch $dispatch, ?Model $entity = null): string
     {
         $sections = [$this->basePrompt()];
 
-        if ($ticket !== null) {
-            $sections[] = $this->ticketContextSection($ticket);
+        if ($entity instanceof Ticket) {
+            $sections[] = $this->ticketContextSection($entity);
         }
 
         $sections[] = $this->dispatchContextSection($dispatch);

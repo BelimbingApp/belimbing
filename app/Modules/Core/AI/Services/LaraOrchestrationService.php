@@ -58,7 +58,7 @@ class LaraOrchestrationService
                         ['status' => 'no_agents'],
                     );
                 } else {
-                    $dispatch = $this->taskDispatcher->dispatchForCurrentUser($match['employee_id'], $task);
+                    $dispatch = $this->taskDispatcher->dispatchForCurrentUser($match['employee_id'], 'general', $task);
 
                     $response = $this->response(
                         __('Delegation queued to :agent (dispatch: :dispatch_id).', [

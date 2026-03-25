@@ -18,6 +18,7 @@ it('clears auth and execution context when returning early for a terminal dispat
         'id' => 'agent_dispatch_terminal_cleanup',
         'employee_id' => 1,
         'acting_for_user_id' => $user->id,
+        'task_type' => 'general',
         'task' => 'Already done',
         'status' => 'succeeded',
         'meta' => null,
@@ -29,7 +30,8 @@ it('clears auth and execution context when returning early for a terminal dispat
     $context->set(
         employeeId: $dispatch->employee_id,
         actingForUserId: $dispatch->acting_for_user_id,
-        ticketId: null,
+        entityType: null,
+        entityId: null,
         dispatchId: $dispatch->id,
     );
 

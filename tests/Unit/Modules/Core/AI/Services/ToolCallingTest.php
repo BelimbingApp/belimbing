@@ -402,7 +402,7 @@ describe('DelegateTaskTool', function () {
 
         $tool = new DelegateTaskTool(Mockery::mock(LaraTaskDispatcher::class), $matcher);
 
-        $result = $tool->execute(['task' => 'Generate a report']);
+        $result = $tool->execute(['task' => 'Generate a report', 'task_type' => 'general']);
 
         expect((string) $result)->toContain('Error');
         expect((string) $result)->toContain('No suitable Agent');
@@ -420,17 +420,18 @@ describe('DelegateTaskTool', function () {
             'id' => 'agent_dispatch_abc123',
             'status' => 'queued',
             'employee_id' => 42,
+            'task_type' => 'general',
             'task' => GENERATE_Q1_REPORT,
             'acting_for_user_id' => 1,
             'meta' => ['employee_name' => REPORT_BOT],
         ]);
 
         $dispatcher = Mockery::mock(LaraTaskDispatcher::class);
-        $dispatcher->shouldReceive('dispatchForCurrentUser')->with(42, GENERATE_Q1_REPORT)->andReturn($dispatch);
+        $dispatcher->shouldReceive('dispatchForCurrentUser')->with(42, 'general', GENERATE_Q1_REPORT)->andReturn($dispatch);
 
         $tool = new DelegateTaskTool($dispatcher, $matcher);
 
-        $result = $tool->execute(['task' => GENERATE_Q1_REPORT]);
+        $result = $tool->execute(['task' => GENERATE_Q1_REPORT, 'task_type' => 'general']);
 
         expect((string) $result)->toContain(REPORT_BOT);
         expect((string) $result)->toContain('agent_dispatch_abc123');
@@ -448,6 +449,7 @@ describe('DelegateTaskTool', function () {
             'id' => 'agent_dispatch_xyz',
             'status' => 'queued',
             'employee_id' => 7,
+            'task_type' => 'general',
             'task' => 'Run analytics',
             'acting_for_user_id' => 1,
             'meta' => ['employee_name' => DATA_ANALYST],
@@ -458,7 +460,7 @@ describe('DelegateTaskTool', function () {
 
         $tool = new DelegateTaskTool($dispatcher, $matcher);
 
-        $result = $tool->execute(['task' => 'Run analytics', 'agent_id' => 7]);
+        $result = $tool->execute(['task' => 'Run analytics', 'task_type' => 'general', 'agent_id' => 7]);
 
         expect((string) $result)->toContain(DATA_ANALYST);
         expect((string) $result)->toContain('agent_dispatch_xyz');
@@ -478,7 +480,7 @@ describe('DelegateTaskTool', function () {
 
         $tool = new DelegateTaskTool($dispatcher, $matcher);
 
-        $result = $tool->execute(['task' => 'some task']);
+        $result = $tool->execute(['task' => 'some task', 'task_type' => 'general']);
 
         expect((string) $result)->toContain('Error');
         expect((string) $result)->toContain('Dispatch unavailable');

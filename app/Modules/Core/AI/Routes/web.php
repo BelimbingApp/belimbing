@@ -6,6 +6,7 @@
 use App\Modules\Core\AI\Http\Controllers\ChatStreamController;
 use App\Modules\Core\AI\Livewire\Playground;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
+use App\Modules\Core\AI\Livewire\Setup\Kodi;
 use App\Modules\Core\AI\Livewire\Setup\Lara;
 use App\Modules\Core\AI\Livewire\Tools;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +18,9 @@ Route::middleware(['auth'])->group(function () {
     // Lara setup
     Route::get('admin/setup/lara', Lara::class)
         ->name('admin.setup.lara');
+    // Kodi setup (available once Lara is activated)
+    Route::get('admin/setup/kodi', Kodi::class)
+        ->name('admin.setup.kodi');
 
     Route::get('admin/ai/playground', Playground::class)
         ->name('admin.ai.playground');

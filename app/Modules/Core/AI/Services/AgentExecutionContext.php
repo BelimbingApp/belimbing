@@ -21,18 +21,21 @@ final class AgentExecutionContext
 
     private ?int $actingForUserId = null;
 
-    private ?int $ticketId = null;
+    private ?string $entityType = null;
+
+    private ?int $entityId = null;
 
     private ?string $dispatchId = null;
 
     /**
      * Set the execution context for an agent job.
      */
-    public function set(int $employeeId, int $actingForUserId, ?int $ticketId, string $dispatchId): void
+    public function set(int $employeeId, ?int $actingForUserId, ?string $entityType, ?int $entityId, string $dispatchId): void
     {
         $this->employeeId = $employeeId;
         $this->actingForUserId = $actingForUserId;
-        $this->ticketId = $ticketId;
+        $this->entityType = $entityType;
+        $this->entityId = $entityId;
         $this->dispatchId = $dispatchId;
     }
 
@@ -43,7 +46,8 @@ final class AgentExecutionContext
     {
         $this->employeeId = null;
         $this->actingForUserId = null;
-        $this->ticketId = null;
+        $this->entityType = null;
+        $this->entityId = null;
         $this->dispatchId = null;
     }
 
@@ -65,9 +69,14 @@ final class AgentExecutionContext
         return $this->actingForUserId;
     }
 
-    public function ticketId(): ?int
+    public function entityType(): ?string
     {
-        return $this->ticketId;
+        return $this->entityType;
+    }
+
+    public function entityId(): ?int
+    {
+        return $this->entityId;
     }
 
     public function dispatchId(): ?string

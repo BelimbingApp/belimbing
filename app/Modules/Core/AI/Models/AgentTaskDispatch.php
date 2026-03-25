@@ -5,20 +5,26 @@
 
 namespace App\Modules\Core\AI\Models;
 
-use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Carbon;
 
 /**
  * Agent Task Dispatch — tracks AI agent task executions.
  *
+ * Uses a polymorphic entity relationship so dispatches can reference
+ * any domain object (IT tickets, QAC cases, etc.) without cross-module
+ * foreign key constraints.
+ *
  * @property string $id
  * @property int $employee_id
- * @property int $acting_for_user_id
- * @property int|null $ticket_id
+ * @property int|null $acting_for_user_id
+ * @property string $task_type
+ * @property string|null $entity_type
+ * @property int|null $entity_id
  * @property string $task
  * @property string $status
  * @property string|null $run_id
@@ -31,10 +37,15 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Employee $employee
  * @property-read User|null $actingForUser
- * @property-read Ticket|null $ticket
+ * @property-read Model|null $entity
  */
 class AgentTaskDispatch extends Model
 {
+    /**
+     * Terminal statuses that indicate the dispatch is complete.
+     */
+    private const TERMINAL_STATUSES = ['succeeded', 'failed', 'cancelled'];
+
     /**
      * Indicates if the IDs are auto-incrementing.
      *
@@ -65,7 +76,9 @@ class AgentTaskDispatch extends Model
         'id',
         'employee_id',
         'acting_for_user_id',
-        'ticket_id',
+        'task_type',
+        'entity_type',
+        'entity_id',
         'task',
         'status',
         'run_id',
@@ -100,6 +113,8 @@ class AgentTaskDispatch extends Model
 
     /**
      * Get the user on whose behalf this task is acting.
+     *
+     * Null for system-initiated tasks (cron, webhook, scheduled).
      */
     public function actingForUser(): BelongsTo
     {
@@ -107,11 +122,14 @@ class AgentTaskDispatch extends Model
     }
 
     /**
-     * Get the ticket associated with this dispatch.
+     * Get the associated domain entity (ticket, QAC case, etc.).
+     *
+     * Uses Laravel's polymorphic relationship. Entity types should be
+     * registered in the morph map via Relation::morphMap().
      */
-    public function ticket(): BelongsTo
+    public function entity(): MorphTo
     {
-        return $this->belongsTo(Ticket::class);
+        return $this->morphTo();
     }
 
     /**
@@ -119,7 +137,7 @@ class AgentTaskDispatch extends Model
      */
     public function isTerminal(): bool
     {
-        return in_array($this->status, ['succeeded', 'failed'], true);
+        return in_array($this->status, self::TERMINAL_STATUSES, true);
     }
 
     /**
@@ -163,6 +181,17 @@ class AgentTaskDispatch extends Model
         $this->update([
             'status' => 'failed',
             'error_message' => $errorMessage,
+            'finished_at' => now(),
+        ]);
+    }
+
+    /**
+     * Transition the dispatch to cancelled status.
+     */
+    public function markCancelled(): void
+    {
+        $this->update([
+            'status' => 'cancelled',
             'finished_at' => now(),
         ]);
     }

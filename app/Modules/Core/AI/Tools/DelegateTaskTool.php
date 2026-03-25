@@ -62,6 +62,11 @@ class DelegateTaskTool extends AbstractTool
                 'Description of the task to delegate. Be specific about '
                     .'what the agent should accomplish.'
             )->required()
+            ->string(
+                'task_type',
+                'Task type discriminator (e.g., "resolve_ticket", "review_qac_case"). '
+                    .'Classifies the kind of work being dispatched.'
+            )->required()
             ->integer(
                 'agent_id',
                 'Employee ID of the target Agent. '
@@ -117,6 +122,7 @@ class DelegateTaskTool extends AbstractTool
     protected function handle(array $arguments): ToolResult
     {
         $task = $this->requireString($arguments, 'task');
+        $taskType = $this->requireString($arguments, 'task_type');
 
         if (mb_strlen($task) > self::MAX_TASK_LENGTH) {
             throw new ToolArgumentException(
@@ -135,7 +141,7 @@ class DelegateTaskTool extends AbstractTool
             );
         } else {
             try {
-                $dispatchResult = $this->dispatcher->dispatchForCurrentUser($agentId, $task);
+                $dispatchResult = $this->dispatcher->dispatchForCurrentUser($agentId, $taskType, $task);
                 $result = ToolResult::success($this->formatDispatchResult($dispatchResult));
             } catch (AuthorizationException $e) {
                 $result = ToolResult::error($e->getMessage(), 'authorization_error');

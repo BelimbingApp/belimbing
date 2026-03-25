@@ -29,12 +29,13 @@ class LaraTaskDispatcher
      * Creates a persisted dispatch record and queues the agent job.
      *
      * @param  int  $employeeId  Target agent's employee ID
+     * @param  string  $taskType  Task type discriminator (e.g., 'resolve_ticket')
      * @param  string  $task  Task description for the agent
-     * @param  array{ticket_id?: int, model_override?: string, source?: string}  $options  Optional dispatch options
+     * @param  array{entity_type?: string, entity_id?: int, model_override?: string, source?: string}  $options  Optional dispatch options
      *
      * @throws AuthorizationException When the target agent is not accessible
      */
-    public function dispatchForCurrentUser(int $employeeId, string $task, array $options = []): AgentTaskDispatch
+    public function dispatchForCurrentUser(int $employeeId, string $taskType, string $task, array $options = []): AgentTaskDispatch
     {
         $agent = $this->capabilityMatcher->findAccessibleAgentById($employeeId);
         $actingForUserId = auth()->id();
@@ -47,7 +48,9 @@ class LaraTaskDispatcher
             'id' => 'agent_dispatch_'.Str::random(12),
             'employee_id' => $agent['employee_id'],
             'acting_for_user_id' => $actingForUserId,
-            'ticket_id' => $options['ticket_id'] ?? null,
+            'task_type' => $taskType,
+            'entity_type' => $options['entity_type'] ?? null,
+            'entity_id' => $options['entity_id'] ?? null,
             'task' => trim($task),
             'status' => 'queued',
             'meta' => [

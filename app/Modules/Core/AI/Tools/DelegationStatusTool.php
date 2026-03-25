@@ -19,7 +19,7 @@ use App\Modules\Core\AI\Models\AgentTaskDispatch;
  *
  * Queries the ai_agent_task_dispatches table to check the status of a
  * previously dispatched task. Returns current status, timing, assigned
- * agent, and result summary when available.
+ * agent, entity reference, and result summary when available.
  *
  * Gated by `ai.tool_delegation_status.execute` authz capability.
  */
@@ -127,7 +127,8 @@ class DelegationStatusTool extends AbstractTool
             'employee_id' => $dispatch->employee_id,
             'employee_name' => data_get($dispatch->meta, 'employee_name'),
             'task' => $dispatch->task,
-            'ticket_id' => $dispatch->ticket_id,
+            'entity_type' => $dispatch->entity_type,
+            'entity_id' => $dispatch->entity_id,
             'created_at' => $dispatch->created_at?->toIso8601String(),
             'started_at' => $dispatch->started_at?->toIso8601String(),
             'finished_at' => $dispatch->finished_at?->toIso8601String(),
