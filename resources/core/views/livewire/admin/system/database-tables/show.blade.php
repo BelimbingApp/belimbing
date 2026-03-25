@@ -40,7 +40,7 @@
             document.addEventListener('mouseup', onUp);
         },
     }"
-    class="flex gap-0 -mx-1 -my-2 sm:-mx-4 sm:-my-1 h-[calc(100vh-theme(spacing.11)-theme(spacing.6))]"
+    class="flex gap-0 -mx-1 -my-2 sm:-mx-4 sm:-my-1 h-[calc(100vh-(--spacing(11))-(--spacing(6)))]"
 >
     {{-- Table Navigator Panel --}}
     <div
@@ -250,6 +250,17 @@
                             placeholder="{{ __('Search across text columns...') }}"
                         />
                     </div>
+                    @if(app()->environment('local') && $tableRegistry)
+                        <button
+                            wire:click="toggleStability"
+                            class="cursor-pointer"
+                            title="{{ $tableRegistry->is_stable ? __('Click to mark unstable') : __('Click to mark stable') }}"
+                        >
+                            <x-ui.badge :variant="$this->stabilityVariant($tableRegistry->is_stable)">
+                                {{ $tableRegistry->is_stable ? __('Stable') : __('Unstable') }}
+                            </x-ui.badge>
+                        </button>
+                    @endif
                     <x-ui.button
                         variant="ghost"
                         size="sm"

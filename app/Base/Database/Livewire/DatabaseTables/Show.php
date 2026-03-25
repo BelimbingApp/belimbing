@@ -5,9 +5,11 @@
 
 namespace App\Base\Database\Livewire\DatabaseTables;
 
+use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\TableInspector;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -38,6 +40,32 @@ class Show extends Component
     public bool $navigatorOpen = true;
 
     public bool $rawValues = false;
+
+    /**
+     * Toggle the stability flag for the current table.
+     */
+    public function toggleStability(): void
+    {
+        $table = TableRegistry::query()
+            ->where('table_name', $this->tableName)
+            ->firstOrFail();
+
+        if ($table->isStable()) {
+            $table->markUnstable();
+
+            return;
+        }
+
+        $table->markStable(Auth::id());
+    }
+
+    /**
+     * Map stability to a badge variant.
+     */
+    public function stabilityVariant(bool $isStable): string
+    {
+        return $isStable ? 'success' : 'default';
+    }
 
     /**
      * Initialize with the table name from the route parameter.
@@ -141,6 +169,9 @@ class Show extends Component
         $recentTables = session('recent_tables', []);
 
         return view('livewire.admin.system.database-tables.show', [
+            'tableRegistry' => TableRegistry::query()
+                ->where('table_name', $this->tableName)
+                ->first(),
             'columns' => $columns,
             'rows' => $inspector->rows(
                 $this->tableName,
