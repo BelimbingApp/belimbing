@@ -17,43 +17,54 @@ BLB-specific rules, **mark false positives on SonarCloud via API**, apply code
 fixes to real issues, validate, and create a PR. All in one pass — no user
 prompts needed.
 
+## Gotchas
+
+- Use BLB-specific triage rules, not generic Sonar advice.
+- Mark false positives and safe hotspots before applying code fixes.
+- Skip metric-only fixes that worsen the design; note them for human review.
+- Work in the quality worktree on `sonar-gate`, never directly on `main`.
+
+## Workflow Checklist
+
+- [ ] Read and validate `SONAR_TOKEN` from `.env`
+- [ ] Switch `blb-quality-tree` to `sonar-gate` and reset to the remote default branch
+- [ ] Fetch open Sonar issues and hotspots
+- [ ] Triage into false positives, safe hotspots, fixable issues, and skipped issues
+- [ ] Mark false positives and safe hotspots via API
+- [ ] Apply code fixes
+- [ ] Validate with tests, Pint, and build when needed
+- [ ] Commit, push, and open the PR
+- [ ] Report counts, fixes, skips, and human-review items
+
 ## Authentication
 
-The SonarCloud API requires a **user token** for write operations (marking false positives,
-reviewing hotspots).
-
-**Token location:** `SONAR_TOKEN` in the project `.env` file (gitignored, never committed).
+Read `SONAR_TOKEN` from the project `.env` file. Never ask the user to paste it
+into chat.
 
 ```bash
-# Read the token from .env
 SONAR_TOKEN=$(grep '^SONAR_TOKEN=' /home/kiat/repo/laravel/blb/.env | cut -d= -f2)
 ```
 
-If `SONAR_TOKEN` is empty or missing, ask the user to add it to `.env`. Do **not** ask them
-to paste the token into chat.
+If it is missing or empty, ask the user to add it to `.env`.
 
-Use the token as the username in HTTP Basic Auth with an empty password:
+Use HTTP Basic Auth with the token as the username:
 
 ```bash
 curl -sS -u "$SONAR_TOKEN:" "https://sonarcloud.io/api/..."
 ```
 
-Validate the token before proceeding:
+Validate before proceeding:
 
 ```bash
 curl -sS -u "$SONAR_TOKEN:" "https://sonarcloud.io/api/authentication/validate"
-# Expected: {"valid":true}
 ```
 
 ## Step 1: Switch to quality worktree
 
 ```bash
-# Work in the quality worktree
 cd /home/kiat/repo/laravel/blb-quality-tree
 git switch sonar-gate
 
-# Reset the branch to the remote default branch.
-# Some repos use origin/master; BLB uses origin/main.
 git fetch --prune origin
 if git show-ref --verify --quiet refs/remotes/origin/master; then
   git reset --hard origin/master
@@ -64,11 +75,8 @@ fi
 
 ## Step 2: Retrieve issues from SonarCloud
 
-The BLB project is hosted at:
 - **Project key:** `BelimbingApp_lara`
 - **Branch:** `main`
-
-Fetch open issues and hotspots using the SonarCloud public API:
 
 ```bash
 # All open issues (paginate with p=1, p=2, ... if total > 100)
@@ -90,8 +98,7 @@ Sort by severity descending (BLOCKER first) before proceeding to triage.
 
 ## Step 3: Triage issues (fix vs false positive)
 
-Apply this decision framework to every issue **before touching any code**.
-Partition all issues into two buckets: **false positives** (mark on SonarCloud) and **fixable** (apply code changes).
+Triage every issue before touching code.
 
 ### Always false positive — mark on SonarCloud
 
@@ -133,20 +140,16 @@ Partition all issues into two buckets: **false positives** (mark on SonarCloud) 
 ### Security hotspots
 
 For each `SECURITY_HOTSPOT`:
-1. Read the flagged code carefully.
-2. Assess whether the risk is real in BLB's context (self-hosted, no untrusted user-supplied commands, internal API, etc.).
-3. If real: fix it and document *why* in the commit message.
-4. If not real: mark as safe on SonarCloud via API (Step 4).
-5. Never mark a hotspot as safe without reading the code.
+1. Read the flagged code.
+2. Decide whether the risk is real in BLB's context.
+3. If real, fix it and document why.
+4. If not real, mark it safe via API.
 
 ## Step 4: Mark false positives on SonarCloud
 
-After triaging (Step 3), immediately mark all false positives on SonarCloud via API
-**before** applying any code fixes.
+Do this immediately after triage and before code fixes.
 
 ### Marking issues as false positive
-
-For each triaged false-positive **issue** (CODE_SMELL, BUG, VULNERABILITY):
 
 ```bash
 # 1. Add a comment explaining why it's a false positive
@@ -162,8 +165,6 @@ curl -sS -u "$SONAR_TOKEN:" -X POST "https://sonarcloud.io/api/issues/do_transit
 
 ### Marking hotspots as safe
 
-For each triaged safe **security hotspot**:
-
 ```bash
 curl -sS -u "$SONAR_TOKEN:" -X POST "https://sonarcloud.io/api/hotspots/change_status" \
   --data-urlencode "hotspot=$HOTSPOT_KEY" \
@@ -174,7 +175,7 @@ curl -sS -u "$SONAR_TOKEN:" -X POST "https://sonarcloud.io/api/hotspots/change_s
 
 ### Comment guidelines
 
-Each comment must explain **why** the issue is a false positive in BLB's context. Examples:
+Use one clear reason per batch. Examples:
 
 | Rule | Comment template |
 |------|-----------------|
@@ -187,14 +188,14 @@ Each comment must explain **why** the issue is a false positive in BLB's context
 
 ### Batch processing
 
-Process issues in batches by rule. For each batch:
-1. Verify the first issue's code to confirm the pattern
-2. Apply the same comment and transition to all matching issues
-3. Check each API response — skip issues that return errors (already resolved, not found)
+Process by rule:
+1. Verify the first issue's code.
+2. Apply the same reason and transition to matching issues.
+3. Check each API response.
 
 ## Step 5: Apply code fixes
 
-After marking false positives, apply code fixes to the remaining fixable issues.
+Apply fixes only after marking false positives and safe hotspots.
 
 ### Boy-Scout Rule
 
@@ -215,51 +216,36 @@ While fixing the flagged issue, also clean up *immediately surrounding code*:
 
 ### Quality bar
 
-A fix is only acceptable if it:
-1. Does **not** change observable behavior
-2. Improves clarity, testability, or structure
-3. Leaves the surrounding code at least as clean as it was found
-4. Passes all existing tests
+A fix is acceptable only if it:
+1. does not change observable behavior
+2. improves clarity, testability, or structure
+3. leaves the surrounding code at least as clean as it was found
+4. passes validation
 
-Skip metric-only fixes that make the code worse. If satisfying a Sonar rule would
-reduce clarity, introduce shallow extractions, or otherwise harm the design,
-skip the issue and note it for human review.
-
-If you cannot satisfy all four, **skip the issue** and note it for a human review.
+If a Sonar-only fix would harm the design, skip it and note it for human review.
 
 ## Step 6: Validate
 
-After applying fixes, run validation in this exact order:
+Use this validation loop:
 
 ```bash
-# Tests must pass
 php artisan test --stop-on-failure
-
-# Linter must be clean
 vendor/bin/pint --dirty
-
-# Frontend must build (if Blade/Livewire files were touched)
 npm run build
 ```
 
-If any step fails, **revert the specific fix that caused the failure** and note the issue.
-
-Do **not** proceed to Step 7 until all validation passes.
+If a step fails, fix or revert the offending change before proceeding.
 
 ## Step 7: Commit and create PR
 
 ```bash
-# Ensure you are on the quality branch
 git switch sonar-gate
 
-# Commit on sonar-gate (one concern per commit is still the rule)
 git add .
 git commit -m "quality: fix Sonar issues"
 
-# Push the branch (never push directly to main)
 git push -u origin sonar-gate
 
-# Open a PR to main
 gh pr create --base main --head sonar-gate --title "quality: fix Sonar issues" --body "$(cat <<'EOF'
 ## Summary
 - Fix Sonar findings (no behavior change)
@@ -274,7 +260,7 @@ EOF
 
 ## Step 8: Report results
 
-After completing all steps, provide a summary table with:
+Report:
 - **Marked as false positive:** count by rule, with comment reason used
 - **Marked as safe (hotspots):** count by rule, with comment reason used
 - **Issues fixed:** rule, file, brief description of fix
