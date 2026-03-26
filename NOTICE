@@ -9,6 +9,9 @@ This NOTICE file is for informational purposes only and does not modify the term
 
 ---
 
+Development support acknowledgment:
+Development of this project was supported in part by complimentary inference tokens provided by Amp Code (https://ampcode.com/).
+
 This product includes data from models.dev (https://models.dev),
 Copyright (c) models.dev contributors, licensed under MIT.
 See https://github.com/anomalyco/models.dev/blob/main/LICENSE for terms.
