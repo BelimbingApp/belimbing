@@ -2,6 +2,7 @@
 
 use App\Base\AI\Exceptions\ModelCatalogSyncException;
 use App\Base\AI\Services\ModelCatalogService;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -43,8 +44,21 @@ it('ensureSynced delegates to sync so the catalog file is populated on demand', 
         ], 200, ['ETag' => '"test-etag"']),
     ]);
 
-    $service = new ModelCatalogService;
-    $service->ensureSynced();
+    $originalStoragePath = app()->storagePath();
+    $testingStoragePath = sys_get_temp_dir().'/blb-testing-models-dev-'.bin2hex(random_bytes(8));
+
+    (new Filesystem)->ensureDirectoryExists($testingStoragePath);
+    app()->useStoragePath($testingStoragePath);
+
+    try {
+        $service = new ModelCatalogService;
+        $service->ensureSynced();
+
+        Http::assertSentCount(1);
+    } finally {
+        app()->useStoragePath($originalStoragePath);
+        (new Filesystem)->deleteDirectory($testingStoragePath);
+    }
 
     expect($service->getCatalog())->not->toBeEmpty()
         ->and($service->getModels('openai'))->not->toBeEmpty();
