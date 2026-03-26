@@ -6,6 +6,8 @@ use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\Support\AssertsToolBehavior;
 use Tests\TestCase;
 
+const DELEGATION_STATUS_TOOL_TEST_TASK = 'Test task';
+
 uses(TestCase::class, LazilyRefreshDatabase::class, AssertsToolBehavior::class);
 
 beforeEach(function () {
@@ -59,7 +61,7 @@ describe('status lookup', function () {
             'employee_id' => 1,
             'acting_for_user_id' => 1,
             'task_type' => 'general',
-            'task' => 'Test task',
+            'task' => DELEGATION_STATUS_TOOL_TEST_TASK,
             'status' => 'queued',
             'meta' => ['employee_name' => 'Kodi'],
         ]));
@@ -71,7 +73,7 @@ describe('status lookup', function () {
             ->and($data['dispatch_id'])->toBe('agent_dispatch_abc123xyz')
             ->and($data['status'])->toBe('queued')
             ->and($data['employee_id'])->toBe(1)
-            ->and($data['task'])->toBe('Test task')
+            ->and($data['task'])->toBe(DELEGATION_STATUS_TOOL_TEST_TASK)
             ->and($data)->toHaveKey('checked_at');
     });
 
@@ -81,7 +83,7 @@ describe('status lookup', function () {
             'employee_id' => 1,
             'acting_for_user_id' => 1,
             'task_type' => 'general',
-            'task' => 'Test task',
+            'task' => DELEGATION_STATUS_TOOL_TEST_TASK,
             'status' => 'queued',
             'meta' => null,
         ]));
