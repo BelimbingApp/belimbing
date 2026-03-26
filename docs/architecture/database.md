@@ -120,6 +120,7 @@ This registry tracks the YYYY_MM_DD prefixes assigned to each module to prevent 
 | `0200_01_07_*` | Modules/Core | Company | Geonames, Address |
 | `0200_01_09_*` | Modules/Core | Employee | Company, Address |
 | `0200_01_20_*` | Modules/Core | User | Company, Employee |
+| `0200_01_25_*` | Modules/Core | Quality | Company, Employee, User, Workflow |
 | `0200_02_01_*` | Modules/Core | AI | Company, Employee |
 | `0300_01_01_*` | Modules/Business | IT/Ticket | Company, User |
 

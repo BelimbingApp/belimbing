@@ -5,7 +5,7 @@
 
 namespace App\Base\Workflow\Contracts;
 
-use App\Base\Authz\DTO\Actor;
+use App\Base\Workflow\DTO\TransitionContext;
 use App\Base\Workflow\Models\StatusTransition;
 use Illuminate\Database\Eloquent\Model;
 
@@ -19,7 +19,7 @@ interface TransitionAction
      *
      * @param  Model  $model  The workflow participant (e.g., LeaveApplication)
      * @param  StatusTransition  $transition  The transition that was executed
-     * @param  Actor  $actor  The actor who triggered the transition
+     * @param  TransitionContext  $context  The transition context (actor, comment, attachments, metadata)
      */
-    public function execute(Model $model, StatusTransition $transition, Actor $actor): void;
+    public function execute(Model $model, StatusTransition $transition, TransitionContext $context): void;
 }

@@ -44,6 +44,7 @@ return [
         'messaging' => 'Multi-channel messaging capabilities',
         'admin' => 'Administrative operations',
         'it_ticket' => 'IT support ticket management',
+        'quality' => 'Quality management (NCR, CAPA, SCAR)',
     ],
 
     'verbs' => [
@@ -67,6 +68,16 @@ return [
         'poll',
         'search',
         'assign',
+        'review',
+        'triage',
+        'respond',
+        'verify',
+        'close',
+        'issue',
+        'accept',
+        'rework',
+        'cancel',
+        'upload',
     ],
 
     // Capabilities owned by the base framework (no module to host them yet).

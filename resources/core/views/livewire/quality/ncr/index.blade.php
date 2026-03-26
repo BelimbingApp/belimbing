@@ -1,0 +1,100 @@
+<?php
+// SPDX-License-Identifier: AGPL-3.0-only
+// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+
+/** @var \App\Modules\Core\Quality\Livewire\Ncr\Index $this */
+?>
+
+<div>
+    <x-slot name="title">{{ __('NCR') }}</x-slot>
+
+    <div class="space-y-section-gap">
+        <x-ui.page-header :title="__('Nonconformance Reports')" :subtitle="__('Manage quality NCRs')">
+            <x-slot name="actions">
+                <x-ui.button variant="primary" as="a" href="{{ route('quality.ncr.create') }}" wire:navigate>
+                    <x-icon name="heroicon-o-plus" class="w-4 h-4" />
+                    {{ __('New NCR') }}
+                </x-ui.button>
+            </x-slot>
+        </x-ui.page-header>
+
+        @if (session('success'))
+            <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
+        @endif
+
+        @if (session('error'))
+            <x-ui.alert variant="error">{{ session('error') }}</x-ui.alert>
+        @endif
+
+        <x-ui.card>
+            <div class="mb-2 flex flex-col sm:flex-row gap-2">
+                <div class="flex-1">
+                    <x-ui.search-input
+                        wire:model.live.debounce.300ms="search"
+                        placeholder="{{ __('Search by NCR number, title, or reporter...') }}"
+                    />
+                </div>
+                <div class="w-full sm:w-48">
+                    <x-ui.select id="status-filter" wire:model.live="statusFilter">
+                        <option value="">{{ __('All Statuses') }}</option>
+                        <option value="open">{{ __('Open') }}</option>
+                        <option value="under_triage">{{ __('Under Triage') }}</option>
+                        <option value="assigned">{{ __('Assigned') }}</option>
+                        <option value="in_progress">{{ __('In Progress') }}</option>
+                        <option value="under_review">{{ __('Under Review') }}</option>
+                        <option value="verified">{{ __('Verified') }}</option>
+                        <option value="closed">{{ __('Closed') }}</option>
+                        <option value="rejected">{{ __('Rejected') }}</option>
+                    </x-ui.select>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto -mx-card-inner px-card-inner">
+                <table class="min-w-full divide-y divide-border-default text-sm">
+                    <thead class="bg-surface-subtle/80">
+                        <tr>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('NCR No') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Title') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Kind') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Severity') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Reporter') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Created') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-surface-card divide-y divide-border-default">
+                        @forelse($ncrs as $ncr)
+                            <tr wire:key="ncr-{{ $ncr->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $ncr->ncr_no }}</td>
+                                <td class="px-table-cell-x py-table-cell-y">
+                                    <a href="{{ route('quality.ncr.show', $ncr) }}" wire:navigate class="text-sm font-medium text-accent hover:underline">{{ $ncr->title }}</a>
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ config('quality.ncr_kinds.' . $ncr->ncr_kind, $ncr->ncr_kind) }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
+                                    @if($ncr->severity)
+                                        <x-ui.badge :variant="$this->severityVariant($ncr->severity)">{{ ucfirst($ncr->severity) }}</x-ui.badge>
+                                    @else
+                                        <span class="text-sm text-muted">—</span>
+                                    @endif
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
+                                    <x-ui.badge :variant="$this->statusVariant($ncr->status)">{{ str_replace('_', ' ', ucfirst($ncr->status)) }}</x-ui.badge>
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $ncr->reported_by_name }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $ncr->created_at?->diffForHumans() }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No NCRs found.') }}</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-2">
+                {{ $ncrs->links() }}
+            </div>
+        </x-ui.card>
+    </div>
+</div>

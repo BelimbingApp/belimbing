@@ -7,6 +7,7 @@ namespace App\Base\Workflow\Services;
 
 use App\Base\Workflow\Contracts\TransitionAction;
 use App\Base\Workflow\DTO\TransitionContext;
+use App\Base\Workflow\DTO\TransitionPayload;
 use App\Base\Workflow\DTO\TransitionResult;
 use App\Base\Workflow\Events\TransitionCompleted;
 use App\Base\Workflow\Models\StatusHistory;
@@ -94,7 +95,24 @@ class WorkflowEngine
             return $history;
         });
 
-        TransitionCompleted::dispatch($flow, $model, $transition, $history, $context);
+        $payload = new TransitionPayload(
+            flow: $flow,
+            flowModel: $model::class,
+            flowId: $model->getKey(),
+            fromStatus: $fromCode,
+            toStatus: $toCode,
+            actorId: $context->actor->id,
+            actorRole: $context->actor->attributes['role'] ?? null,
+            actorDepartment: $context->actor->attributes['department'] ?? null,
+            assignees: $context->assignees,
+            comment: $context->comment,
+            commentTag: $context->commentTag,
+            attachments: $context->attachments,
+            metadata: $context->metadata,
+            transitionedAt: $now,
+        );
+
+        TransitionCompleted::dispatch($flow, $model, $transition, $history, $context, $payload);
 
         return TransitionResult::success($history);
     }
@@ -111,6 +129,9 @@ class WorkflowEngine
 
     /**
      * Execute the transition's action_class (if defined) inside the DB transaction.
+     *
+     * Passes the full TransitionContext so actions can access actor, comment,
+     * attachments, and metadata without coupling to individual fields.
      */
     private function executeAction(StatusTransition $transition, Model $model, TransitionContext $context): void
     {
@@ -120,6 +141,6 @@ class WorkflowEngine
 
         /** @var TransitionAction $action */
         $action = $this->container->make($transition->action_class);
-        $action->execute($model, $transition, $context->actor);
+        $action->execute($model, $transition, $context);
     }
 }
