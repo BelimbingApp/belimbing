@@ -22,9 +22,31 @@ use Illuminate\Support\Collection;
     <div class="flex items-center justify-between mb-2">
         <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Models') }}</span>
         <div class="flex items-center gap-1">
-            <x-ui.button variant="ghost" size="sm" wire:click.stop="syncProviderModels({{ $provider->id }})">
-                <x-icon name="heroicon-o-arrow-path" class="w-3.5 h-3.5" />
-                {{ __('Update Models') }}
+            <x-ui.button
+                variant="ghost"
+                size="sm"
+                class="flex-row flex-nowrap"
+                wire:click.stop="syncProviderModels({{ $provider->id }})"
+                wire:target="syncProviderModels({{ $provider->id }})"
+                wire:loading.attr="disabled"
+            >
+                <span
+                    wire:loading.remove
+                    wire:target="syncProviderModels({{ $provider->id }})"
+                    class="flex flex-row flex-nowrap items-center gap-1.5"
+                >
+                    <x-icon name="heroicon-o-arrow-path" class="inline-block h-3.5 w-3.5 shrink-0 align-middle" />
+                    <span class="whitespace-nowrap">{{ __('Update Models') }}</span>
+                </span>
+                <span
+                    wire:loading
+                    wire:target="syncProviderModels({{ $provider->id }})"
+                    class="flex flex-row flex-nowrap items-center gap-1.5"
+                    aria-live="polite"
+                >
+                    <x-icon name="heroicon-o-arrow-path" class="inline-block h-3.5 w-3.5 shrink-0 align-middle motion-safe:animate-spin" />
+                    <span class="whitespace-nowrap">{{ __('Update Models') }}</span>
+                </span>
             </x-ui.button>
             <x-ui.button variant="ghost" size="sm" wire:click.stop="openCreateModel({{ $provider->id }})">
                 <x-icon name="heroicon-o-plus" class="w-3.5 h-3.5" />

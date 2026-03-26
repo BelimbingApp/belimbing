@@ -76,6 +76,7 @@ trait ManagesSync
             ]),
             $result['added'] > 0 => __('Added :count new models.', ['count' => $result['added']]),
             $result['updated'] > 0 => __('Updated :count models.', ['count' => $result['updated']]),
+            ($result['total'] ?? 0) === 0 => __('No models are listed in the catalog for this provider.'),
             default => __('Models are up to date.'),
         };
     }

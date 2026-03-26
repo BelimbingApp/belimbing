@@ -6,6 +6,7 @@
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\Exceptions\GithubCopilotAuthException;
+use App\Base\AI\Exceptions\ModelCatalogSyncException;
 use App\Base\AI\Exceptions\ProviderDiscoveryException;
 use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Base\AI\Services\ModelCatalogService;
@@ -70,9 +71,13 @@ class ModelDiscoveryService
      *
      * @param  AiProvider  $provider  Provider to sync models for
      * @return array{added: int, updated: int, total: int}
+     *
+     * @throws ModelCatalogSyncException When the models.dev catalog cannot be downloaded
      */
     public function syncModels(AiProvider $provider): array
     {
+        $this->modelCatalog->ensureSynced();
+
         try {
             $discovered = $this->discoverModels($provider);
         } catch (RuntimeException) {

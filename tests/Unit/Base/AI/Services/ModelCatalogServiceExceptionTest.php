@@ -31,3 +31,21 @@ it('throws a dedicated exception when catalog sync returns invalid payload data'
     expect(fn () => $service->sync())
         ->toThrow(ModelCatalogSyncException::class, 'Catalog sync returned empty or invalid data');
 });
+
+it('ensureSynced delegates to sync so the catalog file is populated on demand', function (): void {
+    Http::fake([
+        'https://models.dev/api.json' => Http::response([
+            'openai' => [
+                'api' => 'https://api.openai.com/v1',
+                'name' => 'OpenAI',
+                'models' => ['gpt-4o' => ['id' => 'gpt-4o']],
+            ],
+        ], 200, ['ETag' => '"test-etag"']),
+    ]);
+
+    $service = new ModelCatalogService;
+    $service->ensureSynced();
+
+    expect($service->getCatalog())->not->toBeEmpty()
+        ->and($service->getModels('openai'))->not->toBeEmpty();
+});
