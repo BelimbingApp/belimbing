@@ -336,7 +336,7 @@
             "
             class="h-full"
         >
-            <livewire:admin.ai.chat />
+            <livewire:ai.chat />
         </div>
     @endauth
 

@@ -267,7 +267,7 @@ class Chat extends Component
 
         $settingsUrl = $this->settingsUrl();
 
-        return view('livewire.admin.ai.chat', [
+        return view('livewire.ai.chat', [
             'agentExists' => $agentExists,
             'agentActivated' => $agentActivated,
             'agentIdentity' => $this->agentIdentity(),
