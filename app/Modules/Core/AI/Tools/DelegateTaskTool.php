@@ -33,6 +33,8 @@ class DelegateTaskTool extends AbstractTool
 {
     use ProvidesToolMetadata;
 
+    private const CHARACTERS_SUFFIX = ' characters.';
+
     private const MAX_TASK_LENGTH = 5000;
 
     private const MAX_TASK_TYPE_LENGTH = 60;
@@ -67,7 +69,7 @@ class DelegateTaskTool extends AbstractTool
             ->string(
                 'task_type',
                 'Task type discriminator (e.g., "resolve_ticket", "review_qac_case"). '
-                    .'Classifies the kind of work being dispatched. Maximum '.self::MAX_TASK_TYPE_LENGTH.' characters.'
+                    .'Classifies the kind of work being dispatched. Maximum '.self::MAX_TASK_TYPE_LENGTH.self::CHARACTERS_SUFFIX
             )->required()
             ->integer(
                 'agent_id',
@@ -131,13 +133,13 @@ class DelegateTaskTool extends AbstractTool
 
         if (mb_strlen($task) > self::MAX_TASK_LENGTH) {
             throw new ToolArgumentException(
-                'Task description exceeds maximum length of '.self::MAX_TASK_LENGTH.' characters.'
+                'Task description exceeds maximum length of '.self::MAX_TASK_LENGTH.self::CHARACTERS_SUFFIX
             );
         }
 
         if (mb_strlen($taskType) > self::MAX_TASK_TYPE_LENGTH) {
             throw new ToolArgumentException(
-                'task_type exceeds maximum length of '.self::MAX_TASK_TYPE_LENGTH.' characters.'
+                'task_type exceeds maximum length of '.self::MAX_TASK_TYPE_LENGTH.self::CHARACTERS_SUFFIX
             );
         }
 

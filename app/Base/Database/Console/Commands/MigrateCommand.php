@@ -114,8 +114,9 @@ class MigrateCommand extends IlluminateMigrateCommand
                     $existingRegistry = TableRegistry::query()->pluck('table_name')->all();
                 }
 
-                // Auto-discover and register tables from migration files
-                TableRegistry::ensureDiscoveredRegistered();
+                // Auto-discover, register, and reconcile tables from migration files
+                $reconciliation = TableRegistry::reconcile();
+                $this->reportRemovedRegistryEntries($reconciliation['removed']);
 
                 if ($this->option('unstable') && Schema::hasTable('base_database_tables')) {
                     $newTables = array_values(array_diff(
@@ -200,6 +201,36 @@ class MigrateCommand extends IlluminateMigrateCommand
                 // Re-throw to stop execution
                 throw $e;
             }
+        }
+    }
+
+    /**
+     * Report orphaned registry entries removed during reconciliation.
+     *
+     * @param  list<string>  $removedTables
+     */
+    private function reportRemovedRegistryEntries(array $removedTables): void
+    {
+        if ($removedTables === []) {
+            return;
+        }
+
+        $count = count($removedTables);
+
+        $message = trans_choice(
+            'Removed :count orphaned table registry entry that no longer matches any declared or live relation.|Removed :count orphaned table registry entries that no longer match any declared or live relations.',
+            $count,
+            ['count' => $count],
+        );
+
+        if ($this->components !== null) {
+            $this->components->info($message);
+        } else {
+            $this->info($message);
+        }
+
+        foreach ($removedTables as $table) {
+            $this->line("  - {$table}");
         }
     }
 

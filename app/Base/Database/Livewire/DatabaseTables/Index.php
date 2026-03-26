@@ -6,7 +6,9 @@
 namespace App\Base\Database\Livewire\DatabaseTables;
 
 use App\Base\Database\Models\TableRegistry;
+use App\Base\Database\Services\TableInspector;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -23,6 +25,16 @@ class Index extends Component
     public string $sortDir = 'asc';
 
     /**
+     * @var list<string>
+     */
+    public array $orphanedRegistryNotices = [];
+
+    public function mount(TableInspector $inspector): void
+    {
+        $this->orphanedRegistryNotices = $inspector->reconcileRegistry();
+    }
+
+    /**
      * Toggle the stability flag for a table.
      */
     public function toggleStability(int $id): void
@@ -34,6 +46,19 @@ class Index extends Component
         } else {
             $table->markStable(Auth::id());
         }
+    }
+
+    /**
+     * Dismiss a reconciliation notice.
+     */
+    public function dismissNotice(int $index): void
+    {
+        if (! array_key_exists($index, $this->orphanedRegistryNotices)) {
+            return;
+        }
+
+        unset($this->orphanedRegistryNotices[$index]);
+        $this->orphanedRegistryNotices = array_values($this->orphanedRegistryNotices);
     }
 
     /**
@@ -65,7 +90,7 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.system.database-tables.index', [
             'tables' => TableRegistry::query()

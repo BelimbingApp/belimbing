@@ -189,7 +189,7 @@ class EditFileTool extends AbstractTool
     {
         $directory = dirname($absolutePath);
 
-        if (! $this->ensureDirectoryExists($directory, $filePath)) {
+        if (! $this->ensureDirectoryExists($directory)) {
             return ToolResult::error(
                 "Failed to create the parent directory for \"{$filePath}\".",
                 'directory_create_failed',
@@ -248,7 +248,7 @@ class EditFileTool extends AbstractTool
         return ToolResult::success("Appended {$bytesWritten} bytes to {$filePath}.");
     }
 
-    private function ensureDirectoryExists(string $directory, string $filePath): bool
+    private function ensureDirectoryExists(string $directory): bool
     {
         if (is_dir($directory)) {
             return true;

@@ -8,6 +8,8 @@ namespace App\Base\Database\Models;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Table Registry Model
@@ -24,10 +26,10 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $module_path Module path (e.g., 'app/Modules/Core/AI')
  * @property string|null $migration_file Migration file that created this table
  * @property bool $is_stable Whether this table survives migrate:fresh
- * @property \Illuminate\Support\Carbon|null $stabilized_at When stability was toggled on
+ * @property Carbon|null $stabilized_at When stability was toggled on
  * @property int|null $stabilized_by User who marked it stable
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  */
 class TableRegistry extends Model
 {
@@ -190,24 +192,78 @@ class TableRegistry extends Model
      */
     public static function ensureDiscoveredRegistered(): void
     {
-        $patterns = [
-            app_path('Base/*/Database/Migrations/*.php'),
-            app_path('Modules/*/*/Database/Migrations/*.php'),
-        ];
+        self::reconcile();
+    }
 
-        // Also include database/migrations for Laravel core tables
-        $corePath = database_path('migrations/*.php');
-
-        $files = [];
-        foreach (array_merge($patterns, [$corePath]) as $pattern) {
-            $files = array_merge($files, glob($pattern) ?: []);
+    /**
+     * Reconcile the registry against declared migrations and live relations.
+     *
+     * Declared tables from migration files are always (re)registered. Registry
+     * rows are pruned only when they are neither declared by a migration nor
+     * present as a live database relation (table or view).
+     *
+     * @return array{removed: list<string>}
+     */
+    public static function reconcile(): array
+    {
+        if (! Schema::hasTable('base_database_tables')) {
+            return ['removed' => []];
         }
 
-        foreach ($files as $file) {
-            self::registerDiscoveredFile($file);
+        $declaredTables = self::discoverDeclaredTables();
+
+        foreach ($declaredTables as $tableName => $metadata) {
+            self::register(
+                $tableName,
+                $metadata['module_name'],
+                $metadata['module_path'],
+                $metadata['migration_file'],
+            );
         }
 
         self::ensureInfrastructureRegistered();
+
+        return ['removed' => self::pruneOrphanedEntries(array_keys($declaredTables))];
+    }
+
+    /**
+     * Determine whether a live database relation exists for the given name.
+     */
+    public static function relationExists(string $tableName): bool
+    {
+        return in_array($tableName, self::getExistingRelationNames(), true);
+    }
+
+    /**
+     * Remove a registry row when it no longer maps to a declared or live relation.
+     */
+    public static function removeIfOrphaned(string $tableName): bool
+    {
+        if (in_array($tableName, self::INFRASTRUCTURE_TABLES, true)
+            || self::relationExists($tableName)
+            || array_key_exists($tableName, self::discoverDeclaredTables())
+        ) {
+            return false;
+        }
+
+        return self::query()->where('table_name', $tableName)->delete() > 0;
+    }
+
+    /**
+     * Get registered relation names that currently exist in the database.
+     *
+     * @return list<string>
+     */
+    public static function getAvailableTableNames(): array
+    {
+        if (! Schema::hasTable('base_database_tables')) {
+            return [];
+        }
+
+        return array_values(array_intersect(
+            self::query()->pluck('table_name')->all(),
+            self::getExistingRelationNames(),
+        ));
     }
 
     /**
@@ -228,20 +284,49 @@ class TableRegistry extends Model
     }
 
     /**
-     * Parse a migration file for Schema::create() calls and register found tables.
+     * Discover declared tables from migration files.
+     *
+     * @return array<string, array{module_name: string|null, module_path: string|null, migration_file: string}>
+     */
+    private static function discoverDeclaredTables(): array
+    {
+        $patterns = [
+            app_path('Base/*/Database/Migrations/*.php'),
+            app_path('Modules/*/*/Database/Migrations/*.php'),
+            database_path('migrations/*.php'),
+        ];
+
+        $files = [];
+        foreach ($patterns as $pattern) {
+            $files = array_merge($files, glob($pattern) ?: []);
+        }
+
+        $declaredTables = [];
+        foreach ($files as $file) {
+            foreach (self::discoverTablesFromFile($file) as $tableName => $metadata) {
+                $declaredTables[$tableName] = $metadata;
+            }
+        }
+
+        return $declaredTables;
+    }
+
+    /**
+     * Parse a migration file for Schema::create() calls and return found tables.
      *
      * @param  string  $file  Absolute path to a migration PHP file
+     * @return array<string, array{module_name: string|null, module_path: string|null, migration_file: string}>
      */
-    private static function registerDiscoveredFile(string $file): void
+    private static function discoverTablesFromFile(string $file): array
     {
         $contents = file_get_contents($file);
         if ($contents === false) {
-            return;
+            return [];
         }
 
         // Match Schema::create('table_name', ...) patterns
         if (! preg_match_all('/Schema::create\(\s*[\'"]([\w]+)[\'"]/', $contents, $matches)) {
-            return;
+            return [];
         }
 
         $rel = str_replace([base_path().DIRECTORY_SEPARATOR, '\\'], ['', '/'], $file);
@@ -258,12 +343,69 @@ class TableRegistry extends Model
             $moduleName = basename($modulePath);
         }
 
-        foreach ($matches[1] as $tableName) {
-            if (self::query()->where('table_name', $tableName)->exists()) {
-                continue;
-            }
+        $declaredTables = [];
 
-            self::register($tableName, $moduleName, $modulePath, $migrationFile);
+        foreach ($matches[1] as $tableName) {
+            $declaredTables[$tableName] = [
+                'module_name' => $moduleName,
+                'module_path' => $modulePath,
+                'migration_file' => $migrationFile,
+            ];
         }
+
+        return $declaredTables;
+    }
+
+    /**
+     * Remove registry rows that no longer map to any declared or live relation.
+     *
+     * @param  list<string>  $declaredTableNames
+     * @return list<string>
+     */
+    private static function pruneOrphanedEntries(array $declaredTableNames): array
+    {
+        $protectedNames = array_values(array_unique(array_merge(
+            self::INFRASTRUCTURE_TABLES,
+            $declaredTableNames,
+            self::getExistingRelationNames(),
+        )));
+
+        $query = self::query();
+
+        if ($protectedNames !== []) {
+            $query->whereNotIn('table_name', $protectedNames);
+        }
+
+        $removed = $query->pluck('table_name')->all();
+
+        if ($removed !== []) {
+            self::query()->whereIn('table_name', $removed)->delete();
+        }
+
+        return $removed;
+    }
+
+    /**
+     * Get all live relation names (tables and views) for the current connection.
+     *
+     * @return list<string>
+     */
+    private static function getExistingRelationNames(): array
+    {
+        $tables = array_map(
+            fn (array $table) => $table['name'],
+            Schema::getTables(),
+        );
+
+        try {
+            $views = array_map(
+                fn (array $view) => $view['name'],
+                Schema::getViews(),
+            );
+        } catch (\Throwable) {
+            $views = [];
+        }
+
+        return array_values(array_unique(array_merge($tables, $views)));
     }
 }

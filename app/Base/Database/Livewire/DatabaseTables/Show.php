@@ -10,6 +10,7 @@ use App\Base\Database\Services\TableInspector;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -40,6 +41,11 @@ class Show extends Component
     public bool $navigatorOpen = true;
 
     public bool $rawValues = false;
+
+    /**
+     * @var list<string>
+     */
+    public array $orphanedRegistryNotices = [];
 
     /**
      * Toggle the stability flag for the current table.
@@ -78,14 +84,37 @@ class Show extends Component
         $inspector = app(TableInspector::class);
 
         if (! $inspector->isRegistered($tableName)) {
+            $notices = $inspector->pullOrphanedRegistryNotices();
+
+            if ($notices !== []) {
+                Session::flash('warning', implode(' ', $notices));
+                $this->redirectRoute('admin.system.database-tables.index', navigate: true);
+
+                return;
+            }
+
             abort(404);
         }
 
         $this->tableName = $tableName;
         $this->navigatorOpen = session('table_navigator_open', true);
         $this->search = request()->query('search', '');
+        $this->orphanedRegistryNotices = $inspector->pullOrphanedRegistryNotices();
 
         $this->trackRecentTable($tableName);
+    }
+
+    /**
+     * Dismiss a reconciliation notice.
+     */
+    public function dismissNotice(int $index): void
+    {
+        if (! array_key_exists($index, $this->orphanedRegistryNotices)) {
+            return;
+        }
+
+        unset($this->orphanedRegistryNotices[$index]);
+        $this->orphanedRegistryNotices = array_values($this->orphanedRegistryNotices);
     }
 
     /**

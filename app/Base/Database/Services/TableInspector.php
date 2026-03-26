@@ -10,6 +10,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Read-only inspector for any registered database table.
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\Schema;
  */
 class TableInspector
 {
+    private const ORPHANED_REGISTRY_SESSION_KEY = 'database_tables.orphaned_registry_entries';
+
     /**
      * Column types considered searchable (LIKE-compatible).
      *
@@ -38,6 +41,8 @@ class TableInspector
      */
     public function columns(string $table): array
     {
+        $this->guardRegisteredRelationExists($table);
+
         return Schema::getColumns($table);
     }
 
@@ -57,6 +62,8 @@ class TableInspector
         string $sortDirection = 'asc',
         int $perPage = 25,
     ): LengthAwarePaginator {
+        $this->guardRegisteredRelationExists($table);
+
         $query = DB::table($table);
 
         if ($search !== null && $search !== '') {
@@ -95,6 +102,8 @@ class TableInspector
      */
     public function rowCount(string $table): int
     {
+        $this->guardRegisteredRelationExists($table);
+
         return DB::table($table)->count();
     }
 
@@ -127,7 +136,11 @@ class TableInspector
      */
     public function isRegistered(string $table): bool
     {
-        return TableRegistry::query()->where('table_name', $table)->exists();
+        if (! TableRegistry::query()->where('table_name', $table)->exists()) {
+            return false;
+        }
+
+        return $this->ensureRegisteredRelationExists($table, forgetMissing: true);
     }
 
     /**
@@ -140,6 +153,8 @@ class TableInspector
      */
     public function foreignKeys(string $table): array
     {
+        $this->guardRegisteredRelationExists($table);
+
         $outgoing = [];
         foreach (Schema::getForeignKeys($table) as $fk) {
             foreach ($fk['columns'] as $i => $column) {
@@ -152,7 +167,7 @@ class TableInspector
         }
 
         $incoming = [];
-        $registeredTables = TableRegistry::query()->pluck('table_name')->all();
+        $registeredTables = TableRegistry::getAvailableTableNames();
 
         foreach ($registeredTables as $otherTable) {
             if ($otherTable === $table) {
@@ -185,6 +200,7 @@ class TableInspector
     public function allTablesGroupedByModule(): array
     {
         return TableRegistry::query()
+            ->whereIn('table_name', TableRegistry::getAvailableTableNames())
             ->orderBy('module_name')
             ->orderBy('table_name')
             ->get(['table_name', 'module_name'])
@@ -194,10 +210,85 @@ class TableInspector
     }
 
     /**
+     * Consume and clear orphaned registry notices for the current session.
+     *
+     * @return list<string>
+     */
+    public function pullOrphanedRegistryNotices(): array
+    {
+        /** @var list<string> $messages */
+        $messages = session()->pull(self::ORPHANED_REGISTRY_SESSION_KEY, []);
+
+        return $messages;
+    }
+
+    /**
+     * Reconcile the registry and return human-readable orphan cleanup notices.
+     *
+     * @return list<string>
+     */
+    public function reconcileRegistry(): array
+    {
+        $result = TableRegistry::reconcile();
+
+        foreach ($result['removed'] as $table) {
+            $this->recordOrphanedRegistryNotice($table);
+        }
+
+        return $this->pullOrphanedRegistryNotices();
+    }
+
+    /**
      * Check if a column exists in a table.
      */
     private function columnExists(string $table, string $column): bool
     {
         return Schema::hasColumn($table, $column);
+    }
+
+    /**
+     * Ensure a registered relation exists or fail as not found.
+     */
+    private function guardRegisteredRelationExists(string $table): void
+    {
+        if ($this->ensureRegisteredRelationExists($table, forgetMissing: true)) {
+            return;
+        }
+
+        throw new NotFoundHttpException(__('Database relation [:table] was not found.', ['table' => $table]));
+    }
+
+    /**
+     * Ensure a registered relation still exists, pruning orphaned registry rows.
+     */
+    private function ensureRegisteredRelationExists(string $table, bool $forgetMissing = false): bool
+    {
+        if (TableRegistry::relationExists($table)) {
+            return true;
+        }
+
+        if ($forgetMissing && TableRegistry::removeIfOrphaned($table)) {
+            $this->recordOrphanedRegistryNotice($table);
+        }
+
+        return false;
+    }
+
+    /**
+     * Record a session notice describing a pruned orphaned registry entry.
+     */
+    private function recordOrphanedRegistryNotice(string $table): void
+    {
+        $message = __('Removed orphaned registry entry for :table because the relation no longer exists.', [
+            'table' => $table,
+        ]);
+
+        $messages = session()->get(self::ORPHANED_REGISTRY_SESSION_KEY, []);
+
+        if (! in_array($message, $messages, true)) {
+            $messages[] = $message;
+        }
+
+        session()->put(self::ORPHANED_REGISTRY_SESSION_KEY, $messages);
     }
 }

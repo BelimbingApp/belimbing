@@ -1,8 +1,11 @@
 <?php
+
+use App\Base\Database\Livewire\DatabaseTables\Show;
+
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-/** @var \App\Base\Database\Livewire\DatabaseTables\Show $this */
+/** @var Show $this */
 ?>
 
 <div
@@ -207,6 +210,20 @@
                     </x-ui.button>
                 </x-slot>
             </x-ui.page-header>
+
+            @foreach($this->orphanedRegistryNotices as $index => $notice)
+                <x-ui.alert variant="warning" class="flex items-start justify-between gap-3">
+                    <span>{{ $notice }}</span>
+                    <button
+                        type="button"
+                        wire:click="dismissNotice({{ $index }})"
+                        class="shrink-0 text-muted hover:text-ink transition-colors"
+                        aria-label="{{ __('Dismiss notice') }}"
+                    >
+                        <x-icon name="heroicon-o-x-mark" class="w-4 h-4" />
+                    </button>
+                </x-ui.alert>
+            @endforeach
 
             {{-- Related Tables (Foreign Keys) --}}
             @if(count($foreignKeys['outgoing']) > 0 || count($foreignKeys['incoming']) > 0)
