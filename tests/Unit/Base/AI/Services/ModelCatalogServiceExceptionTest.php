@@ -50,16 +50,18 @@ it('ensureSynced delegates to sync so the catalog file is populated on demand', 
     (new Filesystem)->ensureDirectoryExists($testingStoragePath);
     app()->useStoragePath($testingStoragePath);
 
+    $service = null;
+
     try {
         $service = new ModelCatalogService;
         $service->ensureSynced();
 
         Http::assertSentCount(1);
+
+        expect($service->getCatalog())->not->toBeEmpty()
+            ->and($service->getModels('openai'))->not->toBeEmpty();
     } finally {
         app()->useStoragePath($originalStoragePath);
         (new Filesystem)->deleteDirectory($testingStoragePath);
     }
-
-    expect($service->getCatalog())->not->toBeEmpty()
-        ->and($service->getModels('openai'))->not->toBeEmpty();
 });
