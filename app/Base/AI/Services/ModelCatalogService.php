@@ -8,6 +8,7 @@ namespace App\Base\AI\Services;
 use App\Base\AI\DTO\CatalogSyncResult;
 use App\Base\AI\Exceptions\ModelCatalogSyncException;
 use DateTimeImmutable;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
@@ -50,10 +51,14 @@ class ModelCatalogService
      */
     public function ensureSynced(): void
     {
-        Cache::lock(self::CATALOG_SYNC_LOCK, self::CATALOG_SYNC_LOCK_TTL_SECONDS)
-            ->block(self::CATALOG_SYNC_LOCK_WAIT_SECONDS, function (): void {
-                $this->sync(force: false);
-            });
+        try {
+            Cache::lock(self::CATALOG_SYNC_LOCK, self::CATALOG_SYNC_LOCK_TTL_SECONDS)
+                ->block(self::CATALOG_SYNC_LOCK_WAIT_SECONDS, function (): void {
+                    $this->sync(force: false);
+                });
+        } catch (LockTimeoutException $e) {
+            throw ModelCatalogSyncException::lockTimeout(self::CATALOG_SYNC_LOCK_WAIT_SECONDS, $e);
+        }
     }
 
     /**
