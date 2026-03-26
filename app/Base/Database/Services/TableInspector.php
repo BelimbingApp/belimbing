@@ -262,10 +262,7 @@ class TableInspector
      */
     public function pullOrphanedRegistryNotices(): array
     {
-        /** @var list<string> $messages */
-        $messages = session()->pull(self::ORPHANED_REGISTRY_SESSION_KEY, []);
-
-        return $messages;
+        return session()->pull(self::ORPHANED_REGISTRY_SESSION_KEY, []);
     }
 
     /**
