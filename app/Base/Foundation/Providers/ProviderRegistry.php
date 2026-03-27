@@ -117,8 +117,8 @@ class ProviderRegistry
      */
     private static function extensionClassFromPath(string $path): string
     {
-        $basePath = rtrim(base_path('extensions'), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
-        $relativePath = str_replace($basePath, '', $path);
+        $basePath = rtrim(self::normalizePathSeparators(base_path('extensions')), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
+        $relativePath = str_replace($basePath, '', self::normalizePathSeparators($path));
 
         $segments = explode(DIRECTORY_SEPARATOR, str_replace('.php', '', $relativePath));
         $classSegments = array_map(
@@ -131,6 +131,14 @@ class ProviderRegistry
         );
 
         return 'Extensions\\'.implode('\\', $classSegments);
+    }
+
+    /**
+     * Normalize path separators so discovery works across slash styles.
+     */
+    private static function normalizePathSeparators(string $path): string
+    {
+        return str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
     }
 
     /**
