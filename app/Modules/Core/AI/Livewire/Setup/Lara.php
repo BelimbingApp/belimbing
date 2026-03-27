@@ -53,7 +53,7 @@ class Lara extends Component
      */
     public function updatedSelectedProviderId(): void
     {
-        $this->hydrateSelectedModel();
+        $this->hydrateSelectedModel(forceDefault: true);
     }
 
     /**
