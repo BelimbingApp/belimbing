@@ -109,12 +109,69 @@
                     </x-ui.card>
                 @endif
 
+                {{-- Evidence --}}
+                <x-ui.card>
+                    <h2 class="text-base font-medium tracking-tight text-ink mb-3">{{ __('Evidence') }}</h2>
+
+                    @if($scar->evidence->isNotEmpty())
+                        <div class="space-y-2 mb-4">
+                            @foreach($scar->evidence as $evidence)
+                                <div wire:key="evidence-{{ $evidence->id }}" class="flex items-center justify-between p-3 rounded-lg border border-border-default">
+                                    <div class="flex items-center gap-3 min-w-0">
+                                        <x-icon name="heroicon-o-paper-clip" class="w-4 h-4 text-muted shrink-0" />
+                                        <div class="min-w-0">
+                                            <p class="text-sm font-medium text-ink truncate">{{ $evidence->filename }}</p>
+                                            <p class="text-[11px] text-muted">
+                                                {{ config('quality.evidence_types.' . $evidence->evidence_type, $evidence->evidence_type) }}
+                                                · {{ Number::fileSize($evidence->file_size ?? 0) }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <x-ui.button variant="ghost" size="sm" wire:click="deleteEvidence({{ $evidence->id }})" wire:confirm="{{ __('Remove this evidence?') }}">
+                                        <x-icon name="heroicon-o-trash" class="w-4 h-4" />
+                                    </x-ui.button>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    <form wire:submit="uploadEvidence" class="flex flex-col gap-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <x-ui.select id="evidence-type" wire:model="evidenceType" label="{{ __('Evidence Type') }}">
+                                @foreach(config('quality.evidence_types') as $value => $label)
+                                    <option value="{{ $value }}">{{ __($label) }}</option>
+                                @endforeach
+                            </x-ui.select>
+                            <div>
+                                <label for="evidence-file" class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('File') }}</label>
+                                <input id="evidence-file" type="file" wire:model="evidenceFile" class="mt-1 block w-full text-sm text-ink file:mr-4 file:rounded file:border-0 file:bg-surface-subtle file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-surface-subtle/80" />
+                                @error('evidenceFile') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                        </div>
+                        <div>
+                            <x-ui.button type="submit" variant="outline" size="sm">
+                                <x-icon name="heroicon-o-arrow-up-tray" class="w-4 h-4" />
+                                {{ __('Upload Evidence') }}
+                            </x-ui.button>
+                        </div>
+                    </form>
+                </x-ui.card>
+
                 {{-- Transition actions --}}
                 @if($availableTransitions->isNotEmpty())
                     <x-ui.card>
                         <h2 class="text-base font-medium tracking-tight text-ink mb-3">{{ __('Actions') }}</h2>
 
                         <div class="space-y-4">
+                            @if($availableTransitions->contains('to_code', 'containment_submitted'))
+                                <x-ui.textarea id="containment-response" wire:model="containmentResponse" label="{{ __('Containment Response') }}" rows="2" placeholder="{{ __('Describe containment measures...') }}" />
+                            @endif
+
+                            @if($availableTransitions->contains(fn ($t) => in_array($t->to_code, ['response_submitted', 'under_investigation'])))
+                                <x-ui.textarea id="root-cause-response" wire:model="rootCauseResponse" label="{{ __('Root Cause') }}" rows="2" placeholder="{{ __('Root cause analysis...') }}" />
+                                <x-ui.textarea id="corrective-action-response" wire:model="correctiveActionResponse" label="{{ __('Corrective Action') }}" rows="2" placeholder="{{ __('Corrective action plan...') }}" />
+                            @endif
+
                             <x-ui.textarea
                                 id="transition-comment"
                                 wire:model="transitionComment"

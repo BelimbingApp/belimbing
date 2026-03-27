@@ -24,6 +24,13 @@ class Index extends StatusFilteredSearchableIndex
 
     public string $search = '';
 
+    public string $kindFilter = '';
+
+    public function updatedKindFilter(): void
+    {
+        $this->resetPage();
+    }
+
     public function severityVariant(string $severity): string
     {
         return match ($severity) {
@@ -52,7 +59,13 @@ class Index extends StatusFilteredSearchableIndex
 
     protected function baseQuery(): EloquentBuilder
     {
-        return Ncr::query()
+        $query = Ncr::query()
             ->with('createdByUser', 'currentOwner');
+
+        if ($this->kindFilter !== '') {
+            $query->where('ncr_kind', $this->kindFilter);
+        }
+
+        return $query;
     }
 }

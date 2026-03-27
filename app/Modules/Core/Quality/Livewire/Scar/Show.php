@@ -6,22 +6,70 @@
 namespace App\Modules\Core\Quality\Livewire\Scar;
 
 use App\Base\Authz\DTO\Actor;
+use App\Base\Workflow\DTO\TransitionContext;
+use App\Base\Workflow\DTO\TransitionResult;
 use App\Modules\Core\Quality\Models\Scar;
+use App\Modules\Core\Quality\Services\EvidenceService;
 use App\Modules\Core\Quality\Services\ScarService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 class Show extends Component
 {
+    use WithFileUploads;
+
     public Scar $scar;
 
     public string $transitionComment = '';
 
+    public $evidenceFile = null;
+
+    public string $evidenceType = 'supplier_response';
+
+    // Response fields
+    public ?string $containmentResponse = null;
+
+    public ?string $rootCauseResponse = null;
+
+    public ?string $correctiveActionResponse = null;
+
     public function mount(Scar $scar): void
     {
         $this->scar = $scar->load('ncr', 'issueOwner', 'verifiedByUser', 'closedByUser', 'evidence');
+    }
+
+    public function uploadEvidence(EvidenceService $evidenceService): void
+    {
+        $this->validate([
+            'evidenceFile' => ['required', 'file', 'max:10240'],
+            'evidenceType' => ['required', Rule::in(array_keys(config('quality.evidence_types')))],
+        ]);
+
+        $evidenceService->upload(
+            $this->scar,
+            $this->evidenceFile,
+            $this->evidenceType,
+            Auth::id(),
+        );
+
+        $this->evidenceFile = null;
+        $this->scar->load('evidence');
+        Session::flash('success', __('Evidence uploaded successfully.'));
+    }
+
+    public function deleteEvidence(int $evidenceId, EvidenceService $evidenceService): void
+    {
+        $evidence = $this->scar->evidence->find($evidenceId);
+
+        if ($evidence) {
+            $evidenceService->archive($evidence);
+            $this->scar->load('evidence');
+            Session::flash('success', __('Evidence removed.'));
+        }
     }
 
     public function transitionTo(string $toCode, ScarService $scarService): void
@@ -31,45 +79,64 @@ class Show extends Component
 
         $data = ['comment' => $this->transitionComment ?: null];
 
-        $methodMap = [
-            'issued' => 'issue',
-            'acknowledged' => 'acknowledge',
-            'containment_submitted' => 'submitContainment',
-            'response_submitted' => 'submitResponse',
-            'under_review' => 'beginReview',
-            'verification_pending' => 'review',
-            'action_required' => 'review',
-            'closed' => 'verify',
-        ];
+        $result = match ($toCode) {
+            'issued' => $scarService->issue($this->scar, $actor, $data),
+            'acknowledged' => $scarService->acknowledge($this->scar, $actor, $data),
+            'containment_submitted' => $scarService->submitContainment($this->scar, $actor, [
+                ...$data,
+                'containment_response' => $this->containmentResponse ?: $this->transitionComment ?: __('Containment submitted'),
+            ]),
+            'under_investigation' => $scarService->submitResponse($this->scar, $actor, [
+                ...$data,
+                'root_cause_response' => $this->rootCauseResponse,
+                'corrective_action_response' => $this->correctiveActionResponse,
+            ]),
+            'response_submitted' => $scarService->submitResponse($this->scar, $actor, [
+                ...$data,
+                'root_cause_response' => $this->rootCauseResponse,
+                'corrective_action_response' => $this->correctiveActionResponse,
+            ]),
+            'under_review' => $scarService->beginReview($this->scar, $actor, $data),
+            'verification_pending' => $scarService->review($this->scar, $actor, [...$data, 'accepted' => true]),
+            'action_required' => $scarService->review($this->scar, $actor, [...$data, 'accepted' => false]),
+            'closed' => $scarService->verify($this->scar, $actor, $data),
+            'cancelled', 'rejected' => $this->handleDirectTransition($toCode, $actor, $data),
+            default => null,
+        };
 
-        $method = $methodMap[$toCode] ?? null;
-
-        if ($method === null) {
+        if ($result === null) {
             Session::flash('error', __('Unknown transition target.'));
 
             return;
         }
 
-        if ($method === 'submitContainment') {
-            $data['containment_response'] = $this->transitionComment ?: __('Containment submitted');
-        }
-
-        if ($method === 'review' && $toCode === 'verification_pending') {
-            $data['accepted'] = true;
-        } elseif ($method === 'review' && $toCode === 'action_required') {
-            $data['accepted'] = false;
-        }
-
-        $result = $scarService->$method($this->scar, $actor, $data);
-
         if ($result->success) {
-            $this->transitionComment = '';
+            $this->resetTransitionFields();
             $this->scar->refresh();
             $this->scar->load('ncr', 'issueOwner', 'verifiedByUser', 'closedByUser', 'evidence');
             Session::flash('success', __('SCAR transitioned successfully.'));
         } else {
             Session::flash('error', $result->reason ?? __('Transition failed.'));
         }
+    }
+
+    private function handleDirectTransition(string $toCode, Actor $actor, array $data): TransitionResult
+    {
+        $context = new TransitionContext(
+            actor: $actor,
+            comment: $data['comment'] ?? null,
+            commentTag: $toCode === 'cancelled' ? 'cancellation' : 'rejection',
+        );
+
+        return $this->scar->transitionTo($toCode, $context);
+    }
+
+    private function resetTransitionFields(): void
+    {
+        $this->transitionComment = '';
+        $this->containmentResponse = null;
+        $this->rootCauseResponse = null;
+        $this->correctiveActionResponse = null;
     }
 
     public function statusVariant(string $status): string

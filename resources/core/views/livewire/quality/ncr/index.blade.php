@@ -37,6 +37,14 @@
                     />
                 </div>
                 <div class="w-full sm:w-48">
+                    <x-ui.select id="kind-filter" wire:model.live="kindFilter">
+                        <option value="">{{ __('All Kinds') }}</option>
+                        @foreach(config('quality.ncr_kinds') as $value => $label)
+                            <option value="{{ $value }}">{{ __($label) }}</option>
+                        @endforeach
+                    </x-ui.select>
+                </div>
+                <div class="w-full sm:w-48">
                     <x-ui.select id="status-filter" wire:model.live="statusFilter">
                         <option value="">{{ __('All Statuses') }}</option>
                         <option value="open">{{ __('Open') }}</option>

@@ -82,6 +82,33 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <x-ui.input
+                        id="ncr-quantity-affected"
+                        wire:model="quantity_affected"
+                        label="{{ __('Quantity Affected') }}"
+                        type="number"
+                        step="0.0001"
+                        min="0"
+                        :error="$errors->first('quantity_affected')"
+                    />
+                    <x-ui.input
+                        id="ncr-uom"
+                        wire:model="uom"
+                        label="{{ __('Unit of Measure') }}"
+                        type="text"
+                        placeholder="{{ __('e.g., pcs, kg, m') }}"
+                        :error="$errors->first('uom')"
+                    />
+                    <div class="flex items-end pb-1">
+                        <x-ui.checkbox
+                            id="ncr-is-supplier-related"
+                            wire:model="is_supplier_related"
+                            label="{{ __('Supplier Related') }}"
+                        />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <x-ui.input
                         id="ncr-reported-by-name"
                         wire:model="reported_by_name"
                         label="{{ __('Reported By') }}"
