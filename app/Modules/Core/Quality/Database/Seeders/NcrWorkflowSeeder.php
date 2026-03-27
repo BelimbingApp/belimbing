@@ -13,14 +13,6 @@ class NcrWorkflowSeeder extends Seeder
     use SeedsWorkflowDefinition;
 
     /**
-     * Seed the Quality NCR workflow: registry, statuses, transitions, and kanban columns.
-     */
-    public function run(): void
-    {
-        $this->seedWorkflowDefinition();
-    }
-
-    /**
      * @return array{code: string, label: string, module: string, description: string, model_class: class-string, is_active: bool}
      */
     protected function workflowDefinition(): array
@@ -68,18 +60,6 @@ class NcrWorkflowSeeder extends Seeder
             ['from_code' => 'under_review',  'to_code' => 'verified',     'label' => 'Verify Effective',   'capability' => 'workflow.quality_ncr.verify', 'position' => 1],
             ['from_code' => 'under_review',  'to_code' => 'rejected',     'label' => 'Reject',             'capability' => 'workflow.quality_ncr.reject', 'position' => 2],
             ['from_code' => 'verified',      'to_code' => 'closed',       'label' => 'Close',              'capability' => 'workflow.quality_ncr.close',  'position' => 0],
-        ];
-    }
-
-    /**
-     * @return list<array{code: string, label: string, position: int}>
-     */
-    protected function workflowKanbanColumns(): array
-    {
-        return [
-            ['code' => 'backlog', 'label' => 'Backlog', 'position' => 0],
-            ['code' => 'active',  'label' => 'Active',  'position' => 1],
-            ['code' => 'done',    'label' => 'Done',    'position' => 2],
         ];
     }
 }

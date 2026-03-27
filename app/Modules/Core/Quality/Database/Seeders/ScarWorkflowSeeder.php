@@ -13,14 +13,6 @@ class ScarWorkflowSeeder extends Seeder
     use SeedsWorkflowDefinition;
 
     /**
-     * Seed the Quality SCAR workflow: registry, statuses, transitions, and kanban columns.
-     */
-    public function run(): void
-    {
-        $this->seedWorkflowDefinition();
-    }
-
-    /**
      * @return array{code: string, label: string, module: string, description: string, model_class: class-string, is_active: bool}
      */
     protected function workflowDefinition(): array
@@ -77,18 +69,6 @@ class ScarWorkflowSeeder extends Seeder
             ['from_code' => 'action_required',       'to_code' => 'response_submitted',    'label' => 'Resubmit',           'capability' => null, 'position' => 0],
             ['from_code' => 'verification_pending',  'to_code' => 'closed',                'label' => 'Verify and Close',   'capability' => 'workflow.quality_scar.close',  'position' => 0],
             ['from_code' => 'verification_pending',  'to_code' => 'action_required',       'label' => 'Verification Failed', 'capability' => 'workflow.quality_scar.rework', 'position' => 1],
-        ];
-    }
-
-    /**
-     * @return list<array{code: string, label: string, position: int}>
-     */
-    protected function workflowKanbanColumns(): array
-    {
-        return [
-            ['code' => 'backlog', 'label' => 'Backlog', 'position' => 0],
-            ['code' => 'active',  'label' => 'Active',  'position' => 1],
-            ['code' => 'done',    'label' => 'Done',    'position' => 2],
         ];
     }
 }

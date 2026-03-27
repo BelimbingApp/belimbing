@@ -28,9 +28,24 @@ trait SeedsWorkflowDefinition
     abstract protected function workflowTransitions(): array;
 
     /**
+     * Seed the workflow: registry, statuses, transitions, and kanban columns.
+     */
+    public function run(): void
+    {
+        $this->seedWorkflowDefinition();
+    }
+
+    /**
      * @return list<array{code: string, label: string, position: int}>
      */
-    abstract protected function workflowKanbanColumns(): array;
+    protected function workflowKanbanColumns(): array
+    {
+        return [
+            ['code' => 'backlog', 'label' => 'Backlog', 'position' => 0],
+            ['code' => 'active', 'label' => 'Active', 'position' => 1],
+            ['code' => 'done', 'label' => 'Done', 'position' => 2],
+        ];
+    }
 
     protected function seedWorkflowDefinition(): void
     {

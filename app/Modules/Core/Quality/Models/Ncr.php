@@ -8,8 +8,7 @@ namespace App\Modules\Core\Quality\Models;
 use App\Base\Workflow\Concerns\HasWorkflowStatus;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Quality\Database\Factories\NcrFactory;
-use App\Modules\Core\Quality\Models\Concerns\HasQualityEvents;
-use App\Modules\Core\Quality\Models\Concerns\HasQualityEvidence;
+use App\Modules\Core\Quality\Models\Concerns\HasQualityRecordRelations;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -66,8 +65,7 @@ use Illuminate\Support\Carbon;
 class Ncr extends Model
 {
     use HasFactory, HasWorkflowStatus;
-    use HasQualityEvents;
-    use HasQualityEvidence;
+    use HasQualityRecordRelations;
 
     /**
      * The table associated with the model.
