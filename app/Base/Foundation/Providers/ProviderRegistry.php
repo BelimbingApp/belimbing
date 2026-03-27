@@ -22,10 +22,11 @@ class ProviderRegistry
         $providers = array_merge(
             self::validateProviders($priorityProviders),
             // Ordering is part of the framework contract:
-            // explicit priorities -> Base infrastructure -> business modules -> app providers.
+            // explicit priorities -> Base infrastructure -> business modules -> extensions -> app providers.
             // This keeps bootstrapping deterministic and prevents subtle dependency breakage.
             self::discoverBaseProviders(),
             self::discoverModuleProviders(),
+            self::discoverExtensionProviders(),
             self::validateProviders($appProviders)
         );
 
@@ -72,6 +73,29 @@ class ProviderRegistry
     }
 
     /**
+     * Discover extension service providers from extensions/.
+     *
+     * Extensions follow the two-level {owner}/{module}/ layout and load
+     * after Base and Module providers so they can safely override core bindings.
+     *
+     * @return array<int, class-string<ServiceProvider>>
+     */
+    public static function discoverExtensionProviders(): array
+    {
+        $pattern = base_path('extensions/*/*/ServiceProvider.php');
+        $paths = glob($pattern) ?: [];
+
+        sort($paths);
+
+        $providers = [];
+        foreach ($paths as $path) {
+            $providers[] = self::extensionClassFromPath($path);
+        }
+
+        return self::validateProviders($providers);
+    }
+
+    /**
      * Convert an app path into a fully-qualified class name.
      */
     private static function classFromPath(string $path): string
@@ -84,6 +108,29 @@ class ProviderRegistry
             ['\\', ''],
             $relativePath
         );
+    }
+
+    /**
+     * Convert an extension path into a fully-qualified class name.
+     *
+     * Maps `extensions/sb-group/qac/ServiceProvider.php` to `Extensions\SbGroup\Qac\ServiceProvider`.
+     */
+    private static function extensionClassFromPath(string $path): string
+    {
+        $basePath = rtrim(base_path('extensions'), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
+        $relativePath = str_replace($basePath, '', $path);
+
+        $segments = explode(DIRECTORY_SEPARATOR, str_replace('.php', '', $relativePath));
+        $classSegments = array_map(
+            static fn (string $segment): string => str_replace(
+                ' ',
+                '',
+                ucwords(str_replace('-', ' ', $segment))
+            ),
+            $segments
+        );
+
+        return 'Extensions\\'.implode('\\', $classSegments);
     }
 
     /**

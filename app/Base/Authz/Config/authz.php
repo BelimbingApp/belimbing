@@ -78,6 +78,8 @@ return [
         'rework',
         'cancel',
         'upload',
+        'follow_up',
+        'hod_approve',
     ],
 
     // Capabilities owned by the base framework (no module to host them yet).
