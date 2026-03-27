@@ -5,13 +5,13 @@
 
 namespace App\Modules\Core\Quality\Models;
 
+use App\Modules\Core\Quality\Models\Concerns\HasQualityEvents;
+use App\Modules\Core\Quality\Models\Concerns\HasQualityEvidence;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -65,6 +65,8 @@ use Illuminate\Support\Carbon;
 class Capa extends Model
 {
     use HasFactory;
+    use HasQualityEvents;
+    use HasQualityEvidence;
 
     /**
      * The table associated with the model.
@@ -170,19 +172,8 @@ class Capa extends Model
         return $this->belongsTo(User::class, 'closed_by_user_id');
     }
 
-    /**
-     * Get the evidence attachments for this CAPA.
-     */
-    public function evidence(): MorphMany
+    protected function qualityEventForeignKey(): string
     {
-        return $this->morphMany(QualityEvidence::class, 'evidenceable');
-    }
-
-    /**
-     * Get the domain events for this CAPA.
-     */
-    public function events(): HasMany
-    {
-        return $this->hasMany(QualityEvent::class, 'capa_id');
+        return 'capa_id';
     }
 }

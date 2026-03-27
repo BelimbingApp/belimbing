@@ -5,54 +5,42 @@
 
 namespace App\Modules\Core\Quality\Database\Seeders;
 
-use App\Base\Workflow\Models\KanbanColumn;
-use App\Base\Workflow\Models\StatusConfig;
-use App\Base\Workflow\Models\StatusTransition;
-use App\Base\Workflow\Models\Workflow;
 use App\Modules\Core\Quality\Models\Scar;
 use Illuminate\Database\Seeder;
 
 class ScarWorkflowSeeder extends Seeder
 {
-    /**
-     * The flow identifier for the Quality SCAR workflow.
-     */
-    private const FLOW = 'quality_scar';
+    use SeedsWorkflowDefinition;
 
     /**
      * Seed the Quality SCAR workflow: registry, statuses, transitions, and kanban columns.
      */
     public function run(): void
     {
-        $this->seedWorkflow();
-        $this->seedStatuses();
-        $this->seedTransitions();
-        $this->seedKanbanColumns();
+        $this->seedWorkflowDefinition();
     }
 
     /**
-     * Register the workflow in the process registry.
+     * @return array{code: string, label: string, module: string, description: string, model_class: class-string, is_active: bool}
      */
-    private function seedWorkflow(): void
+    protected function workflowDefinition(): array
     {
-        Workflow::query()->updateOrCreate(
-            ['code' => self::FLOW],
-            [
-                'label' => 'Quality SCAR',
-                'module' => 'quality',
-                'description' => 'Supplier corrective action request lifecycle — from draft through supplier response to closure.',
-                'model_class' => Scar::class,
-                'is_active' => true,
-            ],
-        );
+        return [
+            'code' => 'quality_scar',
+            'label' => 'Quality SCAR',
+            'module' => 'quality',
+            'description' => 'Supplier corrective action request lifecycle — from draft through supplier response to closure.',
+            'model_class' => Scar::class,
+            'is_active' => true,
+        ];
     }
 
     /**
-     * Seed the status nodes for the Quality SCAR workflow.
+     * @return list<array{code: string, label: string, position: int, kanban_code: string}>
      */
-    private function seedStatuses(): void
+    protected function workflowStatuses(): array
     {
-        $statuses = [
+        return [
             ['code' => 'draft',                  'label' => 'Draft',                  'position' => 0,  'kanban_code' => 'backlog'],
             ['code' => 'issued',                 'label' => 'Issued',                 'position' => 1,  'kanban_code' => 'active'],
             ['code' => 'acknowledged',           'label' => 'Acknowledged',           'position' => 2,  'kanban_code' => 'active'],
@@ -66,21 +54,14 @@ class ScarWorkflowSeeder extends Seeder
             ['code' => 'rejected',               'label' => 'Rejected',               'position' => 10, 'kanban_code' => 'done'],
             ['code' => 'cancelled',              'label' => 'Cancelled',              'position' => 11, 'kanban_code' => 'done'],
         ];
-
-        foreach ($statuses as $status) {
-            StatusConfig::query()->updateOrCreate(
-                ['flow' => self::FLOW, 'code' => $status['code']],
-                array_merge($status, ['flow' => self::FLOW, 'is_active' => true]),
-            );
-        }
     }
 
     /**
-     * Seed the transition edges for the Quality SCAR workflow.
+     * @return list<array{from_code: string, to_code: string, label: string, capability: ?string, position: int}>
      */
-    private function seedTransitions(): void
+    protected function workflowTransitions(): array
     {
-        $transitions = [
+        return [
             ['from_code' => 'draft',                 'to_code' => 'issued',                'label' => 'Issue to Supplier',  'capability' => 'workflow.quality_scar.issue',  'position' => 0],
             ['from_code' => 'draft',                 'to_code' => 'cancelled',             'label' => 'Cancel',             'capability' => 'workflow.quality_scar.cancel', 'position' => 1],
             ['from_code' => 'draft',                 'to_code' => 'rejected',              'label' => 'Reject',             'capability' => 'workflow.quality_scar.reject', 'position' => 2],
@@ -97,31 +78,17 @@ class ScarWorkflowSeeder extends Seeder
             ['from_code' => 'verification_pending',  'to_code' => 'closed',                'label' => 'Verify and Close',   'capability' => 'workflow.quality_scar.close',  'position' => 0],
             ['from_code' => 'verification_pending',  'to_code' => 'action_required',       'label' => 'Verification Failed', 'capability' => 'workflow.quality_scar.rework', 'position' => 1],
         ];
-
-        foreach ($transitions as $transition) {
-            StatusTransition::query()->updateOrCreate(
-                ['flow' => self::FLOW, 'from_code' => $transition['from_code'], 'to_code' => $transition['to_code']],
-                array_merge($transition, ['flow' => self::FLOW, 'is_active' => true]),
-            );
-        }
     }
 
     /**
-     * Seed the kanban board columns for the Quality SCAR workflow.
+     * @return list<array{code: string, label: string, position: int}>
      */
-    private function seedKanbanColumns(): void
+    protected function workflowKanbanColumns(): array
     {
-        $columns = [
+        return [
             ['code' => 'backlog', 'label' => 'Backlog', 'position' => 0],
             ['code' => 'active',  'label' => 'Active',  'position' => 1],
             ['code' => 'done',    'label' => 'Done',    'position' => 2],
         ];
-
-        foreach ($columns as $column) {
-            KanbanColumn::query()->updateOrCreate(
-                ['flow' => self::FLOW, 'code' => $column['code']],
-                array_merge($column, ['flow' => self::FLOW, 'is_active' => true]),
-            );
-        }
     }
 }

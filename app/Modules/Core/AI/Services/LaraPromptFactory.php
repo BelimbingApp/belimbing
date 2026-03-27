@@ -6,7 +6,6 @@
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\Foundation\Enums\BlbErrorCode;
-use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Foundation\Exceptions\BlbIntegrationException;
 
 class LaraPromptFactory
@@ -55,27 +54,8 @@ class LaraPromptFactory
 
     private function basePrompt(): string
     {
-        $path = app_path('Modules/Core/AI/Resources/lara/system_prompt.md');
-
-        if (! is_file($path)) {
-            throw new BlbConfigurationException(
-                'Lara base prompt file missing: '.$path,
-                BlbErrorCode::LARA_PROMPT_RESOURCE_MISSING,
-                ['path' => $path, 'resource' => 'core']
-            );
-        }
-
-        $content = file_get_contents($path);
-
-        if (! is_string($content)) {
-            throw new BlbConfigurationException(
-                'Failed to read Lara base prompt file: '.$path,
-                BlbErrorCode::LARA_PROMPT_RESOURCE_UNREADABLE,
-                ['path' => $path, 'resource' => 'core']
-            );
-        }
-
-        return trim($content);
+        return app(PromptResourceLoader::class)
+            ->load(app_path('Modules/Core/AI/Resources/lara/system_prompt.md'), 'Lara base prompt', 'core');
     }
 
     private function extensionPrompt(): ?string
@@ -88,25 +68,8 @@ class LaraPromptFactory
 
         $path = base_path(trim($configuredPath));
 
-        if (! is_file($path)) {
-            throw new BlbConfigurationException(
-                'Lara prompt extension file missing: '.$path,
-                BlbErrorCode::LARA_PROMPT_RESOURCE_MISSING,
-                ['path' => $path, 'resource' => 'extension']
-            );
-        }
-
-        $content = file_get_contents($path);
-
-        if (! is_string($content)) {
-            throw new BlbConfigurationException(
-                'Failed to read Lara prompt extension file: '.$path,
-                BlbErrorCode::LARA_PROMPT_RESOURCE_UNREADABLE,
-                ['path' => $path, 'resource' => 'extension']
-            );
-        }
-
-        return trim($content);
+        return app(PromptResourceLoader::class)
+            ->load($path, 'Lara prompt extension', 'extension');
     }
 
     private function extensionSection(string $extensionPrompt): string

@@ -5,8 +5,6 @@
 
 namespace App\Modules\Core\AI\Services;
 
-use App\Base\Foundation\Enums\BlbErrorCode;
-use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Workflow\Models\StatusHistory;
 use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\AI\Models\AgentTaskDispatch;
@@ -50,27 +48,8 @@ class KodiPromptFactory
      */
     private function basePrompt(): string
     {
-        $path = app_path('Modules/Core/AI/Resources/kodi/system_prompt.md');
-
-        if (! is_file($path)) {
-            throw new BlbConfigurationException(
-                'Kodi base prompt file missing: '.$path,
-                BlbErrorCode::LARA_PROMPT_RESOURCE_MISSING,
-                ['path' => $path, 'resource' => 'kodi']
-            );
-        }
-
-        $content = file_get_contents($path);
-
-        if (! is_string($content)) {
-            throw new BlbConfigurationException(
-                'Failed to read Kodi base prompt file: '.$path,
-                BlbErrorCode::LARA_PROMPT_RESOURCE_UNREADABLE,
-                ['path' => $path, 'resource' => 'kodi']
-            );
-        }
-
-        return trim($content);
+        return app(PromptResourceLoader::class)
+            ->load(app_path('Modules/Core/AI/Resources/kodi/system_prompt.md'), 'Kodi base prompt', 'kodi');
     }
 
     /**
