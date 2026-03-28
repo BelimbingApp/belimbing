@@ -117,6 +117,34 @@ class DevNcrSeeder extends DevSeeder
     }
 
     /**
+     * Build the common NCR case payload shared across seeded scenarios.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    private function ncrCaseData(
+        string $ncrKind,
+        string $severity,
+        string $summary,
+        string $productName,
+        string $productCode,
+        string $quantityAffected,
+        string $uom,
+        array $overrides = [],
+    ): array {
+        return [
+            'ncr_kind' => $ncrKind,
+            'severity' => $severity,
+            'summary' => $summary,
+            'product_name' => $productName,
+            'product_code' => $productCode,
+            'quantity_affected' => $quantityAffected,
+            'uom' => $uom,
+            ...$overrides,
+        ];
+    }
+
+    /**
      * Apply one workflow step to an NCR scenario.
      *
      * @param  array{action: string, actor?: User, payload?: array<string, mixed>}  $step
@@ -235,36 +263,33 @@ class DevNcrSeeder extends DevSeeder
     private function seedOpenNcrs(NcrService $ncrService, Company $company, User $reporter): void
     {
         $cases = [
-            [
-                'ncr_kind' => 'internal',
-                'title' => 'Dimension out of tolerance on CNC bracket batch',
-                'severity' => 'major',
-                'summary' => 'CNC machined brackets from production run PR-2026-0147 measured 102.3mm instead of 100.0mm ±0.5mm specification. Affects 240 pcs from night shift output.',
-                'product_name' => 'CNC Bracket Assembly',
-                'product_code' => 'BK-4420',
-                'quantity_affected' => '240.0000',
-                'uom' => 'pcs',
-            ],
-            [
-                'ncr_kind' => 'customer',
-                'title' => 'Customer complaint — surface finish defect on panel',
-                'severity' => 'critical',
-                'summary' => 'Customer Nusantara Trading reported visible scratch marks and uneven coating on 15 panels from SO-20260312. Photos attached in email dated 2026-03-20.',
-                'product_name' => 'Coated Panel Type A',
-                'product_code' => 'PA-1100',
-                'quantity_affected' => '15.0000',
-                'uom' => 'pcs',
-            ],
-            [
-                'ncr_kind' => 'internal',
-                'title' => 'Wrong material used in sub-assembly',
-                'severity' => 'minor',
-                'summary' => 'Store issued SS304 instead of SS316 for sub-assembly SA-2200. Caught during in-process QC check before final assembly.',
-                'product_name' => 'Sub-Assembly SA-2200',
-                'product_code' => 'SA-2200',
-                'quantity_affected' => '50.0000',
-                'uom' => 'sets',
-            ],
+            ['title' => 'Dimension out of tolerance on CNC bracket batch'] + $this->ncrCaseData(
+                'internal',
+                'major',
+                'CNC machined brackets from production run PR-2026-0147 measured 102.3mm instead of 100.0mm ±0.5mm specification. Affects 240 pcs from night shift output.',
+                'CNC Bracket Assembly',
+                'BK-4420',
+                '240.0000',
+                'pcs',
+            ),
+            ['title' => 'Customer complaint — surface finish defect on panel'] + $this->ncrCaseData(
+                'customer',
+                'critical',
+                'Customer Nusantara Trading reported visible scratch marks and uneven coating on 15 panels from SO-20260312. Photos attached in email dated 2026-03-20.',
+                'Coated Panel Type A',
+                'PA-1100',
+                '15.0000',
+                'pcs',
+            ),
+            ['title' => 'Wrong material used in sub-assembly'] + $this->ncrCaseData(
+                'internal',
+                'minor',
+                'Store issued SS304 instead of SS316 for sub-assembly SA-2200. Caught during in-process QC check before final assembly.',
+                'Sub-Assembly SA-2200',
+                'SA-2200',
+                '50.0000',
+                'sets',
+            ),
         ];
 
         foreach ($cases as $data) {
@@ -282,15 +307,15 @@ class DevNcrSeeder extends DevSeeder
             $company,
             $reporter,
             'Packaging damage during internal transfer',
-            [
-                'ncr_kind' => 'internal',
-                'severity' => 'minor',
-                'summary' => 'Forklift damage to 3 cartons during transfer from warehouse to shipping area. Outer packaging torn, inner product needs inspection.',
-                'product_name' => 'Finished Goods Carton',
-                'product_code' => 'FG-8800',
-                'quantity_affected' => '3.0000',
-                'uom' => 'cartons',
-            ],
+            $this->ncrCaseData(
+                'internal',
+                'minor',
+                'Forklift damage to 3 cartons during transfer from warehouse to shipping area. Outer packaging torn, inner product needs inspection.',
+                'Finished Goods Carton',
+                'FG-8800',
+                '3.0000',
+                'cartons',
+            ),
             [
                 $this->triageStep($qualityMgr, [
                     'triage_summary' => 'Minor packaging damage. Products inside appear intact but require visual inspection. Root cause likely forklift operator error.',
@@ -311,16 +336,16 @@ class DevNcrSeeder extends DevSeeder
             $company,
             $reporter,
             'Welding porosity on frame assembly',
-            [
-                'ncr_kind' => 'internal',
-                'severity' => 'major',
-                'summary' => 'Visual inspection revealed porosity in TIG welds on 12 frame assemblies. Welding parameters may have drifted. Lot FA-2026-0089.',
-                'product_name' => 'Frame Assembly FA-100',
-                'product_code' => 'FA-100',
-                'quantity_affected' => '12.0000',
-                'uom' => 'pcs',
-                'source' => 'inspection',
-            ],
+            $this->ncrCaseData(
+                'internal',
+                'major',
+                'Visual inspection revealed porosity in TIG welds on 12 frame assemblies. Welding parameters may have drifted. Lot FA-2026-0089.',
+                'Frame Assembly FA-100',
+                'FA-100',
+                '12.0000',
+                'pcs',
+                ['source' => 'inspection'],
+            ),
             [
                 $this->triageStep($qualityMgr, [
                     'triage_summary' => 'Welding defect confirmed. Assign to production for root cause analysis and containment. Check gas flow settings and wire batch.',
@@ -349,15 +374,15 @@ class DevNcrSeeder extends DevSeeder
             $company,
             $reporter,
             'Label misprint on export shipment cartons',
-            [
-                'ncr_kind' => 'internal',
-                'severity' => 'major',
-                'summary' => 'Shipping labels on 80 cartons show wrong destination port code. Discovered during pre-shipment audit. Shipment EX-2026-0023.',
-                'product_name' => 'Export Carton Label',
-                'product_code' => 'LB-EX-001',
-                'quantity_affected' => '80.0000',
-                'uom' => 'pcs',
-            ],
+            $this->ncrCaseData(
+                'internal',
+                'major',
+                'Shipping labels on 80 cartons show wrong destination port code. Discovered during pre-shipment audit. Shipment EX-2026-0023.',
+                'Export Carton Label',
+                'LB-EX-001',
+                '80.0000',
+                'pcs',
+            ),
             [
                 $this->triageStep($qualityMgr, [
                     'triage_summary' => 'Label error confirmed. Assign to shipping/logistics for immediate containment and re-labeling.',
@@ -394,17 +419,19 @@ class DevNcrSeeder extends DevSeeder
             $company,
             $reporter,
             'Incoming raw material hardness out of spec',
-            [
-                'ncr_kind' => 'internal',
-                'severity' => 'major',
-                'summary' => 'Incoming inspection on steel bar batch SB-2026-0055 showed Rockwell hardness at HRC 48 vs spec HRC 40-45. 2 tonnes affected.',
-                'product_name' => 'Steel Bar Grade 4140',
-                'product_code' => 'RM-4140',
-                'quantity_affected' => '2000.0000',
-                'uom' => 'kg',
-                'source' => 'inspection',
-                'is_supplier_related' => true,
-            ],
+            $this->ncrCaseData(
+                'internal',
+                'major',
+                'Incoming inspection on steel bar batch SB-2026-0055 showed Rockwell hardness at HRC 48 vs spec HRC 40-45. 2 tonnes affected.',
+                'Steel Bar Grade 4140',
+                'RM-4140',
+                '2000.0000',
+                'kg',
+                [
+                    'source' => 'inspection',
+                    'is_supplier_related' => true,
+                ],
+            ),
             [
                 $this->triageStep($qualityMgr, [
                     'triage_summary' => 'Material hardness confirmed out of spec. Quarantine batch. Coordinate with procurement for supplier notification.',
@@ -452,15 +479,15 @@ class DevNcrSeeder extends DevSeeder
             $company,
             $reporter,
             'Cosmetic mark on sample — not a defect',
-            [
-                'ncr_kind' => 'internal',
-                'severity' => 'observation',
-                'summary' => 'Operator reported a faint tool mark on sample piece from CNC run. Mark is within cosmetic acceptance criteria per drawing note 4.',
-                'product_name' => 'CNC Sample Part',
-                'product_code' => 'SP-9900',
-                'quantity_affected' => '1.0000',
-                'uom' => 'pcs',
-            ],
+            $this->ncrCaseData(
+                'internal',
+                'observation',
+                'Operator reported a faint tool mark on sample piece from CNC run. Mark is within cosmetic acceptance criteria per drawing note 4.',
+                'CNC Sample Part',
+                'SP-9900',
+                '1.0000',
+                'pcs',
+            ),
             [
                 $this->rejectStep($qualityMgr, [
                     'reject_reason' => 'Mark is within acceptable cosmetic tolerance per drawing note 4. Not a nonconformance. Operator advised on acceptance criteria.',
@@ -484,17 +511,19 @@ class DevNcrSeeder extends DevSeeder
             $company,
             $reporter,
             'Supplier delivered wrong grade fasteners',
-            [
-                'ncr_kind' => 'internal',
-                'severity' => 'critical',
-                'summary' => 'Incoming inspection on PO-2026-1200 found Grade 8.8 bolts delivered instead of Grade 10.9 as ordered. 500 pcs affected. Used in safety-critical assembly.',
-                'product_name' => 'Hex Bolt M12x50',
-                'product_code' => 'HB-1250',
-                'quantity_affected' => '500.0000',
-                'uom' => 'pcs',
-                'source' => 'inspection',
-                'is_supplier_related' => true,
-            ],
+            $this->ncrCaseData(
+                'internal',
+                'critical',
+                'Incoming inspection on PO-2026-1200 found Grade 8.8 bolts delivered instead of Grade 10.9 as ordered. 500 pcs affected. Used in safety-critical assembly.',
+                'Hex Bolt M12x50',
+                'HB-1250',
+                '500.0000',
+                'pcs',
+                [
+                    'source' => 'inspection',
+                    'is_supplier_related' => true,
+                ],
+            ),
             [
                 $this->triageStep($qualityMgr, [
                     'triage_summary' => 'Critical: wrong grade fasteners in safety-critical application. Immediate containment required. SCAR to be issued to supplier.',
