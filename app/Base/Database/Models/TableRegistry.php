@@ -294,6 +294,7 @@ class TableRegistry extends Model
             app_path('Base/*/Database/Migrations/*.php'),
             app_path('Modules/*/*/Database/Migrations/*.php'),
             database_path('migrations/*.php'),
+            base_path('extensions/*/*/Database/Migrations/*.php'),
         ];
 
         $files = [];
@@ -338,6 +339,7 @@ class TableRegistry extends Model
 
         if (preg_match('#app/Modules/[^/]+/[^/]+#', $rel, $pathMatch)
             || preg_match('#app/Base/[^/]+#', $rel, $pathMatch)
+            || preg_match('#extensions/[^/]+/[^/]+#', $rel, $pathMatch)
         ) {
             $modulePath = $pathMatch[0];
             $moduleName = basename($modulePath);

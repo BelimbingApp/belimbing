@@ -132,15 +132,7 @@ class FreshCommand extends IlluminateFreshCommand
         $this->components->task(
             'Dropping '.count($tablesToDrop).' non-stable table(s)',
             function () use ($tablesToDrop) {
-                Schema::disableForeignKeyConstraints();
-
-                try {
-                    foreach ($tablesToDrop as $table) {
-                        Schema::dropIfExists($table);
-                    }
-                } finally {
-                    Schema::enableForeignKeyConstraints();
-                }
+                $this->dropTables($tablesToDrop);
 
                 // Clean up migration records for dropped tables so they re-run.
                 // Preserved tables keep their migration records intact.
@@ -178,6 +170,41 @@ class FreshCommand extends IlluminateFreshCommand
             fn (array $table) => $table['name'],
             Schema::getTables()
         );
+    }
+
+    /**
+     * Drop the given tables, handling FK constraints per driver.
+     *
+     * PostgreSQL: uses DROP TABLE … CASCADE because its
+     * disableForeignKeyConstraints() (SET CONSTRAINTS ALL DEFERRED) only
+     * affects constraints declared DEFERRABLE — standard FKs are not.
+     *
+     * Other drivers: uses disableForeignKeyConstraints() which fully
+     * suppresses FK checks for the session (e.g. MySQL SET FOREIGN_KEY_CHECKS=0).
+     *
+     * @param  array<string>  $tables  Table names to drop
+     */
+    protected function dropTables(array $tables): void
+    {
+        $connection = Schema::getConnection();
+
+        if ($connection->getDriverName() === 'pgsql') {
+            $grammar = $connection->getQueryGrammar();
+            $wrapped = array_map(fn (string $t) => $grammar->wrapTable($t), $tables);
+            $connection->statement('DROP TABLE IF EXISTS '.implode(', ', $wrapped).' CASCADE');
+
+            return;
+        }
+
+        Schema::disableForeignKeyConstraints();
+
+        try {
+            foreach ($tables as $table) {
+                Schema::dropIfExists($table);
+            }
+        } finally {
+            Schema::enableForeignKeyConstraints();
+        }
     }
 
     /**
