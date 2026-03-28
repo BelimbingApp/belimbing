@@ -26,6 +26,7 @@ PR. All in one pass — no user prompts needed.
 - A red quality gate with **zero open issues** often means a metric failure, not a clean project. Check measures before concluding there is nothing to fix.
 - `new_*` metrics are usually stored in SonarCloud's `periods[0].value`, not `value`. Parse both.
 - Work in the quality worktree, but create a fresh topic branch from `origin/main` before committing if `sonar-gate` is dirty or diverged.
+- Metric-only duplication failures cannot be transitioned like normal issues. If the remaining failure is a project metric, either refactor the code or recommend a Sonar scope / quality-gate change.
 
 ## Workflow Checklist
 
@@ -170,14 +171,23 @@ Preferred fixes by duplication shape:
 - **Repeated service file-loading / exception boundaries** — extract a dedicated helper/service rather than repeating `is_file()` / `file_get_contents()` / exception handling blocks.
 - **Repeated model relations across sibling models** — extract a trait only when the relation semantics are truly identical; do not abstract unrelated fillable/cast definitions just to satisfy Sonar.
 - **Repeated workflow seeder persistence shape** — extract a trait or base seeder for the common persistence loop, while keeping workflow definitions inline per module.
+- **Repeated development seeder workflow boilerplate** — extract shared open/step/payload builders, but keep each seeded scenario readable as a business story.
 - **Repeated test scaffolding** — prefer helper builders, datasets, and file-level constants over abstract test classes.
 - **Repeated migration column/index bundles** — extract only if the helper makes the migration easier to read; do not hide important schema shape behind vague helpers.
+
+BLB guidance for dev seeders:
+- **Optimize for readable scenarios, not maximum DRY** — duplication in `Database/Seeders/Dev/` is lower-risk than duplication in runtime code because these files are fixture stories, not production behavior.
+- **Refactor repeated scaffolding first** — shared `open()` payload defaults, repeated workflow step arrays, and repeated existence guards are good extraction targets.
+- **Leave scenario data inline when it tells the story** — titles, summaries, departments, corrective actions, and business-specific values should usually remain visible in the seeder.
+- **Stop when abstraction hides the fixtures** — if the next helper makes it harder to understand what lifecycle state is being seeded, prefer readability and consider a Sonar exclusion instead.
+- **When Sonar still fails on dev-seeder duplication after reasonable cleanup, recommend changing Sonar scope** rather than forcing deeper abstractions that make the fixtures worse.
 
 Avoid these anti-patterns:
 - extracting a trait/helper used only twice when the resulting API is less obvious
 - creating abstractions that mix unrelated responsibilities just to reduce line similarity
 - moving code out of place when the duplication is better handled with a local private method or constant
 - forcing DRY across migrations or tests when the shared helper obscures the domain intent
+- forcing dev seeders into opaque builders or config blobs that hide the seeded lifecycle narrative just to satisfy a duplication percentage
 
 ### Apply carefully (requires judgement)
 
