@@ -136,6 +136,89 @@ class DevNcrSeeder extends DevSeeder
     }
 
     /**
+     * Build a normalized workflow step definition.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array{action: string, actor?: User, payload: array<string, mixed>}
+     */
+    private function workflowStep(string $action, array $payload = [], ?User $actor = null): array
+    {
+        $step = [
+            'action' => $action,
+            'payload' => $payload,
+        ];
+
+        if ($actor instanceof User) {
+            $step['actor'] = $actor;
+        }
+
+        return $step;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{action: string, actor: User, payload: array<string, mixed>}
+     */
+    private function triageStep(User $actor, array $payload): array
+    {
+        return $this->workflowStep('triage', $payload, $actor);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{action: string, actor: User, payload: array<string, mixed>}
+     */
+    private function assignStep(User $actor, array $payload): array
+    {
+        return $this->workflowStep('assign', $payload, $actor);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{action: string, actor: User, payload: array<string, mixed>}
+     */
+    private function submitResponseStep(User $actor, array $payload): array
+    {
+        return $this->workflowStep('submit_response', $payload, $actor);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{action: string, actor: User, payload: array<string, mixed>}
+     */
+    private function reviewStep(User $actor, array $payload): array
+    {
+        return $this->workflowStep('review', $payload, $actor);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{action: string, actor: User, payload: array<string, mixed>}
+     */
+    private function rejectStep(User $actor, array $payload): array
+    {
+        return $this->workflowStep('reject', $payload, $actor);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{action: string, actor: User, payload: array<string, mixed>}
+     */
+    private function closeStep(User $actor, array $payload): array
+    {
+        return $this->workflowStep('close', $payload, $actor);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{action: string, payload: array<string, mixed>}
+     */
+    private function capaUpdateStep(array $payload): array
+    {
+        return $this->workflowStep('capa_update', $payload);
+    }
+
+    /**
      * Determine whether an NCR title is already seeded for the company.
      */
     private function ncrExists(Company $company, string $title): bool
@@ -209,15 +292,11 @@ class DevNcrSeeder extends DevSeeder
                 'uom' => 'cartons',
             ],
             [
-                [
-                    'action' => 'triage',
-                    'actor' => $qualityMgr,
-                    'payload' => [
-                        'triage_summary' => 'Minor packaging damage. Products inside appear intact but require visual inspection. Root cause likely forklift operator error.',
-                        'severity' => 'minor',
-                        'classification' => 'handling_damage',
-                    ],
-                ],
+                $this->triageStep($qualityMgr, [
+                    'triage_summary' => 'Minor packaging damage. Products inside appear intact but require visual inspection. Root cause likely forklift operator error.',
+                    'severity' => 'minor',
+                    'classification' => 'handling_damage',
+                ]),
             ],
         );
     }
@@ -243,30 +322,19 @@ class DevNcrSeeder extends DevSeeder
                 'source' => 'inspection',
             ],
             [
-                [
-                    'action' => 'triage',
-                    'actor' => $qualityMgr,
-                    'payload' => [
-                        'triage_summary' => 'Welding defect confirmed. Assign to production for root cause analysis and containment. Check gas flow settings and wire batch.',
-                        'severity' => 'major',
-                        'classification' => 'welding_defect',
-                    ],
-                ],
-                [
-                    'action' => 'assign',
-                    'actor' => $qualityMgr,
-                    'payload' => [
-                        'current_owner_department' => 'Production',
-                        'assignment_comment' => 'Please investigate welding parameters, gas flow rate, and operator certification for the night shift on 2026-03-18.',
-                        'assignment_due_at' => Carbon::now()->addDays(5),
-                    ],
-                ],
-                [
-                    'action' => 'capa_update',
-                    'payload' => [
-                        'investigation_result' => 'Assigned to production for welding parameter investigation. Suspected gas flow drift on Station WS-03.',
-                    ],
-                ],
+                $this->triageStep($qualityMgr, [
+                    'triage_summary' => 'Welding defect confirmed. Assign to production for root cause analysis and containment. Check gas flow settings and wire batch.',
+                    'severity' => 'major',
+                    'classification' => 'welding_defect',
+                ]),
+                $this->assignStep($qualityMgr, [
+                    'current_owner_department' => 'Production',
+                    'assignment_comment' => 'Please investigate welding parameters, gas flow rate, and operator certification for the night shift on 2026-03-18.',
+                    'assignment_due_at' => Carbon::now()->addDays(5),
+                ]),
+                $this->capaUpdateStep([
+                    'investigation_result' => 'Assigned to production for welding parameter investigation. Suspected gas flow drift on Station WS-03.',
+                ]),
             ],
         );
     }
@@ -291,42 +359,27 @@ class DevNcrSeeder extends DevSeeder
                 'uom' => 'pcs',
             ],
             [
-                [
-                    'action' => 'triage',
-                    'actor' => $qualityMgr,
-                    'payload' => [
-                        'triage_summary' => 'Label error confirmed. Assign to shipping/logistics for immediate containment and re-labeling.',
-                        'severity' => 'major',
-                        'classification' => 'labeling_error',
-                    ],
-                ],
-                [
-                    'action' => 'assign',
-                    'actor' => $qualityMgr,
-                    'payload' => [
-                        'current_owner_department' => 'Logistics',
-                        'assignment_comment' => 'Contain all cartons from EX-2026-0023. Re-label with correct port code before shipment.',
-                    ],
-                ],
-                [
-                    'action' => 'submit_response',
-                    'actor' => $prodMgr,
-                    'payload' => [
-                        'containment_action' => 'All 80 cartons quarantined in staging area. Re-labeling completed within 4 hours of discovery.',
-                        'root_cause_occurred' => 'Label template was updated on 2026-03-10 but the old template file was not archived. Operator selected the wrong version from the shared drive.',
-                        'root_cause_leakage' => 'No version control on label templates. Pre-shipment audit is manual and relies on checker experience.',
-                        'corrective_action_occurred' => 'Implement label template version control with date-stamped filenames. Old templates moved to archive folder with read-only access.',
-                        'corrective_action_leakage' => 'Add port code validation step to pre-shipment checklist. Barcode scan verification for destination codes.',
-                    ],
-                ],
-                [
-                    'action' => 'capa_update',
-                    'payload' => [
-                        'investigation_result' => 'Label template version error. Operator used outdated template. No version control system in place.',
-                        'response_by_user_id' => $prodMgr->id,
-                        'responded_at' => Carbon::now(),
-                    ],
-                ],
+                $this->triageStep($qualityMgr, [
+                    'triage_summary' => 'Label error confirmed. Assign to shipping/logistics for immediate containment and re-labeling.',
+                    'severity' => 'major',
+                    'classification' => 'labeling_error',
+                ]),
+                $this->assignStep($qualityMgr, [
+                    'current_owner_department' => 'Logistics',
+                    'assignment_comment' => 'Contain all cartons from EX-2026-0023. Re-label with correct port code before shipment.',
+                ]),
+                $this->submitResponseStep($prodMgr, [
+                    'containment_action' => 'All 80 cartons quarantined in staging area. Re-labeling completed within 4 hours of discovery.',
+                    'root_cause_occurred' => 'Label template was updated on 2026-03-10 but the old template file was not archived. Operator selected the wrong version from the shared drive.',
+                    'root_cause_leakage' => 'No version control on label templates. Pre-shipment audit is manual and relies on checker experience.',
+                    'corrective_action_occurred' => 'Implement label template version control with date-stamped filenames. Old templates moved to archive folder with read-only access.',
+                    'corrective_action_leakage' => 'Add port code validation step to pre-shipment checklist. Barcode scan verification for destination codes.',
+                ]),
+                $this->capaUpdateStep([
+                    'investigation_result' => 'Label template version error. Operator used outdated template. No version control system in place.',
+                    'response_by_user_id' => $prodMgr->id,
+                    'responded_at' => Carbon::now(),
+                ]),
             ],
         );
     }
@@ -353,64 +406,38 @@ class DevNcrSeeder extends DevSeeder
                 'is_supplier_related' => true,
             ],
             [
-                [
-                    'action' => 'triage',
-                    'actor' => $qualityMgr,
-                    'payload' => [
-                        'triage_summary' => 'Material hardness confirmed out of spec. Quarantine batch. Coordinate with procurement for supplier notification.',
-                        'severity' => 'major',
-                        'classification' => 'incoming_material_defect',
-                    ],
-                ],
-                [
-                    'action' => 'assign',
-                    'actor' => $qualityMgr,
-                    'payload' => [
-                        'current_owner_department' => 'QAC/QC',
-                        'assignment_comment' => 'Investigate supplier heat treatment records. Coordinate return or re-heat-treatment if feasible.',
-                    ],
-                ],
-                [
-                    'action' => 'submit_response',
-                    'actor' => $prodMgr,
-                    'payload' => [
-                        'containment_action' => 'Batch SB-2026-0055 quarantined in reject bay. All downstream WIP using this batch recalled — 45 pcs identified and segregated.',
-                        'root_cause_occurred' => 'Supplier heat treatment cycle was shortened due to furnace scheduling conflict. Mill test certificate shows correct chemistry but hardness test was skipped at supplier end.',
-                        'corrective_action_occurred' => 'Supplier agreed to re-heat-treat the batch at their cost. Updated supplier QA agreement to mandate hardness testing on every heat.',
-                        'effective_date_occurred' => Carbon::now()->subDays(3),
-                    ],
-                ],
-                [
-                    'action' => 'capa_update',
-                    'payload' => [
-                        'investigation_result' => 'Supplier heat treatment process deviation confirmed. Mill cert chemistry OK but hardness not tested at source.',
-                        'response_by_user_id' => $prodMgr->id,
-                        'responded_at' => Carbon::now()->subDays(5),
-                    ],
-                ],
-                [
-                    'action' => 'review',
-                    'actor' => $qualityMgr,
-                    'payload' => [
-                        'approved' => true,
-                        'quality_review_comment' => 'Root cause and corrective action accepted. Supplier re-heat-treatment completed and verification test passed. Close case.',
-                    ],
-                ],
-                [
-                    'action' => 'capa_update',
-                    'payload' => [
-                        'verification_result' => 'effective',
-                        'verified_by_user_id' => $qualityMgr->id,
-                        'verified_at' => Carbon::now()->subDays(1),
-                    ],
-                ],
-                [
-                    'action' => 'close',
-                    'actor' => $qualityMgr,
-                    'payload' => [
-                        'comment' => 'Corrective action verified effective. Supplier agreed to updated QA protocol. Case closed.',
-                    ],
-                ],
+                $this->triageStep($qualityMgr, [
+                    'triage_summary' => 'Material hardness confirmed out of spec. Quarantine batch. Coordinate with procurement for supplier notification.',
+                    'severity' => 'major',
+                    'classification' => 'incoming_material_defect',
+                ]),
+                $this->assignStep($qualityMgr, [
+                    'current_owner_department' => 'QAC/QC',
+                    'assignment_comment' => 'Investigate supplier heat treatment records. Coordinate return or re-heat-treatment if feasible.',
+                ]),
+                $this->submitResponseStep($prodMgr, [
+                    'containment_action' => 'Batch SB-2026-0055 quarantined in reject bay. All downstream WIP using this batch recalled — 45 pcs identified and segregated.',
+                    'root_cause_occurred' => 'Supplier heat treatment cycle was shortened due to furnace scheduling conflict. Mill test certificate shows correct chemistry but hardness test was skipped at supplier end.',
+                    'corrective_action_occurred' => 'Supplier agreed to re-heat-treat the batch at their cost. Updated supplier QA agreement to mandate hardness testing on every heat.',
+                    'effective_date_occurred' => Carbon::now()->subDays(3),
+                ]),
+                $this->capaUpdateStep([
+                    'investigation_result' => 'Supplier heat treatment process deviation confirmed. Mill cert chemistry OK but hardness not tested at source.',
+                    'response_by_user_id' => $prodMgr->id,
+                    'responded_at' => Carbon::now()->subDays(5),
+                ]),
+                $this->reviewStep($qualityMgr, [
+                    'approved' => true,
+                    'quality_review_comment' => 'Root cause and corrective action accepted. Supplier re-heat-treatment completed and verification test passed. Close case.',
+                ]),
+                $this->capaUpdateStep([
+                    'verification_result' => 'effective',
+                    'verified_by_user_id' => $qualityMgr->id,
+                    'verified_at' => Carbon::now()->subDays(1),
+                ]),
+                $this->closeStep($qualityMgr, [
+                    'comment' => 'Corrective action verified effective. Supplier agreed to updated QA protocol. Case closed.',
+                ]),
             ],
         );
     }
@@ -435,13 +462,9 @@ class DevNcrSeeder extends DevSeeder
                 'uom' => 'pcs',
             ],
             [
-                [
-                    'action' => 'reject',
-                    'actor' => $qualityMgr,
-                    'payload' => [
-                        'reject_reason' => 'Mark is within acceptable cosmetic tolerance per drawing note 4. Not a nonconformance. Operator advised on acceptance criteria.',
-                    ],
-                ],
+                $this->rejectStep($qualityMgr, [
+                    'reject_reason' => 'Mark is within acceptable cosmetic tolerance per drawing note 4. Not a nonconformance. Operator advised on acceptance criteria.',
+                ]),
             ],
         );
     }
@@ -473,30 +496,19 @@ class DevNcrSeeder extends DevSeeder
                 'is_supplier_related' => true,
             ],
             [
-                [
-                    'action' => 'triage',
-                    'actor' => $qualityMgr,
-                    'payload' => [
-                        'triage_summary' => 'Critical: wrong grade fasteners in safety-critical application. Immediate containment required. SCAR to be issued to supplier.',
-                        'severity' => 'critical',
-                        'classification' => 'wrong_material_supplied',
-                    ],
-                ],
-                [
-                    'action' => 'assign',
-                    'actor' => $qualityMgr,
-                    'payload' => [
-                        'current_owner_department' => 'Procurement',
-                        'assignment_comment' => 'Quarantine all fasteners from PO-2026-1200. Issue SCAR to Borneo Logistics for wrong grade delivery. Check if any Grade 8.8 bolts were already used in production.',
-                        'assignment_due_at' => Carbon::now()->addDays(3),
-                    ],
-                ],
-                [
-                    'action' => 'capa_update',
-                    'payload' => [
-                        'investigation_result' => 'Wrong grade fasteners confirmed via hardness and marking check. SCAR required for supplier accountability.',
-                    ],
-                ],
+                $this->triageStep($qualityMgr, [
+                    'triage_summary' => 'Critical: wrong grade fasteners in safety-critical application. Immediate containment required. SCAR to be issued to supplier.',
+                    'severity' => 'critical',
+                    'classification' => 'wrong_material_supplied',
+                ]),
+                $this->assignStep($qualityMgr, [
+                    'current_owner_department' => 'Procurement',
+                    'assignment_comment' => 'Quarantine all fasteners from PO-2026-1200. Issue SCAR to Borneo Logistics for wrong grade delivery. Check if any Grade 8.8 bolts were already used in production.',
+                    'assignment_due_at' => Carbon::now()->addDays(3),
+                ]),
+                $this->capaUpdateStep([
+                    'investigation_result' => 'Wrong grade fasteners confirmed via hardness and marking check. SCAR required for supplier accountability.',
+                ]),
             ],
         );
 
