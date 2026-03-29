@@ -3,43 +3,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
+
 namespace App\Modules\Core\Geonames\Database\Seeders;
 
-use App\Modules\Core\Geonames\Services\GeonamesDownloader;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use App\Modules\Core\Geonames\Database\Seeders\Concerns\DownloadsGeonamesFile;
 
 class CountrySeeder extends Seeder
 {
+    use DownloadsGeonamesFile;
+
     /**
      * Run the database seeds.
      */
     public function run(): void
     {
         $url = 'https://download.geonames.org/export/dump/countryInfo.txt';
-        $downloadPath = storage_path('download/geonames');
-        $filePath = $downloadPath.'/countryInfo.txt';
-
-        if (! File::exists($downloadPath)) {
-            File::makeDirectory($downloadPath, 0755, true);
-        }
-
-        $downloader = app(GeonamesDownloader::class);
-        $result = $downloader->download($url, $filePath);
-
-        if (! $result['success']) {
-            $this->command?->error(
-                'Failed to download file: '.($result['status'] ?? 'unknown'),
-            );
-
+        $filePath = $this->downloadGeonamesFile($url, 'countryInfo.txt', $this->command);
+        if (! $filePath) {
             return;
-        }
-
-        if ($result['cached']) {
-            $this->command?->info('Using cached countryInfo.txt file.');
-        } else {
-            $this->command?->info('Downloaded successfully.');
         }
 
         $this->command?->info('Parsing countryInfo.txt...');
@@ -54,7 +38,6 @@ class CountrySeeder extends Seeder
 
             if (empty($line) || str_starts_with($line, '#')) {
                 $skipped++;
-
                 continue;
             }
 
@@ -63,16 +46,13 @@ class CountrySeeder extends Seeder
 
             if (count($parts) < 17) {
                 $skipped++;
-
                 continue;
             }
 
             $countries[] = $this->parseCountryRow($parts);
         }
 
-        $this->command?->info(
-            'Inserting '.count($countries).' countries...',
-        );
+        $this->command?->info('Inserting '.count($countries).' countries...');
         $chunks = array_chunk($countries, 100);
 
         foreach ($chunks as $chunk) {

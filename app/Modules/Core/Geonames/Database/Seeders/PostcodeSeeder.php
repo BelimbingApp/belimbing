@@ -6,7 +6,7 @@
 namespace App\Modules\Core\Geonames\Database\Seeders;
 
 use App\Modules\Core\Geonames\Events\PostcodeImportProgress;
-use App\Modules\Core\Geonames\Services\GeonamesDownloader;
+use App\Modules\Core\Geonames\Database\Seeders\Concerns\DownloadsGeonamesFile;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -14,6 +14,8 @@ use ZipArchive;
 
 class PostcodeSeeder extends Seeder
 {
+    use DownloadsGeonamesFile;
+
     /**
      * Broadcast a progress event, silently ignoring failures.
      */
@@ -150,36 +152,23 @@ class PostcodeSeeder extends Seeder
      */
     protected function downloadFile(string $iso): ?string
     {
-        $downloadPath = storage_path('download/geonames/postcodes');
-        $zipPath = $downloadPath.'/'.$iso.'.zip';
-        $txtPath = $downloadPath.'/'.$iso.'.txt';
-
-        if (! File::exists($downloadPath)) {
-            File::makeDirectory($downloadPath, 0755, true);
-        }
-
         $url = 'https://download.geonames.org/export/zip/'.$iso.'.zip';
-        $downloader = app(GeonamesDownloader::class);
-        $result = $downloader->download($url, $zipPath);
+        $zipPath = $this->downloadGeonamesFile($url, $iso.'.zip', $this->command);
 
-        if (! $result['success']) {
-            $this->command?->error("Failed to download {$iso}.zip: ".($result['status'] ?? 'unknown'));
-
+        if (! $zipPath) {
             return null;
         }
 
-        if ($result['cached'] && File::exists($txtPath)) {
+        $downloadPath = dirname($zipPath);
+        $txtPath = $downloadPath.'/'.$iso.'.txt';
+
+        if (File::exists($txtPath)) {
             $this->command?->info("Using cached {$iso}.txt file.");
 
             return $txtPath;
         }
 
-        if ($result['cached']) {
-            $this->command?->info("Using cached {$iso}.zip, extracting...");
-        } else {
-            $this->command?->info("Downloaded {$iso}.zip successfully.");
-        }
-
+        $this->command?->info("Extracting {$iso}.zip...");
         $extracted = $this->extractZip($zipPath, $downloadPath, $iso);
 
         if (! $extracted) {
@@ -187,7 +176,6 @@ class PostcodeSeeder extends Seeder
         }
 
         $this->command?->info("Extracted {$iso}.txt successfully.");
-
         return $txtPath;
     }
 
