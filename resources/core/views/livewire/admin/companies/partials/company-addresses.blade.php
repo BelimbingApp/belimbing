@@ -97,25 +97,22 @@
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $address->pivot->valid_from ?? '-' }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $address->pivot->valid_to ?? '-' }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
-                                    <div class="inline-flex flex-col items-end gap-1">
-                                        <a
-                                            href="{{ route('admin.addresses.show', ['address' => $address, 'company' => $company->id]) }}"
+                                    <x-ui.icon-action-group>
+                                        <x-ui.icon-action
+                                            icon="heroicon-o-arrow-top-right-on-square"
+                                            :label="__('Open address')"
+                                            :title="__('Open')"
+                                            :href="route('admin.addresses.show', ['address' => $address, 'company' => $company->id])"
                                             wire:navigate
-                                            class="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg text-accent hover:bg-surface-subtle transition-colors"
-                                        >
-                                            <x-icon name="heroicon-o-arrow-top-right-on-square" class="w-4 h-4" />
-                                            {{ __('Open') }}
-                                        </a>
-                                        <x-ui.button
-                                            variant="danger-ghost"
-                                            size="sm"
+                                        />
+                                        <x-ui.icon-action
+                                            icon="heroicon-o-link-slash"
+                                            :label="__('Unlink address')"
+                                            :title="__('Unlink')"
                                             wire:click="unlinkAddress({{ $address->id }})"
                                             wire:confirm="{{ __('Are you sure you want to unlink this address?') }}"
-                                        >
-                                            <x-icon name="heroicon-o-link-slash" class="w-4 h-4" />
-                                            {{ __('Unlink') }}
-                                        </x-ui.button>
-                                    </div>
+                                        />
+                                    </x-ui.icon-action-group>
                                 </td>
                             </tr>
                         @empty

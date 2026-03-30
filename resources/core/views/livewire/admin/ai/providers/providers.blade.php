@@ -113,26 +113,20 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                         </div>
                                     </td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
-                                        <div class="flex items-center justify-end gap-1">
-                                            <button
+                                        <x-ui.icon-action-group>
+                                            <x-ui.icon-action
+                                                icon="heroicon-o-pencil"
+                                                :label="__('Edit provider')"
+                                                :title="__('Edit')"
                                                 wire:click.stop="openEditProvider({{ $provider->id }})"
-                                                class="text-accent hover:bg-surface-subtle p-1 rounded"
-                                                type="button"
-                                                title="{{ __('Edit') }}"
-                                                aria-label="{{ __('Edit provider') }}"
-                                            >
-                                                <x-icon name="heroicon-o-pencil" class="w-4 h-4" />
-                                            </button>
-                                            <button
+                                            />
+                                            <x-ui.icon-action
+                                                icon="heroicon-o-link-slash"
+                                                :label="__('Disconnect provider')"
+                                                :title="__('Disconnect')"
                                                 wire:click.stop="confirmDeleteProvider({{ $provider->id }})"
-                                                class="text-accent hover:bg-surface-subtle p-1 rounded"
-                                                type="button"
-                                                title="{{ __('Disconnect') }}"
-                                                aria-label="{{ __('Disconnect provider') }}"
-                                            >
-                                                <x-icon name="heroicon-o-link-slash" class="w-4 h-4" />
-                                            </button>
-                                        </div>
+                                            />
+                                        </x-ui.icon-action-group>
                                     </td>
                                 </tr>
 

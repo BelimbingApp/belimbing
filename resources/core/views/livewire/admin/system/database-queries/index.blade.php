@@ -56,24 +56,22 @@
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">
                                     <x-ui.datetime :value="$view->updated_at" />
                                 </td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
-                                    <div class="flex items-center gap-2">
-                                        <button
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
+                                    <x-ui.icon-action-group>
+                                        <x-ui.icon-action
+                                            icon="heroicon-o-document-duplicate"
+                                            :label="__('Duplicate query')"
+                                            :title="__('Duplicate')"
                                             wire:click="duplicateView({{ $view->id }})"
-                                            class="text-accent hover:bg-surface-subtle rounded p-1 transition-colors cursor-pointer"
-                                            title="{{ __('Duplicate') }}"
-                                        >
-                                            <x-icon name="heroicon-o-document-duplicate" class="size-4" />
-                                        </button>
-                                        <button
+                                        />
+                                        <x-ui.icon-action
+                                            icon="heroicon-o-trash"
+                                            :label="__('Delete query')"
+                                            :title="__('Delete')"
                                             wire:click="deleteView({{ $view->id }})"
                                             wire:confirm="{{ __('Are you sure you want to delete this query?') }}"
-                                            class="text-accent hover:bg-surface-subtle rounded p-1 transition-colors cursor-pointer"
-                                            title="{{ __('Delete') }}"
-                                        >
-                                            <x-icon name="heroicon-o-trash" class="size-4" />
-                                        </button>
-                                    </div>
+                                        />
+                                    </x-ui.icon-action-group>
                                 </td>
                             </tr>
                         @empty

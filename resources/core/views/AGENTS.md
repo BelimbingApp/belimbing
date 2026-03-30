@@ -121,6 +121,8 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.modal` | Modal dialogs |
 | `x-ui.page-header` | Page title + actions + optional `help` slot (slide-down panel) |
 | `x-ui.help` | Standalone "?" toggle button for contextual help |
+| `x-ui.icon-action` | Compact icon-only action links/buttons with consistent hover and focus treatment |
+| `x-ui.icon-action-group` | Right-aligned compact action group for one or more icon actions |
 | `x-ui.tabs` | Page-level tab container (underline/pill variants, URL hash, ARIA, keyboard nav) |
 | `x-ui.tab` | Individual tab panel (child of `x-ui.tabs`) |
 | `x-icon` | Canonical icon component for all UI icons |
