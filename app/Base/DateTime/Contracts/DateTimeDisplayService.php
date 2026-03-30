@@ -14,8 +14,9 @@ interface DateTimeDisplayService
      *
      * Returns an em-dash for null input. In LOCAL mode the value is returned
      * as a UTC ISO-8601 string so the Blade component can let the browser
-     * convert it. In COMPANY/UTC modes the value is converted to the
-     * resolved timezone and formatted as 'Y-m-d H:i'.
+     * convert it. In COMPANY mode the value is formatted using the app
+     * locale (CLDR via Carbon isoFormat 'L LT'). In UTC/Stored mode the
+     * value uses a fixed 'Y-m-d H:i' pattern — the raw database format.
      *
      * @param  \DateTimeInterface|string|null  $value  Raw datetime value
      */
@@ -25,7 +26,7 @@ interface DateTimeDisplayService
      * Format a value as a date-only string.
      *
      * Same null/LOCAL handling as {@see formatDateTime()}.
-     * COMPANY/UTC modes format as 'Y-m-d'.
+     * COMPANY mode uses locale-aware 'L'. UTC/Stored mode uses 'Y-m-d'.
      *
      * @param  \DateTimeInterface|string|null  $value  Raw datetime value
      */
@@ -35,7 +36,7 @@ interface DateTimeDisplayService
      * Format a value as a time-only string.
      *
      * Same null/LOCAL handling as {@see formatDateTime()}.
-     * COMPANY/UTC modes format as 'H:i'.
+     * COMPANY mode uses locale-aware 'LT'. UTC/Stored mode uses 'H:i'.
      *
      * @param  \DateTimeInterface|string|null  $value  Raw datetime value
      */

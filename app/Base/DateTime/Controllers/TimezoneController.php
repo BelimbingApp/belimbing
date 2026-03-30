@@ -10,12 +10,13 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Handles timezone display mode changes.
  *
- * Called from the top-bar Alpine toggle via fetch().
- * Cycles through Company → Local → UTC → Company.
+ * Called from the top-bar Alpine dropdown via fetch().
+ * Accepts a specific mode to set (company, local, or utc).
  */
 class TimezoneController
 {
@@ -26,30 +27,27 @@ class TimezoneController
     ) {}
 
     /**
-     * Cycle the timezone display mode for the authenticated user.
+     * Set the timezone display mode for the authenticated user.
      *
      * Persists at the most specific available scope (employee or company).
-     * Returns the new mode so the UI can update immediately.
+     * Returns the new mode and resolved IANA timezone identifier.
      */
-    public function cycle(Request $request): JsonResponse
+    public function set(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'mode' => ['required', 'string', Rule::in(array_column(TimezoneMode::cases(), 'value'))],
+        ]);
+
         $user = $request->user();
         $scope = $this->resolveScope($user);
+        $mode = TimezoneMode::from($validated['mode']);
 
-        $currentRaw = $this->settings->get(self::SETTINGS_KEY, TimezoneMode::COMPANY->value, $scope);
-        $current = TimezoneMode::tryFrom($currentRaw) ?? TimezoneMode::COMPANY;
-
-        $next = match ($current) {
-            TimezoneMode::COMPANY => TimezoneMode::LOCAL,
-            TimezoneMode::LOCAL => TimezoneMode::UTC,
-            TimezoneMode::UTC => TimezoneMode::COMPANY,
-        };
-
-        $this->settings->set(self::SETTINGS_KEY, $next->value, $scope);
+        $this->settings->set(self::SETTINGS_KEY, $mode->value, $scope);
 
         return response()->json([
-            'mode' => $next->value,
-            'label' => $this->label($next),
+            'mode' => $mode->value,
+            'label' => $this->label($mode),
+            'timezone' => $this->resolveTimezoneForMode($mode, $user),
         ]);
     }
 
@@ -77,7 +75,37 @@ class TimezoneController
         return match ($mode) {
             TimezoneMode::COMPANY => __('Company'),
             TimezoneMode::LOCAL => __('Local'),
-            TimezoneMode::UTC => __('UTC'),
+            TimezoneMode::UTC => __('Stored'),
         };
+    }
+
+    /**
+     * Resolve the IANA timezone identifier for a given mode.
+     *
+     * LOCAL mode returns null — the browser provides the actual timezone.
+     */
+    private function resolveTimezoneForMode(TimezoneMode $mode, mixed $user): ?string
+    {
+        return match ($mode) {
+            TimezoneMode::COMPANY => $this->resolveCompanyTimezone($user),
+            TimezoneMode::UTC => 'UTC',
+            TimezoneMode::LOCAL => null,
+        };
+    }
+
+    /**
+     * Resolve the company-level default timezone from settings.
+     */
+    private function resolveCompanyTimezone(mixed $user): string
+    {
+        if (! $user->company_id) {
+            return 'UTC';
+        }
+
+        return $this->settings->get(
+            'ui.timezone.default',
+            'UTC',
+            Scope::company($user->company_id),
+        );
     }
 }

@@ -63,9 +63,9 @@ it('formats datetime in UTC when mode is UTC', function (): void {
     expect($service->formatTime($carbon))->toBe('08:00');
 });
 
-// --- Formatting in Company Mode with Timezone ---
+// --- Formatting in Company Mode with Timezone (locale-aware) ---
 
-it('formats datetime in company timezone', function (): void {
+it('formats datetime in company timezone with locale', function (): void {
     $user = User::factory()->create(['company_id' => 1]);
     $this->actingAs($user);
 
@@ -74,10 +74,27 @@ it('formats datetime in company timezone', function (): void {
     $service = freshService();
     $carbon = Carbon::parse(DT_TEST_TIMESTAMP, 'UTC');
 
-    // KL is UTC+8
-    expect($service->formatDateTime($carbon))->toBe('2026-06-15 16:00');
-    expect($service->formatDate($carbon))->toBe('2026-06-15');
-    expect($service->formatTime($carbon))->toBe('16:00');
+    // KL is UTC+8 → 16:00; en locale → MM/DD/YYYY h:mm A
+    expect($service->formatDateTime($carbon))->toBe('06/15/2026 4:00 PM');
+    expect($service->formatDate($carbon))->toBe('06/15/2026');
+    expect($service->formatTime($carbon))->toBe('4:00 PM');
+});
+
+it('formats datetime in company timezone with ms locale', function (): void {
+    app()->setLocale('ms');
+
+    $user = User::factory()->create(['company_id' => 1]);
+    $this->actingAs($user);
+
+    $this->settings->set(DT_TEST_KEY_DEFAULT, DT_TEST_TIMEZONE_KL, Scope::company(1));
+
+    $service = freshService();
+    $carbon = Carbon::parse(DT_TEST_TIMESTAMP, 'UTC');
+
+    // KL is UTC+8 → 16:00; ms locale → DD/MM/YYYY HH.mm
+    expect($service->formatDateTime($carbon))->toBe('15/06/2026 16.00');
+    expect($service->formatDate($carbon))->toBe('15/06/2026');
+    expect($service->formatTime($carbon))->toBe('16.00');
 });
 
 // --- Local Mode Returns ISO-8601 ---

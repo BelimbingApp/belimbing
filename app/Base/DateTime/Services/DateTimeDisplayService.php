@@ -13,6 +13,12 @@ use Carbon\Carbon;
 
 class DateTimeDisplayService implements DateTimeDisplayServiceContract
 {
+    private const FORMAT_DATETIME = 'datetime';
+
+    private const FORMAT_DATE = 'date';
+
+    private const FORMAT_TIME = 'time';
+
     private ?TimezoneMode $resolvedMode = null;
 
     private ?string $resolvedTimezone = null;
@@ -26,7 +32,7 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
      */
     public function formatDateTime(\DateTimeInterface|string|null $value): string
     {
-        return $this->format($value, 'Y-m-d H:i');
+        return $this->format($value, self::FORMAT_DATETIME);
     }
 
     /**
@@ -34,7 +40,7 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
      */
     public function formatDate(\DateTimeInterface|string|null $value): string
     {
-        return $this->format($value, 'Y-m-d');
+        return $this->format($value, self::FORMAT_DATE);
     }
 
     /**
@@ -42,7 +48,7 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
      */
     public function formatTime(\DateTimeInterface|string|null $value): string
     {
-        return $this->format($value, 'H:i');
+        return $this->format($value, self::FORMAT_TIME);
     }
 
     /**
@@ -117,10 +123,14 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
     /**
      * Shared formatting logic for all three format methods.
      *
+     * Company mode uses locale-aware formatting via Carbon isoFormat (CLDR).
+     * UTC/Stored mode uses a fixed ISO-like pattern (Y-m-d H:i) — raw database representation.
+     * Local mode emits a UTC ISO-8601 string for browser-side formatting.
+     *
      * @param  \DateTimeInterface|string|null  $value  Raw datetime value
-     * @param  string  $format  PHP date format string
+     * @param  string  $type  One of FORMAT_DATETIME, FORMAT_DATE, FORMAT_TIME
      */
-    private function format(\DateTimeInterface|string|null $value, string $format): string
+    private function format(\DateTimeInterface|string|null $value, string $type): string
     {
         if ($value === null) {
             return '—';
@@ -134,6 +144,39 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
             return $carbon->utc()->toIso8601String();
         }
 
-        return $carbon->setTimezone($this->currentTimezone())->format($format);
+        $carbon = $carbon->setTimezone($this->currentTimezone());
+
+        if ($this->currentMode() === TimezoneMode::UTC) {
+            return $carbon->format($this->storedFormat($type));
+        }
+
+        return $carbon->locale(app()->getLocale())->isoFormat($this->localeFormat($type));
+    }
+
+    /**
+     * Fixed format patterns for Stored/UTC mode — raw database representation.
+     */
+    private function storedFormat(string $type): string
+    {
+        return match ($type) {
+            self::FORMAT_DATE => 'Y-m-d',
+            self::FORMAT_TIME => 'H:i',
+            default => 'Y-m-d H:i',
+        };
+    }
+
+    /**
+     * CLDR isoFormat tokens for locale-aware rendering.
+     *
+     * L = locale short date (e.g. 15/06/2026 for ms, 06/15/2026 for en).
+     * LT = locale short time (e.g. 08.00 for ms, 8:00 AM for en).
+     */
+    private function localeFormat(string $type): string
+    {
+        return match ($type) {
+            self::FORMAT_DATE => 'L',
+            self::FORMAT_TIME => 'LT',
+            default => 'L LT',
+        };
     }
 }

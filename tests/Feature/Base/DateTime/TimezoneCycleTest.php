@@ -4,33 +4,39 @@ use App\Base\DateTime\Enums\TimezoneMode;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Modules\Core\User\Models\User;
-const TZ_CYCLE_SETTINGS_KEY = 'ui.timezone.mode';
+
+const TZ_SET_SETTINGS_KEY = 'ui.timezone.mode';
 
 beforeEach(function (): void {
     config(['settings.cache_ttl' => 0]);
 });
 
-it('cycles through Company → Local → UTC → Company', function (): void {
+it('sets timezone mode to each valid value', function (string $mode): void {
     $user = User::factory()->create(['company_id' => 1]);
-    $settings = app(SettingsService::class);
 
-    // Default is Company → cycles to Local
     $this->actingAs($user)
-        ->postJson(route('timezone.cycle'))
+        ->postJson(route('timezone.set'), ['mode' => $mode])
         ->assertOk()
-        ->assertJson(['mode' => 'local']);
+        ->assertJson(['mode' => $mode]);
+})->with(['company', 'local', 'utc']);
 
-    // Local → UTC
-    $this->actingAs($user)
-        ->postJson(route('timezone.cycle'))
-        ->assertOk()
-        ->assertJson(['mode' => 'utc']);
+it('returns timezone identifier for company and utc modes', function (): void {
+    $user = User::factory()->create(['company_id' => 1]);
 
-    // UTC → Company
     $this->actingAs($user)
-        ->postJson(route('timezone.cycle'))
+        ->postJson(route('timezone.set'), ['mode' => 'utc'])
         ->assertOk()
-        ->assertJson(['mode' => 'company']);
+        ->assertJson(['timezone' => 'UTC']);
+});
+
+it('returns null timezone for local mode', function (): void {
+    $user = User::factory()->create(['company_id' => 1]);
+
+    $response = $this->actingAs($user)
+        ->postJson(route('timezone.set'), ['mode' => 'local'])
+        ->assertOk();
+
+    expect($response->json('timezone'))->toBeNull();
 });
 
 it('persists mode in settings at company scope', function (): void {
@@ -38,15 +44,23 @@ it('persists mode in settings at company scope', function (): void {
     $settings = app(SettingsService::class);
 
     $this->actingAs($user)
-        ->postJson(route('timezone.cycle'))
+        ->postJson(route('timezone.set'), ['mode' => 'local'])
         ->assertOk();
 
-    $stored = $settings->get(TZ_CYCLE_SETTINGS_KEY, null, Scope::company(1));
+    $stored = $settings->get(TZ_SET_SETTINGS_KEY, null, Scope::company(1));
 
     expect($stored)->toBe(TimezoneMode::LOCAL->value);
 });
 
+it('rejects invalid mode values', function (): void {
+    $user = User::factory()->create(['company_id' => 1]);
+
+    $this->actingAs($user)
+        ->postJson(route('timezone.set'), ['mode' => 'invalid'])
+        ->assertUnprocessable();
+});
+
 it('requires authentication', function (): void {
-    $this->postJson(route('timezone.cycle'))
+    $this->postJson(route('timezone.set'), ['mode' => 'utc'])
         ->assertUnauthorized();
 });
