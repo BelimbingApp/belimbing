@@ -94,7 +94,7 @@
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-muted tabular-nums">{{ $country->phone }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-muted">{{ $country->currency_code }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-muted text-right tabular-nums pr-3">{{ number_format($country->population) }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-muted tabular-nums pl-3">{{ $country->updated_at?->format('Y-m-d') }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-muted tabular-nums pl-3"><x-ui.datetime :value="$country->updated_at" format="date" /></td>
                             </tr>
                         @empty
                             <tr>

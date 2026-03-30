@@ -101,7 +101,7 @@
                     <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Email Verified') }}</dt>
                     <dd class="mt-0.5 text-sm text-ink">
                         @if ($user->email_verified_at)
-                            <x-ui.badge variant="success">{{ $user->email_verified_at->format('Y-m-d H:i') }}</x-ui.badge>
+                            <x-ui.badge variant="success"><x-ui.datetime :value="$user->email_verified_at" /></x-ui.badge>
                         @else
                             <x-ui.badge variant="warning">{{ __('Unverified') }}</x-ui.badge>
                         @endif
@@ -109,11 +109,11 @@
                 </div>
                 <div>
                     <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Created') }}</dt>
-                    <dd class="mt-0.5 text-sm text-muted tabular-nums">{{ $user->created_at->format('Y-m-d H:i') }}</dd>
+                    <dd class="mt-0.5 text-sm text-muted tabular-nums"><x-ui.datetime :value="$user->created_at" /></dd>
                 </div>
                 <div>
                     <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Updated') }}</dt>
-                    <dd class="mt-0.5 text-sm text-muted tabular-nums">{{ $user->updated_at->format('Y-m-d H:i') }}</dd>
+                    <dd class="mt-0.5 text-sm text-muted tabular-nums"><x-ui.datetime :value="$user->updated_at" /></dd>
                 </div>
             </dl>
         </x-ui.card>
@@ -451,7 +451,7 @@
                                         default => 'default',
                                     }">{{ ucfirst($employee->status) }}</x-ui.badge>
                                 </td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $employee->employment_start?->format('Y-m-d') ?? '—' }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums"><x-ui.datetime :value="$employee->employment_start" format="date" /></td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
                                     <x-ui.button
                                         variant="danger-ghost"
@@ -577,8 +577,8 @@
                                         <x-ui.badge variant="default">{{ __('Inactive') }}</x-ui.badge>
                                     @endif
                                 </td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $access->access_granted_at?->format('Y-m-d H:i') ?? '—' }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $access->access_expires_at?->format('Y-m-d H:i') ?? '—' }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums"><x-ui.datetime :value="$access->access_granted_at" /></td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums"><x-ui.datetime :value="$access->access_expires_at" /></td>
                             </tr>
                         @empty
                             <tr>

@@ -7,12 +7,15 @@ namespace App\Modules\Core\Address\Concerns;
 
 use App\Modules\Core\Geonames\Jobs\ImportPostcodes;
 use App\Modules\Core\Geonames\Models\Admin1;
+use App\Modules\Core\Geonames\Models\City;
 use App\Modules\Core\Geonames\Models\Country;
 use App\Modules\Core\Geonames\Models\Postcode;
 
 trait HasAddressGeoLookups
 {
     private const POSTCODE_SEARCH_LIMIT = 10;
+
+    private const CITY_SEARCH_LIMIT = 15;
 
     /**
      * Load country options for combobox (ISO + name).
@@ -138,6 +141,51 @@ trait HasAddressGeoLookups
                 'value' => (string) $p->postcode,
                 'label' => (string) $p->postcode,
             ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Search cities by name for a country, optionally filtered by admin1 code.
+     *
+     * Searches name, ascii_name, and alternate_names. Results ordered by population
+     * descending so the most relevant cities appear first.
+     *
+     * @param  string  $countryIso  Two-letter ISO country code
+     * @param  string  $query  Search query (empty returns largest cities up to limit)
+     * @param  string|null  $admin1Code  Optional admin1 code to narrow results (raw code, not prefixed)
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function searchCitiesInCountry(string $countryIso, string $query, ?string $admin1Code = null): array
+    {
+        $iso = strtoupper($countryIso);
+        $q = trim($query);
+
+        $builder = City::query()
+            ->where('country_iso', $iso);
+
+        if ($admin1Code !== null && $admin1Code !== '') {
+            $builder->where('admin1_code', $admin1Code);
+        }
+
+        if ($q !== '') {
+            $pattern = str_replace(['%', '_'], ['\\%', '\\_'], $q);
+            $builder->where(function ($sub) use ($pattern) {
+                $sub->where('name', 'ilike', $pattern.'%')
+                    ->orWhere('ascii_name', 'ilike', $pattern.'%')
+                    ->orWhere('alternate_names', 'ilike', '%'.$pattern.'%');
+            });
+        }
+
+        return $builder
+            ->orderByDesc('population')
+            ->limit(self::CITY_SEARCH_LIMIT)
+            ->get(['name', 'admin1_code', 'population'])
+            ->map(fn (City $c) => [
+                'value' => $c->name,
+                'label' => $c->name,
+            ])
+            ->unique('value')
             ->values()
             ->all();
     }

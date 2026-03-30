@@ -190,7 +190,7 @@
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap font-medium text-ink tabular-nums">{{ $postcode->postcode }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-muted">{{ $postcode->place_name }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-muted tabular-nums">{{ $postcode->admin1Code }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-muted tabular-nums">{{ $postcode->updated_at?->format('Y-m-d') }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-muted tabular-nums"><x-ui.datetime :value="$postcode->updated_at" format="date" /></td>
                             </tr>
                         @empty
                             <tr>

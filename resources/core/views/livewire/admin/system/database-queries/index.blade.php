@@ -8,7 +8,7 @@
 <div>
     <x-slot name="title">{{ __('Database Queries') }}</x-slot>
 
-    <div class="space-y-section-gap" x-data="{ localTime: false }">
+    <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Database Queries')" :subtitle="__('User-defined SQL queries rendered as browsable pages')">
             <x-slot name="actions">
                 <x-ui.button variant="primary" wire:click="createView">
@@ -29,18 +29,6 @@
                         placeholder="{{ __('Search by name or description...') }}"
                     />
                 </div>
-                <x-ui.button
-                    variant="ghost"
-                    size="sm"
-                    @click="localTime = !localTime"
-                    ::class="localTime ? 'ring-2 ring-accent' : ''"
-                    x-bind:aria-pressed="localTime.toString()"
-                    title="{{ __('Toggle timestamp display between UTC and Local Time.') }}"
-                    aria-label="{{ __('Toggle timestamp display between UTC and Local Time.') }}"
-                >
-                    <x-icon name="heroicon-o-clock" class="w-4 h-4" />
-                    <span x-text="localTime ? '{{ __('Local Time') }}' : '{{ __('UTC') }}'"></span>
-                </x-ui.button>
             </div>
 
             <div class="overflow-x-auto -mx-card-inner px-card-inner">
@@ -62,34 +50,12 @@
                             <tr wire:key="query-{{ $view->id }}" class="hover:bg-surface-subtle/50 transition-colors cursor-pointer" tabindex="0" onclick="window.location='{{ $viewUrl }}'" onkeydown="if(event.key==='Enter'||event.key===' '){window.location='{{ $viewUrl }}';event.preventDefault();}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-medium">{{ $view->name }}</td>
                                 <td class="px-table-cell-x py-table-cell-y text-sm text-muted" title="{{ $view->description }}">{{ Str::limit($view->description, 60) ?? '—' }}</td>
-                                <td
-                                    class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums"
-                                    data-utc-display="{{ $view->created_at->format('Y-m-d H:i') }}"
-                                    data-raw="{{ $view->created_at->utc()->format('Y-m-d\TH:i:s\Z') }}"
-                                    x-data
-                                    x-effect="
-                                        if (localTime) {
-                                            const raw = $el.getAttribute('data-raw');
-                                            try { $el.textContent = raw ? new Date(raw).toLocaleString() : '—'; } catch(e) {}
-                                        } else {
-                                            $el.textContent = $el.getAttribute('data-utc-display') || '—';
-                                        }
-                                    "
-                                >{{ $view->created_at->format('Y-m-d H:i') }}</td>
-                                <td
-                                    class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums"
-                                    data-utc-display="{{ $view->updated_at->format('Y-m-d H:i') }}"
-                                    data-raw="{{ $view->updated_at->utc()->format('Y-m-d\TH:i:s\Z') }}"
-                                    x-data
-                                    x-effect="
-                                        if (localTime) {
-                                            const raw = $el.getAttribute('data-raw');
-                                            try { $el.textContent = raw ? new Date(raw).toLocaleString() : '—'; } catch(e) {}
-                                        } else {
-                                            $el.textContent = $el.getAttribute('data-utc-display') || '—';
-                                        }
-                                    "
-                                >{{ $view->updated_at->format('Y-m-d H:i') }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">
+                                    <x-ui.datetime :value="$view->created_at" />
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">
+                                    <x-ui.datetime :value="$view->updated_at" />
+                                </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
                                     <div class="flex items-center gap-2">
                                         <button

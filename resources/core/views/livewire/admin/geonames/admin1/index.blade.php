@@ -76,7 +76,7 @@
                                     />
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $admin1->alt_name }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums min-w-22">{{ $admin1->updated_at?->format('Y-m-d') }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums min-w-22"><x-ui.datetime :value="$admin1->updated_at" format="date" /></td>
                             </tr>
                         @empty
                             <tr>

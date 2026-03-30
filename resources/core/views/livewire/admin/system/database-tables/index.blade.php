@@ -10,7 +10,7 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
 <div>
     <x-slot name="title">{{ __('Database Tables') }}</x-slot>
 
-    <div class="space-y-section-gap" x-data="{ localTime: false }">
+    <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Database Tables')" :subtitle="__('Browse and inspect all registered database tables')">
             <x-slot name="help">
                 @if(app()->environment('local'))
@@ -39,27 +39,11 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
         @endforeach
 
         <x-ui.card>
-            <div class="mb-2 flex items-center gap-4 flex-wrap">
-                <div class="flex-1 min-w-0">
-                    <x-ui.search-input
-                        wire:model.live.debounce.300ms="search"
-                        placeholder="{{ __('Search by table name or module...') }}"
-                    />
-                </div>
-                @if(app()->environment('local'))
-                    <x-ui.button
-                        variant="ghost"
-                        size="sm"
-                        @click="localTime = !localTime"
-                        ::class="localTime ? 'ring-2 ring-accent' : ''"
-                        x-bind:aria-pressed="localTime.toString()"
-                        title="{{ __('Toggle timestamp display between UTC and Local Time.') }}"
-                        aria-label="{{ __('Toggle timestamp display between UTC and Local Time.') }}"
-                    >
-                        <x-icon name="heroicon-o-clock" class="w-4 h-4" />
-                        <span x-text="localTime ? '{{ __('Local Time') }}' : '{{ __('UTC') }}'"></span>
-                    </x-ui.button>
-                @endif
+            <div class="mb-2">
+                <x-ui.search-input
+                    wire:model.live.debounce.300ms="search"
+                    placeholder="{{ __('Search by table name or module...') }}"
+                />
             </div>
 
             <div class="overflow-x-auto -mx-card-inner px-card-inner">
@@ -142,22 +126,9 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
                                             </x-ui.badge>
                                         </button>
                                     </td>
-                                    <td
-                                        class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums"
-                                        @if($table->stabilized_at)
-                                            data-utc-display="{{ $table->stabilized_at->format('Y-m-d H:i:s') }}"
-                                            data-raw="{{ $table->stabilized_at->utc()->format('Y-m-d\TH:i:s\Z') }}"
-                                            x-data
-                                            x-effect="
-                                                if (localTime) {
-                                                    const raw = $el.getAttribute('data-raw');
-                                                    try { $el.textContent = raw ? new Date(raw).toLocaleString() : '—'; } catch(e) {}
-                                                } else {
-                                                    $el.textContent = $el.getAttribute('data-utc-display') || '—';
-                                                }
-                                            "
-                                        @endif
-                                    >{{ $table->stabilized_at?->format('Y-m-d H:i:s') ?? '—' }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">
+                                        <x-ui.datetime :value="$table->stabilized_at" />
+                                    </td>
                                 @endif
                             </tr>
                         @empty

@@ -42,7 +42,7 @@
                     <tbody class="bg-surface-card divide-y divide-border-default">
                         @forelse($mutations as $mutation)
                             <tr wire:key="mutation-{{ $mutation->id }}" class="hover:bg-surface-subtle/50 transition-colors align-top">
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $mutation->occurred_at->format('Y-m-d H:i:s') }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums"><x-ui.datetime :value="$mutation->occurred_at" /></td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
                                     {{ $mutation->actor_name ?? $mutation->actor_type . '#' . $mutation->actor_id }}
                                 </td>

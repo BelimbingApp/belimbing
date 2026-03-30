@@ -48,7 +48,7 @@
                                     <a href="{{ route('admin.roles.show', $assignment->role_id) }}" wire:navigate class="text-sm font-medium text-accent hover:underline">{{ $assignment->role->name }}</a>
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $assignment->company_name ?? __('Global') }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $assignment->created_at->format('Y-m-d H:i') }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted"><x-ui.datetime :value="$assignment->created_at" /></td>
                             </tr>
                         @empty
                             <tr>

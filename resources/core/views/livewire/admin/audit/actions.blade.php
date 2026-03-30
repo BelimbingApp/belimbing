@@ -50,7 +50,7 @@
                                 class="hover:bg-surface-subtle/50 transition-colors cursor-pointer"
                                 @click="payloadJson = {{ \Illuminate\Support\Js::from($action->payload) }} ? JSON.stringify({{ \Illuminate\Support\Js::from($action->payload) }}, null, 2) : ''; payloadModal = true"
                             >
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $action->occurred_at->format('Y-m-d H:i:s') }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums"><x-ui.datetime :value="$action->occurred_at" /></td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
                                     {{ $action->actor_name ?? $action->actor_type . '#' . $action->actor_id }}
                                 </td>

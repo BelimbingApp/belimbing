@@ -311,11 +311,11 @@
                     @endif
                     <div>
                         <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Employment Start') }}</dt>
-                        <dd class="text-sm text-ink px-1 -mx-1 py-0.5 tabular-nums">{{ $employee->employment_start?->format('Y-m-d') ?? '-' }}</dd>
+                        <dd class="text-sm text-ink px-1 -mx-1 py-0.5 tabular-nums"><x-ui.datetime :value="$employee->employment_start" format="date" /></dd>
                     </div>
                     <div>
                         <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Employment End') }}</dt>
-                        <dd class="text-sm text-ink px-1 -mx-1 py-0.5 tabular-nums">{{ $employee->employment_end?->format('Y-m-d') ?? '-' }}</dd>
+                        <dd class="text-sm text-ink px-1 -mx-1 py-0.5 tabular-nums"><x-ui.datetime :value="$employee->employment_end" format="date" /></dd>
                     </div>
                 </dl>
         </x-ui.card>

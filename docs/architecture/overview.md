@@ -16,6 +16,7 @@
 | [broadcasting.md](broadcasting.md) | Real-time broadcasting (Laravel Reverb, Echo), channels, usage |
 | [user-employee-company.md](user-employee-company.md) | User, Employee, Company entity model and relationships |
 | [authorization.md](authorization.md) | AuthZ design (principals, policies, scope), RBAC, Agent alignment |
+| [timezone-display.md](timezone-display.md) | Company-default datetime rendering, Local/UTC toggle model, and timezone display policy |
 | [ai-agent.md](ai-agent.md) | Agent architecture: unified employee model, delegation rules, and governance constraints |
 | [caddy-development-setup.md](caddy-development-setup.md) | Local Caddy setup for development |
 

@@ -50,10 +50,10 @@
                                     <x-ui.badge :variant="$item->direction === 'outgoing' ? 'info' : 'default'">{{ ucfirst($item->direction) }}</x-ui.badge>
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">
-                                    {{ $item->relationship->effective_from?->format('Y-m-d') ?? '-' }}
+                                    <x-ui.datetime :value="$item->relationship->effective_from" format="date" />
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">
-                                    {{ $item->relationship->effective_to?->format('Y-m-d') ?? '-' }}
+                                    <x-ui.datetime :value="$item->relationship->effective_to" format="date" />
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <x-ui.badge :variant="$item->relationship->isActive() ? 'success' : 'danger'">

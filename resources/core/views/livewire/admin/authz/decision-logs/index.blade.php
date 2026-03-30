@@ -34,7 +34,7 @@
                     <tbody class="bg-surface-card divide-y divide-border-default">
                         @forelse($logs as $log)
                             <tr wire:key="log-{{ $log->id }}" class="hover:bg-surface-subtle/50 transition-colors">
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $log->occurred_at->format('Y-m-d H:i:s') }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums"><x-ui.datetime :value="$log->occurred_at" /></td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
                                     {{ $log->actor_name ?? $log->actor_type . '#' . $log->actor_id }}
                                     @if ($log->acting_for_user_id)

@@ -6,15 +6,21 @@
 namespace App\Modules\Core\Company\Livewire\Companies;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\DTO\Scope;
 use App\Modules\Core\Address\Livewire\AbstractAddressForm;
 use App\Modules\Core\Address\Models\Address;
+use App\Modules\Core\Company\Livewire\Concerns\ManagesCompanyTimezone;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\LegalEntityType;
 use App\Modules\Core\Geonames\Models\Country;
+use DateTimeZone;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 
 class Show extends AbstractAddressForm
 {
+    use ManagesCompanyTimezone;
     use SavesValidatedFields;
 
     public Company $company;
@@ -63,6 +69,9 @@ class Show extends AbstractAddressForm
             'inverseRelationships.company',
             'externalAccesses.user',
         ]);
+
+        $this->companyTimezone = app(SettingsService::class)
+            ->get('ui.timezone.default', '', Scope::company($company->id)) ?: '';
     }
 
     public function saveField(string $field, mixed $value): void
@@ -238,7 +247,7 @@ class Show extends AbstractAddressForm
         }
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $linkedIds = $this->company->addresses->pluck('id')->toArray();
 
@@ -253,6 +262,10 @@ class Show extends AbstractAddressForm
                 ->get(['id', 'name']),
             'legalEntityTypes' => LegalEntityType::query()->active()->orderBy('name')->get(['id', 'code', 'name']),
             'countries' => Country::query()->orderBy('country')->get(['iso', 'country']),
+            'timezoneOptions' => collect(DateTimeZone::listIdentifiers())->map(fn (string $tz) => [
+                'value' => $tz,
+                'label' => $tz,
+            ])->all(),
         ]);
     }
 
@@ -312,6 +325,7 @@ class Show extends AbstractAddressForm
         $this->company->load('addresses');
         $this->showAddressModal = false;
         $this->resetAddressForm();
+        $this->autoSaveTimezoneFromAddress();
         Session::flash('success', __('Address created and attached.'));
     }
 
@@ -345,6 +359,7 @@ class Show extends AbstractAddressForm
         $this->company->load('addresses');
         $this->showAddressModal = false;
         $this->resetAddressForm();
+        $this->autoSaveTimezoneFromAddress();
         Session::flash('success', __('Address updated.'));
     }
 }

@@ -142,11 +142,13 @@
                 <div>
                     <x-ui.combobox
                         wire:model.live="locality"
+                        wire:key="show-locality-{{ $countryIso ?? 'none' }}-{{ $admin1Code ?? 'none' }}"
                         label="{{ __('Locality') }}"
                         :hint="$localityIsAuto ? __('(from postcode)') : null"
                         placeholder="{{ __('City / town') }}"
                         :options="$localityOptions"
                         :editable="true"
+                        search-url="{{ route('admin.addresses.cities.search') }}?country={{ $countryIso ?? '' }}&admin1={{ $admin1Code ?? '' }}"
                     />
                 </div>
                 <div x-data="{ editing: false, val: '{{ $address->verificationStatus }}' }">
