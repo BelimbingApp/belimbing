@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Services;
 use App\Base\AI\Services\KnowledgeNavigator;
 use App\Base\AI\Services\ModelCatalogQueryService;
 use App\Base\Foundation\Exceptions\BlbDataContractException;
+use App\Base\Support\Str as BlbStr;
 use Illuminate\Support\Str;
 
 class LaraOrchestrationService
@@ -100,7 +101,7 @@ class LaraOrchestrationService
             return null;
         }
 
-        return trim((string) substr($trimmed, strlen('/delegate')));
+        return BlbStr::afterPrefix($trimmed, '/delegate');
     }
 
     /**
@@ -161,22 +162,19 @@ class LaraOrchestrationService
     {
         $trimmed = trim($message);
 
-        if (! str_starts_with($trimmed, '/guide')) {
-            return null;
-        }
-
-        return trim((string) substr($trimmed, strlen('/guide')));
+        return str_starts_with($trimmed, '/guide')
+            ? BlbStr::afterPrefix($trimmed, '/guide')
+            : null;
     }
 
     private function extractModelExpression(string $message): ?string
     {
         $trimmed = trim($message);
 
-        if (! str_starts_with($trimmed, '/models')) {
-            return null;
-        }
+        return str_starts_with($trimmed, '/models')
+            ? BlbStr::afterPrefix($trimmed, '/models')
+            : null;
 
-        return trim((string) substr($trimmed, strlen('/models')));
     }
 
     /**

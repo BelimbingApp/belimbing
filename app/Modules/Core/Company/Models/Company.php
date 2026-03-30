@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
+use App\Base\Support\Str as BlbStr;
 
 class Company extends Model
 {
@@ -88,7 +88,7 @@ class Company extends Model
 
         static::creating(function ($company): void {
             if (empty($company->code)) {
-                $company->code = Str::lower(Str::slug($company->name, '_'));
+                $company->code = BlbStr::code($company->name);
             }
         });
 
@@ -325,7 +325,7 @@ class Company extends Model
 
         $normalizedCode = null;
         if (is_string($code) && trim($code) !== '') {
-            $normalizedCode = Str::lower(Str::slug($code, '_'));
+            $normalizedCode = BlbStr::code($code);
         }
 
         static::unguarded(fn () => static::query()->create([

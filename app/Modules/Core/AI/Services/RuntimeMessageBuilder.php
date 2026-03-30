@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\DTO\Message;
 
 /**
@@ -168,9 +169,7 @@ class RuntimeMessageBuilder
 
         // Truncate extracted text to prevent prompt explosion
         $maxChars = 50000;
-        if (mb_strlen($text) > $maxChars) {
-            $text = mb_substr($text, 0, $maxChars)."\n\n[... truncated at {$maxChars} characters]";
-        }
+        $text = BlbStr::truncate($text, $maxChars, "\n\n[... truncated at {$maxChars} characters]");
 
         return "[Attached document: {$name}]\n{$text}";
     }

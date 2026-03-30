@@ -12,6 +12,7 @@ use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
+use App\Base\Support\Str as BlbStr;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -274,7 +275,7 @@ class QueryDataTool extends AbstractTool
             foreach ($columns as $col) {
                 $value = $this->formatValue($row[$col] ?? null);
                 if (mb_strlen($value) > $maxColWidth) {
-                    $value = mb_substr($value, 0, $maxColWidth - 3).'...';
+                    $value = BlbStr::preview($value, $maxColWidth - 3, '...');
                 }
                 $line .= mb_str_pad($value, $widths[$col]).' | ';
             }

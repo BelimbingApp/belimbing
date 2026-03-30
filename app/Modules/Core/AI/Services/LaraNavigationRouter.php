@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\User\Models\User;
 
 /**
@@ -77,11 +78,9 @@ class LaraNavigationRouter
     {
         $trimmed = trim($message);
 
-        if (! str_starts_with($trimmed, '/go')) {
-            return null;
-        }
-
-        return mb_strtolower(trim((string) substr($trimmed, strlen('/go'))));
+        return str_starts_with($trimmed, '/go')
+            ? mb_strtolower(BlbStr::afterPrefix($trimmed, '/go'))
+            : null;
     }
 
     /**
@@ -105,16 +104,14 @@ class LaraNavigationRouter
      */
     private function invalidTargetResponse(string $target): ?array
     {
-        if ($target === '') {
-            return [
+        return $target === ''
+            ? [
                 'status' => 'invalid_navigation_command',
                 'message' => __('Use "/go <target>" — available: :targets.', [
                     'targets' => implode(', ', $this->availableTargetNames()),
                 ]),
-            ];
-        }
-
-        return null;
+            ]
+            : null;
     }
 
     /**

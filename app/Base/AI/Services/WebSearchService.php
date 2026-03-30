@@ -5,6 +5,7 @@
 
 namespace App\Base\AI\Services;
 
+use App\Base\Support\Str as BlbStr;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
@@ -182,7 +183,7 @@ class WebSearchService
         $body = $response->json('error.message')
             ?? $response->json('message')
             ?? $response->json('detail')
-            ?? trim(mb_substr($response->body(), 0, 200));
+            ?? trim(BlbStr::preview($response->body(), 200, ''));
 
         return $body !== '' && $body !== null
             ? "HTTP {$status}: {$body}"

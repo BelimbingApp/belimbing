@@ -8,6 +8,7 @@ namespace App\Base\Database\Livewire\DatabaseTables;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\TableInspector;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Support\Str as BlbStr;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
@@ -171,9 +172,7 @@ class Show extends Component
 
         $stringValue = (string) $value;
 
-        return mb_strlen($stringValue) > self::MAX_CELL_LENGTH
-            ? mb_substr($stringValue, 0, self::MAX_CELL_LENGTH).'…'
-            : $stringValue;
+        return BlbStr::preview($stringValue, self::MAX_CELL_LENGTH);
     }
 
     /**

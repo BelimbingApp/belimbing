@@ -7,6 +7,7 @@ namespace App\Base\Audit\Listeners;
 
 use App\Base\Audit\DTO\RequestContext;
 use App\Base\Audit\Services\AuditBuffer;
+use App\Base\Support\Str as BlbStr;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -209,15 +210,11 @@ class MutationListener
         }
 
         if (isset($truncateFields[$field]) && is_string($value)) {
-            $maxLength = $truncateFields[$field];
-
-            return mb_strlen($value) > $maxLength
-                ? mb_substr($value, 0, $maxLength).'[truncated, '.mb_strlen($value).' chars]'
-                : $value;
+            return BlbStr::truncateWithCount($value, $truncateFields[$field]);
         }
 
-        if (is_string($value) && mb_strlen($value) > $truncateDefault) {
-            return mb_substr($value, 0, $truncateDefault).'[truncated, '.mb_strlen($value).' chars]';
+        if (is_string($value)) {
+            return BlbStr::truncateWithCount($value, $truncateDefault);
         }
 
         return $value;

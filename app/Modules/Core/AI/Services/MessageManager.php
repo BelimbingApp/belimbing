@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\DTO\Message;
 use DateTimeImmutable;
 
@@ -186,32 +187,7 @@ class MessageManager
      */
     private function extractSnippet(string $content, int $matchPos): string
     {
-        $snippetLength = 120;
-        $contentLength = mb_strlen($content);
-
-        if ($contentLength <= $snippetLength) {
-            return $content;
-        }
-
-        $halfWindow = (int) floor($snippetLength / 2);
-        $start = max(0, $matchPos - $halfWindow);
-        $end = min($contentLength, $start + $snippetLength);
-
-        if ($end === $contentLength) {
-            $start = max(0, $end - $snippetLength);
-        }
-
-        $snippet = mb_substr($content, $start, $end - $start);
-
-        if ($start > 0) {
-            $snippet = '…'.$snippet;
-        }
-
-        if ($end < $contentLength) {
-            $snippet .= '…';
-        }
-
-        return $snippet;
+        return BlbStr::snippetAround($content, $matchPos);
     }
 
     /**
