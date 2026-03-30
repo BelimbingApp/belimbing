@@ -458,6 +458,8 @@ return [
             'category' => ['inference-platform'],
             'region' => ['global'],
             'description' => 'Open-source model inference API platform',
+            'base_url' => 'https://api.inference.net/v1',
+            'api_key_url' => 'https://docs.inference.net/api/api-quickstart',
         ],
         'io-net' => [
             'category' => ['inference-platform'],

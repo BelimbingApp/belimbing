@@ -95,7 +95,7 @@ class LlmClient
         $data = $response->json();
         if (! is_array($data)) {
             return [
-                'error' => __('Model ":model" returned an unsupported response payload from the provider.', ['model' => $model]),
+                'error' => $this->unsupportedPayloadMessage($response, $model),
                 'error_type' => 'unsupported_response_shape',
                 'latency_ms' => $latencyMs,
             ];
@@ -315,5 +315,20 @@ class LlmClient
     private function latencyMs(int|float $startTime): int
     {
         return (int) ((hrtime(true) - $startTime) / 1_000_000);
+    }
+
+    /**
+     * Describe a successful-but-invalid provider payload.
+     */
+    private function unsupportedPayloadMessage(Response $response, string $model): string
+    {
+        $contentType = strtolower((string) $response->header('Content-Type'));
+        $body = ltrim($response->body());
+
+        if (str_contains($contentType, 'text/html') || str_starts_with($body, '<!DOCTYPE html') || str_starts_with($body, '<html')) {
+            return __('Model ":model" returned HTML instead of JSON. Check that the provider base URL points to the API endpoint, not the provider website.', ['model' => $model]);
+        }
+
+        return __('Model ":model" returned an unsupported response payload from the provider.', ['model' => $model]);
     }
 }

@@ -13,6 +13,7 @@ use Livewire\Livewire;
 const COMPANY_TZ_SETTINGS_KEY = 'ui.timezone.default';
 const COMPANY_TZ_KL = 'Asia/Kuala_Lumpur';
 const COMPANY_TZ_TOKYO = 'Asia/Tokyo';
+const COMPANY_CITY_KUALA_LUMPUR = 'Kuala Lumpur';
 
 /**
  * Seed a Malaysia country and Kuala Lumpur city for geo-based timezone tests.
@@ -29,8 +30,8 @@ function seedMalaysiaGeoData(): void
 
     City::query()->create([
         'geoname_id' => 1735161,
-        'name' => 'Kuala Lumpur',
-        'ascii_name' => 'Kuala Lumpur',
+        'name' => COMPANY_CITY_KUALA_LUMPUR,
+        'ascii_name' => COMPANY_CITY_KUALA_LUMPUR,
         'country_iso' => 'MY',
         'latitude' => 3.1412,
         'longitude' => 101.6865,
@@ -109,7 +110,7 @@ it('auto-saves timezone when address locality matches a city exactly', function 
     // Simulate creating an address with matching locality via the modal.
     $component
         ->set('countryIso', 'MY')
-        ->set('locality', 'Kuala Lumpur')
+        ->set('locality', COMPANY_CITY_KUALA_LUMPUR)
         ->set('kind', ['headquarters'])
         ->call('saveAddress');
 

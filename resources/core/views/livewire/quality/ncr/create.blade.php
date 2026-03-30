@@ -83,12 +83,12 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <x-ui.input
                         id="ncr-quantity-affected"
-                        wire:model="quantity_affected"
+                        wire:model="quantityAffected"
                         label="{{ __('Quantity Affected') }}"
                         type="number"
                         step="0.0001"
                         min="0"
-                        :error="$errors->first('quantity_affected')"
+                        :error="$errors->first('quantityAffected')"
                     />
                     <x-ui.input
                         id="ncr-uom"
@@ -101,7 +101,7 @@
                     <div class="flex items-end pb-1">
                         <x-ui.checkbox
                             id="ncr-is-supplier-related"
-                            wire:model="is_supplier_related"
+                            wire:model="isSupplierRelated"
                             label="{{ __('Supplier Related') }}"
                         />
                     </div>

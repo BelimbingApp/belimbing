@@ -143,4 +143,25 @@ describe('LlmClient tool calling', function () {
         expect($result)->not->toHaveKey('tool_calls');
         expect($result)->toHaveKey('content', 'Just text');
     });
+
+    it('returns a helpful error when a provider responds with HTML', function () {
+        Http::fake([
+            '*/chat/completions' => Http::response('<!DOCTYPE html><html><body>Page Not Found</body></html>', 200, [
+                'Content-Type' => 'text/html; charset=utf-8',
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $result = $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'gpt-4',
+            [['role' => 'user', 'content' => 'Hello']],
+        ));
+
+        expect($result)
+            ->toHaveKey('error_type', 'unsupported_response_shape')
+            ->and($result['error'])->toContain('returned HTML instead of JSON')
+            ->and($result['error'])->toContain('base URL points to the API endpoint');
+    });
 });

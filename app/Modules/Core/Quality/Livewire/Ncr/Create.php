@@ -29,11 +29,11 @@ class Create extends Component
 
     public ?string $product_code = null;
 
-    public ?string $quantity_affected = null;
+    public ?string $quantityAffected = null;
 
     public ?string $uom = null;
 
-    public bool $is_supplier_related = false;
+    public bool $isSupplierRelated = false;
 
     public ?string $reported_by_name = '';
 
@@ -51,9 +51,9 @@ class Create extends Component
             'summary' => ['nullable', 'string', 'max:5000'],
             'product_name' => ['nullable', 'string', 'max:255'],
             'product_code' => ['nullable', 'string', 'max:255'],
-            'quantity_affected' => ['nullable', 'numeric', 'min:0'],
+            'quantityAffected' => ['nullable', 'numeric', 'min:0'],
             'uom' => ['nullable', 'string', 'max:50'],
-            'is_supplier_related' => ['boolean'],
+            'isSupplierRelated' => ['boolean'],
             'reported_by_name' => ['required', 'string', 'max:255'],
             'reported_by_email' => ['nullable', 'email', 'max:255'],
             'source' => ['nullable', 'string', 'max:255'],
@@ -62,9 +62,15 @@ class Create extends Component
         $user = Auth::user();
         $actor = Actor::forUser($user);
 
+        $payload = $validated;
+        $payload['quantity_affected'] = $validated['quantityAffected'];
+        $payload['is_supplier_related'] = $validated['isSupplierRelated'];
+
+        unset($payload['quantityAffected'], $payload['isSupplierRelated']);
+
         $ncr = $ncrService->open($actor, [
             'company_id' => $actor->companyId,
-            ...$validated,
+            ...$payload,
         ]);
 
         Session::flash('success', __('NCR created successfully.'));

@@ -8,6 +8,7 @@ namespace App\Modules\Core\Quality\Database\Seeders\Dev;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Database\Seeders\DevSeeder;
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Quality\Database\Seeders\Dev\Concerns\BuildsNcrWorkflowSteps;
 use App\Modules\Core\Quality\Database\Seeders\NcrWorkflowSeeder;
 use App\Modules\Core\Quality\Database\Seeders\ScarWorkflowSeeder;
 use App\Modules\Core\Quality\Models\Ncr;
@@ -30,6 +31,8 @@ use Illuminate\Support\Carbon;
  */
 class DevNcrSeeder extends DevSeeder
 {
+    use BuildsNcrWorkflowSteps;
+
     protected array $dependencies = [
         DevUserSeeder::class,
     ];
@@ -119,6 +122,7 @@ class DevNcrSeeder extends DevSeeder
     /**
      * Build the common NCR case payload shared across seeded scenarios.
      *
+     * @param  array{name: string, code: string, quantityAffected: string, uom: string}  $productData
      * @param  array<string, mixed>  $overrides
      * @return array<string, mixed>
      */
@@ -126,20 +130,17 @@ class DevNcrSeeder extends DevSeeder
         string $ncrKind,
         string $severity,
         string $summary,
-        string $productName,
-        string $productCode,
-        string $quantityAffected,
-        string $uom,
+        array $productData,
         array $overrides = [],
     ): array {
         return [
             'ncr_kind' => $ncrKind,
             'severity' => $severity,
             'summary' => $summary,
-            'product_name' => $productName,
-            'product_code' => $productCode,
-            'quantity_affected' => $quantityAffected,
-            'uom' => $uom,
+            'product_name' => $productData['name'],
+            'product_code' => $productData['code'],
+            'quantity_affected' => $productData['quantityAffected'],
+            'uom' => $productData['uom'],
             ...$overrides,
         ];
     }
@@ -164,89 +165,6 @@ class DevNcrSeeder extends DevSeeder
     }
 
     /**
-     * Build a normalized workflow step definition.
-     *
-     * @param  array<string, mixed>  $payload
-     * @return array{action: string, actor?: User, payload: array<string, mixed>}
-     */
-    private function workflowStep(string $action, array $payload = [], ?User $actor = null): array
-    {
-        $step = [
-            'action' => $action,
-            'payload' => $payload,
-        ];
-
-        if ($actor instanceof User) {
-            $step['actor'] = $actor;
-        }
-
-        return $step;
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @return array{action: string, actor: User, payload: array<string, mixed>}
-     */
-    private function triageStep(User $actor, array $payload): array
-    {
-        return $this->workflowStep('triage', $payload, $actor);
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @return array{action: string, actor: User, payload: array<string, mixed>}
-     */
-    private function assignStep(User $actor, array $payload): array
-    {
-        return $this->workflowStep('assign', $payload, $actor);
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @return array{action: string, actor: User, payload: array<string, mixed>}
-     */
-    private function submitResponseStep(User $actor, array $payload): array
-    {
-        return $this->workflowStep('submit_response', $payload, $actor);
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @return array{action: string, actor: User, payload: array<string, mixed>}
-     */
-    private function reviewStep(User $actor, array $payload): array
-    {
-        return $this->workflowStep('review', $payload, $actor);
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @return array{action: string, actor: User, payload: array<string, mixed>}
-     */
-    private function rejectStep(User $actor, array $payload): array
-    {
-        return $this->workflowStep('reject', $payload, $actor);
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @return array{action: string, actor: User, payload: array<string, mixed>}
-     */
-    private function closeStep(User $actor, array $payload): array
-    {
-        return $this->workflowStep('close', $payload, $actor);
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @return array{action: string, payload: array<string, mixed>}
-     */
-    private function capaUpdateStep(array $payload): array
-    {
-        return $this->workflowStep('capa_update', $payload);
-    }
-
-    /**
      * Determine whether an NCR title is already seeded for the company.
      */
     private function ncrExists(Company $company, string $title): bool
@@ -267,28 +185,19 @@ class DevNcrSeeder extends DevSeeder
                 'internal',
                 'major',
                 'CNC machined brackets from production run PR-2026-0147 measured 102.3mm instead of 100.0mm ±0.5mm specification. Affects 240 pcs from night shift output.',
-                'CNC Bracket Assembly',
-                'BK-4420',
-                '240.0000',
-                'pcs',
+                ['name' => 'CNC Bracket Assembly', 'code' => 'BK-4420', 'quantityAffected' => '240.0000', 'uom' => 'pcs'],
             ),
             ['title' => 'Customer complaint — surface finish defect on panel'] + $this->ncrCaseData(
                 'customer',
                 'critical',
                 'Customer Nusantara Trading reported visible scratch marks and uneven coating on 15 panels from SO-20260312. Photos attached in email dated 2026-03-20.',
-                'Coated Panel Type A',
-                'PA-1100',
-                '15.0000',
-                'pcs',
+                ['name' => 'Coated Panel Type A', 'code' => 'PA-1100', 'quantityAffected' => '15.0000', 'uom' => 'pcs'],
             ),
             ['title' => 'Wrong material used in sub-assembly'] + $this->ncrCaseData(
                 'internal',
                 'minor',
                 'Store issued SS304 instead of SS316 for sub-assembly SA-2200. Caught during in-process QC check before final assembly.',
-                'Sub-Assembly SA-2200',
-                'SA-2200',
-                '50.0000',
-                'sets',
+                ['name' => 'Sub-Assembly SA-2200', 'code' => 'SA-2200', 'quantityAffected' => '50.0000', 'uom' => 'sets'],
             ),
         ];
 
@@ -311,10 +220,7 @@ class DevNcrSeeder extends DevSeeder
                 'internal',
                 'minor',
                 'Forklift damage to 3 cartons during transfer from warehouse to shipping area. Outer packaging torn, inner product needs inspection.',
-                'Finished Goods Carton',
-                'FG-8800',
-                '3.0000',
-                'cartons',
+                ['name' => 'Finished Goods Carton', 'code' => 'FG-8800', 'quantityAffected' => '3.0000', 'uom' => 'cartons'],
             ),
             [
                 $this->triageStep($qualityMgr, [
@@ -340,10 +246,7 @@ class DevNcrSeeder extends DevSeeder
                 'internal',
                 'major',
                 'Visual inspection revealed porosity in TIG welds on 12 frame assemblies. Welding parameters may have drifted. Lot FA-2026-0089.',
-                'Frame Assembly FA-100',
-                'FA-100',
-                '12.0000',
-                'pcs',
+                ['name' => 'Frame Assembly FA-100', 'code' => 'FA-100', 'quantityAffected' => '12.0000', 'uom' => 'pcs'],
                 ['source' => 'inspection'],
             ),
             [
@@ -378,10 +281,7 @@ class DevNcrSeeder extends DevSeeder
                 'internal',
                 'major',
                 'Shipping labels on 80 cartons show wrong destination port code. Discovered during pre-shipment audit. Shipment EX-2026-0023.',
-                'Export Carton Label',
-                'LB-EX-001',
-                '80.0000',
-                'pcs',
+                ['name' => 'Export Carton Label', 'code' => 'LB-EX-001', 'quantityAffected' => '80.0000', 'uom' => 'pcs'],
             ),
             [
                 $this->triageStep($qualityMgr, [
@@ -423,10 +323,7 @@ class DevNcrSeeder extends DevSeeder
                 'internal',
                 'major',
                 'Incoming inspection on steel bar batch SB-2026-0055 showed Rockwell hardness at HRC 48 vs spec HRC 40-45. 2 tonnes affected.',
-                'Steel Bar Grade 4140',
-                'RM-4140',
-                '2000.0000',
-                'kg',
+                ['name' => 'Steel Bar Grade 4140', 'code' => 'RM-4140', 'quantityAffected' => '2000.0000', 'uom' => 'kg'],
                 [
                     'source' => 'inspection',
                     'is_supplier_related' => true,
@@ -483,10 +380,7 @@ class DevNcrSeeder extends DevSeeder
                 'internal',
                 'observation',
                 'Operator reported a faint tool mark on sample piece from CNC run. Mark is within cosmetic acceptance criteria per drawing note 4.',
-                'CNC Sample Part',
-                'SP-9900',
-                '1.0000',
-                'pcs',
+                ['name' => 'CNC Sample Part', 'code' => 'SP-9900', 'quantityAffected' => '1.0000', 'uom' => 'pcs'],
             ),
             [
                 $this->rejectStep($qualityMgr, [
@@ -515,10 +409,7 @@ class DevNcrSeeder extends DevSeeder
                 'internal',
                 'critical',
                 'Incoming inspection on PO-2026-1200 found Grade 8.8 bolts delivered instead of Grade 10.9 as ordered. 500 pcs affected. Used in safety-critical assembly.',
-                'Hex Bolt M12x50',
-                'HB-1250',
-                '500.0000',
-                'pcs',
+                ['name' => 'Hex Bolt M12x50', 'code' => 'HB-1250', 'quantityAffected' => '500.0000', 'uom' => 'pcs'],
                 [
                     'source' => 'inspection',
                     'is_supplier_related' => true,

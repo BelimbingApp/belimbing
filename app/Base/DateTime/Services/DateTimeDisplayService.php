@@ -66,9 +66,13 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
             return $this->resolvedMode = TimezoneMode::COMPANY;
         }
 
-        $scope = $user->employee_id
-            ? Scope::employee($user->employee_id, $user->company_id ?? 0)
-            : ($user->company_id ? Scope::company($user->company_id) : null);
+        $scope = null;
+
+        if ($user->employee_id) {
+            $scope = Scope::employee($user->employee_id, $user->company_id ?? 0);
+        } elseif ($user->company_id) {
+            $scope = Scope::company($user->company_id);
+        }
 
         $raw = $this->settings->get('ui.timezone.mode', TimezoneMode::COMPANY->value, $scope);
 
@@ -146,11 +150,9 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
 
         $carbon = $carbon->setTimezone($this->currentTimezone());
 
-        if ($this->currentMode() === TimezoneMode::UTC) {
-            return $carbon->format($this->storedFormat($type));
-        }
-
-        return $carbon->locale(app()->getLocale())->isoFormat($this->localeFormat($type));
+        return $this->currentMode() === TimezoneMode::UTC
+            ? $carbon->format($this->storedFormat($type))
+            : $carbon->locale(app()->getLocale())->isoFormat($this->localeFormat($type));
     }
 
     /**
