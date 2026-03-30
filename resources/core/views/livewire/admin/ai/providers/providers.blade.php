@@ -470,15 +470,29 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                     :error="$errors->first('providerBaseUrl')"
                 />
 
-                <x-ui.input
-                    id="new-provider-api-key"
-                    wire:model="providerApiKey"
-                    type="password"
-                    label="{{ __('API Key') }}"
-                    :required="!$isEditingProvider"
-                    :placeholder="$isEditingProvider ? __('Leave blank to keep current key') : ''"
-                    :error="$errors->first('providerApiKey')"
-                />
+                <div class="space-y-1">
+                    <label for="new-provider-api-key" class="block text-[11px] uppercase tracking-wider font-semibold text-muted">
+                        {{ __('API Key') }}
+                        @if(!$isEditingProvider)
+                            <span class="text-status-danger">*</span>
+                        @endif
+                        @if($isEditingProvider)
+                            <span class="ml-2 normal-case tracking-normal font-normal text-xs text-muted">
+                                {{ __('Current key:') }}
+                                <span class="{{ filled($providerApiKeyPreview) ? 'font-mono' : '' }}">{{ filled($providerApiKeyPreview) ? $providerApiKeyPreview : __('not set') }}</span>
+                            </span>
+                        @endif
+                    </label>
+
+                    <x-ui.input
+                        id="new-provider-api-key"
+                        wire:model="providerApiKey"
+                        type="password"
+                        :required="!$isEditingProvider"
+                        :placeholder="$isEditingProvider ? __('Leave blank to keep current key') : ''"
+                        :error="$errors->first('providerApiKey')"
+                    />
+                </div>
 
                 <x-ui.checkbox id="provider-is-active" wire:model="providerIsActive" label="{{ __('Active') }}" />
 

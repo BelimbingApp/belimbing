@@ -10,6 +10,7 @@ namespace App\Modules\Core\AI\Livewire\Tools;
 use App\Base\AI\Services\WebSearchService;
 use App\Base\AI\Tools\ToolResult;
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\Enums\ToolReadiness;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
@@ -235,7 +236,7 @@ class Workspace extends Component
 
                 if ($storedApiKey !== null && $storedApiKey !== '') {
                     $this->webSearchProviders[$index]['has_key'] = true;
-                    $this->webSearchProviders[$index]['key_preview'] = $this->maskApiKeyPreview($storedApiKey);
+                    $this->webSearchProviders[$index]['key_preview'] = BlbStr::maskMiddle($storedApiKey, 6, 4) ?? '';
                 }
             }
         }
@@ -311,7 +312,7 @@ class Workspace extends Component
                 'name' => $p['name'] ?? 'parallel',
                 'api_key' => '',
                 'has_key' => ! empty($p['api_key'] ?? ''),
-                'key_preview' => $this->maskApiKeyPreview($p['api_key'] ?? null),
+                'key_preview' => BlbStr::maskMiddle($p['api_key'] ?? null, 6, 4) ?? '',
                 'enabled' => (bool) ($p['enabled'] ?? true),
             ], $providers);
 
@@ -327,29 +328,10 @@ class Workspace extends Component
                 'name' => is_string($provider) ? $provider : 'parallel',
                 'api_key' => '',
                 'has_key' => is_string($apiKey) && $apiKey !== '',
-                'key_preview' => $this->maskApiKeyPreview($apiKey),
+                'key_preview' => BlbStr::maskMiddle($apiKey, 6, 4) ?? '',
                 'enabled' => true,
             ],
         ];
-    }
-
-    /**
-     * Build a short masked preview for a saved API key.
-     */
-    private function maskApiKeyPreview(mixed $apiKey): string
-    {
-        if (! is_string($apiKey) || $apiKey === '') {
-            return '';
-        }
-
-        $length = mb_strlen($apiKey);
-        $prefix = mb_substr($apiKey, 0, min(6, $length));
-        $suffixLength = $length > 6 ? min(4, $length - 6) : 0;
-        $suffix = $suffixLength > 0 ? mb_substr($apiKey, -$suffixLength) : '';
-
-        return $suffix !== ''
-            ? $prefix.'*******'.$suffix
-            : $prefix.'*******';
     }
 
     /**

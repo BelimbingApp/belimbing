@@ -6,6 +6,7 @@
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Base\AI\Services\ModelCatalogService;
+use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\Models\AiProvider;
 
 /**
@@ -29,6 +30,8 @@ trait ManagesProviders
     public string $providerBaseUrl = '';
 
     public string $providerApiKey = '';
+
+    public ?string $providerApiKeyPreview = null;
 
     public bool $providerIsActive = true;
 
@@ -83,6 +86,7 @@ trait ManagesProviders
         $this->providerName = $provider->name;
         $this->providerDisplayName = $provider->display_name ?? '';
         $this->providerBaseUrl = $provider->base_url;
+        $this->providerApiKeyPreview = BlbStr::maskMiddle($provider->api_key, 7, 4);
         $this->providerIsActive = $provider->is_active;
         $this->showProviderForm = true;
     }
@@ -204,6 +208,7 @@ trait ManagesProviders
         $this->providerDisplayName = '';
         $this->providerBaseUrl = '';
         $this->providerApiKey = '';
+        $this->providerApiKeyPreview = null;
         $this->providerIsActive = true;
         $this->selectedTemplate = '';
         $this->resetValidation();

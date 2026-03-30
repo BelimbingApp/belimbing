@@ -10,6 +10,7 @@
 namespace App\Modules\Core\AI\Livewire\Providers;
 
 use App\Base\AI\Services\ModelCatalogService;
+use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\Livewire\Concerns\FormatsDisplayValues;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesModels;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesProviderHelp;
@@ -215,19 +216,11 @@ class ProviderSetup extends Component
     }
 
     /**
-     * Mask the API key for visual verification: first 7 and last 4 chars.
-     *
-     * Returns null when the key is too short or empty.
+     * Mask the API key for visual verification.
      */
     public function getMaskedApiKeyProperty(): ?string
     {
-        $len = mb_strlen($this->apiKey);
-
-        if ($len < 12) {
-            return null;
-        }
-
-        return mb_substr($this->apiKey, 0, 7).'…'.mb_substr($this->apiKey, -4);
+        return BlbStr::maskMiddle($this->apiKey, 7, 4);
     }
 
     /**
