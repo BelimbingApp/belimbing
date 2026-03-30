@@ -6,6 +6,7 @@
 namespace App\Base\AI\Services;
 
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\Support\Json as BlbJson;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
@@ -270,8 +271,8 @@ class LlmClient
             return;
         }
 
-        $data = json_decode($payload, true);
-        if (! is_array($data)) {
+        $data = BlbJson::decodeArray($payload);
+        if ($data === null) {
             return;
         }
 

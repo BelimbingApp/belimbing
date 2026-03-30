@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\Support\Json as BlbJson;
 use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\DTO\Message;
 use DateTimeImmutable;
@@ -158,9 +159,9 @@ class MessageManager
         }
 
         foreach ($lines as $line) {
-            $data = json_decode($line, true);
+            $data = BlbJson::decodeArray($line);
 
-            if (! is_array($data)) {
+            if ($data === null) {
                 continue;
             }
 
@@ -225,13 +226,11 @@ class MessageManager
      */
     private function messageFromTranscriptLine(string $line, array $runMetadata): ?Message
     {
-        $data = json_decode($line, true);
+        $data = BlbJson::decodeArray($line);
 
-        if (! is_array($data)) {
-            return null;
-        }
-
-        return Message::fromJsonLine($this->enrichMessageMetadata($data, $runMetadata));
+        return $data === null
+            ? null
+            : Message::fromJsonLine($this->enrichMessageMetadata($data, $runMetadata));
     }
 
     /**

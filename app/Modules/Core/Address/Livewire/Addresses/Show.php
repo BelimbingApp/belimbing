@@ -6,6 +6,7 @@
 namespace App\Modules\Core\Address\Livewire\Addresses;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
+use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\Address\Livewire\AbstractAddressForm;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Company\Models\Company;
@@ -224,7 +225,7 @@ class Show extends AbstractAddressForm
             return (object) [
                 'model' => $model,
                 'type' => class_basename($row->addressable_type),
-                'kind' => json_decode($row->kind, true) ?? [],
+                'kind' => BlbJson::decodeArray($row->kind) ?? [],
                 'is_primary' => $row->is_primary,
                 'priority' => $row->priority,
                 'valid_from' => $row->valid_from,

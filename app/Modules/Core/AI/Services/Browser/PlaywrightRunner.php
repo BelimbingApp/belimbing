@@ -5,6 +5,8 @@
 
 namespace App\Modules\Core\AI\Services\Browser;
 
+use App\Base\Support\Json as BlbJson;
+use App\Base\Support\Str as BlbStr;
 use Symfony\Component\Process\Process;
 
 /**
@@ -238,9 +240,9 @@ class PlaywrightRunner
         $stdout = trim($process->getOutput());
 
         if ($stdout !== '') {
-            $parsed = json_decode($stdout, true);
+            $parsed = BlbJson::decodeArray($stdout);
 
-            if (is_array($parsed) && isset($parsed['ok'])) {
+            if ($parsed !== null && isset($parsed['ok'])) {
                 return $parsed;
             }
         }
@@ -262,11 +264,11 @@ class PlaywrightRunner
             throw new PlaywrightRunnerException($emptyOutputMessage);
         }
 
-        $result = json_decode($output, true);
+        $result = BlbJson::decodeArray($output);
 
-        if (! is_array($result) || ! isset($result['ok'])) {
+        if ($result === null || ! isset($result['ok'])) {
             throw new PlaywrightRunnerException(
-                'Browser runner returned invalid JSON: '.substr($output, 0, 200)
+                'Browser runner returned invalid JSON: '.BlbStr::truncate($output, 200, '')
             );
         }
 

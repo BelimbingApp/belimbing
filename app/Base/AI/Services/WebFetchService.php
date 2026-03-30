@@ -5,6 +5,7 @@
 
 namespace App\Base\AI\Services;
 
+use App\Base\Support\Str as BlbStr;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -71,7 +72,7 @@ class WebFetchService
         $truncated = false;
 
         if (mb_strlen($content) > $maxChars) {
-            $content = mb_substr($content, 0, $maxChars);
+            $content = BlbStr::truncate($content, $maxChars, '');
             $truncated = true;
         }
 

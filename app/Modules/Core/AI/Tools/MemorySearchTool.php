@@ -11,6 +11,7 @@ use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolResult;
+use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\Employee\Models\Employee;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -227,7 +228,7 @@ class MemorySearchTool extends AbstractTool
                 $score = $this->scoreSection($section, $tokens);
 
                 if ($score > 0) {
-                    $preview = mb_substr(trim($section['body']), 0, self::PREVIEW_LENGTH);
+                    $preview = BlbStr::truncate(trim($section['body']), self::PREVIEW_LENGTH, '');
 
                     $scored[] = [
                         'score' => $score,
@@ -283,7 +284,7 @@ class MemorySearchTool extends AbstractTool
                     ];
                 }
 
-                $currentHeading = trim(mb_substr($line, 3));
+                $currentHeading = BlbStr::afterPrefix($line, '## ');
                 $currentBody = '';
             } else {
                 $currentBody .= $line."\n";

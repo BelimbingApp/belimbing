@@ -13,6 +13,7 @@ use App\Base\Database\Exceptions\CircularSeederDependencyException;
 use App\Base\Database\Models\SeederRegistry;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Seeders\DevSeeder;
+use App\Base\Support\AppPath;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
@@ -380,9 +381,9 @@ class MigrateCommand extends IlluminateMigrateCommand
 
         foreach ($patterns as $pattern) {
             foreach (glob($pattern) as $file) {
-                $class = $this->classFromPath($file);
+                $class = AppPath::toClass($file);
 
-                if (class_exists($class) && is_subclass_of($class, DevSeeder::class)) {
+                if ($class !== null && class_exists($class) && is_subclass_of($class, DevSeeder::class)) {
                     $classes[] = $class;
                 }
             }
@@ -453,18 +454,6 @@ class MigrateCommand extends IlluminateMigrateCommand
         }
 
         return $sorted;
-    }
-
-    /**
-     * Derive FQCN from a file path under app/.
-     *
-     * @param  string  $path  Absolute path to a PHP file under app/
-     */
-    private function classFromPath(string $path): string
-    {
-        $relative = substr($path, strlen(app_path()) + 1, -4);
-
-        return 'App\\'.str_replace('/', '\\', $relative);
     }
 
     /**

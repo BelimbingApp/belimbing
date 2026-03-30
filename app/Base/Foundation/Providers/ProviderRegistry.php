@@ -5,6 +5,7 @@
 
 namespace App\Base\Foundation\Providers;
 
+use App\Base\Support\AppPath;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
 
@@ -46,7 +47,8 @@ class ProviderRegistry
 
         $providers = [];
         foreach ($paths as $path) {
-            $providers[] = self::classFromPath($path);
+            $providers[] = AppPath::toClass($path)
+                ?? throw new InvalidArgumentException("Expected app path under app/: [$path].");
         }
 
         return self::validateProviders($providers);
@@ -66,7 +68,8 @@ class ProviderRegistry
 
         $providers = [];
         foreach ($paths as $path) {
-            $providers[] = self::classFromPath($path);
+            $providers[] = AppPath::toClass($path)
+                ?? throw new InvalidArgumentException("Expected app path under app/: [$path].");
         }
 
         return self::validateProviders($providers);
@@ -93,21 +96,6 @@ class ProviderRegistry
         }
 
         return self::validateProviders($providers);
-    }
-
-    /**
-     * Convert an app path into a fully-qualified class name.
-     */
-    private static function classFromPath(string $path): string
-    {
-        $appPath = rtrim(app_path(), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
-        $relativePath = str_replace($appPath, '', $path);
-
-        return 'App\\'.str_replace(
-            [DIRECTORY_SEPARATOR, '.php'],
-            ['\\', ''],
-            $relativePath
-        );
     }
 
     /**

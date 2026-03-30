@@ -5,6 +5,8 @@
 
 namespace App\Base\Livewire;
 
+use App\Base\Support\AppPath;
+use App\Base\Support\Str as BlbStr;
 use Livewire\Component;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -115,7 +117,7 @@ class ComponentDiscoveryService
         if (preg_match("/view\(\s*'(livewire\.[\w.\-]+)'/", $source, $matches)
             || preg_match("/const\s+string\s+VIEW_NAME\s*=\s*'(livewire\.[\w.\-]+)'/", $source, $matches)
         ) {
-            $name = substr($matches[1], strlen('livewire.'));
+            $name = BlbStr::afterPrefix($matches[1], 'livewire.', false);
         }
 
         return $name;
@@ -130,18 +132,6 @@ class ComponentDiscoveryService
      */
     protected function classFromPath(string $path): ?string
     {
-        $appPath = rtrim(app_path(), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
-
-        if (! str_starts_with($path, $appPath)) {
-            return null;
-        }
-
-        $relativePath = str_replace($appPath, '', $path);
-
-        return 'App\\'.str_replace(
-            [DIRECTORY_SEPARATOR, '.php'],
-            ['\\', ''],
-            $relativePath
-        );
+        return AppPath::toClass($path);
     }
 }

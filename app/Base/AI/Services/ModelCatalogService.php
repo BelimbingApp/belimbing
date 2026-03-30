@@ -7,6 +7,7 @@ namespace App\Base\AI\Services;
 
 use App\Base\AI\DTO\CatalogSyncResult;
 use App\Base\AI\Exceptions\ModelCatalogSyncException;
+use App\Base\Support\Json as BlbJson;
 use DateTimeImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -285,9 +286,7 @@ class ModelCatalogService
             return null;
         }
 
-        $data = json_decode($content, true);
-
-        return is_array($data) ? $data : null;
+        return BlbJson::decodeArray($content);
     }
 
     /**
@@ -305,13 +304,7 @@ class ModelCatalogService
 
         $content = file_get_contents($path);
 
-        if ($content === false) {
-            return [];
-        }
-
-        $data = json_decode($content, true);
-
-        return is_array($data) ? $data : [];
+        return $content === false ? [] : BlbJson::decodeArray($content) ?? [];
     }
 
     /**

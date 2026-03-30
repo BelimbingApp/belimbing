@@ -5,6 +5,7 @@
 
 namespace App\Base\Database\Models;
 
+use App\Base\Support\AppPath;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -197,23 +198,34 @@ class SeederRegistry extends Model
     private static function registerDiscoveredFile(string $file): void
     {
         $rel = str_replace([base_path().DIRECTORY_SEPARATOR, '\\'], ['', '/'], $file);
+
         if (! str_ends_with($rel, '.php')) {
             return;
         }
+
         if (! str_starts_with($rel, 'app/Base/') && ! str_starts_with($rel, 'app/Modules/')) {
             return;
         }
-        $fqcn = 'App\\'.str_replace(['/', '.php'], ['\\', ''], substr($rel, 4));
+
+        $fqcn = AppPath::toClass($file);
+
+        if ($fqcn === null) {
+            return;
+        }
+
         if (! class_exists($fqcn) || ! is_subclass_of($fqcn, \Illuminate\Database\Seeder::class)) {
             return;
         }
+
         if (self::query()->where('seeder_class', $fqcn)->exists()) {
             return;
         }
+
         $beforeSeeders = '/Database/Seeders/';
         $pos = strpos($rel, $beforeSeeders);
         $modulePath = $pos !== false ? substr($rel, 0, $pos) : null;
         $moduleName = $modulePath ? basename($modulePath) : null;
+
         self::register($fqcn, $moduleName, $modulePath, null);
     }
 

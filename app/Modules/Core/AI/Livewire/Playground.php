@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Livewire;
 
+use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -138,12 +139,7 @@ class Playground extends Component
         $session = $sessionManager->get($this->selectedAgentId, $this->selectedSessionId);
 
         if ($session && $session->title === null) {
-            $title = mb_substr($content, 0, 60);
-
-            if (mb_strlen($content) > 60) {
-                $title .= '…';
-            }
-
+            $title = BlbStr::truncate($content, 60);
             $sessionManager->updateTitle($this->selectedAgentId, $this->selectedSessionId, $title);
         }
 

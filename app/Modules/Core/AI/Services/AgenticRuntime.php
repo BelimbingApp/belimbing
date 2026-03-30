@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Services\LlmClient;
+use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\Message;
 use Illuminate\Support\Str;
 
@@ -360,9 +361,7 @@ class AgenticRuntime
      */
     private function decodeToolArguments(array $toolCall): array
     {
-        $arguments = json_decode((string) ($toolCall['function']['arguments'] ?? '{}'), true);
-
-        return is_array($arguments) ? $arguments : [];
+        return BlbJson::decodeArray((string) ($toolCall['function']['arguments'] ?? '{}')) ?? [];
     }
 
     /**

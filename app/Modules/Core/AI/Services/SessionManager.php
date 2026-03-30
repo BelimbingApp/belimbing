@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\Session;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
@@ -76,7 +77,8 @@ class SessionManager
         $sessions = [];
 
         foreach ($metaFiles as $file) {
-            $data = json_decode(file_get_contents($file), true);
+            $content = file_get_contents($file);
+            $data = $content === false ? null : BlbJson::decodeArray($content);
 
             if ($data !== null) {
                 $sessions[] = Session::fromMeta($data);
@@ -102,7 +104,8 @@ class SessionManager
             return null;
         }
 
-        $data = json_decode(file_get_contents($path), true);
+        $content = file_get_contents($path);
+        $data = $content === false ? null : BlbJson::decodeArray($content);
 
         return $data !== null ? Session::fromMeta($data) : null;
     }

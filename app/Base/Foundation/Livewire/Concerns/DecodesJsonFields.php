@@ -5,16 +5,12 @@
 
 namespace App\Base\Foundation\Livewire\Concerns;
 
+use App\Base\Support\Json;
+
 trait DecodesJsonFields
 {
     protected function decodeJsonField(?string $value): ?array
     {
-        if ($value === null || trim($value) === '') {
-            return null;
-        }
-
-        $decoded = json_decode($value, true);
-
-        return is_array($decoded) ? $decoded : null;
+        return Json::decodeArray($value);
     }
 }

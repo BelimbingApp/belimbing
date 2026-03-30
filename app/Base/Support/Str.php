@@ -189,4 +189,20 @@ final class Str
     {
         return mb_strtolower(\Illuminate\Support\Str::slug($value, $separator));
     }
+
+    /**
+     * Convert a PascalCase string to kebab-case.
+     *
+     * Example:
+     * - input:  'SbGroup'
+     * - output: 'sb-group'
+     *
+     * Intended for namespace or class-name segments that need a filesystem-safe
+     * kebab-case representation without the broader normalization performed by
+     * slug generation.
+     */
+    public static function pascalToKebab(string $value): string
+    {
+        return strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $value));
+    }
 }

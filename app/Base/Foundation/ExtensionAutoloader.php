@@ -5,6 +5,8 @@
 
 namespace App\Base\Foundation;
 
+use App\Base\Support\Str;
+
 /**
  * Auto-discovers and loads classes under the Extensions\ namespace.
  *
@@ -54,8 +56,8 @@ final class ExtensionAutoloader
         // segments[1] = "SbGroup"    → sb-group/    (PascalCase → kebab-case)
         // segments[2] = "Qac"        → qac/         (PascalCase → kebab-case)
         // segments[3..n]             → direct PSR-4  (unchanged)
-        $owner = self::toKebabCase($segments[1]);
-        $module = self::toKebabCase($segments[2]);
+        $owner = Str::pascalToKebab($segments[1]);
+        $module = Str::pascalToKebab($segments[2]);
         $remaining = array_slice($segments, 3);
 
         $basePath = dirname(__DIR__, 3);
@@ -65,15 +67,5 @@ final class ExtensionAutoloader
         if (file_exists($file)) {
             require_once $file;
         }
-    }
-
-    /**
-     * Convert a PascalCase string to kebab-case.
-     *
-     * SbGroup → sb-group, Qac → qac, AcmeCorp → acme-corp
-     */
-    private static function toKebabCase(string $value): string
-    {
-        return strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $value));
     }
 }

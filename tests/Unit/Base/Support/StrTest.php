@@ -136,3 +136,15 @@ it('code strips special characters and collapses spaces', function (): void {
 it('code accepts a custom separator', function (): void {
     expect(Str::code('My Company', '-'))->toBe('my-company');
 });
+
+// ---------------------------------------------------------------------------
+// pascalToKebab
+// ---------------------------------------------------------------------------
+
+it('pascalToKebab converts PascalCase segments to kebab-case', function (): void {
+    expect(Str::pascalToKebab('SbGroup'))->toBe('sb-group');
+});
+
+it('pascalToKebab leaves single-word segments lowercase', function (): void {
+    expect(Str::pascalToKebab('Qac'))->toBe('qac');
+});

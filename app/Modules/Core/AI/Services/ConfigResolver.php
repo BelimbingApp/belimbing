@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\Employee\Models\Employee;
@@ -106,9 +107,9 @@ class ConfigResolver
             return null;
         }
 
-        $data = json_decode(file_get_contents($path), true);
+        $content = file_get_contents($path);
 
-        return is_array($data) ? $data : null;
+        return $content === false ? null : BlbJson::decodeArray($content);
     }
 
     /**
