@@ -4,12 +4,34 @@
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Address Details')">
             <x-slot name="actions">
+                @if($companyContextId)
+                    <a href="{{ route('admin.companies.show', $companyContextId) }}" wire:navigate class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-accent hover:bg-surface-subtle transition-colors">
+                        <x-icon name="heroicon-o-arrow-left" class="w-5 h-5" />
+                        {{ __('Back to Company') }}
+                    </a>
+                @endif
                 <a href="{{ route('admin.addresses.index') }}" wire:navigate class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-accent hover:bg-surface-subtle transition-colors">
                     <x-icon name="heroicon-o-arrow-left" class="w-5 h-5" />
                     {{ __('Back to List') }}
                 </a>
             </x-slot>
         </x-ui.page-header>
+
+        @if($timezoneWasAutoApplied)
+            <x-ui.alert variant="info">
+                {{ __('Company timezone was automatically updated based on the address locality.') }}
+            </x-ui.alert>
+        @endif
+
+        @if($suggestedTimezone)
+            <x-ui.alert variant="warning">
+                <p class="text-sm">{{ __('The address locality suggests timezone :new, but the company currently uses :old.', ['new' => $suggestedTimezone, 'old' => $suggestedTimezoneOld]) }}</p>
+                <div class="flex items-center gap-2 mt-2">
+                    <x-ui.button variant="primary" size="sm" wire:click="acceptSuggestedTimezone">{{ __('Apply :tz', ['tz' => $suggestedTimezone]) }}</x-ui.button>
+                    <x-ui.button variant="ghost" size="sm" wire:click="dismissSuggestedTimezone">{{ __('Keep current') }}</x-ui.button>
+                </div>
+            </x-ui.alert>
+        @endif
 
         <x-ui.card>
             <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Address Details') }}</h3>

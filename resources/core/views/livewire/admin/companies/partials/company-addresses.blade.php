@@ -2,7 +2,7 @@
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">
                     {{ __('Addresses') }}
-                    <x-ui.badge>{{ $company->addresses->count() }}</x-ui.badge>
+                    <x-ui.badge>{{ $addresses->count() }}</x-ui.badge>
                 </h3>
                 <div class="flex items-center gap-2">
                     <x-ui.button variant="primary" size="sm" wire:click="openAddressModal(null)">
@@ -31,7 +31,7 @@
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">
-                        @forelse($company->addresses as $address)
+                        @forelse($addresses as $address)
                             <tr wire:key="address-{{ $address->id }}" class="hover:bg-surface-subtle/50 transition-colors">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-medium">
                                     <button wire:click="openAddressModal({{ $address->id }})" class="text-accent hover:underline cursor-pointer">{{ $address->label ?? '-' }}</button>
@@ -99,7 +99,7 @@
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
                                     <div class="inline-flex flex-col items-end gap-1">
                                         <a
-                                            href="{{ route('admin.addresses.show', $address) }}"
+                                            href="{{ route('admin.addresses.show', ['address' => $address, 'company' => $company->id]) }}"
                                             wire:navigate
                                             class="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg text-accent hover:bg-surface-subtle transition-colors"
                                         >
@@ -145,6 +145,22 @@
                     <x-icon name="heroicon-o-check-circle" class="w-3.5 h-3.5 shrink-0" />
                     <span x-text="savedMsg"></span>
                 </p>
+
+                @if($timezoneWasAutoApplied)
+                    <x-ui.alert variant="info">
+                        {{ __('Timezone was automatically set to :tz based on the primary address locality.', ['tz' => $companyTimezone]) }}
+                    </x-ui.alert>
+                @endif
+
+                @if($suggestedTimezone)
+                    <x-ui.alert variant="warning">
+                        <p class="text-sm">{{ __('The primary address locality suggests timezone :new, but the current timezone is :old.', ['new' => $suggestedTimezone, 'old' => $suggestedTimezoneOld]) }}</p>
+                        <div class="flex items-center gap-2 mt-2">
+                            <x-ui.button variant="primary" size="sm" wire:click="acceptSuggestedTimezone">{{ __('Apply :tz', ['tz' => $suggestedTimezone]) }}</x-ui.button>
+                            <x-ui.button variant="ghost" size="sm" wire:click="dismissSuggestedTimezone">{{ __('Keep current') }}</x-ui.button>
+                        </div>
+                    </x-ui.alert>
+                @endif
             </div>
         </x-ui.card>
 

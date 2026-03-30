@@ -8,13 +8,26 @@ namespace App\Modules\Core\Address\Livewire\Addresses;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Core\Address\Livewire\AbstractAddressForm;
 use App\Modules\Core\Address\Models\Address;
+use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Company\Services\CompanyTimezoneResolver;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Url;
 
 class Show extends AbstractAddressForm
 {
     use SavesValidatedFields;
 
     public Address $address;
+
+    #[Url(as: 'company')]
+    public ?int $companyContextId = null;
+
+    public ?string $suggestedTimezone = null;
+
+    public ?string $suggestedTimezoneOld = null;
+
+    public bool $timezoneWasAutoApplied = false;
 
     public function mount(Address $address): void
     {
@@ -26,6 +39,17 @@ class Show extends AbstractAddressForm
 
         if ($this->countryIso) {
             $this->admin1Options = $this->loadAdmin1ForCountry($this->countryIso);
+        }
+
+        if ($this->companyContextId) {
+            $exists = Company::query()
+                ->whereHas('addresses', fn ($q) => $q->where('addresses.id', $address->id))
+                ->where('id', $this->companyContextId)
+                ->exists();
+
+            if (! $exists) {
+                $this->companyContextId = null;
+            }
         }
     }
 
@@ -59,6 +83,7 @@ class Show extends AbstractAddressForm
         $this->address->postcode = null;
         $this->address->locality = null;
         $this->address->save();
+        $this->checkCompanyTimezone();
     }
 
     public function updatedPostcode($value): void
@@ -69,6 +94,7 @@ class Show extends AbstractAddressForm
         $this->address->admin1Code = $this->admin1Code;
         $this->address->locality = $this->locality;
         $this->address->save();
+        $this->checkCompanyTimezone();
     }
 
     public function updatedAdmin1Code($value = null): void
@@ -83,6 +109,7 @@ class Show extends AbstractAddressForm
         parent::updatedLocality($value);
         $this->address->locality = $value ?? $this->locality;
         $this->address->save();
+        $this->checkCompanyTimezone();
     }
 
     public function saveVerificationStatus(string $status): void
@@ -93,6 +120,96 @@ class Show extends AbstractAddressForm
 
         $this->address->verificationStatus = $status;
         $this->address->save();
+    }
+
+    /**
+     * Accept the suggested timezone and persist it for the company context.
+     */
+    public function acceptSuggestedTimezone(): void
+    {
+        if (! $this->suggestedTimezone || ! $this->companyContextId) {
+            return;
+        }
+
+        $company = Company::query()->find($this->companyContextId);
+
+        if (! $company) {
+            return;
+        }
+
+        $resolver = app(CompanyTimezoneResolver::class);
+        $resolver->apply($company, $this->suggestedTimezone);
+        $this->timezoneWasAutoApplied = true;
+        $this->suggestedTimezone = null;
+        $this->suggestedTimezoneOld = null;
+    }
+
+    /**
+     * Dismiss the timezone suggestion without applying.
+     */
+    public function dismissSuggestedTimezone(): void
+    {
+        $this->suggestedTimezone = null;
+        $this->suggestedTimezoneOld = null;
+    }
+
+    /**
+     * Check whether the address geo change warrants a company timezone update.
+     *
+     * Resolves the company from the URL context or, when unambiguous,
+     * from the single linked company. Only acts on the primary address.
+     */
+    protected function checkCompanyTimezone(): void
+    {
+        $company = $this->resolveCompanyForTimezone();
+
+        if (! $company) {
+            return;
+        }
+
+        $resolver = app(CompanyTimezoneResolver::class);
+        $decision = $resolver->decide($company, $this->address);
+
+        if (! $decision) {
+            $this->suggestedTimezone = null;
+            $this->suggestedTimezoneOld = null;
+
+            return;
+        }
+
+        if ($decision['action'] === 'auto-save') {
+            $resolver->apply($company, $decision['timezone']);
+            $this->timezoneWasAutoApplied = true;
+            $this->suggestedTimezone = null;
+            $this->suggestedTimezoneOld = null;
+        } elseif ($decision['action'] === 'prompt') {
+            $this->suggestedTimezone = $decision['timezone'];
+            $this->suggestedTimezoneOld = $decision['current'];
+        }
+    }
+
+    /**
+     * Resolve the company context for timezone decisions.
+     *
+     * Prefers the explicit URL context. Falls back to the single linked
+     * company when the address belongs to exactly one.
+     */
+    protected function resolveCompanyForTimezone(): ?Company
+    {
+        if ($this->companyContextId) {
+            return Company::query()->find($this->companyContextId);
+        }
+
+        $companyIds = DB::table('addressables')
+            ->where('address_id', $this->address->id)
+            ->where('addressable_type', Company::class)
+            ->pluck('addressable_id');
+
+        if ($companyIds->count() === 1) {
+            return Company::query()->find($companyIds->first());
+        }
+
+        return null;
     }
 
     public function with(): array
@@ -121,7 +238,7 @@ class Show extends AbstractAddressForm
         ];
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.addresses.show', $this->with());
     }

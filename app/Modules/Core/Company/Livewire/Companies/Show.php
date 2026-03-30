@@ -164,7 +164,6 @@ class Show extends AbstractAddressForm
         }
 
         $this->company->addresses()->updateExistingPivot($addressId, [$field => $value]);
-        $this->company->load('addresses');
     }
 
     public function saveAddressKinds(int $addressId, array $kinds): void
@@ -173,13 +172,11 @@ class Show extends AbstractAddressForm
         $kinds = array_values(array_intersect($kinds, $valid));
 
         $this->company->addresses()->updateExistingPivot($addressId, ['kind' => $kinds]);
-        $this->company->load('addresses');
     }
 
     public function unlinkAddress(int $addressId): void
     {
         $this->company->addresses()->detach($addressId);
-        $this->company->load('addresses');
         Session::flash('success', __('Address unlinked.'));
     }
 
@@ -196,7 +193,6 @@ class Show extends AbstractAddressForm
             'valid_from' => now()->toDateString(),
         ]);
 
-        $this->company->load('addresses');
         $this->showAttachModal = false;
         $this->reset(['attachAddressId', 'attachKind', 'attachIsPrimary', 'attachPriority']);
         Session::flash('success', __('Address attached.'));
@@ -247,11 +243,22 @@ class Show extends AbstractAddressForm
         }
     }
 
+    /**
+     * Render the company show page.
+     *
+     * Queries addresses and timezone fresh on every render to avoid
+     * stale data when edited on the standalone address page.
+     */
     public function render(): View
     {
-        $linkedIds = $this->company->addresses->pluck('id')->toArray();
+        $this->companyTimezone = app(SettingsService::class)
+            ->get('ui.timezone.default', '', Scope::company($this->company->id)) ?: '';
+
+        $addresses = $this->company->addresses()->get();
+        $linkedIds = $addresses->pluck('id')->toArray();
 
         return view('livewire.admin.companies.show', [
+            'addresses' => $addresses,
             'availableAddresses' => Address::query()
                 ->whereNotIn('id', $linkedIds)
                 ->orderBy('label')
@@ -322,10 +329,9 @@ class Show extends AbstractAddressForm
             'valid_from' => now()->toDateString(),
         ]);
 
-        $this->company->load('addresses');
         $this->showAddressModal = false;
         $this->resetAddressForm();
-        $this->autoSaveTimezoneFromAddress();
+        $this->checkTimezoneSuggestion($this->company, $address);
         Session::flash('success', __('Address created and attached.'));
     }
 
@@ -356,10 +362,13 @@ class Show extends AbstractAddressForm
             'admin1Code' => $validated['admin1Code'],
         ]);
 
-        $this->company->load('addresses');
         $this->showAddressModal = false;
         $this->resetAddressForm();
-        $this->autoSaveTimezoneFromAddress();
+
+        if ($address->wasChanged(['country_iso', 'admin1Code', 'postcode', 'locality'])) {
+            $this->checkTimezoneSuggestion($this->company, $address);
+        }
+
         Session::flash('success', __('Address updated.'));
     }
 }

@@ -7,12 +7,27 @@ namespace App\Modules\Core\Company\Livewire\Concerns;
 
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
-use App\Modules\Core\Geonames\Models\City;
+use App\Modules\Core\Address\Models\Address;
+use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Company\Services\CompanyTimezoneResolver;
 use DateTimeZone;
 
+/**
+ * Manages company timezone persistence and locality-driven suggestions.
+ *
+ * Provides inline save via updatedCompanyTimezone(), and a decision flow
+ * that auto-saves when the company has no timezone or prompts the user
+ * when the suggested timezone differs from the current one.
+ */
 trait ManagesCompanyTimezone
 {
     public string $companyTimezone = '';
+
+    public ?string $suggestedTimezone = null;
+
+    public ?string $suggestedTimezoneOld = null;
+
+    public bool $timezoneWasAutoApplied = false;
 
     /**
      * Persist the selected IANA timezone as the company default.
@@ -43,46 +58,59 @@ trait ManagesCompanyTimezone
     }
 
     /**
-     * Resolve timezone from Geonames city data for the primary address.
+     * Check timezone suggestion after an address geo change.
      *
-     * Returns the IANA timezone only when an exact city name match exists.
+     * Auto-saves when the company has no timezone set. When a timezone
+     * already exists and differs from the suggestion, stores the suggestion
+     * for the UI to prompt the user.
      */
-    protected function resolveTimezoneFromAddress(): ?string
+    protected function checkTimezoneSuggestion(Company $company, Address $address): void
     {
-        $address = $this->company->primaryAddress();
+        $resolver = app(CompanyTimezoneResolver::class);
+        $decision = $resolver->decide($company, $address);
 
-        if (! $address || ! $address->country_iso || ! $address->locality) {
-            return null;
-        }
+        if (! $decision) {
+            $this->suggestedTimezone = null;
+            $this->suggestedTimezoneOld = null;
 
-        $city = City::query()
-            ->where('country_iso', $address->country_iso)
-            ->where(function ($q) use ($address): void {
-                $q->where('name', $address->locality)
-                    ->orWhere('ascii_name', $address->locality);
-            })
-            ->orderByDesc('population')
-            ->first();
-
-        return $city?->timezone;
-    }
-
-    /**
-     * Auto-save timezone when it can be resolved from the primary address.
-     *
-     * Called after address create/update to keep the company timezone in sync.
-     */
-    protected function autoSaveTimezoneFromAddress(): void
-    {
-        $tz = $this->resolveTimezoneFromAddress();
-
-        if (! $tz) {
             return;
         }
 
-        $settings = app(SettingsService::class);
-        $scope = Scope::company($this->company->id);
-        $settings->set('ui.timezone.default', $tz, $scope);
-        $this->companyTimezone = $tz;
+        if ($decision['action'] === 'auto-save') {
+            $resolver->apply($company, $decision['timezone']);
+            $this->companyTimezone = $decision['timezone'];
+            $this->timezoneWasAutoApplied = true;
+            $this->suggestedTimezone = null;
+            $this->suggestedTimezoneOld = null;
+        } elseif ($decision['action'] === 'prompt') {
+            $this->suggestedTimezone = $decision['timezone'];
+            $this->suggestedTimezoneOld = $decision['current'];
+        }
+    }
+
+    /**
+     * Accept the suggested timezone and persist it.
+     */
+    public function acceptSuggestedTimezone(): void
+    {
+        if (! $this->suggestedTimezone) {
+            return;
+        }
+
+        $resolver = app(CompanyTimezoneResolver::class);
+        $resolver->apply($this->company, $this->suggestedTimezone);
+        $this->companyTimezone = $this->suggestedTimezone;
+        $this->timezoneWasAutoApplied = true;
+        $this->suggestedTimezone = null;
+        $this->suggestedTimezoneOld = null;
+    }
+
+    /**
+     * Dismiss the timezone suggestion without applying.
+     */
+    public function dismissSuggestedTimezone(): void
+    {
+        $this->suggestedTimezone = null;
+        $this->suggestedTimezoneOld = null;
     }
 }

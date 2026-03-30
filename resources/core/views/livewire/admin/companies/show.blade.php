@@ -1,4 +1,14 @@
-<div>
+<div
+    x-data="{
+        init() {
+            this._onNavigated = () => this.$wire.$refresh();
+            document.addEventListener('livewire:navigated', this._onNavigated);
+        },
+        destroy() {
+            document.removeEventListener('livewire:navigated', this._onNavigated);
+        },
+    }"
+>
     <x-slot name="title">{{ $company->name }}</x-slot>
 
     <div class="space-y-section-gap">
