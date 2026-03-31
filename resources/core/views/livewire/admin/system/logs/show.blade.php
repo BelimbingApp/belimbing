@@ -10,6 +10,9 @@
 
     @php
         $numbers = app(\App\Base\Locale\Contracts\NumberDisplayService::class);
+        $localeContext = app(\App\Base\Locale\Contracts\LocaleContext::class);
+        $dateTimes = app(\App\Base\DateTime\Contracts\DateTimeDisplayService::class);
+        $localTimezone = $dateTimes->currentCompanyTimezone();
         $deleteLinesCount = $this->deleteLines > 0 ? $this->deleteLines : 10;
         $windowLabelStart = $windowEnd > 0 ? $windowStart + 1 : 0;
         $nextLabel = $this->mode === 'top' ? __('Next') : __('Older');
@@ -191,8 +194,25 @@
                                                 const el = $el;
                                                 const text = el.getAttribute('data-raw') || el.textContent;
                                                 if (!el.getAttribute('data-raw')) el.setAttribute('data-raw', text);
+                                                const locale = {{ \Illuminate\Support\Js::from($localeContext->forIntl()) }};
+                                                const tz = {{ \Illuminate\Support\Js::from($localTimezone) }};
+                                                const formatter = new Intl.DateTimeFormat(locale || undefined, {
+                                                    year: 'numeric',
+                                                    month: '2-digit',
+                                                    day: '2-digit',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                    second: '2-digit',
+                                                    timeZone: tz || 'UTC',
+                                                });
                                                 el.textContent = text.replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?/g, (m) => {
-                                                    try { return new Date(m).toLocaleString(); } catch(e) { return m; }
+                                                    try {
+                                                        const hasTz = /Z|[+-]\d{2}:\d{2}$/.test(m);
+                                                        const iso = hasTz ? m : (m.includes('T') ? `${m}Z` : `${m.replace(' ', 'T')}Z`);
+                                                        const d = new Date(iso);
+                                                        if (Number.isNaN(d.getTime())) return m;
+                                                        return formatter.format(d);
+                                                    } catch (e) { return m; }
                                                 });
                                             } else {
                                                 const raw = $el.getAttribute('data-raw');

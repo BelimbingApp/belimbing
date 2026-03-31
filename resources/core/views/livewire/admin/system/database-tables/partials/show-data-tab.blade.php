@@ -1,4 +1,10 @@
 <x-ui.card>
+    @php
+        $localeContext = app(\App\Base\Locale\Contracts\LocaleContext::class);
+        $dateTimes = app(\App\Base\DateTime\Contracts\DateTimeDisplayService::class);
+        $localTimezone = $dateTimes->currentCompanyTimezone();
+    @endphp
+
     <div class="mb-2 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div class="flex-1">
             <x-ui.search-input
@@ -110,7 +116,25 @@
                                             const el = $el;
                                             const text = el.getAttribute('data-raw') || el.textContent;
                                             if (!el.getAttribute('data-raw')) el.setAttribute('data-raw', text);
-                                            try { el.textContent = new Date(text.trim()).toLocaleString(); } catch(e) {}
+                                            const locale = {{ \Illuminate\Support\Js::from($localeContext->forIntl()) }};
+                                            const tz = {{ \Illuminate\Support\Js::from($localTimezone) }};
+                                            const formatter = new Intl.DateTimeFormat(locale || undefined, {
+                                                year: 'numeric',
+                                                month: '2-digit',
+                                                day: '2-digit',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                timeZone: tz || 'UTC',
+                                            });
+                                            try {
+                                                const raw = text.trim();
+                                                const hasTz = /Z|[+-]\d{2}:\d{2}$/.test(raw);
+                                                const iso = hasTz ? raw : (raw.includes('T') ? `${raw}Z` : `${raw.replace(' ', 'T')}Z`);
+                                                const d = new Date(iso);
+                                                if (!Number.isNaN(d.getTime())) {
+                                                    el.textContent = formatter.format(d);
+                                                }
+                                            } catch (e) {}
                                         } else {
                                             const raw = $el.getAttribute('data-raw');
                                             if (raw) $el.textContent = raw;

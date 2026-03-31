@@ -21,6 +21,9 @@
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">
                         @forelse($files as $file)
+                            @php
+                                $modifiedAt = \Carbon\Carbon::createFromTimestamp($file->getMTime());
+                            @endphp
                             <tr wire:key="log-{{ $file->getFilename() }}" class="hover:bg-surface-subtle/50 transition-colors">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium">
                                     <a href="{{ route('admin.system.logs.show', $file->getFilename()) }}" class="text-accent hover:underline" wire:navigate>
@@ -28,7 +31,14 @@
                                     </a>
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ Number::fileSize($file->getSize()) }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ \Carbon\Carbon::createFromTimestamp($file->getMTime())->diffForHumans() }}</td>
+                                <td class="px-table-cell-x py-table-cell-y text-sm text-muted">
+                                    <div class="flex items-baseline gap-2 whitespace-nowrap">
+                                        <span class="tabular-nums">
+                                            <x-ui.datetime :value="$modifiedAt" />
+                                        </span>
+                                        <span class="text-xs text-muted">{{ $modifiedAt->diffForHumans() }}</span>
+                                    </div>
+                                </td>
                             </tr>
                         @empty
                             <tr>
