@@ -5,6 +5,10 @@
 /** @var \App\Base\Database\Livewire\Queries\Show $this */
 ?>
 
+@php
+    $numbers = app(\App\Base\Locale\Contracts\NumberDisplayService::class);
+@endphp
+
 <div
     x-data="{
         savedName: @js($savedName),
@@ -286,8 +290,8 @@
         <x-ui.card>
             <div class="mb-2 flex items-center justify-between gap-4">
                 <span class="text-xs text-muted whitespace-nowrap tabular-nums">
-                    {{ trans_choice(':count column|:count columns', count($columns), ['count' => count($columns)]) }}
-                    · {{ trans_choice(':count row|:count rows', $total, ['count' => number_format($total)]) }}
+                    {{ trans_choice(':count column|:count columns', count($columns), ['count' => $numbers->formatInteger(count($columns))]) }}
+                    · {{ trans_choice(':count row|:count rows', $total, ['count' => $numbers->formatInteger($total)]) }}
                 </span>
             </div>
 
@@ -340,9 +344,9 @@
                 <div class="mt-2 flex items-center justify-between text-sm text-muted">
                     <span class="tabular-nums">
                         {{ __('Showing :from to :to of :total results', [
-                            'from' => number_format(($currentPage - 1) * $perPage + 1),
-                            'to' => number_format(min($currentPage * $perPage, $total)),
-                            'total' => number_format($total),
+                            'from' => $numbers->formatInteger(($currentPage - 1) * $perPage + 1),
+                            'to' => $numbers->formatInteger(min($currentPage * $perPage, $total)),
+                            'total' => $numbers->formatInteger($total),
                         ]) }}
                     </span>
                     <div class="flex items-center gap-2">

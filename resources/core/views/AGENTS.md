@@ -129,6 +129,12 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 
 When a needed primitive doesn't exist, create it in `resources/core/views/components/ui/` following the patterns of existing components (props via `@props`, class merging via `$attributes->class([...])`, semantic tokens).
 
+### Select vs Combo Box
+
+- Prefer `x-ui.select` for short, stable option lists that users can scan quickly.
+- Prefer the combo box primitive `x-ui.combobox` when the list has **more than 8 options**, when labels are long, or when users are likely to search by code/name rather than scan visually.
+- If you are unsure and the list is around the cutoff, choose the combo box primitive when selection speed matters more than strict minimalism.
+
 ### Form control ids
 
 - **Always set an explicit `id`** on form controls and form components such as `x-ui.input`, `x-ui.select`, `x-ui.textarea`, `x-ui.checkbox`, and `x-ui.radio`.
@@ -145,7 +151,7 @@ When a needed primitive doesn't exist, create it in `resources/core/views/compon
 - Landmark and dismiss controls should keep explicit names:
   - `<nav>` elements need an accessible name when there is more than one navigation region
   - icon-only or overlay-dismiss controls need an `aria-label`
-- Avoid adding ARIA roles to native elements unless the component truly implements the full ARIA pattern. Reuse `x-ui.combobox` and other existing primitives instead of re-creating listbox/menu semantics ad hoc.
+- Avoid adding ARIA roles to native elements unless the component truly implements the full ARIA pattern. Reuse `x-ui.combobox` and other existing primitives instead of re-creating list box/menu semantics ad hoc.
 - Before finishing a Blade change, scan for these common regressions: orphaned labels, mismatched `aria-label`s, redundant roles on native elements, and list/detail semantics implemented with generic `<div>` wrappers.
 
 ## Elevating to Modern Sleek

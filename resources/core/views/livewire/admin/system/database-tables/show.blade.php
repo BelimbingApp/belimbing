@@ -185,7 +185,7 @@ use App\Base\Database\Livewire\DatabaseTables\Show;
         <div>
             <x-ui.page-header
                 :title="$this->tableName"
-                :subtitle="trans_choice(':count row|:count rows', $rowCount, ['count' => number_format($rowCount)])"
+                :subtitle="trans_choice(':count row|:count rows', $rowCount, ['count' => app(\App\Base\Locale\Contracts\NumberDisplayService::class)->formatInteger($rowCount)])"
                 :pinnable="[
                     'label' => $this->tableName,
                     'url' => request()->url(),

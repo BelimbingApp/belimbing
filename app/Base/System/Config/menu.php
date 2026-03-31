@@ -14,5 +14,14 @@ return [
             'parent' => 'system',
             'position' => 90,
         ],
+        [
+            'id' => 'system.localization',
+            'label' => 'Localization',
+            'icon' => 'heroicon-o-language',
+            'route' => 'admin.system.localization.index',
+            'permission' => 'admin.system_localization.manage',
+            'parent' => 'system',
+            'position' => 95,
+        ],
     ],
 ];

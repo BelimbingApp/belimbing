@@ -5,6 +5,9 @@
 
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
+use App\Base\Locale\Contracts\CurrencyDisplayService;
+use App\Base\Locale\Contracts\NumberDisplayService;
+
 /**
  * Shared display formatting for cost and token count values.
  *
@@ -22,7 +25,7 @@ trait FormatsDisplayValues
             return '—';
         }
 
-        return '$'.number_format((float) $cost, 2);
+        return app(CurrencyDisplayService::class)->format((float) $cost, 'USD', 2);
     }
 
     /**
@@ -34,19 +37,18 @@ trait FormatsDisplayValues
             return '—';
         }
 
-        $value = (float) $count;
         $suffix = '';
 
         if ($count >= 1_000_000) {
-            $value = $count / 1_000_000;
             $suffix = 'M';
         } elseif ($count >= 1_000) {
-            $value = $count / 1_000;
             $suffix = 'K';
         }
 
-        return $suffix === ''
-            ? (string) $count
-            : rtrim(rtrim(number_format($value, 1), '0'), '.').$suffix;
+        if ($suffix === '') {
+            return app(NumberDisplayService::class)->formatInteger($count);
+        }
+
+        return app(NumberDisplayService::class)->abbreviate($count, 1, 1);
     }
 }

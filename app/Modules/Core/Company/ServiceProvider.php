@@ -5,6 +5,8 @@
 
 namespace App\Modules\Core\Company;
 
+use App\Base\Locale\Contracts\LicenseeLocaleBootstrapSource;
+use App\Modules\Core\Company\Services\LicenseeLocaleBootstrapSource as LicenseeLocaleBootstrapSourceImpl;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -17,6 +19,11 @@ class ServiceProvider extends BaseServiceProvider
         $this->mergeConfigFrom(
             __DIR__.'/Config/company.php',
             'company'
+        );
+
+        $this->app->singleton(
+            LicenseeLocaleBootstrapSource::class,
+            LicenseeLocaleBootstrapSourceImpl::class,
         );
     }
 }

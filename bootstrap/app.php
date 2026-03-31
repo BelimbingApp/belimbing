@@ -27,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Add database connection recovery middleware to web group
         $middleware->web(append: [
             \App\Base\Database\Middleware\DatabaseConnectionRecovery::class,
+            \App\Base\Locale\Middleware\ApplyLocaleContext::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -7,6 +7,7 @@ namespace App\Base\DateTime\Services;
 
 use App\Base\DateTime\Contracts\DateTimeDisplayService as DateTimeDisplayServiceContract;
 use App\Base\DateTime\Enums\TimezoneMode;
+use App\Base\Locale\Contracts\LocaleContext;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use Carbon\Carbon;
@@ -25,6 +26,7 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
 
     public function __construct(
         private readonly SettingsService $settings,
+        private readonly LocaleContext $localeContext,
     ) {}
 
     /**
@@ -160,7 +162,7 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
 
         return $this->currentMode() === TimezoneMode::UTC
             ? $carbon->format($this->storedFormat($type))
-            : $carbon->locale(app()->getLocale())->isoFormat($this->localeFormat($type));
+            : $carbon->locale($this->localeContext->forCarbon())->isoFormat($this->localeFormat($type));
     }
 
     /**

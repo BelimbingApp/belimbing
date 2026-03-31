@@ -6,7 +6,7 @@
 @props(['title' => null])
 
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ app(\App\Base\Locale\Contracts\LocaleContext::class)->forIntl() }}">
 <head>
     <title>{{ isset($title) && $title ? $title . ' — ' . config('app.name') : config('app.name') }}</title>
     @include('partials.head')

@@ -9,6 +9,7 @@
     <x-slot name="title">{{ $this->filename }}</x-slot>
 
     @php
+        $numbers = app(\App\Base\Locale\Contracts\NumberDisplayService::class);
         $deleteLinesCount = $this->deleteLines > 0 ? $this->deleteLines : 10;
         $windowLabelStart = $windowEnd > 0 ? $windowStart + 1 : 0;
         $nextLabel = $this->mode === 'top' ? __('Next') : __('Older');
@@ -19,7 +20,7 @@
 
     <div class="space-y-section-gap">
         {{-- Header --}}
-        <x-ui.page-header :title="$this->filename" :subtitle="__(':size · :lines lines', ['size' => Number::fileSize($fileSize), 'lines' => number_format($totalLines)])">
+        <x-ui.page-header :title="$this->filename" :subtitle="__(':size · :lines lines', ['size' => Number::fileSize($fileSize), 'lines' => $numbers->formatInteger($totalLines)])">
             <x-slot name="actions">
                 <a href="{{ route('admin.system.logs.index') }}" class="text-accent hover:underline text-sm" wire:navigate>
                     ← {{ __('Back to Logs') }}
@@ -33,7 +34,7 @@
                 {{-- Lines per chunk --}}
                 <div class="flex flex-col gap-1">
                     <label for="lines-input" class="text-[11px] uppercase tracking-wider font-semibold text-muted">
-                        {{ __($this->mode === 'top' ? 'Top :count lines' : 'Tail :count lines', ['count' => number_format($this->lines)]) }}
+                        {{ __($this->mode === 'top' ? 'Top :count lines' : 'Tail :count lines', ['count' => $numbers->formatInteger($this->lines)]) }}
                     </label>
                     <x-ui.input
                         type="number"
@@ -60,10 +61,10 @@
                         variant="danger-ghost"
                         size="sm"
                         wire:click="deleteLinesFromTop"
-                        wire:confirm="{{ __('Delete :count lines from the top of this file?', ['count' => number_format($deleteLinesCount)]) }}"
+                        wire:confirm="{{ __('Delete :count lines from the top of this file?', ['count' => $numbers->formatInteger($deleteLinesCount)]) }}"
                     >
                         <x-icon name="heroicon-o-scissors" class="w-4 h-4" />
-                        {{ __('Delete :count lines from top', ['count' => number_format($deleteLinesCount)]) }}
+                        {{ __('Delete :count lines from top', ['count' => $numbers->formatInteger($deleteLinesCount)]) }}
                     </x-ui.button>
                     <div class="flex items-center gap-1">
                         <x-ui.input
@@ -121,8 +122,8 @@
         <div class="flex flex-wrap items-center justify-between gap-2">
             {{-- Status --}}
             <div class="flex items-center gap-3 text-xs text-muted">
-                <span>{{ __('Showing :displayed of :total lines', ['displayed' => number_format($displayedCount), 'total' => number_format($totalLines)]) }}</span>
-                <span>· {{ __('lines :start–:end', ['start' => number_format($windowLabelStart), 'end' => number_format($windowEnd)]) }}</span>
+                <span>{{ __('Showing :displayed of :total lines', ['displayed' => $numbers->formatInteger($displayedCount), 'total' => $numbers->formatInteger($totalLines)]) }}</span>
+                <span>· {{ __('lines :start–:end', ['start' => $numbers->formatInteger($windowLabelStart), 'end' => $numbers->formatInteger($windowEnd)]) }}</span>
                 @if($search)
                     <span>· {{ __('filtered by ":search"', ['search' => $search]) }}</span>
                 @endif

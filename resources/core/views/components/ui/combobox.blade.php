@@ -30,6 +30,8 @@
     use Illuminate\Support\Js;
 
     $id = $attributes->get('id') ?? 'cbx-' . Str::random(8);
+    $hasWireModel = $attributes->whereStartsWith('wire:model')->first() !== null;
+    $wireModel = $hasWireModel ? $attributes->wire('model') : null;
     $optionsJs = Js::from(collect($options)->map(fn ($o) => [
         'value' => (string) ($o['value'] ?? ''),
         'label' => $o['label'] ?? '',
@@ -64,7 +66,7 @@
             searchUrl: {{ $searchUrl ? "'".addslashes($searchUrl)."'" : 'null' }},
             options: {{ $optionsJs }},
             disabled: {{ $disabled ? 'true' : 'false' }},
-            selectedValue: @entangle($attributes->wire('model')),
+            selectedValue: @if($wireModel) @entangle($wireModel->value()){{ $wireModel->hasModifier('live') ? '.live' : '' }} @else null @endif,
 
             get selectedOption() {
                 if (this.selectedValue === null || this.selectedValue === '') return null

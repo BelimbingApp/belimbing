@@ -76,6 +76,13 @@ Load the relevant anchor when the task touches that domain. These do not replace
     - task affects bootstrapping for more than one module
   load: .agents/playbooks/feat-discovery-driven-infrastructure.md
 
+- id: FEAT-GLOBAL-LOCALE
+  intent: add or change application-wide locale resolution, localization settings UI, and formatting integration
+  checklist:
+    - task introduces or changes a global locale setting or locale bootstrap policy
+    - task affects request-time formatting behavior across multiple modules or layouts
+  load: .agents/playbooks/feat-global-locale.md
+
 ## Maintenance
 
 - When implementing a task using a playbook, if you discover a better pattern, a new invariant, or a corrected reference path, update the playbook in the same change. Playbooks are living documents — they evolve with the codebase.

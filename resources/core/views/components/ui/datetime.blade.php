@@ -5,6 +5,7 @@
 
 @php
     $service = app(\App\Base\DateTime\Contracts\DateTimeDisplayService::class);
+    $localeContext = app(\App\Base\Locale\Contracts\LocaleContext::class);
     $mode = $service->currentMode();
     $isLocal = $service->isLocalMode();
 
@@ -27,7 +28,7 @@
     <span {{ $attributes }}>{{ $formatted }}</span>
 @elseif ($isLocal)
     <time
-        {{ $attributes->merge(['datetime' => $iso, 'data-format' => $format]) }}
+        {{ $attributes->merge(['datetime' => $iso, 'data-format' => $format, 'data-locale' => $localeContext->forIntl()]) }}
         x-data
         x-effect="
             const d = new Date($el.getAttribute('datetime'));
@@ -36,7 +37,7 @@
                 date: { year: 'numeric', month: '2-digit', day: '2-digit' },
                 time: { hour: '2-digit', minute: '2-digit' },
             }[$el.dataset.format] || { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
-            $el.textContent = new Intl.DateTimeFormat(undefined, opts).format(d);
+            $el.textContent = new Intl.DateTimeFormat($el.dataset.locale || undefined, opts).format(d);
         "
     >{{ $formatted }}</time>
 @else

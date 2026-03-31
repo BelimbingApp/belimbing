@@ -1,9 +1,20 @@
 @php
+    $localeContext = app(\App\Base\Locale\Contracts\LocaleContext::class);
     $isImpersonating = session('impersonation.original_user_id') !== null;
 
     $licenseeExists = \App\Modules\Core\Company\Models\Company::query()->where('id', \App\Modules\Core\Company\Models\Company::LICENSEE_ID)->exists();
 
     $laraActivated = \App\Modules\Core\Employee\Models\Employee::laraActivationState() === true;
+
+    $canManageLocalization = false;
+
+    if (auth()->check()) {
+        $user = auth()->user();
+        $actor = \App\Base\Authz\DTO\Actor::forUser($user);
+        $canManageLocalization = app(\App\Base\Authz\Contracts\AuthorizationService::class)
+            ->can($actor, 'admin.system_localization.manage')
+            ->allowed;
+    }
 @endphp
 
 <div class="h-6 bg-surface-bar border-t border-border-default flex items-center justify-between px-4 text-xs text-muted shrink-0">
@@ -28,6 +39,16 @@
                 <a href="{{ route('admin.setup.licensee') }}" wire:navigate class="text-status-danger hover:underline flex items-center gap-1">
                     <x-icon name="heroicon-o-exclamation-triangle" class="w-3.5 h-3.5" />
                     {{ __('Licensee not set') }}
+                </a>
+            @endif
+            @if ($canManageLocalization && $localeContext->requiresConfirmation())
+                <a href="{{ route('admin.system.localization.index') }}" wire:navigate class="text-status-warning hover:underline flex items-center gap-1">
+                    <x-icon name="heroicon-o-language" class="w-3.5 h-3.5" />
+                    @if ($localeContext->source() === 'licensee_address')
+                        {{ __('Locale inferred: :locale', ['locale' => $localeContext->currentLocale()]) }}
+                    @else
+                        {{ __('Locale not confirmed') }}
+                    @endif
                 </a>
             @endif
 

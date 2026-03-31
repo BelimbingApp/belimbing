@@ -6,5 +6,6 @@
 return [
     'capabilities' => [
         'admin.system_info.view',
+        'admin.system_localization.manage',
     ],
 ];

@@ -13,6 +13,7 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 
 const DT_TEST_KEY_MODE = 'ui.timezone.mode';
 const DT_TEST_KEY_DEFAULT = 'ui.timezone.default';
+const DT_TEST_KEY_LOCALE = 'ui.locale';
 const DT_TEST_TIMEZONE_KL = 'Asia/Kuala_Lumpur';
 const DT_TEST_TIMESTAMP = '2026-06-15 08:00:00';
 
@@ -26,6 +27,9 @@ beforeEach(function (): void {
  */
 function freshService(): DateTimeDisplayService
 {
+    app()->forgetInstance(DateTimeDisplayService::class);
+    app()->forgetInstance(\App\Base\Locale\Contracts\LocaleContext::class);
+
     return app()->make(DateTimeDisplayService::class);
 }
 
@@ -70,6 +74,7 @@ it('formats datetime in company timezone with locale', function (): void {
     $this->actingAs($user);
 
     $this->settings->set(DT_TEST_KEY_DEFAULT, DT_TEST_TIMEZONE_KL, Scope::company(1));
+    $this->settings->set(DT_TEST_KEY_LOCALE, 'en-US');
 
     $service = freshService();
     $carbon = Carbon::parse(DT_TEST_TIMESTAMP, 'UTC');
@@ -81,12 +86,11 @@ it('formats datetime in company timezone with locale', function (): void {
 });
 
 it('formats datetime in company timezone with ms locale', function (): void {
-    app()->setLocale('ms');
-
     $user = User::factory()->create(['company_id' => 1]);
     $this->actingAs($user);
 
     $this->settings->set(DT_TEST_KEY_DEFAULT, DT_TEST_TIMEZONE_KL, Scope::company(1));
+    $this->settings->set(DT_TEST_KEY_LOCALE, 'ms-MY');
 
     $service = freshService();
     $carbon = Carbon::parse(DT_TEST_TIMESTAMP, 'UTC');

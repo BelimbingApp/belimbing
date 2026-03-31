@@ -152,7 +152,7 @@
                                         <span class="font-mono text-xs text-muted">{{ $row->country_iso }}</span>
                                         <span class="ml-1 text-ink">{{ $row->country_name ?? $row->country_iso }}</span>
                                     </td>
-                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right font-medium text-ink tabular-nums">{{ number_format($row->record_count) }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right font-medium text-ink tabular-nums">{{ app(\App\Base\Locale\Contracts\NumberDisplayService::class)->formatInteger($row->record_count) }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
