@@ -4,6 +4,7 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Base\AI\Contracts\Tool;
+use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Services\LlmClient;
@@ -224,11 +225,9 @@ describe('AgenticRuntime', function () {
         ]);
 
         $llmClient = Mockery::mock(LlmClient::class);
-        $llmClient->shouldReceive('chat')->once()->andReturn([
-            'error' => 'Rate limit exceeded',
-            'error_type' => 'rate_limit',
-            'latency_ms' => 50,
-        ]);
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeErrorResponse(AiErrorType::RateLimit, 'Rate limit exceeded', 50)
+        );
 
         $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
         $result = $runtime->run([$this->makeMessage('user', 'Hello')], 1, 'Prompt');

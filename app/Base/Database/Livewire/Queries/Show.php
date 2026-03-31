@@ -257,8 +257,8 @@ class Show extends Component
                 providerName: $config['provider_name'],
             ));
 
-            if (isset($result['error'])) {
-                $this->aiError = $result['error'];
+            if (isset($result['runtime_error'])) {
+                $this->aiError = $result['runtime_error']->userMessage;
 
                 return;
             }

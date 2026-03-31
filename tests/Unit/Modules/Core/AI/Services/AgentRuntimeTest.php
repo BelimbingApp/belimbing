@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -62,7 +63,8 @@ it('returns no-configuration error when no workspace and default config are avai
 
     $result = runRuntimeConversation($configResolver, $llmClient);
 
-    expect($result['content'])->toContain('No LLM configuration available.')
+    expect($result['content'])->toContain('⚠')
+        ->and($result['meta']['error_type'])->toBe('config_error')
         ->and($result['meta']['provider_name'])->toBe('unknown')
         ->and($result['meta']['fallback_attempts'])->toBeEmpty();
 });
@@ -78,11 +80,11 @@ it('collects fallback attempt entries on transient failures before success', fun
     $llmClient = Mockery::mock(LlmClient::class);
     // First call: server error (fallback-worthy)
     $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
-        $this->makeErrorResponse('HTTP 500: Internal Server Error', 'server_error', 150)
+        $this->makeErrorResponse(AiErrorType::ServerError, 'HTTP 500: Internal Server Error', 150)
     );
     // Second call: rate limit (fallback-worthy)
     $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
-        $this->makeErrorResponse('HTTP 429: Too Many Requests', 'rate_limit', 50)
+        $this->makeErrorResponse(AiErrorType::RateLimit, 'HTTP 429: Too Many Requests', 50)
     );
     // Third call: success
     $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
@@ -95,8 +97,8 @@ it('collects fallback attempt entries on transient failures before success', fun
         ->and($result['meta']['model'])->toBe('model-c')
         ->and($result['meta']['fallback_attempts'])->toHaveCount(2);
 
-    $this->assertFallbackAttempt($result['meta']['fallback_attempts'][0], 'provider-a', 'model-a', '500', 'server_error', 150);
-    $this->assertFallbackAttempt($result['meta']['fallback_attempts'][1], 'provider-b', 'model-b', '429', 'rate_limit', 50);
+    $this->assertFallbackAttempt($result['meta']['fallback_attempts'][0], 'provider-a', 'model-a', 'server_error', 150);
+    $this->assertFallbackAttempt($result['meta']['fallback_attempts'][1], 'provider-b', 'model-b', 'rate_limit', 50);
 });
 
 it('includes fallback attempts when all models fail', function (): void {
@@ -108,16 +110,16 @@ it('includes fallback attempts when all models fail', function (): void {
 
     $llmClient = Mockery::mock(LlmClient::class);
     $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
-        $this->makeErrorResponse('HTTP 500: Server Error', 'server_error', 100)
+        $this->makeErrorResponse(AiErrorType::ServerError, 'HTTP 500: Server Error', 100)
     );
     $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
-        $this->makeErrorResponse('Connection refused', 'connection_error', 50)
+        $this->makeErrorResponse(AiErrorType::ConnectionError, 'Connection refused', 50)
     );
 
     $result = runRuntimeConversation($configResolver, $llmClient);
 
-    // Last failure is returned as the result
-    expect($result['meta']['error'])->toContain('Connection refused')
+    // Last failure is returned as the result — user sees safe message, not raw diagnostic
+    expect($result['meta']['error_type'])->toBe('connection_error')
         ->and($result['meta']['fallback_attempts'])->toHaveCount(2);
 
     // Both attempts recorded
@@ -137,13 +139,13 @@ it('does not fall back on client errors and still records empty attempts', funct
     $llmClient = Mockery::mock(LlmClient::class);
     // Client error (401) — should NOT trigger fallback
     $llmClient->shouldReceive('chat')->once()->andReturn(
-        $this->makeErrorResponse('HTTP 401: Unauthorized', 'client_error', 30)
+        $this->makeErrorResponse(AiErrorType::AuthError, 'HTTP 401: Unauthorized', 30)
     );
 
     $result = runRuntimeConversation($configResolver, $llmClient);
 
-    // Should stop at first model, no fallback
-    expect($result['meta']['error'])->toContain('401')
+    // Should stop at first model, no fallback — user sees safe message
+    expect($result['meta']['error_type'])->toBe('auth_error')
         ->and($result['meta']['fallback_attempts'])->toBeEmpty();
 });
 
@@ -159,7 +161,7 @@ it('records config_error in result without fallback since not transient', functi
     $result = runRuntimeConversation($configResolver, $llmClient);
 
     // config_error is NOT in the shouldFallback transient list, so no fallback
-    expect($result['meta']['error'])->toContain('API key is not configured')
+    expect($result['meta']['error_type'])->toBe('config_error')
         ->and($result['meta']['provider_name'])->toBe('broken')
         ->and($result['meta']['llm']['provider'])->toBe('broken')
         ->and($result['meta']['llm']['model'])->toBe('model-a')

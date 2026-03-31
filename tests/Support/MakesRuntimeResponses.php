@@ -3,6 +3,9 @@
 namespace Tests\Support;
 
 use App\Base\AI\Contracts\Tool;
+use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Services\AiRuntimeLogger;
 use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -45,11 +48,10 @@ trait MakesRuntimeResponses
         ];
     }
 
-    protected function makeErrorResponse(string $error, string $errorType, int $latencyMs): array
+    protected function makeErrorResponse(AiErrorType $errorType, string $diagnostic, int $latencyMs): array
     {
         return [
-            'error' => $error,
-            'error_type' => $errorType,
+            'runtime_error' => AiRuntimeError::fromType($errorType, $diagnostic, latencyMs: $latencyMs),
             'latency_ms' => $latencyMs,
         ];
     }
@@ -99,6 +101,7 @@ trait MakesRuntimeResponses
         ?GithubCopilotAuthService $copilotAuth = null,
     ): AgenticRuntime {
         $copilotAuth ??= \Mockery::mock(GithubCopilotAuthService::class);
+        $runtimeLogger = app(AiRuntimeLogger::class);
 
         return new AgenticRuntime(
             $configResolver ?? $this->mockResolvedConfigResolver([$this->makeConfig('test-provider', 'gpt-4', 'test-key')]),
@@ -106,7 +109,8 @@ trait MakesRuntimeResponses
             $toolRegistry ?? $this->makeToolRegistry(),
             new RuntimeCredentialResolver($copilotAuth),
             new RuntimeMessageBuilder,
-            new RuntimeResponseFactory,
+            new RuntimeResponseFactory($runtimeLogger),
+            $runtimeLogger,
         );
     }
 
@@ -116,13 +120,14 @@ trait MakesRuntimeResponses
         ?GithubCopilotAuthService $copilotAuth = null,
     ): AgentRuntime {
         $copilotAuth ??= \Mockery::mock(GithubCopilotAuthService::class);
+        $runtimeLogger = app(AiRuntimeLogger::class);
 
         return new AgentRuntime(
             $configResolver,
             $llmClient,
             new RuntimeCredentialResolver($copilotAuth),
             new RuntimeMessageBuilder,
-            new RuntimeResponseFactory,
+            new RuntimeResponseFactory($runtimeLogger),
         );
     }
 
@@ -158,13 +163,11 @@ trait MakesRuntimeResponses
         array $attempt,
         string $provider,
         string $model,
-        string $errorFragment,
         string $errorType,
         int $latencyMs,
     ): void {
         expect($attempt['provider'])->toBe($provider)
             ->and($attempt['model'])->toBe($model)
-            ->and($attempt['error'])->toContain($errorFragment)
             ->and($attempt['error_type'])->toBe($errorType)
             ->and($attempt['latency_ms'])->toBe($latencyMs);
     }

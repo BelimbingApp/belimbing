@@ -5,7 +5,9 @@
 
 namespace App\Modules\Core\AI\Livewire;
 
+use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
+use App\Base\AI\Services\AiRuntimeLogger;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
@@ -18,10 +20,12 @@ use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\QuickActionRegistry;
+use App\Modules\Core\AI\Services\RuntimeResponseFactory;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Str;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -134,28 +138,54 @@ class Chat extends Component
         $messageManager = app(MessageManager::class);
         $messageManager->appendUserMessage($this->employeeId, $this->selectedSessionId, $content, $userMeta);
 
-        $messages = $messageManager->read($this->employeeId, $this->selectedSessionId);
+        try {
+            $messages = $messageManager->read($this->employeeId, $this->selectedSessionId);
 
-        $result = $this->runAi($hasAttachments, $messages, $content);
+            $result = $this->runAi($hasAttachments, $messages, $content);
 
-        $messageManager->appendAssistantMessage(
-            $this->employeeId,
-            $this->selectedSessionId,
-            $result['content'],
-            $result['run_id'],
-            $result['meta'],
-        );
+            $messageManager->appendAssistantMessage(
+                $this->employeeId,
+                $this->selectedSessionId,
+                $result['content'],
+                $result['run_id'],
+                $result['meta'],
+            );
 
-        $this->lastRunMeta = [
-            'run_id' => $result['run_id'],
-            ...$result['meta'],
-        ];
+            $this->lastRunMeta = [
+                'run_id' => $result['run_id'],
+                ...$result['meta'],
+            ];
 
-        $this->dispatchPostRunEvents($result);
+            $this->dispatchPostRunEvents($result);
+        } catch (\Throwable $e) {
+            $runId = 'run_'.Str::random(12);
 
-        $this->isLoading = false;
-        $this->dispatch('agent-chat-response-ready');
-        $this->dispatch('agent-chat-focus-composer');
+            app(AiRuntimeLogger::class)->unhandledException($runId, $e, [
+                'employee_id' => $this->employeeId,
+                'session_id' => $this->selectedSessionId,
+            ]);
+
+            $error = AiRuntimeError::unexpected($e->getMessage());
+            $fallback = app(RuntimeResponseFactory::class)->error(
+                $runId,
+                'unknown',
+                'unknown',
+                $error,
+                ['employee_id' => $this->employeeId],
+            );
+
+            $messageManager->appendAssistantMessage(
+                $this->employeeId,
+                $this->selectedSessionId,
+                $fallback['content'],
+                $fallback['run_id'],
+                $fallback['meta'],
+            );
+        } finally {
+            $this->isLoading = false;
+            $this->dispatch('agent-chat-response-ready');
+            $this->dispatch('agent-chat-focus-composer');
+        }
     }
 
     /**

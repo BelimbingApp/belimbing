@@ -13,7 +13,9 @@
         $formatted = '—';
         $iso = null;
     } else {
-        $carbon = $value instanceof \DateTimeInterface ? $value : \Carbon\Carbon::parse($value);
+        $carbon = $value instanceof \DateTimeInterface
+            ? \Carbon\Carbon::instance($value)
+            : \Carbon\Carbon::parse($value);
         $iso = $carbon->utc()->toIso8601String();
 
         $formatted = match ($format) {

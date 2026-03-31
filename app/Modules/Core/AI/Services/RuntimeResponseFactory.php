@@ -5,11 +5,18 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\Services\AiRuntimeLogger;
+
 /**
  * Builds consistent runtime response payloads for chat success and error states.
  */
 class RuntimeResponseFactory
 {
+    public function __construct(
+        private readonly AiRuntimeLogger $runtimeLogger,
+    ) {}
+
     /**
      * Build a success result with standard LLM metadata.
      *
@@ -48,37 +55,56 @@ class RuntimeResponseFactory
     }
 
     /**
-     * Build an error result with standard LLM metadata.
+     * Build an error result from a structured AiRuntimeError.
      *
-     * @param  array<string, mixed>  $extraMeta
+     * Logs the failure and returns a response with safe user-facing text.
+     * Raw diagnostic detail is logged but never exposed to end users.
+     *
+     * @param  string  $runId  Unique run identifier
+     * @param  string  $model  Model identifier
+     * @param  string  $providerName  Provider name
+     * @param  AiRuntimeError  $error  Structured error data
+     * @param  array<string, mixed>  $extraContext  Additional log context (employee_id, session_id, etc.)
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
     public function error(
         string $runId,
         string $model,
         string $providerName,
-        int $latencyMs,
-        string $detail,
-        string $errorType = 'unknown',
-        array $extraMeta = [],
+        AiRuntimeError $error,
+        array $extraContext = [],
     ): array {
-        $meta = array_merge([
+        $this->runtimeLogger->runFailed($runId, $error, array_merge(
+            ['model' => $model, 'provider_name' => $providerName],
+            $extraContext,
+        ));
+
+        return [
+            'content' => __('⚠ :detail', ['detail' => $error->userMessage]),
+            'run_id' => $runId,
+            'meta' => $this->errorMeta($model, $providerName, $error),
+        ];
+    }
+
+    /**
+     * Build the persisted metadata payload for a runtime error response.
+     *
+     * @return array<string, mixed>
+     */
+    public function errorMeta(string $model, string $providerName, AiRuntimeError $error): array
+    {
+        return [
             'model' => $model,
             'provider_name' => $providerName,
             'llm' => [
                 'provider' => $providerName,
                 'model' => $model,
             ],
-            'latency_ms' => $latencyMs,
-            'error' => $detail,
-            'error_type' => $errorType,
+            'latency_ms' => $error->latencyMs,
+            'error' => $error->userMessage,
+            'error_type' => $error->errorType->value,
+            'message_type' => 'error',
             'fallback_attempts' => [],
-        ], $extraMeta);
-
-        return [
-            'content' => __('⚠ :detail', ['detail' => $detail]),
-            'run_id' => $runId,
-            'meta' => $meta,
         ];
     }
 }

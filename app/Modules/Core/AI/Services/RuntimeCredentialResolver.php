@@ -5,6 +5,8 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\GithubCopilotAuthService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -25,8 +27,8 @@ class RuntimeCredentialResolver
     /**
      * Resolve API credentials for a runtime request.
      *
-     * @param  array{api_key: string, base_url: string, provider_name: string|null}  $config
-     * @return array{api_key: string, base_url: string}|array{error: string, error_type: string}
+     * @param  array<string, mixed>  $config  Provider config with api_key, base_url, provider_name
+     * @return array{api_key: string, base_url: string}|array{runtime_error: AiRuntimeError}
      */
     public function resolve(array $config): array
     {
@@ -42,8 +44,8 @@ class RuntimeCredentialResolver
     /**
      * Resolve provider-specific credentials after basic configuration is validated.
      *
-     * @param  array{api_key: string, base_url: string, provider_name: string|null}  $config
-     * @return array{api_key: string, base_url: string}|array{error: string, error_type: string}
+     * @param  array<string, mixed>  $config
+     * @return array{api_key: string, base_url: string}|array{runtime_error: AiRuntimeError}
      */
     private function resolveCredentials(array $config): array
     {
@@ -57,8 +59,11 @@ class RuntimeCredentialResolver
                 $baseUrl = $copilot['base_url'];
             } catch (\RuntimeException $e) {
                 return [
-                    'error' => __('Copilot token exchange failed: :error', ['error' => $e->getMessage()]),
-                    'error_type' => 'auth_error',
+                    'runtime_error' => AiRuntimeError::fromType(
+                        AiErrorType::AuthError,
+                        'Copilot token exchange failed: '.$e->getMessage(),
+                        'Re-authenticate via the GitHub Copilot device flow.',
+                    ),
                 ];
             }
         }
@@ -67,7 +72,7 @@ class RuntimeCredentialResolver
             $connectivityError = $this->checkLocalConnectivity($baseUrl);
 
             if ($connectivityError !== null) {
-                return $connectivityError;
+                return ['runtime_error' => $connectivityError];
             }
         }
 
@@ -76,57 +81,55 @@ class RuntimeCredentialResolver
 
     /**
      * Verify a local provider endpoint is reachable by probing its /models listing.
-     *
-     * @return array{error: string, error_type: string}|null
      */
-    private function checkLocalConnectivity(string $baseUrl): ?array
+    private function checkLocalConnectivity(string $baseUrl): ?AiRuntimeError
     {
         try {
             $response = Http::timeout(5)
                 ->get(rtrim($baseUrl, '/').'/models');
 
             if ($response->failed()) {
-                return [
-                    'error' => __('Copilot Proxy at :url returned HTTP :status. Ensure the proxy extension is running in VS Code.', [
-                        'url' => $baseUrl,
-                        'status' => $response->status(),
-                    ]),
-                    'error_type' => 'connection_error',
-                ];
+                return AiRuntimeError::fromType(
+                    AiErrorType::ConnectionError,
+                    "Copilot Proxy at {$baseUrl} returned HTTP {$response->status()}",
+                    'Ensure the proxy extension is running in VS Code.',
+                    httpStatus: $response->status(),
+                );
             }
         } catch (ConnectionException) {
-            return [
-                'error' => __('Could not connect to Copilot Proxy at :url — is the VS Code extension running?', [
-                    'url' => $baseUrl,
-                ]),
-                'error_type' => 'connection_error',
-            ];
+            return AiRuntimeError::fromType(
+                AiErrorType::ConnectionError,
+                "Could not connect to Copilot Proxy at {$baseUrl}",
+                'Is the VS Code extension running?',
+            );
         }
 
         return null;
     }
 
     /**
-     * @param  array{api_key: string, base_url: string, provider_name: string|null}  $config
-     * @return array{error: string, error_type: string}|null
+     * @param  array<string, mixed>  $config
+     * @return array{runtime_error: AiRuntimeError}|null
      */
     private function configurationError(array $config): ?array
     {
+        $providerName = $config['provider_name'] ?? 'default';
+
         if (empty($config['api_key'])) {
             return [
-                'error' => __('API key is not configured for provider :provider.', [
-                    'provider' => $config['provider_name'] ?? 'default',
-                ]),
-                'error_type' => 'config_error',
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::ConfigError,
+                    "API key is not configured for provider {$providerName}",
+                ),
             ];
         }
 
         if (empty($config['base_url'])) {
             return [
-                'error' => __('Base URL is not configured for provider :provider.', [
-                    'provider' => $config['provider_name'] ?? 'default',
-                ]),
-                'error_type' => 'config_error',
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::ConfigError,
+                    "Base URL is not configured for provider {$providerName}",
+                ),
             ];
         }
 

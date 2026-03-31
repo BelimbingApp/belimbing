@@ -329,8 +329,27 @@
                     x-effect="$nextTick(() => $refs.agentScroll.scrollTop = $refs.agentScroll.scrollHeight)"
                 >
                     @forelse($messages as $message)
+                        @php
+                            $messageProvider = $message->meta['provider_name'] ?? $message->meta['llm']['provider'] ?? null;
+                            $messageModel = $message->meta['model'] ?? $message->meta['llm']['model'] ?? null;
+                        @endphp
                         <div class="flex {{ $message->role === 'user' ? 'justify-end' : 'justify-start' }}">
-                            @if ($message->role === 'assistant' && ($message->meta['orchestration']['status'] ?? null) !== null)
+                            @if ($message->role === 'assistant' && ($message->meta['message_type'] ?? null) === 'error')
+                                {{-- Error message --}}
+                                <div class="max-w-[80%] rounded-2xl px-3 py-2 text-sm bg-red-500/10 text-ink border border-red-500/20">
+                                    <div class="flex items-center gap-1.5 mb-0.5">
+                                        <x-icon name="heroicon-o-exclamation-triangle" class="w-3.5 h-3.5 text-red-500" />
+                                        <span class="text-[10px] font-semibold uppercase tracking-wider text-red-500">{{ __('Error') }}</span>
+                                    </div>
+                                    <div class="agent-prose max-w-full overflow-x-auto">{!! $markdown->render($message->content) !!}</div>
+                                    <x-ai.message-meta
+                                        :timestamp="$message->timestamp"
+                                        :provider="$messageProvider"
+                                        :model="$messageModel"
+                                        :run-id="$message->runId"
+                                    />
+                                </div>
+                            @elseif ($message->role === 'assistant' && ($message->meta['orchestration']['status'] ?? null) !== null)
                                 {{-- Action message (navigation, guide, models, etc.) --}}
                                 <div class="max-w-[80%] rounded-2xl px-3 py-2 text-sm bg-accent/10 text-ink border border-accent/20">
                                     <div class="flex items-center gap-1.5 mb-0.5">
@@ -338,9 +357,12 @@
                                         <span class="text-[10px] font-semibold uppercase tracking-wider text-accent">{{ __('Action') }}</span>
                                     </div>
                                     <div class="agent-prose max-w-full overflow-x-auto">{!! $markdown->render($message->content) !!}</div>
-                                    <div class="text-[10px] mt-1 text-muted tabular-nums">
-                                        {{ $message->timestamp->format('H:i:s') }}
-                                    </div>
+                                    <x-ai.message-meta
+                                        :timestamp="$message->timestamp"
+                                        :provider="$messageProvider"
+                                        :model="$messageModel"
+                                        :run-id="$message->runId"
+                                    />
                                 </div>
                             @else
                                 <div class="max-w-[80%] rounded-2xl px-3 py-2 text-sm
@@ -351,9 +373,13 @@
                                     @else
                                         <div class="whitespace-pre-wrap break-words">{{ $message->content }}</div>
                                     @endif
-                                    <div class="text-[10px] mt-1 {{ $message->role === 'user' ? 'text-accent-on/70' : 'text-muted' }} tabular-nums">
-                                        {{ $message->timestamp->format('H:i:s') }}
-                                    </div>
+                                    <x-ai.message-meta
+                                        :timestamp="$message->timestamp"
+                                        :provider="$message->role === 'assistant' ? $messageProvider : null"
+                                        :model="$message->role === 'assistant' ? $messageModel : null"
+                                        :run-id="$message->role === 'assistant' ? $message->runId : null"
+                                        :tone="$message->role === 'user' ? 'inverse' : 'muted'"
+                                    />
                                 </div>
                             @endif
                         </div>

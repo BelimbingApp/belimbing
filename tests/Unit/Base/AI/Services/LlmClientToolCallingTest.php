@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
+use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Facades\Http;
@@ -160,8 +162,9 @@ describe('LlmClient tool calling', function () {
         ));
 
         expect($result)
-            ->toHaveKey('error_type', 'unsupported_response_shape')
-            ->and($result['error'])->toContain('returned HTML instead of JSON')
-            ->and($result['error'])->toContain('base URL points to the API endpoint');
+            ->toHaveKey('runtime_error')
+            ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
+            ->and($result['runtime_error']->errorType)->toBe(AiErrorType::HtmlResponse)
+            ->and($result['runtime_error']->hint)->toContain('base URL points to the API endpoint');
     });
 });

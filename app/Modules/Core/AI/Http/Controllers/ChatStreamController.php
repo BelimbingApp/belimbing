@@ -12,6 +12,7 @@ use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -62,6 +63,7 @@ class ChatStreamController
             $fullContent = null;
             $runId = null;
             $meta = null;
+            $hadError = false;
 
             foreach ($runtime->runStream($messages, $employeeId, $systemPrompt, $modelOverride) as $event) {
                 $eventName = $event['event'];
@@ -79,10 +81,28 @@ class ChatStreamController
                     $fullContent = $data['content'] ?? '';
                     $runId = $data['run_id'] ?? null;
                     $meta = $data['meta'] ?? [];
+                } elseif ($eventName === 'error') {
+                    $hadError = true;
+                    $errorMessage = $data['message'] ?? __('An unexpected error occurred. Please try again.');
+                    $errorRunId = $data['run_id'] ?? 'run_'.Str::random(12);
+                    $errorMeta = is_array($data['meta'] ?? null)
+                        ? $data['meta']
+                        : ['message_type' => 'error'];
+
+                    $this->persistErrorMessage(
+                        $messageManager,
+                        $employeeId,
+                        $sessionId,
+                        $errorMessage,
+                        $errorRunId,
+                        $errorMeta,
+                    );
                 }
             }
 
-            $this->persistAssistantMessage($messageManager, $employeeId, $sessionId, $fullContent, $runId, $meta ?? []);
+            if (! $hadError) {
+                $this->persistAssistantMessage($messageManager, $employeeId, $sessionId, $fullContent, $runId, $meta ?? []);
+            }
         }, 200, [
             'Content-Type' => 'text/event-stream',
             'Cache-Control' => 'no-cache, no-transform',
@@ -107,5 +127,25 @@ class ChatStreamController
         if ($fullContent !== null && $runId !== null) {
             $messageManager->appendAssistantMessage($employeeId, $sessionId, $fullContent, $runId, $meta);
         }
+    }
+
+    /**
+     * Persist a structured error as an assistant message with error metadata.
+     */
+    private function persistErrorMessage(
+        MessageManager $messageManager,
+        int $employeeId,
+        string $sessionId,
+        string $errorMessage,
+        string $runId,
+        array $meta,
+    ): void {
+        $messageManager->appendAssistantMessage(
+            $employeeId,
+            $sessionId,
+            __('⚠ :detail', ['detail' => $errorMessage]),
+            $runId,
+            $meta,
+        );
     }
 }

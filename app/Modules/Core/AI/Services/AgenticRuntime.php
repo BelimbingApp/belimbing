@@ -5,7 +5,10 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Services\AiRuntimeLogger;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\Message;
@@ -33,6 +36,7 @@ class AgenticRuntime
         private readonly RuntimeCredentialResolver $credentialResolver,
         private readonly RuntimeMessageBuilder $messageBuilder,
         private readonly RuntimeResponseFactory $responseFactory,
+        private readonly AiRuntimeLogger $runtimeLogger,
     ) {}
 
     /**
@@ -50,21 +54,26 @@ class AgenticRuntime
         $config = $this->configResolver->resolvePrimaryWithDefaultFallback($employeeId);
 
         if ($config === null) {
-            return $this->responseFactory->error($runId, 'unknown', 'unknown', 0, __('No LLM configuration available.'));
+            return $this->responseFactory->error(
+                $runId,
+                'unknown',
+                'unknown',
+                AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId),
+                ['employee_id' => $employeeId],
+            );
         }
 
         $config = $this->applyModelOverride($config, $modelOverride);
 
         $credentials = $this->credentialResolver->resolve($config);
 
-        if (isset($credentials['error'])) {
+        if (isset($credentials['runtime_error'])) {
             return $this->responseFactory->error(
                 $runId,
                 $config['model'],
                 (string) ($config['provider_name'] ?? 'unknown'),
-                0,
-                $credentials['error'],
-                $credentials['error_type'] ?? 'config_error',
+                $credentials['runtime_error'],
+                ['employee_id' => $employeeId],
             );
         }
 
@@ -89,7 +98,13 @@ class AgenticRuntime
         $config = $this->configResolver->resolvePrimaryWithDefaultFallback($employeeId);
 
         if ($config === null) {
-            yield ['event' => 'error', 'data' => ['message' => __('No LLM configuration available.'), 'run_id' => $runId]];
+            $error = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
+            $this->runtimeLogger->runFailed($runId, $error, ['employee_id' => $employeeId, 'streaming' => true]);
+            yield ['event' => 'error', 'data' => [
+                'message' => $error->userMessage,
+                'run_id' => $runId,
+                'meta' => $this->responseFactory->errorMeta('unknown', 'unknown', $error),
+            ]];
 
             return;
         }
@@ -98,8 +113,23 @@ class AgenticRuntime
 
         $credentials = $this->credentialResolver->resolve($config);
 
-        if (isset($credentials['error'])) {
-            yield ['event' => 'error', 'data' => ['message' => $credentials['error'], 'run_id' => $runId]];
+        if (isset($credentials['runtime_error'])) {
+            $error = $credentials['runtime_error'];
+            $this->runtimeLogger->runFailed($runId, $error, [
+                'employee_id' => $employeeId,
+                'model' => $config['model'],
+                'provider_name' => $config['provider_name'] ?? 'unknown',
+                'streaming' => true,
+            ]);
+            yield ['event' => 'error', 'data' => [
+                'message' => $error->userMessage,
+                'run_id' => $runId,
+                'meta' => $this->responseFactory->errorMeta(
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $error,
+                ),
+            ]];
 
             return;
         }
@@ -232,7 +262,7 @@ class AgenticRuntime
      */
     private function buildLlmErrorResult(string $runId, array $config, array $result): ?array
     {
-        if (! isset($result['error'])) {
+        if (! isset($result['runtime_error'])) {
             return null;
         }
 
@@ -240,9 +270,7 @@ class AgenticRuntime
             $runId,
             $config['model'],
             (string) ($config['provider_name'] ?? 'unknown'),
-            (int) ($result['latency_ms'] ?? 0),
-            (string) $result['error'],
-            (string) ($result['error_type'] ?? 'unknown'),
+            $result['runtime_error'],
         );
     }
 
@@ -390,18 +418,37 @@ class AgenticRuntime
             $runId,
             $config['model'],
             (string) ($config['provider_name'] ?? 'unknown'),
-            0,
-            __('Maximum tool-calling iterations reached. Please try a simpler request.'),
-            'max_iterations',
+            AiRuntimeError::fromType(AiErrorType::MaxIterations, 'Reached '.self::MAX_ITERATIONS.' tool-calling iterations'),
         );
     }
 
+    /**
+     * Build a success result, guarding against blank responses.
+     *
+     * If the LLM returned empty content and there are no client actions,
+     * this is treated as an empty_response error rather than silently
+     * persisting a blank assistant message.
+     */
     private function successResult(string $runId, array $config, array $llmResult, array $toolActions, array $clientActions = []): array
     {
         $content = $llmResult['content'] ?? '';
 
         if ($clientActions !== []) {
             $content = implode("\n", $clientActions)."\n".$content;
+        }
+
+        if (trim($content) === '' && $clientActions === []) {
+            return $this->responseFactory->error(
+                $runId,
+                $config['model'],
+                (string) ($config['provider_name'] ?? 'unknown'),
+                AiRuntimeError::fromType(
+                    AiErrorType::EmptyResponse,
+                    'LLM returned blank content after tool-calling loop',
+                    'The model may be unavailable or the prompt may need adjustment.',
+                    latencyMs: (int) ($llmResult['latency_ms'] ?? 0),
+                ),
+            );
         }
 
         return $this->responseFactory->success(
@@ -441,8 +488,23 @@ class AgenticRuntime
         for ($iteration = 0; $iteration < self::MAX_ITERATIONS; $iteration++) {
             $result = $this->chatWithTools($credentials, $config, $apiMessages, $tools);
 
-            if (isset($result['error'])) {
-                yield ['event' => 'error', 'data' => ['message' => (string) $result['error'], 'run_id' => $runId]];
+            if (isset($result['runtime_error'])) {
+                $runtimeError = $result['runtime_error'];
+                $this->runtimeLogger->runFailed($runId, $runtimeError, [
+                    'model' => $config['model'],
+                    'provider_name' => $config['provider_name'] ?? 'unknown',
+                    'streaming' => true,
+                    'iteration' => $iteration,
+                ]);
+                yield ['event' => 'error', 'data' => [
+                    'message' => $runtimeError->userMessage,
+                    'run_id' => $runId,
+                    'meta' => $this->responseFactory->errorMeta(
+                        $config['model'],
+                        (string) ($config['provider_name'] ?? 'unknown'),
+                        $runtimeError,
+                    ),
+                ]];
 
                 return;
             }
@@ -479,9 +541,21 @@ class AgenticRuntime
             }
         }
 
+        $maxIterError = AiRuntimeError::fromType(AiErrorType::MaxIterations, 'Reached '.self::MAX_ITERATIONS.' streaming tool-calling iterations');
+        $this->runtimeLogger->runFailed($runId, $maxIterError, [
+            'model' => $config['model'],
+            'provider_name' => $config['provider_name'] ?? 'unknown',
+            'streaming' => true,
+        ]);
+
         yield ['event' => 'error', 'data' => [
-            'message' => __('Maximum tool-calling iterations reached.'),
+            'message' => $maxIterError->userMessage,
             'run_id' => $runId,
+            'meta' => $this->responseFactory->errorMeta(
+                $config['model'],
+                (string) ($config['provider_name'] ?? 'unknown'),
+                $maxIterError,
+            ),
         ]];
     }
 
@@ -530,7 +604,30 @@ class AgenticRuntime
                 $usage = $event['usage'] ?? null;
                 $latencyMs = $event['latency_ms'] ?? 0;
             } elseif ($event['type'] === 'error') {
-                yield ['event' => 'error', 'data' => ['message' => $event['message'], 'run_id' => $runId]];
+                $runtimeError = $event['runtime_error'] ?? null;
+                $message = $runtimeError instanceof AiRuntimeError
+                    ? $runtimeError->userMessage
+                    : ($event['message'] ?? __('An unexpected error occurred. Please try again.'));
+
+                if ($runtimeError instanceof AiRuntimeError) {
+                    $this->runtimeLogger->runFailed($runId, $runtimeError, [
+                        'model' => $config['model'],
+                        'provider_name' => $config['provider_name'] ?? 'unknown',
+                        'streaming' => true,
+                    ]);
+                }
+
+                yield ['event' => 'error', 'data' => [
+                    'message' => $message,
+                    'run_id' => $runId,
+                    'meta' => $runtimeError instanceof AiRuntimeError
+                        ? $this->responseFactory->errorMeta(
+                            $config['model'],
+                            (string) ($config['provider_name'] ?? 'unknown'),
+                            $runtimeError,
+                        )
+                        : null,
+                ]];
 
                 return;
             }
@@ -538,6 +635,30 @@ class AgenticRuntime
 
         if ($clientActions !== []) {
             $fullContent = implode("\n", $clientActions)."\n".$fullContent;
+        }
+
+        if (trim($fullContent) === '' && $clientActions === []) {
+            $emptyError = AiRuntimeError::fromType(
+                AiErrorType::EmptyResponse,
+                'Streaming response completed with no content',
+                latencyMs: $latencyMs,
+            );
+            $this->runtimeLogger->runFailed($runId, $emptyError, [
+                'model' => $config['model'],
+                'provider_name' => $config['provider_name'] ?? 'unknown',
+                'streaming' => true,
+            ]);
+            yield ['event' => 'error', 'data' => [
+                'message' => $emptyError->userMessage,
+                'run_id' => $runId,
+                'meta' => $this->responseFactory->errorMeta(
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $emptyError,
+                ),
+            ]];
+
+            return;
         }
 
         $meta = [

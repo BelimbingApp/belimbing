@@ -1,5 +1,7 @@
 <?php
 
+use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
 use Illuminate\Support\Facades\Http;
@@ -29,10 +31,11 @@ test('copilot-proxy returns connection error when server is unreachable', functi
     ]);
 
     expect($result)
-        ->toHaveKey('error')
-        ->toHaveKey('error_type', 'connection_error')
-        ->and($result['error'])->toContain('Copilot Proxy')
-        ->and($result['error'])->toContain('500');
+        ->toHaveKey('runtime_error')
+        ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
+        ->and($result['runtime_error']->errorType)->toBe(AiErrorType::ConnectionError)
+        ->and($result['runtime_error']->diagnostic)->toContain('Copilot Proxy')
+        ->and($result['runtime_error']->diagnostic)->toContain('500');
 });
 
 test('copilot-proxy passes when server is reachable', function (): void {
@@ -49,7 +52,7 @@ test('copilot-proxy passes when server is reachable', function (): void {
     expect($result)
         ->toHaveKey('api_key', 'not-required')
         ->toHaveKey('base_url', RCR_PROXY_BASE_URL)
-        ->not->toHaveKey('error');
+        ->not->toHaveKey('runtime_error');
 });
 
 test('non-proxy providers skip connectivity check', function (): void {
@@ -64,7 +67,7 @@ test('non-proxy providers skip connectivity check', function (): void {
     expect($result)
         ->toHaveKey('api_key', 'sk-test')
         ->toHaveKey('base_url', 'https://api.openai.com/v1')
-        ->not->toHaveKey('error');
+        ->not->toHaveKey('runtime_error');
 
     Http::assertNothingSent();
 });
@@ -81,7 +84,9 @@ test('copilot-proxy connection error message mentions VS Code extension', functi
     ]);
 
     expect($result)
-        ->toHaveKey('error_type', 'connection_error')
-        ->and($result['error'])->toContain('Could not connect')
-        ->and($result['error'])->toContain('VS Code');
+        ->toHaveKey('runtime_error')
+        ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
+        ->and($result['runtime_error']->errorType)->toBe(AiErrorType::ConnectionError)
+        ->and($result['runtime_error']->diagnostic)->toContain('Could not connect')
+        ->and($result['runtime_error']->hint)->toContain('VS Code');
 });

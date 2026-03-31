@@ -5,6 +5,8 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\DTO\Message;
 use Illuminate\Support\Str;
@@ -91,7 +93,12 @@ class AgentRuntime
      */
     private function noLlmConfigResult(string $runId): array
     {
-        return $this->responseFactory->error($runId, 'unknown', 'unknown', 0, __('No LLM configuration available.'));
+        return $this->responseFactory->error(
+            $runId,
+            'unknown',
+            'unknown',
+            AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration available'),
+        );
     }
 
     /**
@@ -112,14 +119,12 @@ class AgentRuntime
         $model = $config['model'];
         $credentials = $this->credentialResolver->resolve($config);
 
-        if (isset($credentials['error'])) {
+        if (isset($credentials['runtime_error'])) {
             return $this->responseFactory->error(
                 $runId,
                 $model,
                 (string) ($config['provider_name'] ?? 'unknown'),
-                0,
-                $credentials['error'],
-                $credentials['error_type'] ?? 'config_error',
+                $credentials['runtime_error'],
             );
         }
 
@@ -136,10 +141,12 @@ class AgentRuntime
             providerName: $config['provider_name'],
         ));
 
-        if (isset($result['error'])) {
+        if (isset($result['runtime_error'])) {
             return $this->responseFactory->error(
-                $runId, $model, (string) ($config['provider_name'] ?? 'unknown'), $result['latency_ms'],
-                $result['error'], $result['error_type'] ?? 'unknown',
+                $runId,
+                $model,
+                (string) ($config['provider_name'] ?? 'unknown'),
+                $result['runtime_error'],
             );
         }
 
@@ -156,8 +163,14 @@ class AgentRuntime
      */
     private function shouldFallback(array $result): bool
     {
-        $errorType = $result['meta']['error_type'] ?? null;
+        $errorTypeValue = $result['meta']['error_type'] ?? null;
 
-        return in_array($errorType, ['connection_error', 'rate_limit', 'server_error'], true);
+        if ($errorTypeValue === null) {
+            return false;
+        }
+
+        $errorType = AiErrorType::tryFrom($errorTypeValue);
+
+        return $errorType?->retryable() === true;
     }
 }

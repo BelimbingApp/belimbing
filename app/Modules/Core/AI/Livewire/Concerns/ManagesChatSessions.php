@@ -142,7 +142,7 @@ trait ManagesChatSessions
         }
 
         $credentials = app(RuntimeCredentialResolver::class)->resolve($config);
-        if (isset($credentials['error'])) {
+        if (isset($credentials['runtime_error'])) {
             return;
         }
 
@@ -221,6 +221,10 @@ trait ManagesChatSessions
             timeout: 15,
             providerName: $config['provider_name'] ?? null,
         ));
+
+        if (isset($response['runtime_error'])) {
+            return null;
+        }
 
         $title = trim($response['content'] ?? '');
 

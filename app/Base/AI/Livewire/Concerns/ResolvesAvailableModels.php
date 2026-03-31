@@ -145,8 +145,8 @@ trait ResolvesAvailableModels
             'provider_name' => $provider->name,
         ]);
 
-        if (isset($credentials['error'])) {
-            return ['error' => $credentials['error']];
+        if (isset($credentials['runtime_error'])) {
+            return ['error' => $credentials['runtime_error']->userMessage];
         }
 
         return [

@@ -7,6 +7,7 @@ namespace App\Base\AI;
 
 use App\Base\AI\Console\Commands\AiCatalogSyncCommand;
 use App\Base\AI\Providers\Help\ProviderHelpRegistry;
+use App\Base\AI\Services\AiRuntimeLogger;
 use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Base\AI\Services\KnowledgeNavigator;
 use App\Base\AI\Services\LlmClient;
@@ -42,6 +43,12 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(GithubCopilotAuthService::class);
         $this->app->singleton(VectorStoreService::class);
         $this->app->singleton(ProviderHelpRegistry::class);
+
+        $this->app->singleton(AiRuntimeLogger::class, function ($app) {
+            return new AiRuntimeLogger(
+                $app->make('log')->channel('ai'),
+            );
+        });
     }
 
     /**

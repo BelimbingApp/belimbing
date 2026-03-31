@@ -5,7 +5,9 @@
 
 namespace App\Base\AI\Services;
 
+use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Enums\AiErrorType;
 use App\Base\Support\Json as BlbJson;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
@@ -58,10 +60,17 @@ class LlmClient
             ], fn ($v) => $v !== null));
         } catch (ConnectionException $e) {
             $latencyMs = $this->latencyMs($startTime);
+            $errorType = $this->classifyConnectionException($e);
 
             return [
-                'error' => $e->getMessage(),
-                'error_type' => 'connection_error',
+                'runtime_error' => AiRuntimeError::fromType(
+                    $errorType,
+                    $e->getMessage(),
+                    $errorType === AiErrorType::Timeout
+                        ? 'Increase the provider timeout or check network connectivity.'
+                        : null,
+                    latencyMs: $latencyMs,
+                ),
                 'latency_ms' => $latencyMs,
             ];
         }
@@ -76,28 +85,43 @@ class LlmClient
     {
         if ($response->failed()) {
             $body = $response->json();
-            $errorDetail = $body['error']['message']
+            $diagnostic = $body['error']['message']
                 ?? $body['error']['code']
                 ?? $response->body();
 
             $errorType = match (true) {
-                $response->status() === 429 => 'rate_limit',
-                $response->status() >= 500 => 'server_error',
-                default => 'client_error',
+                $response->status() === 401 => AiErrorType::AuthError,
+                $response->status() === 404 => AiErrorType::NotFound,
+                $response->status() === 429 => AiErrorType::RateLimit,
+                $response->status() >= 500 => AiErrorType::ServerError,
+                default => AiErrorType::UnexpectedError,
             };
 
             return [
-                'error' => "HTTP {$response->status()}: {$errorDetail}",
-                'error_type' => $errorType,
+                'runtime_error' => AiRuntimeError::fromType(
+                    $errorType,
+                    "HTTP {$response->status()}: {$diagnostic}",
+                    httpStatus: $response->status(),
+                    latencyMs: $latencyMs,
+                ),
                 'latency_ms' => $latencyMs,
             ];
         }
 
         $data = $response->json();
         if (! is_array($data)) {
+            $payloadType = $this->classifyInvalidPayload($response);
+
             return [
-                'error' => $this->unsupportedPayloadMessage($response, $model),
-                'error_type' => 'unsupported_response_shape',
+                'runtime_error' => AiRuntimeError::fromType(
+                    $payloadType,
+                    "Model \"{$model}\" returned non-JSON payload (Content-Type: {$response->header('Content-Type')})",
+                    $payloadType === AiErrorType::HtmlResponse
+                        ? 'Check that the provider base URL points to the API endpoint, not the provider website.'
+                        : null,
+                    httpStatus: $response->status(),
+                    latencyMs: $latencyMs,
+                ),
                 'latency_ms' => $latencyMs,
             ];
         }
@@ -105,8 +129,11 @@ class LlmClient
         $choice = $data['choices'][0]['message'] ?? [];
         if (! is_array($choice)) {
             return [
-                'error' => __('Model ":model" returned an unsupported message format from the provider.', ['model' => $model]),
-                'error_type' => 'unsupported_response_shape',
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::UnsupportedResponseShape,
+                    "Model \"{$model}\" returned unsupported message format",
+                    latencyMs: $latencyMs,
+                ),
                 'latency_ms' => $latencyMs,
             ];
         }
@@ -118,8 +145,12 @@ class LlmClient
 
         if (($content === '' || $content === null) && ! $hasToolCalls) {
             return [
-                'error' => __('Model ":model" produced no text content. It may be unavailable for this provider key, endpoint, or response format.', ['model' => $model]),
-                'error_type' => 'empty_response',
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::EmptyResponse,
+                    "Model \"{$model}\" produced no text content",
+                    'The model may be unavailable for this provider key or endpoint.',
+                    latencyMs: $latencyMs,
+                ),
                 'latency_ms' => $latencyMs,
             ];
         }
@@ -177,18 +208,38 @@ class LlmClient
                 'tool_choice' => $request->toolChoice,
             ], fn ($v) => $v !== null));
         } catch (ConnectionException $e) {
-            yield ['type' => 'error', 'message' => $e->getMessage(), 'latency_ms' => $this->latencyMs($startTime)];
+            $latencyMs = $this->latencyMs($startTime);
+            $errorType = $this->classifyConnectionException($e);
+
+            yield [
+                'type' => 'error',
+                'runtime_error' => AiRuntimeError::fromType($errorType, $e->getMessage(), latencyMs: $latencyMs),
+                'latency_ms' => $latencyMs,
+            ];
 
             return;
         }
 
         if ($response->failed()) {
+            $latencyMs = $this->latencyMs($startTime);
             $body = $response->json();
-            $errorDetail = $body['error']['message']
+            $diagnostic = $body['error']['message']
                 ?? $body['error']['code']
                 ?? $response->body();
 
-            yield ['type' => 'error', 'message' => "HTTP {$response->status()}: {$errorDetail}", 'latency_ms' => $this->latencyMs($startTime)];
+            $errorType = match (true) {
+                $response->status() === 401 => AiErrorType::AuthError,
+                $response->status() === 404 => AiErrorType::NotFound,
+                $response->status() === 429 => AiErrorType::RateLimit,
+                $response->status() >= 500 => AiErrorType::ServerError,
+                default => AiErrorType::UnexpectedError,
+            };
+
+            yield [
+                'type' => 'error',
+                'runtime_error' => AiRuntimeError::fromType($errorType, "HTTP {$response->status()}: {$diagnostic}", httpStatus: $response->status(), latencyMs: $latencyMs),
+                'latency_ms' => $latencyMs,
+            ];
 
             return;
         }
@@ -319,17 +370,31 @@ class LlmClient
     }
 
     /**
-     * Describe a successful-but-invalid provider payload.
+     * Classify a non-JSON provider response as HTML or generic unsupported shape.
      */
-    private function unsupportedPayloadMessage(Response $response, string $model): string
+    private function classifyInvalidPayload(Response $response): AiErrorType
     {
         $contentType = strtolower((string) $response->header('Content-Type'));
         $body = ltrim($response->body());
 
         if (str_contains($contentType, 'text/html') || str_starts_with($body, '<!DOCTYPE html') || str_starts_with($body, '<html')) {
-            return __('Model ":model" returned HTML instead of JSON. Check that the provider base URL points to the API endpoint, not the provider website.', ['model' => $model]);
+            return AiErrorType::HtmlResponse;
         }
 
-        return __('Model ":model" returned an unsupported response payload from the provider.', ['model' => $model]);
+        return AiErrorType::UnsupportedResponseShape;
+    }
+
+    /**
+     * Classify a connection exception as timeout or generic connection error.
+     */
+    private function classifyConnectionException(ConnectionException $e): AiErrorType
+    {
+        $message = $e->getMessage();
+
+        if (str_contains($message, 'timed out') || str_contains($message, 'cURL error 28')) {
+            return AiErrorType::Timeout;
+        }
+
+        return AiErrorType::ConnectionError;
     }
 }
