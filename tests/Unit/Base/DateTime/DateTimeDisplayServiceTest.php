@@ -58,9 +58,9 @@ it('formats datetime in UTC when mode is UTC', function (): void {
     $service = freshService();
     $carbon = Carbon::parse(DT_TEST_TIMESTAMP, 'UTC');
 
-    expect($service->formatDateTime($carbon))->toBe('2026-06-15 08:00');
+    expect($service->formatDateTime($carbon))->toBe('2026-06-15 08:00:00');
     expect($service->formatDate($carbon))->toBe('2026-06-15');
-    expect($service->formatTime($carbon))->toBe('08:00');
+    expect($service->formatTime($carbon))->toBe('08:00:00');
 });
 
 // --- Formatting in Company Mode with Timezone (locale-aware) ---
@@ -125,7 +125,7 @@ it('parses string datetime values', function (): void {
 
     $service = freshService();
 
-    expect($service->formatDateTime(DT_TEST_TIMESTAMP))->toBe('2026-06-15 08:00');
+    expect($service->formatDateTime(DT_TEST_TIMESTAMP))->toBe('2026-06-15 08:00:00');
 });
 
 // --- Mode Resolution Cascade ---
@@ -146,4 +146,14 @@ it('falls back to COMPANY for invalid mode value', function (): void {
     $this->settings->set(DT_TEST_KEY_MODE, 'invalid_mode');
 
     expect(freshService()->currentMode())->toBe(TimezoneMode::COMPANY);
+});
+
+it('returns configured company timezone even when active mode is utc', function (): void {
+    $user = User::factory()->create(['company_id' => 1]);
+    $this->actingAs($user);
+
+    $this->settings->set(DT_TEST_KEY_DEFAULT, DT_TEST_TIMEZONE_KL, Scope::company(1));
+    $this->settings->set(DT_TEST_KEY_MODE, TimezoneMode::UTC->value, Scope::company(1));
+
+    expect(freshService()->currentCompanyTimezone())->toBe(DT_TEST_TIMEZONE_KL);
 });

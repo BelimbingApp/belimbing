@@ -5,6 +5,7 @@
 
 namespace App\Base\DateTime\Controllers;
 
+use App\Base\DateTime\Contracts\DateTimeDisplayService;
 use App\Base\DateTime\Enums\TimezoneMode;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
@@ -24,6 +25,7 @@ class TimezoneController
 
     public function __construct(
         private readonly SettingsService $settings,
+        private readonly DateTimeDisplayService $dateTimeDisplay,
     ) {}
 
     /**
@@ -48,6 +50,7 @@ class TimezoneController
             'mode' => $mode->value,
             'label' => $this->label($mode),
             'timezone' => $this->resolveTimezoneForMode($mode, $user),
+            'company_timezone' => $this->dateTimeDisplay->currentCompanyTimezone(),
         ]);
     }
 

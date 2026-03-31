@@ -16,7 +16,7 @@ interface DateTimeDisplayService
      * as a UTC ISO-8601 string so the Blade component can let the browser
      * convert it. In COMPANY mode the value is formatted using the app
      * locale (CLDR via Carbon isoFormat 'L LT'). In UTC/Stored mode the
-     * value uses a fixed 'Y-m-d H:i' pattern — the raw database format.
+     * value uses a fixed 'Y-m-d H:i:s' pattern — the raw database format.
      *
      * @param  \DateTimeInterface|string|null  $value  Raw datetime value
      */
@@ -36,7 +36,7 @@ interface DateTimeDisplayService
      * Format a value as a time-only string.
      *
      * Same null/LOCAL handling as {@see formatDateTime()}.
-     * COMPANY mode uses locale-aware 'LT'. UTC/Stored mode uses 'H:i'.
+     * COMPANY mode uses locale-aware 'LT'. UTC/Stored mode uses 'H:i:s'.
      *
      * @param  \DateTimeInterface|string|null  $value  Raw datetime value
      */
@@ -59,6 +59,14 @@ interface DateTimeDisplayService
      * returns 'UTC' (the browser handles conversion).
      */
     public function currentTimezone(): string;
+
+    /**
+     * Resolve the configured company timezone independent of the active mode.
+     *
+     * Reads 'ui.timezone.default' from the company scope, falling back to
+     * 'UTC' when there is no authenticated company context.
+     */
+    public function currentCompanyTimezone(): string;
 
     /**
      * Convenience check: whether the current mode is LOCAL.

@@ -89,10 +89,18 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
         }
 
         return $this->resolvedTimezone = match ($this->currentMode()) {
-            TimezoneMode::COMPANY => $this->resolveCompanyTimezone(),
+            TimezoneMode::COMPANY => $this->currentCompanyTimezone(),
             TimezoneMode::UTC,
             TimezoneMode::LOCAL => 'UTC',
         };
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function currentCompanyTimezone(): string
+    {
+        return $this->resolveCompanyTimezone();
     }
 
     /**
@@ -128,7 +136,7 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
      * Shared formatting logic for all three format methods.
      *
      * Company mode uses locale-aware formatting via Carbon isoFormat (CLDR).
-     * UTC/Stored mode uses a fixed ISO-like pattern (Y-m-d H:i) — raw database representation.
+     * UTC/Stored mode uses a fixed ISO-like pattern (Y-m-d H:i:s) — raw database representation.
      * Local mode emits a UTC ISO-8601 string for browser-side formatting.
      *
      * @param  \DateTimeInterface|string|null  $value  Raw datetime value
@@ -162,8 +170,8 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
     {
         return match ($type) {
             self::FORMAT_DATE => 'Y-m-d',
-            self::FORMAT_TIME => 'H:i',
-            default => 'Y-m-d H:i',
+            self::FORMAT_TIME => 'H:i:s',
+            default => 'Y-m-d H:i:s',
         };
     }
 

@@ -9,7 +9,7 @@
         \App\Base\DateTime\Enums\TimezoneMode::LOCAL => __('Local'),
         \App\Base\DateTime\Enums\TimezoneMode::UTC => __('Stored'),
     };
-    $companyTz = $tzService->currentTimezone();
+    $companyTz = $tzService->currentCompanyTimezone();
 @endphp
 
 <div class="h-7 bg-surface-bar border-b border-border-default flex items-center justify-between px-2 shrink-0 z-10">
@@ -47,7 +47,7 @@
         },
         tzDisplay(mode) {
             if (mode === 'local') return this.browserTz;
-            if (mode === 'utc') return 'UTC · Y-m-d H:i';
+            if (mode === 'utc') return 'UTC · Y-m-d H:i:s';
             return this.companyTz;
         },
         setTz(mode) {
@@ -62,7 +62,7 @@
             .then(data => {
                 this.tzMode = data.mode;
                 this.tzLabel = data.label;
-                if (data.timezone) this.companyTz = data.timezone;
+                if (data.company_timezone) this.companyTz = data.company_timezone;
                 this.tzOpen = false;
                 window.location.reload();
             })
