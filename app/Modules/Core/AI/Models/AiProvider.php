@@ -60,7 +60,7 @@ class AiProvider extends Model
      */
     public function getApiKeyAttribute(): ?string
     {
-        return $this->credentials['api_key'] ?? null;
+        return data_get($this->credentials, 'api_key');
     }
 
     /**

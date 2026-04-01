@@ -7,8 +7,8 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Exceptions\GithubCopilotAuthException;
 use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Values\ResolvedProviderConfig;
 
 /**
  * Resolves API credentials for runtime calls by dispatching through provider definitions.
@@ -49,18 +49,14 @@ class RuntimeCredentialResolver
     {
         $providerName = $config['provider_name'] ?? 'default';
 
-        // Load the provider record to dispatch through its definition
-        $provider = $this->findProvider($providerName, $config);
-
-        if ($provider !== null) {
-            return $this->resolveViaDefinition($provider);
+        if ($providerName === 'default') {
+            return [
+                'api_key' => $config['api_key'],
+                'base_url' => $config['base_url'],
+            ];
         }
 
-        // Fallback for configs without a matching DB record (e.g. manual overrides)
-        return [
-            'api_key' => $config['api_key'],
-            'base_url' => $config['base_url'],
-        ];
+        return $this->resolveViaDefinition($this->providerFromConfig($providerName, $config));
     }
 
     /**
@@ -79,6 +75,14 @@ class RuntimeCredentialResolver
                 'api_key' => $resolved->apiKey ?? '',
                 'base_url' => $resolved->baseUrl,
             ];
+        } catch (GithubCopilotAuthException $e) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::AuthError,
+                    "Provider {$provider->name}: {$e->getMessage()}",
+                    'Re-authenticate via the GitHub Copilot device flow.',
+                ),
+            ];
         } catch (\RuntimeException $e) {
             return [
                 'runtime_error' => AiRuntimeError::fromType(
@@ -90,23 +94,18 @@ class RuntimeCredentialResolver
     }
 
     /**
-     * Find the provider record by name for definition dispatch.
+     * Build a transient provider model from resolved runtime config.
      *
      * @param  array<string, mixed>  $config
      */
-    private function findProvider(string $providerName, array $config): ?AiProvider
+    private function providerFromConfig(string $providerName, array $config): AiProvider
     {
-        if ($providerName === 'default') {
-            return null;
-        }
-
-        // Try to find the provider by name — the config carries the provider_name
-        // but may not carry the DB record. Look it up for definition dispatch.
-        return AiProvider::query()
-            ->where('name', $providerName)
-            ->where('base_url', $config['base_url'] ?? '')
-            ->active()
-            ->first();
+        return new AiProvider([
+            'name' => $providerName,
+            'base_url' => (string) ($config['base_url'] ?? ''),
+            'credentials' => ['api_key' => (string) ($config['api_key'] ?? '')],
+            'connection_config' => $config['connection_config'] ?? [],
+        ]);
     }
 
     /**
