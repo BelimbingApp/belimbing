@@ -358,7 +358,6 @@ class LlmClient
             'model' => $request->model,
             'input' => $this->convertToResponsesInput($request->messages),
             'max_output_tokens' => $request->maxTokens,
-            'temperature' => $request->temperature,
             'stream' => $stream,
             'store' => false,
             'tools' => $request->tools !== null ? $this->convertToResponsesTools($request->tools) : null,

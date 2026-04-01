@@ -5,6 +5,7 @@
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
 use Illuminate\Foundation\Testing\TestCase;
@@ -166,5 +167,65 @@ describe('LlmClient tool calling', function () {
             ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
             ->and($result['runtime_error']->errorType)->toBe(AiErrorType::HtmlResponse)
             ->and($result['runtime_error']->hint)->toContain('base URL points to the API endpoint');
+    });
+
+    it('omits temperature from responses api payloads', function () {
+        Http::fake([
+            '*/responses' => Http::response([
+                'output' => [
+                    [
+                        'type' => 'message',
+                        'content' => [
+                            ['type' => 'output_text', 'text' => 'Hello!'],
+                        ],
+                    ],
+                ],
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'gpt-5.4',
+            [['role' => 'user', 'content' => 'Hello']],
+            temperature: 0.7,
+            apiType: AiApiType::OpenAiResponses,
+        ));
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return ! isset($body['temperature'])
+                && isset($body['max_output_tokens'])
+                && $body['model'] === 'gpt-5.4';
+        });
+    });
+
+    it('uses a generic user message for bad requests', function () {
+        Http::fake([
+            '*/responses' => Http::response([
+                'error' => [
+                    'message' => "Unsupported parameter: 'temperature' is not supported with this model.",
+                ],
+            ], 400),
+        ]);
+
+        $client = new LlmClient;
+        $result = $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'gpt-5.4',
+            [['role' => 'user', 'content' => 'Hello']],
+            apiType: AiApiType::OpenAiResponses,
+        ));
+
+        expect($result)
+            ->toHaveKey('runtime_error')
+            ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
+            ->and($result['runtime_error']->errorType)->toBe(AiErrorType::BadRequest)
+            ->and($result['runtime_error']->userMessage)->toBe('The AI provider rejected the request. Please ask an administrator to review the model and request settings.')
+            ->and($result['runtime_error']->hint)->toContain("Unsupported parameter: 'temperature'");
     });
 });

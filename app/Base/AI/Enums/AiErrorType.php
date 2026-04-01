@@ -53,7 +53,7 @@ enum AiErrorType: string
             self::ServerError => __('The AI provider encountered a server error. Please try again later.'),
             self::AuthError => __('AI provider authentication failed. Please ask an administrator to check the provider credentials.'),
             self::NotFound => __('The configured AI model or endpoint could not be found. Please ask an administrator to verify the setup.'),
-            self::BadRequest => __('The AI provider rejected the request. The selected model may not be available for this provider or endpoint.'),
+            self::BadRequest => __('The AI provider rejected the request. Please ask an administrator to review the model and request settings.'),
             self::HtmlResponse,
             self::UnsupportedResponseShape => __('The AI provider returned an invalid response. Please ask an administrator to check the provider endpoint.'),
             self::EmptyResponse => __('The AI model returned an empty reply. Please try again or switch to a different model.'),

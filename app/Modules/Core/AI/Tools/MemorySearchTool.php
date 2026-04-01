@@ -12,24 +12,16 @@ use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolResult;
 use App\Base\Support\Str as BlbStr;
+use App\Modules\Core\AI\DTO\MemorySearchResult;
+use App\Modules\Core\AI\Services\Memory\MemoryRetrievalEngine;
 use App\Modules\Core\Employee\Models\Employee;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
 
 /**
- * Semantic search tool for Agents over documentation and workspace files.
+ * Thin wrapper around the memory retrieval engine for agent tool use.
  *
- * Performs keyword-based search (BM25-style scoring) over indexed markdown
- * files from two sources:
- * - Project `docs/` directory (framework knowledge)
- * - agent workspace directory (if exists)
- *
- * Splits markdown files into sections by `##` headings and scores each
- * section by keyword overlap with the query. Heading matches are weighted
- * higher than body matches for relevance.
- *
- * Will be upgraded to full vector KNN search via sqlite-vec once embedding
- * infrastructure is ready.
+ * Delegates all search logic to MemoryRetrievalEngine. Also searches
+ * the project `docs/` directory as a reference corpus when the agent
+ * has no indexed memory yet.
  *
  * Gated by `ai.tool_memory_search.execute` authz capability.
  */
@@ -62,6 +54,8 @@ class MemorySearchTool extends AbstractTool
         'we', 'what', 'when', 'which', 'who', 'will', 'with', 'you',
     ];
 
+    private ?MemoryRetrievalEngine $retrievalEngine = null;
+
     /**
      * Create an instance if the docs directory exists.
      *
@@ -79,6 +73,18 @@ class MemorySearchTool extends AbstractTool
         return new self;
     }
 
+    /**
+     * Inject the retrieval engine for indexed memory search.
+     *
+     * Called by ServiceProvider after construction. When set, the tool
+     * delegates to the engine for per-agent memory before falling back
+     * to the docs corpus scan.
+     */
+    public function setRetrievalEngine(MemoryRetrievalEngine $engine): void
+    {
+        $this->retrievalEngine = $engine;
+    }
+
     public function name(): string
     {
         return 'memory_search';
@@ -86,16 +92,15 @@ class MemorySearchTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Search project documentation and workspace files by keyword. '
-            .'Returns matched sections from markdown files ranked by relevance. '
-            .'Use this to find specific topics, concepts, or references across '
-            .'the entire documentation and workspace knowledge base.';
+        return 'Search agent memory and project documentation by keyword. '
+            .'Returns matched sections ranked by relevance with citations. '
+            .'Searches indexed memory files first, then project docs as reference.';
     }
 
     protected function schema(): ToolSchemaBuilder
     {
         return ToolSchemaBuilder::make()
-            ->string('query', 'Search text to find in documentation and workspace files.')->required()
+            ->string('query', 'Search text to find in memory and documentation.')->required()
             ->integer(
                 'max_results',
                 'Maximum number of results to return (default '
@@ -124,13 +129,13 @@ class MemorySearchTool extends AbstractTool
     {
         return [
             'displayName' => 'Memory Search',
-            'summary' => 'Search across workspace knowledge using semantic and keyword matching.',
-            'explanation' => 'Performs hybrid vector + keyword search over markdown files in the agent workspace. '
-                .'Requires embedding provider configuration and indexed workspace content. '
-                .'This tool only reads indexed workspace files — it cannot access arbitrary files.',
+            'summary' => 'Search across agent memory and workspace knowledge.',
+            'explanation' => 'Performs hybrid keyword search over indexed agent memory files '
+                .'and project documentation. Returns citations with source paths, '
+                .'headings, and relevance scores.',
             'setupRequirements' => [
                 'Docs directory must exist',
-                'Workspace content indexed',
+                'Memory index built via blb:ai:memory:index',
             ],
             'testExamples' => [
                 [
@@ -140,10 +145,10 @@ class MemorySearchTool extends AbstractTool
             ],
             'healthChecks' => [
                 'Docs directory accessible',
-                'Index up to date',
+                'Memory index up to date',
             ],
             'limits' => [
-                'Searches workspace files only',
+                'Searches memory and docs files only',
                 'Maximum 10 results by default',
             ],
         ];
@@ -154,26 +159,58 @@ class MemorySearchTool extends AbstractTool
         $query = $this->requireString($arguments, 'query', 'search query');
         $maxResults = $this->optionalInt($arguments, 'max_results', self::DEFAULT_MAX_RESULTS, min: 1, max: self::MAX_RESULTS_LIMIT);
 
-        $matches = $this->searchFiles($query, $maxResults);
+        // Search indexed memory first when engine is available
+        $memoryResults = $this->searchIndexedMemory($query, $maxResults);
 
-        if ($matches === []) {
+        // Search docs as reference corpus
+        $docsResults = $this->searchDocs($query, $maxResults);
+
+        $allResults = $this->mergeResults($memoryResults, $docsResults, $maxResults);
+
+        if ($allResults === []) {
             return ToolResult::success('No matches found for "'.$query.'".');
         }
 
-        return ToolResult::success($this->formatResults($matches, $query));
+        return ToolResult::success($this->formatAllResults($allResults, $query));
     }
 
     /**
-     * Search markdown files for sections matching the query.
+     * Search the indexed memory via retrieval engine.
      *
-     * Scans both the project docs directory and the agent workspace directory,
-     * scores each section by keyword overlap, and returns the top matches.
-     *
-     * @param  string  $query  Search text
-     * @param  int  $limit  Maximum results to return
-     * @return list<array{score: int, path: string, heading: string, preview: string}>
+     * @return list<MemorySearchResult>
      */
-    private function searchFiles(string $query, int $limit): array
+    private function searchIndexedMemory(string $query, int $limit): array
+    {
+        if ($this->retrievalEngine === null) {
+            return [];
+        }
+
+        // Resolve agent ID from execution context
+        $employeeId = $this->resolveAgentId();
+
+        if ($employeeId === null) {
+            return [];
+        }
+
+        return $this->retrievalEngine->search($employeeId, $query, $limit);
+    }
+
+    /**
+     * Resolve the current agent's employee ID.
+     *
+     * Falls back to LARA_ID for the primary chat agent context.
+     */
+    private function resolveAgentId(): ?int
+    {
+        return Employee::LARA_ID;
+    }
+
+    /**
+     * Search project docs directory (legacy reference corpus).
+     *
+     * @return list<array{score: int, path: string, heading: string, preview: string, source_class: string}>
+     */
+    private function searchDocs(string $query, int $limit): array
     {
         $tokens = $this->tokenize($query);
 
@@ -182,15 +219,10 @@ class MemorySearchTool extends AbstractTool
         }
 
         $scored = [];
-
         $docsPath = base_path('docs');
+
         if (is_dir($docsPath)) {
             $this->scoreDirectory($docsPath, $tokens, $scored, 'docs');
-        }
-
-        $workspacePath = $this->workspacePath();
-        if ($workspacePath !== null && is_dir($workspacePath)) {
-            $this->scoreDirectory($workspacePath, $tokens, $scored, 'workspace');
         }
 
         usort($scored, fn (array $a, array $b): int => $b['score'] <=> $a['score']);
@@ -199,12 +231,66 @@ class MemorySearchTool extends AbstractTool
     }
 
     /**
+     * Merge memory results and docs results into a combined output.
+     *
+     * Memory results appear first (higher trust), followed by reference docs.
+     *
+     * @param  list<MemorySearchResult>  $memoryResults
+     * @param  list<array{score: int, path: string, heading: string, preview: string, source_class: string}>  $docsResults
+     * @return list<array{path: string, heading: string, preview: string, label: string}>
+     */
+    private function mergeResults(array $memoryResults, array $docsResults, int $limit): array
+    {
+        $merged = [];
+
+        foreach ($memoryResults as $r) {
+            $merged[] = [
+                'path' => 'memory:'.$r->sourcePath,
+                'heading' => $r->heading,
+                'preview' => $r->snippet,
+                'label' => '['.$r->sourceType->value.'] score:'.round($r->score, 2).' via:'.$r->basis->value,
+            ];
+        }
+
+        foreach ($docsResults as $r) {
+            $merged[] = [
+                'path' => $r['path'],
+                'heading' => $r['heading'],
+                'preview' => $r['preview'],
+                'label' => '[reference] score:'.$r['score'],
+            ];
+        }
+
+        return array_slice($merged, 0, $limit);
+    }
+
+    /**
+     * Format merged results for agent consumption.
+     *
+     * @param  list<array{path: string, heading: string, preview: string, label: string}>  $results
+     */
+    private function formatAllResults(array $results, string $query): string
+    {
+        $count = count($results);
+        $output = 'Found '.$count.' match'.($count !== 1 ? 'es' : '').' for "'.$query.'":';
+
+        foreach ($results as $index => $match) {
+            $number = $index + 1;
+            $output .= "\n\n".$number.'. '.$match['label'].' '.$match['path']
+                ."\n".'   Section: '.$match['heading']
+                ."\n".'   '.$match['preview'];
+        }
+
+        return $output;
+    }
+
+    /**
      * Score all markdown files in a directory and append matches.
      *
      * @param  string  $directory  Absolute path to scan
      * @param  list<string>  $tokens  Query tokens
-     * @param  list<array{score: int, path: string, heading: string, preview: string}>  &$scored  Results accumulator
-     * @param  string  $scopePrefix  Scope label ('docs' or 'workspace')
+     * @param  list<array{score: int, path: string, heading: string, preview: string, source_class: string}>  &$scored
+     * @param  string  $scopePrefix  Scope label
      */
     private function scoreDirectory(string $directory, array $tokens, array &$scored, string $scopePrefix): void
     {
@@ -235,6 +321,7 @@ class MemorySearchTool extends AbstractTool
                         'path' => $relativePath,
                         'heading' => $section['heading'],
                         'preview' => $preview,
+                        'source_class' => 'reference',
                     ];
                 }
             }
@@ -262,9 +349,6 @@ class MemorySearchTool extends AbstractTool
 
     /**
      * Split markdown content into sections by `## ` headings.
-     *
-     * Each section has a heading and body. Content before the first heading
-     * uses the filename as the heading.
      *
      * @return list<array{heading: string, body: string}>
      */
@@ -304,8 +388,6 @@ class MemorySearchTool extends AbstractTool
     /**
      * Score a section by keyword overlap.
      *
-     * Heading matches are weighted higher than body matches.
-     *
      * @param  array{heading: string, body: string}  $section
      * @param  list<string>  $tokens
      */
@@ -336,8 +418,8 @@ class MemorySearchTool extends AbstractTool
     private function findMarkdownFiles(string $directory): array
     {
         $files = [];
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($directory, RecursiveDirectoryIterator::SKIP_DOTS),
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($directory, \RecursiveDirectoryIterator::SKIP_DOTS),
         );
 
         foreach ($iterator as $file) {
@@ -347,41 +429,5 @@ class MemorySearchTool extends AbstractTool
         }
 
         return $files;
-    }
-
-    /**
-     * Format search results as a numbered list with scores and previews.
-     *
-     * @param  list<array{score: int, path: string, heading: string, preview: string}>  $matches
-     */
-    private function formatResults(array $matches, string $query): string
-    {
-        $count = count($matches);
-        $output = 'Found '.$count.' match'.($count !== 1 ? 'es' : '').' for "'.$query.'":';
-
-        foreach ($matches as $index => $match) {
-            $number = $index + 1;
-            $output .= "\n\n".$number.'. ['.$match['score'].'] '.$match['path']
-                ."\n".'   Section: '.$match['heading']
-                ."\n".'   '.$match['preview'];
-        }
-
-        return $output;
-    }
-
-    /**
-     * Resolve the agent workspace directory path.
-     *
-     * Returns null if the workspace path is not configured.
-     */
-    private function workspacePath(): ?string
-    {
-        $basePath = config('ai.workspace_path');
-
-        if (! is_string($basePath) || $basePath === '') {
-            return null;
-        }
-
-        return $basePath.'/'.Employee::LARA_ID;
     }
 }

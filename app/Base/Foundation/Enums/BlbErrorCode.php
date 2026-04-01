@@ -23,6 +23,10 @@ enum BlbErrorCode: string
     case WORKSPACE_FILE_UNREADABLE = 'workspace_file_unreadable';
     case WORKSPACE_VALIDATION_FAILED = 'workspace_validation_failed';
 
+    case MEMORY_SOURCE_UNREADABLE = 'memory_source_unreadable';
+    case MEMORY_INDEX_FAILED = 'memory_index_failed';
+    case MEMORY_INDEX_CORRUPT = 'memory_index_corrupt';
+
     case AUTHZ_DENIED = 'authz_denied';
     case AUTHZ_UNKNOWN_CAPABILITY = 'authz_unknown_capability';
 

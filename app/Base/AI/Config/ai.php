@@ -98,6 +98,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Memory Subsystem
+    |--------------------------------------------------------------------------
+    |
+    | Per-agent memory index and retrieval settings. Memory sources are
+    | discovered from the agent workspace; the index is a rebuildable
+    | derivative stored alongside the workspace.
+    |
+    */
+    'memory' => [
+        // Maximum chunk size in characters. Chunks exceeding this are split
+        // at paragraph boundaries.
+        'max_chunk_chars' => 2000,
+
+        // Maximum results returned per retrieval query.
+        'default_max_results' => 10,
+
+        // Score threshold below which results are excluded (0.0–1.0).
+        'min_score_threshold' => 0.05,
+
+        // Compaction: archive prefix for daily notes that have been compacted.
+        'compaction_archive_prefix' => 'archived-',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Lara (System Agent)
     |--------------------------------------------------------------------------
     |

@@ -6,6 +6,7 @@
 namespace App\Base\Database\Livewire\Queries;
 
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Database\Exceptions\BlbQueryException;
@@ -255,6 +256,7 @@ class Show extends Component
                 temperature: 0.1,
                 timeout: 30,
                 providerName: $config['provider_name'],
+                apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
             ));
 
             if (isset($result['runtime_error'])) {
@@ -457,7 +459,7 @@ class Show extends Component
      * Delegates to the shared ResolvesAvailableModels concern and maps
      * errors to the component's $aiError property.
      *
-     * @return array{api_key: string, base_url: string, model: string, provider_name: string|null}|null
+     * @return array{api_key: string, base_url: string, model: string, provider_name: string|null, api_type?: AiApiType}|null
      */
     private function resolveModelConfig(): ?array
     {

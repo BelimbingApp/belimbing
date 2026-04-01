@@ -6,6 +6,8 @@
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\DTO\Message;
@@ -110,7 +112,7 @@ class AgentRuntime
      *
      * @param  list<Message>  $messages  Conversation history
      * @param  string|null  $systemPrompt  Optional system prompt
-     * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}  $config
+     * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null, api_type?: AiApiType}  $config
      * @param  string  $runId  Run identifier
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
@@ -130,7 +132,7 @@ class AgentRuntime
 
         $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
 
-        $result = $this->llmClient->chat(new \App\Base\AI\DTO\ChatRequest(
+        $result = $this->llmClient->chat(new ChatRequest(
             $credentials['base_url'],
             $credentials['api_key'],
             $model,
@@ -139,6 +141,7 @@ class AgentRuntime
             temperature: $config['temperature'],
             timeout: $config['timeout'],
             providerName: $config['provider_name'],
+            apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
         ));
 
         if (isset($result['runtime_error'])) {

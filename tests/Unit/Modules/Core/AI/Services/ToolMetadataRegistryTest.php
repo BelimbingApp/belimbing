@@ -15,8 +15,8 @@ it('contains metadata for all built-in tools', function () {
     $registry = app(ToolMetadataRegistry::class);
     $all = $registry->all();
 
-    // Verify expected tool count (23 built-in tools)
-    expect($all)->toHaveCount(23);
+    // Verify expected tool count (24 built-in tools)
+    expect($all)->toHaveCount(24);
 
     // Spot-check a few well-known tools
     expect($registry->has('query_data'))->toBeTrue();

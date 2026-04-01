@@ -20,6 +20,12 @@ use App\Modules\Core\AI\Services\LaraNavigationRouter;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
+use App\Modules\Core\AI\Services\Memory\MemoryChunker;
+use App\Modules\Core\AI\Services\Memory\MemoryCompactor;
+use App\Modules\Core\AI\Services\Memory\MemoryHealthService;
+use App\Modules\Core\AI\Services\Memory\MemoryIndexer;
+use App\Modules\Core\AI\Services\Memory\MemoryRetrievalEngine;
+use App\Modules\Core\AI\Services\Memory\MemorySourceCatalog;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\Messaging\Adapters\EmailAdapter;
 use App\Modules\Core\AI\Services\Messaging\Adapters\SlackAdapter;
@@ -48,6 +54,7 @@ use App\Modules\Core\AI\Tools\GuideTool;
 use App\Modules\Core\AI\Tools\ImageAnalysisTool;
 use App\Modules\Core\AI\Tools\MemoryGetTool;
 use App\Modules\Core\AI\Tools\MemorySearchTool;
+use App\Modules\Core\AI\Tools\MemoryStatusTool;
 use App\Modules\Core\AI\Tools\MessageTool;
 use App\Modules\Core\AI\Tools\NavigateTool;
 use App\Modules\Core\AI\Tools\NotificationTool;
@@ -93,6 +100,12 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(WorkspaceValidator::class);
         $this->app->singleton(PromptPackageFactory::class);
         $this->app->singleton(PromptRenderer::class);
+        $this->app->singleton(MemorySourceCatalog::class);
+        $this->app->singleton(MemoryChunker::class);
+        $this->app->singleton(MemoryIndexer::class);
+        $this->app->singleton(MemoryRetrievalEngine::class);
+        $this->app->singleton(MemoryCompactor::class);
+        $this->app->singleton(MemoryHealthService::class);
         $this->app->singleton(LaraPromptFactory::class);
         $this->app->singleton(KodiPromptFactory::class);
         $this->app->singleton(AgentExecutionContext::class);
@@ -119,7 +132,7 @@ class ServiceProvider extends BaseServiceProvider
      *
      * The execution registry (AgentToolRegistry) receives only tools
      * that pass runtime availability checks. The metadata registry
-     * (ToolMetadataRegistry) receives ALL 23 tools so the workspace UI can
+     * (ToolMetadataRegistry) receives ALL 24 tools so the workspace UI can
      * display setup instructions even for unconfigured tools.
      */
     private function registerToolRegistries(): void
@@ -159,10 +172,10 @@ class ServiceProvider extends BaseServiceProvider
     }
 
     /**
-     * Instantiate all 23 Agent tools (memoized).
+     * Instantiate all 24 Agent tools (memoized).
      *
      * Returns three groups:
-     * - 'always': Tools that are always available (21 tools)
+     * - 'always': Tools that are always available (22 tools)
      * - 'conditional': Tools that depend on runtime config (may be null)
      * - 'metadataFallbacks': Metadata-only instances for conditional tools
      *   that failed availability checks — safe to call metadata methods on
@@ -187,7 +200,8 @@ class ServiceProvider extends BaseServiceProvider
             new EditFileTool,
             $app->make(GuideTool::class),
             new ImageAnalysisTool,
-            new MemoryGetTool,
+            $this->buildMemoryGetTool($app),
+            $this->buildMemoryStatusTool($app),
             $app->make(MessageTool::class),
             new NavigateTool,
             new NotificationTool,
@@ -201,6 +215,12 @@ class ServiceProvider extends BaseServiceProvider
         ];
 
         $memorySearchTool = MemorySearchTool::createIfAvailable();
+
+        if ($memorySearchTool !== null) {
+            $memorySearchTool->setRetrievalEngine(
+                $app->make(MemoryRetrievalEngine::class),
+            );
+        }
         $webSearchTool = WebSearchTool::createIfConfigured(
             $app->make(WebSearchService::class),
         );
@@ -227,5 +247,27 @@ class ServiceProvider extends BaseServiceProvider
         ];
 
         return $this->toolInstances;
+    }
+
+    /**
+     * Build MemoryGetTool with catalog injection.
+     */
+    private function buildMemoryGetTool(Application $app): MemoryGetTool
+    {
+        $tool = new MemoryGetTool;
+        $tool->setCatalog($app->make(MemorySourceCatalog::class));
+
+        return $tool;
+    }
+
+    /**
+     * Build MemoryStatusTool with health service injection.
+     */
+    private function buildMemoryStatusTool(Application $app): MemoryStatusTool
+    {
+        $tool = new MemoryStatusTool;
+        $tool->setHealthService($app->make(MemoryHealthService::class));
+
+        return $tool;
     }
 }

@@ -9,14 +9,15 @@ use App\Base\AI\Tools\AbstractReadOnlyMemoryTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
+use App\Modules\Core\AI\Services\Memory\MemorySourceCatalog;
 use App\Modules\Core\Employee\Models\Employee;
 
 /**
- * Workspace and documentation file reading tool for Agents.
+ * Agent-generic file reading tool for memory and documentation.
  *
- * Allows a agent to read files from two scopes:
+ * Allows an agent to read files from two scopes:
  * - `docs`: The BLB project documentation directory (base_path('docs/'))
- * - `workspace`: Lara's workspace directory (config('ai.workspace_path')/LARA_ID/)
+ * - `workspace`: The agent's workspace memory files
  *
  * Safety: Path traversal is blocked, absolute paths are rejected, binary
  * files are detected, and output is capped at 500 lines.
@@ -29,6 +30,19 @@ class MemoryGetTool extends AbstractReadOnlyMemoryTool
 
     private const BINARY_CHECK_BYTES = 1024;
 
+    private ?MemorySourceCatalog $catalog = null;
+
+    /**
+     * Inject the memory source catalog for workspace scope reads.
+     *
+     * When set, workspace reads are validated against the memory source
+     * catalog for path safety. Falls back to direct resolution otherwise.
+     */
+    public function setCatalog(MemorySourceCatalog $catalog): void
+    {
+        $this->catalog = $catalog;
+    }
+
     public function name(): string
     {
         return 'memory_get';
@@ -36,9 +50,9 @@ class MemoryGetTool extends AbstractReadOnlyMemoryTool
 
     public function description(): string
     {
-        return 'Read a file from the project documentation or Lara\'s workspace. '
+        return 'Read a file from the project documentation or agent workspace memory. '
             .'Use scope "docs" to read architecture specs, blueprints, and guides (e.g., "architecture/database.md"). '
-            .'Use scope "workspace" to read Lara\'s workspace files (e.g., "MEMORY.md", "notes/meeting-2026-03-06.md"). '
+            .'Use scope "workspace" to read agent memory files (e.g., "MEMORY.md", "memory/2026-04-01.md"). '
             .'Supports optional line range selection for large files.';
     }
 
@@ -53,7 +67,7 @@ class MemoryGetTool extends AbstractReadOnlyMemoryTool
             ->string(
                 'scope',
                 'Where to read from: "docs" for project documentation (default), '
-                    .'"workspace" for Lara\'s workspace files.',
+                    .'"workspace" for agent memory files.',
                 enum: ['docs', 'workspace'],
             )
             ->integer('from', 'Start reading from this line number (1-indexed, default: 1).', min: 1)
@@ -143,16 +157,30 @@ class MemoryGetTool extends AbstractReadOnlyMemoryTool
     /**
      * Resolve the base directory path for the given scope.
      *
+     * Agent-generic: resolves via configured workspace path + agent ID.
+     *
      * @param  string  $scope  Either 'docs' or 'workspace'
      * @return string Absolute path to the scope's base directory
      */
     private function resolveBasePath(string $scope): string
     {
         if ($scope === 'workspace') {
-            return config('ai.workspace_path').'/'.Employee::LARA_ID;
+            $employeeId = $this->resolveAgentId();
+
+            return config('ai.workspace_path').'/'.$employeeId;
         }
 
         return base_path('docs');
+    }
+
+    /**
+     * Resolve the current agent's employee ID.
+     *
+     * Uses LARA_ID as the default for the primary chat context.
+     */
+    private function resolveAgentId(): int
+    {
+        return Employee::LARA_ID;
     }
 
     /**
