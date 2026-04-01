@@ -25,12 +25,16 @@ PR. All in one pass — no user prompts needed.
 - Skip metric-only fixes that worsen the design; note them for human review.
 - A red quality gate with **zero open issues** often means a metric failure, not a clean project. Check measures before concluding there is nothing to fix.
 - `new_*` metrics are usually stored in SonarCloud's `periods[0].value`, not `value`. Parse both.
+- Use only the dedicated quality worktree at `/home/kiat/repo/laravel/blb-quality-tree`. If it is missing, create it from `origin/main` before doing any Sonar work.
+- If `/home/kiat/repo/laravel/blb-quality-tree` already exists as a plain directory instead of a Git worktree, move it aside first and then create the worktree at that exact path.
 - Work in the quality worktree, but create a fresh topic branch from `origin/main` before committing if `sonar-gate` is dirty or diverged.
 - Metric-only duplication failures cannot be transitioned like normal issues. If the remaining failure is a project metric, either refactor the code or recommend a Sonar scope / quality-gate change.
 
 ## Workflow Checklist
 
 - [ ] Read and validate `SONAR_TOKEN` from `.env`
+- [ ] Ensure `/home/kiat/repo/laravel/blb-quality-tree` exists; create it from `origin/main` if missing
+- [ ] If that path exists but is not a Git worktree, move it aside and recreate the worktree there
 - [ ] Switch `blb-quality-tree` to `sonar-gate` and reset to the remote default branch
 - [ ] Fetch open Sonar issues, hotspots, and quality-gate metrics
 - [ ] If the gate is failing with zero issues, fetch per-file metric breakdown for new-code duplication / other metric-only failures
@@ -67,15 +71,24 @@ curl -sS -u "$SONAR_TOKEN:" "https://sonarcloud.io/api/authentication/validate"
 ## Step 1: Switch to quality worktree
 
 ```bash
-cd /home/kiat/repo/laravel/blb-quality-tree
+QUALITY_TREE=/home/kiat/repo/laravel/blb-quality-tree
+MAIN_REPO=/home/kiat/repo/laravel/blb
+
+git -C "$MAIN_REPO" fetch --prune origin
+
+if ! git -C "$MAIN_REPO" worktree list --porcelain | grep -Fxq "worktree $QUALITY_TREE"; then
+  if [ -e "$QUALITY_TREE" ] && [ ! -e "$QUALITY_TREE/.git" ]; then
+    mv "$QUALITY_TREE" "${QUALITY_TREE}-stale-$(date +%Y%m%d%H%M%S)"
+  fi
+
+  git -C "$MAIN_REPO" worktree add -b sonar-gate "$QUALITY_TREE" origin/main
+fi
+
+cd "$QUALITY_TREE"
 git switch sonar-gate
 
 git fetch --prune origin
-if git show-ref --verify --quiet refs/remotes/origin/master; then
-  git reset --hard origin/master
-else
-  git reset --hard origin/main
-fi
+git reset --hard origin/main
 ```
 
 ## Step 2: Retrieve issues from SonarCloud
@@ -332,6 +345,7 @@ npm run build
 ## Step 7: Commit and create PR
 
 ```bash
+cd /home/kiat/repo/laravel/blb-quality-tree
 git switch sonar-gate
 git fetch --prune origin
 
