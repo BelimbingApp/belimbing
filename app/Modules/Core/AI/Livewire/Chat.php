@@ -22,6 +22,7 @@ use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\QuickActionRegistry;
 use App\Modules\Core\AI\Services\RuntimeResponseFactory;
 use App\Modules\Core\AI\Services\SessionManager;
+use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
@@ -209,9 +210,13 @@ class Chat extends Component
 
         $runtime = app(AgenticRuntime::class);
 
-        $systemPrompt = $this->employeeId === Employee::LARA_ID
-            ? app(LaraPromptFactory::class)->buildForCurrentUser($content)
-            : null;
+        $systemPrompt = null;
+
+        if ($this->employeeId === Employee::LARA_ID) {
+            $factory = app(LaraPromptFactory::class);
+            $package = $factory->buildPackage($content);
+            $systemPrompt = app(PromptRenderer::class)->render($package);
+        }
 
         $result = $runtime->run($messages, $this->employeeId, $systemPrompt, $this->selectedModel);
 

@@ -9,6 +9,7 @@ use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\SessionManager;
+use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -53,13 +54,19 @@ class ChatStreamController
             return response('No messages in session', 400);
         }
 
-        $systemPrompt = $employeeId === Employee::LARA_ID
-            ? app(LaraPromptFactory::class)->buildForCurrentUser($messages[count($messages) - 1]->content ?? '')
-            : null;
+        $systemPrompt = null;
+        $promptMeta = null;
+
+        if ($employeeId === Employee::LARA_ID) {
+            $factory = app(LaraPromptFactory::class);
+            $package = $factory->buildPackage($messages[count($messages) - 1]->content ?? '');
+            $systemPrompt = app(PromptRenderer::class)->render($package);
+            $promptMeta = $package->describe();
+        }
 
         $runtime = app(AgenticRuntime::class);
 
-        return new StreamedResponse(function () use ($runtime, $messages, $employeeId, $systemPrompt, $modelOverride, $messageManager, $sessionId) {
+        return new StreamedResponse(function () use ($runtime, $messages, $employeeId, $systemPrompt, $modelOverride, $messageManager, $sessionId, $promptMeta) {
             $fullContent = null;
             $runId = null;
             $meta = null;
@@ -101,7 +108,13 @@ class ChatStreamController
             }
 
             if (! $hadError) {
-                $this->persistAssistantMessage($messageManager, $employeeId, $sessionId, $fullContent, $runId, $meta ?? []);
+                $effectiveMeta = $meta ?? [];
+
+                if ($promptMeta !== null) {
+                    $effectiveMeta['prompt_package'] = $promptMeta;
+                }
+
+                $this->persistAssistantMessage($messageManager, $employeeId, $sessionId, $fullContent, $runId, $effectiveMeta);
             }
         }, 200, [
             'Content-Type' => 'text/event-stream',

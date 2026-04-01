@@ -20,6 +20,9 @@ enum BlbErrorCode: string
     case LARA_PROMPT_RESOURCE_MISSING = 'lara_prompt_resource_missing';
     case LARA_PROMPT_RESOURCE_UNREADABLE = 'lara_prompt_resource_unreadable';
 
+    case WORKSPACE_FILE_UNREADABLE = 'workspace_file_unreadable';
+    case WORKSPACE_VALIDATION_FAILED = 'workspace_validation_failed';
+
     case AUTHZ_DENIED = 'authz_denied';
     case AUTHZ_UNKNOWN_CAPABILITY = 'authz_unknown_capability';
 

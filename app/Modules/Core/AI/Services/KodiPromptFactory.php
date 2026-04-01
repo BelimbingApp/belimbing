@@ -5,17 +5,27 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\Foundation\Enums\BlbErrorCode;
+use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Workflow\Models\StatusHistory;
 use App\Modules\Business\IT\Models\Ticket;
+use App\Modules\Core\AI\DTO\PromptPackage;
+use App\Modules\Core\AI\DTO\PromptSection;
+use App\Modules\Core\AI\Enums\PromptSectionType;
 use App\Modules\Core\AI\Models\AgentTaskDispatch;
+use App\Modules\Core\AI\Services\Workspace\PromptPackageFactory;
+use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
+use App\Modules\Core\AI\Services\Workspace\WorkspaceResolver;
+use App\Modules\Core\AI\Services\Workspace\WorkspaceValidator;
+use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Database\Eloquent\Model;
 
 /**
  * System prompt factory for Kodi, BLB's developer agent.
  *
- * Builds a context-rich system prompt that includes Kodi's identity,
- * coding conventions, ticket context, and dispatch metadata. Used by
- * RunAgentTaskJob when executing agent tasks from the queue.
+ * Builds a context-rich system prompt through the workspace-driven
+ * prompt pipeline. Kodi-specific context (ticket, dispatch metadata)
+ * is contributed as operational sections.
  */
 class KodiPromptFactory
 {
@@ -23,6 +33,13 @@ class KodiPromptFactory
      * Maximum number of recent timeline entries to include in context.
      */
     private const MAX_TIMELINE_ENTRIES = 10;
+
+    public function __construct(
+        private readonly WorkspaceResolver $workspaceResolver,
+        private readonly WorkspaceValidator $workspaceValidator,
+        private readonly PromptPackageFactory $packageFactory,
+        private readonly PromptRenderer $renderer,
+    ) {}
 
     /**
      * Build the system prompt for a dispatched agent task.
@@ -32,30 +49,56 @@ class KodiPromptFactory
      */
     public function buildForDispatch(AgentTaskDispatch $dispatch, ?Model $entity = null): string
     {
-        $sections = [$this->basePrompt()];
+        $package = $this->buildPackage($dispatch, $entity);
 
-        if ($entity instanceof Ticket) {
-            $sections[] = $this->ticketContextSection($entity);
-        }
-
-        $sections[] = $this->dispatchContextSection($dispatch);
-
-        return implode("\n\n", $sections);
+        return $this->renderer->render($package);
     }
 
     /**
-     * Load the base Kodi system prompt from the resource file.
+     * Build the full prompt package for diagnostics or metadata attachment.
      */
-    private function basePrompt(): string
+    public function buildPackage(AgentTaskDispatch $dispatch, ?Model $entity = null): PromptPackage
     {
-        return app(PromptResourceLoader::class)
-            ->load(app_path('Modules/Core/AI/Resources/kodi/system_prompt.md'), 'Kodi base prompt', 'kodi');
+        $manifest = $this->workspaceResolver->resolve(Employee::KODI_ID);
+        $validation = $this->workspaceValidator->validate($manifest);
+
+        if (! $validation->valid) {
+            throw new BlbConfigurationException(
+                'Kodi workspace validation failed: '.implode('; ', $validation->errors),
+                BlbErrorCode::WORKSPACE_VALIDATION_FAILED,
+                ['errors' => $validation->errors],
+            );
+        }
+
+        return $this->packageFactory->build(
+            manifest: $manifest,
+            validation: $validation,
+            operationalSections: $this->operationalSections($dispatch, $entity),
+        );
+    }
+
+    /**
+     * Build Kodi-specific operational context sections.
+     *
+     * @return list<PromptSection>
+     */
+    private function operationalSections(AgentTaskDispatch $dispatch, ?Model $entity): array
+    {
+        $sections = [];
+
+        if ($entity instanceof Ticket) {
+            $sections[] = $this->ticketSection($entity);
+        }
+
+        $sections[] = $this->dispatchSection($dispatch);
+
+        return $sections;
     }
 
     /**
      * Build the ticket context section with recent timeline.
      */
-    private function ticketContextSection(Ticket $ticket): string
+    private function ticketSection(Ticket $ticket): PromptSection
     {
         $context = [
             'ticket_id' => $ticket->id,
@@ -76,13 +119,19 @@ class KodiPromptFactory
 
         $encoded = json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return "Ticket context (JSON):\n".$encoded;
+        return new PromptSection(
+            label: 'ticket_context',
+            content: "Ticket context (JSON):\n".$encoded,
+            type: PromptSectionType::Operational,
+            order: 0,
+            source: 'kodi_ticket_context',
+        );
     }
 
     /**
      * Build the dispatch metadata section.
      */
-    private function dispatchContextSection(AgentTaskDispatch $dispatch): string
+    private function dispatchSection(AgentTaskDispatch $dispatch): PromptSection
     {
         $context = [
             'dispatch_id' => $dispatch->id,
@@ -93,7 +142,13 @@ class KodiPromptFactory
 
         $encoded = json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        return "Dispatch context (JSON):\n".$encoded;
+        return new PromptSection(
+            label: 'dispatch_context',
+            content: "Dispatch context (JSON):\n".$encoded,
+            type: PromptSectionType::Operational,
+            order: 1,
+            source: 'kodi_dispatch_context',
+        );
     }
 
     /**

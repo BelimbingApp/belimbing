@@ -11,6 +11,7 @@ use App\Modules\Core\AI\Models\AgentTaskDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\KodiPromptFactory;
+use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use DateTimeImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -66,9 +67,11 @@ class RunAgentTaskJob implements ShouldQueue
     public function handle(
         AgenticRuntime $runtime,
         KodiPromptFactory $promptFactory,
+        PromptRenderer $renderer,
         AgentExecutionContext $context,
     ): void {
         $dispatch = null;
+        $promptMeta = null;
 
         try {
             $dispatch = AgentTaskDispatch::query()->find($this->dispatchId);
@@ -93,7 +96,9 @@ class RunAgentTaskJob implements ShouldQueue
 
             $entity = $dispatch->entity;
 
-            $systemPrompt = $promptFactory->buildForDispatch($dispatch, $entity);
+            $package = $promptFactory->buildPackage($dispatch, $entity);
+            $systemPrompt = $renderer->render($package);
+            $promptMeta = $package->describe();
 
             $messages = [new Message(
                 role: 'user',
@@ -108,7 +113,7 @@ class RunAgentTaskJob implements ShouldQueue
                 modelOverride: data_get($dispatch->meta, 'model_override'),
             );
 
-            $this->recordResult($dispatch, $result);
+            $this->recordResult($dispatch, $result, $promptMeta);
         } catch (\Throwable $e) {
             app(AiRuntimeLogger::class)->unhandledException(
                 $result['run_id'] ?? 'dispatch_'.$this->dispatchId,
@@ -135,8 +140,9 @@ class RunAgentTaskJob implements ShouldQueue
      * Record the runtime result on the dispatch record.
      *
      * @param  array{content: string, run_id: string, meta: array<string, mixed>}  $result
+     * @param  array<string, mixed>|null  $promptMeta  Prompt package diagnostics
      */
-    private function recordResult(AgentTaskDispatch $dispatch, array $result): void
+    private function recordResult(AgentTaskDispatch $dispatch, array $result, ?array $promptMeta): void
     {
         $hasError = isset($result['meta']['error_type']);
 
@@ -146,10 +152,16 @@ class RunAgentTaskJob implements ShouldQueue
             return;
         }
 
+        $meta = ['runtime_meta' => $result['meta'] ?? []];
+
+        if ($promptMeta !== null) {
+            $meta['prompt_package'] = $promptMeta;
+        }
+
         $dispatch->markSucceeded(
             $result['run_id'],
             $result['content'] ?? '',
-            ['runtime_meta' => $result['meta'] ?? []],
+            $meta,
         );
     }
 }

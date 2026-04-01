@@ -6,13 +6,17 @@
 namespace App\Modules\Core\AI\Livewire;
 
 use App\Base\Support\Str as BlbStr;
+use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\SessionManager;
+use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\Employee\Models\Employee;
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 
 class Playground extends Component
@@ -110,7 +114,9 @@ class Playground extends Component
         // Get the agent's job description for the system prompt.
         $agent = Employee::query()->find($this->selectedAgentId);
         if ($agent?->isLara()) {
-            $systemPrompt = app(LaraPromptFactory::class)->buildForCurrentUser();
+            $factory = app(LaraPromptFactory::class);
+            $package = $factory->buildPackage();
+            $systemPrompt = app(PromptRenderer::class)->render($package);
         } else {
             $systemPrompt = $agent?->job_description
                 ? __('You are an agent. Your role: :role', ['role' => $agent->job_description])
@@ -244,7 +250,7 @@ class Playground extends Component
                 return;
             }
 
-            $provider = \App\Modules\Core\AI\Models\AiProvider::query()
+            $provider = AiProvider::query()
                 ->forCompany($companyId)
                 ->active()
                 ->where('name', $providerName)
@@ -320,14 +326,14 @@ class Playground extends Component
 
     private function resolveDefaultProviderModelId(int $providerId): ?string
     {
-        $defaultModel = \App\Modules\Core\AI\Models\AiProviderModel::query()
+        $defaultModel = AiProviderModel::query()
             ->where('ai_provider_id', $providerId)
             ->active()
             ->default()
             ->first();
 
         if ($defaultModel === null) {
-            $defaultModel = \App\Modules\Core\AI\Models\AiProviderModel::query()
+            $defaultModel = AiProviderModel::query()
                 ->where('ai_provider_id', $providerId)
                 ->active()
                 ->orderBy('model_id')
@@ -337,7 +343,7 @@ class Playground extends Component
         return $defaultModel?->model_id;
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $sessions = [];
         $messages = [];
@@ -360,7 +366,7 @@ class Playground extends Component
             }
 
             if ($user->employee && $user->employee->company_id) {
-                $availableProviders = \App\Modules\Core\AI\Models\AiProvider::query()
+                $availableProviders = AiProvider::query()
                     ->forCompany((int) $user->employee->company_id)
                     ->active()
                     ->get(['id', 'name', 'display_name']);
@@ -368,7 +374,7 @@ class Playground extends Component
                 // Build provider → models map for the LLM config modal
                 $providerModelsMap = [];
                 foreach ($availableProviders as $p) {
-                    $providerModelsMap[$p->name] = \App\Modules\Core\AI\Models\AiProviderModel::query()
+                    $providerModelsMap[$p->name] = AiProviderModel::query()
                         ->where('ai_provider_id', $p->id)
                         ->active()
                         ->orderBy('model_id')

@@ -5,6 +5,7 @@ use App\Modules\Core\AI\Models\AgentTaskDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\KodiPromptFactory;
+use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Auth;
@@ -38,8 +39,9 @@ it('clears auth and execution context when returning early for a terminal dispat
     $job = new RunAgentTaskJob($dispatch->id);
     $runtime = Mockery::mock(AgenticRuntime::class);
     $promptFactory = Mockery::mock(KodiPromptFactory::class);
+    $renderer = new PromptRenderer;
 
-    $job->handle($runtime, $promptFactory, $context);
+    $job->handle($runtime, $promptFactory, $renderer, $context);
 
     expect(Auth::check())->toBeFalse()
         ->and($context->active())->toBeFalse();
