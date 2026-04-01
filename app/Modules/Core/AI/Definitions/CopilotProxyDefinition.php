@@ -5,12 +5,11 @@
 
 namespace App\Modules\Core\AI\Definitions;
 
-use App\Modules\Core\AI\Enums\AuthType;
+use App\Modules\Core\AI\Exceptions\CopilotProxyRuntimeException;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Values\ResolvedProviderConfig;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
-use RuntimeException;
 
 /**
  * Definition for VS Code Copilot Proxy (local proxy for GitHub Copilot models).
@@ -27,7 +26,7 @@ final readonly class CopilotProxyDefinition extends GenericLocalDefinition
     /**
      * Verifies the local proxy is reachable before returning runtime config.
      *
-     * @throws RuntimeException When the proxy is unreachable
+     * @throws CopilotProxyRuntimeException When the proxy is unreachable
      */
     public function resolveRuntime(AiProvider $provider): ResolvedProviderConfig
     {
@@ -38,12 +37,12 @@ final readonly class CopilotProxyDefinition extends GenericLocalDefinition
                 ->get(rtrim($baseUrl, '/').'/models');
 
             if ($response->failed()) {
-                throw new RuntimeException(
+                throw new CopilotProxyRuntimeException(
                     "Copilot Proxy at {$baseUrl} returned HTTP {$response->status()} — ensure the proxy extension is running in VS Code.",
                 );
             }
         } catch (ConnectionException) {
-            throw new RuntimeException(
+            throw new CopilotProxyRuntimeException(
                 "Could not connect to Copilot Proxy at {$baseUrl} — is the VS Code extension running?",
             );
         }

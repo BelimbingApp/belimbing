@@ -7,25 +7,32 @@ use App\Modules\Core\AI\Definitions\GenericLocalDefinition;
 use App\Modules\Core\AI\Definitions\GithubCopilotDefinition;
 use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Enums\ProviderOperation;
+use App\Modules\Core\AI\Exceptions\CopilotProxyRuntimeException;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Values\ResolvedProviderConfig;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
+
+const PDT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const PDT_OLLAMA_BASE_URL = 'http://localhost:11434';
+const PDT_COPILOT_PROXY_BASE_URL = 'http://localhost:1337/v1';
 
 // ── GenericApiKeyDefinition ──
 
 test('GenericApiKeyDefinition returns correct key and auth type', function (): void {
-    $def = new GenericApiKeyDefinition('openai', 'https://api.openai.com/v1');
+    $def = new GenericApiKeyDefinition('openai', PDT_OPENAI_BASE_URL);
 
     expect($def->key())->toBe('openai')
         ->and($def->authType())->toBe(AuthType::ApiKey)
-        ->and($def->defaultBaseUrl())->toBe('https://api.openai.com/v1');
+        ->and($def->defaultBaseUrl())->toBe(PDT_OPENAI_BASE_URL);
 });
 
 test('GenericApiKeyDefinition editorFields includes base_url and api_key', function (): void {
-    $def = new GenericApiKeyDefinition('openai', 'https://api.openai.com/v1');
+    $def = new GenericApiKeyDefinition('openai', PDT_OPENAI_BASE_URL);
     $fields = $def->editorFields(ProviderOperation::Create);
 
     expect($fields)->toHaveCount(2)
@@ -39,12 +46,12 @@ test('GenericApiKeyDefinition validates and normalizes create input', function (
     $def = new GenericApiKeyDefinition('openai');
 
     $result = $def->validateAndNormalize([
-        'base_url' => 'https://api.openai.com/v1',
+        'base_url' => PDT_OPENAI_BASE_URL,
         'api_key' => 'sk-test-key',
     ], ProviderOperation::Create);
 
     expect($result)
-        ->toHaveKey('base_url', 'https://api.openai.com/v1')
+        ->toHaveKey('base_url', PDT_OPENAI_BASE_URL)
         ->toHaveKey('auth_type', AuthType::ApiKey)
         ->toHaveKey('credentials', ['api_key' => 'sk-test-key'])
         ->toHaveKey('connection_config', []);
@@ -54,7 +61,7 @@ test('GenericApiKeyDefinition omits credentials when api_key is blank on edit', 
     $def = new GenericApiKeyDefinition('openai');
 
     $result = $def->validateAndNormalize([
-        'base_url' => 'https://api.openai.com/v1',
+        'base_url' => PDT_OPENAI_BASE_URL,
         'api_key' => '',
     ], ProviderOperation::Edit);
 
@@ -67,33 +74,33 @@ test('GenericApiKeyDefinition rejects missing api_key on create', function (): v
     $def = new GenericApiKeyDefinition('openai');
 
     $def->validateAndNormalize([
-        'base_url' => 'https://api.openai.com/v1',
+        'base_url' => PDT_OPENAI_BASE_URL,
         'api_key' => '',
     ], ProviderOperation::Create);
 })->throws(ValidationException::class);
 
 test('GenericApiKeyDefinition resolveRuntime returns config from provider', function (): void {
     $provider = new AiProvider;
-    $provider->base_url = 'https://api.openai.com/v1';
+    $provider->base_url = PDT_OPENAI_BASE_URL;
     $provider->credentials = ['api_key' => 'sk-test'];
 
     $def = new GenericApiKeyDefinition('openai');
     $resolved = $def->resolveRuntime($provider);
 
     expect($resolved)->toBeInstanceOf(ResolvedProviderConfig::class)
-        ->and($resolved->baseUrl)->toBe('https://api.openai.com/v1')
+        ->and($resolved->baseUrl)->toBe(PDT_OPENAI_BASE_URL)
         ->and($resolved->apiKey)->toBe('sk-test');
 });
 
 // ── GenericLocalDefinition ──
 
 test('GenericLocalDefinition has Local auth type and optional api_key', function (): void {
-    $def = new GenericLocalDefinition('ollama', 'http://localhost:11434');
+    $def = new GenericLocalDefinition('ollama', PDT_OLLAMA_BASE_URL);
 
     expect($def->authType())->toBe(AuthType::Local);
 
     $result = $def->validateAndNormalize([
-        'base_url' => 'http://localhost:11434',
+        'base_url' => PDT_OLLAMA_BASE_URL,
         'api_key' => '',
     ], ProviderOperation::Create);
 
@@ -116,13 +123,13 @@ test('GenericLocalDefinition accepts optional api_key', function (): void {
 
 test('GenericLocalDefinition resolveRuntime returns config without api_key when none set', function (): void {
     $provider = new AiProvider;
-    $provider->base_url = 'http://localhost:11434';
+    $provider->base_url = PDT_OLLAMA_BASE_URL;
     $provider->credentials = [];
 
     $def = new GenericLocalDefinition('ollama');
     $resolved = $def->resolveRuntime($provider);
 
-    expect($resolved->baseUrl)->toBe('http://localhost:11434')
+    expect($resolved->baseUrl)->toBe(PDT_OLLAMA_BASE_URL)
         ->and($resolved->apiKey)->toBeNull();
 });
 
@@ -198,7 +205,7 @@ test('CopilotProxyDefinition has correct defaults', function (): void {
 
     expect($def->key())->toBe('copilot-proxy')
         ->and($def->authType())->toBe(AuthType::Local)
-        ->and($def->defaultBaseUrl())->toBe('http://localhost:1337/v1');
+        ->and($def->defaultBaseUrl())->toBe(PDT_COPILOT_PROXY_BASE_URL);
 });
 
 test('CopilotProxyDefinition resolveRuntime probes server before returning', function (): void {
@@ -207,25 +214,25 @@ test('CopilotProxyDefinition resolveRuntime probes server before returning', fun
     ]);
 
     $provider = new AiProvider;
-    $provider->base_url = 'http://localhost:1337/v1';
+    $provider->base_url = PDT_COPILOT_PROXY_BASE_URL;
     $provider->credentials = [];
 
     $def = new CopilotProxyDefinition;
     $resolved = $def->resolveRuntime($provider);
 
-    expect($resolved->baseUrl)->toBe('http://localhost:1337/v1');
+    expect($resolved->baseUrl)->toBe(PDT_COPILOT_PROXY_BASE_URL);
     Http::assertSentCount(1);
 });
 
 test('CopilotProxyDefinition resolveRuntime throws when server unreachable', function (): void {
     Http::fake([
-        'localhost:1337/v1/models' => fn () => throw new \Illuminate\Http\Client\ConnectionException('refused'),
+        'localhost:1337/v1/models' => fn () => throw new ConnectionException('refused'),
     ]);
 
     $provider = new AiProvider;
-    $provider->base_url = 'http://localhost:1337/v1';
+    $provider->base_url = PDT_COPILOT_PROXY_BASE_URL;
     $provider->credentials = [];
 
     $def = new CopilotProxyDefinition;
     $def->resolveRuntime($provider);
-})->throws(RuntimeException::class, 'Could not connect');
+})->throws(CopilotProxyRuntimeException::class, 'Could not connect');
