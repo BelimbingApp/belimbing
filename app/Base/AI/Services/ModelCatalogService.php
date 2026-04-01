@@ -6,6 +6,7 @@
 namespace App\Base\AI\Services;
 
 use App\Base\AI\DTO\CatalogSyncResult;
+use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Exceptions\ModelCatalogSyncException;
 use App\Base\Support\Json as BlbJson;
 use DateTimeImmutable;
@@ -354,6 +355,36 @@ class ModelCatalogService
     private function catalogPath(): string
     {
         return storage_path(self::CATALOG_DIR.'/'.self::CATALOG_FILE);
+    }
+
+    /**
+     * Resolve the API type for a provider+model pair.
+     *
+     * Checks `api_type_overrides` glob patterns in the provider overlay config.
+     * Falls back to OpenAiChatCompletions when no pattern matches.
+     *
+     * @param  string|null  $providerName  Provider identifier (e.g. 'openai', 'github-copilot')
+     * @param  string  $modelId  Model identifier (e.g. 'gpt-5.4', 'claude-sonnet-4')
+     */
+    public function resolveApiType(?string $providerName, string $modelId): AiApiType
+    {
+        if ($providerName === null || $providerName === '') {
+            return AiApiType::OpenAiChatCompletions;
+        }
+
+        $overlay = config("ai.provider_overlay.{$providerName}.api_type_overrides", []);
+
+        foreach ($overlay as $pattern => $apiTypeValue) {
+            if (fnmatch($pattern, $modelId)) {
+                $resolved = AiApiType::tryFrom($apiTypeValue);
+
+                if ($resolved !== null) {
+                    return $resolved;
+                }
+            }
+        }
+
+        return AiApiType::OpenAiChatCompletions;
     }
 
     private function metaPath(): string

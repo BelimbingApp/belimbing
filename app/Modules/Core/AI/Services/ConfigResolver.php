@@ -5,6 +5,8 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\AI\Enums\AiApiType;
+use App\Base\AI\Services\ModelCatalogService;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
@@ -28,7 +30,7 @@ class ConfigResolver
      * Returns an empty array if no LLM configuration is available.
      *
      * @param  int  $employeeId  Agent employee ID
-     * @return list<array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}>
+     * @return list<array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null, api_type: AiApiType}>
      */
     public function resolve(int $employeeId): array
     {
@@ -138,21 +140,23 @@ class ConfigResolver
      * @param  array<string, mixed>  $modelConfig  Per-model config from workspace
      * @param  int|null  $companyId  Company ID for provider lookup
      * @param  array<string, mixed>  $runtimeDefaults  Fallback runtime parameters
-     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}
+     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null, api_type: AiApiType}
      */
     private function resolveModelConfig(array $modelConfig, ?int $companyId, array $runtimeDefaults): array
     {
+        $modelId = $modelConfig['model'] ?? '';
+        $providerName = $modelConfig['provider'] ?? null;
+
         $resolved = [
             'api_key' => '',
             'base_url' => '',
-            'model' => $modelConfig['model'] ?? '',
+            'model' => $modelId,
             'max_tokens' => (int) ($modelConfig['max_tokens'] ?? $runtimeDefaults['max_tokens']),
             'temperature' => (float) ($modelConfig['temperature'] ?? $runtimeDefaults['temperature']),
             'timeout' => (int) ($modelConfig['timeout'] ?? $runtimeDefaults['timeout']),
             'provider_name' => null,
+            'api_type' => app(ModelCatalogService::class)->resolveApiType($providerName, $modelId),
         ];
-
-        $providerName = $modelConfig['provider'] ?? null;
 
         if ($providerName !== null && $companyId !== null) {
             $provider = AiProvider::query()
@@ -182,7 +186,7 @@ class ConfigResolver
      * as fallback for agents without workspace config.
      *
      * @param  int  $companyId  Company ID
-     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}|null
+     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null, api_type: AiApiType}|null
      */
     public function resolveDefault(int $companyId): ?array
     {
@@ -234,6 +238,7 @@ class ConfigResolver
             'temperature' => $defaults['temperature'],
             'timeout' => $defaults['timeout'],
             'provider_name' => $provider->name,
+            'api_type' => app(ModelCatalogService::class)->resolveApiType($provider->name, $model->model_id),
         ];
     }
 
@@ -245,7 +250,7 @@ class ConfigResolver
      *
      * @param  int  $providerId  Provider database ID
      * @param  string  $modelId  Model identifier
-     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}|null
+     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null, api_type: AiApiType}|null
      */
     public function resolveForProvider(int $providerId, string $modelId): ?array
     {
@@ -268,6 +273,7 @@ class ConfigResolver
             'temperature' => $defaults['temperature'],
             'timeout' => $defaults['timeout'],
             'provider_name' => $provider->name,
+            'api_type' => app(ModelCatalogService::class)->resolveApiType($provider->name, $modelId),
         ];
     }
 

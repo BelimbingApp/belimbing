@@ -49,6 +49,8 @@
                     'providerBinding' => 'selectedProviderId',
                     'modelBinding' => 'selectedModelId',
                 ])
+
+                @include('livewire.admin.setup.partials.provider-diagnostics')
             </x-ui.card>
         @elseif (! $licenseeExists)
             <x-ui.alert variant="info">
@@ -104,6 +106,8 @@
                         'providerBinding' => 'selectedProviderId',
                         'modelBinding' => 'selectedModelId',
                     ])
+
+                    @include('livewire.admin.setup.partials.provider-diagnostics')
 
                     <div class="flex items-center gap-4">
                         <x-ui.button wire:click="activateLara" variant="primary">

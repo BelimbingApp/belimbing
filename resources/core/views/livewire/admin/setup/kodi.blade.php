@@ -71,6 +71,8 @@
                     'modelBinding' => 'selectedModelId',
                 ])
 
+                @include('livewire.admin.setup.partials.provider-diagnostics')
+
                 <p class="text-xs text-muted">
                     {{ __('Changes are saved automatically when you select a model.') }}
                 </p>

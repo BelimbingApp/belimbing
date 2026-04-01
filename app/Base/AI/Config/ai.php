@@ -152,6 +152,10 @@ return [
             'description' => 'GPT, o-series reasoning, and DALL·E models',
             'base_url' => 'https://api.openai.com/v1',
             'api_key_url' => 'https://platform.openai.com/api-keys',
+            'api_type_overrides' => [
+                'gpt-5*' => 'openai_responses',
+                'codex-*' => 'openai_responses',
+            ],
         ],
         'anthropic' => [
             'category' => ['leading-lab'],
@@ -281,6 +285,10 @@ return [
             'description' => 'GitHub device login — subscription includes models from OpenAI, Anthropic, Google, and xAI',
             'base_url' => 'https://api.individual.githubcopilot.com',
             'auth_type' => 'device_flow',
+            'api_type_overrides' => [
+                'gpt-5*' => 'openai_responses',
+                'codex-*' => 'openai_responses',
+            ],
         ],
         'chutes' => [
             'category' => ['inference-platform'],

@@ -6,6 +6,7 @@
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\MessageManager;
@@ -220,6 +221,7 @@ trait ManagesChatSessions
             temperature: 0.5,
             timeout: 15,
             providerName: $config['provider_name'] ?? null,
+            apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
         ));
 
         if (isset($response['runtime_error'])) {

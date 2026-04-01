@@ -49,25 +49,49 @@ Build the structural foundation: normalize errors, log them, and prevent blank/c
 
 ---
 
-## Phase 1 — Admin Diagnostics 🔲
+## Phase 1 — Admin Diagnostics ✅
 
 Thin diagnostics surface for admins to understand what's failing and why.
 
-- [ ] Add "Test provider" action to setup pages: resolve config → credentials → tiny API call → show diagnosis
-- [ ] Surface provider health summary in setup pages (last success/failure from log file or small DB table)
+### 1.1 "Test Provider" Action
+- [x] `ProviderTestResult` DTO — structured result with `connected`, `providerName`, `model`, `latencyMs`, `error`
+- [x] `ProviderTestService` — end-to-end test chain: `ConfigResolver` → `RuntimeCredentialResolver` → `LlmClient` (tiny API call)
+- [x] `HandlesProviderDiagnostics` Livewire concern — shared action + UI state for both Lara and Kodi setup pages
+- [x] Shared Blade partial (`partials/provider-diagnostics.blade.php`) — Test button + success/failure result rendering
+- [x] Integrated into Lara setup page (both activation and change-model cards)
+- [x] Integrated into Kodi setup page (change-model card)
+- [x] Stale results cleared on provider/model selection change
+
+### 1.2 Provider Health Summary
+- [x] Test results logged via `AiRuntimeLogger::providerTestCompleted()` — structured logging with provider, model, connected status, latency, error context
+- [x] In-session health visibility: last test result shown inline on setup pages (no page reload needed)
 - [ ] Optionally: `AiRuntimeFailure` model + migration for in-app failure browsing (defer until log-based approach proves insufficient)
+
+### 1.3 Infrastructure Improvements
+- [x] `ChatRequest` — removed mandatory API key validation (supports keyless providers like Ollama)
+- [x] `LlmClient` — conditionally adds bearer auth only when API key is non-empty (both `chat()` and `chatStream()`)
 
 ---
 
-## Phase 2 — Resilience 🔲
+## Phase 2 — Resilience ✅
 
-Targeted retry and fallback for transient failures, only after observability exists.
+Targeted retry and fallback for transient failures, built on Phase 0/1 observability.
 
-- [ ] Single retry for retryable errors (`timeout`, `connection_error`, `rate_limit`, `server_error`)
-- [ ] No retry on config/auth/payload errors
-- [ ] Provider fallback only before tool-calling loop commits
-- [ ] Log all retry/fallback attempts in metadata
-- [ ] Expose retry/fallback info in run metadata for admin visibility
+### 2.1 Single Retry
+- [x] `chatWithRetry()` in `AgenticRuntime` — retries once on transient failures (`timeout`, `connection_error`, `rate_limit`, `server_error`, `empty_response`)
+- [x] No retry on config/auth/payload errors — `AiErrorType::retryable()` governs retry eligibility
+- [x] Retry attempt logged via `AiRuntimeLogger::retryAttempted()`
+
+### 2.2 Provider Fallback
+- [x] `AgenticRuntime.run()` and `runStream()` now resolve all configs via `resolveWithDefaultFallback()` (list of configs in priority order)
+- [x] Each provider attempted in order — credential resolution + first LLM call
+- [x] Provider fallback only before tool-calling loop commits — once tools start, provider is locked
+- [x] Fallback attempt recorded with provider, model, error_type, latency_ms
+
+### 2.3 Metadata Exposure
+- [x] `meta['retry_attempts']` — array of retry attempt entries (provider, model, error, error_type, latency_ms)
+- [x] `meta['fallback_attempts']` — array of fallback attempt entries (same shape as AgentRuntime)
+- [x] Both arrays included in sync and streaming response metadata
 
 ---
 

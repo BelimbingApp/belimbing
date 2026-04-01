@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Livewire\Setup;
 
+use App\Modules\Core\AI\Livewire\Concerns\HandlesProviderDiagnostics;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesAgentModelSelection;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\Company\Models\Company;
@@ -15,6 +16,7 @@ use Livewire\Component;
 
 class Kodi extends Component
 {
+    use HandlesProviderDiagnostics;
     use ManagesAgentModelSelection;
 
     public function mount(): void
@@ -42,6 +44,7 @@ class Kodi extends Component
      */
     public function updatedSelectedProviderId(): void
     {
+        $this->clearProviderTestResult();
         $this->hydrateSelectedModel(forceDefault: true);
     }
 
@@ -50,6 +53,7 @@ class Kodi extends Component
      */
     public function updatedSelectedModelId(): void
     {
+        $this->clearProviderTestResult();
         if (Employee::laraActivationState() !== true) {
             return;
         }

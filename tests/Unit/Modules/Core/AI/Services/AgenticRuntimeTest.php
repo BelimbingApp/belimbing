@@ -203,29 +203,43 @@ describe('AgenticRuntime', function () {
     });
 
     it('returns error when no LLM configuration is available', function () {
-        // Stub resolveConfig to return null by making resolve return empty
-        // and having no employee in DB. We mock at the config resolver level.
         $configResolver = Mockery::mock(ConfigResolver::class);
-        $configResolver->shouldReceive('resolve')->with(1)->andReturn([]);
-        $configResolver->shouldReceive('resolvePrimaryWithDefaultFallback')->with(1)->andReturn(null);
+        $configResolver->shouldReceive('resolveWithDefaultFallback')->with(1)->andReturn([]);
 
         $llmClient = Mockery::mock(LlmClient::class);
         $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
 
-        // Employee ID 1 doesn't exist in test DB, so company lookup fails gracefully
         $result = $runtime->run([$this->makeMessage('user', 'Hello')], 1, 'Prompt');
 
         expect($result['content'])->toContain('⚠');
         expect($result['meta'])->toHaveKey('error');
     });
 
-    it('returns error when LLM call fails', function () {
+    it('returns error when LLM call fails with non-retryable error', function () {
         $configResolver = $this->mockResolvedConfigResolver([
             $this->makeConfig('test-provider', 'gpt-4', 'test-key'),
         ]);
 
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeErrorResponse(AiErrorType::AuthError, 'Invalid API key', 50)
+        );
+
+        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
+        $result = $runtime->run([$this->makeMessage('user', 'Hello')], 1, 'Prompt');
+
+        expect($result['content'])->toContain('⚠');
+        expect($result['meta']['error_type'])->toBe('auth_error');
+        expect($result['meta']['retry_attempts'])->toBe([]);
+    });
+
+    it('retries once on retryable error then returns error if retry also fails', function () {
+        $configResolver = $this->mockResolvedConfigResolver([
+            $this->makeConfig('test-provider', 'gpt-4', 'test-key'),
+        ]);
+
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')->twice()->andReturn(
             $this->makeErrorResponse(AiErrorType::RateLimit, 'Rate limit exceeded', 50)
         );
 
@@ -234,5 +248,28 @@ describe('AgenticRuntime', function () {
 
         expect($result['content'])->toContain('⚠');
         expect($result['meta']['error_type'])->toBe('rate_limit');
+        expect($result['meta']['retry_attempts'])->toHaveCount(1);
+        expect($result['meta']['retry_attempts'][0]['error_type'])->toBe('rate_limit');
+    });
+
+    it('retries once on retryable error then succeeds if retry works', function () {
+        $configResolver = $this->mockResolvedConfigResolver([
+            $this->makeConfig('test-provider', 'gpt-4', 'test-key'),
+        ]);
+
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeErrorResponse(AiErrorType::Timeout, 'Connection timed out', 30000)
+        );
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeFinalResponse('Success after retry!')
+        );
+
+        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
+        $result = $runtime->run([$this->makeMessage('user', 'Hello')], 1, 'Prompt');
+
+        expect($result['content'])->toBe('Success after retry!');
+        expect($result['meta']['retry_attempts'])->toHaveCount(1);
+        expect($result['meta']['retry_attempts'][0]['error_type'])->toBe('timeout');
     });
 });

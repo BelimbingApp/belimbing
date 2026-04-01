@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\AiRuntimeLogger;
 use App\Base\AI\Services\LlmClient;
@@ -21,9 +22,10 @@ use Illuminate\Support\Str;
  * LLM call → tool execution → feed results back → LLM call → ... until the
  * LLM produces a final text response or the maximum iteration limit is reached.
  *
- * Uses the same config resolution and fallback strategy as AgentRuntime
- * for the initial LLM call. Subsequent loop iterations reuse the resolved
- * provider/model (no mid-loop fallback).
+ * Resilience strategy:
+ * - Single retry on transient failures (timeout, connection, rate_limit, server_error, empty_response)
+ * - Provider fallback before the tool-calling loop commits (first successful LLM call)
+ * - No mid-loop fallback: once tool calls start, the provider is locked for consistency
  */
 class AgenticRuntime
 {
@@ -42,8 +44,12 @@ class AgenticRuntime
     /**
      * Run an agentic conversation turn with tool calling.
      *
+     * Resolves all available provider configs and attempts each in order.
+     * Falls back to the next provider on retryable failures before the
+     * tool-calling loop commits. Each LLM call is retried once on transient errors.
+     *
      * @param  list<Message>  $messages  Conversation history
-     * @param  int  $employeeId  Lara's employee ID
+     * @param  int  $employeeId  Agent employee ID
      * @param  string|null  $systemPrompt  System prompt
      * @param  string|null  $modelOverride  Optional model ID to override the resolved config
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
@@ -51,9 +57,9 @@ class AgenticRuntime
     public function run(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null): array
     {
         $runId = 'run_'.Str::random(12);
-        $config = $this->configResolver->resolvePrimaryWithDefaultFallback($employeeId);
+        $configs = $this->configResolver->resolveWithDefaultFallback($employeeId);
 
-        if ($config === null) {
+        if ($configs === []) {
             return $this->responseFactory->error(
                 $runId,
                 'unknown',
@@ -63,21 +69,41 @@ class AgenticRuntime
             );
         }
 
-        $config = $this->applyModelOverride($config, $modelOverride);
+        $fallbackAttempts = [];
+        $lastErrorResult = null;
 
-        $credentials = $this->credentialResolver->resolve($config);
+        foreach ($configs as $config) {
+            $config = $this->applyModelOverride($config, $modelOverride);
+            $credentials = $this->credentialResolver->resolve($config);
 
-        if (isset($credentials['runtime_error'])) {
-            return $this->responseFactory->error(
-                $runId,
-                $config['model'],
-                (string) ($config['provider_name'] ?? 'unknown'),
-                $credentials['runtime_error'],
-                ['employee_id' => $employeeId],
-            );
+            if (isset($credentials['runtime_error'])) {
+                $fallbackAttempts[] = $this->buildFallbackAttempt($config, $credentials['runtime_error']);
+                $lastErrorResult = $this->responseFactory->error(
+                    $runId,
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $credentials['runtime_error'],
+                    ['employee_id' => $employeeId],
+                );
+
+                continue;
+            }
+
+            $result = $this->runToolCallingLoop($runId, $config, $credentials, $messages, $systemPrompt, $fallbackAttempts);
+            $result['meta']['fallback_attempts'] = $fallbackAttempts;
+
+            return $result;
         }
 
-        return $this->runToolCallingLoop($runId, $config, $credentials, $messages, $systemPrompt);
+        $result = $lastErrorResult ?? $this->responseFactory->error(
+            $runId,
+            'unknown',
+            'unknown',
+            AiRuntimeError::fromType(AiErrorType::ConfigError, 'All provider configurations failed'),
+        );
+        $result['meta']['fallback_attempts'] = $fallbackAttempts;
+
+        return $result;
     }
 
     /**
@@ -85,6 +111,9 @@ class AgenticRuntime
      *
      * Tool-calling iterations run synchronously. Only the final text response
      * is streamed as SSE-compatible events. Yields arrays with 'event' and 'data' keys.
+     *
+     * Provider fallback is attempted before the tool loop commits. Each LLM call
+     * is retried once on transient errors.
      *
      * @param  list<Message>  $messages  Conversation history
      * @param  int  $employeeId  Agent employee ID
@@ -95,9 +124,9 @@ class AgenticRuntime
     public function runStream(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null): \Generator
     {
         $runId = 'run_'.Str::random(12);
-        $config = $this->configResolver->resolvePrimaryWithDefaultFallback($employeeId);
+        $configs = $this->configResolver->resolveWithDefaultFallback($employeeId);
 
-        if ($config === null) {
+        if ($configs === []) {
             $error = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
             $this->runtimeLogger->runFailed($runId, $error, ['employee_id' => $employeeId, 'streaming' => true]);
             yield ['event' => 'error', 'data' => [
@@ -109,32 +138,48 @@ class AgenticRuntime
             return;
         }
 
-        $config = $this->applyModelOverride($config, $modelOverride);
+        $fallbackAttempts = [];
+        $lastError = null;
+        $lastConfig = null;
 
-        $credentials = $this->credentialResolver->resolve($config);
+        foreach ($configs as $config) {
+            $config = $this->applyModelOverride($config, $modelOverride);
+            $credentials = $this->credentialResolver->resolve($config);
 
-        if (isset($credentials['runtime_error'])) {
-            $error = $credentials['runtime_error'];
-            $this->runtimeLogger->runFailed($runId, $error, [
-                'employee_id' => $employeeId,
-                'model' => $config['model'],
-                'provider_name' => $config['provider_name'] ?? 'unknown',
-                'streaming' => true,
-            ]);
-            yield ['event' => 'error', 'data' => [
-                'message' => $error->userMessage,
-                'run_id' => $runId,
-                'meta' => $this->responseFactory->errorMeta(
-                    $config['model'],
-                    (string) ($config['provider_name'] ?? 'unknown'),
-                    $error,
-                ),
-            ]];
+            if (isset($credentials['runtime_error'])) {
+                $error = $credentials['runtime_error'];
+                $fallbackAttempts[] = $this->buildFallbackAttempt($config, $error);
+                $this->runtimeLogger->runFailed($runId, $error, [
+                    'employee_id' => $employeeId,
+                    'model' => $config['model'],
+                    'provider_name' => $config['provider_name'] ?? 'unknown',
+                    'streaming' => true,
+                ]);
+                $lastError = $error;
+                $lastConfig = $config;
+
+                continue;
+            }
+
+            yield from $this->runStreamingToolLoop($runId, $config, $credentials, $messages, $systemPrompt, $fallbackAttempts);
 
             return;
         }
 
-        yield from $this->runStreamingToolLoop($runId, $config, $credentials, $messages, $systemPrompt);
+        $error = $lastError ?? AiRuntimeError::fromType(AiErrorType::ConfigError, 'All provider configurations failed');
+        $errorConfig = $lastConfig ?? $configs[0];
+        yield ['event' => 'error', 'data' => [
+            'message' => $error->userMessage,
+            'run_id' => $runId,
+            'meta' => array_merge(
+                $this->responseFactory->errorMeta(
+                    $errorConfig['model'] ?? 'unknown',
+                    (string) ($errorConfig['provider_name'] ?? 'unknown'),
+                    $error,
+                ),
+                ['fallback_attempts' => $fallbackAttempts],
+            ),
+        ]];
     }
 
     /**
@@ -186,9 +231,13 @@ class AgenticRuntime
     /**
      * Execute the iterative tool-calling loop after configuration has been resolved.
      *
+     * The first LLM call uses retry. Once tool calls start, the provider is
+     * locked and subsequent calls use retry but not provider fallback.
+     *
      * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}  $config
      * @param  array{api_key: string, base_url: string}  $credentials
      * @param  list<Message>  $messages
+     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
     private function runToolCallingLoop(
@@ -197,35 +246,101 @@ class AgenticRuntime
         array $credentials,
         array $messages,
         ?string $systemPrompt,
+        array &$fallbackAttempts,
     ): array {
         $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
         $tools = $this->toolRegistry->toolDefinitionsForCurrentUser();
         $toolActions = [];
         $clientActions = [];
+        $retryAttempts = [];
 
         for ($iteration = 0; $iteration < self::MAX_ITERATIONS; $iteration++) {
-            $result = $this->chatWithTools($credentials, $config, $apiMessages, $tools);
+            $result = $this->chatWithRetry($credentials, $config, $apiMessages, $tools, $retryAttempts);
 
-            $errorResult = $this->buildLlmErrorResult($runId, $config, $result);
-            if ($errorResult !== null) {
+            if (isset($result['runtime_error'])) {
+                // On first iteration, this is a pre-commit failure — record for fallback
+                if ($iteration === 0) {
+                    $fallbackAttempts[] = $this->buildFallbackAttempt($config, $result['runtime_error']);
+                }
+
+                $errorResult = $this->responseFactory->error(
+                    $runId,
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $result['runtime_error'],
+                );
+                $errorResult['meta']['retry_attempts'] = $retryAttempts;
+
                 return $errorResult;
             }
 
             if ($this->hasNoToolCalls($result)) {
-                return $this->successResult(
+                $successResult = $this->successResult(
                     $runId,
                     $config,
                     $result,
                     $toolActions,
                     $clientActions,
                 );
+                $successResult['meta']['retry_attempts'] = $retryAttempts;
+
+                return $successResult;
             }
 
             $this->appendAssistantToolCallMessage($apiMessages, $result);
             $this->executeToolCalls($result['tool_calls'], $apiMessages, $toolActions, $clientActions);
         }
 
-        return $this->maxIterationsResult($runId, $config);
+        $maxIterResult = $this->maxIterationsResult($runId, $config);
+        $maxIterResult['meta']['retry_attempts'] = $retryAttempts;
+
+        return $maxIterResult;
+    }
+
+    /**
+     * Call the LLM with a single retry on transient failures.
+     *
+     * @param  array{api_key: string, base_url: string}  $credentials
+     * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}  $config
+     * @param  list<array<string, mixed>>  $apiMessages
+     * @param  list<array<string, mixed>>  $tools
+     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $retryAttempts
+     * @return array<string, mixed>
+     */
+    private function chatWithRetry(
+        array $credentials,
+        array $config,
+        array $apiMessages,
+        array $tools,
+        array &$retryAttempts,
+    ): array {
+        $result = $this->chatWithTools($credentials, $config, $apiMessages, $tools);
+
+        if (! isset($result['runtime_error'])) {
+            return $result;
+        }
+
+        $runtimeError = $result['runtime_error'];
+
+        if (! $runtimeError->retryable) {
+            return $result;
+        }
+
+        $retryAttempts[] = [
+            'provider' => $config['provider_name'] ?? 'unknown',
+            'model' => $config['model'] ?? 'unknown',
+            'error' => $runtimeError->userMessage,
+            'error_type' => $runtimeError->errorType->value,
+            'latency_ms' => $runtimeError->latencyMs,
+        ];
+
+        $this->runtimeLogger->retryAttempted(
+            providerName: (string) ($config['provider_name'] ?? 'unknown'),
+            model: $config['model'],
+            error: $runtimeError,
+        );
+
+        return $this->chatWithTools($credentials, $config, $apiMessages, $tools);
     }
 
     /**
@@ -250,28 +365,8 @@ class AgenticRuntime
             providerName: $config['provider_name'],
             tools: $tools !== [] ? $tools : null,
             toolChoice: $tools !== [] ? 'auto' : null,
+            apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
         ));
-    }
-
-    /**
-     * Build an error result from an LLM failure payload.
-     *
-     * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}  $config
-     * @param  array<string, mixed>  $result
-     * @return array{content: string, run_id: string, meta: array<string, mixed>}|null
-     */
-    private function buildLlmErrorResult(string $runId, array $config, array $result): ?array
-    {
-        if (! isset($result['runtime_error'])) {
-            return null;
-        }
-
-        return $this->responseFactory->error(
-            $runId,
-            $config['model'],
-            (string) ($config['provider_name'] ?? 'unknown'),
-            $result['runtime_error'],
-        );
     }
 
     /**
@@ -463,12 +558,13 @@ class AgenticRuntime
     /**
      * Execute the tool-calling loop with streaming on the final response.
      *
-     * Intermediate tool-call iterations use synchronous chat. The final
-     * text response iteration uses the streaming client and yields delta events.
+     * Intermediate tool-call iterations use synchronous chat with retry.
+     * The final text response iteration uses the streaming client.
      *
      * @param  array<string, mixed>  $config
      * @param  array{api_key: string, base_url: string}  $credentials
      * @param  list<Message>  $messages
+     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
     private function runStreamingToolLoop(
@@ -477,16 +573,18 @@ class AgenticRuntime
         array $credentials,
         array $messages,
         ?string $systemPrompt,
+        array $fallbackAttempts,
     ): \Generator {
         $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
         $tools = $this->toolRegistry->toolDefinitionsForCurrentUser();
         $toolActions = [];
         $clientActions = [];
+        $retryAttempts = [];
 
         yield ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => $runId]];
 
         for ($iteration = 0; $iteration < self::MAX_ITERATIONS; $iteration++) {
-            $result = $this->chatWithTools($credentials, $config, $apiMessages, $tools);
+            $result = $this->chatWithRetry($credentials, $config, $apiMessages, $tools, $retryAttempts);
 
             if (isset($result['runtime_error'])) {
                 $runtimeError = $result['runtime_error'];
@@ -499,10 +597,16 @@ class AgenticRuntime
                 yield ['event' => 'error', 'data' => [
                     'message' => $runtimeError->userMessage,
                     'run_id' => $runId,
-                    'meta' => $this->responseFactory->errorMeta(
-                        $config['model'],
-                        (string) ($config['provider_name'] ?? 'unknown'),
-                        $runtimeError,
+                    'meta' => array_merge(
+                        $this->responseFactory->errorMeta(
+                            $config['model'],
+                            (string) ($config['provider_name'] ?? 'unknown'),
+                            $runtimeError,
+                        ),
+                        [
+                            'retry_attempts' => $retryAttempts,
+                            'fallback_attempts' => $fallbackAttempts,
+                        ],
                     ),
                 ]];
 
@@ -511,7 +615,7 @@ class AgenticRuntime
 
             if ($this->hasNoToolCalls($result)) {
                 yield from $this->streamFinalResponse(
-                    $runId, $config, $credentials, $apiMessages, $tools, $toolActions, $clientActions,
+                    $runId, $config, $credentials, $apiMessages, $tools, $toolActions, $clientActions, $retryAttempts, $fallbackAttempts,
                 );
 
                 return;
@@ -551,10 +655,16 @@ class AgenticRuntime
         yield ['event' => 'error', 'data' => [
             'message' => $maxIterError->userMessage,
             'run_id' => $runId,
-            'meta' => $this->responseFactory->errorMeta(
-                $config['model'],
-                (string) ($config['provider_name'] ?? 'unknown'),
-                $maxIterError,
+            'meta' => array_merge(
+                $this->responseFactory->errorMeta(
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $maxIterError,
+                ),
+                [
+                    'retry_attempts' => $retryAttempts,
+                    'fallback_attempts' => $fallbackAttempts,
+                ],
             ),
         ]];
     }
@@ -568,6 +678,8 @@ class AgenticRuntime
      * @param  list<array<string, mixed>>  $tools
      * @param  list<array<string, mixed>>  $toolActions
      * @param  list<string>  $clientActions
+     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $retryAttempts
+     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
     private function streamFinalResponse(
@@ -578,6 +690,8 @@ class AgenticRuntime
         array $tools,
         array $toolActions,
         array $clientActions,
+        array $retryAttempts,
+        array $fallbackAttempts,
     ): \Generator {
         $fullContent = '';
         $usage = null;
@@ -594,6 +708,7 @@ class AgenticRuntime
             providerName: $config['provider_name'],
             tools: $tools !== [] ? $tools : null,
             toolChoice: $tools !== [] ? 'auto' : null,
+            apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
         ));
 
         foreach ($stream as $event) {
@@ -621,10 +736,16 @@ class AgenticRuntime
                     'message' => $message,
                     'run_id' => $runId,
                     'meta' => $runtimeError instanceof AiRuntimeError
-                        ? $this->responseFactory->errorMeta(
-                            $config['model'],
-                            (string) ($config['provider_name'] ?? 'unknown'),
-                            $runtimeError,
+                        ? array_merge(
+                            $this->responseFactory->errorMeta(
+                                $config['model'],
+                                (string) ($config['provider_name'] ?? 'unknown'),
+                                $runtimeError,
+                            ),
+                            [
+                                'retry_attempts' => $retryAttempts,
+                                'fallback_attempts' => $fallbackAttempts,
+                            ],
                         )
                         : null,
                 ]];
@@ -651,10 +772,16 @@ class AgenticRuntime
             yield ['event' => 'error', 'data' => [
                 'message' => $emptyError->userMessage,
                 'run_id' => $runId,
-                'meta' => $this->responseFactory->errorMeta(
-                    $config['model'],
-                    (string) ($config['provider_name'] ?? 'unknown'),
-                    $emptyError,
+                'meta' => array_merge(
+                    $this->responseFactory->errorMeta(
+                        $config['model'],
+                        (string) ($config['provider_name'] ?? 'unknown'),
+                        $emptyError,
+                    ),
+                    [
+                        'retry_attempts' => $retryAttempts,
+                        'fallback_attempts' => $fallbackAttempts,
+                    ],
                 ),
             ]];
 
@@ -673,7 +800,8 @@ class AgenticRuntime
                 'prompt' => $usage['prompt_tokens'] ?? null,
                 'completion' => $usage['completion_tokens'] ?? null,
             ],
-            'fallback_attempts' => [],
+            'fallback_attempts' => $fallbackAttempts,
+            'retry_attempts' => $retryAttempts,
         ];
 
         if ($toolActions !== []) {
@@ -685,5 +813,22 @@ class AgenticRuntime
             'content' => $fullContent,
             'meta' => $meta,
         ]];
+    }
+
+    /**
+     * Build a structured fallback attempt entry for metadata.
+     *
+     * @param  array<string, mixed>  $config
+     * @return array{provider: string, model: string, error: string, error_type: string, latency_ms: int}
+     */
+    private function buildFallbackAttempt(array $config, AiRuntimeError $error): array
+    {
+        return [
+            'provider' => $config['provider_name'] ?? 'unknown',
+            'model' => $config['model'] ?? 'unknown',
+            'error' => $error->userMessage,
+            'error_type' => $error->errorType->value,
+            'latency_ms' => $error->latencyMs,
+        ];
     }
 }

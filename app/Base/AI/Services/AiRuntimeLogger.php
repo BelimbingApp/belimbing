@@ -81,6 +81,55 @@ class AiRuntimeLogger
     }
 
     /**
+     * Log the result of a provider connectivity test.
+     *
+     * @param  string  $providerName  Provider name
+     * @param  string  $model  Model identifier
+     * @param  bool  $connected  Whether the test succeeded
+     * @param  ?int  $latencyMs  Response latency in milliseconds
+     * @param  ?AiRuntimeError  $error  Structured error on failure
+     */
+    public function providerTestCompleted(
+        string $providerName,
+        string $model,
+        bool $connected,
+        ?int $latencyMs = null,
+        ?AiRuntimeError $error = null,
+    ): void {
+        $context = [
+            'provider_name' => $providerName,
+            'model' => $model,
+            'connected' => $connected,
+            'latency_ms' => $latencyMs,
+        ];
+
+        if ($error !== null) {
+            $context = array_merge($context, $error->toLogContext());
+        }
+
+        $level = $connected ? 'info' : 'warning';
+        $this->logger->log($level, 'AI provider test completed', $context);
+    }
+
+    /**
+     * Log a retry attempt after a transient failure.
+     *
+     * @param  string  $providerName  Provider name
+     * @param  string  $model  Model identifier
+     * @param  AiRuntimeError  $error  The transient error that triggered the retry
+     */
+    public function retryAttempted(string $providerName, string $model, AiRuntimeError $error): void
+    {
+        $this->logger->info('AI retry attempted', array_merge(
+            [
+                'provider_name' => $providerName,
+                'model' => $model,
+            ],
+            $error->toLogContext(),
+        ));
+    }
+
+    /**
      * Log a streaming-specific failure.
      *
      * @param  string  $runId  Unique run identifier
