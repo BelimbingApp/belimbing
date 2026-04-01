@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Models;
 
+use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -27,7 +28,9 @@ class AiProvider extends Model
         'name',
         'display_name',
         'base_url',
-        'api_key',
+        'auth_type',
+        'credentials',
+        'connection_config',
         'is_active',
         'priority',
         'created_by',
@@ -39,12 +42,25 @@ class AiProvider extends Model
     protected function casts(): array
     {
         return [
-            'api_key' => 'encrypted',
+            'auth_type' => AuthType::class,
+            'credentials' => 'encrypted:array',
+            'connection_config' => 'array',
             'is_active' => 'boolean',
             'priority' => 'integer',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Backward-compat accessor: reads api_key from the credentials bag.
+     *
+     * Used by callers migrating from the old single-column schema.
+     * Prefer reading from credentials directly in new code.
+     */
+    public function getApiKeyAttribute(): ?string
+    {
+        return data_get($this->credentials, 'api_key');
     }
 
     /**

@@ -162,7 +162,7 @@ class ConfigResolver
                 ->first();
 
             if ($provider) {
-                $resolved['api_key'] = $provider->api_key;
+                $resolved['api_key'] = $provider->credentials['api_key'] ?? '';
                 $resolved['base_url'] = $provider->base_url;
                 $resolved['provider_name'] = $provider->name;
             }
@@ -227,7 +227,7 @@ class ConfigResolver
         $defaults = $this->runtimeDefaults();
 
         return [
-            'api_key' => $provider->api_key,
+            'api_key' => $provider->credentials['api_key'] ?? '',
             'base_url' => $provider->base_url,
             'model' => $model->model_id,
             'max_tokens' => $defaults['max_tokens'],
@@ -261,7 +261,7 @@ class ConfigResolver
         $defaults = $this->runtimeDefaults();
 
         return [
-            'api_key' => $provider->api_key,
+            'api_key' => $provider->credentials['api_key'] ?? '',
             'base_url' => $provider->base_url,
             'model' => $modelId,
             'max_tokens' => $defaults['max_tokens'],

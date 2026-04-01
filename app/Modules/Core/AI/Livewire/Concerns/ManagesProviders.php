@@ -86,7 +86,7 @@ trait ManagesProviders
         $this->providerName = $provider->name;
         $this->providerDisplayName = $provider->display_name ?? '';
         $this->providerBaseUrl = $provider->base_url;
-        $this->providerApiKeyPreview = BlbStr::maskMiddle($provider->api_key, 7, 4);
+        $this->providerApiKeyPreview = BlbStr::maskMiddle($provider->credentials['api_key'] ?? '', 7, 4);
         $this->providerIsActive = $provider->is_active;
         $this->showProviderForm = true;
     }
@@ -129,13 +129,15 @@ trait ManagesProviders
                 unset($data['name']);
 
                 if ($this->providerApiKey !== '') {
-                    $data['api_key'] = $this->providerApiKey;
+                    $data['credentials'] = ['api_key' => $this->providerApiKey];
                 }
 
                 $provider->update($data);
             }
         } else {
-            $data['api_key'] = $this->providerApiKey;
+            $data['auth_type'] = 'api_key';
+            $data['credentials'] = ['api_key' => $this->providerApiKey];
+            $data['connection_config'] = [];
             $data['created_by'] = auth()->user()->employee?->id;
             AiProvider::query()->create($data);
         }

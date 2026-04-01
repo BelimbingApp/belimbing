@@ -7,21 +7,19 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Enums\AiErrorType;
-use App\Base\AI\Services\GithubCopilotAuthService;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Support\Facades\Http;
+use App\Base\AI\Exceptions\GithubCopilotAuthException;
+use App\Modules\Core\AI\Models\AiProvider;
 
 /**
- * Resolves API credentials for runtime calls, including provider-specific exchanges.
+ * Resolves API credentials for runtime calls by dispatching through provider definitions.
  *
- * Beyond credential resolution, performs provider-specific pre-flight checks:
- * - github-copilot: exchanges device token for a Copilot API token
- * - copilot-proxy: verifies the local proxy server is reachable
+ * Each provider's definition owns its credential transformation logic
+ * (e.g. token exchange for GitHub Copilot, connectivity probes for local providers).
  */
 class RuntimeCredentialResolver
 {
     public function __construct(
-        private readonly GithubCopilotAuthService $githubCopilotAuth,
+        private readonly ProviderDefinitionRegistry $registry,
     ) {}
 
     /**
@@ -42,69 +40,72 @@ class RuntimeCredentialResolver
     }
 
     /**
-     * Resolve provider-specific credentials after basic configuration is validated.
+     * Resolve credentials by dispatching to the provider's definition.
      *
      * @param  array<string, mixed>  $config
      * @return array{api_key: string, base_url: string}|array{runtime_error: AiRuntimeError}
      */
     private function resolveCredentials(array $config): array
     {
-        $apiKey = $config['api_key'];
-        $baseUrl = $config['base_url'];
+        $providerName = $config['provider_name'] ?? 'default';
 
-        if ($config['provider_name'] === 'github-copilot') {
-            try {
-                $copilot = $this->githubCopilotAuth->exchangeForCopilotToken($apiKey);
-                $apiKey = $copilot['token'];
-                $baseUrl = $copilot['base_url'];
-            } catch (\RuntimeException $e) {
-                return [
-                    'runtime_error' => AiRuntimeError::fromType(
-                        AiErrorType::AuthError,
-                        'Copilot token exchange failed: '.$e->getMessage(),
-                        'Re-authenticate via the GitHub Copilot device flow.',
-                    ),
-                ];
-            }
+        if ($providerName === 'default') {
+            return [
+                'api_key' => $config['api_key'],
+                'base_url' => $config['base_url'],
+            ];
         }
 
-        if ($config['provider_name'] === 'copilot-proxy') {
-            $connectivityError = $this->checkLocalConnectivity($baseUrl);
-
-            if ($connectivityError !== null) {
-                return ['runtime_error' => $connectivityError];
-            }
-        }
-
-        return ['api_key' => $apiKey, 'base_url' => $baseUrl];
+        return $this->resolveViaDefinition($this->providerFromConfig($providerName, $config));
     }
 
     /**
-     * Verify a local provider endpoint is reachable by probing its /models listing.
+     * Resolve credentials through the provider's definition.
+     *
+     * @return array{api_key: string, base_url: string}|array{runtime_error: AiRuntimeError}
      */
-    private function checkLocalConnectivity(string $baseUrl): ?AiRuntimeError
+    private function resolveViaDefinition(AiProvider $provider): array
     {
+        $definition = $this->registry->for($provider->name);
+
         try {
-            $response = Http::timeout(5)
-                ->get(rtrim($baseUrl, '/').'/models');
+            $resolved = $definition->resolveRuntime($provider);
 
-            if ($response->failed()) {
-                return AiRuntimeError::fromType(
+            return [
+                'api_key' => $resolved->apiKey ?? '',
+                'base_url' => $resolved->baseUrl,
+            ];
+        } catch (GithubCopilotAuthException $e) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::AuthError,
+                    "Provider {$provider->name}: {$e->getMessage()}",
+                    'Re-authenticate via the GitHub Copilot device flow.',
+                ),
+            ];
+        } catch (\RuntimeException $e) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
                     AiErrorType::ConnectionError,
-                    "Copilot Proxy at {$baseUrl} returned HTTP {$response->status()}",
-                    'Ensure the proxy extension is running in VS Code.',
-                    httpStatus: $response->status(),
-                );
-            }
-        } catch (ConnectionException) {
-            return AiRuntimeError::fromType(
-                AiErrorType::ConnectionError,
-                "Could not connect to Copilot Proxy at {$baseUrl}",
-                'Is the VS Code extension running?',
-            );
+                    "Provider {$provider->name}: {$e->getMessage()}",
+                ),
+            ];
         }
+    }
 
-        return null;
+    /**
+     * Build a transient provider model from resolved runtime config.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    private function providerFromConfig(string $providerName, array $config): AiProvider
+    {
+        return new AiProvider([
+            'name' => $providerName,
+            'base_url' => (string) ($config['base_url'] ?? ''),
+            'credentials' => ['api_key' => (string) ($config['api_key'] ?? '')],
+            'connection_config' => $config['connection_config'] ?? [],
+        ]);
     }
 
     /**
@@ -114,6 +115,23 @@ class RuntimeCredentialResolver
     private function configurationError(array $config): ?array
     {
         $providerName = $config['provider_name'] ?? 'default';
+
+        // Local providers may not require an API key
+        $definition = $this->registry->for($providerName);
+
+        if (! $definition->authType()->requiresApiKey()) {
+            // Only base_url is required for local/keyless providers
+            if (empty($config['base_url'])) {
+                return [
+                    'runtime_error' => AiRuntimeError::fromType(
+                        AiErrorType::ConfigError,
+                        "Base URL is not configured for provider {$providerName}",
+                    ),
+                ];
+            }
+
+            return null;
+        }
 
         if (empty($config['api_key'])) {
             return [

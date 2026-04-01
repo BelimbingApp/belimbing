@@ -6,7 +6,6 @@ use App\Base\AI\Contracts\Tool;
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\AiRuntimeLogger;
-use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
@@ -94,20 +93,55 @@ trait MakesRuntimeResponses
         return $registry;
     }
 
+    /**
+     * Build a RuntimeCredentialResolver that validates api_key / base_url
+     * from config without hitting the database. Used by unit tests that test
+     * runtime orchestration, not credential resolution.
+     */
+    protected function makePassthroughCredentialResolver(): RuntimeCredentialResolver
+    {
+        $resolver = \Mockery::mock(RuntimeCredentialResolver::class);
+        $resolver->shouldReceive('resolve')
+            ->andReturnUsing(function (array $config) {
+                if (empty($config['api_key'])) {
+                    return [
+                        'runtime_error' => AiRuntimeError::fromType(
+                            AiErrorType::ConfigError,
+                            'API key is not configured for provider '.($config['provider_name'] ?? 'default'),
+                        ),
+                    ];
+                }
+
+                if (empty($config['base_url'])) {
+                    return [
+                        'runtime_error' => AiRuntimeError::fromType(
+                            AiErrorType::ConfigError,
+                            'Base URL is not configured for provider '.($config['provider_name'] ?? 'default'),
+                        ),
+                    ];
+                }
+
+                return [
+                    'api_key' => $config['api_key'],
+                    'base_url' => $config['base_url'],
+                ];
+            });
+
+        return $resolver;
+    }
+
     protected function makeAgenticRuntime(
         LlmClient $llmClient,
         ?ConfigResolver $configResolver = null,
         ?AgentToolRegistry $toolRegistry = null,
-        ?GithubCopilotAuthService $copilotAuth = null,
     ): AgenticRuntime {
-        $copilotAuth ??= \Mockery::mock(GithubCopilotAuthService::class);
         $runtimeLogger = app(AiRuntimeLogger::class);
 
         return new AgenticRuntime(
             $configResolver ?? $this->mockResolvedConfigResolver([$this->makeConfig('test-provider', 'gpt-4', 'test-key')]),
             $llmClient,
             $toolRegistry ?? $this->makeToolRegistry(),
-            new RuntimeCredentialResolver($copilotAuth),
+            $this->makePassthroughCredentialResolver(),
             new RuntimeMessageBuilder,
             new RuntimeResponseFactory($runtimeLogger),
             $runtimeLogger,
@@ -117,15 +151,13 @@ trait MakesRuntimeResponses
     protected function makeAgentRuntime(
         ConfigResolver $configResolver,
         LlmClient $llmClient,
-        ?GithubCopilotAuthService $copilotAuth = null,
     ): AgentRuntime {
-        $copilotAuth ??= \Mockery::mock(GithubCopilotAuthService::class);
         $runtimeLogger = app(AiRuntimeLogger::class);
 
         return new AgentRuntime(
             $configResolver,
             $llmClient,
-            new RuntimeCredentialResolver($copilotAuth),
+            $this->makePassthroughCredentialResolver(),
             new RuntimeMessageBuilder,
             new RuntimeResponseFactory($runtimeLogger),
         );

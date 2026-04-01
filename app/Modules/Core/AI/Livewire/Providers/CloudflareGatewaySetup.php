@@ -42,45 +42,31 @@ class CloudflareGatewaySetup extends ProviderSetup
     }
 
     /**
-     * Build validation rules for Cloudflare gateway setup fields.
+     * Gather Cloudflare-specific input for the definition.
      *
-     * Overrides parent because base URL is derived from account + gateway IDs.
+     * Overrides parent to provide account_id and gateway_id instead of base_url.
+     * The CloudflareGatewayDefinition derives the base URL from these.
      *
-     * @return array<string, list<string>>
+     * @return array<string, mixed>
      */
-    protected function buildValidationRules(): array
+    protected function gatherInput(): array
     {
         return [
-            'cloudflareAccountId' => ['required', 'string', 'max:255'],
-            'cloudflareGatewayId' => ['required', 'string', 'max:255'],
-            'apiKey' => ['required', 'string', 'max:2048'],
+            'account_id' => $this->cloudflareAccountId,
+            'gateway_id' => $this->cloudflareGatewayId,
+            'api_key' => $this->apiKey,
         ];
     }
 
     /**
-     * Build validation messages for Cloudflare gateway setup fields.
-     *
-     * @return array<string, string>
+     * Map Cloudflare definition field keys to Livewire property names.
      */
-    protected function buildValidationMessages(): array
+    protected function mapFieldToProperty(string $fieldKey): string
     {
-        return array_merge(parent::buildValidationMessages(), [
-            'cloudflareAccountId.required' => __('Account ID is required.'),
-            'cloudflareGatewayId.required' => __('Gateway ID is required.'),
-        ]);
-    }
-
-    /**
-     * Build Cloudflare AI Gateway base URL from Account ID and Gateway ID.
-     *
-     * Overrides parent to convert Cloudflare-specific fields into the
-     * OpenAI-compatible endpoint consumed by provider discovery.
-     */
-    protected function resolveBaseUrl(): string
-    {
-        $accountId = trim($this->cloudflareAccountId);
-        $gatewayId = trim($this->cloudflareGatewayId);
-
-        return "https://gateway.ai.cloudflare.com/v1/{$accountId}/{$gatewayId}/openai";
+        return match ($fieldKey) {
+            'account_id' => 'cloudflareAccountId',
+            'gateway_id' => 'cloudflareGatewayId',
+            default => parent::mapFieldToProperty($fieldKey),
+        };
     }
 }

@@ -140,7 +140,7 @@ trait ResolvesAvailableModels
         }
 
         $credentials = app(RuntimeCredentialResolver::class)->resolve([
-            'api_key' => $provider->api_key,
+            'api_key' => $provider->credentials['api_key'] ?? '',
             'base_url' => $provider->base_url,
             'provider_name' => $provider->name,
         ]);

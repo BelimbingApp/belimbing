@@ -8,7 +8,6 @@ namespace App\Modules\Core\AI\Services;
 use App\Base\AI\Exceptions\GithubCopilotAuthException;
 use App\Base\AI\Exceptions\ModelCatalogSyncException;
 use App\Base\AI\Exceptions\ProviderDiscoveryException;
-use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Base\AI\Services\ModelCatalogService;
 use App\Base\AI\Services\ProviderDiscoveryService;
 use App\Modules\Core\AI\Models\AiProvider;
@@ -21,7 +20,7 @@ use RuntimeException;
  * Delegates stateless operations to Base services:
  *   - ProviderDiscoveryService for API discovery (GET /models)
  *   - ModelCatalogService for community catalog data (models.dev)
- *   - GithubCopilotAuthService for Copilot token exchange
+ *   - ProviderDefinitionRegistry for credential resolution
  *
  * Handles company-scoped concerns: DB upsert, default model selection,
  * catalog enrichment fallback.
@@ -29,7 +28,7 @@ use RuntimeException;
 class ModelDiscoveryService
 {
     public function __construct(
-        private readonly GithubCopilotAuthService $githubCopilotAuth,
+        private readonly ProviderDefinitionRegistry $registry,
         private readonly ProviderDiscoveryService $providerDiscovery,
         private readonly ModelCatalogService $modelCatalog,
     ) {}
@@ -37,27 +36,23 @@ class ModelDiscoveryService
     /**
      * Discover available models from a provider's API.
      *
-     * For GitHub Copilot, exchanges the stored token first. Delegates the
-     * actual HTTP discovery to Base ProviderDiscoveryService.
+     * Resolves runtime credentials through the provider's definition,
+     * which handles provider-specific transformations (e.g. token exchange).
      *
-     * @param  AiProvider  $provider  Provider with base_url and api_key
+     * @param  AiProvider  $provider  Provider with base_url and credentials
      * @return list<array{model_id: string, display_name: string}>
      *
      * @throws GithubCopilotAuthException|ProviderDiscoveryException
      */
     public function discoverModels(AiProvider $provider): array
     {
-        $baseUrl = rtrim($provider->base_url, '/');
-        $apiKey = $provider->api_key;
+        $definition = $this->registry->for($provider->name);
+        $resolved = $definition->resolveRuntime($provider);
 
-        // GitHub Copilot: exchange GitHub token for Copilot API token
-        if ($provider->name === 'github-copilot') {
-            $copilot = $this->githubCopilotAuth->exchangeForCopilotToken($apiKey);
-            $baseUrl = rtrim($copilot['base_url'], '/');
-            $apiKey = $copilot['token'];
-        }
-
-        return $this->providerDiscovery->discoverModels($baseUrl, $apiKey);
+        return $this->providerDiscovery->discoverModels(
+            rtrim($resolved->baseUrl, '/'),
+            $resolved->apiKey ?? '',
+        );
     }
 
     /**

@@ -65,7 +65,7 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                     wire:key="provider-{{ $provider->id }}"
                                     wire:click="toggleProvider({{ $provider->id }})"
                                     x-data="{ flash: false }"
-                                    x-init="$wire.on('priority-changed', (id) => { if (id == {{ $provider->id }}) { flash = true; setTimeout(() => flash = false, 600) } })"
+                                    x-init="$wire.on('priority-changed', (id) => { if (id == {{ $provider->id }}) { flash = true; setTimeout(() => flash = false, 1800) } })"
                                     :class="flash ? 'bg-accent/10' : ''"
                                     class="hover:bg-surface-subtle/50 transition-colors duration-800 cursor-pointer"
                                 >
@@ -76,13 +76,12 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                         />
                                     </td>
                                     <td class="hidden md:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">
-                                        <div class="flex items-center gap-1">
-                                            <span>{{ $provider->name }}</span>
-                                            <x-ui.help
-                                                wire:click.stop="openProviderHelp('{{ $provider->name }}', '{{ $provider->auth_type ?? 'api_key' }}')"
-                                                title="{{ __('Setup & troubleshooting') }}"
-                                            />
-                                        </div>
+                                        @include('livewire.admin.ai.providers.partials.provider-help-trigger', [
+                                            'label' => $provider->name,
+                                            'providerKey' => $provider->name,
+                                            'authType' => $provider->auth_type->value,
+                                            'scope' => 'connected',
+                                        ])
                                     </td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $provider->display_name }}</td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-left" @click.stop>
@@ -131,14 +130,14 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                 </tr>
 
                                 {{-- Provider help panel --}}
-                                @if($helpProviderKey === $provider->name)
-                                    <x-ai.provider-help-panel
-                                        wire:key="provider-{{ $provider->id }}-help"
-                                        :provider-name="$provider->display_name"
-                                        :help="$this->activeProviderHelp()"
-                                        :colspan="8"
-                                    />
-                                @endif
+                                @include('livewire.admin.ai.providers.partials.provider-help-inline-panel', [
+                                    'matchKey' => $provider->name,
+                                    'scope' => 'connected',
+                                    'wireKey' => 'provider-'.$provider->id.'-help',
+                                    'providerName' => $provider->display_name,
+                                    'colspan' => 8,
+                                    'visibilityExpression' => null,
+                                ])
 
                                 {{-- Expanded models sub-table --}}
                                 @if($expandedProviderId === $provider->id)
@@ -301,11 +300,15 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">
                         @foreach($catalog as $entry)
+                            @php
+                                $catalogSearchText = mb_strtolower($entry['key'].' '.$entry['display_name'].' '.($entry['description'] ?? ''));
+                                $catalogVisibility = 'matchesSearch('.\Illuminate\Support\Js::from($catalogSearchText).') && matchesFilters('.\Illuminate\Support\Js::from($entry['category']).', '.\Illuminate\Support\Js::from($entry['region']).')';
+                            @endphp
                             <tr
                                 wire:key="catalog-{{ $entry['key'] }}"
                                 wire:click="toggleCatalogProvider('{{ $entry['key'] }}')"
                                 class="hover:bg-surface-subtle/50 transition-colors cursor-pointer"
-                                x-show="matchesSearch('{{ mb_strtolower($entry['key'].' '.$entry['display_name'].' '.($entry['description'] ?? '')) }}') && matchesFilters({{ json_encode($entry['category']) }}, {{ json_encode($entry['region']) }})"
+                                x-show="{{ $catalogVisibility }}"
                             >
                                 <td class="px-table-cell-x py-table-cell-y">
                                     <x-icon
@@ -314,13 +317,12 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                     />
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">
-                                    <div class="flex items-center gap-1">
-                                        <span>{{ $entry['display_name'] }}</span>
-                                        <x-ui.help
-                                            wire:click.stop="openProviderHelp('{{ $entry['key'] }}', '{{ $entry['auth_type'] ?? 'api_key' }}')"
-                                            title="{{ __('Setup & troubleshooting') }}"
-                                        />
-                                    </div>
+                                    @include('livewire.admin.ai.providers.partials.provider-help-trigger', [
+                                        'label' => $entry['display_name'],
+                                        'providerKey' => $entry['key'],
+                                        'authType' => $entry['auth_type'] ?? 'api_key',
+                                        'scope' => 'catalog',
+                                    ])
                                 </td>
                                 <td class="hidden md:table-cell px-table-cell-x py-table-cell-y text-sm text-muted">{{ $entry['description'] }}</td>
                                 <td class="hidden md:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums text-right">{{ $entry['model_count'] ?: '—' }}</td>
@@ -347,20 +349,19 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                             </tr>
 
                             {{-- Provider help panel (inline) --}}
-                            @if($helpProviderKey === $entry['key'])
-                                <x-ai.provider-help-panel
-                                    wire:key="catalog-{{ $entry['key'] }}-help"
-                                    :provider-name="$entry['display_name']"
-                                    :help="$this->activeProviderHelp()"
-                                    :colspan="6"
-                                    x-show="matchesSearch('{{ mb_strtolower($entry['key'].' '.$entry['display_name'].' '.($entry['description'] ?? '')) }}') && matchesFilters({{ json_encode($entry['category']) }}, {{ json_encode($entry['region']) }})"
-                                />
-                            @endif
+                            @include('livewire.admin.ai.providers.partials.provider-help-inline-panel', [
+                                'matchKey' => $entry['key'],
+                                'scope' => 'catalog',
+                                'wireKey' => 'catalog-'.$entry['key'].'-help',
+                                'providerName' => $entry['display_name'],
+                                'colspan' => 6,
+                                'visibilityExpression' => $catalogVisibility,
+                            ])
 
                             {{-- Expanded model catalog --}}
                             @if($expandedCatalogProvider === $entry['key'] && count($entry['models']) > 0)
                                 <tr wire:key="catalog-{{ $entry['key'] }}-models"
-                                    x-show="matchesSearch('{{ mb_strtolower($entry['key'].' '.$entry['display_name'].' '.($entry['description'] ?? '')) }}') && matchesFilters({{ json_encode($entry['category']) }}, {{ json_encode($entry['region']) }})"
+                                    x-show="{{ $catalogVisibility }}"
                                 >
                                     <td colspan="6" class="p-0">
                                         <div class="bg-surface-subtle/30 border-t border-border-default px-8 py-3">
