@@ -20,7 +20,9 @@ return new class extends Migration
             $table->string('name');
             $table->string('display_name');
             $table->string('base_url');
-            $table->text('api_key');
+            $table->string('auth_type')->default('api_key');
+            $table->text('credentials')->nullable();
+            $table->json('connection_config')->nullable();
             $table->boolean('is_active')->default(true);
             $table->unsignedSmallInteger('priority')->default(0);
             $table->unsignedBigInteger('created_by')->nullable()->index();

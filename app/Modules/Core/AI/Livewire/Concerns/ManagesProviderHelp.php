@@ -19,20 +19,24 @@ trait ManagesProviderHelp
 
     public ?string $helpProviderAuthType = null;
 
+    public ?string $helpPanelScope = null;
+
     /**
      * Open the provider help panel (toggle behavior).
      */
-    public function openProviderHelp(string $providerKey, string $authType = 'api_key'): void
+    public function openProviderHelp(string $providerKey, string $authType = 'api_key', string $scope = 'connected'): void
     {
-        if ($this->helpProviderKey === $providerKey) {
+        if ($this->helpProviderKey === $providerKey && $this->helpPanelScope === $scope) {
             $this->helpProviderKey = null;
             $this->helpProviderAuthType = null;
+            $this->helpPanelScope = null;
 
             return;
         }
 
         $this->helpProviderKey = $providerKey;
         $this->helpProviderAuthType = $authType;
+        $this->helpPanelScope = $scope;
     }
 
     /**
@@ -42,6 +46,7 @@ trait ManagesProviderHelp
     {
         $this->helpProviderKey = null;
         $this->helpProviderAuthType = null;
+        $this->helpPanelScope = null;
     }
 
     /**

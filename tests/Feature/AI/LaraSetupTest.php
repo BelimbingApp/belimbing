@@ -4,7 +4,21 @@ use App\Modules\Core\AI\Livewire\Setup\Lara;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\Company\Models\Company;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
+
+beforeEach(function (): void {
+    config()->set('ai.workspace_path', storage_path('framework/testing/lara-setup-'.Str::random(16)));
+});
+
+afterEach(function (): void {
+    $workspacePath = config('ai.workspace_path');
+
+    if (is_string($workspacePath)) {
+        File::deleteDirectory($workspacePath);
+    }
+});
 
 test('lara provider change selects the new provider default model', function (): void {
     Company::query()->find(Company::LICENSEE_ID)
@@ -15,7 +29,9 @@ test('lara provider change selects the new provider default model', function ():
         'name' => 'provider-one',
         'display_name' => 'Provider One',
         'base_url' => 'https://provider-one.example.test',
-        'api_key' => 'provider-one-key',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'provider-one-key'],
+        'connection_config' => [],
         'is_active' => true,
         'priority' => 1,
     ]);
@@ -25,7 +41,9 @@ test('lara provider change selects the new provider default model', function ():
         'name' => 'provider-two',
         'display_name' => 'Provider Two',
         'base_url' => 'https://provider-two.example.test',
-        'api_key' => 'provider-two-key',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'provider-two-key'],
+        'connection_config' => [],
         'is_active' => true,
         'priority' => 2,
     ]);

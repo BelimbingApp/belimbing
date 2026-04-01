@@ -68,7 +68,7 @@ use Illuminate\Support\Collection;
     @endif
 
     @if($syncError && $syncErrorProviderId === $provider->id)
-        @php $helpAdvice = app(\App\Base\AI\Providers\Help\ProviderHelpRegistry::class)->get($provider->name, $provider->auth_type ?? 'api_key')->connectionErrorAdvice(); @endphp
+        @php $helpAdvice = app(\App\Base\AI\Providers\Help\ProviderHelpRegistry::class)->get($provider->name, $provider->auth_type->value)->connectionErrorAdvice(); @endphp
         <div class="mb-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
             <div class="flex items-start justify-between gap-2">
                 <div class="flex items-start gap-2 min-w-0">
@@ -81,7 +81,7 @@ use Illuminate\Support\Collection;
                 <div class="flex items-center gap-1 shrink-0">
                     <button
                         type="button"
-                        wire:click.stop="openProviderHelp('{{ $provider->name }}', '{{ $provider->auth_type ?? 'api_key' }}')"
+                        wire:click.stop="openProviderHelp('{{ $provider->name }}', '{{ $provider->auth_type->value }}', 'connected')"
                         class="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline whitespace-nowrap"
                     >
                         {{ __('Get help') }}

@@ -17,11 +17,14 @@ use App\Modules\Core\AI\Livewire\Concerns\ManagesProviderHelp;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesSync;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
+use App\Modules\Core\AI\Services\ProviderDefinitionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 class ProviderSetup extends Component
@@ -129,6 +132,10 @@ class ProviderSetup extends Component
 
     /**
      * Connect the provider and import its models.
+     *
+     * Delegates validation to the provider definition. ValidationException
+     * errors are remapped from definition field keys (e.g. base_url) to
+     * Livewire property names (e.g. baseUrl) for correct error display.
      */
     public function connect(): void
     {
@@ -138,16 +145,20 @@ class ProviderSetup extends Component
             return;
         }
 
-        $rules = $this->buildValidationRules();
-
-        $this->validate($rules, $this->buildValidationMessages());
-
         $this->connectError = null;
 
         try {
             $provider = $this->connectProvider($companyId);
             $this->cleanupAuthFlows();
             $this->connectedProviderId = $provider->id;
+        } catch (ValidationException $e) {
+            $mapped = [];
+
+            foreach ($e->errors() as $key => $messages) {
+                $mapped[$this->mapFieldToProperty($key)] = $messages;
+            }
+
+            throw ValidationException::withMessages($mapped);
         } catch (ConnectionException $e) {
             $this->connectError = __('Could not connect to :url — is the server running?', [
                 'url' => $this->baseUrl,
@@ -263,43 +274,40 @@ class ProviderSetup extends Component
     }
 
     /**
-     * Build validation rules based on provider type.
+     * Gather raw input from Livewire properties for the definition.
      *
-     * @return array<string, list<string>>
+     * Keys must match the definition's expected field keys.
+     * Override in child classes that have different credential shapes.
+     *
+     * @return array<string, mixed>
      */
-    protected function buildValidationRules(): array
+    protected function gatherInput(): array
     {
-        $rules = [];
-
-        $rules['baseUrl'] = ['required', 'string', 'max:2048'];
-
-        if (in_array($this->authType, ['api_key', 'custom', 'device_flow'], true)) {
-            $rules['apiKey'] = ['required', 'string', 'max:2048'];
-        } else {
-            $rules['apiKey'] = ['nullable', 'string', 'max:2048'];
-        }
-
-        return $rules;
+        return [
+            'base_url' => $this->baseUrl,
+            'api_key' => $this->apiKey,
+        ];
     }
 
     /**
-     * Build validation messages for shared provider setup fields.
+     * Map a definition field key to its Livewire property name for error display.
      *
-     * @return array<string, string>
+     * Override in child classes with custom field mappings.
      */
-    protected function buildValidationMessages(): array
+    protected function mapFieldToProperty(string $fieldKey): string
     {
-        return [
-            'baseUrl.required' => __('Base URL is required.'),
-            'apiKey.required' => __('API key is required.'),
-        ];
+        return match ($fieldKey) {
+            'base_url' => 'baseUrl',
+            'api_key' => 'apiKey',
+            default => $fieldKey,
+        };
     }
 
     /**
      * Create the provider record and run initial model discovery.
      *
-     * Returns the connected provider (existing or newly created) so the
-     * setup page can transition to model management without redirecting.
+     * Delegates validation and normalization to the provider definition,
+     * which returns model attributes (base_url, credentials, connection_config, auth_type).
      */
     private function connectProvider(int $companyId): AiProvider
     {
@@ -309,39 +317,31 @@ class ProviderSetup extends Component
             ->first();
 
         if ($existing) {
-            $discovery = app(ModelDiscoveryService::class);
-
             if (! $existing->models()->exists()) {
-                $discovery->syncModels($existing);
+                app(ModelDiscoveryService::class)->syncModels($existing);
             }
 
             return $existing;
         }
 
-        $discovery = app(ModelDiscoveryService::class);
+        $definition = app(ProviderDefinitionRegistry::class)->for($this->providerKey);
+        $normalized = $definition->validateAndNormalize(
+            $this->gatherInput(),
+            ProviderOperation::Create,
+        );
 
-        $provider = AiProvider::query()->create([
+        $provider = AiProvider::query()->create(array_merge($normalized, [
             'company_id' => $companyId,
             'name' => $this->providerKey,
             'display_name' => $this->displayName,
-            'base_url' => $this->resolveBaseUrl(),
-            'api_key' => $this->apiKey !== '' ? $this->apiKey : 'not-required',
             'is_active' => true,
             'created_by' => auth()->user()->employee?->id,
-        ]);
+        ]));
 
         $provider->assignNextPriority();
-        $discovery->syncModels($provider);
+        app(ModelDiscoveryService::class)->syncModels($provider);
 
         return $provider;
-    }
-
-    /**
-     * Build the provider base URL used for connection and model discovery.
-     */
-    protected function resolveBaseUrl(): string
-    {
-        return $this->baseUrl;
     }
 
     private function getCompanyId(): ?int
