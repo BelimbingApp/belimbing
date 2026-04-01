@@ -37,7 +37,7 @@ PR. All in one pass — no user prompts needed.
 - [ ] If that path exists but is not a Git worktree, move it aside and recreate the worktree there
 - [ ] Switch `blb-quality-tree` to `sonar-gate` and reset to the remote default branch
 - [ ] Fetch open Sonar issues, hotspots, and quality-gate metrics
-- [ ] If the gate is failing with zero issues, fetch per-file metric breakdown for new-code duplication / other metric-only failures
+- [ ] Fetch per-file metric breakdown for new-code duplication / other metric-only failures
 - [ ] Triage into false positives, safe hotspots, fixable issues, skipped issues, and metric-only refactors
 - [ ] Mark false positives and safe hotspots via API
 - [ ] Apply code fixes
