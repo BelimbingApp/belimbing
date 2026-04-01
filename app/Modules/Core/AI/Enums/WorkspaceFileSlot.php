@@ -68,11 +68,9 @@ enum WorkspaceFileSlot: string
     }
 
     /**
-     * Whether this slot is required for the given agent class.
-     *
-     * @param  bool  $isSystemAgent  Whether the agent is framework-owned (Lara, Kodi)
+     * Whether this slot is required for workspace validation.
      */
-    public function isRequired(bool $isSystemAgent): bool
+    public function isRequired(): bool
     {
         return match ($this) {
             self::SystemPrompt => true,

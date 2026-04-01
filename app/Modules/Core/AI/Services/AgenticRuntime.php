@@ -615,7 +615,17 @@ class AgenticRuntime
 
             if ($this->hasNoToolCalls($result)) {
                 yield from $this->streamFinalResponse(
-                    $runId, $config, $credentials, $apiMessages, $tools, $toolActions, $clientActions, $retryAttempts, $fallbackAttempts,
+                    $runId,
+                    $config,
+                    $credentials,
+                    [
+                        'api_messages' => $apiMessages,
+                        'tools' => $tools,
+                        'tool_actions' => $toolActions,
+                        'client_actions' => $clientActions,
+                        'retry_attempts' => $retryAttempts,
+                        'fallback_attempts' => $fallbackAttempts,
+                    ],
                 );
 
                 return;
@@ -674,24 +684,21 @@ class AgenticRuntime
      *
      * @param  array<string, mixed>  $config
      * @param  array{api_key: string, base_url: string}  $credentials
-     * @param  list<array<string, mixed>>  $apiMessages
-     * @param  list<array<string, mixed>>  $tools
-     * @param  list<array<string, mixed>>  $toolActions
-     * @param  list<string>  $clientActions
-     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $retryAttempts
-     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
+     * @param  array{
+     *     api_messages: list<array<string, mixed>>,
+     *     tools: list<array<string, mixed>>,
+     *     tool_actions: list<array<string, mixed>>,
+     *     client_actions: list<string>,
+     *     retry_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
+     *     fallback_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>
+     * }  $streamState
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
     private function streamFinalResponse(
         string $runId,
         array $config,
         array $credentials,
-        array $apiMessages,
-        array $tools,
-        array $toolActions,
-        array $clientActions,
-        array $retryAttempts,
-        array $fallbackAttempts,
+        array $streamState,
     ): \Generator {
         $fullContent = '';
         $usage = null;
@@ -701,13 +708,13 @@ class AgenticRuntime
             baseUrl: $credentials['base_url'],
             apiKey: $credentials['api_key'],
             model: $config['model'],
-            messages: $apiMessages,
+            messages: $streamState['api_messages'],
             maxTokens: $config['max_tokens'],
             temperature: $config['temperature'],
             timeout: $config['timeout'],
             providerName: $config['provider_name'],
-            tools: $tools !== [] ? $tools : null,
-            toolChoice: $tools !== [] ? 'auto' : null,
+            tools: $streamState['tools'] !== [] ? $streamState['tools'] : null,
+            toolChoice: $streamState['tools'] !== [] ? 'auto' : null,
             apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
         ));
 
@@ -715,75 +722,28 @@ class AgenticRuntime
             if ($event['type'] === 'content_delta') {
                 $fullContent .= $event['text'];
                 yield ['event' => 'delta', 'data' => ['text' => $event['text']]];
-            } elseif ($event['type'] === 'done') {
+
+                continue;
+            }
+
+            if ($event['type'] === 'done') {
                 $usage = $event['usage'] ?? null;
                 $latencyMs = $event['latency_ms'] ?? 0;
-            } elseif ($event['type'] === 'error') {
-                $runtimeError = $event['runtime_error'] ?? null;
-                $message = $runtimeError instanceof AiRuntimeError
-                    ? $runtimeError->userMessage
-                    : ($event['message'] ?? __('An unexpected error occurred. Please try again.'));
 
-                if ($runtimeError instanceof AiRuntimeError) {
-                    $this->runtimeLogger->runFailed($runId, $runtimeError, [
-                        'model' => $config['model'],
-                        'provider_name' => $config['provider_name'] ?? 'unknown',
-                        'streaming' => true,
-                    ]);
-                }
+                continue;
+            }
 
-                yield ['event' => 'error', 'data' => [
-                    'message' => $message,
-                    'run_id' => $runId,
-                    'meta' => $runtimeError instanceof AiRuntimeError
-                        ? array_merge(
-                            $this->responseFactory->errorMeta(
-                                $config['model'],
-                                (string) ($config['provider_name'] ?? 'unknown'),
-                                $runtimeError,
-                            ),
-                            [
-                                'retry_attempts' => $retryAttempts,
-                                'fallback_attempts' => $fallbackAttempts,
-                            ],
-                        )
-                        : null,
-                ]];
+            if ($event['type'] === 'error') {
+                yield $this->streamFinalErrorEvent($runId, $config, $event, $streamState);
 
                 return;
             }
         }
 
-        if ($clientActions !== []) {
-            $fullContent = implode("\n", $clientActions)."\n".$fullContent;
-        }
+        $fullContent = $this->prependClientActions($fullContent, $streamState['client_actions']);
 
-        if (trim($fullContent) === '' && $clientActions === []) {
-            $emptyError = AiRuntimeError::fromType(
-                AiErrorType::EmptyResponse,
-                'Streaming response completed with no content',
-                latencyMs: $latencyMs,
-            );
-            $this->runtimeLogger->runFailed($runId, $emptyError, [
-                'model' => $config['model'],
-                'provider_name' => $config['provider_name'] ?? 'unknown',
-                'streaming' => true,
-            ]);
-            yield ['event' => 'error', 'data' => [
-                'message' => $emptyError->userMessage,
-                'run_id' => $runId,
-                'meta' => array_merge(
-                    $this->responseFactory->errorMeta(
-                        $config['model'],
-                        (string) ($config['provider_name'] ?? 'unknown'),
-                        $emptyError,
-                    ),
-                    [
-                        'retry_attempts' => $retryAttempts,
-                        'fallback_attempts' => $fallbackAttempts,
-                    ],
-                ),
-            ]];
+        if (trim($fullContent) === '' && $streamState['client_actions'] === []) {
+            yield $this->streamEmptyContentError($runId, $config, $latencyMs, $streamState);
 
             return;
         }
@@ -800,18 +760,111 @@ class AgenticRuntime
                 'prompt' => $usage['prompt_tokens'] ?? null,
                 'completion' => $usage['completion_tokens'] ?? null,
             ],
-            'fallback_attempts' => $fallbackAttempts,
-            'retry_attempts' => $retryAttempts,
+            'fallback_attempts' => $streamState['fallback_attempts'],
+            'retry_attempts' => $streamState['retry_attempts'],
         ];
 
-        if ($toolActions !== []) {
-            $meta['tool_actions'] = $toolActions;
+        if ($streamState['tool_actions'] !== []) {
+            $meta['tool_actions'] = $streamState['tool_actions'];
         }
 
         yield ['event' => 'done', 'data' => [
             'run_id' => $runId,
             'content' => $fullContent,
             'meta' => $meta,
+        ]];
+    }
+
+    /**
+     * @param  list<string>  $clientActions
+     */
+    private function prependClientActions(string $fullContent, array $clientActions): string
+    {
+        if ($clientActions === []) {
+            return $fullContent;
+        }
+
+        return implode("\n", $clientActions)."\n".$fullContent;
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $event
+     * @param  array{
+     *     retry_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
+     *     fallback_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>
+     * }  $streamState
+     * @return array{event: string, data: array<string, mixed>}
+     */
+    private function streamFinalErrorEvent(string $runId, array $config, array $event, array $streamState): array
+    {
+        $runtimeError = $event['runtime_error'] ?? null;
+        $message = $runtimeError instanceof AiRuntimeError
+            ? $runtimeError->userMessage
+            : ($event['message'] ?? __('An unexpected error occurred. Please try again.'));
+
+        if ($runtimeError instanceof AiRuntimeError) {
+            $this->runtimeLogger->runFailed($runId, $runtimeError, [
+                'model' => $config['model'],
+                'provider_name' => $config['provider_name'] ?? 'unknown',
+                'streaming' => true,
+            ]);
+        }
+
+        return ['event' => 'error', 'data' => [
+            'message' => $message,
+            'run_id' => $runId,
+            'meta' => $runtimeError instanceof AiRuntimeError
+                ? array_merge(
+                    $this->responseFactory->errorMeta(
+                        $config['model'],
+                        (string) ($config['provider_name'] ?? 'unknown'),
+                        $runtimeError,
+                    ),
+                    [
+                        'retry_attempts' => $streamState['retry_attempts'],
+                        'fallback_attempts' => $streamState['fallback_attempts'],
+                    ],
+                )
+                : null,
+        ]];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array{
+     *     retry_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
+     *     fallback_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>
+     * }  $streamState
+     * @return array{event: string, data: array<string, mixed>}
+     */
+    private function streamEmptyContentError(string $runId, array $config, int $latencyMs, array $streamState): array
+    {
+        $emptyError = AiRuntimeError::fromType(
+            AiErrorType::EmptyResponse,
+            'Streaming response completed with no content',
+            latencyMs: $latencyMs,
+        );
+        $this->runtimeLogger->runFailed($runId, $emptyError, [
+            'model' => $config['model'],
+            'provider_name' => $config['provider_name'] ?? 'unknown',
+            'streaming' => true,
+        ]);
+
+        return ['event' => 'error', 'data' => [
+            'message' => $emptyError->userMessage,
+            'run_id' => $runId,
+            'meta' => array_merge(
+                $this->responseFactory->errorMeta(
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $emptyError,
+                ),
+                [
+                    'retry_attempts' => $streamState['retry_attempts'],
+                    'fallback_attempts' => $streamState['fallback_attempts'],
+                ],
+            ),
         ]];
     }
 

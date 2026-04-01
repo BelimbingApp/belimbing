@@ -54,19 +54,11 @@ class ChatStreamController
             return response('No messages in session', 400);
         }
 
-        $systemPrompt = null;
-        $promptMeta = null;
-
-        if ($employeeId === Employee::LARA_ID) {
-            $factory = app(LaraPromptFactory::class);
-            $package = $factory->buildPackage($messages[count($messages) - 1]->content ?? '');
-            $systemPrompt = app(PromptRenderer::class)->render($package);
-            $promptMeta = $package->describe();
-        }
+        [$systemPrompt, $promptMeta] = $this->resolvePromptPackage($employeeId, $messages);
 
         $runtime = app(AgenticRuntime::class);
 
-        return new StreamedResponse(function () use ($runtime, $messages, $employeeId, $systemPrompt, $modelOverride, $messageManager, $sessionId, $promptMeta) {
+        return new StreamedResponse(function () use ($runtime, $messages, $employeeId, $systemPrompt, $modelOverride, $messageManager, $sessionId, $promptMeta): void {
             $fullContent = null;
             $runId = null;
             $meta = null;
@@ -76,34 +68,17 @@ class ChatStreamController
                 $eventName = $event['event'];
                 $data = $event['data'];
 
-                echo "event: {$eventName}\n";
-                echo 'data: '.json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n\n";
-
-                if (ob_get_level() > 0) {
-                    ob_flush();
-                }
-                flush();
+                $this->emitEvent($eventName, $data);
 
                 if ($eventName === 'done') {
-                    $fullContent = $data['content'] ?? '';
-                    $runId = $data['run_id'] ?? null;
-                    $meta = $data['meta'] ?? [];
-                } elseif ($eventName === 'error') {
-                    $hadError = true;
-                    $errorMessage = $data['message'] ?? __('An unexpected error occurred. Please try again.');
-                    $errorRunId = $data['run_id'] ?? 'run_'.Str::random(12);
-                    $errorMeta = is_array($data['meta'] ?? null)
-                        ? $data['meta']
-                        : ['message_type' => 'error'];
+                    [$fullContent, $runId, $meta] = $this->captureDoneEvent($data);
 
-                    $this->persistErrorMessage(
-                        $messageManager,
-                        $employeeId,
-                        $sessionId,
-                        $errorMessage,
-                        $errorRunId,
-                        $errorMeta,
-                    );
+                    continue;
+                }
+
+                if ($eventName === 'error') {
+                    $hadError = true;
+                    $this->persistStructuredError($messageManager, $employeeId, $sessionId, $data);
                 }
             }
 
@@ -122,6 +97,76 @@ class ChatStreamController
             'Connection' => 'keep-alive',
             'X-Accel-Buffering' => 'no',
         ]);
+    }
+
+    /**
+     * @param  array<int, object>  $messages
+     * @return array{0: ?string, 1: ?array<string, mixed>}
+     */
+    private function resolvePromptPackage(int $employeeId, array $messages): array
+    {
+        if ($employeeId !== Employee::LARA_ID) {
+            return [null, null];
+        }
+
+        $factory = app(LaraPromptFactory::class);
+        $package = $factory->buildPackage($messages[count($messages) - 1]->content ?? '');
+
+        return [
+            app(PromptRenderer::class)->render($package),
+            $package->describe(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function emitEvent(string $eventName, array $data): void
+    {
+        echo "event: {$eventName}\n";
+        echo 'data: '.json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n\n";
+
+        if (ob_get_level() > 0) {
+            ob_flush();
+        }
+
+        flush();
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{0: ?string, 1: ?string, 2: array<string, mixed>}
+     */
+    private function captureDoneEvent(array $data): array
+    {
+        return [
+            $data['content'] ?? '',
+            $data['run_id'] ?? null,
+            is_array($data['meta'] ?? null) ? $data['meta'] : [],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function persistStructuredError(
+        MessageManager $messageManager,
+        int $employeeId,
+        string $sessionId,
+        array $data,
+    ): void {
+        $errorMeta = is_array($data['meta'] ?? null)
+            ? $data['meta']
+            : ['message_type' => 'error'];
+
+        $this->persistErrorMessage(
+            $messageManager,
+            $employeeId,
+            $sessionId,
+            $data['message'] ?? __('An unexpected error occurred. Please try again.'),
+            $data['run_id'] ?? 'run_'.Str::random(12),
+            $errorMeta,
+        );
     }
 
     /**

@@ -15,9 +15,7 @@ class LocaleCatalog
     public function supportedLocales(): array
     {
         /** @var array<string, array{label: string, language: string}> $locales */
-        $locales = config('locale.supported_locales', []);
-
-        return $locales;
+        return config('locale.supported_locales', []);
     }
 
     /**

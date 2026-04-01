@@ -37,7 +37,8 @@
     <span
         class="{{ $toneClasses }} inline-flex max-w-full items-center gap-1 rounded-md tabular-nums outline-none transition-colors focus-visible:ring-2 focus-visible:ring-offset-0"
     >
-        <span
+        <button
+            type="button"
             tabindex="0"
             @mouseenter="tooltipOpen = true"
             @mouseleave="tooltipOpen = false"
@@ -46,7 +47,7 @@
             class="shrink-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0"
         >
             <x-ui.datetime :value="$timestamp" format="time" />
-        </span>
+        </button>
 
         @if ($llmLabel !== null)
             <span aria-hidden="true" class="shrink-0">·</span>
@@ -58,17 +59,17 @@
         @if ($runIdLabel !== null)
             <span aria-hidden="true" class="shrink-0">·</span>
             <span class="relative inline-flex" x-data="{ runIdTooltipOpen: false }">
-                <span
+                <button
+                    type="button"
                     @mouseenter="runIdTooltipOpen = true"
                     @mouseleave="runIdTooltipOpen = false"
                     @focus="runIdTooltipOpen = true"
                     @blur="runIdTooltipOpen = false"
                     tabindex="0"
                     class="truncate outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0"
-                    aria-label="{{ __('Run ID') }}"
                 >
                     {{ $runIdLabel }}
-                </span>
+                </button>
                 <span
                     x-show="runIdTooltipOpen"
                     x-cloak

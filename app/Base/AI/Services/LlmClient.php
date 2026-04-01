@@ -12,9 +12,7 @@ use App\Base\AI\Enums\AiErrorType;
 use App\Base\Support\Json as BlbJson;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
-use Illuminate\Support\Facades\Http;
 
 /**
  * Stateless LLM client supporting multiple wire protocols.
@@ -37,6 +35,8 @@ class LlmClient
         'Editor-Plugin-Version' => 'copilot-chat/0.35.0',
         'Copilot-Integration-Id' => 'vscode-chat',
     ];
+
+    private const UNKNOWN_ERROR = 'Unknown error';
 
     // =========================================================================
     // Public API — route on apiType
@@ -81,7 +81,7 @@ class LlmClient
         $startTime = hrtime(true);
 
         try {
-            $http = $this->buildHttp($request);
+            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS);
 
             $response = $http->post(rtrim($request->baseUrl, '/').'/chat/completions', array_filter([
                 'model' => $request->model,
@@ -92,10 +92,10 @@ class LlmClient
                 'tool_choice' => $request->toolChoice,
             ], fn ($v) => $v !== null));
         } catch (ConnectionException $e) {
-            return $this->connectionError($e, $startTime);
+            return LlmClientSupport::connectionError($e, $startTime);
         }
 
-        return $this->parseChatCompletionsResponse($response, $this->latencyMs($startTime), $request->model);
+        return $this->parseChatCompletionsResponse($response, LlmClientSupport::latencyMs($startTime), $request->model);
     }
 
     /**
@@ -106,7 +106,7 @@ class LlmClient
         $startTime = hrtime(true);
 
         try {
-            $http = $this->buildHttp($request, stream: true);
+            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, stream: true);
 
             $response = $http->post(rtrim($request->baseUrl, '/').'/chat/completions', array_filter([
                 'model' => $request->model,
@@ -118,12 +118,12 @@ class LlmClient
                 'tool_choice' => $request->toolChoice,
             ], fn ($v) => $v !== null));
         } catch (ConnectionException $e) {
-            yield from $this->connectionErrorStream($e, $startTime);
+            yield from LlmClientSupport::connectionErrorStream($e, $startTime);
 
             return;
         }
 
-        $error = $this->checkFailedResponse($response, $startTime);
+        $error = LlmClientSupport::checkFailedResponse($response, $startTime);
         if ($error !== null) {
             yield $error;
 
@@ -136,12 +136,12 @@ class LlmClient
     private function parseChatCompletionsResponse(Response $response, int $latencyMs, string $model): array
     {
         if ($response->failed()) {
-            return $this->parseFailedResponse($response, $latencyMs);
+            return LlmClientSupport::parseFailedResponse($response, $latencyMs);
         }
 
         $data = $response->json();
         if (! is_array($data)) {
-            return $this->invalidPayloadError($response, $latencyMs, $model);
+            return LlmClientSupport::invalidPayloadError($response, $latencyMs, $model);
         }
 
         $choice = $data['choices'][0]['message'] ?? [];
@@ -231,7 +231,7 @@ class LlmClient
             'type' => 'done',
             'finish_reason' => $finishReason ?? 'stop',
             'usage' => null,
-            'latency_ms' => $this->latencyMs($startTime),
+            'latency_ms' => LlmClientSupport::latencyMs($startTime),
         ];
     }
 
@@ -245,7 +245,7 @@ class LlmClient
                 'type' => 'done',
                 'finish_reason' => $finishReason ?? 'stop',
                 'usage' => null,
-                'latency_ms' => $this->latencyMs($startTime),
+                'latency_ms' => LlmClientSupport::latencyMs($startTime),
             ];
 
             $finishReason = '__done__';
@@ -288,7 +288,7 @@ class LlmClient
                     'prompt_tokens' => $usage['prompt_tokens'] ?? null,
                     'completion_tokens' => $usage['completion_tokens'] ?? null,
                 ],
-                'latency_ms' => $this->latencyMs($startTime),
+                'latency_ms' => LlmClientSupport::latencyMs($startTime),
             ];
 
             $finishReason = '__done__';
@@ -304,17 +304,17 @@ class LlmClient
         $startTime = hrtime(true);
 
         try {
-            $http = $this->buildHttp($request);
+            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS);
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/responses',
                 $this->buildResponsesPayload($request, stream: false),
             );
         } catch (ConnectionException $e) {
-            return $this->connectionError($e, $startTime);
+            return LlmClientSupport::connectionError($e, $startTime);
         }
 
-        return $this->parseResponsesResponse($response, $this->latencyMs($startTime), $request->model);
+        return $this->parseResponsesResponse($response, LlmClientSupport::latencyMs($startTime), $request->model);
     }
 
     /**
@@ -325,19 +325,19 @@ class LlmClient
         $startTime = hrtime(true);
 
         try {
-            $http = $this->buildHttp($request, stream: true);
+            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, stream: true);
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/responses',
                 $this->buildResponsesPayload($request, stream: true),
             );
         } catch (ConnectionException $e) {
-            yield from $this->connectionErrorStream($e, $startTime);
+            yield from LlmClientSupport::connectionErrorStream($e, $startTime);
 
             return;
         }
 
-        $error = $this->checkFailedResponse($response, $startTime);
+        $error = LlmClientSupport::checkFailedResponse($response, $startTime);
         if ($error !== null) {
             yield $error;
 
@@ -354,7 +354,7 @@ class LlmClient
      */
     private function buildResponsesPayload(ChatRequest $request, bool $stream): array
     {
-        $payload = array_filter([
+        return array_filter([
             'model' => $request->model,
             'input' => $this->convertToResponsesInput($request->messages),
             'max_output_tokens' => $request->maxTokens,
@@ -363,8 +363,6 @@ class LlmClient
             'tools' => $request->tools !== null ? $this->convertToResponsesTools($request->tools) : null,
             'tool_choice' => $request->toolChoice,
         ], fn ($v) => $v !== null);
-
-        return $payload;
     }
 
     /**
@@ -427,6 +425,9 @@ class LlmClient
                         'output' => $msg['content'] ?? '',
                     ];
                     break;
+
+                default:
+                    break;
             }
         }
 
@@ -462,35 +463,20 @@ class LlmClient
     private function parseResponsesResponse(Response $response, int $latencyMs, string $model): array
     {
         if ($response->failed()) {
-            return $this->parseFailedResponse($response, $latencyMs);
+            return LlmClientSupport::parseFailedResponse($response, $latencyMs);
         }
 
         $data = $response->json();
         if (! is_array($data)) {
-            return $this->invalidPayloadError($response, $latencyMs, $model);
+            return LlmClientSupport::invalidPayloadError($response, $latencyMs, $model);
         }
 
         $content = '';
         $toolCalls = [];
 
         foreach ($data['output'] ?? [] as $item) {
-            $type = $item['type'] ?? '';
-
-            if ($type === 'message') {
-                foreach ($item['content'] ?? [] as $part) {
-                    if (($part['type'] ?? '') === 'output_text') {
-                        $content .= $part['text'] ?? '';
-                    }
-                }
-            } elseif ($type === 'function_call') {
-                $toolCalls[] = [
-                    'id' => $item['call_id'] ?? '',
-                    'type' => 'function',
-                    'function' => [
-                        'name' => $item['name'] ?? '',
-                        'arguments' => $item['arguments'] ?? '{}',
-                    ],
-                ];
+            if (is_array($item)) {
+                $this->applyResponsesOutputItem($item, $content, $toolCalls);
             }
         }
 
@@ -566,26 +552,16 @@ class LlmClient
                 }
 
                 if (str_starts_with($line, 'data: ')) {
-                    $data = BlbJson::decodeArray(substr($line, 6));
-                    if ($data === null) {
-                        $pendingEventType = null;
-
-                        continue;
-                    }
-
-                    $event = $pendingEventType ?? $data['type'] ?? '';
-                    $pendingEventType = null;
-
-                    yield from $this->processResponsesSseEvent(
-                        $event,
-                        $data,
+                    yield from $this->processResponsesDataLine(
+                        $line,
+                        $pendingEventType,
                         $startTime,
                         $toolCallIndex,
                         $currentToolCallId,
                         $currentToolCallName,
                     );
 
-                    if ($event === 'response.completed' || $event === 'response.failed' || $event === 'error') {
+                    if ($pendingEventType === '__done__') {
                         return;
                     }
                 }
@@ -596,7 +572,7 @@ class LlmClient
             'type' => 'done',
             'finish_reason' => 'stop',
             'usage' => null,
-            'latency_ms' => $this->latencyMs($startTime),
+            'latency_ms' => LlmClientSupport::latencyMs($startTime),
         ];
     }
 
@@ -663,204 +639,143 @@ class LlmClient
 
                 yield [
                     'type' => 'done',
-                    'finish_reason' => $status === 'completed' ? 'stop' : ($status === 'incomplete' ? 'length' : 'error'),
+                    'finish_reason' => $this->responseFinishReason($status),
                     'usage' => $usage !== null ? [
                         'prompt_tokens' => $usage['input_tokens'] ?? null,
                         'completion_tokens' => $usage['output_tokens'] ?? null,
                     ] : null,
-                    'latency_ms' => $this->latencyMs($startTime),
+                    'latency_ms' => LlmClientSupport::latencyMs($startTime),
                 ];
                 break;
 
             case 'response.failed':
-                $error = $data['response']['error'] ?? $data['error'] ?? null;
-                $msg = is_array($error) ? ($error['message'] ?? 'Unknown error') : 'Unknown error';
-
-                yield [
-                    'type' => 'error',
-                    'runtime_error' => AiRuntimeError::fromType(
-                        AiErrorType::ServerError,
-                        $msg,
-                        latencyMs: $this->latencyMs($startTime),
-                    ),
-                    'latency_ms' => $this->latencyMs($startTime),
-                ];
+                yield $this->responseFailureEvent($data, $startTime);
                 break;
 
             case 'error':
-                $msg = ($data['message'] ?? $data['code'] ?? 'Unknown error');
+                yield $this->responseErrorEvent($data, $startTime);
+                break;
 
-                yield [
-                    'type' => 'error',
-                    'runtime_error' => AiRuntimeError::fromType(
-                        AiErrorType::ServerError,
-                        "Error code {$data['code']}: {$msg}",
-                        latencyMs: $this->latencyMs($startTime),
-                    ),
-                    'latency_ms' => $this->latencyMs($startTime),
-                ];
+            default:
                 break;
         }
     }
 
-    // =========================================================================
-    // Shared helpers
-    // =========================================================================
-
     /**
-     * Build the HTTP client with auth and provider-specific headers.
+     * @param  array<string, mixed>  $item
+     * @param  array<int, array<string, mixed>>  $toolCalls
      */
-    private function buildHttp(ChatRequest $request, bool $stream = false): PendingRequest
+    private function applyResponsesOutputItem(array $item, string &$content, array &$toolCalls): void
     {
-        $http = Http::timeout($request->timeout);
+        $type = $item['type'] ?? '';
 
-        if ($stream) {
-            $http = $http->withOptions(['stream' => true]);
+        if ($type === 'message') {
+            foreach ($item['content'] ?? [] as $part) {
+                if (($part['type'] ?? '') === 'output_text') {
+                    $content .= $part['text'] ?? '';
+                }
+            }
+
+            return;
         }
 
-        if ($request->apiKey !== '') {
-            $http = $http->withToken($request->apiKey);
+        if ($type === 'function_call') {
+            $toolCalls[] = [
+                'id' => $item['call_id'] ?? '',
+                'type' => 'function',
+                'function' => [
+                    'name' => $item['name'] ?? '',
+                    'arguments' => $item['arguments'] ?? '{}',
+                ],
+            ];
         }
-
-        if ($request->providerName === 'github-copilot') {
-            $http = $http->withHeaders(self::COPILOT_HEADERS);
-        }
-
-        return $http;
-    }
-
-    /**
-     * Parse a failed HTTP response into a normalized error array.
-     */
-    private function parseFailedResponse(Response $response, int $latencyMs): array
-    {
-        $body = $response->json();
-        $diagnostic = $body['error']['message']
-            ?? $body['error']['code']
-            ?? $response->body();
-
-        $errorType = match (true) {
-            $response->status() === 400 => AiErrorType::BadRequest,
-            $response->status() === 401 => AiErrorType::AuthError,
-            $response->status() === 404 => AiErrorType::NotFound,
-            $response->status() === 429 => AiErrorType::RateLimit,
-            $response->status() >= 500 => AiErrorType::ServerError,
-            default => AiErrorType::UnexpectedError,
-        };
-
-        $hint = $errorType === AiErrorType::BadRequest
-            ? (string) $diagnostic
-            : null;
-
-        return [
-            'runtime_error' => AiRuntimeError::fromType(
-                $errorType,
-                "HTTP {$response->status()}: {$diagnostic}",
-                $hint,
-                httpStatus: $response->status(),
-                latencyMs: $latencyMs,
-            ),
-            'latency_ms' => $latencyMs,
-        ];
-    }
-
-    /**
-     * Check a streaming response for HTTP errors before reading the body.
-     *
-     * @return array<string, mixed>|null Error event array, or null if response is OK
-     */
-    private function checkFailedResponse(Response $response, int $startTime): ?array
-    {
-        if (! $response->failed()) {
-            return null;
-        }
-
-        $latencyMs = $this->latencyMs($startTime);
-        $parsed = $this->parseFailedResponse($response, $latencyMs);
-
-        return [
-            'type' => 'error',
-            'runtime_error' => $parsed['runtime_error'],
-            'latency_ms' => $latencyMs,
-        ];
-    }
-
-    private function connectionError(ConnectionException $e, int $startTime): array
-    {
-        $latencyMs = $this->latencyMs($startTime);
-        $errorType = $this->classifyConnectionException($e);
-
-        return [
-            'runtime_error' => AiRuntimeError::fromType(
-                $errorType,
-                $e->getMessage(),
-                $errorType === AiErrorType::Timeout
-                    ? 'Increase the provider timeout or check network connectivity.'
-                    : null,
-                latencyMs: $latencyMs,
-            ),
-            'latency_ms' => $latencyMs,
-        ];
     }
 
     /**
      * @return Generator<int, array<string, mixed>>
      */
-    private function connectionErrorStream(ConnectionException $e, int $startTime): Generator
-    {
-        $latencyMs = $this->latencyMs($startTime);
-        $errorType = $this->classifyConnectionException($e);
+    private function processResponsesDataLine(
+        string $line,
+        ?string &$pendingEventType,
+        int $startTime,
+        int &$toolCallIndex,
+        ?string &$currentToolCallId,
+        ?string &$currentToolCallName,
+    ): Generator {
+        $data = BlbJson::decodeArray(substr($line, 6));
+        if ($data === null) {
+            $pendingEventType = null;
 
-        yield [
-            'type' => 'error',
-            'runtime_error' => AiRuntimeError::fromType($errorType, $e->getMessage(), latencyMs: $latencyMs),
-            'latency_ms' => $latencyMs,
-        ];
+            return;
+        }
+
+        $event = $pendingEventType ?? $data['type'] ?? '';
+        $pendingEventType = null;
+
+        yield from $this->processResponsesSseEvent(
+            $event,
+            $data,
+            $startTime,
+            $toolCallIndex,
+            $currentToolCallId,
+            $currentToolCallName,
+        );
+
+        if ($event === 'response.completed' || $event === 'response.failed' || $event === 'error') {
+            $pendingEventType = '__done__';
+        }
     }
 
-    private function invalidPayloadError(Response $response, int $latencyMs, string $model): array
+    private function responseFinishReason(string $status): string
     {
-        $payloadType = $this->classifyInvalidPayload($response);
+        return match ($status) {
+            'completed' => 'stop',
+            'incomplete' => 'length',
+            default => 'error',
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function responseFailureEvent(array $data, int $startTime): array
+    {
+        $error = $data['response']['error'] ?? $data['error'] ?? null;
+        $message = is_array($error)
+            ? (string) ($error['message'] ?? self::UNKNOWN_ERROR)
+            : self::UNKNOWN_ERROR;
+        $latencyMs = LlmClientSupport::latencyMs($startTime);
 
         return [
+            'type' => 'error',
             'runtime_error' => AiRuntimeError::fromType(
-                $payloadType,
-                "Model \"{$model}\" returned non-JSON payload (Content-Type: {$response->header('Content-Type')})",
-                $payloadType === AiErrorType::HtmlResponse
-                    ? 'Check that the provider base URL points to the API endpoint, not the provider website.'
-                    : null,
-                httpStatus: $response->status(),
+                AiErrorType::ServerError,
+                $message,
                 latencyMs: $latencyMs,
             ),
             'latency_ms' => $latencyMs,
         ];
     }
 
-    private function latencyMs(int|float $startTime): int
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function responseErrorEvent(array $data, int $startTime): array
     {
-        return (int) ((hrtime(true) - $startTime) / 1_000_000);
-    }
+        $code = (string) ($data['code'] ?? self::UNKNOWN_ERROR);
+        $message = (string) ($data['message'] ?? $data['code'] ?? self::UNKNOWN_ERROR);
+        $latencyMs = LlmClientSupport::latencyMs($startTime);
 
-    private function classifyInvalidPayload(Response $response): AiErrorType
-    {
-        $contentType = strtolower((string) $response->header('Content-Type'));
-        $body = ltrim($response->body());
-
-        if (str_contains($contentType, 'text/html') || str_starts_with($body, '<!DOCTYPE html') || str_starts_with($body, '<html')) {
-            return AiErrorType::HtmlResponse;
-        }
-
-        return AiErrorType::UnsupportedResponseShape;
-    }
-
-    private function classifyConnectionException(ConnectionException $e): AiErrorType
-    {
-        $message = $e->getMessage();
-
-        if (str_contains($message, 'timed out') || str_contains($message, 'cURL error 28')) {
-            return AiErrorType::Timeout;
-        }
-
-        return AiErrorType::ConnectionError;
+        return [
+            'type' => 'error',
+            'runtime_error' => AiRuntimeError::fromType(
+                AiErrorType::ServerError,
+                "Error code {$code}: {$message}",
+                latencyMs: $latencyMs,
+            ),
+            'latency_ms' => $latencyMs,
+        ];
     }
 }

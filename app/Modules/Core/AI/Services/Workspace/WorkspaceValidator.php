@@ -29,7 +29,7 @@ class WorkspaceValidator
         foreach (WorkspaceFileSlot::inLoadOrder() as $slot) {
             $entry = $manifest->entry($slot);
             $exists = $entry !== null && $entry->exists;
-            $required = $slot->isRequired($manifest->isSystemAgent);
+            $required = $slot->isRequired();
 
             if ($required && ! $exists) {
                 $errors[] = "Required workspace file missing: {$slot->filename()} (slot: {$slot->value})";

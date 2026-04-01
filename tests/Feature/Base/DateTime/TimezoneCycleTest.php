@@ -6,6 +6,7 @@ use App\Base\Settings\DTO\Scope;
 use App\Modules\Core\User\Models\User;
 
 const TZ_SET_SETTINGS_KEY = 'ui.timezone.mode';
+const TZ_SET_COMPANY_TIMEZONE_KL = 'Asia/Kuala_Lumpur';
 
 beforeEach(function (): void {
     config(['settings.cache_ttl' => 0]);
@@ -23,28 +24,28 @@ it('sets timezone mode to each valid value', function (string $mode): void {
 it('returns timezone identifier for company and utc modes', function (): void {
     $user = User::factory()->create(['company_id' => 1]);
     $settings = app(SettingsService::class);
-    $settings->set('ui.timezone.default', 'Asia/Kuala_Lumpur', Scope::company(1));
+    $settings->set('ui.timezone.default', TZ_SET_COMPANY_TIMEZONE_KL, Scope::company(1));
 
     $this->actingAs($user)
         ->postJson(route('timezone.set'), ['mode' => 'utc'])
         ->assertOk()
         ->assertJson([
             'timezone' => 'UTC',
-            'company_timezone' => 'Asia/Kuala_Lumpur',
+            'company_timezone' => TZ_SET_COMPANY_TIMEZONE_KL,
         ]);
 });
 
 it('returns null timezone for local mode', function (): void {
     $user = User::factory()->create(['company_id' => 1]);
     $settings = app(SettingsService::class);
-    $settings->set('ui.timezone.default', 'Asia/Kuala_Lumpur', Scope::company(1));
+    $settings->set('ui.timezone.default', TZ_SET_COMPANY_TIMEZONE_KL, Scope::company(1));
 
     $response = $this->actingAs($user)
         ->postJson(route('timezone.set'), ['mode' => 'local'])
         ->assertOk();
 
     expect($response->json('timezone'))->toBeNull();
-    expect($response->json('company_timezone'))->toBe('Asia/Kuala_Lumpur');
+    expect($response->json('company_timezone'))->toBe(TZ_SET_COMPANY_TIMEZONE_KL);
 });
 
 it('persists mode in settings at company scope', function (): void {
