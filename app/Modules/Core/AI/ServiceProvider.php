@@ -8,10 +8,18 @@ namespace App\Modules\Core\AI;
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\Services\WebSearchService;
 use App\Base\Authz\Contracts\AuthorizationService;
+use App\Modules\Core\AI\Console\Commands\BrowserStatusCommand;
+use App\Modules\Core\AI\Console\Commands\BrowserSweepCommand;
+use App\Modules\Core\AI\Console\Commands\MemoryCompactCommand;
+use App\Modules\Core\AI\Console\Commands\MemoryIndexCommand;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
+use App\Modules\Core\AI\Services\Browser\BrowserArtifactStore;
+use App\Modules\Core\AI\Services\Browser\BrowserRuntimeAdapter;
+use App\Modules\Core\AI\Services\Browser\BrowserSessionManager;
+use App\Modules\Core\AI\Services\Browser\BrowserSessionRepository;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\KodiPromptFactory;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
@@ -110,6 +118,12 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(KodiPromptFactory::class);
         $this->app->singleton(AgentExecutionContext::class);
 
+        // Browser subsystem
+        $this->app->singleton(BrowserSessionRepository::class);
+        $this->app->singleton(BrowserRuntimeAdapter::class);
+        $this->app->singleton(BrowserSessionManager::class);
+        $this->app->singleton(BrowserArtifactStore::class);
+
         $this->app->singleton(ChannelAdapterRegistry::class, function () {
             $registry = new ChannelAdapterRegistry;
 
@@ -125,6 +139,23 @@ class ServiceProvider extends BaseServiceProvider
 
         $this->app->singleton(AgenticRuntime::class);
         $this->app->singleton(ToolReadinessService::class);
+    }
+
+    /**
+     * Bootstrap Core AI services.
+     *
+     * Registers artisan commands for memory and browser management.
+     */
+    public function boot(): void
+    {
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                MemoryIndexCommand::class,
+                MemoryCompactCommand::class,
+                BrowserSweepCommand::class,
+                BrowserStatusCommand::class,
+            ]);
+        }
     }
 
     /**

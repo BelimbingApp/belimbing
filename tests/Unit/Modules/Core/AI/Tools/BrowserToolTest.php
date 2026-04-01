@@ -1,8 +1,13 @@
 <?php
 
-use App\Modules\Core\AI\Services\Browser\BrowserPoolManager;
+use App\Modules\Core\AI\DTO\BrowserArtifactMeta;
+use App\Modules\Core\AI\Enums\BrowserArtifactType;
+use App\Modules\Core\AI\Enums\BrowserSessionStatus;
+use App\Modules\Core\AI\Models\BrowserSession;
+use App\Modules\Core\AI\Services\Browser\BrowserArtifactStore;
+use App\Modules\Core\AI\Services\Browser\BrowserSessionException;
+use App\Modules\Core\AI\Services\Browser\BrowserSessionManager;
 use App\Modules\Core\AI\Services\Browser\BrowserSsrfGuard;
-use App\Modules\Core\AI\Services\Browser\PlaywrightRunner;
 use App\Modules\Core\AI\Tools\BrowserTool;
 use Tests\Support\AssertsToolBehavior;
 use Tests\TestCase;
@@ -34,26 +39,40 @@ function runnerError(string $action, string $message, string $code = 'browser_er
 }
 
 /**
- * Build a session_required error for actions that need a persistent browser.
+ * Create a fake BrowserSession model with given attributes.
  */
-function runnerSessionRequired(string $action): array
+function fakeBrowserSession(array $attrs = []): BrowserSession
 {
-    return runnerError(
-        $action,
-        "The \"{$action}\" action requires an active browser session. "
-            .'Per-command execution does not support session-dependent actions yet.',
-        'session_required',
-    );
+    $session = new BrowserSession;
+    $session->id = $attrs['id'] ?? 'bs_test123';
+    $session->employee_id = $attrs['employee_id'] ?? 0;
+    $session->company_id = $attrs['company_id'] ?? 0;
+    $session->status = $attrs['status'] ?? BrowserSessionStatus::Ready;
+    $session->headless = $attrs['headless'] ?? true;
+
+    return $session;
 }
 
 beforeEach(function () {
-    $this->poolManager = Mockery::mock(BrowserPoolManager::class);
+    $this->sessionManager = Mockery::mock(BrowserSessionManager::class);
     $this->ssrfGuard = Mockery::mock(BrowserSsrfGuard::class);
-    $this->runner = Mockery::mock(PlaywrightRunner::class);
-    $this->tool = new BrowserTool($this->poolManager, $this->ssrfGuard, $this->runner);
+    $this->artifactStore = Mockery::mock(BrowserArtifactStore::class);
+    $this->tool = new BrowserTool($this->sessionManager, $this->ssrfGuard, $this->artifactStore);
 
-    $this->poolManager->shouldReceive('isAvailable')->andReturn(true)->byDefault();
+    $this->sessionManager->shouldReceive('isAvailable')->andReturn(true)->byDefault();
+    $this->sessionManager->shouldReceive('open')->andReturn(fakeBrowserSession())->byDefault();
     $this->ssrfGuard->shouldReceive('validate')->andReturn(true)->byDefault();
+    $this->artifactStore->shouldReceive('store')->andReturn(new BrowserArtifactMeta(
+        artifactId: 'ba_test',
+        sessionId: 'bs_test123',
+        type: BrowserArtifactType::Snapshot,
+        storagePath: 'browser-artifacts/bs_test123/ba_test.txt',
+        mimeType: 'text/plain',
+        sizeBytes: 0,
+        relatedUrl: null,
+        relatedTabId: null,
+        createdAt: '2026-01-01T00:00:00+00:00',
+    ))->byDefault();
 });
 
 describe('tool metadata', function () {
@@ -77,8 +96,8 @@ describe('input validation', function () {
         $this->assertToolError(['action' => 'bogus'], 'must be one of');
     });
 
-    it('returns error when pool unavailable', function () {
-        $this->poolManager->shouldReceive('isAvailable')->andReturn(false);
+    it('returns error when session manager unavailable', function () {
+        $this->sessionManager->shouldReceive('isAvailable')->andReturn(false);
 
         $result = $this->tool->execute(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL]);
 
@@ -102,9 +121,9 @@ describe('navigate action', function () {
             ->and((string) $result)->toContain('Blocked');
     });
 
-    it('navigates successfully via runner', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('navigate', ['url' => BROWSER_EXAMPLE_URL])
+    it('navigates successfully via session manager', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'navigate', ['url' => BROWSER_EXAMPLE_URL])
             ->andReturn(runnerSuccess('navigate', [
                 'url' => BROWSER_EXAMPLE_URL,
                 'title' => BROWSER_EXAMPLE_DOMAIN_TITLE,
@@ -119,8 +138,8 @@ describe('navigate action', function () {
             ->and($data['title'])->toBe(BROWSER_EXAMPLE_DOMAIN_TITLE);
     });
 
-    it('returns error when runner fails', function () {
-        $this->runner->shouldReceive('execute')
+    it('returns error when session action fails', function () {
+        $this->sessionManager->shouldReceive('executeAction')
             ->andThrow(new RuntimeException('Browser process timed out'));
 
         $result = $this->tool->execute(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL]);
@@ -132,8 +151,8 @@ describe('navigate action', function () {
 
 describe('snapshot action', function () {
     it('returns snapshot with default format', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('snapshot', Mockery::on(fn ($args) => $args['format'] === 'ai'))
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'snapshot', Mockery::on(fn ($args) => $args['format'] === 'ai'))
             ->andReturn(runnerSuccess('snapshot', [
                 'format' => 'ai',
                 'content' => BROWSER_EXAMPLE_DOMAIN_TITLE,
@@ -148,8 +167,8 @@ describe('snapshot action', function () {
     });
 
     it('accepts aria format', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('snapshot', Mockery::on(fn ($args) => $args['format'] === 'aria'))
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'snapshot', Mockery::on(fn ($args) => $args['format'] === 'aria'))
             ->andReturn(runnerSuccess('snapshot', [
                 'format' => 'aria',
                 'content' => '- heading "'.BROWSER_EXAMPLE_DOMAIN_TITLE.'"',
@@ -163,9 +182,9 @@ describe('snapshot action', function () {
 });
 
 describe('screenshot action', function () {
-    it('returns screenshot via runner', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('screenshot', Mockery::type('array'))
+    it('returns screenshot via session manager', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'screenshot', Mockery::type('array'))
             ->andReturn(runnerSuccess('screenshot', [
                 'image_base64' => 'iVBORw0KGgo=',
                 'status' => 'captured',
@@ -177,9 +196,9 @@ describe('screenshot action', function () {
             ->and($data['status'])->toBe('captured');
     });
 
-    it('passes full_page flag to runner', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('screenshot', Mockery::on(fn ($args) => $args['full_page'] === true))
+    it('passes full_page flag', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'screenshot', Mockery::on(fn ($args) => $args['full_page'] === true))
             ->andReturn(runnerSuccess('screenshot', [
                 'image_base64' => 'iVBORw0KGgo=',
                 'full_page' => true,
@@ -206,28 +225,27 @@ describe('act action', function () {
         $this->assertToolError(['action' => 'act', 'kind' => 'click'], 'ref');
     });
 
-    it('returns session_required error for act', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('act', Mockery::type('array'))
-            ->andReturn(runnerSessionRequired('act'));
+    it('executes act via session manager', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'act', Mockery::type('array'))
+            ->andReturn(runnerSuccess('act', ['status' => 'clicked']));
 
-        $result = $this->tool->execute(['action' => 'act', 'kind' => 'click', 'ref' => 'e1']);
+        $data = $this->decodeToolExecution(['action' => 'act', 'kind' => 'click', 'ref' => 'e1']);
 
-        expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('session');
+        expect($data['ok'])->toBeTrue()
+            ->and($data['status'])->toBe('clicked');
     });
 });
 
 describe('tabs action', function () {
-    it('returns session_required error for tabs', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('tabs', [])
-            ->andReturn(runnerSessionRequired('tabs'));
+    it('lists tabs via session manager', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'tabs', [])
+            ->andReturn(runnerSuccess('tabs', ['tabs' => []]));
 
-        $result = $this->tool->execute(['action' => 'tabs']);
+        $data = $this->decodeToolExecution(['action' => 'tabs']);
 
-        expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('session');
+        expect($data['ok'])->toBeTrue();
     });
 });
 
@@ -236,15 +254,15 @@ describe('open action', function () {
         $this->assertToolError(['action' => 'open']);
     });
 
-    it('returns session_required error for open', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('open', ['url' => BROWSER_EXAMPLE_URL])
-            ->andReturn(runnerSessionRequired('open'));
+    it('opens tab via session manager', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'open', ['url' => BROWSER_EXAMPLE_URL])
+            ->andReturn(runnerSuccess('open', ['url' => BROWSER_EXAMPLE_URL, 'tab_id' => 'tab2']));
 
-        $result = $this->tool->execute(['action' => 'open', 'url' => BROWSER_EXAMPLE_URL]);
+        $data = $this->decodeToolExecution(['action' => 'open', 'url' => BROWSER_EXAMPLE_URL]);
 
-        expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('session');
+        expect($data['ok'])->toBeTrue()
+            ->and($data['tab_id'])->toBe('tab2');
     });
 });
 
@@ -253,15 +271,14 @@ describe('close action', function () {
         $this->assertToolError(['action' => 'close']);
     });
 
-    it('returns session_required error for close', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('close', ['tab_id' => 'tab1'])
-            ->andReturn(runnerSessionRequired('close'));
+    it('closes tab via session manager', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'close', ['tab_id' => 'tab1'])
+            ->andReturn(runnerSuccess('close', ['status' => 'closed']));
 
-        $result = $this->tool->execute(['action' => 'close', 'tab_id' => 'tab1']);
+        $data = $this->decodeToolExecution(['action' => 'close', 'tab_id' => 'tab1']);
 
-        expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('session');
+        expect($data['ok'])->toBeTrue();
     });
 });
 
@@ -284,11 +301,11 @@ describe('evaluate action', function () {
             ->and((string) $result)->toContain('script');
     });
 
-    it('evaluates via runner when enabled', function () {
+    it('evaluates via session manager when enabled', function () {
         config()->set('ai.tools.browser.evaluate_enabled', true);
 
-        $this->runner->shouldReceive('execute')
-            ->with('evaluate', ['script' => 'document.title'])
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'evaluate', ['script' => 'document.title'])
             ->andReturn(runnerSuccess('evaluate', [
                 'result' => BROWSER_EXAMPLE_DOMAIN_TITLE,
                 'status' => 'evaluated',
@@ -303,9 +320,9 @@ describe('evaluate action', function () {
 });
 
 describe('pdf action', function () {
-    it('exports pdf via runner', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('pdf', Mockery::type('array'))
+    it('exports pdf via session manager', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'pdf', Mockery::type('array'))
             ->andReturn(runnerSuccess('pdf', [
                 'pdf_base64' => 'JVBERi0xLjQ=',
                 'size_bytes' => 1024,
@@ -331,9 +348,9 @@ describe('cookies action', function () {
         expect((string) $result)->toContain('Error');
     });
 
-    it('gets cookies via runner', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('cookies', Mockery::on(fn ($args) => $args['cookie_action'] === 'get'))
+    it('gets cookies via session manager', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'cookies', Mockery::on(fn ($args) => $args['cookie_action'] === 'get'))
             ->andReturn(runnerSuccess('cookies', [
                 'cookie_action' => 'get',
                 'cookies' => [],
@@ -351,9 +368,9 @@ describe('cookies action', function () {
         expect((string) $result)->toContain('Error');
     });
 
-    it('sets cookie via runner', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('cookies', Mockery::on(fn ($args) => $args['cookie_action'] === 'set'
+    it('sets cookie via session manager', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'cookies', Mockery::on(fn ($args) => $args['cookie_action'] === 'set'
                 && $args['cookie_name'] === 'test'
                 && $args['cookie_value'] === 'val'))
             ->andReturn(runnerSuccess('cookies', [
@@ -373,9 +390,9 @@ describe('cookies action', function () {
             ->and($data['status'])->toBe('set');
     });
 
-    it('clears cookies via runner', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('cookies', Mockery::on(fn ($args) => $args['cookie_action'] === 'clear'))
+    it('clears cookies via session manager', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'cookies', Mockery::on(fn ($args) => $args['cookie_action'] === 'clear'))
             ->andReturn(runnerSuccess('cookies', [
                 'cookie_action' => 'clear',
                 'status' => 'cleared',
@@ -395,9 +412,9 @@ describe('wait action', function () {
             ->and((string) $result)->toContain('At least one');
     });
 
-    it('waits for text condition via runner', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('wait', Mockery::on(fn ($args) => $args['text'] === 'Hello'))
+    it('waits for text condition', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'wait', Mockery::on(fn ($args) => $args['text'] === 'Hello'))
             ->andReturn(runnerSuccess('wait', [
                 'text' => 'Hello',
                 'status' => 'matched',
@@ -409,9 +426,9 @@ describe('wait action', function () {
             ->and($data['status'])->toBe('matched');
     });
 
-    it('waits for selector condition via runner', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('wait', Mockery::on(fn ($args) => $args['selector'] === BROWSER_WAIT_SELECTOR_MAIN))
+    it('waits for selector condition', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'wait', Mockery::on(fn ($args) => $args['selector'] === BROWSER_WAIT_SELECTOR_MAIN))
             ->andReturn(runnerSuccess('wait', [
                 'selector' => BROWSER_WAIT_SELECTOR_MAIN,
                 'status' => 'matched',
@@ -423,9 +440,9 @@ describe('wait action', function () {
             ->and($data['status'])->toBe('matched');
     });
 
-    it('waits for url condition via runner', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('wait', Mockery::on(fn ($args) => $args['url'] === BROWSER_WAIT_URL_DONE))
+    it('waits for url condition', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'wait', Mockery::on(fn ($args) => $args['url'] === BROWSER_WAIT_URL_DONE))
             ->andReturn(runnerSuccess('wait', [
                 'url' => BROWSER_WAIT_URL_DONE,
                 'status' => 'matched',
@@ -437,9 +454,9 @@ describe('wait action', function () {
             ->and($data['status'])->toBe('matched');
     });
 
-    it('passes timeout to runner', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('wait', Mockery::on(fn ($args) => $args['timeout_ms'] === 10000))
+    it('passes timeout', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'wait', Mockery::on(fn ($args) => $args['timeout_ms'] === 10000))
             ->andReturn(runnerSuccess('wait', ['status' => 'matched']));
 
         $data = $this->decodeToolExecution(['action' => 'wait', 'text' => 'Hi', 'timeout_ms' => 10000]);
@@ -448,8 +465,8 @@ describe('wait action', function () {
     });
 
     it('uses default timeout', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('wait', Mockery::on(fn ($args) => $args['timeout_ms'] === 5000))
+        $this->sessionManager->shouldReceive('executeAction')
+            ->with('bs_test123', 'wait', Mockery::on(fn ($args) => $args['timeout_ms'] === 5000))
             ->andReturn(runnerSuccess('wait', ['status' => 'matched']));
 
         $data = $this->decodeToolExecution(['action' => 'wait', 'text' => 'Hello']);
@@ -458,9 +475,9 @@ describe('wait action', function () {
     });
 });
 
-describe('runner error handling', function () {
+describe('error handling', function () {
     it('converts RuntimeException to error result', function () {
-        $this->runner->shouldReceive('execute')
+        $this->sessionManager->shouldReceive('executeAction')
             ->andThrow(new RuntimeException('Process timed out after 30 seconds'));
 
         $result = $this->tool->execute(['action' => 'snapshot']);
@@ -471,7 +488,7 @@ describe('runner error handling', function () {
     });
 
     it('converts runner error response to error result', function () {
-        $this->runner->shouldReceive('execute')
+        $this->sessionManager->shouldReceive('executeAction')
             ->andReturn(runnerError('navigate', 'net::ERR_NAME_NOT_RESOLVED', 'action_failed'));
 
         $result = $this->tool->execute(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL]);
@@ -479,35 +496,53 @@ describe('runner error handling', function () {
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('net::ERR_NAME_NOT_RESOLVED');
     });
+
+    it('converts session exception to error result', function () {
+        $this->sessionManager->shouldReceive('executeAction')
+            ->andThrow(new BrowserSessionException('Session expired'));
+
+        $result = $this->tool->execute(['action' => 'snapshot']);
+
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('Session expired');
+    });
+
+    it('handles session open failure', function () {
+        $this->sessionManager->shouldReceive('open')
+            ->andThrow(new BrowserSessionException('Concurrency limit reached'));
+
+        $result = $this->tool->execute(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL]);
+
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('Concurrency limit');
+    });
 });
 
-describe('per-call headless override', function () {
-    it('forwards headless=true to runner when explicitly set', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('snapshot', Mockery::on(fn ($args) => $args['headless'] === true && $args['format'] === 'ai'))
-            ->andReturn(runnerSuccess('snapshot', ['format' => 'ai', 'status' => 'captured']));
+describe('headless mode', function () {
+    it('opens session with headless from config when not specified', function () {
+        config()->set('ai.tools.browser.headless', true);
 
-        $data = $this->decodeToolExecution(['action' => 'snapshot', 'headless' => true]);
+        $this->sessionManager->shouldReceive('open')
+            ->with(0, 0, true)
+            ->andReturn(fakeBrowserSession());
+
+        $this->sessionManager->shouldReceive('executeAction')
+            ->andReturn(runnerSuccess('snapshot', ['status' => 'captured']));
+
+        $data = $this->decodeToolExecution(['action' => 'snapshot']);
 
         expect($data['ok'])->toBeTrue();
     });
 
-    it('forwards headless=false to runner when explicitly set', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('navigate', Mockery::on(fn ($args) => $args['headless'] === false && $args['url'] === BROWSER_EXAMPLE_URL))
+    it('opens session with headless=false when explicitly provided', function () {
+        $this->sessionManager->shouldReceive('open')
+            ->with(0, 0, false)
+            ->andReturn(fakeBrowserSession(['headless' => false]));
+
+        $this->sessionManager->shouldReceive('executeAction')
             ->andReturn(runnerSuccess('navigate', ['url' => BROWSER_EXAMPLE_URL, 'status' => 'navigated']));
 
         $data = $this->decodeToolExecution(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL, 'headless' => false]);
-
-        expect($data['ok'])->toBeTrue();
-    });
-
-    it('does not inject headless key when not provided in input', function () {
-        $this->runner->shouldReceive('execute')
-            ->with('snapshot', Mockery::on(fn ($args) => ! array_key_exists('headless', $args)))
-            ->andReturn(runnerSuccess('snapshot', ['format' => 'ai', 'status' => 'captured']));
-
-        $data = $this->decodeToolExecution(['action' => 'snapshot']);
 
         expect($data['ok'])->toBeTrue();
     });

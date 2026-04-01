@@ -63,6 +63,7 @@ return [
             'headless' => env('AI_BROWSER_HEADLESS', env('APP_ENV', 'production') !== 'local'),
             'max_contexts_per_company' => 3,
             'context_idle_timeout_seconds' => 300,
+            'ref_stale_seconds' => 300,
             'evaluate_enabled' => false,
             'ssrf_policy' => [
                 'allow_private_network' => false,

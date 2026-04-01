@@ -14,31 +14,24 @@ use App\Base\AI\Tools\SetupAction;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
 use App\Base\AI\Tools\ToolUnavailableException;
-use App\Modules\Core\AI\Services\Browser\BrowserPoolManager;
+use App\Modules\Core\AI\Enums\BrowserArtifactType;
+use App\Modules\Core\AI\Services\Browser\BrowserArtifactStore;
+use App\Modules\Core\AI\Services\Browser\BrowserSessionException;
+use App\Modules\Core\AI\Services\Browser\BrowserSessionManager;
 use App\Modules\Core\AI\Services\Browser\BrowserSsrfGuard;
-use App\Modules\Core\AI\Services\Browser\PlaywrightRunner;
 use RuntimeException;
 
 /**
- * Browser automation tool for Agents — headful or headless.
+ * Browser automation tool for Agents — thin wrapper over browser subsystem.
  *
- * Provides enterprise-grade browser automation via Chromium driven by
- * a Playwright Node.js subprocess. Supports navigation, page snapshots,
- * screenshots, interaction, tab management, JS evaluation (opt-in), PDF
- * export, cookie management, and wait conditions.
+ * Provides browser automation via Chromium/Playwright. Supports navigation,
+ * page snapshots, screenshots, interaction, tab management, JS evaluation
+ * (opt-in), PDF export, cookie management, and wait conditions.
  *
- * Runs in headful mode (visible browser window) in local environments and
- * headless mode (no GUI) in production/staging. The mode is determined by
- * APP_ENV and can be overridden via AI_BROWSER_HEADLESS.
- *
- * Each action is dispatched through a single deep tool interface. PHP
- * handles argument validation, SSRF guarding, and config gating; the
- * actual browser work is delegated to PlaywrightRunner which launches
- * a per-command Chromium process.
- *
- * Session-dependent actions (act, tabs, open, close) require a persistent
- * browser process and are not yet supported — the runner returns a clear
- * session_required error for these.
+ * All lifecycle, session state, and artifact persistence are delegated to
+ * the browser subsystem services (BrowserSessionManager, BrowserArtifactStore).
+ * This tool is an action router: it validates arguments, enforces SSRF and
+ * evaluate policy gates, then dispatches to the session manager.
  *
  * Gated by `ai.tool_browser.execute` authz capability.
  * The `evaluate` action additionally requires `ai.tool_browser_evaluate.execute`.
@@ -94,16 +87,17 @@ class BrowserTool extends AbstractActionTool
     ];
 
     /**
-     * Per-call headless override, set by handleAction() from the input
-     * arguments and injected into executeRunner() calls. Null means
-     * "use global config" (no override). Reset after each action dispatch.
+     * Active session ID for the current tool lifecycle.
+     *
+     * Set during handleAction() from resolved session context and
+     * used by action handlers to route through the session manager.
      */
-    private ?bool $headlessOverride = null;
+    private ?string $activeSessionId = null;
 
     public function __construct(
-        private readonly BrowserPoolManager $poolManager,
+        private readonly BrowserSessionManager $sessionManager,
         private readonly BrowserSsrfGuard $ssrfGuard,
-        private readonly PlaywrightRunner $runner,
+        private readonly BrowserArtifactStore $artifactStore,
     ) {}
 
     public function name(): string
@@ -208,9 +202,9 @@ class BrowserTool extends AbstractActionTool
     /**
      * Dispatch to the appropriate browser action handler.
      *
-     * Overrides parent to check browser availability before dispatch.
-     * Throws ToolUnavailableException with a Lara handoff action if
-     * Playwright is not installed or browser automation is disabled.
+     * Overrides parent to check browser availability and resolve a session
+     * before dispatch. Creates or reuses a persistent browser session
+     * scoped to the current agent and company.
      *
      * @param  string  $action  The validated action name
      * @param  array<string, mixed>  $arguments  Full arguments (including 'action')
@@ -219,7 +213,7 @@ class BrowserTool extends AbstractActionTool
      */
     protected function handleAction(string $action, array $arguments): ToolResult
     {
-        if (! $this->poolManager->isAvailable()) {
+        if (! $this->sessionManager->isAvailable()) {
             throw new ToolUnavailableException(
                 errorCode: 'browser_unavailable',
                 message: 'Browser automation is not available. '
@@ -234,12 +228,22 @@ class BrowserTool extends AbstractActionTool
             );
         }
 
-        // Capture per-call headless override from input arguments.
-        // This is consumed by executeRunner() and cleared after dispatch
-        // so it doesn't bleed into subsequent calls on the same instance.
-        $this->headlessOverride = array_key_exists('headless', $arguments)
+        // Resolve or create a browser session for this tool invocation.
+        // TODO: employeeId and companyId should come from agent execution context.
+        $headless = array_key_exists('headless', $arguments)
             ? (bool) $arguments['headless']
-            : null;
+            : (bool) config('ai.tools.browser.headless', true);
+
+        try {
+            $session = $this->sessionManager->open(
+                employeeId: $arguments['_employee_id'] ?? 0,
+                companyId: $arguments['_company_id'] ?? 0,
+                headless: $headless,
+            );
+            $this->activeSessionId = $session->id;
+        } catch (BrowserSessionException $e) {
+            return ToolResult::error($e->getMessage(), 'browser_session_error');
+        }
 
         try {
             return match ($action) {
@@ -256,7 +260,7 @@ class BrowserTool extends AbstractActionTool
                 'wait' => $this->handleWait($arguments),
             };
         } finally {
-            $this->headlessOverride = null;
+            $this->activeSessionId = null;
         }
     }
 
@@ -284,8 +288,7 @@ class BrowserTool extends AbstractActionTool
      * Handle the "open" action (new tab).
      *
      * Validates the URL against the SSRF guard, then delegates to the
-     * Playwright runner. Currently returns session_required since tab
-     * management needs a persistent browser process.
+     * session manager to open a new tab in the active browser session.
      *
      * @param  array<string, mixed>  $arguments
      */
@@ -339,9 +342,9 @@ class BrowserTool extends AbstractActionTool
     /**
      * Handle the "act" action.
      *
-     * Validates interaction parameters in PHP, then delegates to the runner.
-     * Currently returns session_required since element interaction needs
-     * a persistent browser session with prior page state.
+     * Validates interaction parameters in PHP, then delegates to the
+     * session manager. Operates against the browser session's current
+     * page state and known element refs.
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
@@ -361,8 +364,7 @@ class BrowserTool extends AbstractActionTool
     /**
      * Handle the "tabs" action.
      *
-     * Lists all open browser tabs. Currently returns session_required
-     * since tab management needs a persistent browser process.
+     * Lists all open browser tabs in the current session.
      */
     private function handleTabs(): ToolResult
     {
@@ -372,8 +374,7 @@ class BrowserTool extends AbstractActionTool
     /**
      * Handle the "close" action.
      *
-     * Closes a browser tab by tab ID. Currently returns session_required
-     * since tab management needs a persistent browser process.
+     * Closes a browser tab by tab ID within the current session.
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
@@ -488,29 +489,34 @@ class BrowserTool extends AbstractActionTool
     // ─── Runner integration ─────────────────────────────────────────
 
     /**
-     * Execute a browser action via the Playwright runner and convert the result.
+     * Execute a browser action via the session manager and convert the result.
      *
-     * Catches RuntimeException from the runner (process failures, timeouts,
-     * invalid output) and converts them to ToolResult errors.
+     * Routes through the persistent browser session. On screenshot/snapshot/pdf
+     * success, stores the output as a durable artifact.
      *
      * @param  string  $action  The browser action name
      * @param  array<string, mixed>  $arguments  Action-specific arguments (without 'action')
      */
     private function executeRunner(string $action, array $arguments = []): ToolResult
     {
-        // Forward per-call headless override to the runner, which will
-        // use it instead of the global config value.
-        if ($this->headlessOverride !== null) {
-            $arguments['headless'] = $this->headlessOverride;
-        }
-
         try {
-            $result = $this->runner->execute($action, $arguments);
+            $result = $this->sessionManager->executeAction(
+                $this->activeSessionId,
+                $action,
+                $arguments,
+            );
+        } catch (BrowserSessionException $e) {
+            return ToolResult::error($e->getMessage(), 'browser_session_error');
         } catch (RuntimeException $e) {
             return ToolResult::error(
                 'Browser action failed: '.$e->getMessage(),
                 'browser_process_error',
             );
+        }
+
+        // Store durable artifacts for output-producing actions.
+        if ($result['ok'] ?? false) {
+            $this->maybeStoreArtifact($action, $result);
         }
 
         return $this->runnerResultToToolResult($result);
@@ -537,5 +543,44 @@ class BrowserTool extends AbstractActionTool
         $message = $result['message'] ?? 'Browser action failed.';
 
         return ToolResult::error($message, $errorCode);
+    }
+
+    /**
+     * Store artifact for output-producing actions (screenshot, snapshot, pdf, evaluate).
+     *
+     * @param  array<string, mixed>  $result
+     */
+    private function maybeStoreArtifact(string $action, array $result): void
+    {
+        $type = match ($action) {
+            'screenshot' => BrowserArtifactType::Screenshot,
+            'snapshot' => BrowserArtifactType::Snapshot,
+            'pdf' => BrowserArtifactType::Pdf,
+            'evaluate' => BrowserArtifactType::EvaluateResult,
+            default => null,
+        };
+
+        if ($type === null || $this->activeSessionId === null) {
+            return;
+        }
+
+        $content = match ($action) {
+            'screenshot' => base64_decode($result['data'] ?? '', true) ?: null,
+            'pdf' => base64_decode($result['data'] ?? '', true) ?: null,
+            'snapshot' => $result['content'] ?? $result['snapshot'] ?? null,
+            'evaluate' => isset($result['result']) ? json_encode($result['result'], JSON_UNESCAPED_SLASHES) : null,
+            default => null,
+        };
+
+        if ($content === null || $content === '' || $content === false) {
+            return;
+        }
+
+        $this->artifactStore->store(
+            sessionId: $this->activeSessionId,
+            type: $type,
+            content: $content,
+            relatedUrl: $result['url'] ?? null,
+        );
     }
 }
