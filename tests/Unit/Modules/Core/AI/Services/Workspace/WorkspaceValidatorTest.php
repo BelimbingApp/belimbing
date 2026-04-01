@@ -6,6 +6,9 @@ use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceValidator;
 use App\Modules\Core\Employee\Models\Employee;
 
+const WORKSPACE_VALIDATOR_TEST_PATH = '/tmp/test';
+const WORKSPACE_VALIDATOR_TEST_RESOURCES_PATH = '/tmp/resources';
+
 /**
  * Build a synthetic "found" entry without hitting the filesystem.
  */
@@ -24,9 +27,9 @@ function syntheticFound(WorkspaceFileSlot $slot, string $source = 'framework'): 
 it('passes validation when system_prompt is present', function (): void {
     $manifest = new WorkspaceManifest(
         employeeId: Employee::LARA_ID,
-        workspacePath: '/tmp/test',
+        workspacePath: WORKSPACE_VALIDATOR_TEST_PATH,
         isSystemAgent: true,
-        frameworkResourcePath: '/tmp/resources',
+        frameworkResourcePath: WORKSPACE_VALIDATOR_TEST_RESOURCES_PATH,
         files: [
             syntheticFound(WorkspaceFileSlot::SystemPrompt),
             WorkspaceFileEntry::missing(WorkspaceFileSlot::Operator),
@@ -47,7 +50,7 @@ it('passes validation when system_prompt is present', function (): void {
 it('fails validation when system_prompt is missing', function (): void {
     $manifest = new WorkspaceManifest(
         employeeId: 999,
-        workspacePath: '/tmp/test',
+        workspacePath: WORKSPACE_VALIDATOR_TEST_PATH,
         isSystemAgent: false,
         frameworkResourcePath: null,
         files: [
@@ -70,9 +73,9 @@ it('fails validation when system_prompt is missing', function (): void {
 it('produces warnings for missing optional prompt files', function (): void {
     $manifest = new WorkspaceManifest(
         employeeId: Employee::LARA_ID,
-        workspacePath: '/tmp/test',
+        workspacePath: WORKSPACE_VALIDATOR_TEST_PATH,
         isSystemAgent: true,
-        frameworkResourcePath: '/tmp/resources',
+        frameworkResourcePath: WORKSPACE_VALIDATOR_TEST_RESOURCES_PATH,
         files: [
             syntheticFound(WorkspaceFileSlot::SystemPrompt),
             WorkspaceFileEntry::missing(WorkspaceFileSlot::Operator),
@@ -93,9 +96,9 @@ it('produces warnings for missing optional prompt files', function (): void {
 it('includes only existing prompt-content slots in load order', function (): void {
     $manifest = new WorkspaceManifest(
         employeeId: Employee::LARA_ID,
-        workspacePath: '/tmp/test',
+        workspacePath: WORKSPACE_VALIDATOR_TEST_PATH,
         isSystemAgent: true,
-        frameworkResourcePath: '/tmp/resources',
+        frameworkResourcePath: WORKSPACE_VALIDATOR_TEST_RESOURCES_PATH,
         files: [
             syntheticFound(WorkspaceFileSlot::SystemPrompt),
             syntheticFound(WorkspaceFileSlot::Operator, 'workspace'),
@@ -119,9 +122,9 @@ it('includes only existing prompt-content slots in load order', function (): voi
 it('produces deterministic validation results for same input', function (): void {
     $manifest = new WorkspaceManifest(
         employeeId: Employee::LARA_ID,
-        workspacePath: '/tmp/test',
+        workspacePath: WORKSPACE_VALIDATOR_TEST_PATH,
         isSystemAgent: true,
-        frameworkResourcePath: '/tmp/resources',
+        frameworkResourcePath: WORKSPACE_VALIDATOR_TEST_RESOURCES_PATH,
         files: [
             syntheticFound(WorkspaceFileSlot::SystemPrompt),
             WorkspaceFileEntry::missing(WorkspaceFileSlot::Operator),

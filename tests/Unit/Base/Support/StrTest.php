@@ -5,6 +5,9 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+const STR_TEST_HELLO_WORLD = 'hello world';
+const STR_TEST_GUIDE_PREFIX = '/guide';
+
 it('masks a four character string with visible ends', function (): void {
     expect(Str::maskMiddle('abcz'))->toBe('a**z');
 });
@@ -43,11 +46,11 @@ it('truncate returns the string unchanged when under the limit', function (): vo
 });
 
 it('truncate clips at the limit and appends the suffix', function (): void {
-    expect(Str::truncate('hello world', 5))->toBe('hello…');
+    expect(Str::truncate(STR_TEST_HELLO_WORLD, 5))->toBe('hello…');
 });
 
 it('truncate accepts a custom suffix', function (): void {
-    expect(Str::truncate('hello world', 5, '...'))->toBe('hello...');
+    expect(Str::truncate(STR_TEST_HELLO_WORLD, 5, '...'))->toBe('hello...');
 });
 
 it('truncate returns the string unchanged when exactly at the limit', function (): void {
@@ -63,11 +66,11 @@ it('preview returns the string unchanged when under the limit', function (): voi
 });
 
 it('preview truncates with the default suffix', function (): void {
-    expect(Str::preview('hello world', 5))->toBe('hello…');
+    expect(Str::preview(STR_TEST_HELLO_WORLD, 5))->toBe('hello…');
 });
 
 it('preview accepts a custom suffix', function (): void {
-    expect(Str::preview('hello world', 5, '...'))->toBe('hello...');
+    expect(Str::preview(STR_TEST_HELLO_WORLD, 5, '...'))->toBe('hello...');
 });
 
 // ---------------------------------------------------------------------------
@@ -79,7 +82,7 @@ it('truncateWithCount returns the string unchanged when under the limit', functi
 });
 
 it('truncateWithCount clips and appends the original length marker', function (): void {
-    expect(Str::truncateWithCount('hello world', 5))->toBe('hello[truncated, 11 chars]');
+    expect(Str::truncateWithCount(STR_TEST_HELLO_WORLD, 5))->toBe('hello[truncated, 11 chars]');
 });
 
 // ---------------------------------------------------------------------------
@@ -110,15 +113,15 @@ it('snippetAround adds edge markers when the window does not reach the ends', fu
 // ---------------------------------------------------------------------------
 
 it('afterPrefix returns the part after the prefix and trims by default', function (): void {
-    expect(Str::afterPrefix('/guide authz', '/guide'))->toBe('authz');
+    expect(Str::afterPrefix(STR_TEST_GUIDE_PREFIX.' authz', STR_TEST_GUIDE_PREFIX))->toBe('authz');
 });
 
 it('afterPrefix preserves surrounding spaces when trim is disabled', function (): void {
-    expect(Str::afterPrefix('/guide authz  ', '/guide', false))->toBe(' authz  ');
+    expect(Str::afterPrefix(STR_TEST_GUIDE_PREFIX.' authz  ', STR_TEST_GUIDE_PREFIX, false))->toBe(' authz  ');
 });
 
 it('afterPrefix returns the original string when the prefix is missing', function (): void {
-    expect(Str::afterPrefix('authz', '/guide'))->toBe('authz');
+    expect(Str::afterPrefix('authz', STR_TEST_GUIDE_PREFIX))->toBe('authz');
 });
 
 // ---------------------------------------------------------------------------

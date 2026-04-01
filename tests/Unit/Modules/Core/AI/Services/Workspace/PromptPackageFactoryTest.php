@@ -13,6 +13,8 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+const PROMPT_PACKAGE_TEST_SYSTEM_PROMPT_SUFFIX = '/system_prompt.md';
+
 beforeEach(function (): void {
     $this->tempDir = storage_path('framework/testing/prompt-package-'.uniqid());
     mkdir($this->tempDir, 0755, true);
@@ -29,7 +31,7 @@ afterEach(function (): void {
 });
 
 it('assembles behavioral sections from workspace files in load order', function (): void {
-    $systemPromptPath = $this->tempDir.'/system_prompt.md';
+    $systemPromptPath = $this->tempDir.PROMPT_PACKAGE_TEST_SYSTEM_PROMPT_SUFFIX;
     $operatorPath = $this->tempDir.'/operator.md';
     file_put_contents($systemPromptPath, 'You are Lara.');
     file_put_contents($operatorPath, 'Company: Belimbing');
@@ -67,7 +69,7 @@ it('assembles behavioral sections from workspace files in load order', function 
 });
 
 it('wraps extension content with append-only policy preamble', function (): void {
-    $systemPromptPath = $this->tempDir.'/system_prompt.md';
+    $systemPromptPath = $this->tempDir.PROMPT_PACKAGE_TEST_SYSTEM_PROMPT_SUFFIX;
     $extensionPath = $this->tempDir.'/extension.md';
     file_put_contents($systemPromptPath, 'Identity');
     file_put_contents($extensionPath, 'Extra rules here');
@@ -103,7 +105,7 @@ it('wraps extension content with append-only policy preamble', function (): void
 });
 
 it('appends operational and transient sections after behavioral sections', function (): void {
-    $systemPromptPath = $this->tempDir.'/system_prompt.md';
+    $systemPromptPath = $this->tempDir.PROMPT_PACKAGE_TEST_SYSTEM_PROMPT_SUFFIX;
     file_put_contents($systemPromptPath, 'Identity');
 
     $manifest = new WorkspaceManifest(
@@ -153,7 +155,7 @@ it('appends operational and transient sections after behavioral sections', funct
 });
 
 it('skips empty workspace files', function (): void {
-    $systemPromptPath = $this->tempDir.'/system_prompt.md';
+    $systemPromptPath = $this->tempDir.PROMPT_PACKAGE_TEST_SYSTEM_PROMPT_SUFFIX;
     $operatorPath = $this->tempDir.'/operator.md';
     file_put_contents($systemPromptPath, 'Identity');
     file_put_contents($operatorPath, '   ');
