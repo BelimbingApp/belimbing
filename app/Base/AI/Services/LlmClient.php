@@ -589,76 +589,157 @@ class LlmClient
         ?string &$currentToolCallId,
         ?string &$currentToolCallName,
     ): Generator {
-        switch ($event) {
-            case 'response.output_text.delta':
-                $delta = $data['delta'] ?? '';
-                if ($delta !== '') {
-                    yield ['type' => 'content_delta', 'text' => $delta];
-                }
-                break;
+        if ($event === 'response.output_text.delta') {
+            $deltaEvent = $this->responseTextDeltaEvent($data);
 
-            case 'response.output_item.added':
-                $item = $data['item'] ?? [];
-                if (($item['type'] ?? '') === 'function_call') {
-                    $currentToolCallId = $item['call_id'] ?? null;
-                    $currentToolCallName = $item['name'] ?? null;
+            if ($deltaEvent !== null) {
+                yield $deltaEvent;
+            }
 
-                    yield [
-                        'type' => 'tool_call_delta',
-                        'index' => $toolCallIndex,
-                        'id' => $currentToolCallId,
-                        'name' => $currentToolCallName,
-                        'arguments_delta' => '',
-                    ];
-                }
-                break;
-
-            case 'response.function_call_arguments.delta':
-                yield [
-                    'type' => 'tool_call_delta',
-                    'index' => $toolCallIndex,
-                    'id' => null,
-                    'name' => null,
-                    'arguments_delta' => $data['delta'] ?? '',
-                ];
-                break;
-
-            case 'response.output_item.done':
-                $item = $data['item'] ?? [];
-                if (($item['type'] ?? '') === 'function_call') {
-                    $toolCallIndex++;
-                    $currentToolCallId = null;
-                    $currentToolCallName = null;
-                }
-                break;
-
-            case 'response.completed':
-                $resp = $data['response'] ?? $data;
-                $usage = $resp['usage'] ?? null;
-                $status = $resp['status'] ?? 'completed';
-
-                yield [
-                    'type' => 'done',
-                    'finish_reason' => $this->responseFinishReason($status),
-                    'usage' => $usage !== null ? [
-                        'prompt_tokens' => $usage['input_tokens'] ?? null,
-                        'completion_tokens' => $usage['output_tokens'] ?? null,
-                    ] : null,
-                    'latency_ms' => LlmClientSupport::latencyMs($startTime),
-                ];
-                break;
-
-            case 'response.failed':
-                yield $this->responseFailureEvent($data, $startTime);
-                break;
-
-            case 'error':
-                yield $this->responseErrorEvent($data, $startTime);
-                break;
-
-            default:
-                break;
+            return;
         }
+
+        if ($event === 'response.output_item.added') {
+            $toolCallAddedEvent = $this->responseOutputItemAddedEvent(
+                data: $data,
+                toolCallIndex: $toolCallIndex,
+                currentToolCallId: $currentToolCallId,
+                currentToolCallName: $currentToolCallName,
+            );
+
+            if ($toolCallAddedEvent !== null) {
+                yield $toolCallAddedEvent;
+            }
+
+            return;
+        }
+
+        if ($event === 'response.function_call_arguments.delta') {
+            yield $this->responseFunctionCallArgumentsDeltaEvent($data, $toolCallIndex);
+
+            return;
+        }
+
+        if ($event === 'response.output_item.done') {
+            $this->completeResponseOutputItem($data, $toolCallIndex, $currentToolCallId, $currentToolCallName);
+
+            return;
+        }
+
+        if ($event === 'response.completed') {
+            yield $this->responseCompletedEvent($data, $startTime);
+
+            return;
+        }
+
+        if ($event === 'response.failed') {
+            yield $this->responseFailureEvent($data, $startTime);
+
+            return;
+        }
+
+        if ($event === 'error') {
+            yield $this->responseErrorEvent($data, $startTime);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|null
+     */
+    private function responseTextDeltaEvent(array $data): ?array
+    {
+        $delta = $data['delta'] ?? '';
+
+        if ($delta === '') {
+            return null;
+        }
+
+        return ['type' => 'content_delta', 'text' => $delta];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|null
+     */
+    private function responseOutputItemAddedEvent(
+        array $data,
+        int $toolCallIndex,
+        ?string &$currentToolCallId,
+        ?string &$currentToolCallName,
+    ): ?array {
+        $item = $data['item'] ?? [];
+
+        if (($item['type'] ?? '') !== 'function_call') {
+            return null;
+        }
+
+        $currentToolCallId = $item['call_id'] ?? null;
+        $currentToolCallName = $item['name'] ?? null;
+
+        return [
+            'type' => 'tool_call_delta',
+            'index' => $toolCallIndex,
+            'id' => $currentToolCallId,
+            'name' => $currentToolCallName,
+            'arguments_delta' => '',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function responseFunctionCallArgumentsDeltaEvent(array $data, int $toolCallIndex): array
+    {
+        return [
+            'type' => 'tool_call_delta',
+            'index' => $toolCallIndex,
+            'id' => null,
+            'name' => null,
+            'arguments_delta' => $data['delta'] ?? '',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function completeResponseOutputItem(
+        array $data,
+        int &$toolCallIndex,
+        ?string &$currentToolCallId,
+        ?string &$currentToolCallName,
+    ): void {
+        $item = $data['item'] ?? [];
+
+        if (($item['type'] ?? '') !== 'function_call') {
+            return;
+        }
+
+        $toolCallIndex++;
+        $currentToolCallId = null;
+        $currentToolCallName = null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function responseCompletedEvent(array $data, int $startTime): array
+    {
+        $resp = $data['response'] ?? $data;
+        $usage = $resp['usage'] ?? null;
+        $status = $resp['status'] ?? 'completed';
+
+        return [
+            'type' => 'done',
+            'finish_reason' => $this->responseFinishReason($status),
+            'usage' => $usage !== null ? [
+                'prompt_tokens' => $usage['input_tokens'] ?? null,
+                'completion_tokens' => $usage['output_tokens'] ?? null,
+            ] : null,
+            'latency_ms' => LlmClientSupport::latencyMs($startTime),
+        ];
     }
 
     /**

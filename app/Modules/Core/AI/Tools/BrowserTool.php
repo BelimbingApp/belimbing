@@ -229,7 +229,7 @@ class BrowserTool extends AbstractActionTool
         }
 
         // Resolve or create a browser session for this tool invocation.
-        // TODO: employeeId and companyId should come from agent execution context.
+        // The execution context should eventually populate these synthetic fields.
         $headless = array_key_exists('headless', $arguments)
             ? (bool) $arguments['headless']
             : (bool) config('ai.tools.browser.headless', true);

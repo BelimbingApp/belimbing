@@ -2,6 +2,7 @@
 
 use App\Base\DateTime\Contracts\DateTimeDisplayService;
 use App\Base\DateTime\Enums\TimezoneMode;
+use App\Base\Locale\Contracts\LocaleContext;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Modules\Core\User\Models\User;
@@ -28,7 +29,7 @@ beforeEach(function (): void {
 function freshService(): DateTimeDisplayService
 {
     app()->forgetInstance(DateTimeDisplayService::class);
-    app()->forgetInstance(\App\Base\Locale\Contracts\LocaleContext::class);
+    app()->forgetInstance(LocaleContext::class);
 
     return app()->make(DateTimeDisplayService::class);
 }
@@ -62,7 +63,7 @@ it('formats datetime in UTC when mode is UTC', function (): void {
     $service = freshService();
     $carbon = Carbon::parse(DT_TEST_TIMESTAMP, 'UTC');
 
-    expect($service->formatDateTime($carbon))->toBe('2026-06-15 08:00:00');
+    expect($service->formatDateTime($carbon))->toBe(DT_TEST_TIMESTAMP);
     expect($service->formatDate($carbon))->toBe('2026-06-15');
     expect($service->formatTime($carbon))->toBe('08:00:00');
 });
@@ -129,7 +130,7 @@ it('parses string datetime values', function (): void {
 
     $service = freshService();
 
-    expect($service->formatDateTime(DT_TEST_TIMESTAMP))->toBe('2026-06-15 08:00:00');
+    expect($service->formatDateTime(DT_TEST_TIMESTAMP))->toBe(DT_TEST_TIMESTAMP);
 });
 
 // --- Mode Resolution Cascade ---

@@ -24,7 +24,6 @@ class MemoryCompactor
     private const DAILY_DIR = 'memory';
 
     public function __construct(
-        private readonly MemorySourceCatalog $catalog,
         private readonly MemoryIndexer $indexer,
     ) {}
 
@@ -41,11 +40,9 @@ class MemoryCompactor
         $workspacePath = $this->workspacePath($employeeId);
         $dailyDir = $workspacePath.'/'.self::DAILY_DIR;
 
-        if (! is_dir($dailyDir)) {
-            return ['compacted_files' => 0, 'archived_files' => 0, 'appended_bytes' => 0];
-        }
-
-        $dailyFiles = $this->findUnarchivedDailyFiles($dailyDir);
+        $dailyFiles = is_dir($dailyDir)
+            ? $this->findUnarchivedDailyFiles($dailyDir)
+            : [];
 
         if ($dailyFiles === []) {
             return ['compacted_files' => 0, 'archived_files' => 0, 'appended_bytes' => 0];

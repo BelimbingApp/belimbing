@@ -11,6 +11,8 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+const MEMORY_INDEXER_DURABLE_FILE = '/MEMORY.md';
+
 beforeEach(function (): void {
     $this->workspacePath = storage_path('framework/testing/memory-indexer-'.uniqid());
     config()->set('ai.workspace_path', $this->workspacePath);
@@ -33,7 +35,7 @@ function makeIndexer(): MemoryIndexer
 
 it('indexes a single memory file', function (): void {
     File::ensureDirectoryExists($this->agentDir);
-    file_put_contents($this->agentDir.'/MEMORY.md', "## Knowledge\n\nImportant facts here.");
+    file_put_contents($this->agentDir.MEMORY_INDEXER_DURABLE_FILE, "## Knowledge\n\nImportant facts here.");
 
     $result = makeIndexer()->index($this->agentId);
 
@@ -45,7 +47,7 @@ it('indexes a single memory file', function (): void {
 
 it('skips unchanged files on second index', function (): void {
     File::ensureDirectoryExists($this->agentDir);
-    file_put_contents($this->agentDir.'/MEMORY.md', "## Facts\n\nSome content.");
+    file_put_contents($this->agentDir.MEMORY_INDEXER_DURABLE_FILE, "## Facts\n\nSome content.");
 
     makeIndexer()->index($this->agentId);
     $result = makeIndexer()->index($this->agentId);
@@ -56,11 +58,11 @@ it('skips unchanged files on second index', function (): void {
 
 it('re-indexes changed files', function (): void {
     File::ensureDirectoryExists($this->agentDir);
-    file_put_contents($this->agentDir.'/MEMORY.md', "## Facts\n\nOriginal.");
+    file_put_contents($this->agentDir.MEMORY_INDEXER_DURABLE_FILE, "## Facts\n\nOriginal.");
 
     makeIndexer()->index($this->agentId);
 
-    file_put_contents($this->agentDir.'/MEMORY.md', "## Facts\n\nUpdated content.");
+    file_put_contents($this->agentDir.MEMORY_INDEXER_DURABLE_FILE, "## Facts\n\nUpdated content.");
     $result = makeIndexer()->index($this->agentId);
 
     expect($result['indexed'])->toBe(1)
@@ -84,7 +86,7 @@ it('removes stale entries for deleted files', function (): void {
 
 it('force reindexes all files', function (): void {
     File::ensureDirectoryExists($this->agentDir);
-    file_put_contents($this->agentDir.'/MEMORY.md', "## Facts\n\nContent.");
+    file_put_contents($this->agentDir.MEMORY_INDEXER_DURABLE_FILE, "## Facts\n\nContent.");
 
     makeIndexer()->index($this->agentId);
     $result = makeIndexer()->reindex($this->agentId);
@@ -104,7 +106,7 @@ it('handles empty workspace gracefully', function (): void {
 
 it('indexes multiple files across durable and daily', function (): void {
     File::ensureDirectoryExists($this->agentDir.'/memory');
-    file_put_contents($this->agentDir.'/MEMORY.md', "## Durable\n\nLong-term memory.");
+    file_put_contents($this->agentDir.MEMORY_INDEXER_DURABLE_FILE, "## Durable\n\nLong-term memory.");
     file_put_contents($this->agentDir.'/memory/2026-07-20.md', "## Today\n\nToday's notes and observations.");
 
     $result = makeIndexer()->index($this->agentId);

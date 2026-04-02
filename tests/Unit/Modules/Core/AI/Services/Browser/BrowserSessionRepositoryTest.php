@@ -13,6 +13,9 @@ use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, CreatesLaraFixtures::class);
 
+const BROWSER_REPOSITORY_URL = 'https://example.com';
+const BROWSER_REPOSITORY_FAILURE_REASON = 'Process crashed';
+
 beforeEach(function () {
     $this->repository = new BrowserSessionRepository;
     $fixture = $this->createLaraFixture();
@@ -165,7 +168,7 @@ describe('state transitions', function () {
 
         expect($this->repository->markFailed($session, 'Process crashed'))->toBeTrue()
             ->and($session->status)->toBe(BrowserSessionStatus::Failed)
-            ->and($session->failure_reason)->toBe('Process crashed');
+            ->and($session->failure_reason)->toBe(BROWSER_REPOSITORY_FAILURE_REASON);
     });
 
     it('rejects transition from terminal to Failed', function () {
@@ -200,15 +203,15 @@ describe('updatePageState', function () {
         $this->repository->updatePageState(
             session: $session,
             activeTabId: 'tab1',
-            currentUrl: 'https://example.com',
-            tabs: [['tab_id' => 'tab1', 'url' => 'https://example.com', 'title' => 'Example', 'is_active' => true]],
+            currentUrl: BROWSER_REPOSITORY_URL,
+            tabs: [['tab_id' => 'tab1', 'url' => BROWSER_REPOSITORY_URL, 'title' => 'Example', 'is_active' => true]],
             pageState: ['element_refs' => ['e1' => '#btn']],
         );
 
         $refreshed = $this->repository->find($session->id);
 
         expect($refreshed->active_tab_id)->toBe('tab1')
-            ->and($refreshed->current_url)->toBe('https://example.com')
+            ->and($refreshed->current_url)->toBe(BROWSER_REPOSITORY_URL)
             ->and($refreshed->tabs)->toBeArray()
             ->and($refreshed->tabs[0]['tab_id'])->toBe('tab1')
             ->and($refreshed->page_state['element_refs']['e1'])->toBe('#btn');

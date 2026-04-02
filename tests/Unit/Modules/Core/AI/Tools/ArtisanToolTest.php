@@ -12,6 +12,8 @@ uses(TestCase::class, AssertsToolBehavior::class);
 
 const ARTISAN_ROUTES_OUTPUT = 'routes output';
 const ARTISAN_COMMAND_NOT_FOUND = 'Command not found';
+const ARTISAN_MIGRATE_COMMAND = 'php artisan migrate';
+const ARTISAN_MIGRATE_SEED_COMMAND = 'php artisan migrate --seed';
 
 beforeEach(function () {
     $this->backgroundService = Mockery::mock(BackgroundCommandService::class);
@@ -204,7 +206,7 @@ describe('background execution', function () {
     it('returns dispatch_id immediately', function () {
         $dispatch = new OperationDispatch([
             'id' => 'op_bg_migrate123',
-            'task' => 'php artisan migrate',
+            'task' => ARTISAN_MIGRATE_COMMAND,
             'status' => 'queued',
         ]);
 
@@ -224,13 +226,13 @@ describe('background execution', function () {
         expect($data)->not->toBeNull()
             ->and($data['status'])->toBe('dispatched')
             ->and($data['dispatch_id'])->toStartWith('op_')
-            ->and($data['command'])->toBe('php artisan migrate');
+            ->and($data['command'])->toBe(ARTISAN_MIGRATE_COMMAND);
     });
 
     it('returns message with dispatch instructions', function () {
         $dispatch = new OperationDispatch([
             'id' => 'op_bg_migrate456',
-            'task' => 'php artisan migrate',
+            'task' => ARTISAN_MIGRATE_COMMAND,
             'status' => 'queued',
         ]);
 
@@ -252,7 +254,7 @@ describe('background execution', function () {
 
         $dispatch = new OperationDispatch([
             'id' => 'op_bg_no_exec',
-            'task' => 'php artisan migrate',
+            'task' => ARTISAN_MIGRATE_COMMAND,
             'status' => 'queued',
         ]);
 
@@ -265,7 +267,7 @@ describe('background execution', function () {
             'background' => true,
         ]);
 
-        Process::assertDidntRun('php artisan migrate');
+        Process::assertDidntRun(ARTISAN_MIGRATE_COMMAND);
     });
 
     it('returns policy_denied for disallowed commands', function () {
@@ -277,7 +279,6 @@ describe('background execution', function () {
             'command' => 'db:wipe',
             'background' => true,
         ]);
-        $data = json_decode((string) $result, true);
 
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('not permitted');
@@ -286,7 +287,7 @@ describe('background execution', function () {
     it('strips prefix before dispatching', function () {
         $dispatch = new OperationDispatch([
             'id' => 'op_bg_stripped',
-            'task' => 'php artisan migrate --seed',
+            'task' => ARTISAN_MIGRATE_SEED_COMMAND,
             'status' => 'queued',
         ]);
 
@@ -296,18 +297,18 @@ describe('background execution', function () {
             ->andReturn($dispatch);
 
         $result = $this->tool->execute([
-            'command' => 'php artisan migrate --seed',
+            'command' => ARTISAN_MIGRATE_SEED_COMMAND,
             'background' => true,
         ]);
         $data = json_decode((string) $result, true);
 
-        expect($data['command'])->toBe('php artisan migrate --seed');
+        expect($data['command'])->toBe(ARTISAN_MIGRATE_SEED_COMMAND);
     });
 
     it('ignores timeout when background is true', function () {
         $dispatch = new OperationDispatch([
             'id' => 'op_bg_timeout',
-            'task' => 'php artisan migrate',
+            'task' => ARTISAN_MIGRATE_COMMAND,
             'status' => 'queued',
         ]);
 

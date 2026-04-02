@@ -16,6 +16,7 @@ use App\Modules\Core\AI\Models\ScheduleDefinition;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionService;
 use App\Modules\Core\Employee\Models\Employee;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * Scheduled task management tool for Agents.
@@ -48,10 +49,14 @@ class ScheduleTaskTool extends AbstractActionTool
         'status',
     ];
 
+    private readonly ScheduleTaskToolSupport $support;
+
     public function __construct(
         private readonly ScheduleDefinitionService $scheduleService,
         private readonly AgentExecutionContext $executionContext,
-    ) {}
+    ) {
+        $this->support = new ScheduleTaskToolSupport;
+    }
 
     public function name(): string
     {
@@ -155,9 +160,9 @@ class ScheduleTaskTool extends AbstractActionTool
 
         $schedules = $this->scheduleService->list($companyId);
 
-        $tasks = $schedules->map(fn (ScheduleDefinition $s) => $this->formatSchedule($s))->all();
+        $tasks = $schedules->map(fn (ScheduleDefinition $s) => $this->support->formatSchedule($s))->all();
 
-        return $this->encodeResponse([
+        return $this->support->encodeResponse([
             'tasks' => $tasks,
             'total' => count($tasks),
         ]);
@@ -203,9 +208,9 @@ class ScheduleTaskTool extends AbstractActionTool
             throw new ToolArgumentException($e->getMessage());
         }
 
-        return $this->encodeResponse([
+        return $this->support->encodeResponse([
             'status' => 'created',
-            ...$this->formatSchedule($schedule),
+            ...$this->support->formatSchedule($schedule),
         ]);
     }
 
@@ -245,15 +250,12 @@ class ScheduleTaskTool extends AbstractActionTool
         }
 
         if ($schedule === null) {
-            return ToolResult::error(
-                'Schedule #'.$scheduleId.' not found or does not belong to your company.',
-                'not_found',
-            );
+            return $this->support->scheduleNotFoundResult($scheduleId);
         }
 
-        return $this->encodeResponse([
+        return $this->support->encodeResponse([
             'status' => 'updated',
-            ...$this->formatSchedule($schedule),
+            ...$this->support->formatSchedule($schedule),
         ]);
     }
 
@@ -280,13 +282,10 @@ class ScheduleTaskTool extends AbstractActionTool
         $removed = $this->scheduleService->remove($scheduleId, $companyId);
 
         if (! $removed) {
-            return ToolResult::error(
-                'Schedule #'.$scheduleId.' not found or does not belong to your company.',
-                'not_found',
-            );
+            return $this->support->scheduleNotFoundResult($scheduleId);
         }
 
-        return $this->encodeResponse([
+        return $this->support->encodeResponse([
             'task_id' => $scheduleId,
             'status' => 'removed',
             'removed_at' => now()->toIso8601String(),
@@ -316,15 +315,12 @@ class ScheduleTaskTool extends AbstractActionTool
         $schedule = $this->scheduleService->find($scheduleId, $companyId);
 
         if ($schedule === null) {
-            return ToolResult::error(
-                'Schedule #'.$scheduleId.' not found or does not belong to your company.',
-                'not_found',
-            );
+            return $this->support->scheduleNotFoundResult($scheduleId);
         }
 
-        return $this->encodeResponse([
+        return $this->support->encodeResponse([
             'status' => 'found',
-            ...$this->formatSchedule($schedule),
+            ...$this->support->formatSchedule($schedule),
             'checked_at' => now()->toIso8601String(),
         ]);
     }
@@ -404,29 +400,6 @@ class ScheduleTaskTool extends AbstractActionTool
     }
 
     /**
-     * Format a ScheduleDefinition as a tool-friendly array.
-     *
-     * @return array<string, mixed>
-     */
-    private function formatSchedule(ScheduleDefinition $schedule): array
-    {
-        return [
-            'task_id' => $schedule->id,
-            'description' => $schedule->description,
-            'execution_payload' => $schedule->execution_payload,
-            'cron_expression' => $schedule->cron_expression,
-            'timezone' => $schedule->timezone,
-            'agent_id' => $schedule->employee_id,
-            'enabled' => $schedule->is_enabled,
-            'concurrency_policy' => $schedule->concurrency_policy,
-            'last_fired_at' => $schedule->last_fired_at?->toIso8601String(),
-            'next_due_at' => $schedule->next_due_at?->toIso8601String(),
-            'created_at' => $schedule->created_at?->toIso8601String(),
-            'updated_at' => $schedule->updated_at?->toIso8601String(),
-        ];
-    }
-
-    /**
      * Resolve the company ID from agent execution context or auth.
      */
     private function resolveCompanyId(): ?int
@@ -439,7 +412,7 @@ class ScheduleTaskTool extends AbstractActionTool
             }
         }
 
-        $user = auth()->user();
+        $user = Auth::user();
 
         if ($user !== null && method_exists($user, 'getCompanyId')) {
             return $user->getCompanyId();
@@ -457,13 +430,51 @@ class ScheduleTaskTool extends AbstractActionTool
             return $this->executionContext->actingForUserId();
         }
 
-        return auth()->id();
+        return Auth::id();
+    }
+}
+
+final class ScheduleTaskToolSupport
+{
+    private const SCHEDULE_NOT_FOUND_PREFIX = 'Schedule #';
+
+    private const SCHEDULE_NOT_FOUND_SUFFIX = ' not found or does not belong to your company.';
+
+    /**
+     * Format a ScheduleDefinition as a tool-friendly array.
+     *
+     * @return array<string, mixed>
+     */
+    public function formatSchedule(ScheduleDefinition $schedule): array
+    {
+        return [
+            'task_id' => $schedule->id,
+            'description' => $schedule->description,
+            'execution_payload' => $schedule->execution_payload,
+            'cron_expression' => $schedule->cron_expression,
+            'timezone' => $schedule->timezone,
+            'agent_id' => $schedule->employee_id,
+            'enabled' => $schedule->is_enabled,
+            'concurrency_policy' => $schedule->concurrency_policy,
+            'last_fired_at' => $schedule->last_fired_at?->toIso8601String(),
+            'next_due_at' => $schedule->next_due_at?->toIso8601String(),
+            'created_at' => $schedule->created_at?->toIso8601String(),
+            'updated_at' => $schedule->updated_at?->toIso8601String(),
+        ];
+    }
+
+    public function scheduleNotFoundResult(int $scheduleId): ToolResult
+    {
+        return ToolResult::error(
+            self::SCHEDULE_NOT_FOUND_PREFIX.$scheduleId.self::SCHEDULE_NOT_FOUND_SUFFIX,
+            'not_found',
+        );
     }
 
     /**
      * @param  array<string, mixed>  $payload
      */
-    private function encodeResponse(array $payload): ToolResult
+    public function encodeResponse(array $payload): ToolResult
     {
         return ToolResult::success(
             json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)

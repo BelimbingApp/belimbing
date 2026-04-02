@@ -15,6 +15,8 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+const BROWSER_MANAGER_URL = 'https://example.com';
+
 /**
  * Helper to make a fake BrowserSession model (not persisted).
  */
@@ -131,11 +133,11 @@ describe('executeAction', function () {
         $session = fakeSession();
         $this->repository->shouldReceive('find')->with('bs_test_mgr')->andReturn($session);
         $this->runtimeAdapter->shouldReceive('execute')
-            ->with($session, 'navigate', ['url' => 'https://example.com'])
-            ->andReturn(['ok' => true, 'action' => 'navigate', 'url' => 'https://example.com']);
+            ->with($session, 'navigate', ['url' => BROWSER_MANAGER_URL])
+            ->andReturn(['ok' => true, 'action' => 'navigate', 'url' => BROWSER_MANAGER_URL]);
         $this->repository->shouldReceive('touchActivity')->once();
 
-        $result = $this->manager->executeAction('bs_test_mgr', 'navigate', ['url' => 'https://example.com']);
+        $result = $this->manager->executeAction('bs_test_mgr', 'navigate', ['url' => BROWSER_MANAGER_URL]);
 
         expect($result['ok'])->toBeTrue();
     });
@@ -209,8 +211,8 @@ describe('getSession', function () {
 describe('getSessionState', function () {
     it('returns DTO for existing session', function () {
         $session = fakeSession();
-        $session->tabs = [['tab_id' => 't1', 'url' => 'https://example.com', 'title' => 'E', 'is_active' => true]];
-        $session->current_url = 'https://example.com';
+        $session->tabs = [['tab_id' => 't1', 'url' => BROWSER_MANAGER_URL, 'title' => 'E', 'is_active' => true]];
+        $session->current_url = BROWSER_MANAGER_URL;
         $session->page_state = ['refs_captured_at' => '2026-01-01'];
         $this->repository->shouldReceive('find')->andReturn($session);
 
