@@ -9,6 +9,7 @@ use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Jobs\RunAgentTaskJob;
 use App\Modules\Core\AI\Models\OperationDispatch;
+use App\Modules\Core\AI\Services\Orchestration\AgentCapabilityCatalog;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
 
@@ -16,19 +17,22 @@ use Illuminate\Support\Str;
  * Dispatches tasks to AI agents via Laravel queues.
  *
  * Creates a durable dispatch record in the operations ledger, then queues
- * a RunAgentTaskJob for asynchronous execution. Returns the dispatch
- * model so callers can format receipts or track status.
+ * a RunAgentTaskJob for asynchronous execution. Uses the AgentCapabilityCatalog
+ * for agent validation. Returns the dispatch model so callers can format
+ * receipts or track status.
  */
 class LaraTaskDispatcher
 {
     public function __construct(
-        private readonly LaraCapabilityMatcher $capabilityMatcher,
+        private readonly AgentCapabilityCatalog $catalog,
     ) {}
 
     /**
      * Dispatch a task to an accessible Agent on behalf of the current user.
      *
      * Creates a persisted dispatch record and queues the agent job.
+     * Validates the target agent via the capability catalog rather than
+     * the legacy matcher.
      *
      * @param  int  $employeeId  Target agent's employee ID
      * @param  string  $taskType  Task type discriminator (e.g., 'resolve_ticket')
@@ -39,17 +43,17 @@ class LaraTaskDispatcher
      */
     public function dispatchForCurrentUser(int $employeeId, string $taskType, string $task, array $options = []): OperationDispatch
     {
-        $agent = $this->capabilityMatcher->findAccessibleAgentById($employeeId);
+        $descriptor = $this->catalog->descriptorFor($employeeId);
         $actingForUserId = auth()->id();
 
-        if ($agent === null || ! is_int($actingForUserId)) {
+        if ($descriptor === null || ! is_int($actingForUserId)) {
             throw new AuthorizationException(__('Unauthorized Agent dispatch target.'));
         }
 
         $dispatch = OperationDispatch::query()->create([
             'id' => OperationDispatch::ID_PREFIX.Str::random(12),
             'operation_type' => OperationType::AgentTask,
-            'employee_id' => $agent['employee_id'],
+            'employee_id' => $descriptor->employeeId,
             'acting_for_user_id' => $actingForUserId,
             'task' => trim($task),
             'status' => OperationStatus::Queued,
@@ -57,7 +61,7 @@ class LaraTaskDispatcher
                 'task_type' => $taskType,
                 'model_override' => $options['model_override'] ?? null,
                 'source' => $options['source'] ?? 'delegate_task',
-                'employee_name' => $agent['name'],
+                'employee_name' => $descriptor->name,
             ],
             'entity_type' => $options['entity_type'] ?? null,
             'entity_id' => $options['entity_id'] ?? null,

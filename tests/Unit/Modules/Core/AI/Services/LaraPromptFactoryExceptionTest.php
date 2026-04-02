@@ -7,9 +7,9 @@ use App\Modules\Core\AI\DTO\WorkspaceFileEntry;
 use App\Modules\Core\AI\DTO\WorkspaceManifest;
 use App\Modules\Core\AI\DTO\WorkspaceValidationResult;
 use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
-use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraContextProvider;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
+use App\Modules\Core\AI\Services\Orchestration\AgentCapabilityCatalog;
 use App\Modules\Core\AI\Services\Workspace\PromptPackageFactory;
 use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceResolver;
@@ -64,12 +64,12 @@ it('throws integration exception when Lara runtime context cannot be encoded', f
         'broken' => $resource,
     ]);
 
-    $capabilityMatcher = Mockery::mock(LaraCapabilityMatcher::class);
-    $capabilityMatcher->shouldReceive('discoverDelegableAgentsForCurrentUser')->once()->andReturn([]);
+    $capabilityCatalog = Mockery::mock(AgentCapabilityCatalog::class);
+    $capabilityCatalog->shouldReceive('delegableDescriptorsForCurrentUser')->once()->andReturn([]);
 
     $factory = new LaraPromptFactory(
         $contextProvider,
-        $capabilityMatcher,
+        $capabilityCatalog,
         $resolver,
         $validator,
         new PromptPackageFactory,
@@ -100,11 +100,11 @@ it('throws configuration exception when Lara workspace validation fails', functi
     $validator->shouldReceive('validate')->with($manifest)->andReturn($validation);
 
     $contextProvider = Mockery::mock(LaraContextProvider::class);
-    $capabilityMatcher = Mockery::mock(LaraCapabilityMatcher::class);
+    $capabilityCatalog = Mockery::mock(AgentCapabilityCatalog::class);
 
     $factory = new LaraPromptFactory(
         $contextProvider,
-        $capabilityMatcher,
+        $capabilityCatalog,
         $resolver,
         $validator,
         new PromptPackageFactory,
@@ -142,12 +142,12 @@ it('gracefully skips missing legacy extension path without throwing', function (
             'app' => ['name' => 'Belimbing'],
         ]);
 
-        $capabilityMatcher = Mockery::mock(LaraCapabilityMatcher::class);
-        $capabilityMatcher->shouldReceive('discoverDelegableAgentsForCurrentUser')->once()->andReturn([]);
+        $capabilityCatalog = Mockery::mock(AgentCapabilityCatalog::class);
+        $capabilityCatalog->shouldReceive('delegableDescriptorsForCurrentUser')->once()->andReturn([]);
 
         $factory = new LaraPromptFactory(
             $contextProvider,
-            $capabilityMatcher,
+            $capabilityCatalog,
             $resolver,
             $validator,
             new PromptPackageFactory,

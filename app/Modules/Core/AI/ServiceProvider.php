@@ -49,6 +49,15 @@ use App\Modules\Core\AI\Services\Messaging\InboundSignalService;
 use App\Modules\Core\AI\Services\Messaging\OutboundMessageService;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use App\Modules\Core\AI\Services\OperationsDispatchService;
+use App\Modules\Core\AI\Services\Orchestration\AgentCapabilityCatalog;
+use App\Modules\Core\AI\Services\Orchestration\OrchestrationPolicyService;
+use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRegistry;
+use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRunner;
+use App\Modules\Core\AI\Services\Orchestration\SessionSpawnManager;
+use App\Modules\Core\AI\Services\Orchestration\SkillContextResolver;
+use App\Modules\Core\AI\Services\Orchestration\SkillPackRegistry;
+use App\Modules\Core\AI\Services\Orchestration\SkillPacks\KnowledgeSkillPack;
+use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
 use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionService;
 use App\Modules\Core\AI\Services\Scheduling\SchedulePlanner;
@@ -128,6 +137,18 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(KodiPromptFactory::class);
         $this->app->singleton(AgentExecutionContext::class);
 
+        // Orchestration subsystem
+        $this->app->singleton(OrchestrationPolicyService::class);
+        $this->app->singleton(AgentCapabilityCatalog::class);
+        $this->app->singleton(TaskRoutingService::class);
+        $this->app->singleton(SessionSpawnManager::class);
+        $this->app->singleton(SkillPackRegistry::class);
+        $this->app->singleton(SkillContextResolver::class);
+        $this->app->singleton(RuntimeHookRegistry::class);
+        $this->app->singleton(RuntimeHookRunner::class);
+
+        $this->registerSkillPacks();
+
         // Browser subsystem
         $this->app->singleton(BrowserSessionRepository::class);
         $this->app->singleton(BrowserRuntimeAdapter::class);
@@ -183,6 +204,20 @@ class ServiceProvider extends BaseServiceProvider
                 OperationsStatusCommand::class,
             ]);
         }
+    }
+
+    /**
+     * Register built-in skill packs with the SkillPackRegistry.
+     *
+     * Packs are registered during service provider boot (deferred
+     * resolution). Each pack builds its manifest from live data.
+     */
+    private function registerSkillPacks(): void
+    {
+        $this->app->afterResolving(SkillPackRegistry::class, function (SkillPackRegistry $registry): void {
+            $pack = $this->app->make(KnowledgeSkillPack::class);
+            $registry->register($pack->manifest());
+        });
     }
 
     /**

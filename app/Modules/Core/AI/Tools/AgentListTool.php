@@ -11,14 +11,16 @@ use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolResult;
-use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
+use App\Modules\Core\AI\DTO\Orchestration\AgentCapabilityDescriptor;
+use App\Modules\Core\AI\Services\Orchestration\AgentCapabilityCatalog;
 
 /**
  * Agent discovery tool for Lara and other agents.
  *
  * Lists available Agents that the current user can delegate tasks
- * to, including each agent's name and capability summary. This enables
- * Lara to discover available agents before dispatching delegation tasks.
+ * to, including each agent's name, capability summary, and structured
+ * capability data. Uses the AgentCapabilityCatalog for richer
+ * discovery than the legacy keyword matcher.
  *
  * Gated by `ai.tool_agent_list.execute` authz capability.
  */
@@ -27,7 +29,7 @@ class AgentListTool extends AbstractTool
     use ProvidesToolMetadata;
 
     public function __construct(
-        private readonly LaraCapabilityMatcher $capabilityMatcher,
+        private readonly AgentCapabilityCatalog $catalog,
     ) {}
 
     public function name(): string
@@ -83,9 +85,9 @@ class AgentListTool extends AbstractTool
 
     protected function handle(array $arguments): ToolResult
     {
-        $agents = $this->capabilityMatcher->discoverDelegableAgentsForCurrentUser();
+        $descriptors = $this->catalog->delegableDescriptorsForCurrentUser();
 
-        if ($agents === []) {
+        if ($descriptors === []) {
             return ToolResult::success(
                 'No Agents available for delegation. '
                     .'The current user has no accessible Agents.'
@@ -95,9 +97,9 @@ class AgentListTool extends AbstractTool
         $filter = $this->optionalString($arguments, 'capability_filter');
 
         if ($filter !== null) {
-            $agents = $this->filterAgents($agents, $filter);
+            $descriptors = $this->filterDescriptors($descriptors, $filter);
 
-            if ($agents === []) {
+            if ($descriptors === []) {
                 return ToolResult::success(
                     'No Agents match the filter "'.$filter.'". '
                         .'Try again without a filter to see all available agents.'
@@ -105,42 +107,55 @@ class AgentListTool extends AbstractTool
             }
         }
 
-        return ToolResult::success($this->formatAgentList($agents));
+        return ToolResult::success($this->formatDescriptorList($descriptors));
     }
 
     /**
-     * Filter agents whose capability summary contains the keyword (case-insensitive).
+     * Filter descriptors whose display summary contains the keyword (case-insensitive).
      *
-     * @param  list<array{employee_id: int, name: string, capability_summary: string}>  $agents
-     * @return list<array{employee_id: int, name: string, capability_summary: string}>
+     * @param  list<AgentCapabilityDescriptor>  $descriptors
+     * @return list<AgentCapabilityDescriptor>
      */
-    private function filterAgents(array $agents, string $filter): array
+    private function filterDescriptors(array $descriptors, string $filter): array
     {
         $normalizedFilter = mb_strtolower($filter);
 
         return array_values(array_filter(
-            $agents,
-            fn (array $agent): bool => str_contains(
-                mb_strtolower($agent['capability_summary']),
+            $descriptors,
+            fn (AgentCapabilityDescriptor $descriptor): bool => str_contains(
+                mb_strtolower($descriptor->displaySummary ?? ''),
                 $normalizedFilter,
             ),
         ));
     }
 
     /**
-     * Format the agent list as a readable numbered list.
+     * Format the descriptor list as a readable numbered list.
      *
-     * @param  list<array{employee_id: int, name: string, capability_summary: string}>  $agents
+     * Includes structured capability data (domains, task types, specialties)
+     * when available, providing richer discovery than bare summaries.
+     *
+     * @param  list<AgentCapabilityDescriptor>  $descriptors
      */
-    private function formatAgentList(array $agents): string
+    private function formatDescriptorList(array $descriptors): string
     {
-        $count = count($agents);
+        $count = count($descriptors);
         $output = $count.' Agent'.($count !== 1 ? 's' : '').' available:'."\n";
 
-        foreach ($agents as $index => $agent) {
+        foreach ($descriptors as $index => $descriptor) {
             $number = $index + 1;
-            $output .= "\n".$number.'. **'.$agent['name'].'** (ID: '.$agent['employee_id'].')'
-                ."\n".'   '.$agent['capability_summary']."\n";
+            $output .= "\n".$number.'. **'.$descriptor->name.'** (ID: '.$descriptor->employeeId.')'
+                ."\n".'   '.($descriptor->displaySummary ?? 'General Agent');
+
+            if ($descriptor->domains !== []) {
+                $output .= "\n".'   Domains: '.implode(', ', $descriptor->domains);
+            }
+
+            if ($descriptor->taskTypes !== []) {
+                $output .= "\n".'   Task types: '.implode(', ', $descriptor->taskTypes);
+            }
+
+            $output .= "\n";
         }
 
         return $output;

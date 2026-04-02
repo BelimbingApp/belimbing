@@ -2,9 +2,9 @@
 
 **Parent:** `docs/todo/openclaw-parity/00-capability-gap-audit.md`  
 **Scope:** Turn BLB's current delegation and Lara-specific shortcuts into a general multi-agent orchestration and extension kernel  
-**Status:** Planned  
+**Status:** Complete  
 **Phase Owner:** Core AI / Base AI  
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-02
 
 ---
 
@@ -377,12 +377,12 @@ Suggested fields or manifest data:
 
 | Workstream | Goal | Status | Notes |
 |---|---|---|---|
-| 5.1 | Define orchestration core contracts | Not started | Stabilize routing, child-session, skill-pack, and hook interfaces first |
-| 5.2 | Replace summary-only routing with capability catalog | Not started | Keep current matcher only as a bootstrap input |
-| 5.3 | Add child-session lineage and spawn mechanics | Not started | Distinguish dispatches from sessions |
-| 5.4 | Introduce skill-pack registry | Not started | Package prompts/tools/references under manifests |
-| 5.5 | Add runtime hook stages | Not started | Keep stages small and deterministic |
-| 5.6 | Move Lara shortcuts onto the new substrate | Not started | `/delegate`, `/guide`, and future commands should become veneers |
+| 5.1 | Define orchestration core contracts | **Complete** | Enums, DTOs, RuntimeHook contract, OrchestrationSession model+migration, OrchestrationPolicyService, OperationType.ChildSession |
+| 5.2 | Replace summary-only routing with capability catalog | **Complete** | AgentCapabilityCatalog, TaskRoutingService, OrchestrationPolicyService created and tested (36 tests) |
+| 5.3 | Add child-session lineage and spawn mechanics | **Complete** | SessionSpawnManager, SpawnAgentSessionJob, AgentExecutionContext lineage fields, domain exceptions, 10 tests |
+| 5.4 | Introduce skill-pack registry | **Complete** | SkillPackRegistry, SkillContextResolver, SkillResolution DTO, KnowledgeSkillPack proof, 32 tests |
+| 5.5 | Add runtime hook stages | **Complete** | RuntimeHookRegistry, RuntimeHookRunner, HookRunResult created. Integrated at all 5 stages in AgenticRuntime (sync+streaming). 22 tests |
+| 5.6 | Move Lara shortcuts onto the new substrate | **Complete** | DelegateTaskTool, AgentListTool, LaraOrchestrationService, LaraTaskDispatcher, LaraPromptFactory rebased on orchestration services. All existing tests updated. After-coding alignment review verified no stale LaraCapabilityMatcher direct dependencies remain. 1176 tests pass (3168 assertions) |
 
 ### 9.1 Stage A - Core contracts and policy
 
@@ -441,10 +441,14 @@ Sub-todos:
 
 Sub-todos:
 
-1. rebase `DelegateTaskTool` on the orchestration core
-2. rebase Lara slash commands on the same services
-3. ensure non-Lara agents can use orchestration primitives too
-4. retire hardcoded one-off orchestration logic where the new substrate replaces it
+1. rebase `DelegateTaskTool` on the orchestration core — **Done**: constructor takes `LaraTaskDispatcher`, `TaskRoutingService`, `AgentExecutionContext`; uses `routeTask()` via `TaskRoutingService::route()` returning `RoutingDecision`
+2. rebase `AgentListTool` on `AgentCapabilityCatalog` — **Done**: uses `delegableDescriptorsForCurrentUser()` returning `AgentCapabilityDescriptor` objects; richer output with domains and task types
+3. rebase `LaraOrchestrationService` `/delegate` on `TaskRoutingService` — **Done**: `routeAndDispatchDelegation()` creates `RoutingRequest` and uses `TaskRoutingService::route()`
+4. rebase `LaraTaskDispatcher` on `AgentCapabilityCatalog` — **Done**: uses `catalog->descriptorFor()` for agent validation instead of `findAccessibleAgentById()`
+5. update existing tests — **Done**: `DelegateTaskToolTest.php` (14 tests), `AgentListToolTest.php` (9 tests), `ToolCallingTest.php` (6 tests updated to new constructor), `AgenticRuntimeTest.php` (7 tests fixed — added `RuntimeHookRunner` 8th arg), `LaraPromptAndOrchestrationTest.php` (2 tests fixed — updated assertion keys)
+6. fix missing imports — **Done**: `AgenticRuntime.php` (added `RuntimeHookRunner`, `HookStage`), `LaraOrchestrationService.php` (added `RoutingRequest`, `Employee`, `RoutingTarget`)
+7. `LaraCapabilityMatcher` is now a leaf dependency used ONLY by `AgentCapabilityCatalog` for access-control checks — no longer directly used by tools or orchestration services
+8. rebase `LaraPromptFactory` on `AgentCapabilityCatalog` — **Done** (alignment review): constructor takes `AgentCapabilityCatalog` instead of `LaraCapabilityMatcher`; `LaraPromptFactoryExceptionTest` updated to mock `AgentCapabilityCatalog`
 
 ---
 

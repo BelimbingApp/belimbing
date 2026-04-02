@@ -14,10 +14,13 @@ use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
+use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRegistry;
+use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRunner;
 use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
 use App\Modules\Core\AI\Services\RuntimeMessageBuilder;
 use App\Modules\Core\AI\Services\RuntimeResponseFactory;
 use DateTimeImmutable;
+use Psr\Log\NullLogger;
 
 trait MakesRuntimeResponses
 {
@@ -145,6 +148,7 @@ trait MakesRuntimeResponses
             new RuntimeMessageBuilder,
             new RuntimeResponseFactory($runtimeLogger),
             $runtimeLogger,
+            new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger),
         );
     }
 

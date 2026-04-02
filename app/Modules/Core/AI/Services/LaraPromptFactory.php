@@ -12,6 +12,7 @@ use App\Modules\Core\AI\DTO\PromptPackage;
 use App\Modules\Core\AI\DTO\PromptSection;
 use App\Modules\Core\AI\Enums\PromptSectionType;
 use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
+use App\Modules\Core\AI\Services\Orchestration\AgentCapabilityCatalog;
 use App\Modules\Core\AI\Services\Workspace\PromptPackageFactory;
 use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceResolver;
@@ -22,7 +23,7 @@ class LaraPromptFactory
 {
     public function __construct(
         private readonly LaraContextProvider $contextProvider,
-        private readonly LaraCapabilityMatcher $capabilityMatcher,
+        private readonly AgentCapabilityCatalog $capabilityCatalog,
         private readonly WorkspaceResolver $workspaceResolver,
         private readonly WorkspaceValidator $workspaceValidator,
         private readonly PromptPackageFactory $packageFactory,
@@ -90,7 +91,10 @@ class LaraPromptFactory
                 'delegate' => '/delegate <task>',
                 'guide' => '/guide <topic>',
             ],
-            'available_agents' => $this->capabilityMatcher->discoverDelegableAgentsForCurrentUser(),
+            'available_agents' => array_map(
+                fn ($descriptor) => $descriptor->toArray(),
+                $this->capabilityCatalog->delegableDescriptorsForCurrentUser(),
+            ),
         ];
 
         $encodedContext = json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
