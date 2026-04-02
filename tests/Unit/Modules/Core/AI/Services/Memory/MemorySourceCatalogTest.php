@@ -12,7 +12,6 @@ uses(TestCase::class);
 
 const MEMORY_SOURCE_DURABLE_FILE = '/MEMORY.md';
 const MEMORY_SOURCE_DAILY_DIR = '/memory';
-const MEMORY_SOURCE_ROOT = 'memory';
 const MEMORY_SOURCE_DURABLE_RELATIVE = 'MEMORY.md';
 
 beforeEach(function (): void {

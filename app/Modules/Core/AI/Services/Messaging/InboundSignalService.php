@@ -92,14 +92,17 @@ class InboundSignalService
     }
 
     /**
-     * Resolve channel account ID from the inbound message metadata.
+     * Resolve the enabled channel account for the given channel.
+     *
+     * Current behavior is intentionally simple: return the first enabled
+     * account for the channel until richer inbound-account matching is added.
      *
      * @param  string  $channel  Channel identifier
-     * @param  InboundMessage  $message  Parsed inbound message
      */
     private function resolveAccountId(string $channel): ?int
     {
-        // Try to find an account by matching the channel and conversation metadata
+        // Use the first enabled account for the channel until adapters expose
+        // enough metadata to support more specific account resolution.
         $account = ChannelAccount::query()
             ->where('channel', $channel)
             ->where('is_enabled', true)
