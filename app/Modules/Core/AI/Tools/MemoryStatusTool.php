@@ -44,9 +44,9 @@ class MemoryStatusTool extends AbstractReadOnlyMemoryTool
             .'and embedding availability.';
     }
 
-    protected function schema(): ToolSchemaBuilder
+    protected function schema(): ?ToolSchemaBuilder
     {
-        return ToolSchemaBuilder::make();
+        return null;
     }
 
     public function requiredCapability(): ?string

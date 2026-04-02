@@ -159,7 +159,7 @@ final class ToolSchemaBuilder
     {
         $schema = [
             'type' => 'object',
-            'properties' => $this->properties,
+            'properties' => $this->properties === [] ? new \stdClass : $this->properties,
         ];
 
         if ($this->required !== []) {
