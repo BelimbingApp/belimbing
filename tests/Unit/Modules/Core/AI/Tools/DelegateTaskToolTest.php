@@ -1,10 +1,12 @@
 <?php
 
+use App\Modules\Core\AI\DTO\Orchestration\RoutingDecision;
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Models\OperationDispatch;
-use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
+use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
+use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
 use App\Modules\Core\AI\Tools\DelegateTaskTool;
 use Illuminate\Auth\Access\AuthorizationException;
 use Tests\Support\AssertsToolBehavior;
@@ -30,10 +32,22 @@ function makeOperationDispatch(array $overrides = []): OperationDispatch
     ], $overrides));
 }
 
+function makeDelegateAgentDecision(int $agentId, string $agentName, int $confidence = 80): RoutingDecision
+{
+    return RoutingDecision::agent(
+        agentEmployeeId: $agentId,
+        agentName: $agentName,
+        confidenceScore: $confidence,
+        reasons: ['Matched by test.'],
+        meta: ['routing_method' => 'test'],
+    );
+}
+
 beforeEach(function () {
     $this->dispatcher = Mockery::mock(LaraTaskDispatcher::class);
-    $this->matcher = Mockery::mock(LaraCapabilityMatcher::class);
-    $this->tool = new DelegateTaskTool($this->dispatcher, $this->matcher);
+    $this->router = Mockery::mock(TaskRoutingService::class);
+    $this->executionContext = new AgentExecutionContext;
+    $this->tool = new DelegateTaskTool($this->dispatcher, $this->router, $this->executionContext);
 });
 
 describe('tool metadata', function () {
@@ -73,6 +87,10 @@ describe('input validation', function () {
             'task' => str_repeat('x', 5000),
         ]);
 
+        $this->router->shouldReceive('route')
+            ->once()
+            ->andReturn(makeDelegateAgentDecision(1, 'Worker'));
+
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
             ->andReturn($dispatch);
@@ -88,13 +106,21 @@ describe('input validation', function () {
 });
 
 describe('dispatch with explicit agent_id', function () {
-    it('dispatches to specified agent', function () {
+    it('dispatches to specified agent via routing', function () {
         $dispatch = makeOperationDispatch([
             'id' => 'op_test123abc',
             'employee_id' => 42,
             'task' => DELEGATE_ANALYZE_SALES_DATA,
             'meta' => ['employee_name' => 'Data Analyst', 'task_type' => 'general'],
         ]);
+
+        $this->router->shouldReceive('route')
+            ->once()
+            ->withArgs(function ($request) {
+                return $request->preferredAgentId === 42
+                    && $request->task === DELEGATE_ANALYZE_SALES_DATA;
+            })
+            ->andReturn(makeDelegateAgentDecision(42, 'Data Analyst', 100));
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
@@ -112,6 +138,10 @@ describe('dispatch with explicit agent_id', function () {
     });
 
     it('returns error when dispatcher throws authorization exception', function () {
+        $this->router->shouldReceive('route')
+            ->once()
+            ->andReturn(makeDelegateAgentDecision(999, 'Unknown'));
+
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
             ->andThrow(new AuthorizationException('Unauthorized Agent dispatch target.'));
@@ -124,16 +154,15 @@ describe('dispatch with explicit agent_id', function () {
 });
 
 describe('dispatch with auto-matching', function () {
-    it('auto-matches best agent when no agent_id given', function () {
-        $this->matcher->shouldReceive('matchBestForTask')
+    it('auto-routes best agent when no agent_id given', function () {
+        $this->router->shouldReceive('route')
             ->once()
-            ->with(DELEGATE_GENERATE_MONTHLY_REPORT)
-            ->andReturn([
-                'employee_id' => 7,
-                'name' => DELEGATE_REPORT_GENERATOR,
-                'capability_summary' => 'Generates reports and summaries',
-                'match_score' => 3,
-            ]);
+            ->withArgs(function ($request) {
+                return $request->preferredAgentId === null
+                    && $request->task === DELEGATE_GENERATE_MONTHLY_REPORT
+                    && $request->taskType === 'generate_report';
+            })
+            ->andReturn(makeDelegateAgentDecision(7, DELEGATE_REPORT_GENERATOR));
 
         $dispatch = makeOperationDispatch([
             'id' => 'op_auto456xyz',
@@ -153,15 +182,68 @@ describe('dispatch with auto-matching', function () {
             ->and((string) $result)->toContain(DELEGATE_REPORT_GENERATOR);
     });
 
-    it('returns error when no agent matches the task', function () {
-        $this->matcher->shouldReceive('matchBestForTask')
+    it('returns error when routing falls back to local', function () {
+        $this->router->shouldReceive('route')
             ->once()
-            ->andReturn(null);
+            ->andReturn(RoutingDecision::local(['No agent matched.']));
 
         $result = $this->tool->execute(['task' => 'Something obscure', 'task_type' => 'general']);
 
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('No suitable Agent');
+    });
+
+    it('includes routing reasons in error message', function () {
+        $this->router->shouldReceive('route')
+            ->once()
+            ->andReturn(RoutingDecision::local(['No delegable agents available for the current user.']));
+
+        $result = $this->tool->execute(['task' => 'Impossible task', 'task_type' => 'general']);
+
+        expect((string) $result)->toContain('No suitable Agent')
+            ->and((string) $result)->toContain('No delegable agents');
+    });
+});
+
+describe('execution context', function () {
+    it('uses agent execution context employee ID when active', function () {
+        $this->executionContext->set(
+            employeeId: 5,
+            actingForUserId: 10,
+            entityType: null,
+            entityId: null,
+            dispatchId: 'op_test',
+        );
+
+        $this->router->shouldReceive('route')
+            ->once()
+            ->withArgs(function ($request) {
+                return $request->requestingEmployeeId === 5;
+            })
+            ->andReturn(makeDelegateAgentDecision(7, 'Target Agent'));
+
+        $this->dispatcher->shouldReceive('dispatchForCurrentUser')
+            ->once()
+            ->andReturn(makeOperationDispatch());
+
+        $this->tool->execute(['task' => 'From queued job', 'task_type' => 'general']);
+
+        $this->executionContext->clear();
+    });
+
+    it('falls back to Lara ID when no execution context active', function () {
+        $this->router->shouldReceive('route')
+            ->once()
+            ->withArgs(function ($request) {
+                return $request->requestingEmployeeId === 1; // Employee::LARA_ID
+            })
+            ->andReturn(makeDelegateAgentDecision(7, 'Target Agent'));
+
+        $this->dispatcher->shouldReceive('dispatchForCurrentUser')
+            ->once()
+            ->andReturn(makeOperationDispatch());
+
+        $this->tool->execute(['task' => 'From chat', 'task_type' => 'general']);
     });
 });
 
@@ -171,6 +253,10 @@ describe('output format', function () {
             'id' => 'op_xyz789abc',
             'task' => 'Do something',
         ]);
+
+        $this->router->shouldReceive('route')
+            ->once()
+            ->andReturn(makeDelegateAgentDecision(1, 'Worker'));
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
@@ -192,6 +278,10 @@ describe('output format', function () {
             'task' => 'Do something else',
             'meta' => null,
         ]);
+
+        $this->router->shouldReceive('route')
+            ->once()
+            ->andReturn(makeDelegateAgentDecision(9, 'Agent Nine'));
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()

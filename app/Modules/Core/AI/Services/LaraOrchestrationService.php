@@ -9,6 +9,10 @@ use App\Base\AI\Services\KnowledgeNavigator;
 use App\Base\AI\Services\ModelCatalogQueryService;
 use App\Base\Foundation\Exceptions\BlbDataContractException;
 use App\Base\Support\Str as BlbStr;
+use App\Modules\Core\AI\DTO\Orchestration\RoutingRequest;
+use App\Modules\Core\AI\Enums\RoutingTarget;
+use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
+use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Support\Str;
 
 class LaraOrchestrationService
@@ -16,7 +20,7 @@ class LaraOrchestrationService
     public function __construct(
         private readonly ModelCatalogQueryService $modelCatalogQuery,
         private readonly KnowledgeNavigator $knowledgeNavigator,
-        private readonly LaraCapabilityMatcher $capabilityMatcher,
+        private readonly TaskRoutingService $router,
         private readonly LaraTaskDispatcher $taskDispatcher,
         private readonly LaraNavigationRouter $navigationRouter,
     ) {}
@@ -51,28 +55,7 @@ class LaraOrchestrationService
                     ['status' => 'invalid_command'],
                 );
             } elseif ($task !== null) {
-                $match = $this->capabilityMatcher->matchBestForTask($task);
-
-                if ($match === null) {
-                    $response = $this->response(
-                        __('No delegated Agent is available for this request.'),
-                        ['status' => 'no_agents'],
-                    );
-                } else {
-                    $dispatch = $this->taskDispatcher->dispatchForCurrentUser($match['employee_id'], 'general', $task);
-
-                    $response = $this->response(
-                        __('Delegation queued to :agent (dispatch: :dispatch_id).', [
-                            'agent' => data_get($dispatch->meta, 'employee_name', $match['name']),
-                            'dispatch_id' => $dispatch->id,
-                        ]),
-                        [
-                            'status' => 'queued',
-                            'selected_agent' => $match,
-                            'dispatch_id' => $dispatch->id,
-                        ],
-                    );
-                }
+                $response = $this->routeAndDispatchDelegation($task);
             }
         }
 
@@ -102,6 +85,53 @@ class LaraOrchestrationService
         }
 
         return BlbStr::afterPrefix($trimmed, '/delegate');
+    }
+
+    /**
+     * Route a delegation task through TaskRoutingService and dispatch if matched.
+     *
+     * Replaces the legacy LaraCapabilityMatcher::matchBestForTask() path
+     * with structured routing. Lara is always the requesting agent for
+     * slash-command delegation.
+     *
+     * @return array{assistant_content: string, run_id: string, meta: array<string, mixed>}
+     */
+    private function routeAndDispatchDelegation(string $task): array
+    {
+        $request = new RoutingRequest(
+            task: $task,
+            requestingEmployeeId: Employee::LARA_ID,
+            actingForUserId: auth()->id(),
+            taskType: 'general',
+            sourceContext: 'slash_delegate',
+        );
+
+        $decision = $this->router->route($request);
+
+        if ($decision->target !== RoutingTarget::Agent || $decision->agentEmployeeId === null) {
+            return $this->response(
+                __('No delegated Agent is available for this request.'),
+                ['status' => 'no_agents', 'routing_reasons' => $decision->reasons],
+            );
+        }
+
+        $dispatch = $this->taskDispatcher->dispatchForCurrentUser(
+            $decision->agentEmployeeId,
+            'general',
+            $task,
+        );
+
+        return $this->response(
+            __('Delegation queued to :agent (dispatch: :dispatch_id).', [
+                'agent' => $decision->agentName ?? data_get($dispatch->meta, 'employee_name', 'Agent #'.$decision->agentEmployeeId),
+                'dispatch_id' => $dispatch->id,
+            ]),
+            [
+                'status' => 'queued',
+                'selected_agent' => $decision->toArray(),
+                'dispatch_id' => $dispatch->id,
+            ],
+        );
     }
 
     /**

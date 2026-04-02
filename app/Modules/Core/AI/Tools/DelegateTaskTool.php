@@ -12,17 +12,22 @@ use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
+use App\Modules\Core\AI\DTO\Orchestration\RoutingDecision;
+use App\Modules\Core\AI\DTO\Orchestration\RoutingRequest;
+use App\Modules\Core\AI\Enums\RoutingTarget;
 use App\Modules\Core\AI\Models\OperationDispatch;
-use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
+use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
+use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
+use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Auth\Access\AuthorizationException;
 
 /**
  * Task delegation tool for Agents.
  *
  * Dispatches a task to a specific Agent or auto-matches the best
- * available agent based on task description. Uses LaraTaskDispatcher for
- * dispatch orchestration and LaraCapabilityMatcher for auto-matching.
+ * available agent based on task description. Uses TaskRoutingService for
+ * capability-based routing and LaraTaskDispatcher for dispatch execution.
  *
  * Returns a dispatch ID that can be used with delegation_status to poll
  * for results.
@@ -41,7 +46,8 @@ class DelegateTaskTool extends AbstractTool
 
     public function __construct(
         private readonly LaraTaskDispatcher $dispatcher,
-        private readonly LaraCapabilityMatcher $capabilityMatcher,
+        private readonly TaskRoutingService $router,
+        private readonly AgentExecutionContext $executionContext,
     ) {}
 
     public function name(): string
@@ -143,43 +149,57 @@ class DelegateTaskTool extends AbstractTool
             );
         }
 
-        $agentId = $this->resolveAgentId($arguments, $task);
-        $result = null;
+        $decision = $this->routeTask($arguments, $task, $taskType);
 
-        if ($agentId === null) {
-            $result = ToolResult::error(
+        if ($decision->target !== RoutingTarget::Agent || $decision->agentEmployeeId === null) {
+            return ToolResult::error(
                 'No suitable Agent found for this task. '
-                    .'Use agent_list to see available agents, then specify an agent_id explicitly.',
+                    .'Use agent_list to see available agents, then specify an agent_id explicitly.'
+                    .($decision->reasons !== [] ? "\n\nRouting: ".implode(' ', $decision->reasons) : ''),
                 'no_agent_match',
             );
-        } else {
-            try {
-                $dispatchResult = $this->dispatcher->dispatchForCurrentUser($agentId, $taskType, $task);
-                $result = ToolResult::success($this->formatDispatchResult($dispatchResult));
-            } catch (AuthorizationException $e) {
-                $result = ToolResult::error($e->getMessage(), 'authorization_error');
-            } catch (\Throwable $e) {
-                $result = ToolResult::error('Dispatching task failed: '.$e->getMessage(), 'dispatch_error');
-            }
         }
 
-        return $result;
+        try {
+            $dispatchResult = $this->dispatcher->dispatchForCurrentUser(
+                $decision->agentEmployeeId,
+                $taskType,
+                $task,
+            );
+
+            return ToolResult::success($this->formatDispatchResult($dispatchResult));
+        } catch (AuthorizationException $e) {
+            return ToolResult::error($e->getMessage(), 'authorization_error');
+        } catch (\Throwable $e) {
+            return ToolResult::error('Dispatching task failed: '.$e->getMessage(), 'dispatch_error');
+        }
     }
 
     /**
-     * Resolve the target agent ID from explicit argument or auto-matching.
+     * Route the task through the orchestration routing service.
+     *
+     * Builds a RoutingRequest from tool arguments, using the agent
+     * execution context for the requesting employee ID when available
+     * (queued job context), falling back to Lara's well-known ID for
+     * interactive chat.
      */
-    private function resolveAgentId(array $arguments, string $task): ?int
+    private function routeTask(array $arguments, string $task, string $taskType): RoutingDecision
     {
         $agentId = $arguments['agent_id'] ?? null;
+        $requestingEmployeeId = $this->executionContext->active()
+            ? $this->executionContext->employeeId()
+            : Employee::LARA_ID;
 
-        if (is_int($agentId)) {
-            return $agentId;
-        }
+        $request = new RoutingRequest(
+            task: $task,
+            requestingEmployeeId: $requestingEmployeeId,
+            actingForUserId: auth()->id(),
+            preferredAgentId: is_int($agentId) ? $agentId : null,
+            taskType: $taskType,
+            sourceContext: 'delegate_task_tool',
+        );
 
-        $match = $this->capabilityMatcher->matchBestForTask($task);
-
-        return $match !== null ? $match['employee_id'] : null;
+        return $this->router->route($request);
     }
 
     /**

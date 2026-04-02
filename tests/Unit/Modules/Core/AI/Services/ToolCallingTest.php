@@ -10,13 +10,15 @@ use App\Base\AI\Tools\ToolResult;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\Enums\AuthorizationReasonCode;
+use App\Modules\Core\AI\DTO\Orchestration\RoutingDecision;
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Models\OperationDispatch;
+use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\BackgroundCommandService;
-use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
+use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
 use App\Modules\Core\AI\Tools\ArtisanTool;
 use App\Modules\Core\AI\Tools\BashTool;
 use App\Modules\Core\AI\Tools\DelegateTaskTool;
@@ -377,22 +379,27 @@ describe('BashTool', function () {
     });
 });
 
+function makeToolCallingDelegateTool(
+    ?LaraTaskDispatcher $dispatcher = null,
+    ?TaskRoutingService $router = null,
+): DelegateTaskTool {
+    return new DelegateTaskTool(
+        $dispatcher ?? Mockery::mock(LaraTaskDispatcher::class),
+        $router ?? Mockery::mock(TaskRoutingService::class),
+        new AgentExecutionContext,
+    );
+}
+
 describe('DelegateTaskTool', function () {
     it(TOOL_METADATA_DESCRIPTION, function () {
-        $tool = new DelegateTaskTool(
-            Mockery::mock(LaraTaskDispatcher::class),
-            Mockery::mock(LaraCapabilityMatcher::class),
-        );
+        $tool = makeToolCallingDelegateTool();
 
         expect($tool->name())->toBe('delegate_task');
         expect($tool->requiredCapability())->toBe('ai.tool_delegate.execute');
     });
 
     it('returns error for empty task', function () {
-        $tool = new DelegateTaskTool(
-            Mockery::mock(LaraTaskDispatcher::class),
-            Mockery::mock(LaraCapabilityMatcher::class),
-        );
+        $tool = makeToolCallingDelegateTool();
 
         expect((string) $tool->execute([]))->toContain(NO_TASK_DESCRIPTION_PROVIDED);
         expect((string) $tool->execute(['task' => '']))->toContain(NO_TASK_DESCRIPTION_PROVIDED);
@@ -400,10 +407,10 @@ describe('DelegateTaskTool', function () {
     });
 
     it('returns error when no agent is available', function () {
-        $matcher = Mockery::mock(LaraCapabilityMatcher::class);
-        $matcher->shouldReceive('matchBestForTask')->andReturn(null);
+        $router = Mockery::mock(TaskRoutingService::class);
+        $router->shouldReceive('route')->andReturn(RoutingDecision::local(['No agent matched.']));
 
-        $tool = new DelegateTaskTool(Mockery::mock(LaraTaskDispatcher::class), $matcher);
+        $tool = makeToolCallingDelegateTool(router: $router);
 
         $result = $tool->execute(['task' => 'Generate a report', 'task_type' => 'general']);
 
@@ -412,12 +419,10 @@ describe('DelegateTaskTool', function () {
     });
 
     it('dispatches task to best matching agent when no agent_id is given', function () {
-        $matcher = Mockery::mock(LaraCapabilityMatcher::class);
-        $matcher->shouldReceive('matchBestForTask')->with(GENERATE_Q1_REPORT)->andReturn([
-            'employee_id' => 42,
-            'name' => REPORT_BOT,
-            'capability_summary' => 'Financial reporting',
-        ]);
+        $router = Mockery::mock(TaskRoutingService::class);
+        $router->shouldReceive('route')->andReturn(
+            RoutingDecision::agent(42, REPORT_BOT, 80, ['Matched financial reporting.'])
+        );
 
         $dispatch = new OperationDispatch([
             'id' => 'op_abc123',
@@ -432,7 +437,7 @@ describe('DelegateTaskTool', function () {
         $dispatcher = Mockery::mock(LaraTaskDispatcher::class);
         $dispatcher->shouldReceive('dispatchForCurrentUser')->with(42, 'general', GENERATE_Q1_REPORT)->andReturn($dispatch);
 
-        $tool = new DelegateTaskTool($dispatcher, $matcher);
+        $tool = makeToolCallingDelegateTool($dispatcher, $router);
 
         $result = $tool->execute(['task' => GENERATE_Q1_REPORT, 'task_type' => 'general']);
 
@@ -441,12 +446,10 @@ describe('DelegateTaskTool', function () {
     });
 
     it('dispatches to a specific agent when agent_id is given', function () {
-        $matcher = Mockery::mock(LaraCapabilityMatcher::class);
-        $matcher->shouldReceive('findAccessibleAgentById')->with(7)->andReturn([
-            'employee_id' => 7,
-            'name' => DATA_ANALYST,
-            'capability_summary' => 'Analytics',
-        ]);
+        $router = Mockery::mock(TaskRoutingService::class);
+        $router->shouldReceive('route')->andReturn(
+            RoutingDecision::agent(7, DATA_ANALYST, 100, ['Explicitly requested.'])
+        );
 
         $dispatch = new OperationDispatch([
             'id' => 'op_xyz456',
@@ -461,7 +464,7 @@ describe('DelegateTaskTool', function () {
         $dispatcher = Mockery::mock(LaraTaskDispatcher::class);
         $dispatcher->shouldReceive('dispatchForCurrentUser')->andReturn($dispatch);
 
-        $tool = new DelegateTaskTool($dispatcher, $matcher);
+        $tool = makeToolCallingDelegateTool($dispatcher, $router);
 
         $result = $tool->execute(['task' => 'Run analytics', 'task_type' => 'general', 'agent_id' => 7]);
 
@@ -470,18 +473,16 @@ describe('DelegateTaskTool', function () {
     });
 
     it('returns error when dispatcher throws', function () {
-        $matcher = Mockery::mock(LaraCapabilityMatcher::class);
-        $matcher->shouldReceive('matchBestForTask')->andReturn([
-            'employee_id' => 1,
-            'name' => 'Bot',
-            'capability_summary' => '',
-        ]);
+        $router = Mockery::mock(TaskRoutingService::class);
+        $router->shouldReceive('route')->andReturn(
+            RoutingDecision::agent(1, 'Bot', 80, ['Matched.'])
+        );
 
         $dispatcher = Mockery::mock(LaraTaskDispatcher::class);
         $dispatcher->shouldReceive('dispatchForCurrentUser')
             ->andThrow(new RuntimeException('Dispatch unavailable'));
 
-        $tool = new DelegateTaskTool($dispatcher, $matcher);
+        $tool = makeToolCallingDelegateTool($dispatcher, $router);
 
         $result = $tool->execute(['task' => 'some task', 'task_type' => 'general']);
 

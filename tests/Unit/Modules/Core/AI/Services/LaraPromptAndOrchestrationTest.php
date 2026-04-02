@@ -181,7 +181,7 @@ it('queues delegation to the best matched agent', function (): void {
 
     expect($result)->not->toBeNull()
         ->and($result['meta']['orchestration']['status'])->toBe('queued')
-        ->and($result['meta']['orchestration']['selected_agent']['name'])->toBe(CODE_WORKER)
+        ->and($result['meta']['orchestration']['selected_agent']['agent_name'])->toBe(CODE_WORKER)
         ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('op_');
 });
 

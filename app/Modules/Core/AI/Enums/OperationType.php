@@ -21,13 +21,16 @@ enum OperationType: string
     /** Background artisan command dispatched through policy. */
     case BackgroundCommand = 'background_command';
 
+    /** Child agent session spawned through orchestration. */
+    case ChildSession = 'child_session';
+
     /**
      * Determine whether the operation type targets an agent employee.
      */
     public function targetsAgent(): bool
     {
         return match ($this) {
-            self::AgentTask, self::ScheduledTask => true,
+            self::AgentTask, self::ScheduledTask, self::ChildSession => true,
             self::BackgroundCommand => false,
         };
     }
@@ -41,6 +44,7 @@ enum OperationType: string
             self::AgentTask => 'Agent Task',
             self::ScheduledTask => 'Scheduled Task',
             self::BackgroundCommand => 'Background Command',
+            self::ChildSession => 'Child Session',
         };
     }
 }
