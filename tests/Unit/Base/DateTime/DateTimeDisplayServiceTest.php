@@ -34,6 +34,31 @@ function freshService(): DateTimeDisplayService
     return app()->make(DateTimeDisplayService::class);
 }
 
+function actingUser(?int $companyId): User
+{
+    $user = User::factory()->create(['company_id' => $companyId]);
+    test()->actingAs($user);
+
+    return $user;
+}
+
+function setTimezoneMode(SettingsService $settings, TimezoneMode $mode, ?Scope $scope = null): void
+{
+    if ($scope === null) {
+        $settings->set(DT_TEST_KEY_MODE, $mode->value);
+
+        return;
+    }
+
+    $settings->set(DT_TEST_KEY_MODE, $mode->value, $scope);
+}
+
+function setCompanyTimezoneLocale(SettingsService $settings, int $companyId, string $locale): void
+{
+    $settings->set(DT_TEST_KEY_DEFAULT, DT_TEST_TIMEZONE_KL, Scope::company($companyId));
+    $settings->set(DT_TEST_KEY_LOCALE, $locale);
+}
+
 // --- Default Behavior (no auth, no settings) ---
 
 it('defaults to COMPANY mode when unauthenticated', function (): void {
@@ -55,10 +80,8 @@ it('returns em-dash for null values', function (): void {
 // --- Formatting in UTC Mode ---
 
 it('formats datetime in UTC when mode is UTC', function (): void {
-    $user = User::factory()->create(['company_id' => null]);
-    $this->actingAs($user);
-
-    $this->settings->set(DT_TEST_KEY_MODE, TimezoneMode::UTC->value);
+    actingUser(null);
+    setTimezoneMode($this->settings, TimezoneMode::UTC);
 
     $service = freshService();
     $carbon = Carbon::parse(DT_TEST_TIMESTAMP, 'UTC');
@@ -71,11 +94,8 @@ it('formats datetime in UTC when mode is UTC', function (): void {
 // --- Formatting in Company Mode with Timezone (locale-aware) ---
 
 it('formats datetime in company timezone with locale', function (): void {
-    $user = User::factory()->create(['company_id' => 1]);
-    $this->actingAs($user);
-
-    $this->settings->set(DT_TEST_KEY_DEFAULT, DT_TEST_TIMEZONE_KL, Scope::company(1));
-    $this->settings->set(DT_TEST_KEY_LOCALE, 'en-US');
+    actingUser(1);
+    setCompanyTimezoneLocale($this->settings, 1, 'en-US');
 
     $service = freshService();
     $carbon = Carbon::parse(DT_TEST_TIMESTAMP, 'UTC');
@@ -87,11 +107,8 @@ it('formats datetime in company timezone with locale', function (): void {
 });
 
 it('formats datetime in company timezone with ms locale', function (): void {
-    $user = User::factory()->create(['company_id' => 1]);
-    $this->actingAs($user);
-
-    $this->settings->set(DT_TEST_KEY_DEFAULT, DT_TEST_TIMEZONE_KL, Scope::company(1));
-    $this->settings->set(DT_TEST_KEY_LOCALE, 'ms-MY');
+    actingUser(1);
+    setCompanyTimezoneLocale($this->settings, 1, 'ms-MY');
 
     $service = freshService();
     $carbon = Carbon::parse(DT_TEST_TIMESTAMP, 'UTC');
@@ -105,10 +122,8 @@ it('formats datetime in company timezone with ms locale', function (): void {
 // --- Local Mode Returns ISO-8601 ---
 
 it('returns UTC ISO-8601 in local mode for browser formatting', function (): void {
-    $user = User::factory()->create(['company_id' => null]);
-    $this->actingAs($user);
-
-    $this->settings->set(DT_TEST_KEY_MODE, TimezoneMode::LOCAL->value);
+    actingUser(null);
+    setTimezoneMode($this->settings, TimezoneMode::LOCAL);
 
     $service = freshService();
     $carbon = Carbon::parse(DT_TEST_TIMESTAMP, 'UTC');
@@ -123,10 +138,8 @@ it('returns UTC ISO-8601 in local mode for browser formatting', function (): voi
 // --- String Input ---
 
 it('parses string datetime values', function (): void {
-    $user = User::factory()->create(['company_id' => null]);
-    $this->actingAs($user);
-
-    $this->settings->set(DT_TEST_KEY_MODE, TimezoneMode::UTC->value);
+    actingUser(null);
+    setTimezoneMode($this->settings, TimezoneMode::UTC);
 
     $service = freshService();
 
@@ -136,17 +149,14 @@ it('parses string datetime values', function (): void {
 // --- Mode Resolution Cascade ---
 
 it('resolves company-scoped mode override for user without employee', function (): void {
-    $user = User::factory()->create(['company_id' => 1]);
-    $this->actingAs($user);
-
-    $this->settings->set(DT_TEST_KEY_MODE, TimezoneMode::UTC->value, Scope::company(1));
+    actingUser(1);
+    setTimezoneMode($this->settings, TimezoneMode::UTC, Scope::company(1));
 
     expect(freshService()->currentMode())->toBe(TimezoneMode::UTC);
 });
 
 it('falls back to COMPANY for invalid mode value', function (): void {
-    $user = User::factory()->create(['company_id' => null]);
-    $this->actingAs($user);
+    actingUser(null);
 
     $this->settings->set(DT_TEST_KEY_MODE, 'invalid_mode');
 
@@ -154,11 +164,9 @@ it('falls back to COMPANY for invalid mode value', function (): void {
 });
 
 it('returns configured company timezone even when active mode is utc', function (): void {
-    $user = User::factory()->create(['company_id' => 1]);
-    $this->actingAs($user);
-
+    actingUser(1);
     $this->settings->set(DT_TEST_KEY_DEFAULT, DT_TEST_TIMEZONE_KL, Scope::company(1));
-    $this->settings->set(DT_TEST_KEY_MODE, TimezoneMode::UTC->value, Scope::company(1));
+    setTimezoneMode($this->settings, TimezoneMode::UTC, Scope::company(1));
 
     expect(freshService()->currentCompanyTimezone())->toBe(DT_TEST_TIMEZONE_KL);
 });

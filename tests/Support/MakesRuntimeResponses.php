@@ -17,6 +17,7 @@ use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRegistry;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRunner;
 use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
+use App\Modules\Core\AI\Services\RuntimeHookCoordinator;
 use App\Modules\Core\AI\Services\RuntimeMessageBuilder;
 use App\Modules\Core\AI\Services\RuntimeResponseFactory;
 use DateTimeImmutable;
@@ -148,7 +149,7 @@ trait MakesRuntimeResponses
             new RuntimeMessageBuilder,
             new RuntimeResponseFactory($runtimeLogger),
             $runtimeLogger,
-            new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger),
+            new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
         );
     }
 

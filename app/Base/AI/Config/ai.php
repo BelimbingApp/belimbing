@@ -3,6 +3,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
+$messagingChannel = static fn (string $enabledKey, int $rateLimit): array => [
+    'enabled' => env($enabledKey, false),
+    'rate_limit_per_minute' => $rateLimit,
+];
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -72,22 +77,10 @@ return [
         ],
         'messaging' => [
             'channels' => [
-                'whatsapp' => [
-                    'enabled' => env('AI_MESSAGING_WHATSAPP_ENABLED', false),
-                    'rate_limit_per_minute' => 60,
-                ],
-                'telegram' => [
-                    'enabled' => env('AI_MESSAGING_TELEGRAM_ENABLED', false),
-                    'rate_limit_per_minute' => 30,
-                ],
-                'slack' => [
-                    'enabled' => env('AI_MESSAGING_SLACK_ENABLED', false),
-                    'rate_limit_per_minute' => 60,
-                ],
-                'email' => [
-                    'enabled' => env('AI_MESSAGING_EMAIL_ENABLED', false),
-                    'rate_limit_per_minute' => 30,
-                ],
+                'whatsapp' => $messagingChannel('AI_MESSAGING_WHATSAPP_ENABLED', 60),
+                'telegram' => $messagingChannel('AI_MESSAGING_TELEGRAM_ENABLED', 30),
+                'slack' => $messagingChannel('AI_MESSAGING_SLACK_ENABLED', 60),
+                'email' => $messagingChannel('AI_MESSAGING_EMAIL_ENABLED', 30),
             ],
         ],
         'artisan' => [

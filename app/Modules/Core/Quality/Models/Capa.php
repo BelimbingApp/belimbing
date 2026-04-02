@@ -133,7 +133,7 @@ class Capa extends QualityRecord
      */
     public function assignedByUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'assigned_by_user_id');
+        return $this->qualityUserRelation('assigned_by_user_id');
     }
 
     /**
@@ -141,7 +141,7 @@ class Capa extends QualityRecord
      */
     public function approvedByUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'approved_by_user_id');
+        return $this->qualityUserRelation('approved_by_user_id');
     }
 
     /**
@@ -149,7 +149,7 @@ class Capa extends QualityRecord
      */
     public function respondedByUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'response_by_user_id');
+        return $this->qualityUserRelation('response_by_user_id');
     }
 
     /**
@@ -157,7 +157,7 @@ class Capa extends QualityRecord
      */
     public function verifiedByUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'verified_by_user_id');
+        return $this->qualityUserRelation('verified_by_user_id');
     }
 
     /**
@@ -165,7 +165,7 @@ class Capa extends QualityRecord
      */
     public function closedByUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'closed_by_user_id');
+        return $this->qualityUserRelation('closed_by_user_id');
     }
 
     protected function qualityEventForeignKey(): string

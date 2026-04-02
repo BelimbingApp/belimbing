@@ -10,8 +10,6 @@ use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\OrchestrationSession;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
-use App\Modules\Core\AI\Services\KodiPromptFactory;
-use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use DateTimeImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -67,8 +65,6 @@ class SpawnAgentSessionJob implements ShouldQueue
      */
     public function handle(
         AgenticRuntime $runtime,
-        KodiPromptFactory $promptFactory,
-        PromptRenderer $renderer,
         AgentExecutionContext $context,
     ): void {
         $session = null;
@@ -100,11 +96,7 @@ class SpawnAgentSessionJob implements ShouldQueue
             $maxIterations = $envelope['max_iterations'] ?? 10;
             $modelOverride = $envelope['model_override'] ?? null;
 
-            $systemPrompt = $this->buildSystemPrompt(
-                $session,
-                $promptFactory,
-                $renderer,
-            );
+            $systemPrompt = $this->buildSystemPrompt($session);
 
             $messages = [new Message(
                 role: 'user',
@@ -145,16 +137,9 @@ class SpawnAgentSessionJob implements ShouldQueue
 
     /**
      * Build the system prompt for the child session.
-     *
-     * Attempts to build a prompt package via KodiPromptFactory. Falls back
-     * to the task description with context payload if the factory cannot
-     * produce a package (e.g., for agents without workspace configurations).
      */
-    private function buildSystemPrompt(
-        OrchestrationSession $session,
-        KodiPromptFactory $promptFactory,
-        PromptRenderer $renderer,
-    ): string {
+    private function buildSystemPrompt(OrchestrationSession $session): string
+    {
         $envelope = $session->spawn_envelope ?? [];
         $contextPayload = $envelope['context_payload'] ?? [];
 

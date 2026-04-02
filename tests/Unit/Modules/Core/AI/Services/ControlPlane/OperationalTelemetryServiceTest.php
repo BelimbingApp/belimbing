@@ -4,6 +4,7 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Modules\Core\AI\DTO\ControlPlane\TelemetryEvent;
+use App\Modules\Core\AI\DTO\ControlPlane\TelemetryRecordRequest;
 use App\Modules\Core\AI\Enums\ControlPlaneTarget;
 use App\Modules\Core\AI\Enums\TelemetryEventType;
 use App\Modules\Core\AI\Models\TelemetryEvent as TelemetryEventModel;
@@ -31,13 +32,13 @@ describe('record', function () {
     it('persists a telemetry event and returns a DTO', function () {
         $service = makeOTService();
 
-        $dto = $service->record(
+        $dto = $service->record(new TelemetryRecordRequest(
             eventType: TelemetryEventType::RunStarted,
             payload: ['model' => 'claude-opus-4'],
             runId: OTS_RUN_ID,
             sessionId: OTS_SESSION_ID,
             employeeId: OTS_EMPLOYEE_ID,
-        );
+        ));
 
         expect($dto)->toBeInstanceOf(TelemetryEvent::class)
             ->and($dto->eventType)->toBe(TelemetryEventType::RunStarted)
@@ -56,12 +57,12 @@ describe('record', function () {
     it('stores target type and target ID when provided', function () {
         $service = makeOTService();
 
-        $dto = $service->record(
+        $dto = $service->record(new TelemetryRecordRequest(
             eventType: TelemetryEventType::HealthCheck,
             payload: [],
             targetType: ControlPlaneTarget::Tool,
             targetId: 'bash',
-        );
+        ));
 
         expect($dto->targetType)->toBe(ControlPlaneTarget::Tool)
             ->and($dto->targetId)->toBe('bash');
@@ -77,32 +78,32 @@ describe('query methods', function () {
         $this->service = makeOTService();
 
         // Seed several events
-        $this->service->record(
+        $this->service->record(new TelemetryRecordRequest(
             eventType: TelemetryEventType::RunStarted,
             runId: OTS_RUN_ID,
             sessionId: OTS_SESSION_ID,
             employeeId: OTS_EMPLOYEE_ID,
-        );
+        ));
 
-        $this->service->record(
+        $this->service->record(new TelemetryRecordRequest(
             eventType: TelemetryEventType::RunCompleted,
             runId: OTS_RUN_ID,
             sessionId: OTS_SESSION_ID,
             employeeId: OTS_EMPLOYEE_ID,
-        );
+        ));
 
-        $this->service->record(
+        $this->service->record(new TelemetryRecordRequest(
             eventType: TelemetryEventType::ToolInvoked,
             payload: ['tool' => 'bash'],
             runId: OTS_RUN_ID,
             sessionId: OTS_SESSION_ID,
             employeeId: OTS_EMPLOYEE_ID,
-        );
+        ));
 
-        $this->service->record(
+        $this->service->record(new TelemetryRecordRequest(
             eventType: TelemetryEventType::HealthCheck,
             dispatchId: OTS_DISPATCH_ID,
-        );
+        ));
     });
 
     it('queries events by run ID', function () {

@@ -19,6 +19,8 @@ const HOOK_RUN_TOOL_TO_REMOVE = 'banned_tool';
 const HOOK_RUN_AUG_KEY = 'custom_flag';
 const HOOK_RUN_AUG_VALUE = true;
 
+final class RuntimeHookRunnerTestException extends RuntimeException {}
+
 function makeHookRunner(): RuntimeHookRunner
 {
     return new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger);
@@ -120,7 +122,7 @@ function makeFailingHook(string $identifier, HookStage $stage = HookStage::PreCo
 
         public function execute(HookPayload $payload): HookResult
         {
-            throw new RuntimeException('Hook intentionally failed');
+            throw new RuntimeHookRunnerTestException('Hook intentionally failed');
         }
     };
 }

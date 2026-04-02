@@ -25,6 +25,10 @@ use App\Modules\Core\AI\Services\ToolReadinessService;
  */
 class HealthAndPresenceService
 {
+    private const PROVIDER_LAST_TEST_AT_SUFFIX = '.last_test_at';
+
+    private const PROVIDER_LAST_TEST_SUCCESS_SUFFIX = '.last_test_success';
+
     /**
      * Threshold in minutes: agent considered active if session activity within this window.
      */
@@ -56,7 +60,7 @@ class HealthAndPresenceService
         $lastVerified = $readinessSnapshot['lastVerified'];
 
         $health = $this->computeToolHealth($readiness, $lastVerified);
-        $presence = $this->computeToolPresence($toolName, $readiness);
+        $presence = $this->computeToolPresence($readiness);
 
         return new HealthSnapshot(
             targetType: ControlPlaneTarget::Tool,
@@ -64,7 +68,7 @@ class HealthAndPresenceService
             readiness: $readiness,
             health: $health,
             presence: $presence,
-            explanation: $this->buildToolExplanation($toolName, $readiness, $health, $presence, $lastVerified),
+            explanation: $this->buildToolExplanation($toolName, $readiness, $lastVerified),
             measuredAt: now()->toIso8601String(),
         );
     }
@@ -83,7 +87,7 @@ class HealthAndPresenceService
             $readiness = $data['readiness'];
             $lastVerified = $data['lastVerified'];
             $health = $this->computeToolHealth($readiness, $lastVerified);
-            $presence = $this->computeToolPresence($name, $readiness);
+            $presence = $this->computeToolPresence($readiness);
 
             $snapshots[] = new HealthSnapshot(
                 targetType: ControlPlaneTarget::Tool,
@@ -91,7 +95,7 @@ class HealthAndPresenceService
                 readiness: $readiness,
                 health: $health,
                 presence: $presence,
-                explanation: $this->buildToolExplanation($name, $readiness, $health, $presence, $lastVerified),
+                explanation: $this->buildToolExplanation($name, $readiness, $lastVerified),
                 measuredAt: now()->toIso8601String(),
             );
         }
@@ -132,18 +136,12 @@ class HealthAndPresenceService
      */
     public function providerSnapshot(string $providerName): HealthSnapshot
     {
-        $lastTest = $this->settings->get("ai.providers.{$providerName}.last_test_at");
-        $lastTestSuccess = (bool) $this->settings->get("ai.providers.{$providerName}.last_test_success", false);
+        $lastTest = $this->settings->get('ai.providers.'.$providerName.self::PROVIDER_LAST_TEST_AT_SUFFIX);
+        $lastTestSuccess = (bool) $this->settings->get('ai.providers.'.$providerName.self::PROVIDER_LAST_TEST_SUCCESS_SUFFIX, false);
 
         $readiness = ToolReadiness::READY;
         $health = $this->computeProviderHealth($lastTest, $lastTestSuccess);
         $presence = $lastTest !== null ? PresenceState::Active : PresenceState::Offline;
-
-        $explanation = $lastTest === null
-            ? "Provider '{$providerName}' has not been tested yet."
-            : ($lastTestSuccess
-                ? "Provider '{$providerName}' last tested successfully at {$lastTest}."
-                : "Provider '{$providerName}' last test failed at {$lastTest}.");
 
         return new HealthSnapshot(
             targetType: ControlPlaneTarget::Provider,
@@ -151,7 +149,7 @@ class HealthAndPresenceService
             readiness: $readiness,
             health: $health,
             presence: $presence,
-            explanation: $explanation,
+            explanation: $this->buildProviderExplanation($providerName, $lastTest, $lastTestSuccess),
             measuredAt: now()->toIso8601String(),
         );
     }
@@ -202,7 +200,7 @@ class HealthAndPresenceService
      * activity signals the way agents do. A tool that is not ready
      * is considered offline.
      */
-    private function computeToolPresence(string $toolName, ToolReadiness $readiness): PresenceState
+    private function computeToolPresence(ToolReadiness $readiness): PresenceState
     {
         return $readiness === ToolReadiness::READY
             ? PresenceState::Active
@@ -312,8 +310,6 @@ class HealthAndPresenceService
     private function buildToolExplanation(
         string $toolName,
         ToolReadiness $readiness,
-        ToolHealthState $health,
-        PresenceState $presence,
         ?array $lastVerified,
     ): string {
         if ($readiness !== ToolReadiness::READY) {
@@ -331,6 +327,19 @@ class HealthAndPresenceService
         }
 
         return implode(' ', $parts);
+    }
+
+    private function buildProviderExplanation(string $providerName, ?string $lastTest, bool $lastTestSuccess): string
+    {
+        if ($lastTest === null) {
+            return "Provider '{$providerName}' has not been tested yet.";
+        }
+
+        if ($lastTestSuccess) {
+            return "Provider '{$providerName}' last tested successfully at {$lastTest}.";
+        }
+
+        return "Provider '{$providerName}' last test failed at {$lastTest}.";
     }
 
     /**

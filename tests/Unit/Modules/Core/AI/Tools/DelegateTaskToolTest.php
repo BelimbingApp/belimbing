@@ -18,6 +18,7 @@ const DELEGATE_DISPATCH_SUCCESS = 'dispatched successfully';
 const DELEGATE_ANALYZE_SALES_DATA = 'Analyze sales data';
 const DELEGATE_GENERATE_MONTHLY_REPORT = 'Generate monthly report';
 const DELEGATE_REPORT_GENERATOR = 'Report Generator';
+const DELEGATE_DATA_ANALYST = 'Data Analyst';
 
 function makeOperationDispatch(array $overrides = []): OperationDispatch
 {
@@ -111,7 +112,7 @@ describe('dispatch with explicit agent_id', function () {
             'id' => 'op_test123abc',
             'employee_id' => 42,
             'task' => DELEGATE_ANALYZE_SALES_DATA,
-            'meta' => ['employee_name' => 'Data Analyst', 'task_type' => 'general'],
+            'meta' => ['employee_name' => DELEGATE_DATA_ANALYST, 'task_type' => 'general'],
         ]);
 
         $this->router->shouldReceive('route')
@@ -120,7 +121,7 @@ describe('dispatch with explicit agent_id', function () {
                 return $request->preferredAgentId === 42
                     && $request->task === DELEGATE_ANALYZE_SALES_DATA;
             })
-            ->andReturn(makeDelegateAgentDecision(42, 'Data Analyst', 100));
+            ->andReturn(makeDelegateAgentDecision(42, DELEGATE_DATA_ANALYST, 100));
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
@@ -131,7 +132,7 @@ describe('dispatch with explicit agent_id', function () {
 
         expect((string) $result)->toContain(DELEGATE_DISPATCH_SUCCESS)
             ->and((string) $result)->toContain('op_test123abc')
-            ->and((string) $result)->toContain('Data Analyst')
+            ->and((string) $result)->toContain(DELEGATE_DATA_ANALYST)
             ->and((string) $result)->toContain('ID: 42')
             ->and((string) $result)->toContain(DELEGATE_ANALYZE_SALES_DATA)
             ->and((string) $result)->toContain('delegation_status');

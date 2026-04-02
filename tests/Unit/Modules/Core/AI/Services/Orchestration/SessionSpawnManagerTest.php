@@ -81,8 +81,8 @@ function makeSpawnEnvelope(int $parentId, int $childId, array $overrides = []): 
  */
 function createParentOrchestrationSession(int $parentId, int $childId, int $depth = 1): OrchestrationSession
 {
-    /** @var OrchestrationSession $session */
-    $session = OrchestrationSession::unguarded(fn () => OrchestrationSession::query()->create([
+    /** @var OrchestrationSession */
+    return OrchestrationSession::unguarded(fn () => OrchestrationSession::query()->create([
         'id' => OrchestrationSession::ID_PREFIX.'test_'.Str::random(6),
         'parent_employee_id' => $parentId,
         'child_employee_id' => $childId,
@@ -90,8 +90,6 @@ function createParentOrchestrationSession(int $parentId, int $childId, int $dept
         'status' => OrchestrationSessionStatus::Running,
         'depth' => $depth,
     ]));
-
-    return $session;
 }
 
 // --- spawn ---
