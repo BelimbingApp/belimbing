@@ -12,7 +12,7 @@ use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
-use App\Modules\Core\AI\Models\AgentTaskDispatch;
+use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -185,13 +185,13 @@ class DelegateTaskTool extends AbstractTool
     /**
      * Format the dispatch model as a readable status message.
      */
-    private function formatDispatchResult(AgentTaskDispatch $dispatch): string
+    private function formatDispatchResult(OperationDispatch $dispatch): string
     {
         $employeeName = data_get($dispatch->meta, 'employee_name') ?? 'Agent #'.$dispatch->employee_id;
 
         return 'Task dispatched successfully.'
             ."\n\n".'**Dispatch ID:** '.$dispatch->id
-            ."\n".'**Status:** '.$dispatch->status
+            ."\n".'**Status:** '.$dispatch->status->value
             ."\n".'**Assigned to:** '.$employeeName.' (ID: '.$dispatch->employee_id.')'
             ."\n".'**Task:** '.$dispatch->task
             ."\n".'**Created:** '.$dispatch->created_at?->toIso8601String()

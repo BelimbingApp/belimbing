@@ -5,6 +5,8 @@
 
 namespace App\Modules\Core\AI\Models;
 
+use App\Modules\Core\AI\Enums\OperationStatus;
+use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -13,20 +15,24 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Carbon;
 
 /**
- * Agent Task Dispatch — tracks AI agent task executions.
+ * Operation Dispatch — unified ledger for all AI async operations.
+ *
+ * Tracks agent tasks, scheduled task executions, background artisan
+ * commands, and any other durable asynchronous work through a single
+ * lifecycle model (queued → running → succeeded/failed/cancelled).
  *
  * Uses a polymorphic entity relationship so dispatches can reference
  * any domain object (IT tickets, QAC cases, etc.) without cross-module
  * foreign key constraints.
  *
  * @property string $id
- * @property int $employee_id
+ * @property OperationType $operation_type
+ * @property int|null $employee_id
  * @property int|null $acting_for_user_id
- * @property string $task_type
  * @property string|null $entity_type
  * @property int|null $entity_id
  * @property string $task
- * @property string $status
+ * @property OperationStatus $status
  * @property string|null $run_id
  * @property string|null $result_summary
  * @property string|null $error_message
@@ -35,16 +41,16 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $finished_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
- * @property-read Employee $employee
+ * @property-read Employee|null $employee
  * @property-read User|null $actingForUser
  * @property-read Model|null $entity
  */
-class AgentTaskDispatch extends Model
+class OperationDispatch extends Model
 {
     /**
-     * Terminal statuses that indicate the dispatch is complete.
+     * Prefix for operation dispatch IDs.
      */
-    private const TERMINAL_STATUSES = ['succeeded', 'failed', 'cancelled'];
+    public const ID_PREFIX = 'op_';
 
     /**
      * Indicates if the IDs are auto-incrementing.
@@ -65,7 +71,7 @@ class AgentTaskDispatch extends Model
      *
      * @var string
      */
-    protected $table = 'ai_agent_task_dispatches';
+    protected $table = 'ai_operation_dispatches';
 
     /**
      * The attributes that are mass assignable.
@@ -74,9 +80,9 @@ class AgentTaskDispatch extends Model
      */
     protected $fillable = [
         'id',
+        'operation_type',
         'employee_id',
         'acting_for_user_id',
-        'task_type',
         'entity_type',
         'entity_id',
         'task',
@@ -97,6 +103,8 @@ class AgentTaskDispatch extends Model
     protected function casts(): array
     {
         return [
+            'operation_type' => OperationType::class,
+            'status' => OperationStatus::class,
             'meta' => 'json',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
@@ -104,7 +112,9 @@ class AgentTaskDispatch extends Model
     }
 
     /**
-     * Get the agent (employee) assigned to execute this task.
+     * Get the agent (employee) assigned to execute this operation.
+     *
+     * Null for operations that do not target an agent (e.g., background commands).
      */
     public function employee(): BelongsTo
     {
@@ -112,9 +122,9 @@ class AgentTaskDispatch extends Model
     }
 
     /**
-     * Get the user on whose behalf this task is acting.
+     * Get the user on whose behalf this operation is acting.
      *
-     * Null for system-initiated tasks (cron, webhook, scheduled).
+     * Null for system-initiated operations (cron, webhook, scheduled).
      */
     public function actingForUser(): BelongsTo
     {
@@ -137,7 +147,7 @@ class AgentTaskDispatch extends Model
      */
     public function isTerminal(): bool
     {
-        return in_array($this->status, self::TERMINAL_STATUSES, true);
+        return $this->status->isTerminal();
     }
 
     /**
@@ -146,7 +156,7 @@ class AgentTaskDispatch extends Model
     public function markRunning(): void
     {
         $this->update([
-            'status' => 'running',
+            'status' => OperationStatus::Running,
             'started_at' => now(),
         ]);
     }
@@ -163,7 +173,7 @@ class AgentTaskDispatch extends Model
         $meta = array_merge($this->meta ?? [], $runtimeMeta);
 
         $this->update([
-            'status' => 'succeeded',
+            'status' => OperationStatus::Succeeded,
             'run_id' => $runId,
             'result_summary' => $resultSummary,
             'meta' => $meta,
@@ -179,7 +189,7 @@ class AgentTaskDispatch extends Model
     public function markFailed(string $errorMessage): void
     {
         $this->update([
-            'status' => 'failed',
+            'status' => OperationStatus::Failed,
             'error_message' => $errorMessage,
             'finished_at' => now(),
         ]);
@@ -191,7 +201,7 @@ class AgentTaskDispatch extends Model
     public function markCancelled(): void
     {
         $this->update([
-            'status' => 'cancelled',
+            'status' => OperationStatus::Cancelled,
             'finished_at' => now(),
         ]);
     }

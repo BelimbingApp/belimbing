@@ -1,7 +1,9 @@
 <?php
 
+use App\Modules\Core\AI\Enums\OperationStatus;
+use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Jobs\RunAgentTaskJob;
-use App\Modules\Core\AI\Models\AgentTaskDispatch;
+use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\KodiPromptFactory;
@@ -15,13 +17,13 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 
 it('clears auth and execution context when returning early for a terminal dispatch', function () {
     $user = User::factory()->create();
-    $dispatch = AgentTaskDispatch::unguarded(fn () => AgentTaskDispatch::query()->create([
-        'id' => 'agent_dispatch_terminal_cleanup',
+    $dispatch = OperationDispatch::unguarded(fn () => OperationDispatch::query()->create([
+        'id' => 'op_terminal_cleanup',
+        'operation_type' => OperationType::AgentTask,
         'employee_id' => 1,
         'acting_for_user_id' => $user->id,
-        'task_type' => 'general',
         'task' => 'Already done',
-        'status' => 'succeeded',
+        'status' => OperationStatus::Succeeded,
         'meta' => null,
     ]));
 

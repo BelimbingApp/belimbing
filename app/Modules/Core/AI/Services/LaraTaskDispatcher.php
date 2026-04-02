@@ -5,15 +5,17 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Modules\Core\AI\Enums\OperationStatus;
+use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Jobs\RunAgentTaskJob;
-use App\Modules\Core\AI\Models\AgentTaskDispatch;
+use App\Modules\Core\AI\Models\OperationDispatch;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
 
 /**
  * Dispatches tasks to AI agents via Laravel queues.
  *
- * Creates a durable dispatch record in the database, then queues
+ * Creates a durable dispatch record in the operations ledger, then queues
  * a RunAgentTaskJob for asynchronous execution. Returns the dispatch
  * model so callers can format receipts or track status.
  */
@@ -35,7 +37,7 @@ class LaraTaskDispatcher
      *
      * @throws AuthorizationException When the target agent is not accessible
      */
-    public function dispatchForCurrentUser(int $employeeId, string $taskType, string $task, array $options = []): AgentTaskDispatch
+    public function dispatchForCurrentUser(int $employeeId, string $taskType, string $task, array $options = []): OperationDispatch
     {
         $agent = $this->capabilityMatcher->findAccessibleAgentById($employeeId);
         $actingForUserId = auth()->id();
@@ -44,20 +46,21 @@ class LaraTaskDispatcher
             throw new AuthorizationException(__('Unauthorized Agent dispatch target.'));
         }
 
-        $dispatch = AgentTaskDispatch::query()->create([
-            'id' => 'agent_dispatch_'.Str::random(12),
+        $dispatch = OperationDispatch::query()->create([
+            'id' => OperationDispatch::ID_PREFIX.Str::random(12),
+            'operation_type' => OperationType::AgentTask,
             'employee_id' => $agent['employee_id'],
             'acting_for_user_id' => $actingForUserId,
-            'task_type' => $taskType,
-            'entity_type' => $options['entity_type'] ?? null,
-            'entity_id' => $options['entity_id'] ?? null,
             'task' => trim($task),
-            'status' => 'queued',
+            'status' => OperationStatus::Queued,
             'meta' => [
+                'task_type' => $taskType,
                 'model_override' => $options['model_override'] ?? null,
                 'source' => $options['source'] ?? 'delegate_task',
                 'employee_name' => $agent['name'],
             ],
+            'entity_type' => $options['entity_type'] ?? null,
+            'entity_id' => $options['entity_id'] ?? null,
         ]);
 
         RunAgentTaskJob::dispatch($dispatch->id);

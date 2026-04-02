@@ -2,9 +2,9 @@
 
 **Parent:** `docs/todo/openclaw-parity/00-capability-gap-audit.md`  
 **Scope:** Turn BLB's messaging, inbound triggers, scheduled work, and background command execution into a durable operations fabric  
-**Status:** Planned  
+**Status:** Complete  
 **Phase Owner:** Core AI / Base AI  
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-02
 
 ---
 
@@ -439,12 +439,12 @@ If BLB keeps `AgentTaskDispatch` as the underlying ledger, Phase 4 should make t
 
 | Workstream | Goal | Status | Notes |
 |---|---|---|---|
-| 4.1 | Define shared dispatch and data model | Not started | Decide whether to generalize `AgentTaskDispatch` or build a neutral dispatch core |
-| 4.2 | Build outbound messaging foundation | Not started | Start with one real channel first, not four partial ones |
-| 4.3 | Build inbound intake and routing | Not started | Normalize raw payloads before agent/domain routing |
-| 4.4 | Build schedule registry and due-work planner | Not started | Make schedules durable and replay-safe |
-| 4.5 | Build background artisan execution | Not started | Reuse dispatch ledger and capture process output safely |
-| 4.6 | Add operator visibility and status tooling | Not started | Make async work inspectable outside the tool call path |
+| 4.1 | Define shared dispatch and data model | Complete | Generalized `AgentTaskDispatch` → `OperationDispatch`; 4 enums, 5 models, 4 migrations |
+| 4.2 | Build outbound messaging foundation | Complete | Email channel real via Laravel Mail; `OutboundMessageService` + `ChannelOutboundMail` |
+| 4.3 | Build inbound intake and routing | Complete | Webhook → `InboundSignalService` → `ProcessInboundSignalJob` → `InboundRoutingService`; authenticity verification deferred to real adapters |
+| 4.4 | Build schedule registry and due-work planner | Complete | `ScheduleDefinitionService` CRUD + `SchedulePlanner` + `DispatchDueSchedulesJob`; `ScheduleTaskTool` fully rewritten |
+| 4.5 | Build background artisan execution | Complete | `BackgroundCommandService` + `RunBackgroundCommandJob` with configurable allowlist policy |
+| 4.6 | Add operator visibility and status tooling | Complete | `OperationsDispatchService` + `DelegationStatusTool` get/list + `OperationsSweepCommand` + `OperationsStatusCommand` |
 
 ### 9.1 Stage A - Dispatch and persistence foundations
 

@@ -10,8 +10,11 @@ use App\Base\AI\Tools\ToolResult;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\Enums\AuthorizationReasonCode;
-use App\Modules\Core\AI\Models\AgentTaskDispatch;
+use App\Modules\Core\AI\Enums\OperationStatus;
+use App\Modules\Core\AI\Enums\OperationType;
+use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
+use App\Modules\Core\AI\Services\BackgroundCommandService;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use App\Modules\Core\AI\Tools\ArtisanTool;
@@ -278,21 +281,21 @@ describe('AgentToolRegistry', function () {
 
 describe('ArtisanTool', function () {
     it(TOOL_METADATA_DESCRIPTION, function () {
-        $tool = new ArtisanTool;
+        $tool = new ArtisanTool(Mockery::mock(BackgroundCommandService::class));
 
         expect($tool->name())->toBe('artisan');
         expect($tool->requiredCapability())->toBe('ai.tool_artisan.execute');
     });
 
     it('returns error for empty command', function () {
-        $tool = new ArtisanTool;
+        $tool = new ArtisanTool(Mockery::mock(BackgroundCommandService::class));
 
         expect((string) $tool->execute([]))->toContain(NO_COMMAND_PROVIDED);
         expect((string) $tool->execute(['command' => '']))->toContain(NO_COMMAND_PROVIDED);
     });
 
     it('strips php artisan prefix if LLM included it', function () {
-        $tool = new ArtisanTool;
+        $tool = new ArtisanTool(Mockery::mock(BackgroundCommandService::class));
 
         // This will run 'php artisan list' — should work without error
         $result = $tool->execute(['command' => 'php artisan list --raw']);
@@ -416,11 +419,11 @@ describe('DelegateTaskTool', function () {
             'capability_summary' => 'Financial reporting',
         ]);
 
-        $dispatch = new AgentTaskDispatch([
-            'id' => 'agent_dispatch_abc123',
-            'status' => 'queued',
+        $dispatch = new OperationDispatch([
+            'id' => 'op_abc123',
+            'operation_type' => OperationType::AgentTask,
+            'status' => OperationStatus::Queued,
             'employee_id' => 42,
-            'task_type' => 'general',
             'task' => GENERATE_Q1_REPORT,
             'acting_for_user_id' => 1,
             'meta' => ['employee_name' => REPORT_BOT],
@@ -434,7 +437,7 @@ describe('DelegateTaskTool', function () {
         $result = $tool->execute(['task' => GENERATE_Q1_REPORT, 'task_type' => 'general']);
 
         expect((string) $result)->toContain(REPORT_BOT);
-        expect((string) $result)->toContain('agent_dispatch_abc123');
+        expect((string) $result)->toContain('op_abc123');
     });
 
     it('dispatches to a specific agent when agent_id is given', function () {
@@ -445,11 +448,11 @@ describe('DelegateTaskTool', function () {
             'capability_summary' => 'Analytics',
         ]);
 
-        $dispatch = new AgentTaskDispatch([
-            'id' => 'agent_dispatch_xyz',
-            'status' => 'queued',
+        $dispatch = new OperationDispatch([
+            'id' => 'op_xyz456',
+            'operation_type' => OperationType::AgentTask,
+            'status' => OperationStatus::Queued,
             'employee_id' => 7,
-            'task_type' => 'general',
             'task' => 'Run analytics',
             'acting_for_user_id' => 1,
             'meta' => ['employee_name' => DATA_ANALYST],
@@ -463,7 +466,7 @@ describe('DelegateTaskTool', function () {
         $result = $tool->execute(['task' => 'Run analytics', 'task_type' => 'general', 'agent_id' => 7]);
 
         expect((string) $result)->toContain(DATA_ANALYST);
-        expect((string) $result)->toContain('agent_dispatch_xyz');
+        expect((string) $result)->toContain('op_xyz456');
     });
 
     it('returns error when dispatcher throws', function () {

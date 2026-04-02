@@ -90,6 +90,19 @@ return [
                 ],
             ],
         ],
+        'artisan' => [
+            // Command prefixes allowed for background (queued) execution.
+            // Foreground execution is unrestricted. Prefix matching: 'blb:'
+            // permits 'blb:ai:catalog:sync', 'blb:user:create', etc.
+            'background_allowlist' => [
+                'blb:',
+                'migrate:status',
+                'route:list',
+                'config:show',
+                'schedule:list',
+                'queue:',
+            ],
+        ],
         'memory_search' => [
             'sqlite_vec_extension' => env('AI_SQLITE_VEC_EXTENSION', 'vec0'),
             'sqlite_vec_extension_dir' => env('AI_SQLITE_VEC_EXTENSION_DIR', null),

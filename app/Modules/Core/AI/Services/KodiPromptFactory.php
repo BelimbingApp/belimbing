@@ -12,7 +12,7 @@ use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\AI\DTO\PromptPackage;
 use App\Modules\Core\AI\DTO\PromptSection;
 use App\Modules\Core\AI\Enums\PromptSectionType;
-use App\Modules\Core\AI\Models\AgentTaskDispatch;
+use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\Workspace\PromptPackageFactory;
 use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceResolver;
@@ -44,10 +44,10 @@ class KodiPromptFactory
     /**
      * Build the system prompt for a dispatched agent task.
      *
-     * @param  AgentTaskDispatch  $dispatch  The dispatch record
+     * @param  OperationDispatch  $dispatch  The dispatch record
      * @param  Model|null  $entity  Associated domain entity (ticket, QAC case, etc.)
      */
-    public function buildForDispatch(AgentTaskDispatch $dispatch, ?Model $entity = null): string
+    public function buildForDispatch(OperationDispatch $dispatch, ?Model $entity = null): string
     {
         $package = $this->buildPackage($dispatch, $entity);
 
@@ -57,7 +57,7 @@ class KodiPromptFactory
     /**
      * Build the full prompt package for diagnostics or metadata attachment.
      */
-    public function buildPackage(AgentTaskDispatch $dispatch, ?Model $entity = null): PromptPackage
+    public function buildPackage(OperationDispatch $dispatch, ?Model $entity = null): PromptPackage
     {
         $manifest = $this->workspaceResolver->resolve(Employee::KODI_ID);
         $validation = $this->workspaceValidator->validate($manifest);
@@ -82,7 +82,7 @@ class KodiPromptFactory
      *
      * @return list<PromptSection>
      */
-    private function operationalSections(AgentTaskDispatch $dispatch, ?Model $entity): array
+    private function operationalSections(OperationDispatch $dispatch, ?Model $entity): array
     {
         $sections = [];
 
@@ -131,7 +131,7 @@ class KodiPromptFactory
     /**
      * Build the dispatch metadata section.
      */
-    private function dispatchSection(AgentTaskDispatch $dispatch): PromptSection
+    private function dispatchSection(OperationDispatch $dispatch): PromptSection
     {
         $context = [
             'dispatch_id' => $dispatch->id,

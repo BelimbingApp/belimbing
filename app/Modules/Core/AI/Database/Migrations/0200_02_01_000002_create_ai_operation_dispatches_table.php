@@ -14,11 +14,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('ai_agent_task_dispatches', function (Blueprint $table): void {
+        Schema::create('ai_operation_dispatches', function (Blueprint $table): void {
             $table->string('id')->primary();
-            $table->foreignId('employee_id')->constrained('employees');
+            $table->string('operation_type', 60)->index();
+            $table->foreignId('employee_id')->nullable()->constrained('employees');
             $table->foreignId('acting_for_user_id')->nullable()->constrained('users');
-            $table->string('task_type', 60)->index();
             $table->nullableMorphs('entity');
             $table->text('task');
             $table->string('status', 20)->default('queued');
@@ -32,6 +32,7 @@ return new class extends Migration
 
             $table->index('status');
             $table->index(['employee_id', 'status']);
+            $table->index(['operation_type', 'status']);
         });
     }
 
@@ -40,6 +41,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('ai_agent_task_dispatches');
+        Schema::dropIfExists('ai_operation_dispatches');
     }
 };

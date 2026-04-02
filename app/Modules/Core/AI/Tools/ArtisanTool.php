@@ -9,14 +9,20 @@ use App\Base\AI\Tools\AbstractHighImpactProcessTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
+use App\Modules\Core\AI\Services\BackgroundCommandService;
 use Illuminate\Support\Facades\Process;
 
 /**
  * Artisan command execution tool for Agents.
  *
- * Allows a agent to run `php artisan` commands on behalf of the user.
- * Supports foreground execution with configurable timeout, and background
- * execution via Laravel queues (stub — pending queue job implementation).
+ * Allows an agent to run `php artisan` commands on behalf of the user.
+ * Foreground execution runs immediately with configurable timeout.
+ * Background execution dispatches through BackgroundCommandService,
+ * which creates a durable OperationDispatch record and queues
+ * RunBackgroundCommandJob — poll with delegation_status.
+ *
+ * Background mode enforces a command allowlist policy to prevent
+ * arbitrary command execution in queued context.
  *
  * Gated by `ai.tool_artisan.execute` authz capability.
  *
@@ -41,6 +47,10 @@ class ArtisanTool extends AbstractHighImpactProcessTool
      */
     private const MAX_TIMEOUT_SECONDS = 300;
 
+    public function __construct(
+        private readonly BackgroundCommandService $backgroundService,
+    ) {}
+
     public function name(): string
     {
         return 'artisan';
@@ -51,7 +61,8 @@ class ArtisanTool extends AbstractHighImpactProcessTool
         return 'Execute a php artisan command and return its output. '
             .'Use this to query data (e.g., tinker), run BLB commands, check system status, etc. '
             .'Only artisan commands are allowed — no arbitrary shell commands. '
-            .'Supports optional timeout override and background execution via Laravel queues.';
+            .'Supports optional timeout override and background execution via Laravel queues. '
+            .'Background mode only permits allowlisted commands.';
     }
 
     protected function schema(): ToolSchemaBuilder
@@ -75,7 +86,8 @@ class ArtisanTool extends AbstractHighImpactProcessTool
             ->boolean(
                 'background',
                 'Run the command in the background via Laravel queues. '
-                    .'Returns a dispatch_id immediately for polling with delegation_status tool.'
+                    .'Returns a dispatch_id immediately for polling with delegation_status tool. '
+                    .'Only allowlisted commands are permitted in background mode.'
             );
     }
 
@@ -91,7 +103,8 @@ class ArtisanTool extends AbstractHighImpactProcessTool
             'summary' => 'Execute Laravel artisan commands.',
             'explanation' => 'Runs `php artisan` commands within the BLB application. '
                 .'Useful for system administration tasks. This is a powerful tool '
-                .'that can modify application state — use with appropriate authorization.',
+                .'that can modify application state — use with appropriate authorization. '
+                .'Background mode uses a command allowlist for safety.',
             'test_examples' => [
                 [
                     'label' => 'List routes',
@@ -103,7 +116,7 @@ class ArtisanTool extends AbstractHighImpactProcessTool
                     'runnable' => false,
                 ],
                 [
-                    'label' => '⚠ Wipe database (destroys all data)',
+                    'label' => 'Wipe database (destroys all data)',
                     'input' => ['command' => 'db:wipe --force'],
                     'runnable' => false,
                 ],
@@ -113,6 +126,7 @@ class ArtisanTool extends AbstractHighImpactProcessTool
             ],
             'limits' => [
                 'Commands execute in the application context',
+                'Background mode restricted to allowlisted commands',
             ],
         ];
     }
@@ -131,7 +145,7 @@ class ArtisanTool extends AbstractHighImpactProcessTool
         $background = $this->optionalBool($arguments, 'background');
 
         if ($background) {
-            return ToolResult::success($this->executeBackground($command));
+            return $this->executeBackground($command);
         }
 
         return $this->executeForeground($command, $arguments);
@@ -162,24 +176,27 @@ class ArtisanTool extends AbstractHighImpactProcessTool
     }
 
     /**
-     * Dispatch the command for background execution via Laravel queues.
+     * Dispatch the command for background execution via the dispatch ledger.
      *
-     * Returns a dispatch_id immediately. The caller can poll for results
-     * using the delegation_status tool.
-     *
-     * Note: Currently returns a stub response. Queue job implementation pending.
+     * Creates a durable OperationDispatch record and queues the job.
+     * Returns the dispatch ID for polling with delegation_status.
      */
-    private function executeBackground(string $command): string
+    private function executeBackground(string $command): ToolResult
     {
-        $dispatchId = 'artisan_'.bin2hex(random_bytes(12));
+        $actingForUserId = auth()->id();
 
-        return json_encode([
+        try {
+            $dispatch = $this->backgroundService->dispatch($command, $actingForUserId);
+        } catch (\InvalidArgumentException $e) {
+            return ToolResult::error($e->getMessage(), 'policy_denied');
+        }
+
+        return ToolResult::success(json_encode([
             'status' => 'dispatched',
-            'dispatch_id' => $dispatchId,
-            'command' => $command,
-            'message' => 'Command dispatched for background execution (stub). '
-                .'Queue job implementation pending. '
-                .'Use the delegation_status tool to check progress.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            'dispatch_id' => $dispatch->id,
+            'command' => 'php artisan '.$command,
+            'message' => 'Command dispatched for background execution. '
+                .'Use the delegation_status tool with dispatch_id "'.$dispatch->id.'" to check progress.',
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 }

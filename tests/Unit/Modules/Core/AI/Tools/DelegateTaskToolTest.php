@@ -1,6 +1,8 @@
 <?php
 
-use App\Modules\Core\AI\Models\AgentTaskDispatch;
+use App\Modules\Core\AI\Enums\OperationStatus;
+use App\Modules\Core\AI\Enums\OperationType;
+use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use App\Modules\Core\AI\Tools\DelegateTaskTool;
@@ -10,11 +12,23 @@ use Tests\TestCase;
 
 uses(TestCase::class, AssertsToolBehavior::class);
 
-const DISPATCH_SUCCESS = 'dispatched successfully';
-const ANALYZE_SALES_DATA = 'Analyze sales data';
-const REPORT_TIMESTAMP = '2026-03-08T12:00:00+00:00';
-const GENERATE_MONTHLY_REPORT = 'Generate monthly report';
-const REPORT_GENERATOR = 'Report Generator';
+const DELEGATE_DISPATCH_SUCCESS = 'dispatched successfully';
+const DELEGATE_ANALYZE_SALES_DATA = 'Analyze sales data';
+const DELEGATE_GENERATE_MONTHLY_REPORT = 'Generate monthly report';
+const DELEGATE_REPORT_GENERATOR = 'Report Generator';
+
+function makeOperationDispatch(array $overrides = []): OperationDispatch
+{
+    return new OperationDispatch(array_merge([
+        'id' => 'op_test123abc',
+        'operation_type' => OperationType::AgentTask,
+        'status' => OperationStatus::Queued,
+        'employee_id' => 1,
+        'acting_for_user_id' => 10,
+        'task' => 'Test task',
+        'meta' => ['employee_name' => 'Worker', 'task_type' => 'general'],
+    ], $overrides));
+}
 
 beforeEach(function () {
     $this->dispatcher = Mockery::mock(LaraTaskDispatcher::class);
@@ -55,14 +69,8 @@ describe('input validation', function () {
     });
 
     it('accepts task at max length', function () {
-        $dispatch = new AgentTaskDispatch([
-            'id' => 'agent_dispatch_abc123',
-            'status' => 'queued',
-            'employee_id' => 1,
-            'task_type' => 'general',
+        $dispatch = makeOperationDispatch([
             'task' => str_repeat('x', 5000),
-            'acting_for_user_id' => 10,
-            'meta' => ['employee_name' => 'Worker'],
         ]);
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
@@ -75,34 +83,31 @@ describe('input validation', function () {
             'agent_id' => 1,
         ]);
 
-        expect((string) $result)->toContain(DISPATCH_SUCCESS);
+        expect((string) $result)->toContain(DELEGATE_DISPATCH_SUCCESS);
     });
 });
 
 describe('dispatch with explicit agent_id', function () {
     it('dispatches to specified agent', function () {
-        $dispatch = new AgentTaskDispatch([
-            'id' => 'agent_dispatch_test123',
-            'status' => 'queued',
+        $dispatch = makeOperationDispatch([
+            'id' => 'op_test123abc',
             'employee_id' => 42,
-            'task_type' => 'general',
-            'task' => ANALYZE_SALES_DATA,
-            'acting_for_user_id' => 10,
-            'meta' => ['employee_name' => 'Data Analyst'],
+            'task' => DELEGATE_ANALYZE_SALES_DATA,
+            'meta' => ['employee_name' => 'Data Analyst', 'task_type' => 'general'],
         ]);
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
-            ->with(42, 'general', ANALYZE_SALES_DATA)
+            ->with(42, 'general', DELEGATE_ANALYZE_SALES_DATA)
             ->andReturn($dispatch);
 
-        $result = $this->tool->execute(['task' => ANALYZE_SALES_DATA, 'task_type' => 'general', 'agent_id' => 42]);
+        $result = $this->tool->execute(['task' => DELEGATE_ANALYZE_SALES_DATA, 'task_type' => 'general', 'agent_id' => 42]);
 
-        expect((string) $result)->toContain(DISPATCH_SUCCESS)
-            ->and((string) $result)->toContain('agent_dispatch_test123')
+        expect((string) $result)->toContain(DELEGATE_DISPATCH_SUCCESS)
+            ->and((string) $result)->toContain('op_test123abc')
             ->and((string) $result)->toContain('Data Analyst')
             ->and((string) $result)->toContain('ID: 42')
-            ->and((string) $result)->toContain(ANALYZE_SALES_DATA)
+            ->and((string) $result)->toContain(DELEGATE_ANALYZE_SALES_DATA)
             ->and((string) $result)->toContain('delegation_status');
     });
 
@@ -122,33 +127,30 @@ describe('dispatch with auto-matching', function () {
     it('auto-matches best agent when no agent_id given', function () {
         $this->matcher->shouldReceive('matchBestForTask')
             ->once()
-            ->with(GENERATE_MONTHLY_REPORT)
+            ->with(DELEGATE_GENERATE_MONTHLY_REPORT)
             ->andReturn([
                 'employee_id' => 7,
-                'name' => REPORT_GENERATOR,
+                'name' => DELEGATE_REPORT_GENERATOR,
                 'capability_summary' => 'Generates reports and summaries',
                 'match_score' => 3,
             ]);
 
-        $dispatch = new AgentTaskDispatch([
-            'id' => 'agent_dispatch_auto456',
-            'status' => 'queued',
+        $dispatch = makeOperationDispatch([
+            'id' => 'op_auto456xyz',
             'employee_id' => 7,
-            'task_type' => 'generate_report',
-            'task' => GENERATE_MONTHLY_REPORT,
-            'acting_for_user_id' => 10,
-            'meta' => ['employee_name' => REPORT_GENERATOR],
+            'task' => DELEGATE_GENERATE_MONTHLY_REPORT,
+            'meta' => ['employee_name' => DELEGATE_REPORT_GENERATOR, 'task_type' => 'generate_report'],
         ]);
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
-            ->with(7, 'generate_report', GENERATE_MONTHLY_REPORT)
+            ->with(7, 'generate_report', DELEGATE_GENERATE_MONTHLY_REPORT)
             ->andReturn($dispatch);
 
-        $result = $this->tool->execute(['task' => GENERATE_MONTHLY_REPORT, 'task_type' => 'generate_report']);
+        $result = $this->tool->execute(['task' => DELEGATE_GENERATE_MONTHLY_REPORT, 'task_type' => 'generate_report']);
 
-        expect((string) $result)->toContain(DISPATCH_SUCCESS)
-            ->and((string) $result)->toContain(REPORT_GENERATOR);
+        expect((string) $result)->toContain(DELEGATE_DISPATCH_SUCCESS)
+            ->and((string) $result)->toContain(DELEGATE_REPORT_GENERATOR);
     });
 
     it('returns error when no agent matches the task', function () {
@@ -165,14 +167,9 @@ describe('dispatch with auto-matching', function () {
 
 describe('output format', function () {
     it('includes dispatch_id in result', function () {
-        $dispatch = new AgentTaskDispatch([
-            'id' => 'agent_dispatch_xyz789',
-            'status' => 'queued',
-            'employee_id' => 1,
-            'task_type' => 'general',
+        $dispatch = makeOperationDispatch([
+            'id' => 'op_xyz789abc',
             'task' => 'Do something',
-            'acting_for_user_id' => 10,
-            'meta' => ['employee_name' => 'Worker'],
         ]);
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
@@ -189,13 +186,10 @@ describe('output format', function () {
     });
 
     it('falls back to agent id when dispatch meta is absent', function () {
-        $dispatch = new AgentTaskDispatch([
-            'id' => 'agent_dispatch_null_meta',
-            'status' => 'queued',
+        $dispatch = makeOperationDispatch([
+            'id' => 'op_null_meta',
             'employee_id' => 9,
-            'task_type' => 'general',
             'task' => 'Do something else',
-            'acting_for_user_id' => 10,
             'meta' => null,
         ]);
 

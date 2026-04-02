@@ -12,18 +12,22 @@ use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
-use Illuminate\Support\Str;
+use App\Modules\Core\AI\Models\ScheduleDefinition;
+use App\Modules\Core\AI\Services\AgentExecutionContext;
+use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionService;
+use App\Modules\Core\Employee\Models\Employee;
 
 /**
  * Scheduled task management tool for Agents.
  *
- * Provides CRUD operations for Laravel-native scheduled tasks stored in the
- * database. Each task defines a cron expression, target agent, task description,
- * and enabled state. Scheduled tasks execute via Laravel's scheduler,
- * dispatching to agent runtimes.
+ * Provides CRUD operations for schedule definitions stored in the
+ * database. Each schedule defines a cron expression, target agent,
+ * execution payload, and enabled state. Schedules are dispatched by
+ * the SchedulePlanner via the operations ledger.
  *
- * Note: Currently returns stub responses. Full persistence will be available
- * once the scheduled_tasks DB table and scheduler integration are implemented.
+ * Thin wrapper over ScheduleDefinitionService — the tool owns
+ * argument validation and response formatting; the service owns
+ * persistence and business rules.
  *
  * Gated by `ai.tool_schedule.execute` authz capability.
  */
@@ -44,18 +48,10 @@ class ScheduleTaskTool extends AbstractActionTool
         'status',
     ];
 
-    /**
-     * Expected prefix for scheduled task IDs.
-     */
-    private const TASK_ID_PREFIX = 'sched_';
-
-    /**
-     * Regex pattern for validating 5-field cron expressions.
-     *
-     * Fields: minute hour day-of-month month day-of-week.
-     * Supports digits, wildcards (*), ranges (-), steps (/), and lists (,).
-     */
-    private const CRON_PATTERN = '/^(\*(?:\/[0-9]+)?|[0-9\/,\-]+)\s+(\*(?:\/[0-9]+)?|[0-9\/,\-]+)\s+(\*(?:\/[0-9]+)?|[0-9\/,\-]+)\s+(\*(?:\/[0-9]+)?|[0-9\/,\-]+)\s+(\*(?:\/[0-9]+)?|[0-9\/,\-]+)$/';
+    public function __construct(
+        private readonly ScheduleDefinitionService $scheduleService,
+        private readonly AgentExecutionContext $executionContext,
+    ) {}
 
     public function name(): string
     {
@@ -67,7 +63,8 @@ class ScheduleTaskTool extends AbstractActionTool
         return 'Manage scheduled tasks for Agents. '
             .'Supports listing, adding, updating, removing, and checking status of '
             .'scheduled tasks. Each task defines a cron expression, target agent, '
-            .'description, and enabled state. Tasks execute via Laravel\'s scheduler.';
+            .'description, and enabled state. Tasks execute via the schedule planner '
+            .'and operations dispatch ledger.';
     }
 
     public function category(): ToolCategory
@@ -90,11 +87,12 @@ class ScheduleTaskTool extends AbstractActionTool
         return [
             'displayName' => 'Schedule Task',
             'summary' => 'Create and manage scheduled tasks for Agents.',
-            'explanation' => 'CRUD operations for scheduled tasks stored in the database. '
-                .'Each task defines a cron expression, target agent, and task description. '
-                .'Tasks execute via Laravel\'s scheduler.',
+            'explanation' => 'CRUD operations for schedule definitions stored in the database. '
+                .'Each schedule defines a cron expression, target agent, and execution payload. '
+                .'Schedules fire through the operations dispatch ledger.',
             'setupRequirements' => [
                 'Laravel scheduler running',
+                'blb:ai:schedules:tick registered in scheduler',
             ],
             'testExamples' => [
                 [
@@ -106,7 +104,7 @@ class ScheduleTaskTool extends AbstractActionTool
                 'Scheduler active',
             ],
             'limits' => [
-                'Company-scoped task isolation',
+                'Company-scoped schedule isolation',
             ],
         ];
     }
@@ -119,10 +117,12 @@ class ScheduleTaskTool extends AbstractActionTool
     protected function schema(): ToolSchemaBuilder
     {
         return ToolSchemaBuilder::make()
-            ->string('task_id', 'The scheduled task ID. Required for update, remove, and status actions. Format: "sched_<alphanumeric>".')
+            ->integer('task_id', 'The schedule definition ID. Required for update, remove, and status actions.')
             ->string('description', 'Description of what the scheduled task should do. Required for add, optional for update.')
+            ->string('execution_payload', 'The task instruction or command that will be executed. Required for add, optional for update. For agent-targeted schedules, this is the task prompt sent to the agent.')
             ->string('cron_expression', 'Standard 5-field cron expression (minute hour day month weekday). Required for add, optional for update. Example: "0 9 * * 1" for every Monday at 9am.')
             ->integer('agent_id', 'Employee ID of the target Agent to execute the task. Optional; use agent_list to discover available agents.')
+            ->string('timezone', 'IANA timezone for the cron expression (default: UTC). Example: "Asia/Kuala_Lumpur".')
             ->boolean('enabled', 'Whether the scheduled task is enabled. Defaults to true for add. Optional for update.');
     }
 
@@ -140,25 +140,33 @@ class ScheduleTaskTool extends AbstractActionTool
     /**
      * Handle the "list" action.
      *
-     * Returns all scheduled tasks. Currently returns an empty stub since
-     * the scheduled_tasks table is not yet implemented.
+     * Returns all schedule definitions for the current company.
      */
     private function handleList(): ToolResult
     {
-        return ToolResult::success(json_encode([
-            'tasks' => [],
-            'total' => 0,
-            'message' => 'Scheduled task persistence is pending. '
-                .'No tasks are stored yet. The scheduled_tasks DB table '
-                .'and scheduler integration are not yet implemented.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $companyId = $this->resolveCompanyId();
+
+        if ($companyId === null) {
+            return ToolResult::error(
+                'Cannot determine company context for schedule listing.',
+                'no_company_context',
+            );
+        }
+
+        $schedules = $this->scheduleService->list($companyId);
+
+        $tasks = $schedules->map(fn (ScheduleDefinition $s) => $this->formatSchedule($s))->all();
+
+        return $this->encodeResponse([
+            'tasks' => $tasks,
+            'total' => count($tasks),
+        ]);
     }
 
     /**
      * Handle the "add" action.
      *
-     * Validates required fields (description, cron_expression) and returns
-     * a stub response with a generated task ID.
+     * Creates a new schedule definition through the service.
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
@@ -166,142 +174,299 @@ class ScheduleTaskTool extends AbstractActionTool
     {
         $description = $this->requireString($arguments, 'description');
         $cronExpression = $this->requireString($arguments, 'cron_expression');
+        $executionPayload = $this->requireString($arguments, 'execution_payload');
 
-        if (! $this->isValidCronExpression($cronExpression)) {
-            throw new ToolArgumentException(
-                'Invalid cron_expression format. '
-                    .'Expected 5-field cron format: "minute hour day month weekday". '
-                    .'Example: "0 9 * * 1" for every Monday at 9am.'
+        $companyId = $this->resolveCompanyId();
+
+        if ($companyId === null) {
+            return ToolResult::error(
+                'Cannot determine company context for schedule creation.',
+                'no_company_context',
             );
         }
 
-        $taskId = self::TASK_ID_PREFIX.Str::random(12);
         $agentId = $arguments['agent_id'] ?? null;
         $enabled = $this->optionalBool($arguments, 'enabled', true);
+        $timezone = $this->optionalString($arguments, 'timezone') ?? 'UTC';
 
-        return ToolResult::success(json_encode([
-            'task_id' => $taskId,
-            'description' => $description,
-            'cron_expression' => $cronExpression,
-            'agent_id' => is_int($agentId) ? $agentId : null,
-            'enabled' => $enabled,
+        try {
+            $schedule = $this->scheduleService->create($companyId, [
+                'description' => $description,
+                'execution_payload' => $executionPayload,
+                'cron_expression' => $cronExpression,
+                'employee_id' => is_int($agentId) ? $agentId : null,
+                'timezone' => $timezone,
+                'is_enabled' => $enabled,
+                'created_by_user_id' => $this->resolveUserId(),
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            throw new ToolArgumentException($e->getMessage());
+        }
+
+        return $this->encodeResponse([
             'status' => 'created',
-            'message' => 'Task created (stub). Persistence is pending — this task '
-                .'will not survive restarts until the scheduled_tasks DB table '
-                .'and scheduler integration are implemented.',
-            'created_at' => now()->toIso8601String(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            ...$this->formatSchedule($schedule),
+        ]);
     }
 
     /**
      * Handle the "update" action.
      *
-     * Validates task_id format and any provided update fields, then returns
-     * a stub response.
+     * Updates an existing schedule definition through the service.
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
     private function handleUpdate(array $arguments): ToolResult
     {
-        $taskId = $this->requireValidTaskId($arguments);
-        $cronExpression = $this->optionalString($arguments, 'cron_expression');
+        $scheduleId = $this->requireScheduleId($arguments);
 
-        if ($cronExpression !== null && ! $this->isValidCronExpression($cronExpression)) {
-            throw new ToolArgumentException(
-                'Invalid cron_expression format. '
-                    .'Expected 5-field cron format: "minute hour day month weekday". '
-                    .'Example: "0 9 * * 1" for every Monday at 9am.'
+        $companyId = $this->resolveCompanyId();
+
+        if ($companyId === null) {
+            return ToolResult::error(
+                'Cannot determine company context for schedule update.',
+                'no_company_context',
             );
         }
 
-        return ToolResult::success(json_encode([
-            'task_id' => $taskId,
+        $updateData = $this->buildUpdateData($arguments);
+
+        if ($updateData === []) {
+            throw new ToolArgumentException(
+                'No update fields provided. Provide at least one of: '
+                .'description, execution_payload, cron_expression, agent_id, timezone, enabled.',
+            );
+        }
+
+        try {
+            $schedule = $this->scheduleService->update($scheduleId, $companyId, $updateData);
+        } catch (\InvalidArgumentException $e) {
+            throw new ToolArgumentException($e->getMessage());
+        }
+
+        if ($schedule === null) {
+            return ToolResult::error(
+                'Schedule #'.$scheduleId.' not found or does not belong to your company.',
+                'not_found',
+            );
+        }
+
+        return $this->encodeResponse([
             'status' => 'updated',
-            'message' => 'Task updated (stub). Persistence is pending — changes '
-                .'will not take effect until the scheduled_tasks DB table '
-                .'and scheduler integration are implemented.',
-            'updated_at' => now()->toIso8601String(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            ...$this->formatSchedule($schedule),
+        ]);
     }
 
     /**
      * Handle the "remove" action.
      *
-     * Validates task_id format and returns a stub removal response.
+     * Deletes a schedule definition through the service.
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
     private function handleRemove(array $arguments): ToolResult
     {
-        $taskId = $this->requireValidTaskId($arguments);
+        $scheduleId = $this->requireScheduleId($arguments);
 
-        return ToolResult::success(json_encode([
-            'task_id' => $taskId,
+        $companyId = $this->resolveCompanyId();
+
+        if ($companyId === null) {
+            return ToolResult::error(
+                'Cannot determine company context for schedule removal.',
+                'no_company_context',
+            );
+        }
+
+        $removed = $this->scheduleService->remove($scheduleId, $companyId);
+
+        if (! $removed) {
+            return ToolResult::error(
+                'Schedule #'.$scheduleId.' not found or does not belong to your company.',
+                'not_found',
+            );
+        }
+
+        return $this->encodeResponse([
+            'task_id' => $scheduleId,
             'status' => 'removed',
-            'message' => 'Task removed (stub). Persistence is pending — this '
-                .'is a no-op until the scheduled_tasks DB table and scheduler '
-                .'integration are implemented.',
             'removed_at' => now()->toIso8601String(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        ]);
     }
 
     /**
      * Handle the "status" action.
      *
-     * Validates task_id format and returns a stub status response.
+     * Retrieves a single schedule definition with its current state.
      *
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
      */
     private function handleStatus(array $arguments): ToolResult
     {
-        $taskId = $this->requireValidTaskId($arguments);
+        $scheduleId = $this->requireScheduleId($arguments);
 
-        return ToolResult::success(json_encode([
-            'task_id' => $taskId,
-            'status' => 'unknown',
-            'enabled' => null,
-            'last_run_at' => null,
-            'next_run_at' => null,
-            'message' => 'Task status lookup is pending. The scheduled_tasks DB table '
-                .'and scheduler integration are not yet implemented.',
-            'checked_at' => now()->toIso8601String(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-    }
+        $companyId = $this->resolveCompanyId();
 
-    /**
-     * Extract and validate the task_id argument.
-     *
-     * Uses `requireString()` for presence/type validation, then checks the
-     * expected "sched_<alphanumeric>" format.
-     *
-     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
-     *
-     * @throws ToolArgumentException If task_id is missing or malformed
-     */
-    private function requireValidTaskId(array $arguments): string
-    {
-        $taskId = $this->requireString($arguments, 'task_id');
-
-        if (! str_starts_with($taskId, self::TASK_ID_PREFIX)
-            || strlen($taskId) <= strlen(self::TASK_ID_PREFIX)
-            || ! ctype_alnum(substr($taskId, strlen(self::TASK_ID_PREFIX)))
-        ) {
-            throw new ToolArgumentException(
-                'Invalid task_id format. '
-                .'Expected format: "sched_<alphanumeric>" as returned by the add action.'
+        if ($companyId === null) {
+            return ToolResult::error(
+                'Cannot determine company context for schedule status.',
+                'no_company_context',
             );
         }
 
-        return $taskId;
+        $schedule = $this->scheduleService->find($scheduleId, $companyId);
+
+        if ($schedule === null) {
+            return ToolResult::error(
+                'Schedule #'.$scheduleId.' not found or does not belong to your company.',
+                'not_found',
+            );
+        }
+
+        return $this->encodeResponse([
+            'status' => 'found',
+            ...$this->formatSchedule($schedule),
+            'checked_at' => now()->toIso8601String(),
+        ]);
     }
 
     /**
-     * Validate that a cron expression is in standard 5-field format.
+     * Extract and validate the task_id argument as an integer schedule ID.
      *
-     * @param  string  $expression  The cron expression to validate
+     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
+     *
+     * @throws ToolArgumentException If task_id is missing or invalid
      */
-    private function isValidCronExpression(string $expression): bool
+    private function requireScheduleId(array $arguments): int
     {
-        return (bool) preg_match(self::CRON_PATTERN, $expression);
+        $taskId = $arguments['task_id'] ?? null;
+
+        if ($taskId === null) {
+            throw new ToolArgumentException(
+                'Missing required argument: task_id. '
+                .'Provide the schedule definition ID as returned by the add or list action.',
+            );
+        }
+
+        if (! is_int($taskId) && ! (is_string($taskId) && ctype_digit($taskId))) {
+            throw new ToolArgumentException(
+                'Invalid task_id: expected an integer schedule ID as returned by the add or list action.',
+            );
+        }
+
+        return (int) $taskId;
+    }
+
+    /**
+     * Build the update data array from optional arguments.
+     *
+     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
+     * @return array<string, mixed>
+     */
+    private function buildUpdateData(array $arguments): array
+    {
+        $data = [];
+
+        $description = $this->optionalString($arguments, 'description');
+
+        if ($description !== null) {
+            $data['description'] = $description;
+        }
+
+        $executionPayload = $this->optionalString($arguments, 'execution_payload');
+
+        if ($executionPayload !== null) {
+            $data['execution_payload'] = $executionPayload;
+        }
+
+        $cronExpression = $this->optionalString($arguments, 'cron_expression');
+
+        if ($cronExpression !== null) {
+            $data['cron_expression'] = $cronExpression;
+        }
+
+        $agentId = $arguments['agent_id'] ?? null;
+
+        if (is_int($agentId)) {
+            $data['employee_id'] = $agentId;
+        }
+
+        $timezone = $this->optionalString($arguments, 'timezone');
+
+        if ($timezone !== null) {
+            $data['timezone'] = $timezone;
+        }
+
+        if (array_key_exists('enabled', $arguments)) {
+            $data['is_enabled'] = (bool) $arguments['enabled'];
+        }
+
+        return $data;
+    }
+
+    /**
+     * Format a ScheduleDefinition as a tool-friendly array.
+     *
+     * @return array<string, mixed>
+     */
+    private function formatSchedule(ScheduleDefinition $schedule): array
+    {
+        return [
+            'task_id' => $schedule->id,
+            'description' => $schedule->description,
+            'execution_payload' => $schedule->execution_payload,
+            'cron_expression' => $schedule->cron_expression,
+            'timezone' => $schedule->timezone,
+            'agent_id' => $schedule->employee_id,
+            'enabled' => $schedule->is_enabled,
+            'concurrency_policy' => $schedule->concurrency_policy,
+            'last_fired_at' => $schedule->last_fired_at?->toIso8601String(),
+            'next_due_at' => $schedule->next_due_at?->toIso8601String(),
+            'created_at' => $schedule->created_at?->toIso8601String(),
+            'updated_at' => $schedule->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Resolve the company ID from agent execution context or auth.
+     */
+    private function resolveCompanyId(): ?int
+    {
+        if ($this->executionContext->active()) {
+            $employee = Employee::query()->find($this->executionContext->employeeId());
+
+            if ($employee !== null) {
+                return $employee->company_id;
+            }
+        }
+
+        $user = auth()->user();
+
+        if ($user !== null && method_exists($user, 'getCompanyId')) {
+            return $user->getCompanyId();
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve the acting user ID from agent execution context or auth.
+     */
+    private function resolveUserId(): ?int
+    {
+        if ($this->executionContext->active()) {
+            return $this->executionContext->actingForUserId();
+        }
+
+        return auth()->id();
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function encodeResponse(array $payload): ToolResult
+    {
+        return ToolResult::success(
+            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+        );
     }
 }

@@ -7,7 +7,7 @@ namespace App\Modules\Core\AI\Jobs;
 
 use App\Base\AI\Services\AiRuntimeLogger;
 use App\Modules\Core\AI\DTO\Message;
-use App\Modules\Core\AI\Models\AgentTaskDispatch;
+use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\KodiPromptFactory;
@@ -28,7 +28,7 @@ use Illuminate\Support\Facades\Auth;
  * context, builds the system prompt with entity context, and runs
  * the agentic tool-calling loop.
  *
- * Status lifecycle: queued → running → succeeded/failed/cancelled.
+ * Status lifecycle: queued -> running -> succeeded/failed/cancelled.
  */
 class RunAgentTaskJob implements ShouldQueue
 {
@@ -45,7 +45,7 @@ class RunAgentTaskJob implements ShouldQueue
     public int $timeout = 600;
 
     /**
-     * @param  string  $dispatchId  The ai_agent_task_dispatches primary key
+     * @param  string  $dispatchId  The ai_operation_dispatches primary key
      */
     public function __construct(
         public string $dispatchId,
@@ -74,7 +74,7 @@ class RunAgentTaskJob implements ShouldQueue
         $promptMeta = null;
 
         try {
-            $dispatch = AgentTaskDispatch::query()->find($this->dispatchId);
+            $dispatch = OperationDispatch::query()->find($this->dispatchId);
 
             if ($dispatch === null || $dispatch->isTerminal()) {
                 return;
@@ -142,7 +142,7 @@ class RunAgentTaskJob implements ShouldQueue
      * @param  array{content: string, run_id: string, meta: array<string, mixed>}  $result
      * @param  array<string, mixed>|null  $promptMeta  Prompt package diagnostics
      */
-    private function recordResult(AgentTaskDispatch $dispatch, array $result, ?array $promptMeta): void
+    private function recordResult(OperationDispatch $dispatch, array $result, ?array $promptMeta): void
     {
         $hasError = isset($result['meta']['error_type']);
 

@@ -4,12 +4,20 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Modules\Core\AI\Http\Controllers\ChatStreamController;
+use App\Modules\Core\AI\Http\Controllers\MessagingWebhookController;
+use App\Modules\Core\AI\Http\Controllers\ProviderSetupController;
 use App\Modules\Core\AI\Livewire\Playground;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
 use App\Modules\Core\AI\Livewire\Setup\Kodi;
 use App\Modules\Core\AI\Livewire\Setup\Lara;
 use App\Modules\Core\AI\Livewire\Tools;
 use Illuminate\Support\Facades\Route;
+
+// Inbound messaging webhook — unauthenticated (external platforms POST here)
+Route::post('api/ai/messaging/webhook/{channel}/{accountId?}', MessagingWebhookController::class)
+    ->name('ai.messaging.webhook')
+    ->where('channel', '[a-z]+')
+    ->where('accountId', '[0-9]+');
 
 Route::middleware(['auth'])->group(function () {
     // Agent chat streaming (SSE)
@@ -30,7 +38,7 @@ Route::middleware(['auth'])->group(function () {
         ->name('admin.ai.providers');
 
     // Dynamic provider setup - resolve component class in controller
-    Route::get('admin/ai/providers/setup/{providerKey}', \App\Modules\Core\AI\Http\Controllers\ProviderSetupController::class)
+    Route::get('admin/ai/providers/setup/{providerKey}', ProviderSetupController::class)
         ->name('admin.ai.providers.setup');
 
     // Legacy redirects — old Browse and Connections URLs point to the unified page.

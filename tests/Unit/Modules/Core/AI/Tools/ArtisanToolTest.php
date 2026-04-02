@@ -1,17 +1,21 @@
 <?php
 
+use App\Modules\Core\AI\Models\OperationDispatch;
+use App\Modules\Core\AI\Services\BackgroundCommandService;
 use App\Modules\Core\AI\Tools\ArtisanTool;
+use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\Process;
 use Tests\Support\AssertsToolBehavior;
 use Tests\TestCase;
 
 uses(TestCase::class, AssertsToolBehavior::class);
 
-const ROUTES_OUTPUT = 'routes output';
-const COMMAND_NOT_FOUND = 'Command not found';
+const ARTISAN_ROUTES_OUTPUT = 'routes output';
+const ARTISAN_COMMAND_NOT_FOUND = 'Command not found';
 
 beforeEach(function () {
-    $this->tool = new ArtisanTool;
+    $this->backgroundService = Mockery::mock(BackgroundCommandService::class);
+    $this->tool = new ArtisanTool($this->backgroundService);
 });
 
 describe('tool metadata', function () {
@@ -55,29 +59,25 @@ describe('input validation', function () {
 
     it('strips php artisan prefix', function () {
         Process::fake([
-            'php artisan route:list' => Process::result(ROUTES_OUTPUT),
+            'php artisan route:list' => Process::result(ARTISAN_ROUTES_OUTPUT),
         ]);
 
         $result = $this->tool->execute(['command' => 'php artisan route:list']);
-        expect((string) $result)->toBe(ROUTES_OUTPUT);
+        expect((string) $result)->toBe(ARTISAN_ROUTES_OUTPUT);
     });
 
     it('strips artisan prefix without php', function () {
         Process::fake([
-            'php artisan route:list' => Process::result(ROUTES_OUTPUT),
+            'php artisan route:list' => Process::result(ARTISAN_ROUTES_OUTPUT),
         ]);
 
         $result = $this->tool->execute(['command' => 'artisan route:list']);
-        expect((string) $result)->toBe(ROUTES_OUTPUT);
+        expect((string) $result)->toBe(ARTISAN_ROUTES_OUTPUT);
     });
 
     it('rejects artisan-only command that becomes empty after parsing', function () {
-        // "artisan" alone → preg_replace strips "artisan " → empty string
-        // But trim("artisan") doesn't have trailing space, so regex doesn't match.
-        // The command runs as-is: "php artisan artisan" which will fail at runtime.
-        // This is acceptable behavior — the LLM should provide an actual command.
         Process::fake([
-            '*' => Process::result(output: '', errorOutput: COMMAND_NOT_FOUND, exitCode: 1),
+            '*' => Process::result(output: '', errorOutput: ARTISAN_COMMAND_NOT_FOUND, exitCode: 1),
         ]);
 
         $result = $this->tool->execute(['command' => '  ']);
@@ -99,14 +99,14 @@ describe('foreground execution', function () {
         Process::fake([
             'php artisan bad:command' => Process::result(
                 output: '',
-                errorOutput: COMMAND_NOT_FOUND,
+                errorOutput: ARTISAN_COMMAND_NOT_FOUND,
                 exitCode: 1,
             ),
         ]);
 
         $result = $this->tool->execute(['command' => 'bad:command']);
         expect((string) $result)->toContain('failed')
-            ->and((string) $result)->toContain(COMMAND_NOT_FOUND);
+            ->and((string) $result)->toContain(ARTISAN_COMMAND_NOT_FOUND);
     });
 
     it('returns success message for empty output', function () {
@@ -202,6 +202,19 @@ describe('timeout parameter', function () {
 
 describe('background execution', function () {
     it('returns dispatch_id immediately', function () {
+        $dispatch = new OperationDispatch([
+            'id' => 'op_bg_migrate123',
+            'task' => 'php artisan migrate',
+            'status' => 'queued',
+        ]);
+
+        $this->backgroundService->shouldReceive('dispatch')
+            ->once()
+            ->with('migrate', null)
+            ->andReturn($dispatch);
+
+        $this->actingAs(User::factory()->make());
+
         $result = $this->tool->execute([
             'command' => 'migrate',
             'background' => true,
@@ -210,23 +223,42 @@ describe('background execution', function () {
 
         expect($data)->not->toBeNull()
             ->and($data['status'])->toBe('dispatched')
-            ->and($data['dispatch_id'])->toStartWith('artisan_')
-            ->and($data['command'])->toBe('migrate');
+            ->and($data['dispatch_id'])->toStartWith('op_')
+            ->and($data['command'])->toBe('php artisan migrate');
     });
 
-    it('returns stub message', function () {
+    it('returns message with dispatch instructions', function () {
+        $dispatch = new OperationDispatch([
+            'id' => 'op_bg_migrate456',
+            'task' => 'php artisan migrate',
+            'status' => 'queued',
+        ]);
+
+        $this->backgroundService->shouldReceive('dispatch')
+            ->once()
+            ->andReturn($dispatch);
+
         $result = $this->tool->execute([
             'command' => 'migrate',
             'background' => true,
         ]);
         $data = json_decode((string) $result, true);
 
-        expect($data['message'])->toContain('stub')
-            ->and($data['message'])->toContain('delegation_status');
+        expect($data['message'])->toContain('delegation_status');
     });
 
     it('does not execute process for background commands', function () {
         Process::fake();
+
+        $dispatch = new OperationDispatch([
+            'id' => 'op_bg_no_exec',
+            'task' => 'php artisan migrate',
+            'status' => 'queued',
+        ]);
+
+        $this->backgroundService->shouldReceive('dispatch')
+            ->once()
+            ->andReturn($dispatch);
 
         $this->tool->execute([
             'command' => 'migrate',
@@ -236,27 +268,53 @@ describe('background execution', function () {
         Process::assertDidntRun('php artisan migrate');
     });
 
-    it('generates unique dispatch IDs', function () {
-        $result1 = $this->tool->execute(['command' => 'cmd1', 'background' => true]);
-        $result2 = $this->tool->execute(['command' => 'cmd2', 'background' => true]);
+    it('returns policy_denied for disallowed commands', function () {
+        $this->backgroundService->shouldReceive('dispatch')
+            ->once()
+            ->andThrow(new InvalidArgumentException('Command "db:wipe" is not permitted for background execution.'));
 
-        $data1 = json_decode((string) $result1, true);
-        $data2 = json_decode((string) $result2, true);
+        $result = $this->tool->execute([
+            'command' => 'db:wipe',
+            'background' => true,
+        ]);
+        $data = json_decode((string) $result, true);
 
-        expect($data1['dispatch_id'])->not->toBe($data2['dispatch_id']);
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('not permitted');
     });
 
     it('strips prefix before dispatching', function () {
+        $dispatch = new OperationDispatch([
+            'id' => 'op_bg_stripped',
+            'task' => 'php artisan migrate --seed',
+            'status' => 'queued',
+        ]);
+
+        $this->backgroundService->shouldReceive('dispatch')
+            ->once()
+            ->with('migrate --seed', null)
+            ->andReturn($dispatch);
+
         $result = $this->tool->execute([
             'command' => 'php artisan migrate --seed',
             'background' => true,
         ]);
         $data = json_decode((string) $result, true);
 
-        expect($data['command'])->toBe('migrate --seed');
+        expect($data['command'])->toBe('php artisan migrate --seed');
     });
 
     it('ignores timeout when background is true', function () {
+        $dispatch = new OperationDispatch([
+            'id' => 'op_bg_timeout',
+            'task' => 'php artisan migrate',
+            'status' => 'queued',
+        ]);
+
+        $this->backgroundService->shouldReceive('dispatch')
+            ->once()
+            ->andReturn($dispatch);
+
         $result = $this->tool->execute([
             'command' => 'migrate',
             'background' => true,
@@ -303,6 +361,16 @@ describe('output format', function () {
     });
 
     it('returns valid JSON for background execution', function () {
+        $dispatch = new OperationDispatch([
+            'id' => 'op_bg_json',
+            'task' => 'php artisan migrate',
+            'status' => 'queued',
+        ]);
+
+        $this->backgroundService->shouldReceive('dispatch')
+            ->once()
+            ->andReturn($dispatch);
+
         $result = $this->tool->execute([
             'command' => 'migrate',
             'background' => true,

@@ -14,23 +14,23 @@ use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\Contracts\Messaging\ChannelAdapter;
 use App\Modules\Core\AI\DTO\Messaging\ChannelCapabilities;
+use App\Modules\Core\AI\Exceptions\ChannelNotAvailableException;
+use App\Modules\Core\AI\Exceptions\NoChannelAccountException;
+use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\Messaging\ChannelAdapterRegistry;
+use App\Modules\Core\AI\Services\Messaging\OutboundMessageService;
+use App\Modules\Core\AI\Services\Messaging\OutboundSendResult;
+use App\Modules\Core\Employee\Models\Employee;
 
 /**
  * Multi-channel messaging tool for Agents.
  *
  * Provides enterprise-grade messaging across multiple platforms (WhatsApp,
  * Telegram, Slack, Email) via a single deep tool with action-based dispatch.
- * Each action routes through the ChannelAdapterRegistry to the appropriate
- * platform adapter.
- *
- * Supports sending, replying, reacting, editing, deleting messages, creating
- * polls, listing conversations, and searching message history. Channel
- * capabilities are validated before dispatch — unsupported actions return
- * informative errors.
- *
- * Note: Currently returns stub responses. Full channel integration will be
- * implemented once messaging accounts and webhook infrastructure are deployed.
+ * Send and reply actions route through OutboundMessageService for durable
+ * delivery with conversation/message persistence. Other actions (react,
+ * edit, delete, poll, list, search) remain stubbed until their backing
+ * services are implemented.
  *
  * Gated by `ai.tool_message.execute` authz capability.
  * Per-channel send capabilities (e.g., `messaging.whatsapp.send`) are
@@ -70,6 +70,8 @@ class MessageTool extends AbstractActionTool
 
     public function __construct(
         private readonly ChannelAdapterRegistry $adapterRegistry,
+        private readonly OutboundMessageService $outboundService,
+        private readonly AgentExecutionContext $executionContext,
     ) {
         $this->support = new MessageToolSupport($adapterRegistry);
     }
@@ -137,6 +139,7 @@ class MessageTool extends AbstractActionTool
             ->string('channel', 'Channel to use: whatsapp, telegram, slack, email.')->required()
             ->string('target', 'Recipient identifier (phone number, chat ID, email address, channel name).')
             ->string('text', 'Message text content (max '.self::MAX_TEXT_LENGTH.' characters).')
+            ->string('subject', 'Email subject line (for email channel only).')
             ->string('media_path', 'Path to media file to attach (for "send" action).')
             ->string('message_id', 'Platform-specific message ID (for reply, react, edit, delete actions).')
             ->string('emoji', 'Emoji to react with (for "react" action).')
@@ -175,7 +178,8 @@ class MessageTool extends AbstractActionTool
     /**
      * Handle the "send" action.
      *
-     * Sends a text or media message to a target recipient.
+     * Routes through OutboundMessageService for durable delivery with
+     * conversation/message persistence.
      *
      * @param  string  $channel  Channel identifier
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
@@ -186,31 +190,34 @@ class MessageTool extends AbstractActionTool
         $text = $this->requireString($arguments, 'text');
         $this->support->assertTextLength($text, self::MAX_TEXT_LENGTH);
 
-        $capabilities = $this->support->channelCapabilities($channel);
+        $companyId = $this->resolveCompanyId();
 
-        if (mb_strlen($text) > $capabilities->maxMessageLength) {
+        if ($companyId === null) {
             return ToolResult::error(
-                'Message exceeds '.$channel.' limit of '.$capabilities->maxMessageLength.' characters.',
-                'message_too_long',
+                'Cannot determine company context for message delivery.',
+                'no_company_context',
             );
         }
 
-        return $this->encodeResponse([
-            'action' => 'send',
-            'channel' => $channel,
-            'target' => $target,
-            'text' => $text,
+        $options = array_filter([
+            'subject' => $this->optionalString($arguments, 'subject'),
             'media_path' => $this->optionalString($arguments, 'media_path'),
-            'status' => 'sent',
-            'message_id' => null,
-            'message' => 'Message sent (stub). Channel adapter integration pending.',
         ]);
+
+        try {
+            $result = $this->outboundService->send($companyId, $channel, $target, $text, $options);
+
+            return $this->formatOutboundResult('send', $channel, $target, $result);
+        } catch (ChannelNotAvailableException|NoChannelAccountException $e) {
+            return ToolResult::error($e->getMessage(), 'channel_error');
+        }
     }
 
     /**
      * Handle the "reply" action.
      *
-     * Replies to a specific message by its platform message ID.
+     * Routes through OutboundMessageService to find the original
+     * conversation and deliver the reply with persistence.
      *
      * @param  string  $channel  Channel identifier
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
@@ -218,22 +225,31 @@ class MessageTool extends AbstractActionTool
     private function handleReply(string $channel, array $arguments): ToolResult
     {
         $text = $this->requireString($arguments, 'text');
+        $messageId = $this->requireString($arguments, 'message_id');
         $this->support->assertTextLength($text, self::MAX_TEXT_LENGTH);
 
-        return $this->encodeResponse([
-            'action' => 'reply',
-            'channel' => $channel,
-            'message_id' => $this->requireString($arguments, 'message_id'),
-            'text' => $text,
-            'status' => 'replied',
-            'message' => 'Reply sent (stub). Channel adapter integration pending.',
-        ]);
+        $companyId = $this->resolveCompanyId();
+
+        if ($companyId === null) {
+            return ToolResult::error(
+                'Cannot determine company context for message delivery.',
+                'no_company_context',
+            );
+        }
+
+        try {
+            $result = $this->outboundService->reply($companyId, $channel, $messageId, $text);
+
+            return $this->formatOutboundResult('reply', $channel, null, $result);
+        } catch (ChannelNotAvailableException|NoChannelAccountException $e) {
+            return ToolResult::error($e->getMessage(), 'channel_error');
+        }
     }
 
     /**
      * Handle the "react" action.
      *
-     * Reacts to a message with an emoji.
+     * Reacts to a message with an emoji. Stubbed — no backing service yet.
      *
      * @param  string  $channel  Channel identifier
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
@@ -255,7 +271,7 @@ class MessageTool extends AbstractActionTool
     /**
      * Handle the "edit" action.
      *
-     * Edits a previously sent message.
+     * Edits a previously sent message. Stubbed — no backing service yet.
      *
      * @param  string  $channel  Channel identifier
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
@@ -280,7 +296,7 @@ class MessageTool extends AbstractActionTool
     /**
      * Handle the "delete" action.
      *
-     * Deletes a previously sent message.
+     * Deletes a previously sent message. Stubbed — no backing service yet.
      *
      * @param  string  $channel  Channel identifier
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
@@ -301,7 +317,7 @@ class MessageTool extends AbstractActionTool
     /**
      * Handle the "poll" action.
      *
-     * Creates a poll in the target conversation.
+     * Creates a poll in the target conversation. Stubbed — no backing service yet.
      *
      * @param  string  $channel  Channel identifier
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
@@ -324,7 +340,7 @@ class MessageTool extends AbstractActionTool
     /**
      * Handle the "list_conversations" action.
      *
-     * Lists recent conversations on the specified channel.
+     * Lists recent conversations on the specified channel. Stubbed.
      *
      * @param  string  $channel  Channel identifier
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
@@ -344,7 +360,7 @@ class MessageTool extends AbstractActionTool
     /**
      * Handle the "search" action.
      *
-     * Searches message history across the specified channel.
+     * Searches message history across the specified channel. Stubbed.
      *
      * @param  string  $channel  Channel identifier
      * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
@@ -362,6 +378,57 @@ class MessageTool extends AbstractActionTool
             'status' => 'searched',
             'message' => 'Search completed (stub). Channel adapter integration pending.',
         ]);
+    }
+
+    /**
+     * Resolve the company ID from agent execution context or auth.
+     */
+    private function resolveCompanyId(): ?int
+    {
+        // Priority 1: Agent execution context (queued job)
+        if ($this->executionContext->active()) {
+            $employee = Employee::query()->find($this->executionContext->employeeId());
+
+            if ($employee !== null) {
+                return $employee->company_id;
+            }
+        }
+
+        // Priority 2: Authenticated user
+        $user = auth()->user();
+
+        if ($user !== null && method_exists($user, 'getCompanyId')) {
+            return $user->getCompanyId();
+        }
+
+        return null;
+    }
+
+    /**
+     * Format an OutboundSendResult into a tool response.
+     *
+     * @param  string  $action  The action name ('send' or 'reply')
+     * @param  string  $channel  Channel identifier
+     * @param  string|null  $target  Recipient (null for reply)
+     * @param  OutboundSendResult  $result  Service result
+     */
+    private function formatOutboundResult(string $action, string $channel, ?string $target, OutboundSendResult $result): ToolResult
+    {
+        if (! $result->success) {
+            return ToolResult::error($result->error ?? 'Message delivery failed.', 'delivery_failed');
+        }
+
+        $payload = array_filter([
+            'action' => $action,
+            'channel' => $channel,
+            'target' => $target,
+            'status' => 'sent',
+            'message_id' => $result->messageId,
+            'conversation_id' => $result->conversationId,
+            'message_record_id' => $result->messageRecordId,
+        ]);
+
+        return $this->encodeResponse($payload);
     }
 
     /**

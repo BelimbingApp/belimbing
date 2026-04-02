@@ -12,10 +12,14 @@ use App\Modules\Core\AI\Console\Commands\BrowserStatusCommand;
 use App\Modules\Core\AI\Console\Commands\BrowserSweepCommand;
 use App\Modules\Core\AI\Console\Commands\MemoryCompactCommand;
 use App\Modules\Core\AI\Console\Commands\MemoryIndexCommand;
+use App\Modules\Core\AI\Console\Commands\OperationsStatusCommand;
+use App\Modules\Core\AI\Console\Commands\OperationsSweepCommand;
+use App\Modules\Core\AI\Console\Commands\SchedulesTickCommand;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
+use App\Modules\Core\AI\Services\BackgroundCommandService;
 use App\Modules\Core\AI\Services\Browser\BrowserArtifactStore;
 use App\Modules\Core\AI\Services\Browser\BrowserRuntimeAdapter;
 use App\Modules\Core\AI\Services\Browser\BrowserSessionManager;
@@ -40,8 +44,14 @@ use App\Modules\Core\AI\Services\Messaging\Adapters\SlackAdapter;
 use App\Modules\Core\AI\Services\Messaging\Adapters\TelegramAdapter;
 use App\Modules\Core\AI\Services\Messaging\Adapters\WhatsAppAdapter;
 use App\Modules\Core\AI\Services\Messaging\ChannelAdapterRegistry;
+use App\Modules\Core\AI\Services\Messaging\InboundRoutingService;
+use App\Modules\Core\AI\Services\Messaging\InboundSignalService;
+use App\Modules\Core\AI\Services\Messaging\OutboundMessageService;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
+use App\Modules\Core\AI\Services\OperationsDispatchService;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
+use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionService;
+use App\Modules\Core\AI\Services\Scheduling\SchedulePlanner;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\AI\Services\ToolMetadataRegistry;
 use App\Modules\Core\AI\Services\ToolReadinessService;
@@ -135,6 +145,20 @@ class ServiceProvider extends BaseServiceProvider
             return $registry;
         });
 
+        $this->app->singleton(OutboundMessageService::class);
+        $this->app->singleton(InboundSignalService::class);
+        $this->app->singleton(InboundRoutingService::class);
+
+        // Scheduling subsystem
+        $this->app->singleton(ScheduleDefinitionService::class);
+        $this->app->singleton(SchedulePlanner::class);
+
+        // Background command subsystem
+        $this->app->singleton(BackgroundCommandService::class);
+
+        // Operations dispatch (query/lifecycle)
+        $this->app->singleton(OperationsDispatchService::class);
+
         $this->registerToolRegistries();
 
         $this->app->singleton(AgenticRuntime::class);
@@ -154,6 +178,9 @@ class ServiceProvider extends BaseServiceProvider
                 MemoryCompactCommand::class,
                 BrowserSweepCommand::class,
                 BrowserStatusCommand::class,
+                SchedulesTickCommand::class,
+                OperationsSweepCommand::class,
+                OperationsStatusCommand::class,
             ]);
         }
     }
@@ -221,11 +248,11 @@ class ServiceProvider extends BaseServiceProvider
         }
 
         $always = [
-            new ArtisanTool,
+            $app->make(ArtisanTool::class),
             new BashTool,
             $app->make(BrowserTool::class),
             $app->make(DelegateTaskTool::class),
-            new DelegationStatusTool,
+            $app->make(DelegationStatusTool::class),
             new DocumentAnalysisTool,
             new EditDataTool,
             new EditFileTool,
@@ -237,7 +264,7 @@ class ServiceProvider extends BaseServiceProvider
             new NavigateTool,
             new NotificationTool,
             new QueryDataTool,
-            new ScheduleTaskTool,
+            $app->make(ScheduleTaskTool::class),
             new SystemInfoTool,
             $app->make(TicketUpdateTool::class),
             $app->make(WebFetchTool::class),
