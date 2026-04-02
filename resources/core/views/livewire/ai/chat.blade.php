@@ -9,9 +9,17 @@
     x-data="{
         sessionsOpen: false,
         sessionWidth: parseInt(localStorage.getItem('agent-chat-session-width')) || 224,
+        pageAwareness: localStorage.getItem('blb-lara-page-awareness') || 'page',
         _sessionDragging: false,
         SESSION_MIN: 160,
         SESSION_MAX: 320,
+
+        cyclePageAwareness() {
+            const levels = ['off', 'page', 'full'];
+            const idx = levels.indexOf(this.pageAwareness);
+            this.pageAwareness = levels[(idx + 1) % levels.length];
+            localStorage.setItem('blb-lara-page-awareness', this.pageAwareness);
+        },
 
         startSessionDrag(e) {
             this._sessionDragging = true;
@@ -38,7 +46,12 @@
             document.addEventListener('mouseup', onUp);
         }
     }"
-    x-init="$nextTick(() => $refs.agentComposer?.focus())"
+    x-init="
+        $nextTick(() => $refs.agentComposer?.focus());
+        $wire.set('pageUrl', window.location.href);
+        $watch('pageAwareness', v => $wire.set('pageAwareness', v));
+    "
+    @navigate.window="$wire.set('pageUrl', window.location.href)"
     @agent-chat-focus-composer.window="$nextTick(() => $refs.agentComposer?.focus())"
     @agent-chat-opened.window="if ($event.detail?.prompt) { $wire.set('messageInput', $event.detail.prompt); $nextTick(() => $refs.agentComposer?.focus()); }"
 >
@@ -81,6 +94,28 @@
         </div>
 
         <div class="flex items-center gap-1">
+            {{-- Page awareness toggle --}}
+            <button
+                type="button"
+                x-on:click="cyclePageAwareness()"
+                class="text-muted hover:text-ink transition-colors p-0.5"
+                :title="pageAwareness === 'off'
+                    ? '{{ __('Page awareness: off') }}'
+                    : (pageAwareness === 'page'
+                        ? '{{ __('Page awareness: page info') }}'
+                        : '{{ __('Page awareness: full snapshot') }}')"
+                :aria-label="pageAwareness === 'off'
+                    ? '{{ __('Page awareness off — click to enable') }}'
+                    : (pageAwareness === 'page'
+                        ? '{{ __('Page awareness: page info — click for full') }}'
+                        : '{{ __('Page awareness: full snapshot — click to disable') }}')"
+            >
+                <x-icon name="heroicon-o-eye-slash" class="w-4 h-4" x-show="pageAwareness === 'off'" x-cloak />
+                <x-icon name="heroicon-o-eye" class="w-4 h-4" x-show="pageAwareness === 'page'" x-cloak
+                    ::class="'text-muted hover:text-ink'" />
+                <x-icon name="heroicon-o-eye" class="w-4 h-4 text-accent" x-show="pageAwareness === 'full'" x-cloak />
+            </button>
+
             {{-- Keyboard shortcuts cheatsheet --}}
             <div x-data="{ shortcutsOpen: false, _mod: navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl' }" class="relative">
                 <x-ui.help
@@ -499,6 +534,9 @@
             this.$nextTick(() => {
                 if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
             });
+
+            // Capture the real page URL before the Livewire update fires
+            await this.$wire.set('pageUrl', window.location.href);
 
             // Try streaming first
             try {

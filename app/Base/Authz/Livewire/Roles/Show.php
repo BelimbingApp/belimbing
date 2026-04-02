@@ -14,13 +14,15 @@ use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Authz\Models\RoleCapability;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
+use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
+use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 
-class Show extends Component
+class Show extends Component implements ProvidesLaraPageContext
 {
     use ChecksCapabilityAuthorization;
     use SavesValidatedFields;
@@ -314,5 +316,20 @@ class Show extends Component
             'licenseeCompanies' => $licenseeCompanies,
             'hasAssignedUsers' => $hasAssignedUsers,
         ]);
+    }
+
+    public function pageContext(): PageContext
+    {
+        return new PageContext(
+            route: 'admin.roles.show',
+            url: route('admin.roles.show', $this->role),
+            title: $this->role->name,
+            module: 'Role',
+            resourceType: 'role',
+            resourceId: $this->role->id,
+            visibleActions: $this->role->is_system
+                ? ['View capabilities', 'View assigned users']
+                : ['Edit role', 'Assign capabilities', 'Assign users', 'Delete role'],
+        );
     }
 }

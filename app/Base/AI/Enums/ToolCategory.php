@@ -19,6 +19,7 @@ enum ToolCategory: string
     case MESSAGING = 'messaging';
     case AUTOMATION = 'automation';
     case MEDIA = 'media';
+    case CONTEXT = 'context';
 
     public function label(): string
     {
@@ -32,12 +33,14 @@ enum ToolCategory: string
             self::MESSAGING => __('Messaging'),
             self::AUTOMATION => __('Automation'),
             self::MEDIA => __('Media'),
+            self::CONTEXT => __('Context'),
         };
     }
 
     public function sortOrder(): int
     {
         return match ($this) {
+            self::CONTEXT => 0,
             self::DATA => 1,
             self::WEB => 2,
             self::MEMORY => 3,

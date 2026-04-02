@@ -19,6 +19,8 @@ use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
+use App\Modules\Core\AI\Services\PageContextHolder;
+use App\Modules\Core\AI\Services\PageContextResolver;
 use App\Modules\Core\AI\Services\QuickActionRegistry;
 use App\Modules\Core\AI\Services\RuntimeResponseFactory;
 use App\Modules\Core\AI\Services\SessionManager;
@@ -66,6 +68,11 @@ class Chat extends Component
     public ?array $lastRunMeta = null;
 
     public ?string $selectedModel = null;
+
+    public string $pageAwareness = 'page';
+
+    /** Current page URL sent by the client (window.location.href). */
+    public string $pageUrl = '';
 
     public ?string $editingSessionId = null;
 
@@ -138,6 +145,8 @@ class Chat extends Component
 
         $messageManager = app(MessageManager::class);
         $messageManager->appendUserMessage($this->employeeId, $this->selectedSessionId, $content, $userMeta);
+
+        $this->resolvePageContext($this->pageAwareness);
 
         try {
             $messages = $messageManager->read($this->employeeId, $this->selectedSessionId);
@@ -230,6 +239,40 @@ class Chat extends Component
         }
 
         return $result;
+    }
+
+    /**
+     * Resolve and store page context for the current request lifecycle.
+     *
+     * Writes to the request-scoped PageContextHolder so LaraPromptFactory
+     * and ActivePageSnapshotTool can read it during this request.
+     */
+    private function resolvePageContext(?string $consentLevel = null): void
+    {
+        $resolver = app(PageContextResolver::class);
+        $holder = app(PageContextHolder::class);
+
+        if (is_string($consentLevel)) {
+            $holder->setConsentLevel($consentLevel);
+        }
+
+        if ($holder->getConsentLevel() === 'off') {
+            return;
+        }
+
+        $context = $resolver->resolveFromUrl($this->pageUrl);
+
+        if ($context !== null) {
+            $holder->setContext($context);
+        }
+
+        if ($holder->getConsentLevel() === 'full') {
+            $snapshot = $resolver->resolveSnapshotFromUrl($this->pageUrl);
+
+            if ($snapshot !== null) {
+                $holder->setSnapshot($snapshot);
+            }
+        }
     }
 
     /**

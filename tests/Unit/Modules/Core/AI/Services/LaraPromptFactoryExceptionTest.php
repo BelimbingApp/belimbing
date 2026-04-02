@@ -10,6 +10,7 @@ use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
 use App\Modules\Core\AI\Services\LaraContextProvider;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\Orchestration\AgentCapabilityCatalog;
+use App\Modules\Core\AI\Services\PageContextHolder;
 use App\Modules\Core\AI\Services\Workspace\PromptPackageFactory;
 use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceResolver;
@@ -70,6 +71,7 @@ it('throws integration exception when Lara runtime context cannot be encoded', f
     $factory = new LaraPromptFactory(
         $contextProvider,
         $capabilityCatalog,
+        new PageContextHolder,
         $resolver,
         $validator,
         new PromptPackageFactory,
@@ -105,6 +107,7 @@ it('throws configuration exception when Lara workspace validation fails', functi
     $factory = new LaraPromptFactory(
         $contextProvider,
         $capabilityCatalog,
+        new PageContextHolder,
         $resolver,
         $validator,
         new PromptPackageFactory,
@@ -148,6 +151,7 @@ it('gracefully skips missing legacy extension path without throwing', function (
         $factory = new LaraPromptFactory(
             $contextProvider,
             $capabilityCatalog,
+            new PageContextHolder,
             $resolver,
             $validator,
             new PromptPackageFactory,

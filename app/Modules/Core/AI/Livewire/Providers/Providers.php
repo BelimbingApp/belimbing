@@ -13,6 +13,8 @@
 namespace App\Modules\Core\AI\Livewire\Providers;
 
 use App\Base\AI\Services\ModelCatalogService;
+use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
+use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\Livewire\Concerns\FormatsDisplayValues;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesModels;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesProviderHelp;
@@ -21,9 +23,10 @@ use App\Modules\Core\AI\Livewire\Concerns\ManagesSync;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\Employee\Models\Employee;
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 
-class Providers extends Component
+class Providers extends Component implements ProvidesLaraPageContext
 {
     use FormatsDisplayValues;
     use ManagesModels;
@@ -63,7 +66,24 @@ class Providers extends Component
         $this->redirectRoute('admin.ai.providers.setup', ['providerKey' => $key], navigate: true);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function pageContext(): PageContext
+    {
+        $companyId = $this->getCompanyId();
+        $connectedCount = $companyId !== null
+            ? AiProvider::query()->forCompany($companyId)->count()
+            : 0;
+
+        return new PageContext(
+            route: 'admin.ai.providers',
+            url: route('admin.ai.providers'),
+            title: 'AI Providers ('.$connectedCount.' connected)',
+            module: 'AI',
+            resourceType: 'provider',
+            visibleActions: ['Connect provider', 'Sync models', 'Browse catalog'],
+        );
+    }
+
+    public function render(): View
     {
         $catalogService = app(ModelCatalogService::class);
         $companyId = $this->getCompanyId();

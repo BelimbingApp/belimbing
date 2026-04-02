@@ -24,6 +24,7 @@ class LaraPromptFactory
     public function __construct(
         private readonly LaraContextProvider $contextProvider,
         private readonly AgentCapabilityCatalog $capabilityCatalog,
+        private readonly PageContextHolder $pageContextHolder,
         private readonly WorkspaceResolver $workspaceResolver,
         private readonly WorkspaceValidator $workspaceValidator,
         private readonly PromptPackageFactory $packageFactory,
@@ -113,6 +114,38 @@ class LaraPromptFactory
                 type: PromptSectionType::Operational,
                 order: 0,
                 source: 'lara_context_provider',
+            ),
+            ...$this->pageContextSection(),
+        ];
+    }
+
+    /**
+     * Build a prompt section for the active page context.
+     *
+     * Returns an empty array when no page context is available (zero cost).
+     * The compact XML tag costs ~30 tokens — cheaper than a tool call.
+     *
+     * @return list<PromptSection>
+     */
+    private function pageContextSection(): array
+    {
+        if (! $this->pageContextHolder->hasContext()) {
+            return [];
+        }
+
+        $context = $this->pageContextHolder->getContext();
+
+        if ($context === null) {
+            return [];
+        }
+
+        return [
+            new PromptSection(
+                label: 'page_context',
+                content: $context->toPromptXml(),
+                type: PromptSectionType::Transient,
+                order: 1,
+                source: 'page_context_resolver',
             ),
         ];
     }

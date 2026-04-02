@@ -5,14 +5,18 @@
 
 namespace App\Modules\Core\AI\Http\Controllers;
 
+use App\Modules\Core\AI\DTO\PageContext;
+use App\Modules\Core\AI\DTO\PageSnapshot;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
+use App\Modules\Core\AI\Services\PageContextHolder;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -53,6 +57,8 @@ class ChatStreamController
         if ($messages === []) {
             return response('No messages in session', 400);
         }
+
+        $this->resolvePageContext($request);
 
         [$systemPrompt, $promptMeta] = $this->resolvePromptPackage($employeeId, $messages);
 
@@ -210,6 +216,47 @@ class ChatStreamController
     ): void {
         if ($fullContent !== null && $runId !== null) {
             $messageManager->appendAssistantMessage($employeeId, $sessionId, $fullContent, $runId, $meta);
+        }
+    }
+
+    /**
+     * Hydrate page context from the cache key set by prepareStreamingRun().
+     *
+     * The Livewire component resolves context on the user's page request
+     * (where the route is the actual page, not the SSE endpoint) and
+     * caches the serialized payload under a short-lived key. The key is
+     * passed as a query param so we can hydrate into the request-scoped
+     * PageContextHolder for this streaming request.
+     */
+    private function resolvePageContext(Request $request): void
+    {
+        $cacheKey = $request->query('page_ctx');
+
+        if (! is_string($cacheKey) || $cacheKey === '') {
+            return;
+        }
+
+        $payload = Cache::pull($cacheKey);
+
+        if (! is_array($payload)) {
+            return;
+        }
+
+        $holder = app(PageContextHolder::class);
+
+        $consentLevel = $payload['consent'] ?? 'page';
+        $holder->setConsentLevel($consentLevel);
+
+        if ($consentLevel === 'off') {
+            return;
+        }
+
+        if (is_array($payload['context'] ?? null)) {
+            $holder->setContext(PageContext::fromArray($payload['context']));
+        }
+
+        if ($consentLevel === 'full' && is_array($payload['snapshot'] ?? null)) {
+            $holder->setSnapshot(PageSnapshot::fromArray($payload['snapshot']));
         }
     }
 

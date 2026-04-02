@@ -67,6 +67,8 @@ use App\Modules\Core\AI\Services\Orchestration\SkillContextResolver;
 use App\Modules\Core\AI\Services\Orchestration\SkillPackRegistry;
 use App\Modules\Core\AI\Services\Orchestration\SkillPacks\KnowledgeSkillPack;
 use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
+use App\Modules\Core\AI\Services\PageContextHolder;
+use App\Modules\Core\AI\Services\PageContextResolver;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
 use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionService;
 use App\Modules\Core\AI\Services\Scheduling\SchedulePlanner;
@@ -77,6 +79,7 @@ use App\Modules\Core\AI\Services\Workspace\PromptPackageFactory;
 use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceResolver;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceValidator;
+use App\Modules\Core\AI\Tools\ActivePageSnapshotTool;
 use App\Modules\Core\AI\Tools\AgentListTool;
 use App\Modules\Core\AI\Tools\ArtisanTool;
 use App\Modules\Core\AI\Tools\BashTool;
@@ -145,6 +148,10 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(LaraPromptFactory::class);
         $this->app->singleton(KodiPromptFactory::class);
         $this->app->singleton(AgentExecutionContext::class);
+
+        // Page context (request-scoped for isolation between requests)
+        $this->app->scoped(PageContextHolder::class);
+        $this->app->singleton(PageContextResolver::class);
 
         // Orchestration subsystem
         $this->app->singleton(OrchestrationPolicyService::class);
@@ -303,6 +310,7 @@ class ServiceProvider extends BaseServiceProvider
         }
 
         $always = [
+            $app->make(ActivePageSnapshotTool::class),
             $app->make(ArtisanTool::class),
             new BashTool,
             $app->make(BrowserTool::class),

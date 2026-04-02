@@ -9,17 +9,20 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Models\Role;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
+use App\Modules\Core\AI\DTO\PageContext;
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 use Livewire\WithPagination;
 
-class Index extends Component
+class Index extends Component implements ProvidesLaraPageContext
 {
     use ResetsPaginationOnSearch;
     use WithPagination;
 
     public string $search = '';
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $authUser = auth()->user();
 
@@ -45,5 +48,18 @@ class Index extends Component
                 ->orderBy('name')
                 ->paginate(10),
         ]);
+    }
+
+    public function pageContext(): PageContext
+    {
+        return new PageContext(
+            route: 'admin.roles.index',
+            url: route('admin.roles.index'),
+            title: 'Roles',
+            module: 'Role',
+            resourceType: 'role',
+            visibleActions: ['Create role', 'Search'],
+            searchQuery: $this->search !== '' ? $this->search : null,
+        );
     }
 }

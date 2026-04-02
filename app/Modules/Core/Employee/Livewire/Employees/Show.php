@@ -7,14 +7,22 @@ namespace App\Modules\Core\Employee\Livewire\Employees;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Core\Address\Models\Address;
+use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
+use App\Modules\Core\AI\Contracts\ProvidesLaraPageSnapshot;
+use App\Modules\Core\AI\DTO\FormFieldSnapshot;
+use App\Modules\Core\AI\DTO\FormSnapshot;
+use App\Modules\Core\AI\DTO\ModalSnapshot;
+use App\Modules\Core\AI\DTO\PageContext;
+use App\Modules\Core\AI\DTO\PageSnapshot;
 use App\Modules\Core\Company\Models\Department;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\Employee\Models\EmployeeType;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 
-class Show extends Component
+class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPageSnapshot
 {
     use SavesValidatedFields;
 
@@ -182,7 +190,7 @@ class Show extends Component
         $this->employee->load('addresses');
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.employees.show', [
             'departments' => Department::query()
@@ -212,5 +220,46 @@ class Show extends Component
                 ->orderBy('label')
                 ->get(['id', 'label', 'line1', 'locality', 'country_iso']),
         ]);
+    }
+
+    public function pageContext(): PageContext
+    {
+        return new PageContext(
+            route: 'admin.employees.show',
+            url: route('admin.employees.show', $this->employee),
+            title: $this->employee->full_name,
+            module: 'Employee',
+            resourceType: 'employee',
+            resourceId: $this->employee->id,
+            visibleActions: ['Edit fields', 'Change status', 'Manage addresses', 'Manage subordinates'],
+        );
+    }
+
+    public function pageSnapshot(): PageSnapshot
+    {
+        $fields = [
+            new FormFieldSnapshot('full_name', 'string', $this->employee->full_name),
+            new FormFieldSnapshot('short_name', 'string', $this->employee->short_name),
+            new FormFieldSnapshot('employee_number', 'string', $this->employee->employee_number),
+            new FormFieldSnapshot('email', 'string', $this->employee->email),
+            new FormFieldSnapshot('designation', 'string', $this->employee->designation),
+            new FormFieldSnapshot('status', 'string', $this->employee->status),
+            new FormFieldSnapshot('employee_type', 'string', $this->employee->employee_type),
+            new FormFieldSnapshot('company', 'string', $this->employee->company?->name),
+            new FormFieldSnapshot('department', 'string', $this->employee->department?->type?->label),
+            new FormFieldSnapshot('supervisor', 'string', $this->employee->supervisor?->full_name),
+        ];
+
+        $modals = [];
+
+        if ($this->showAttachModal) {
+            $modals[] = new ModalSnapshot('attach-address', 'Attach Address', true);
+        }
+
+        return new PageSnapshot(
+            pageContext: $this->pageContext(),
+            forms: [new FormSnapshot('employee-detail', fields: $fields)],
+            modals: $modals,
+        );
     }
 }

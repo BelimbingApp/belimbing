@@ -5,6 +5,9 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Modules\Core\AI\DTO\PageContext;
+use Illuminate\Support\Str;
+
 class QuickActionRegistry
 {
     /**
@@ -33,6 +36,69 @@ class QuickActionRegistry
         }
 
         return $this->defaults();
+    }
+
+    /**
+     * Get context-enhanced quick actions using page awareness data.
+     *
+     * When a PageContext is available, this method generates richer,
+     * resource-specific prompts (e.g., "Tell me about John Doe" instead of
+     * generic "Employee help"). Falls back to route-based resolution.
+     *
+     * @return list<array{label: string, prompt: string, icon: string}>
+     */
+    public function forContext(?PageContext $context): array
+    {
+        if ($context === null) {
+            return $this->defaults();
+        }
+
+        $contextual = $this->contextualActions($context);
+
+        if ($contextual !== []) {
+            return $contextual;
+        }
+
+        return $this->forRoute($context->route);
+    }
+
+    /**
+     * Build resource-specific actions from page context metadata.
+     *
+     * @return list<array{label: string, prompt: string, icon: string}>
+     */
+    private function contextualActions(PageContext $context): array
+    {
+        $actions = [];
+
+        // Show-page actions: "Tell me about <resource>"
+        if ($context->resourceId !== null && $context->title !== null) {
+            $actions[] = [
+                'label' => __('About this :type', ['type' => $context->resourceType ?? 'item']),
+                'prompt' => 'Tell me about '.$context->title,
+                'icon' => 'heroicon-o-information-circle',
+            ];
+        }
+
+        // Surface visible actions as quick prompts
+        foreach (array_slice($context->visibleActions, 0, 2) as $action) {
+            $actions[] = [
+                'label' => $action,
+                'prompt' => 'Help me '.Str::lower($action),
+                'icon' => 'heroicon-o-cursor-arrow-rays',
+            ];
+        }
+
+        // Search-aware action for index pages
+        if ($context->searchQuery !== null) {
+            $actions[] = [
+                'label' => __('Refine search'),
+                'prompt' => 'I\'m searching for "'.$context->searchQuery.'" — help me find what I need',
+                'icon' => 'heroicon-o-magnifying-glass',
+            ];
+        }
+
+        return $actions;
     }
 
     /**

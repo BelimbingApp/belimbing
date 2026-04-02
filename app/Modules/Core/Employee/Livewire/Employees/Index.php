@@ -6,12 +6,15 @@
 namespace App\Modules\Core\Employee\Livewire\Employees;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
+use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\Employee\Models\Employee;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
 
-class Index extends Component
+class Index extends Component implements ProvidesLaraPageContext
 {
     use ResetsPaginationOnSearch;
     use WithPagination;
@@ -50,7 +53,7 @@ class Index extends Component
         Session::flash('success', __('Employee deleted successfully.'));
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.employees.index', [
             'employees' => Employee::query()
@@ -69,5 +72,25 @@ class Index extends Component
                 ->latest()
                 ->paginate(15),
         ]);
+    }
+
+    public function pageContext(): PageContext
+    {
+        $filters = [];
+
+        if ($this->typeFilter !== 'all') {
+            $filters[] = 'type:'.$this->typeFilter;
+        }
+
+        return new PageContext(
+            route: 'admin.employees.index',
+            url: route('admin.employees.index'),
+            title: 'Employees',
+            module: 'Employee',
+            resourceType: 'employee',
+            visibleActions: ['Create employee', 'Search', 'Filter by type', 'Delete'],
+            filters: $filters,
+            searchQuery: $this->search !== '' ? $this->search : null,
+        );
     }
 }
