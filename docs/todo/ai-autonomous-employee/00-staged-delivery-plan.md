@@ -1,7 +1,7 @@
 # AI Agent - Staged Delivery Plan
 
 **Status:** Active — Stage 0 implemented
-**Source Context:** `docs/architecture/ai-agent.md`
+**Source Context:** `docs/architecture/ai/agent-model.md`
 **Last Updated:** 2026-03-04
 **Prerequisite:** `docs/architecture/authorization.md`, `docs/todo/authorization/00-prd.md`
 
@@ -54,8 +54,8 @@ Establish a safe, testable end-to-end loop: web chat UI -> Agent runtime -> resp
 
 **What Is Implemented**
 1. Agent as employee: `employees` with `employee_type` and `job_description`; file-based sessions (JSONL per session + `.meta.json`) in per-Agent workspace directories (see [01-stage-0 §3.2](01-stage-0-agent-playground.md))
-2. Per-agent LLM configuration: company-level provider credentials (`ai_providers` table, encrypted keys), per-agent model selection via workspace `config.json` (multi-model with ordered fallback), config resolution cascade (agent → company provider → global defaults). See `docs/architecture/ai-agent.md` §15.
-3. Basic runtime orchestration with no high-risk tools (per-agent model-aware) and **fallback attempt trace metadata** (OpenClaw-style: provider, model, error, error_type, latency_ms per attempt). See `docs/architecture/ai-agent.md` §15.5.
+2. Per-agent LLM configuration: company-level provider credentials (`ai_providers` table, encrypted keys), per-agent model selection via workspace `config.json` (multi-model with ordered fallback), config resolution cascade (agent → company provider → global defaults). See `docs/architecture/ai/agent-model.md` §15.
+3. Basic runtime orchestration with no high-risk tools (per-agent model-aware) and **fallback attempt trace metadata** (OpenClaw-style: provider, model, error, error_type, latency_ms per attempt). See `docs/architecture/ai/agent-model.md` §15.5.
 4. Persistence for all user/assistant messages (append-only JSONL files with `LOCK_EX`)
 5. Provider management page (`LLM Providers`) with catalog/manual add, model sync, default model, and provider priority controls.
 6. Debug panel in playground surfaces runtime metadata including collapsible fallback attempt trace.
@@ -251,8 +251,8 @@ Convert interaction data into operational insight and measurable business value.
 3. Tool idempotency for retries
 4. Data model choice for message/action logs — **decided:** file-based (JSONL per session, OpenClaw pattern); see Stage 0 checklist §3.2
 5. Access controls for multi-company and supervisor/subordinate Agent interactions
-6. **Memory/recall architecture:** Transcript (messages table) vs semantic memory (MemSearch-style). Decision: PHP-native, markdown source of truth, SQLite per Agent for vectors. See `docs/architecture/ai-agent.md` §14.
-7. **Per-agent LLM config resolution:** Provider credentials (company-level, encrypted DB) vs model selection (per-agent workspace). Config cascade must handle missing provider, inactive provider, and missing config.json gracefully. See `docs/architecture/ai-agent.md` §15.
+6. **Memory/recall architecture:** Transcript (messages table) vs semantic memory (MemSearch-style). Decision: PHP-native, markdown source of truth, SQLite per Agent for vectors. See `docs/architecture/ai/agent-model.md` §14.
+7. **Per-agent LLM config resolution:** Provider credentials (company-level, encrypted DB) vs model selection (per-agent workspace). Config cascade must handle missing provider, inactive provider, and missing config.json gracefully. See `docs/architecture/ai/agent-model.md` §15.
 
 ## 7. Suggested Delivery Rhythm
 

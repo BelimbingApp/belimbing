@@ -1,15 +1,17 @@
 # AI Agent Architecture
 
 **Document Type:** Architecture Specification
-**Status:** Active (Stage 0 core implemented; Stage 1+ planned)
-**Last Updated:** 2026-03-04
-**Related:** `docs/architecture/user-employee-company.md`, `docs/architecture/authorization.md`, `docs/architecture/database.md`
+**Status:** Active foundational specification
+**Last Updated:** 2026-04-02
+**Related:** `docs/architecture/user-employee-company.md`, `docs/architecture/authorization.md`, `docs/architecture/database.md`, `docs/architecture/ai/current-state.md`, `docs/architecture/ai/lara.md`
 
 ---
 
 ## 1. Problem Essence
 
 BLB needs Agents to be managed as first-class employees under the same organizational model and authorization system as humans, with clear delegation boundaries and accountable supervision.
+
+> For the implementation-first view of what exists in code today, see `docs/architecture/ai/current-state.md`.
 
 ---
 

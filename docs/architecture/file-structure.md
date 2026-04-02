@@ -152,6 +152,7 @@ belimbing/
 │
 ├── docs/                    # Documentation
 │   ├── architecture/       # Architecture docs (this file)
+│   │   └── ai/             # AI architecture docs and current-state reference
 │   ├── modules/            # Module documentation
 │   ├── extensions/         # Extension development guide
 │   └── deployment/         # Deployment guides

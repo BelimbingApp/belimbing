@@ -25,7 +25,7 @@
 5. Guided agent onboarding wizard (identity → LLM config → authorization → review)
 
 ### Agent Chained to Human
-Per `docs/architecture/ai-agent.md`: every Agent is an employee with a supervision chain that resolves to a human. In Stage 0, playground sessions belong to a Agent (an employee with `employee_type = 'agent'`); access is scoped by "current user supervises this Agent" (or is the human at the end of the chain).
+Per `docs/architecture/ai/agent-model.md`: every Agent is an employee with a supervision chain that resolves to a human. In Stage 0, playground sessions belong to a Agent (an employee with `employee_type = 'agent'`); access is scoped by "current user supervises this Agent" (or is the human at the end of the chain).
 
 ### Current Snapshot (2026-03-04)
 
@@ -98,7 +98,7 @@ When fallback occurs, `fallback_attempts` contains structured entries:
 
 ### 3.3 Provider Credentials (Database)
 
-Company-level LLM provider credentials stored in `ai_providers` table. See `docs/architecture/ai-agent.md` §15.1 for full schema.
+Company-level LLM provider credentials stored in `ai_providers` table. See `docs/architecture/ai/agent-model.md` §15.1 for full schema.
 
 **Migration:** `app/Modules/Core/AI/Database/Migrations/` (module-aware)
 
@@ -132,7 +132,7 @@ Each Agent's workspace contains a `config.json` for per-agent LLM overrides:
 - `models`: ordered list; first entry is primary, rest are fallbacks on transient failures
 - `provider` references `ai_providers.name` within the agent's company
 - Falls back to global `config('ai.llm.*')` when absent
-- See `docs/architecture/ai-agent.md` §15.2–§15.3 for resolution rules
+- See `docs/architecture/ai/agent-model.md` §15.2–§15.3 for resolution rules
 
 ### 3.5 File Conventions
 
@@ -242,7 +242,7 @@ Behavior requirements:
 
 Stage 0 persists only the **chat transcript** (JSONL files). Long-term semantic memory (MemSearch-style: markdown source of truth, vector index for recall) is out of scope. When implementing memory:
 
-- See `docs/architecture/ai-agent.md` §14 for the design: transcript vs memory, MemSearch pattern, PHP-native implementation, hybrid search, compaction.
+- See `docs/architecture/ai/agent-model.md` §14 for the design: transcript vs memory, MemSearch pattern, PHP-native implementation, hybrid search, compaction.
 - Workspace layout already reserves `MEMORY.md`, `memory/*.md`, and `memory.db` alongside `sessions/`.
 
 ## 11. Risks and Mitigations

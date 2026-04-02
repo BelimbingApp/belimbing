@@ -1,11 +1,11 @@
 # Agent Tools Blueprint — Mirroring OpenClaw Capabilities for BLB
 
 **Document Type:** Architecture Blueprint (Study & Plan)
-**Status:** Draft
-**Last Updated:** 2026-03-09
-**Related:** `docs/Base/AI/tool-framework.md` (tool abstraction layer), `docs/architecture/lara-system-agent.md` §3 (Lara vs agents), §14 (Tool Calling), `docs/architecture/ai-agent.md` §13–§14
+**Status:** Active parity map with implemented Phases 1-6 and later roadmap sections
+**Last Updated:** 2026-04-02
+**Related:** `docs/Base/AI/tool-framework.md` (tool abstraction layer), `docs/architecture/ai/lara.md` §3 (Lara vs agents), §14 (Tool Calling), `docs/architecture/ai/agent-model.md` §13–§14, `docs/architecture/ai/current-state.md`
 
-> **Important:** The tool-calling infrastructure described here is **agent-generic**, not Lara-specific. All tools implement the `Tool` contract (`App\Base\AI\Contracts\Tool`), extend `AbstractTool` or `AbstractActionTool`, are registered in the shared `AgentToolRegistry`, and execute through the common `AgenticRuntime`. Lara is distinguished from other agents by her framework-controlled identity, personality, and mission — not by unique tool code. Which tools a agent can use is a **policy decision** controlled by authz role assignment. See `docs/architecture/lara-system-agent.md` §3 for the full distinction.
+> **Important:** The tool-calling infrastructure described here is **agent-generic**, not Lara-specific. All tools implement the `Tool` contract (`App\Base\AI\Contracts\Tool`), extend `AbstractTool` or `AbstractActionTool`, are registered in the shared `AgentToolRegistry`, and execute through the common `AgenticRuntime`. Lara is distinguished from other agents by her framework-controlled identity, personality, and mission — not by unique tool code. Which tools a agent can use is a **policy decision** controlled by authz role assignment. See `docs/architecture/ai/lara.md` §3 for the full distinction.
 
 ---
 
@@ -196,7 +196,7 @@ These tools directly serve Lara's core mission and build on existing infrastruct
 
 **2a. `MemorySearchTool`** — Semantic search across Lara's knowledge
 - **OpenClaw parallel:** `memory_search`
-- **BLB approach:** PHP-native implementation of the MemSearch pattern (see `ai-agent.md` §14). Hybrid vector + BM25 search over markdown workspace files. Per-agent SQLite vector storage (`sqlite-vec`).
+- **BLB approach:** PHP-native implementation of the MemSearch pattern (see `agent-model.md` §14). Hybrid vector + BM25 search over markdown workspace files. Per-agent SQLite vector storage (`sqlite-vec`).
 - **Parameters:** `query`, `max_results` (default 10), `min_score` (float)
 - **Dependency:** Requires embedding provider configuration and sqlite-vec extension
 - **Capability:** `ai.tool_memory_search.execute`

@@ -145,11 +145,7 @@ Agents should read the nearest AGENTS.md in the directory tree for context-speci
 | Shell scripts | `scripts/AGENTS.md` |
 | Docs | `docs/AGENTS.md` |
 
-## 7. Playbook-First Implementation Guard
-
-Before implementing any feature, read `.agents/playbooks/README.md` and route to the matching playbook. The playbook provides the file pack, invariants, and skeletons needed — eliminating broad codebase sweeps. If no playbook matches, implement using the nearest existing pattern and create a new playbook afterward.
-
-## 8. Module-First Placement Guard
+## 7. Module-First Placement Guard
 
 Before creating new framework/module assets, verify placement against `docs/architecture/file-structure.md`.
 If the task touches module config, migrations, or seeders, **stop and verify placement/prefix/registration rules first** before creating or moving files.

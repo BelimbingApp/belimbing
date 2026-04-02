@@ -4,7 +4,7 @@
 **Type:** Implementation review + living build sheet
 **Last Updated:** 2026-04-01
 **Source Context:** `docs/todo/openclaw-parity/00-capability-gap-audit.md`
-**Related:** `docs/architecture/ai-agent.md`, `docs/architecture/lara-system-agent.md`
+**Related:** `docs/architecture/ai/agent-model.md`, `docs/architecture/ai/lara.md`
 
 ## 1. Problem Essence
 

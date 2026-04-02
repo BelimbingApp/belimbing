@@ -3,7 +3,7 @@
 **Document Type:** Capability Gap Audit  
 **Status:** Code-audited current-state assessment  
 **Audited On:** 2026-04-01  
-**Related:** `docs/architecture/ai-agent.md`, `docs/architecture/lara-system-agent.md`, `docs/architecture/agent-tools-blueprint.md`, `docs/Base/AI/tool-framework.md`
+**Related:** `docs/architecture/ai/agent-model.md`, `docs/architecture/ai/lara.md`, `docs/architecture/ai/capability-map.md`, `docs/Base/AI/tool-framework.md`
 
 ---
 

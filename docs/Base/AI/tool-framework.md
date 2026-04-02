@@ -3,7 +3,7 @@
 **Document Type:** Architecture Reference
 **Module:** `app/Base/AI`
 **Last Updated:** 2026-03-09
-**Related:** `docs/architecture/agent-tools-blueprint.md` (tool roadmap), `docs/architecture/lara-system-agent.md` (Lara), `docs/architecture/ai-agent.md` (agent model)
+**Related:** `docs/architecture/ai/capability-map.md` (tool roadmap), `docs/architecture/ai/lara.md` (Lara), `docs/architecture/ai/agent-model.md` (agent model)
 
 ---
 

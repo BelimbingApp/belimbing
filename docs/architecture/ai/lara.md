@@ -1,15 +1,17 @@
 # Lara — BLB System Agent
 
 **Document Type:** Architecture Specification
-**Status:** Draft
-**Last Updated:** 2026-03-09
-**Related:** `docs/architecture/ai-agent.md`, `docs/architecture/user-employee-company.md`, `docs/Base/AI/tool-framework.md`
+**Status:** Active with forward-looking sections
+**Last Updated:** 2026-04-02
+**Related:** `docs/architecture/ai/agent-model.md`, `docs/architecture/user-employee-company.md`, `docs/Base/AI/tool-framework.md`, `docs/architecture/ai/current-state.md`
 
 ---
 
 ## 1. Problem Essence
 
 BLB is an AI-native framework, but AI activation is currently optional and user-initiated. There is no built-in AI presence that guides users through setup, configuration, and daily operations. Lara fills this gap as a **framework-level system Agent** — always present, provisioned at install, and the default AI touchpoint for every user.
+
+> For implemented browser surfaces, routes, tools, and commands, see `docs/architecture/ai/current-state.md`.
 
 ---
 
@@ -174,7 +176,7 @@ Shows a single-action page:
 ### 6.2 Lara Record Exists But No Provider
 
 Shows the LLM configuration step:
-- Select from available company providers (reuse provider selector from agent onboarding §16 of `ai-agent.md`).
+- Select from available company providers (reuse provider selector from agent onboarding §16 of `agent-model.md`).
 - Pick a model.
 - "Activate" writes `config.json` to Lara's workspace.
 
@@ -366,7 +368,7 @@ Lara is a critical-path component — unlike a regular agent (where downtime onl
 
 1. ~~Lara-specific tools or capabilities~~ — **Now in scope**, see §13 Tool Calling.
 2. Multi-language support for Lara's personality.
-3. Lara's memory system (follows general agent memory architecture from `ai-agent.md` §14).
+3. Lara's memory system (follows general agent memory architecture from `agent-model.md` §14).
 
 ---
 

@@ -3,7 +3,7 @@
 **Document Type:** Architecture Specification
 **Status:** Implemented
 **Last Updated:** 2026-02-26
-**Related:** `docs/architecture/user-employee-company.md`, `docs/architecture/ai-agent.md`, `docs/architecture/database.md`
+**Related:** `docs/architecture/user-employee-company.md`, `docs/architecture/ai/agent-model.md`, `docs/architecture/database.md`
 
 ---
 
@@ -268,7 +268,7 @@ The base `Config/authz.php` holds only:
 - System role definitions that aggregate capabilities across modules
 - Decision log retention config
 
-**Adding capabilities for a new module:** Create `Config/authz.php` in the module directory. No service provider changes needed — the file is auto-discovered. For **Agent** administration capabilities (e.g. `employee.agent.create`, `employee.agent.update`), the vocabulary is defined in [docs/architecture/ai-agent.md](ai-agent.md) §5.3; AuthZ owns registration and enforcement.
+**Adding capabilities for a new module:** Create `Config/authz.php` in the module directory. No service provider changes needed — the file is auto-discovered. For **Agent** administration capabilities (e.g. `employee.agent.create`, `employee.agent.update`), the vocabulary is defined in [docs/architecture/ai/agent-model.md](ai/agent-model.md) §5.3; AuthZ owns registration and enforcement.
 
 ### 5.3 Catalog and Registry
 
@@ -434,7 +434,7 @@ The following invariant must be covered consistently in web, API, and Agent runt
 
 ### 9.4 Agents
 
-Agents are first-class employees under the same org and AuthZ model as humans. **Full specification:** [docs/architecture/ai-agent.md](ai-agent.md).
+Agents are first-class employees under the same org and AuthZ model as humans. **Full specification:** [docs/architecture/ai/agent-model.md](ai/agent-model.md).
 
 **AuthZ contract for Agent:**
 
@@ -443,7 +443,7 @@ Agents are first-class employees under the same org and AuthZ model as humans. *
 3. **Capability gates for Agent administration:** The Agent spec defines capability keys for managing Agents (e.g. `employee.agent.create`, `employee.agent.update`, `employee.agent.assign_role`, `employee.agent.assign_permission`, `employee.agent.disable`). The final vocabulary is owned by the AuthZ module and declared in `Config/authz.php` (or module configs) when implemented.
 4. **Supervision chain:** Every Agent must have a supervision chain that resolves to a human accountable owner; the supervision graph must be acyclic. AuthZ may need to evaluate “can this supervisor delegate to this subordinate?” using the same engine.
 
-For delegation invariants, supervisor model, and UI/audit rules, see [docs/architecture/ai-agent.md](ai-agent.md) §5–§7.
+For delegation invariants, supervisor model, and UI/audit rules, see [docs/architecture/ai/agent-model.md](ai/agent-model.md) §5–§7.
 
 ### 9.5 Menu Integration Rule
 
@@ -582,7 +582,7 @@ app/Modules/Core/Company/Config/authz.php    # core.company.*
 ## 14. Complexity Hotspots
 
 1. Multi-company users and company context switching.
-2. Manager-subordinate conditional policies and **Agent delegation** (Agent permissions ≤ supervisor; see [ai-agent.md](ai-agent.md)).
+2. Manager-subordinate conditional policies and **Agent delegation** (Agent permissions ≤ supervisor; see [ai/agent-model.md](ai/agent-model.md)).
 3. Workflow-state-dependent permissions.
 4. Consistency between synchronous UI checks and async job execution.
 5. Future ACL overrides without policy ambiguity.
