@@ -59,13 +59,11 @@ class MemorySourceCatalog
             return true;
         }
 
-        $prefix = self::DAILY_DIR.'/';
+        $filename = $this->dailyFilename($relativePath);
 
-        if (! str_starts_with($relativePath, $prefix)) {
+        if ($filename === null) {
             return false;
         }
-
-        $filename = substr($relativePath, strlen($prefix));
 
         // Only direct children — no subdirectory traversal
         if (str_contains($filename, '/') || str_contains($filename, '..')) {
@@ -114,6 +112,17 @@ class MemorySourceCatalog
     private function workspacePath(int $employeeId): string
     {
         return rtrim((string) config('ai.workspace_path'), '/').'/'.$employeeId;
+    }
+
+    private function dailyFilename(string $relativePath): ?string
+    {
+        $prefix = self::DAILY_DIR.'/';
+
+        if (! str_starts_with($relativePath, $prefix)) {
+            return null;
+        }
+
+        return substr($relativePath, strlen($prefix));
     }
 
     /**

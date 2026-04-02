@@ -7,9 +7,13 @@ use App\Modules\Core\AI\DTO\BrowserSessionState;
 use App\Modules\Core\AI\DTO\BrowserTabState;
 use App\Modules\Core\AI\Enums\BrowserSessionStatus;
 
+const BROWSER_SESSION_URL = 'https://example.com';
+const BROWSER_SESSION_CREATED_AT = '2026-01-01T00:00:00+00:00';
+const BROWSER_SESSION_LAST_ACTIVITY_AT = '2026-01-01T00:01:00+00:00';
+
 describe('BrowserSessionState', function () {
     it('constructs with all fields', function () {
-        $tab = new BrowserTabState('tab1', 'https://example.com', 'Example', true);
+        $tab = new BrowserTabState('tab1', BROWSER_SESSION_URL, 'Example', true);
 
         $state = new BrowserSessionState(
             sessionId: 'bs_test',
@@ -18,12 +22,12 @@ describe('BrowserSessionState', function () {
             status: BrowserSessionStatus::Ready,
             headless: false,
             activeTabId: 'tab1',
-            currentUrl: 'https://example.com',
+            currentUrl: BROWSER_SESSION_URL,
             tabs: [$tab],
-            lastSnapshotRef: '2026-01-01T00:00:00+00:00',
+            lastSnapshotRef: BROWSER_SESSION_CREATED_AT,
             failureReason: null,
-            createdAt: '2026-01-01T00:00:00+00:00',
-            lastActivityAt: '2026-01-01T00:01:00+00:00',
+            createdAt: BROWSER_SESSION_CREATED_AT,
+            lastActivityAt: BROWSER_SESSION_LAST_ACTIVITY_AT,
             expiresAt: '2026-01-01T00:06:00+00:00',
         );
 
@@ -46,8 +50,8 @@ describe('BrowserSessionState', function () {
             tabs: [],
             lastSnapshotRef: null,
             failureReason: null,
-            createdAt: '2026-01-01T00:00:00+00:00',
-            lastActivityAt: '2026-01-01T00:01:00+00:00',
+            createdAt: BROWSER_SESSION_CREATED_AT,
+            lastActivityAt: BROWSER_SESSION_LAST_ACTIVITY_AT,
             expiresAt: null,
         );
 
@@ -77,8 +81,8 @@ describe('BrowserSessionState', function () {
             tabs: $tabs,
             lastSnapshotRef: null,
             failureReason: null,
-            createdAt: '2026-01-01T00:00:00+00:00',
-            lastActivityAt: '2026-01-01T00:01:00+00:00',
+            createdAt: BROWSER_SESSION_CREATED_AT,
+            lastActivityAt: BROWSER_SESSION_LAST_ACTIVITY_AT,
             expiresAt: null,
         );
 

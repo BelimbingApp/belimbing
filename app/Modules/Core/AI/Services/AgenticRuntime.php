@@ -77,7 +77,10 @@ class AgenticRuntime
         $lastErrorResult = null;
 
         foreach ($configs as $config) {
-            $config = $this->applyModelOverride($config, $modelOverride);
+            if ($modelOverride !== null) {
+                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
+            }
+
             $credentials = $this->credentialResolver->resolve($config);
 
             if (isset($credentials['runtime_error'])) {
@@ -147,7 +150,10 @@ class AgenticRuntime
         $lastConfig = null;
 
         foreach ($configs as $config) {
-            $config = $this->applyModelOverride($config, $modelOverride);
+            if ($modelOverride !== null) {
+                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
+            }
+
             $credentials = $this->credentialResolver->resolve($config);
 
             if (isset($credentials['runtime_error'])) {
@@ -184,25 +190,6 @@ class AgenticRuntime
                 ['fallback_attempts' => $fallbackAttempts],
             ),
         ]];
-    }
-
-    /**
-     * Apply a model override to the resolved config.
-     *
-     * Supports composite "providerId:::modelId" format to resolve the full
-     * provider config (api_key, base_url, etc.) for cross-provider overrides.
-     * Plain model IDs just override the model name within the existing config.
-     *
-     * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}  $config
-     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}
-     */
-    private function applyModelOverride(array $config, ?string $modelOverride): array
-    {
-        if ($modelOverride === null) {
-            return $config;
-        }
-
-        return $this->applyCompositeOrSimpleOverride($config, $modelOverride);
     }
 
     /**
@@ -295,7 +282,7 @@ class AgenticRuntime
                 return $errorResult;
             }
 
-            if ($this->hasNoToolCalls($result)) {
+            if (($result['tool_calls'] ?? []) === []) {
                 $successResult = $this->successResult(
                     $runId,
                     $config,
@@ -396,16 +383,6 @@ class AgenticRuntime
             toolChoice: $tools !== [] ? 'auto' : null,
             apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
         ));
-    }
-
-    /**
-     * Determine whether the LLM has finished without requesting tools.
-     *
-     * @param  array<string, mixed>  $result
-     */
-    private function hasNoToolCalls(array $result): bool
-    {
-        return ! isset($result['tool_calls']) || $result['tool_calls'] === [];
     }
 
     /**
@@ -660,7 +637,7 @@ class AgenticRuntime
                 return;
             }
 
-            if ($this->hasNoToolCalls($result)) {
+            if (($result['tool_calls'] ?? []) === []) {
                 // Hook: PostRun on success
                 $this->runPostRunHooks($runId, $employeeId, true, $hookMetadata);
 

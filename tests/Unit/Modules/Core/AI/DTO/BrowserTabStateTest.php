@@ -5,17 +5,19 @@
 
 use App\Modules\Core\AI\DTO\BrowserTabState;
 
+const BROWSER_TAB_URL = 'https://example.com';
+
 describe('BrowserTabState', function () {
     it('constructs with required fields', function () {
         $tab = new BrowserTabState(
             tabId: 'tab1',
-            url: 'https://example.com',
+            url: BROWSER_TAB_URL,
             title: 'Example',
             isActive: true,
         );
 
         expect($tab->tabId)->toBe('tab1')
-            ->and($tab->url)->toBe('https://example.com')
+            ->and($tab->url)->toBe(BROWSER_TAB_URL)
             ->and($tab->title)->toBe('Example')
             ->and($tab->isActive)->toBeTrue();
     });
@@ -35,7 +37,7 @@ describe('BrowserTabState', function () {
     it('defaults title and isActive from array', function () {
         $tab = BrowserTabState::fromArray([
             'tab_id' => 'tab3',
-            'url' => 'https://example.com',
+            'url' => BROWSER_TAB_URL,
         ]);
 
         expect($tab->title)->toBe('')
@@ -43,12 +45,12 @@ describe('BrowserTabState', function () {
     });
 
     it('converts to array', function () {
-        $tab = new BrowserTabState('tab1', 'https://example.com', 'Example', true);
+        $tab = new BrowserTabState('tab1', BROWSER_TAB_URL, 'Example', true);
         $array = $tab->toArray();
 
         expect($array)->toBe([
             'tab_id' => 'tab1',
-            'url' => 'https://example.com',
+            'url' => BROWSER_TAB_URL,
             'title' => 'Example',
             'is_active' => true,
         ]);
@@ -57,7 +59,7 @@ describe('BrowserTabState', function () {
     it('round-trips through fromArray and toArray', function () {
         $original = [
             'tab_id' => 'tab1',
-            'url' => 'https://example.com',
+            'url' => BROWSER_TAB_URL,
             'title' => 'Example',
             'is_active' => true,
         ];

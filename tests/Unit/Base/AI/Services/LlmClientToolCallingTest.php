@@ -14,8 +14,9 @@ use Illuminate\Support\Facades\Http;
 uses(TestCase::class);
 
 const TEST_API_BASE_URL = 'https://api.example.com/v1';
+const LLM_TOOL_CALLING_GREETING = 'Hello!';
 
-describe('LlmClient tool calling', function () {
+describe('LlmClient tool calling request payloads', function () {
     it('sends tools and tool_choice in request payload when provided', function () {
         Http::fake([
             '*/chat/completions' => Http::response([
@@ -23,7 +24,7 @@ describe('LlmClient tool calling', function () {
                     [
                         'message' => [
                             'role' => 'assistant',
-                            'content' => 'Hello!',
+                            'content' => LLM_TOOL_CALLING_GREETING,
                         ],
                     ],
                 ],
@@ -52,7 +53,7 @@ describe('LlmClient tool calling', function () {
             toolChoice: 'auto',
         ));
 
-        expect($result)->toHaveKey('content', 'Hello!');
+        expect($result)->toHaveKey('content', LLM_TOOL_CALLING_GREETING);
         expect($result)->not->toHaveKey('tool_calls');
 
         Http::assertSent(function ($request) {
@@ -86,7 +87,9 @@ describe('LlmClient tool calling', function () {
             return ! isset($body['tools']) && ! isset($body['tool_choice']);
         });
     });
+});
 
+describe('LlmClient tool calling response parsing', function () {
     it('parses tool_calls from response when present', function () {
         Http::fake([
             '*/chat/completions' => Http::response([
@@ -168,7 +171,9 @@ describe('LlmClient tool calling', function () {
             ->and($result['runtime_error']->errorType)->toBe(AiErrorType::HtmlResponse)
             ->and($result['runtime_error']->hint)->toContain('base URL points to the API endpoint');
     });
+});
 
+describe('LlmClient tool calling responses api handling', function () {
     it('omits temperature from responses api payloads', function () {
         Http::fake([
             '*/responses' => Http::response([
@@ -176,7 +181,7 @@ describe('LlmClient tool calling', function () {
                     [
                         'type' => 'message',
                         'content' => [
-                            ['type' => 'output_text', 'text' => 'Hello!'],
+                            ['type' => 'output_text', 'text' => LLM_TOOL_CALLING_GREETING],
                         ],
                     ],
                 ],

@@ -59,28 +59,15 @@ class ChatStreamController
         $runtime = app(AgenticRuntime::class);
 
         return new StreamedResponse(function () use ($runtime, $messages, $employeeId, $systemPrompt, $modelOverride, $messageManager, $sessionId, $promptMeta): void {
-            $fullContent = null;
-            $runId = null;
-            $meta = null;
-            $hadError = false;
-
-            foreach ($runtime->runStream($messages, $employeeId, $systemPrompt, $modelOverride) as $event) {
-                $eventName = $event['event'];
-                $data = $event['data'];
-
-                $this->emitEvent($eventName, $data);
-
-                if ($eventName === 'done') {
-                    [$fullContent, $runId, $meta] = $this->captureDoneEvent($data);
-
-                    continue;
-                }
-
-                if ($eventName === 'error') {
-                    $hadError = true;
-                    $this->persistStructuredError($messageManager, $employeeId, $sessionId, $data);
-                }
-            }
+            [$fullContent, $runId, $meta, $hadError] = $this->streamRuntimeEvents(
+                runtime: $runtime,
+                messages: $messages,
+                employeeId: $employeeId,
+                systemPrompt: $systemPrompt,
+                modelOverride: $modelOverride,
+                messageManager: $messageManager,
+                sessionId: $sessionId,
+            );
 
             if (! $hadError) {
                 $effectiveMeta = $meta ?? [];
@@ -97,6 +84,45 @@ class ChatStreamController
             'Connection' => 'keep-alive',
             'X-Accel-Buffering' => 'no',
         ]);
+    }
+
+    /**
+     * @param  array<int, object>  $messages
+     * @return array{0: ?string, 1: ?string, 2: ?array<string, mixed>, 3: bool}
+     */
+    private function streamRuntimeEvents(
+        AgenticRuntime $runtime,
+        array $messages,
+        int $employeeId,
+        ?string $systemPrompt,
+        ?string $modelOverride,
+        MessageManager $messageManager,
+        string $sessionId,
+    ): array {
+        $fullContent = null;
+        $runId = null;
+        $meta = null;
+        $hadError = false;
+
+        foreach ($runtime->runStream($messages, $employeeId, $systemPrompt, $modelOverride) as $event) {
+            $eventName = $event['event'];
+            $data = $event['data'];
+
+            $this->emitEvent($eventName, $data);
+
+            if ($eventName === 'done') {
+                [$fullContent, $runId, $meta] = $this->captureDoneEvent($data);
+
+                continue;
+            }
+
+            if ($eventName === 'error') {
+                $hadError = true;
+                $this->persistStructuredError($messageManager, $employeeId, $sessionId, $data);
+            }
+        }
+
+        return [$fullContent, $runId, $meta, $hadError];
     }
 
     /**

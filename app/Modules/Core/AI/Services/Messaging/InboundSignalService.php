@@ -5,7 +5,6 @@
 
 namespace App\Modules\Core\AI\Services\Messaging;
 
-use App\Modules\Core\AI\Contracts\Messaging\ChannelAdapter;
 use App\Modules\Core\AI\DTO\Messaging\InboundMessage;
 use App\Modules\Core\AI\Enums\SignalAuthenticityStatus;
 use App\Modules\Core\AI\Models\ChannelAccount;
@@ -48,7 +47,7 @@ class InboundSignalService
         }
 
         // Verify authenticity (adapters that don't support verification return 'skipped')
-        $authenticity = $this->verifyAuthenticity($adapter, $request);
+        $authenticity = $this->verifyAuthenticity();
 
         if ($authenticity === SignalAuthenticityStatus::Failed) {
             return $this->persistRejectedSignal($channel, $channelAccountId, $request, $authenticity);
@@ -64,7 +63,7 @@ class InboundSignalService
 
         // Resolve channel account if not provided
         if ($channelAccountId === null) {
-            $channelAccountId = $this->resolveAccountId($channel, $message);
+            $channelAccountId = $this->resolveAccountId($channel);
         }
 
         return InboundSignal::query()->create([
@@ -86,22 +85,24 @@ class InboundSignalService
      * Currently returns 'skipped' for all adapters since none implement
      * verification yet. Real adapters will check signatures, tokens, etc.
      */
-    private function verifyAuthenticity(ChannelAdapter $adapter, Request $request): SignalAuthenticityStatus
+    private function verifyAuthenticity(): SignalAuthenticityStatus
     {
-        // TODO: Add verifyInbound(Request) to ChannelAdapter contract when
-        // real channel integrations land. For now, authenticity is skipped.
+        // Authenticity stays skipped until channel adapters expose verification hooks.
         return SignalAuthenticityStatus::Skipped;
     }
 
     /**
-     * Resolve channel account ID from the inbound message metadata.
+     * Resolve the enabled channel account for the given channel.
+     *
+     * Current behavior is intentionally simple: return the first enabled
+     * account for the channel until richer inbound-account matching is added.
      *
      * @param  string  $channel  Channel identifier
-     * @param  InboundMessage  $message  Parsed inbound message
      */
-    private function resolveAccountId(string $channel, InboundMessage $message): ?int
+    private function resolveAccountId(string $channel): ?int
     {
-        // Try to find an account by matching the channel and conversation metadata
+        // Use the first enabled account for the channel until adapters expose
+        // enough metadata to support more specific account resolution.
         $account = ChannelAccount::query()
             ->where('channel', $channel)
             ->where('is_enabled', true)

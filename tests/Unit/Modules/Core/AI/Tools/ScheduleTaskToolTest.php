@@ -14,6 +14,8 @@ uses(TestCase::class, AssertsToolBehavior::class);
 const SCHED_TOOL_TASK = 'Test task';
 const SCHED_TOOL_WEEKLY_CRON = '0 9 * * 1';
 const SCHED_TOOL_PAYLOAD = 'Run the weekly report generation';
+const SCHED_TOOL_PASSWORD_FIELD = 'password';
+const SCHED_TOOL_NOT_FOUND = 'not found';
 
 function makeScheduleServiceMock(): ScheduleDefinitionService
 {
@@ -36,7 +38,10 @@ function actAsScheduleUser(int $companyId = 10): void
 {
     $user = new class($companyId) implements Authenticatable
     {
-        public function __construct(private readonly int $companyId) {}
+        public function __construct(
+            private readonly int $companyId,
+            private readonly string $password = SCHED_TOOL_PASSWORD_FIELD,
+        ) {}
 
         public function getAuthIdentifier(): int
         {
@@ -50,12 +55,12 @@ function actAsScheduleUser(int $companyId = 10): void
 
         public function getAuthPassword(): string
         {
-            return 'password';
+            return $this->password;
         }
 
         public function getAuthPasswordName(): string
         {
-            return 'password';
+            return SCHED_TOOL_PASSWORD_FIELD;
         }
 
         public function getRememberToken(): string
@@ -63,7 +68,10 @@ function actAsScheduleUser(int $companyId = 10): void
             return '';
         }
 
-        public function setRememberToken($value): void {}
+        public function setRememberToken($value): void
+        {
+            unset($value);
+        }
 
         public function getRememberTokenName(): string
         {
@@ -342,7 +350,7 @@ describe('update action', function () {
             'description' => 'New desc',
         ]);
         expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('not found');
+            ->and((string) $result)->toContain(SCHED_TOOL_NOT_FOUND);
     });
 
     it('rejects invalid cron expression in update', function () {
@@ -392,7 +400,7 @@ describe('remove action', function () {
 
         $result = $this->tool->execute(['action' => 'remove', 'task_id' => 999]);
         expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('not found');
+            ->and((string) $result)->toContain(SCHED_TOOL_NOT_FOUND);
     });
 });
 
@@ -430,6 +438,6 @@ describe('status action', function () {
 
         $result = $this->tool->execute(['action' => 'status', 'task_id' => 999]);
         expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('not found');
+            ->and((string) $result)->toContain(SCHED_TOOL_NOT_FOUND);
     });
 });

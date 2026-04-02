@@ -12,6 +12,8 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+const MEMORY_HEALTH_DURABLE_FILE = '/MEMORY.md';
+
 beforeEach(function (): void {
     $this->workspacePath = storage_path('framework/testing/memory-health-'.uniqid());
     config()->set('ai.workspace_path', $this->workspacePath);
@@ -41,7 +43,7 @@ it('reports not indexed when no index exists', function (): void {
 
 it('reports sources without index as all stale', function (): void {
     File::ensureDirectoryExists($this->agentDir);
-    file_put_contents($this->agentDir.'/MEMORY.md', 'Some knowledge.');
+    file_put_contents($this->agentDir.MEMORY_HEALTH_DURABLE_FILE, 'Some knowledge.');
 
     $report = makeHealthService()->report($this->agentId);
 
@@ -52,7 +54,7 @@ it('reports sources without index as all stale', function (): void {
 
 it('reports healthy indexed state', function (): void {
     File::ensureDirectoryExists($this->agentDir);
-    file_put_contents($this->agentDir.'/MEMORY.md', "## Facts\n\nImportant knowledge.");
+    file_put_contents($this->agentDir.MEMORY_HEALTH_DURABLE_FILE, "## Facts\n\nImportant knowledge.");
 
     $indexer = new MemoryIndexer(new MemorySourceCatalog, new MemoryChunker);
     $indexer->index($this->agentId);
@@ -68,13 +70,13 @@ it('reports healthy indexed state', function (): void {
 
 it('detects stale sources after file changes', function (): void {
     File::ensureDirectoryExists($this->agentDir);
-    file_put_contents($this->agentDir.'/MEMORY.md', 'Original content.');
+    file_put_contents($this->agentDir.MEMORY_HEALTH_DURABLE_FILE, 'Original content.');
 
     $indexer = new MemoryIndexer(new MemorySourceCatalog, new MemoryChunker);
     $indexer->index($this->agentId);
 
     // Modify the file after indexing
-    file_put_contents($this->agentDir.'/MEMORY.md', 'Modified content.');
+    file_put_contents($this->agentDir.MEMORY_HEALTH_DURABLE_FILE, 'Modified content.');
 
     $report = makeHealthService()->report($this->agentId);
 

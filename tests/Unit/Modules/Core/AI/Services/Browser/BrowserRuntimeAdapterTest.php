@@ -13,6 +13,11 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+const BROWSER_RUNTIME_URL = 'https://example.com';
+const BROWSER_RUNTIME_PAGE_URL = 'https://example.com/page';
+const BROWSER_RUNTIME_NEW_URL = 'https://example.com/new';
+const BROWSER_RUNTIME_CRASH_REASON = 'Process crashed';
+
 /**
  * Create a BrowserSession model with the given status (in-memory, not persisted).
  */
@@ -45,15 +50,15 @@ describe('execute', function () {
 
         $this->repository->shouldReceive('markBusy')->with($session)->once()->andReturn(true);
         $this->runner->shouldReceive('execute')
-            ->with('navigate', Mockery::on(fn ($args) => $args['url'] === 'https://example.com' && $args['headless'] === true))
-            ->andReturn(['ok' => true, 'action' => 'navigate', 'url' => 'https://example.com']);
+            ->with('navigate', Mockery::on(fn ($args) => $args['url'] === BROWSER_RUNTIME_URL && $args['headless'] === true))
+            ->andReturn(['ok' => true, 'action' => 'navigate', 'url' => BROWSER_RUNTIME_URL]);
         $this->repository->shouldReceive('updatePageState')->once();
         $this->repository->shouldReceive('markIdle')->with($session)->once()->andReturn(true);
 
-        $result = $this->adapter->execute($session, 'navigate', ['url' => 'https://example.com']);
+        $result = $this->adapter->execute($session, 'navigate', ['url' => BROWSER_RUNTIME_URL]);
 
         expect($result['ok'])->toBeTrue()
-            ->and($result['url'])->toBe('https://example.com');
+            ->and($result['url'])->toBe(BROWSER_RUNTIME_URL);
     });
 
     it('throws when session is not actionable', function () {
@@ -67,11 +72,11 @@ describe('execute', function () {
         $session = makeAdapterSession(BrowserSessionStatus::Ready);
 
         $this->repository->shouldReceive('markBusy')->andReturn(true);
-        $this->runner->shouldReceive('execute')->andThrow(new RuntimeException('Process crashed'));
-        $this->repository->shouldReceive('markFailed')->with($session, 'Process crashed')->once();
+        $this->runner->shouldReceive('execute')->andThrow(new RuntimeException(BROWSER_RUNTIME_CRASH_REASON));
+        $this->repository->shouldReceive('markFailed')->with($session, BROWSER_RUNTIME_CRASH_REASON)->once();
 
         expect(fn () => $this->adapter->execute($session, 'navigate'))
-            ->toThrow(RuntimeException::class, 'Process crashed');
+            ->toThrow(RuntimeException::class, BROWSER_RUNTIME_CRASH_REASON);
     });
 
     it('injects headless mode from session state', function () {
@@ -84,7 +89,7 @@ describe('execute', function () {
         $this->repository->shouldReceive('updatePageState')->once();
         $this->repository->shouldReceive('markIdle')->andReturn(true);
 
-        $result = $this->adapter->execute($session, 'navigate', ['url' => 'https://example.com']);
+        $result = $this->adapter->execute($session, 'navigate', ['url' => BROWSER_RUNTIME_URL]);
 
         expect($result['ok'])->toBeTrue();
     });
@@ -96,16 +101,16 @@ describe('page state updates', function () {
 
         $this->repository->shouldReceive('markBusy')->andReturn(true);
         $this->runner->shouldReceive('execute')->andReturn([
-            'ok' => true, 'action' => 'navigate', 'url' => 'https://example.com/page',
+            'ok' => true, 'action' => 'navigate', 'url' => BROWSER_RUNTIME_PAGE_URL,
         ]);
         $this->repository->shouldReceive('updatePageState')
-            ->withArgs(function ($s, $activeTabId, $currentUrl) {
-                return $currentUrl === 'https://example.com/page';
+            ->withArgs(function (...$args) {
+                return $args[2] === BROWSER_RUNTIME_PAGE_URL;
             })
             ->once();
         $this->repository->shouldReceive('markIdle')->andReturn(true);
 
-        $this->adapter->execute($session, 'navigate', ['url' => 'https://example.com/page']);
+        $this->adapter->execute($session, 'navigate', ['url' => BROWSER_RUNTIME_PAGE_URL]);
     });
 
     it('updates tabs after open', function () {
@@ -116,17 +121,17 @@ describe('page state updates', function () {
             'ok' => true,
             'action' => 'open',
             'tab_id' => 'tab2',
-            'url' => 'https://example.com',
+            'url' => BROWSER_RUNTIME_URL,
             'tabs' => [['tab_id' => 'tab1'], ['tab_id' => 'tab2']],
         ]);
         $this->repository->shouldReceive('updatePageState')
-            ->withArgs(function ($s, $activeTabId, $currentUrl, $tabs) {
-                return $activeTabId === 'tab2' && count($tabs) === 2;
+            ->withArgs(function (...$args) {
+                return $args[1] === 'tab2' && count($args[3]) === 2;
             })
             ->once();
         $this->repository->shouldReceive('markIdle')->andReturn(true);
 
-        $this->adapter->execute($session, 'open', ['url' => 'https://example.com']);
+        $this->adapter->execute($session, 'open', ['url' => BROWSER_RUNTIME_URL]);
     });
 
     it('merges element refs from snapshot', function () {
@@ -137,10 +142,12 @@ describe('page state updates', function () {
             'ok' => true,
             'action' => 'snapshot',
             'refs' => ['e1' => '#btn', 'e2' => '#input'],
-            'url' => 'https://example.com',
+            'url' => BROWSER_RUNTIME_URL,
         ]);
         $this->repository->shouldReceive('updatePageState')
-            ->withArgs(function ($s, $activeTabId, $currentUrl, $tabs, $pageState) {
+            ->withArgs(function (...$args) {
+                $pageState = $args[4];
+
                 return isset($pageState['element_refs'])
                     && $pageState['element_refs']['e1'] === '#btn'
                     && isset($pageState['refs_captured_at']);
@@ -159,14 +166,14 @@ describe('page state updates', function () {
             'ok' => false, 'action' => 'navigate', 'error' => 'timeout',
         ]);
         $this->repository->shouldReceive('updatePageState')
-            ->withArgs(function ($s, $activeTabId, $currentUrl) {
+            ->withArgs(function (...$args) {
                 // Page state should still be called but with unchanged values.
-                return $currentUrl === null;
+                return $args[2] === null;
             })
             ->never();
         $this->repository->shouldReceive('markIdle')->andReturn(true);
 
-        $this->adapter->execute($session, 'navigate', ['url' => 'https://example.com']);
+        $this->adapter->execute($session, 'navigate', ['url' => BROWSER_RUNTIME_URL]);
     });
 });
 
@@ -212,10 +219,10 @@ describe('ref freshness validation', function () {
         config(['ai.tools.browser.ref_stale_seconds' => 60]);
 
         $session = makeAdapterSession(BrowserSessionStatus::Ready, [
-            'current_url' => 'https://example.com',
+            'current_url' => BROWSER_RUNTIME_URL,
             'page_state' => [
                 'element_refs' => ['e1' => '#btn'],
-                'refs_url' => 'https://example.com',
+                'refs_url' => BROWSER_RUNTIME_URL,
                 'refs_captured_at' => now()->subSeconds(120)->toIso8601String(),
             ],
         ]);
@@ -226,10 +233,10 @@ describe('ref freshness validation', function () {
 
     it('allows act when refs are fresh and URL matches', function () {
         $session = makeAdapterSession(BrowserSessionStatus::Ready, [
-            'current_url' => 'https://example.com',
+            'current_url' => BROWSER_RUNTIME_URL,
             'page_state' => [
                 'element_refs' => ['e1' => '#btn'],
-                'refs_url' => 'https://example.com',
+                'refs_url' => BROWSER_RUNTIME_URL,
                 'refs_captured_at' => now()->toIso8601String(),
             ],
         ]);
@@ -251,12 +258,12 @@ describe('ref freshness validation', function () {
 
         $this->repository->shouldReceive('markBusy')->andReturn(true);
         $this->runner->shouldReceive('execute')->andReturn([
-            'ok' => true, 'action' => 'navigate', 'url' => 'https://example.com',
+            'ok' => true, 'action' => 'navigate', 'url' => BROWSER_RUNTIME_URL,
         ]);
         $this->repository->shouldReceive('updatePageState')->once();
         $this->repository->shouldReceive('markIdle')->andReturn(true);
 
-        $result = $this->adapter->execute($session, 'navigate', ['url' => 'https://example.com']);
+        $result = $this->adapter->execute($session, 'navigate', ['url' => BROWSER_RUNTIME_URL]);
 
         expect($result['ok'])->toBeTrue();
     });
@@ -274,11 +281,13 @@ describe('ref invalidation after navigate', function () {
 
         $this->repository->shouldReceive('markBusy')->andReturn(true);
         $this->runner->shouldReceive('execute')->andReturn([
-            'ok' => true, 'action' => 'navigate', 'url' => 'https://example.com/new',
+            'ok' => true, 'action' => 'navigate', 'url' => BROWSER_RUNTIME_NEW_URL,
         ]);
         $this->repository->shouldReceive('updatePageState')
-            ->withArgs(function ($s, $activeTabId, $currentUrl, $tabs, $pageState) {
-                return $currentUrl === 'https://example.com/new'
+            ->withArgs(function (...$args) {
+                $pageState = $args[4];
+
+                return $args[2] === BROWSER_RUNTIME_NEW_URL
                     && ! isset($pageState['element_refs'])
                     && ! isset($pageState['refs_url'])
                     && ! isset($pageState['refs_captured_at']);
@@ -286,7 +295,7 @@ describe('ref invalidation after navigate', function () {
             ->once();
         $this->repository->shouldReceive('markIdle')->andReturn(true);
 
-        $this->adapter->execute($session, 'navigate', ['url' => 'https://example.com/new']);
+        $this->adapter->execute($session, 'navigate', ['url' => BROWSER_RUNTIME_NEW_URL]);
     });
 
     it('preserves refs after snapshot action', function () {
@@ -297,10 +306,12 @@ describe('ref invalidation after navigate', function () {
             'ok' => true,
             'action' => 'snapshot',
             'refs' => ['e1' => '#btn'],
-            'url' => 'https://example.com',
+            'url' => BROWSER_RUNTIME_URL,
         ]);
         $this->repository->shouldReceive('updatePageState')
-            ->withArgs(function ($s, $activeTabId, $currentUrl, $tabs, $pageState) {
+            ->withArgs(function (...$args) {
+                $pageState = $args[4];
+
                 return isset($pageState['element_refs'])
                     && $pageState['element_refs']['e1'] === '#btn'
                     && isset($pageState['refs_captured_at']);

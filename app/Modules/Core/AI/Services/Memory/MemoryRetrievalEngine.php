@@ -59,11 +59,9 @@ class MemoryRetrievalEngine
         $limit = $maxResults ?? (int) config('ai.memory.default_max_results', 10);
         $tokens = $this->tokenize($query);
 
-        if ($tokens === []) {
-            return [];
-        }
-
-        $keywordResults = $store->keywordSearch($tokens, $limit);
+        $keywordResults = $tokens !== []
+            ? $store->keywordSearch($tokens, $limit)
+            : [];
 
         if ($keywordResults === []) {
             return [];

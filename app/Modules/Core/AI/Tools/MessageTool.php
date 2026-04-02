@@ -21,6 +21,7 @@ use App\Modules\Core\AI\Services\Messaging\ChannelAdapterRegistry;
 use App\Modules\Core\AI\Services\Messaging\OutboundMessageService;
 use App\Modules\Core\AI\Services\Messaging\OutboundSendResult;
 use App\Modules\Core\Employee\Models\Employee;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * Multi-channel messaging tool for Agents.
@@ -207,7 +208,7 @@ class MessageTool extends AbstractActionTool
         try {
             $result = $this->outboundService->send($companyId, $channel, $target, $text, $options);
 
-            return $this->formatOutboundResult('send', $channel, $target, $result);
+            return $this->support->formatOutboundResult('send', $channel, $target, $result);
         } catch (ChannelNotAvailableException|NoChannelAccountException $e) {
             return ToolResult::error($e->getMessage(), 'channel_error');
         }
@@ -240,7 +241,7 @@ class MessageTool extends AbstractActionTool
         try {
             $result = $this->outboundService->reply($companyId, $channel, $messageId, $text);
 
-            return $this->formatOutboundResult('reply', $channel, null, $result);
+            return $this->support->formatOutboundResult('reply', $channel, null, $result);
         } catch (ChannelNotAvailableException|NoChannelAccountException $e) {
             return ToolResult::error($e->getMessage(), 'channel_error');
         }
@@ -258,7 +259,7 @@ class MessageTool extends AbstractActionTool
     {
         $this->support->assertCapability($channel, 'supportsReactions', $channel.' does not support reactions.');
 
-        return $this->encodeResponse([
+        return $this->support->encodeResponse([
             'action' => 'react',
             'channel' => $channel,
             'message_id' => $this->requireString($arguments, 'message_id'),
@@ -283,7 +284,7 @@ class MessageTool extends AbstractActionTool
         $text = $this->requireString($arguments, 'text');
         $this->support->assertTextLength($text, self::MAX_TEXT_LENGTH);
 
-        return $this->encodeResponse([
+        return $this->support->encodeResponse([
             'action' => 'edit',
             'channel' => $channel,
             'message_id' => $this->requireString($arguments, 'message_id'),
@@ -305,7 +306,7 @@ class MessageTool extends AbstractActionTool
     {
         $this->support->assertCapability($channel, 'supportsDeletion', $channel.' does not support message deletion.');
 
-        return $this->encodeResponse([
+        return $this->support->encodeResponse([
             'action' => 'delete',
             'channel' => $channel,
             'message_id' => $this->requireString($arguments, 'message_id'),
@@ -326,7 +327,7 @@ class MessageTool extends AbstractActionTool
     {
         $this->support->assertCapability($channel, 'supportsPolls', $channel.' does not support polls.');
 
-        return $this->encodeResponse([
+        return $this->support->encodeResponse([
             'action' => 'poll',
             'channel' => $channel,
             'target' => $this->requireString($arguments, 'target'),
@@ -347,7 +348,7 @@ class MessageTool extends AbstractActionTool
      */
     private function handleListConversations(string $channel, array $arguments): ToolResult
     {
-        return $this->encodeResponse([
+        return $this->support->encodeResponse([
             'action' => 'list_conversations',
             'channel' => $channel,
             'limit' => $this->optionalInt($arguments, 'limit', 10, min: 1, max: 50),
@@ -369,7 +370,7 @@ class MessageTool extends AbstractActionTool
     {
         $this->support->assertCapability($channel, 'supportsSearch', $channel.' does not support message search.');
 
-        return $this->encodeResponse([
+        return $this->support->encodeResponse([
             'action' => 'search',
             'channel' => $channel,
             'query' => $this->requireString($arguments, 'query'),
@@ -395,50 +396,13 @@ class MessageTool extends AbstractActionTool
         }
 
         // Priority 2: Authenticated user
-        $user = auth()->user();
+        $user = Auth::user();
 
         if ($user !== null && method_exists($user, 'getCompanyId')) {
             return $user->getCompanyId();
         }
 
         return null;
-    }
-
-    /**
-     * Format an OutboundSendResult into a tool response.
-     *
-     * @param  string  $action  The action name ('send' or 'reply')
-     * @param  string  $channel  Channel identifier
-     * @param  string|null  $target  Recipient (null for reply)
-     * @param  OutboundSendResult  $result  Service result
-     */
-    private function formatOutboundResult(string $action, string $channel, ?string $target, OutboundSendResult $result): ToolResult
-    {
-        if (! $result->success) {
-            return ToolResult::error($result->error ?? 'Message delivery failed.', 'delivery_failed');
-        }
-
-        $payload = array_filter([
-            'action' => $action,
-            'channel' => $channel,
-            'target' => $target,
-            'status' => 'sent',
-            'message_id' => $result->messageId,
-            'conversation_id' => $result->conversationId,
-            'message_record_id' => $result->messageRecordId,
-        ]);
-
-        return $this->encodeResponse($payload);
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function encodeResponse(array $payload): ToolResult
-    {
-        return ToolResult::success(
-            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-        );
     }
 }
 
@@ -505,6 +469,39 @@ final class MessageToolSupport
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param  string  $action  The action name ('send' or 'reply')
+     * @param  string  $channel  Channel identifier
+     * @param  string|null  $target  Recipient (null for reply)
+     * @param  OutboundSendResult  $result  Service result
+     */
+    public function formatOutboundResult(string $action, string $channel, ?string $target, OutboundSendResult $result): ToolResult
+    {
+        if (! $result->success) {
+            return ToolResult::error($result->error ?? 'Message delivery failed.', 'delivery_failed');
+        }
+
+        return $this->encodeResponse(array_filter([
+            'action' => $action,
+            'channel' => $channel,
+            'target' => $target,
+            'status' => 'sent',
+            'message_id' => $result->messageId,
+            'conversation_id' => $result->conversationId,
+            'message_record_id' => $result->messageRecordId,
+        ]));
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function encodeResponse(array $payload): ToolResult
+    {
+        return ToolResult::success(
+            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+        );
     }
 
     /**

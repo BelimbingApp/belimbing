@@ -19,6 +19,8 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'blb:ai:browser:status')]
 class BrowserStatusCommand extends Command
 {
+    private const NONE_LABEL = '(none)';
+
     protected $description = 'Show browser session status for a company or specific session';
 
     protected $signature = 'blb:ai:browser:status
@@ -58,12 +60,12 @@ class BrowserStatusCommand extends Command
         $this->components->twoColumnDetail('Employee', (string) $state->employeeId);
         $this->components->twoColumnDetail('Company', (string) $state->companyId);
         $this->components->twoColumnDetail('Headless', $state->headless ? 'Yes' : 'No');
-        $this->components->twoColumnDetail('Current URL', $state->currentUrl ?? '(none)');
-        $this->components->twoColumnDetail('Active Tab', $state->activeTabId ?? '(none)');
+        $this->components->twoColumnDetail('Current URL', $state->currentUrl ?? self::NONE_LABEL);
+        $this->components->twoColumnDetail('Active Tab', $state->activeTabId ?? self::NONE_LABEL);
         $this->components->twoColumnDetail('Tabs', (string) count($state->tabs));
         $this->components->twoColumnDetail('Created', $state->createdAt);
         $this->components->twoColumnDetail('Last Activity', $state->lastActivityAt);
-        $this->components->twoColumnDetail('Expires', $state->expiresAt ?? '(none)');
+        $this->components->twoColumnDetail('Expires', $state->expiresAt ?? self::NONE_LABEL);
 
         if ($state->failureReason !== null) {
             $this->components->twoColumnDetail('Failure Reason', $state->failureReason);
