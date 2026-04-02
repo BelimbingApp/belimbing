@@ -13,6 +13,8 @@ const ORCH_POLICY_TASK = 'Review the quarterly report';
 const ORCH_POLICY_PACK_ID = 'blb.test-pack';
 const ORCH_POLICY_PACK_NAME = 'Test Pack';
 const ORCH_POLICY_PACK_DESC = 'A test pack for policy tests';
+const ORCH_POLICY_PACK_VERSION = '1.0.0';
+const ORCH_POLICY_AGENT_A = 'Agent A';
 
 function makeOrchestrationPolicyService(): OrchestrationPolicyService
 {
@@ -69,7 +71,7 @@ it('allows an available skill pack applicable to the agent', function (): void {
 
     $manifest = new SkillPackManifest(
         id: ORCH_POLICY_PACK_ID,
-        version: '1.0.0',
+        version: ORCH_POLICY_PACK_VERSION,
         name: ORCH_POLICY_PACK_NAME,
         description: ORCH_POLICY_PACK_DESC,
         applicableAgentIds: ['5'],
@@ -84,7 +86,7 @@ it('allows a universal skill pack with empty applicableAgentIds', function (): v
 
     $manifest = new SkillPackManifest(
         id: ORCH_POLICY_PACK_ID,
-        version: '1.0.0',
+        version: ORCH_POLICY_PACK_VERSION,
         name: ORCH_POLICY_PACK_NAME,
         description: ORCH_POLICY_PACK_DESC,
         applicableAgentIds: [],
@@ -99,7 +101,7 @@ it('rejects a disabled skill pack even if agent matches', function (): void {
 
     $manifest = new SkillPackManifest(
         id: ORCH_POLICY_PACK_ID,
-        version: '1.0.0',
+        version: ORCH_POLICY_PACK_VERSION,
         name: ORCH_POLICY_PACK_NAME,
         description: ORCH_POLICY_PACK_DESC,
         applicableAgentIds: ['5'],
@@ -114,7 +116,7 @@ it('rejects a degraded skill pack', function (): void {
 
     $manifest = new SkillPackManifest(
         id: ORCH_POLICY_PACK_ID,
-        version: '1.0.0',
+        version: ORCH_POLICY_PACK_VERSION,
         name: ORCH_POLICY_PACK_NAME,
         description: ORCH_POLICY_PACK_DESC,
         status: SkillPackStatus::Degraded,
@@ -128,7 +130,7 @@ it('rejects a ready skill pack when agent is not in applicableAgentIds', functio
 
     $manifest = new SkillPackManifest(
         id: ORCH_POLICY_PACK_ID,
-        version: '1.0.0',
+        version: ORCH_POLICY_PACK_VERSION,
         name: ORCH_POLICY_PACK_NAME,
         description: ORCH_POLICY_PACK_DESC,
         applicableAgentIds: ['5', '10'],
@@ -145,7 +147,7 @@ it('recognizes structured capabilities when domains are present', function (): v
 
     $descriptor = new AgentCapabilityDescriptor(
         employeeId: 1,
-        name: 'Agent A',
+        name: ORCH_POLICY_AGENT_A,
         domains: ['it_support'],
     );
 
@@ -157,7 +159,7 @@ it('recognizes structured capabilities when task types are present', function ()
 
     $descriptor = new AgentCapabilityDescriptor(
         employeeId: 1,
-        name: 'Agent A',
+        name: ORCH_POLICY_AGENT_A,
         taskTypes: ['resolve_ticket'],
     );
 
@@ -169,7 +171,7 @@ it('recognizes structured capabilities when specialties are present', function (
 
     $descriptor = new AgentCapabilityDescriptor(
         employeeId: 1,
-        name: 'Agent A',
+        name: ORCH_POLICY_AGENT_A,
         specialties: ['database_migration'],
     );
 
@@ -181,7 +183,7 @@ it('rejects agents without structured capabilities', function (): void {
 
     $descriptor = new AgentCapabilityDescriptor(
         employeeId: 1,
-        name: 'Agent A',
+        name: ORCH_POLICY_AGENT_A,
         displaySummary: 'Just a free-text bio, no structured data',
     );
 

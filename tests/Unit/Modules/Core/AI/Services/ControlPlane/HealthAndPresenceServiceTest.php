@@ -21,6 +21,10 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 const HAPS_TOOL_NAME = 'bash';
 const HAPS_EMPLOYEE_ID = 1;
 const HAPS_PROVIDER_NAME = 'anthropic';
+const HAPS_RUN_TIME_1 = '2026-04-02T10:00:00+00:00';
+const HAPS_RUN_TIME_2 = '2026-04-02T10:01:00+00:00';
+const HAPS_PROVIDER_LAST_TEST_AT = '.last_test_at';
+const HAPS_PROVIDER_LAST_TEST_SUCCESS = '.last_test_success';
 
 function makeHapsService(
     ?ToolReadinessService $toolReadiness = null,
@@ -231,8 +235,8 @@ describe('agentSnapshot', function () {
 
     it('computes healthy agent health from successful recent runs', function () {
         $runs = [
-            'run_1' => ['meta' => ['latency_ms' => 100], 'recorded_at' => '2026-04-02T10:00:00+00:00'],
-            'run_2' => ['meta' => ['latency_ms' => 200], 'recorded_at' => '2026-04-02T10:01:00+00:00'],
+            'run_1' => ['meta' => ['latency_ms' => 100], 'recorded_at' => HAPS_RUN_TIME_1],
+            'run_2' => ['meta' => ['latency_ms' => 200], 'recorded_at' => HAPS_RUN_TIME_2],
         ];
 
         $sessionManager = Mockery::mock(SessionManager::class);
@@ -248,8 +252,8 @@ describe('agentSnapshot', function () {
 
     it('computes failing agent health when most recent runs have errors', function () {
         $runs = [
-            'run_1' => ['meta' => ['error' => 'Timeout'], 'recorded_at' => '2026-04-02T10:00:00+00:00'],
-            'run_2' => ['meta' => ['error' => 'Rate limit'], 'recorded_at' => '2026-04-02T10:01:00+00:00'],
+            'run_1' => ['meta' => ['error' => 'Timeout'], 'recorded_at' => HAPS_RUN_TIME_1],
+            'run_2' => ['meta' => ['error' => 'Rate limit'], 'recorded_at' => HAPS_RUN_TIME_2],
             'run_3' => ['meta' => ['error' => 'Auth fail'], 'recorded_at' => '2026-04-02T10:02:00+00:00'],
         ];
 
@@ -266,8 +270,8 @@ describe('agentSnapshot', function () {
 
     it('computes degraded agent health when some runs have errors', function () {
         $runs = [
-            'run_1' => ['meta' => ['latency_ms' => 100], 'recorded_at' => '2026-04-02T10:00:00+00:00'],
-            'run_2' => ['meta' => ['error' => 'Timeout'], 'recorded_at' => '2026-04-02T10:01:00+00:00'],
+            'run_1' => ['meta' => ['latency_ms' => 100], 'recorded_at' => HAPS_RUN_TIME_1],
+            'run_2' => ['meta' => ['error' => 'Timeout'], 'recorded_at' => HAPS_RUN_TIME_2],
             'run_3' => ['meta' => ['latency_ms' => 200], 'recorded_at' => '2026-04-02T10:02:00+00:00'],
         ];
 
@@ -291,10 +295,10 @@ describe('providerSnapshot', function () {
     it('returns unknown health when provider has never been tested', function () {
         $settings = Mockery::mock(SettingsService::class);
         $settings->shouldReceive('get')
-            ->with('ai.providers.'.HAPS_PROVIDER_NAME.'.last_test_at')
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_AT)
             ->andReturn(null);
         $settings->shouldReceive('get')
-            ->with('ai.providers.'.HAPS_PROVIDER_NAME.'.last_test_success', false)
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS, false)
             ->andReturn(false);
 
         $service = makeHapsService(settings: $settings);
@@ -310,10 +314,10 @@ describe('providerSnapshot', function () {
 
         $settings = Mockery::mock(SettingsService::class);
         $settings->shouldReceive('get')
-            ->with('ai.providers.'.HAPS_PROVIDER_NAME.'.last_test_at')
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_AT)
             ->andReturn($recentTime);
         $settings->shouldReceive('get')
-            ->with('ai.providers.'.HAPS_PROVIDER_NAME.'.last_test_success', false)
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS, false)
             ->andReturn(true);
 
         $service = makeHapsService(settings: $settings);
@@ -328,10 +332,10 @@ describe('providerSnapshot', function () {
 
         $settings = Mockery::mock(SettingsService::class);
         $settings->shouldReceive('get')
-            ->with('ai.providers.'.HAPS_PROVIDER_NAME.'.last_test_at')
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_AT)
             ->andReturn($recentTime);
         $settings->shouldReceive('get')
-            ->with('ai.providers.'.HAPS_PROVIDER_NAME.'.last_test_success', false)
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS, false)
             ->andReturn(false);
 
         $service = makeHapsService(settings: $settings);

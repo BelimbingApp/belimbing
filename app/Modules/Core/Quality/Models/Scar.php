@@ -166,7 +166,7 @@ class Scar extends QualityRecord
      */
     public function issueOwner(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'issue_owner_user_id');
+        return $this->qualityUserRelation('issue_owner_user_id');
     }
 
     /**
@@ -174,7 +174,7 @@ class Scar extends QualityRecord
      */
     public function verifiedByUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'verified_by_user_id');
+        return $this->qualityUserRelation('verified_by_user_id');
     }
 
     /**
@@ -182,7 +182,7 @@ class Scar extends QualityRecord
      */
     public function closedByUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'closed_by_user_id');
+        return $this->qualityUserRelation('closed_by_user_id');
     }
 
     protected function qualityEventForeignKey(): string

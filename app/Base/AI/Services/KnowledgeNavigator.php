@@ -23,7 +23,7 @@ class KnowledgeNavigator
             ],
             [
                 'title' => 'Lara system Agent',
-                'path' => 'docs/architecture/lara-system-agent.md',
+                'path' => 'docs/architecture/ai/lara.md',
                 'summary' => 'Lara identity, access model, session isolation, and orchestration scope.',
                 'keywords' => ['lara', 'chat', 'system', 'orchestration', 'agent'],
             ],

@@ -6,7 +6,7 @@
 namespace App\Modules\Core\AI\Services\ControlPlane;
 
 use App\Modules\Core\AI\DTO\ControlPlane\TelemetryEvent;
-use App\Modules\Core\AI\Enums\ControlPlaneTarget;
+use App\Modules\Core\AI\DTO\ControlPlane\TelemetryRecordRequest;
 use App\Modules\Core\AI\Enums\TelemetryEventType;
 use App\Modules\Core\AI\Models\TelemetryEvent as TelemetryEventModel;
 use Illuminate\Database\Eloquent\Collection;
@@ -23,51 +23,34 @@ class OperationalTelemetryService
 {
     /**
      * Record a telemetry event.
-     *
-     * @param  TelemetryEventType  $eventType  Event classification
-     * @param  array<string, mixed>  $payload  Structured event data (no secrets)
-     * @param  string|null  $runId  Correlated run identifier
-     * @param  string|null  $sessionId  Correlated session identifier
-     * @param  string|null  $dispatchId  Correlated dispatch identifier
-     * @param  int|null  $employeeId  Agent employee ID
-     * @param  ControlPlaneTarget|null  $targetType  Target subsystem type
-     * @param  string|null  $targetId  Target subsystem identifier
      */
-    public function record(
-        TelemetryEventType $eventType,
-        array $payload = [],
-        ?string $runId = null,
-        ?string $sessionId = null,
-        ?string $dispatchId = null,
-        ?int $employeeId = null,
-        ?ControlPlaneTarget $targetType = null,
-        ?string $targetId = null,
-    ): TelemetryEvent {
+    public function record(TelemetryRecordRequest $request): TelemetryEvent
+    {
         $eventId = TelemetryEventModel::ID_PREFIX.Str::ulid()->toBase32();
 
         $model = TelemetryEventModel::query()->create([
             'id' => $eventId,
-            'event_type' => $eventType,
-            'run_id' => $runId,
-            'session_id' => $sessionId,
-            'dispatch_id' => $dispatchId,
-            'employee_id' => $employeeId,
-            'target_type' => $targetType,
-            'target_id' => $targetId,
-            'payload' => $payload,
+            'event_type' => $request->eventType,
+            'run_id' => $request->runId,
+            'session_id' => $request->sessionId,
+            'dispatch_id' => $request->dispatchId,
+            'employee_id' => $request->employeeId,
+            'target_type' => $request->targetType,
+            'target_id' => $request->targetId,
+            'payload' => $request->payload,
             'occurred_at' => now(),
         ]);
 
         return new TelemetryEvent(
             eventId: $model->id,
-            eventType: $eventType,
-            runId: $runId,
-            sessionId: $sessionId,
-            dispatchId: $dispatchId,
-            employeeId: $employeeId,
-            targetType: $targetType,
-            targetId: $targetId,
-            payload: $payload,
+            eventType: $request->eventType,
+            runId: $request->runId,
+            sessionId: $request->sessionId,
+            dispatchId: $request->dispatchId,
+            employeeId: $request->employeeId,
+            targetType: $request->targetType,
+            targetId: $request->targetId,
+            payload: $request->payload,
             occurredAt: $model->occurred_at->toIso8601String(),
         );
     }

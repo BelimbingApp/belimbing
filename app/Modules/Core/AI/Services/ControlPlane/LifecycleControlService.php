@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Services\ControlPlane;
 
 use App\Modules\Core\AI\DTO\ControlPlane\LifecyclePreview;
 use App\Modules\Core\AI\DTO\ControlPlane\LifecycleRequest as LifecycleRequestDTO;
+use App\Modules\Core\AI\DTO\ControlPlane\TelemetryRecordRequest;
 use App\Modules\Core\AI\Enums\LifecycleAction;
 use App\Modules\Core\AI\Enums\LifecycleActionStatus;
 use App\Modules\Core\AI\Enums\TelemetryEventType;
@@ -94,7 +95,7 @@ class LifecycleControlService
 
             $request->markCompleted($result);
 
-            $this->telemetry->record(
+            $this->telemetry->record(new TelemetryRecordRequest(
                 eventType: TelemetryEventType::LifecycleAction,
                 payload: [
                     'action' => $action->value,
@@ -102,11 +103,11 @@ class LifecycleControlService
                     'result' => $result,
                     'status' => 'completed',
                 ],
-            );
+            ));
         } catch (\Throwable $e) {
             $request->markFailed($e->getMessage());
 
-            $this->telemetry->record(
+            $this->telemetry->record(new TelemetryRecordRequest(
                 eventType: TelemetryEventType::LifecycleAction,
                 payload: [
                     'action' => $action->value,
@@ -114,7 +115,7 @@ class LifecycleControlService
                     'status' => 'failed',
                     'error' => $e->getMessage(),
                 ],
-            );
+            ));
         }
 
         $request->refresh();

@@ -131,8 +131,8 @@ class SessionSpawnManager
      */
     private function createSession(SpawnEnvelope $envelope, int $depth): OrchestrationSession
     {
-        /** @var OrchestrationSession $session */
-        $session = OrchestrationSession::query()->create([
+        /** @var OrchestrationSession */
+        return OrchestrationSession::query()->create([
             'id' => OrchestrationSession::ID_PREFIX.Str::random(12),
             'parent_session_id' => $envelope->parentSessionId,
             'parent_run_id' => $envelope->parentRunId,
@@ -146,7 +146,5 @@ class SessionSpawnManager
             'spawn_envelope' => $envelope->toArray(),
             'depth' => $depth,
         ]);
-
-        return $session;
     }
 }

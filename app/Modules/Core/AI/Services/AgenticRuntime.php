@@ -13,9 +13,6 @@ use App\Base\AI\Services\AiRuntimeLogger;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\Message;
-use App\Modules\Core\AI\DTO\Orchestration\HookPayload;
-use App\Modules\Core\AI\Enums\HookStage;
-use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRunner;
 use Illuminate\Support\Str;
 
 /**
@@ -42,7 +39,7 @@ class AgenticRuntime
         private readonly RuntimeMessageBuilder $messageBuilder,
         private readonly RuntimeResponseFactory $responseFactory,
         private readonly AiRuntimeLogger $runtimeLogger,
-        private readonly RuntimeHookRunner $hookRunner,
+        private readonly RuntimeHookCoordinator $hookCoordinator,
     ) {}
 
     /**
@@ -242,13 +239,13 @@ class AgenticRuntime
         $employeeId = (int) ($config['employee_id'] ?? 0);
 
         // Hook: PreContextBuild — augment system prompt before message assembly
-        $systemPrompt = $this->runPreContextBuildHooks($runId, $employeeId, $systemPrompt);
+        $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
 
         $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
         $tools = $this->toolRegistry->toolDefinitionsForCurrentUser();
 
         // Hook: PreToolRegistry — add/remove tools before the LLM sees them
-        $tools = $this->runPreToolRegistryHooks($runId, $employeeId, $tools);
+        $tools = $this->hookCoordinator->preToolRegistry($runId, $employeeId, $tools);
 
         $toolActions = [];
         $clientActions = [];
@@ -257,7 +254,7 @@ class AgenticRuntime
 
         for ($iteration = 0; $iteration < self::MAX_ITERATIONS; $iteration++) {
             // Hook: PreLlmCall — observe or augment before each LLM call
-            $this->runPreLlmCallHooks($runId, $employeeId, $iteration, $hookMetadata);
+            $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $hookMetadata);
 
             $result = $this->chatWithRetry($credentials, $config, $apiMessages, $tools, $retryAttempts);
 
@@ -276,7 +273,7 @@ class AgenticRuntime
                 $errorResult['meta']['retry_attempts'] = $retryAttempts;
 
                 // Hook: PostRun on error
-                $this->runPostRunHooks($runId, $employeeId, false, $hookMetadata);
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $hookMetadata);
                 $errorResult['meta']['hooks'] = $hookMetadata;
 
                 return $errorResult;
@@ -293,7 +290,7 @@ class AgenticRuntime
                 $successResult['meta']['retry_attempts'] = $retryAttempts;
 
                 // Hook: PostRun on success
-                $this->runPostRunHooks($runId, $employeeId, true, $hookMetadata);
+                $this->hookCoordinator->postRun($runId, $employeeId, true, $hookMetadata);
                 $successResult['meta']['hooks'] = $hookMetadata;
 
                 return $successResult;
@@ -307,7 +304,7 @@ class AgenticRuntime
         $maxIterResult['meta']['retry_attempts'] = $retryAttempts;
 
         // Hook: PostRun on max iterations
-        $this->runPostRunHooks($runId, $employeeId, false, $hookMetadata);
+        $this->hookCoordinator->postRun($runId, $employeeId, false, $hookMetadata);
         $maxIterResult['meta']['hooks'] = $hookMetadata;
 
         return $maxIterResult;
@@ -398,29 +395,6 @@ class AgenticRuntime
             'content' => $result['content'] ?? null,
             'tool_calls' => $result['tool_calls'],
         ];
-    }
-
-    /**
-     * Execute requested tools and append tool responses back into the conversation.
-     *
-     * @param  list<array<string, mixed>>  $toolCalls
-     * @param  list<array<string, mixed>>  $apiMessages
-     * @param  list<array<string, mixed>>  $toolActions
-     * @param  list<string>  $clientActions
-     */
-    private function executeToolCalls(
-        array $toolCalls,
-        array &$apiMessages,
-        array &$toolActions,
-        array &$clientActions,
-    ): void {
-        foreach ($toolCalls as $toolCall) {
-            $toolExecution = $this->executeToolCall($toolCall);
-
-            $toolActions[] = $toolExecution['action'];
-            array_push($clientActions, ...$toolExecution['client_actions']);
-            $apiMessages[] = $toolExecution['message'];
-        }
     }
 
     /**
@@ -584,13 +558,13 @@ class AgenticRuntime
         $employeeId = (int) ($config['employee_id'] ?? 0);
 
         // Hook: PreContextBuild — augment system prompt before message assembly
-        $systemPrompt = $this->runPreContextBuildHooks($runId, $employeeId, $systemPrompt);
+        $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
 
         $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
         $tools = $this->toolRegistry->toolDefinitionsForCurrentUser();
 
         // Hook: PreToolRegistry — add/remove tools before the LLM sees them
-        $tools = $this->runPreToolRegistryHooks($runId, $employeeId, $tools);
+        $tools = $this->hookCoordinator->preToolRegistry($runId, $employeeId, $tools);
 
         $toolActions = [];
         $clientActions = [];
@@ -601,7 +575,7 @@ class AgenticRuntime
 
         for ($iteration = 0; $iteration < self::MAX_ITERATIONS; $iteration++) {
             // Hook: PreLlmCall
-            $this->runPreLlmCallHooks($runId, $employeeId, $iteration, $hookMetadata);
+            $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $hookMetadata);
 
             $result = $this->chatWithRetry($credentials, $config, $apiMessages, $tools, $retryAttempts);
 
@@ -615,7 +589,7 @@ class AgenticRuntime
                 ]);
 
                 // Hook: PostRun on error
-                $this->runPostRunHooks($runId, $employeeId, false, $hookMetadata);
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $hookMetadata);
 
                 yield ['event' => 'error', 'data' => [
                     'message' => $runtimeError->userMessage,
@@ -639,7 +613,7 @@ class AgenticRuntime
 
             if (($result['tool_calls'] ?? []) === []) {
                 // Hook: PostRun on success
-                $this->runPostRunHooks($runId, $employeeId, true, $hookMetadata);
+                $this->hookCoordinator->postRun($runId, $employeeId, true, $hookMetadata);
 
                 yield from $this->streamFinalResponse(
                     $runId,
@@ -676,7 +650,7 @@ class AgenticRuntime
                 $apiMessages[] = $toolExecution['message'];
 
                 // Hook: PostToolResult
-                $this->runPostToolResultHooks($runId, $employeeId, $toolExecution['action'], $hookMetadata);
+                $this->hookCoordinator->postToolResult($runId, $employeeId, $toolExecution['action'], $hookMetadata);
 
                 yield ['event' => 'status', 'data' => [
                     'phase' => 'tool_finished',
@@ -694,7 +668,7 @@ class AgenticRuntime
         ]);
 
         // Hook: PostRun on max iterations
-        $this->runPostRunHooks($runId, $employeeId, false, $hookMetadata);
+        $this->hookCoordinator->postRun($runId, $employeeId, false, $hookMetadata);
 
         yield ['event' => 'error', 'data' => [
             'message' => $maxIterError->userMessage,
@@ -925,176 +899,6 @@ class AgenticRuntime
         ];
     }
 
-    // ──────────────────────────────────────────────────
-    // Runtime hook integration
-    // ──────────────────────────────────────────────────
-
-    /**
-     * Build a HookPayload for the given stage.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    private function buildHookPayload(HookStage $stage, string $runId, int $employeeId, array $data = []): HookPayload
-    {
-        return new HookPayload(
-            stage: $stage,
-            runId: $runId,
-            employeeId: $employeeId,
-            data: $data,
-        );
-    }
-
-    /**
-     * Run PreContextBuild hooks to augment the system prompt.
-     *
-     * Hook prompt sections are appended to the system prompt.
-     */
-    private function runPreContextBuildHooks(string $runId, int $employeeId, ?string $systemPrompt): ?string
-    {
-        if (! $this->hookRunner->hasHooksFor(HookStage::PreContextBuild)) {
-            return $systemPrompt;
-        }
-
-        $payload = $this->buildHookPayload(
-            HookStage::PreContextBuild,
-            $runId,
-            $employeeId,
-            ['system_prompt' => $systemPrompt],
-        );
-
-        $result = $this->hookRunner->run(HookStage::PreContextBuild, $payload);
-
-        if ($result->promptSections === []) {
-            return $systemPrompt;
-        }
-
-        $additions = implode("\n\n", $result->promptSections);
-
-        return $systemPrompt !== null
-            ? $systemPrompt."\n\n".$additions
-            : $additions;
-    }
-
-    /**
-     * Run PreToolRegistry hooks to add or remove tools.
-     *
-     * @param  list<array<string, mixed>>  $tools
-     * @return list<array<string, mixed>>
-     */
-    private function runPreToolRegistryHooks(string $runId, int $employeeId, array $tools): array
-    {
-        if (! $this->hookRunner->hasHooksFor(HookStage::PreToolRegistry)) {
-            return $tools;
-        }
-
-        $toolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
-
-        $payload = $this->buildHookPayload(
-            HookStage::PreToolRegistry,
-            $runId,
-            $employeeId,
-            ['tool_names' => $toolNames],
-        );
-
-        $result = $this->hookRunner->run(HookStage::PreToolRegistry, $payload);
-
-        if (! $result->hasChanges()) {
-            return $tools;
-        }
-
-        // Remove tools that hooks requested removed
-        if ($result->toolsToRemove !== []) {
-            $removeSet = array_flip($result->toolsToRemove);
-            $tools = array_values(array_filter(
-                $tools,
-                fn (array $t): bool => ! isset($removeSet[$t['function']['name'] ?? '']),
-            ));
-        }
-
-        // Note: toolsToAdd names are recorded in metadata but actual tool
-        // definition addition requires the tool to be registered in the
-        // AgentToolRegistry. Hooks signal intent; the registry resolves it.
-
-        return $tools;
-    }
-
-    /**
-     * Run PreLlmCall hooks before each LLM API call.
-     *
-     * @param  array<string, array<string, mixed>>  $hookMetadata
-     */
-    private function runPreLlmCallHooks(string $runId, int $employeeId, int $iteration, array &$hookMetadata): void
-    {
-        if (! $this->hookRunner->hasHooksFor(HookStage::PreLlmCall)) {
-            return;
-        }
-
-        $payload = $this->buildHookPayload(
-            HookStage::PreLlmCall,
-            $runId,
-            $employeeId,
-            ['iteration' => $iteration],
-        );
-
-        $result = $this->hookRunner->run(HookStage::PreLlmCall, $payload);
-
-        if ($result->hasExecutions()) {
-            $hookMetadata['pre_llm_call_'.$iteration] = $result->toArray();
-        }
-    }
-
-    /**
-     * Run PostToolResult hooks after a tool execution.
-     *
-     * @param  array<string, mixed>  $toolAction  The executed tool action metadata
-     * @param  array<string, array<string, mixed>>  $hookMetadata
-     */
-    private function runPostToolResultHooks(string $runId, int $employeeId, array $toolAction, array &$hookMetadata): void
-    {
-        if (! $this->hookRunner->hasHooksFor(HookStage::PostToolResult)) {
-            return;
-        }
-
-        $payload = $this->buildHookPayload(
-            HookStage::PostToolResult,
-            $runId,
-            $employeeId,
-            ['tool_action' => $toolAction],
-        );
-
-        $result = $this->hookRunner->run(HookStage::PostToolResult, $payload);
-
-        if ($result->hasExecutions()) {
-            $toolName = $toolAction['tool'] ?? 'unknown';
-            $hookMetadata['post_tool_'.$toolName] = $result->toArray();
-        }
-    }
-
-    /**
-     * Run PostRun hooks after the agentic run completes.
-     *
-     * @param  array<string, array<string, mixed>>  $hookMetadata
-     */
-    private function runPostRunHooks(string $runId, int $employeeId, bool $success, array &$hookMetadata): void
-    {
-        if (! $this->hookRunner->hasHooksFor(HookStage::PostRun)) {
-            return;
-        }
-
-        $payload = $this->buildHookPayload(
-            HookStage::PostRun,
-            $runId,
-            $employeeId,
-            ['success' => $success],
-        );
-
-        $result = $this->hookRunner->run(HookStage::PostRun, $payload);
-
-        if ($result->hasExecutions()) {
-            $hookMetadata['post_run'] = $result->toArray();
-        }
-    }
-
     /**
      * Execute tool calls with PostToolResult hooks.
      *
@@ -1122,8 +926,7 @@ class AgenticRuntime
             array_push($clientActions, ...$toolExecution['client_actions']);
             $apiMessages[] = $toolExecution['message'];
 
-            // Hook: PostToolResult
-            $this->runPostToolResultHooks($runId, $employeeId, $toolExecution['action'], $hookMetadata);
+            $this->hookCoordinator->postToolResult($runId, $employeeId, $toolExecution['action'], $hookMetadata);
         }
     }
 }

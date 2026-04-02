@@ -61,10 +61,17 @@ class SkillContextResolver
      */
     public function resolveForTask(int $employeeId, string $task, ?string $taskType = null): SkillResolution
     {
-        // Task-level filtering is a future extension. For now, resolve
-        // by agent only. The task/taskType params ensure the interface
-        // is stable when filtering is added.
-        return $this->resolve($employeeId);
+        if ($task === '' && $taskType === null) {
+            return $this->resolve($employeeId);
+        }
+
+        $applicablePacks = $this->resolveApplicablePacks($employeeId);
+
+        if ($applicablePacks === []) {
+            return SkillResolution::empty();
+        }
+
+        return $this->mergePackResources($applicablePacks);
     }
 
     /**

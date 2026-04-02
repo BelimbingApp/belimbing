@@ -20,6 +20,8 @@ const PES_SUBJECT = 'agent:lara';
 const PES_EMPLOYEE_ID = 1;
 const PES_SAFE_URL = 'https://example.com/api/data';
 const PES_BLOCKED_URL = 'http://169.254.169.254/latest/meta-data';
+const PES_WORKSPACE_PATH_PREFIX = '/tmp/workspace/';
+const PES_FRAMEWORK_RESOURCE_PATH = '/resources/agents';
 
 function makePesMocks(): array
 {
@@ -206,9 +208,9 @@ describe('evaluateWorkspaceValidity', function () {
     it('allows when workspace is valid with no warnings', function () {
         $manifest = new WorkspaceManifest(
             employeeId: PES_EMPLOYEE_ID,
-            workspacePath: '/tmp/workspace/'.PES_EMPLOYEE_ID,
+            workspacePath: PES_WORKSPACE_PATH_PREFIX.PES_EMPLOYEE_ID,
             isSystemAgent: true,
-            frameworkResourcePath: '/resources/agents',
+            frameworkResourcePath: PES_FRAMEWORK_RESOURCE_PATH,
             files: [],
         );
         $validResult = new WorkspaceValidationResult(
@@ -236,9 +238,9 @@ describe('evaluateWorkspaceValidity', function () {
     it('degrades when workspace is valid but has warnings', function () {
         $manifest = new WorkspaceManifest(
             employeeId: PES_EMPLOYEE_ID,
-            workspacePath: '/tmp/workspace/'.PES_EMPLOYEE_ID,
+            workspacePath: PES_WORKSPACE_PATH_PREFIX.PES_EMPLOYEE_ID,
             isSystemAgent: true,
-            frameworkResourcePath: '/resources/agents',
+            frameworkResourcePath: PES_FRAMEWORK_RESOURCE_PATH,
             files: [],
         );
         $warningResult = new WorkspaceValidationResult(
@@ -268,9 +270,9 @@ describe('evaluateWorkspaceValidity', function () {
     it('denies when workspace validation fails', function () {
         $manifest = new WorkspaceManifest(
             employeeId: PES_EMPLOYEE_ID,
-            workspacePath: '/tmp/workspace/'.PES_EMPLOYEE_ID,
+            workspacePath: PES_WORKSPACE_PATH_PREFIX.PES_EMPLOYEE_ID,
             isSystemAgent: true,
-            frameworkResourcePath: '/resources/agents',
+            frameworkResourcePath: PES_FRAMEWORK_RESOURCE_PATH,
             files: [],
         );
         $failedResult = new WorkspaceValidationResult(

@@ -14,6 +14,10 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+const CP_ENUM_LABEL_COLOR_CASE_MESSAGE = 'provides label and color for every case';
+const CP_ENUM_FIVE_CASES_MESSAGE = 'has five cases';
+const CP_ENUM_NON_EMPTY_LABELS_MESSAGE = 'provides non-empty labels for all cases';
+
 // ------------------------------------------------------------------
 // ControlPlaneTarget
 // ------------------------------------------------------------------
@@ -45,7 +49,7 @@ describe('PresenceState', function () {
         expect(PresenceState::cases())->toHaveCount(3);
     });
 
-    it('provides label and color for every case', function () {
+    it(CP_ENUM_LABEL_COLOR_CASE_MESSAGE, function () {
         foreach (PresenceState::cases() as $case) {
             expect($case->label())->toBeString()->not()->toBeEmpty()
                 ->and($case->color())->toBeString()->not()->toBeEmpty();
@@ -70,7 +74,7 @@ describe('PresenceState', function () {
 // ------------------------------------------------------------------
 
 describe('LifecycleAction', function () {
-    it('has five cases', function () {
+    it(CP_ENUM_FIVE_CASES_MESSAGE, function () {
         expect(LifecycleAction::cases())->toHaveCount(5);
     });
 
@@ -82,7 +86,7 @@ describe('LifecycleAction', function () {
             ->and(LifecycleAction::SweepOperations->isDestructive())->toBeFalse();
     });
 
-    it('provides non-empty labels for all cases', function () {
+    it(CP_ENUM_NON_EMPTY_LABELS_MESSAGE, function () {
         foreach (LifecycleAction::cases() as $case) {
             expect($case->label())->toBeString()->not()->toBeEmpty();
         }
@@ -94,7 +98,7 @@ describe('LifecycleAction', function () {
 // ------------------------------------------------------------------
 
 describe('LifecycleActionStatus', function () {
-    it('has five cases', function () {
+    it(CP_ENUM_FIVE_CASES_MESSAGE, function () {
         expect(LifecycleActionStatus::cases())->toHaveCount(5);
     });
 
@@ -106,7 +110,7 @@ describe('LifecycleActionStatus', function () {
             ->and(LifecycleActionStatus::Cancelled->isTerminal())->toBeTrue();
     });
 
-    it('provides label and color for every case', function () {
+    it(CP_ENUM_LABEL_COLOR_CASE_MESSAGE, function () {
         foreach (LifecycleActionStatus::cases() as $case) {
             expect($case->label())->toBeString()->not()->toBeEmpty()
                 ->and($case->color())->toBeString()->not()->toBeEmpty();
@@ -119,7 +123,7 @@ describe('LifecycleActionStatus', function () {
 // ------------------------------------------------------------------
 
 describe('PolicyLayer', function () {
-    it('has five cases', function () {
+    it(CP_ENUM_FIVE_CASES_MESSAGE, function () {
         expect(PolicyLayer::cases())->toHaveCount(5);
     });
 
@@ -131,7 +135,7 @@ describe('PolicyLayer', function () {
             ->and(PolicyLayer::Operator->order())->toBe(5);
     });
 
-    it('provides non-empty labels for all cases', function () {
+    it(CP_ENUM_NON_EMPTY_LABELS_MESSAGE, function () {
         foreach (PolicyLayer::cases() as $case) {
             expect($case->label())->toBeString()->not()->toBeEmpty();
         }
