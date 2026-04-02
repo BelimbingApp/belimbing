@@ -2,9 +2,9 @@
 
 **Parent:** `docs/todo/openclaw-parity/00-capability-gap-audit.md`  
 **Scope:** Turn BLB's current diagnostics, readiness checks, and scattered safeguards into a unified operator control plane with deeper policy and lifecycle controls  
-**Status:** Planned  
+**Status:** Complete  
 **Phase Owner:** Core AI / Base AI  
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-02
 
 ---
 
@@ -391,22 +391,22 @@ Suggested fields:
 
 | Workstream | Goal | Status | Notes |
 |---|---|---|---|
-| 6.1 | Define control-plane contracts | Not started | Stabilize inspection, lifecycle, and policy interfaces before building screens |
-| 6.2 | Build unified run inspection | Not started | Promote `lastRunMeta` into a real inspection model |
-| 6.3 | Build health and presence model | Not started | Wire `ToolHealthState` into a live service instead of leaving it unused |
-| 6.4 | Build lifecycle controls | Not started | Compaction and prune flows need previewability and audit |
-| 6.5 | Add layered policy evaluation | Not started | Move beyond coarse capability checks and isolated guards |
-| 6.6 | Compose the operator UI | Not started | UI should sit on top of services, not become the implementation |
+| 6.1 | Define control-plane contracts | **Done** | 7 enums, 6 DTOs, 2 models, 2 migrations — all tested (24 enum tests, 14 DTO tests) |
+| 6.2 | Build unified run inspection | **Done** | `RunInspectionService` (inspectRun/inspectSession/inspectDispatchRun) + `OperationalTelemetryService` (record/forRun/forSession/forAgent/byType/countByType) — 17 tests passing |
+| 6.3 | Build health and presence model | **Done** | `HealthAndPresenceService` (toolSnapshot/allToolSnapshots/agentSnapshot/providerSnapshot) — 16 tests passing. Fixed unused `ProviderTestService` dep and int/float comparison bug. |
+| 6.4 | Build lifecycle controls | **Done** | `LifecycleControlService` (preview/execute/recent) — 14 tests passing. Fixed FK constraint, ULID ordering tiebreaker, final-class mock workarounds. |
+| 6.5 | Add layered policy evaluation | **Done** | `PolicyEvaluationService` (evaluateToolUse/evaluateNetworkAccess/evaluateWorkspaceValidity) — 12 tests passing. Fixed `WorkspaceResolver` type mismatch. |
+| 6.6 | Compose the operator UI | **Done** | `ControlPlane` Livewire component (3 tabs: Run Inspector, Health & Presence, Lifecycle Controls) + route + menu entry + 4 Artisan commands |
 
 ### 9.1 Stage A - Core control-plane contracts
 
 Sub-todos:
 
-1. define run inspection DTOs and service contract
-2. define readiness/health/presence state model
-3. define lifecycle control request model
-4. define policy evaluation response shape
-5. decide which identifiers are mandatory across telemetry and inspection
+1. ~~define run inspection DTOs and service contract~~ — `RunInspection` DTO in `DTO/ControlPlane/`
+2. ~~define readiness/health/presence state model~~ — `HealthSnapshot` DTO, `PresenceState` enum, reuses existing `ToolHealthState` + `ToolReadiness`
+3. ~~define lifecycle control request model~~ — `LifecycleRequest` model + `LifecyclePreview` DTO, `LifecycleAction`/`LifecycleActionStatus` enums, `ai_lifecycle_requests` table
+4. ~~define policy evaluation response shape~~ — `PolicyDecision` DTO with `PolicyLayer`/`PolicyVerdict` enums
+5. ~~decide which identifiers are mandatory across telemetry and inspection~~ — `TelemetryEvent` model + `TelemetryEventType`/`ControlPlaneTarget` enums, `ai_telemetry_events` table
 
 Exit condition:
 
@@ -416,46 +416,77 @@ Exit condition:
 
 Sub-todos:
 
-1. promote runtime/session metadata into a coherent run-inspection view
-2. normalize telemetry event capture
-3. connect stream failures, provider tests, dispatches, and tool actions under shared IDs
-4. prove the model on both normal and error runs
+1. ~~promote runtime/session metadata into a coherent run-inspection view~~ — `RunInspectionService::inspectRun()` assembles `RunInspection` DTO from session metadata + dispatch records
+2. ~~normalize telemetry event capture~~ — `OperationalTelemetryService::record()` persists to `ai_telemetry_events` table, returns `TelemetryEvent` DTO
+3. ~~connect stream failures, provider tests, dispatches, and tool actions under shared IDs~~ — All query methods support `forRun()`, `forSession()`, `forAgent()`, `byType()`, `countByType()`
+4. ~~prove the model on both normal and error runs~~ — `RunInspectionServiceTest` covers normal runs, error runs, dispatch-linked runs, missing runs, and multi-run sessions (9 tests)
+
+**Services:** `RunInspectionService`, `OperationalTelemetryService`  
+**Tests:** 17 passing (9 + 8)
 
 ### 9.3 Stage C - Health and presence
 
 Sub-todos:
 
-1. wire `ToolHealthState` into a real health computation path
-2. define agent/tool/provider/browser presence signals
-3. combine readiness, health, and presence into explainable snapshots
-4. expose snapshots to the UI and CLI/admin surfaces
+1. ~~wire `ToolHealthState` into a real health computation path~~ — `HealthAndPresenceService::toolSnapshot()` computes health from readiness + last verification result (fresh/stale/failed)
+2. ~~define agent/tool/provider/browser presence signals~~ — Agent presence from session recency (active/idle/offline); provider presence from last-test-at timestamps; tool presence from readiness state
+3. ~~combine readiness, health, and presence into explainable snapshots~~ — `HealthSnapshot` DTO unifies all three dimensions with explanation string
+4. ~~expose snapshots to the UI and CLI/admin surfaces~~ — `HealthSnapshotCommand` (`blb:ai:health:snapshot`) created
+
+**Service:** `HealthAndPresenceService`  
+**Tests:** 16 passing  
+**Bugs fixed:** Removed unused `ProviderTestService` dependency (unmockable `final readonly`), fixed PHP `int/float` strict comparison in `computeAgentHealth()`
 
 ### 9.4 Stage D - Lifecycle controls
 
 Sub-todos:
 
-1. define compaction/prune request workflows
-2. add preview support before destructive execution
-3. connect memory/artifact/session lifecycle jobs to one control service
-4. record outcomes for later inspection
+1. ~~define compaction/prune request workflows~~ — `LifecycleAction` enum: CompactMemory, PruneSessions, PruneArtifacts, SweepBrowserSessions, SweepOperations
+2. ~~add preview support before destructive execution~~ — `LifecycleControlService::preview()` returns `LifecyclePreview` DTO with affected count/summary/destructiveness
+3. ~~connect memory/artifact/session lifecycle jobs to one control service~~ — Delegates to `MemoryCompactor`, `BrowserSessionManager`, `BrowserArtifactStore`, `OperationsDispatchService`, `SessionManager`
+4. ~~record outcomes for later inspection~~ — `LifecycleRequest` model persists all requests; `recent()` returns audit trail ordered by creation time
+
+**Service:** `LifecycleControlService`  
+**Commands:** `LifecyclePreviewCommand` (`blb:ai:lifecycle:preview`), `LifecycleExecuteCommand` (`blb:ai:lifecycle:execute`)  
+**Tests:** 14 passing  
+**Bugs fixed:** FK constraint on `requested_by` (needs real User), ULID ordering tiebreaker for SQLite, `final readonly` TelemetryEvent mock workaround
 
 ### 9.5 Stage E - Policy depth
 
 Sub-todos:
 
-1. inventory current policy checks already embedded in tools/services
-2. extract shared policy evaluation where repetition is growing
-3. make denials and degradations explainable to operators
-4. keep trust-boundary enforcement explicit and testable
+1. ~~inventory current policy checks already embedded in tools/services~~ — Identified: AuthorizationService capability checks, ToolReadinessService readiness, BrowserSsrfGuard network policy, WorkspaceValidator workspace policy
+2. ~~extract shared policy evaluation where repetition is growing~~ — `PolicyEvaluationService` with layered evaluation chain: capability → readiness → subsystem → data/network/workspace → operator
+3. ~~make denials and degradations explainable to operators~~ — `PolicyDecision` DTO with `layerResults` array showing each layer's verdict + reason
+4. ~~keep trust-boundary enforcement explicit and testable~~ — 12 tests cover allow/deny/degrade paths across tool use, network access, and workspace validity
+
+**Service:** `PolicyEvaluationService`  
+**Tests:** 12 passing  
+**Bug fixed:** `evaluateWorkspaceValidity()` was passing `int` to `WorkspaceValidator::validate()` which expects `WorkspaceManifest`; added `WorkspaceResolver` dependency
 
 ### 9.6 Stage F - Operator UI composition
 
 Sub-todos:
 
-1. add a run inspector view
-2. add agent/tool state dashboards
-3. add lifecycle-control panels
-4. link Tool Catalog, provider diagnostics, and workspace validation into the same operational narrative
+1. ~~add a run inspector view~~ — `ControlPlane` Livewire component with "Run Inspector" tab backed by `RunInspectionService`; `run-detail.blade.php` partial renders run facts
+2. ~~add agent/tool state dashboards~~ — "Health & Presence" tab backed by `HealthAndPresenceService` showing tool/agent/provider snapshots
+3. ~~add lifecycle-control panels~~ — "Lifecycle Controls" tab backed by `LifecycleControlService` with preview-first workflow + recent request history
+4. ~~link Tool Catalog, provider diagnostics, and workspace validation into the same operational narrative~~ — Health tab cross-references tool readiness and provider status; policy layer explanations surface workspace/network/capability reasons
+5. ~~register route and menu entry~~ — `admin/ai/control-plane` route in `web.php`, menu item at position 50 under AI parent
+
+**Livewire component:** `app/Modules/Core/AI/Livewire/ControlPlane.php`  
+**Blade views:**
+- `resources/core/views/livewire/admin/ai/control-plane.blade.php`
+- `resources/core/views/livewire/admin/ai/control-plane/partials/run-detail.blade.php`
+
+**Route:** `admin.ai.control-plane` in `app/Modules/Core/AI/Routes/web.php`  
+**Menu:** `ai.control-plane` at position 50 in `app/Modules/Core/AI/Config/menu.php`
+
+**Artisan commands (already created):**
+- `InspectRunCommand` (`blb:ai:inspect:run`)
+- `HealthSnapshotCommand` (`blb:ai:health:snapshot`)
+- `LifecyclePreviewCommand` (`blb:ai:lifecycle:preview`)
+- `LifecycleExecuteCommand` (`blb:ai:lifecycle:execute`)
 
 ---
 

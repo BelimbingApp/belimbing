@@ -6,6 +6,7 @@
 use App\Modules\Core\AI\Http\Controllers\ChatStreamController;
 use App\Modules\Core\AI\Http\Controllers\MessagingWebhookController;
 use App\Modules\Core\AI\Http\Controllers\ProviderSetupController;
+use App\Modules\Core\AI\Livewire\ControlPlane;
 use App\Modules\Core\AI\Livewire\Playground;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
 use App\Modules\Core\AI\Livewire\Setup\Kodi;
@@ -49,4 +50,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('admin/ai/tools/{toolName?}', Tools::class)
         ->name('admin.ai.tools');
+
+    Route::get('admin/ai/control-plane', ControlPlane::class)
+        ->name('admin.ai.control-plane');
 });

@@ -10,6 +10,10 @@ use App\Base\AI\Services\WebSearchService;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Modules\Core\AI\Console\Commands\BrowserStatusCommand;
 use App\Modules\Core\AI\Console\Commands\BrowserSweepCommand;
+use App\Modules\Core\AI\Console\Commands\HealthSnapshotCommand;
+use App\Modules\Core\AI\Console\Commands\InspectRunCommand;
+use App\Modules\Core\AI\Console\Commands\LifecycleExecuteCommand;
+use App\Modules\Core\AI\Console\Commands\LifecyclePreviewCommand;
 use App\Modules\Core\AI\Console\Commands\MemoryCompactCommand;
 use App\Modules\Core\AI\Console\Commands\MemoryIndexCommand;
 use App\Modules\Core\AI\Console\Commands\OperationsStatusCommand;
@@ -25,6 +29,11 @@ use App\Modules\Core\AI\Services\Browser\BrowserRuntimeAdapter;
 use App\Modules\Core\AI\Services\Browser\BrowserSessionManager;
 use App\Modules\Core\AI\Services\Browser\BrowserSessionRepository;
 use App\Modules\Core\AI\Services\ConfigResolver;
+use App\Modules\Core\AI\Services\ControlPlane\HealthAndPresenceService;
+use App\Modules\Core\AI\Services\ControlPlane\LifecycleControlService;
+use App\Modules\Core\AI\Services\ControlPlane\OperationalTelemetryService;
+use App\Modules\Core\AI\Services\ControlPlane\PolicyEvaluationService;
+use App\Modules\Core\AI\Services\ControlPlane\RunInspectionService;
 use App\Modules\Core\AI\Services\KodiPromptFactory;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraContextProvider;
@@ -180,6 +189,13 @@ class ServiceProvider extends BaseServiceProvider
         // Operations dispatch (query/lifecycle)
         $this->app->singleton(OperationsDispatchService::class);
 
+        // Control plane subsystem
+        $this->app->singleton(RunInspectionService::class);
+        $this->app->singleton(OperationalTelemetryService::class);
+        $this->app->singleton(HealthAndPresenceService::class);
+        $this->app->singleton(LifecycleControlService::class);
+        $this->app->singleton(PolicyEvaluationService::class);
+
         $this->registerToolRegistries();
 
         $this->app->singleton(AgenticRuntime::class);
@@ -202,6 +218,10 @@ class ServiceProvider extends BaseServiceProvider
                 SchedulesTickCommand::class,
                 OperationsSweepCommand::class,
                 OperationsStatusCommand::class,
+                InspectRunCommand::class,
+                HealthSnapshotCommand::class,
+                LifecyclePreviewCommand::class,
+                LifecycleExecuteCommand::class,
             ]);
         }
     }

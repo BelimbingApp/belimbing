@@ -29,5 +29,6 @@ return [
         $item('ai.playground', 'Agent Playground', 'heroicon-o-chat-bubble-left-right', 'ai', 20, 'admin.ai.playground'),
         $item('ai.providers', 'AI Providers', 'heroicon-o-server-stack', 'ai', 30, 'admin.ai.providers'),
         $item('ai.tools', 'Tools', 'heroicon-o-wrench-screwdriver', 'ai', 40, 'admin.ai.tools'),
+        $item('ai.control-plane', 'Control Plane', 'heroicon-o-adjustments-horizontal', 'ai', 50, 'admin.ai.control-plane'),
     ],
 ];
