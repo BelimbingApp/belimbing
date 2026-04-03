@@ -231,7 +231,7 @@ class RunRecorder
 
     private function messageBelongsToReconstructedRun(Message $message, string $runId): bool
     {
-        return ! ($message->runId !== $runId && $message->type === 'message');
+        return $message->runId === $runId;
     }
 
     /**

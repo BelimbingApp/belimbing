@@ -34,6 +34,8 @@
         default => null,
     };
     $runIdLabel = is_string($runId) && $runId !== '' ? $runId : null;
+    $runDetailsId = $runIdLabel !== null ? 'run-details-'.$runIdLabel : null;
+    $runDetailsTitleId = $runIdLabel !== null ? 'run-details-title-'.$runIdLabel : null;
 
     $toneClasses = match ($tone) {
         'inverse' => 'text-accent-on/70 focus-visible:ring-accent-on/40',
@@ -78,18 +80,37 @@
                     tabindex="0"
                     class="truncate outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0 hover:text-ink transition-colors"
                     :aria-expanded="popoverOpen"
+                    @if ($runDetailsId !== null)
+                        aria-controls="{{ $runDetailsId }}"
+                        aria-haspopup="dialog"
+                    @endif
                 >
                     {{ \Illuminate\Support\Str::limit($runIdLabel, 8, '…') }}
                 </button>
                 <div
+                    @if ($runDetailsId !== null)
+                        id="{{ $runDetailsId }}"
+                    @endif
                     x-show="popoverOpen"
                     x-cloak
                     @click.outside="popoverOpen = false"
                     @keydown.escape.window="popoverOpen = false"
                     x-transition.opacity.duration.100ms
+                    role="dialog"
+                    aria-modal="false"
+                    @if ($runDetailsTitleId !== null)
+                        aria-labelledby="{{ $runDetailsTitleId }}"
+                    @endif
                     class="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-xl border border-border-default bg-surface-card shadow-lg p-2.5 text-[11px] text-ink"
                 >
-                    <div class="font-medium text-muted mb-1.5">{{ __('Run') }}</div>
+                    <div
+                        @if ($runDetailsTitleId !== null)
+                            id="{{ $runDetailsTitleId }}"
+                        @endif
+                        class="font-medium text-muted mb-1.5"
+                    >
+                        {{ __('Run') }}
+                    </div>
                     <div class="space-y-1.5">
                         <div class="flex justify-between">
                             <span class="text-muted">{{ __('ID') }}</span>
