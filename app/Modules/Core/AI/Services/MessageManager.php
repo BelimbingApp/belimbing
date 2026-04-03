@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Services;
 use App\Base\Support\Json as BlbJson;
 use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\DTO\Message;
+use App\Modules\Core\AI\Models\AiRun;
 use DateTimeImmutable;
 
 class MessageManager
@@ -85,10 +86,6 @@ class MessageManager
         );
 
         $this->append($employeeId, $sessionId, $persistedMessage);
-
-        if (is_string($runId) && $runId !== '' && $meta !== []) {
-            $this->sessionManager->storeRunMeta($employeeId, $sessionId, $runId, $meta);
-        }
 
         return new Message(
             role: 'assistant',
@@ -208,50 +205,105 @@ class MessageManager
 
         $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         $messages = [];
-        $runMetadata = $this->sessionManager->runMetadata($employeeId, $sessionId);
+        $runIds = [];
 
         foreach ($lines as $line) {
-            $message = $this->messageFromTranscriptLine($line, $runMetadata);
+            $data = BlbJson::decodeArray($line);
 
-            if ($message !== null) {
-                $messages[] = $message;
+            if ($data === null) {
+                continue;
             }
+
+            $messages[] = Message::fromJsonLine($data);
+
+            if (($data['role'] ?? '') === 'assistant' && isset($data['run_id']) && ($data['meta'] ?? []) === []) {
+                $runIds[] = $data['run_id'];
+            }
+        }
+
+        if ($runIds !== []) {
+            $runMeta = $this->batchLoadRunMeta(array_unique($runIds));
+
+            $messages = array_map(function (Message $msg) use ($runMeta) {
+                if ($msg->role === 'assistant' && $msg->runId !== null && $msg->meta === [] && isset($runMeta[$msg->runId])) {
+                    return new Message(
+                        role: $msg->role,
+                        content: $msg->content,
+                        timestamp: $msg->timestamp,
+                        runId: $msg->runId,
+                        meta: $runMeta[$msg->runId],
+                        type: $msg->type,
+                    );
+                }
+
+                return $msg;
+            }, $messages);
         }
 
         return $messages;
     }
 
     /**
-     * @param  array<string, mixed>  $runMetadata
+     * Batch-load run metadata from ai_runs for transcript hydration.
+     *
+     * @param  list<string>  $runIds
+     * @return array<string, array<string, mixed>>
      */
-    private function messageFromTranscriptLine(string $line, array $runMetadata): ?Message
+    private function batchLoadRunMeta(array $runIds): array
     {
-        $data = BlbJson::decodeArray($line);
+        $runs = AiRun::query()
+            ->whereIn('id', $runIds)
+            ->get()
+            ->keyBy('id');
 
-        return $data === null
-            ? null
-            : Message::fromJsonLine($this->enrichMessageMetadata($data, $runMetadata));
+        $result = [];
+
+        foreach ($runs as $id => $run) {
+            $result[$id] = $this->buildMetaFromAiRun($run);
+        }
+
+        return $result;
     }
 
     /**
-     * @param  array<string, mixed>  $data
-     * @param  array<string, mixed>  $runMetadata
+     * Build message-compatible meta array from an AiRun model.
+     *
      * @return array<string, mixed>
      */
-    private function enrichMessageMetadata(array $data, array $runMetadata): array
+    private function buildMetaFromAiRun(AiRun $run): array
     {
-        $runId = $data['run_id'] ?? null;
-        $lineMeta = $data['meta'] ?? null;
+        $meta = [
+            'model' => $run->model,
+            'provider_name' => $run->provider_name,
+            'llm' => [
+                'provider' => $run->provider_name ?? 'unknown',
+                'model' => $run->model ?? 'unknown',
+            ],
+            'latency_ms' => $run->latency_ms,
+            'tokens' => [
+                'prompt' => $run->prompt_tokens,
+                'completion' => $run->completion_tokens,
+            ],
+        ];
 
-        if (($lineMeta === null || $lineMeta === []) && is_string($runId)) {
-            $storedRun = $runMetadata[$runId] ?? null;
-            $storedMeta = is_array($storedRun) ? ($storedRun['meta'] ?? null) : null;
-
-            if (is_array($storedMeta)) {
-                $data['meta'] = $storedMeta;
-            }
+        if ($run->error_type !== null) {
+            $meta['error'] = $run->error_message;
+            $meta['error_type'] = $run->error_type;
+            $meta['message_type'] = 'error';
         }
 
-        return $data;
+        if ($run->retry_attempts !== null) {
+            $meta['retry_attempts'] = $run->retry_attempts;
+        }
+
+        if ($run->fallback_attempts !== null) {
+            $meta['fallback_attempts'] = $run->fallback_attempts;
+        }
+
+        if ($run->tool_actions !== null) {
+            $meta['tool_actions'] = $run->tool_actions;
+        }
+
+        return $meta;
     }
 }

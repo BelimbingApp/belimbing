@@ -6,10 +6,12 @@
 use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\AI\DTO\ControlPlane\HealthSnapshot;
 use App\Modules\Core\AI\DTO\Session;
+use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\ControlPlaneTarget;
 use App\Modules\Core\AI\Enums\PresenceState;
 use App\Modules\Core\AI\Enums\ToolHealthState;
 use App\Modules\Core\AI\Enums\ToolReadiness;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\ControlPlane\HealthAndPresenceService;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\AI\Services\ToolReadinessService;
@@ -21,8 +23,6 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 const HAPS_TOOL_NAME = 'bash';
 const HAPS_EMPLOYEE_ID = 1;
 const HAPS_PROVIDER_NAME = 'anthropic';
-const HAPS_RUN_TIME_1 = '2026-04-02T10:00:00+00:00';
-const HAPS_RUN_TIME_2 = '2026-04-02T10:01:00+00:00';
 const HAPS_PROVIDER_LAST_TEST_AT = '.last_test_at';
 const HAPS_PROVIDER_LAST_TEST_SUCCESS = '.last_test_success';
 
@@ -38,7 +38,7 @@ function makeHapsService(
     );
 }
 
-function hapsSession(int $minutesAgo = 5, array $runs = []): Session
+function hapsSession(int $minutesAgo = 5): Session
 {
     $lastActivity = (new DateTimeImmutable)->modify("-{$minutesAgo} minutes");
 
@@ -49,8 +49,24 @@ function hapsSession(int $minutesAgo = 5, array $runs = []): Session
         title: 'Test',
         createdAt: $lastActivity,
         lastActivityAt: $lastActivity,
-        runs: $runs,
     );
+}
+
+function hapsCreateAiRun(array $overrides = []): AiRun
+{
+    return AiRun::unguarded(fn () => AiRun::query()->create(array_merge([
+        'id' => 'run_'.uniqid(),
+        'employee_id' => HAPS_EMPLOYEE_ID,
+        'session_id' => 'sess_haps_001',
+        'source' => 'chat',
+        'execution_mode' => 'streaming',
+        'status' => AiRunStatus::Succeeded,
+        'provider_name' => 'anthropic',
+        'model' => 'claude-opus-4',
+        'latency_ms' => 100,
+        'started_at' => now(),
+        'finished_at' => now(),
+    ], $overrides)));
 }
 
 // ------------------------------------------------------------------
@@ -234,15 +250,13 @@ describe('agentSnapshot', function () {
     });
 
     it('computes healthy agent health from successful recent runs', function () {
-        $runs = [
-            'run_1' => ['meta' => ['latency_ms' => 100], 'recorded_at' => HAPS_RUN_TIME_1],
-            'run_2' => ['meta' => ['latency_ms' => 200], 'recorded_at' => HAPS_RUN_TIME_2],
-        ];
+        hapsCreateAiRun(['started_at' => now()->subMinutes(2)]);
+        hapsCreateAiRun(['started_at' => now()->subMinute()]);
 
         $sessionManager = Mockery::mock(SessionManager::class);
         $sessionManager->shouldReceive('list')
             ->with(HAPS_EMPLOYEE_ID)
-            ->andReturn([hapsSession(minutesAgo: 5, runs: $runs)]);
+            ->andReturn([hapsSession(minutesAgo: 5)]);
 
         $service = makeHapsService(sessionManager: $sessionManager);
         $snapshot = $service->agentSnapshot(HAPS_EMPLOYEE_ID);
@@ -251,16 +265,14 @@ describe('agentSnapshot', function () {
     });
 
     it('computes failing agent health when most recent runs have errors', function () {
-        $runs = [
-            'run_1' => ['meta' => ['error' => 'Timeout'], 'recorded_at' => HAPS_RUN_TIME_1],
-            'run_2' => ['meta' => ['error' => 'Rate limit'], 'recorded_at' => HAPS_RUN_TIME_2],
-            'run_3' => ['meta' => ['error' => 'Auth fail'], 'recorded_at' => '2026-04-02T10:02:00+00:00'],
-        ];
+        hapsCreateAiRun(['status' => AiRunStatus::Failed, 'error_type' => 'timeout', 'started_at' => now()->subMinutes(3)]);
+        hapsCreateAiRun(['status' => AiRunStatus::Failed, 'error_type' => 'rate_limit', 'started_at' => now()->subMinutes(2)]);
+        hapsCreateAiRun(['status' => AiRunStatus::Failed, 'error_type' => 'auth', 'started_at' => now()->subMinute()]);
 
         $sessionManager = Mockery::mock(SessionManager::class);
         $sessionManager->shouldReceive('list')
             ->with(HAPS_EMPLOYEE_ID)
-            ->andReturn([hapsSession(minutesAgo: 5, runs: $runs)]);
+            ->andReturn([hapsSession(minutesAgo: 5)]);
 
         $service = makeHapsService(sessionManager: $sessionManager);
         $snapshot = $service->agentSnapshot(HAPS_EMPLOYEE_ID);
@@ -269,16 +281,14 @@ describe('agentSnapshot', function () {
     });
 
     it('computes degraded agent health when some runs have errors', function () {
-        $runs = [
-            'run_1' => ['meta' => ['latency_ms' => 100], 'recorded_at' => HAPS_RUN_TIME_1],
-            'run_2' => ['meta' => ['error' => 'Timeout'], 'recorded_at' => HAPS_RUN_TIME_2],
-            'run_3' => ['meta' => ['latency_ms' => 200], 'recorded_at' => '2026-04-02T10:02:00+00:00'],
-        ];
+        hapsCreateAiRun(['started_at' => now()->subMinutes(3)]);
+        hapsCreateAiRun(['status' => AiRunStatus::Failed, 'error_type' => 'timeout', 'started_at' => now()->subMinutes(2)]);
+        hapsCreateAiRun(['started_at' => now()->subMinute()]);
 
         $sessionManager = Mockery::mock(SessionManager::class);
         $sessionManager->shouldReceive('list')
             ->with(HAPS_EMPLOYEE_ID)
-            ->andReturn([hapsSession(minutesAgo: 5, runs: $runs)]);
+            ->andReturn([hapsSession(minutesAgo: 5)]);
 
         $service = makeHapsService(sessionManager: $sessionManager);
         $snapshot = $service->agentSnapshot(HAPS_EMPLOYEE_ID);

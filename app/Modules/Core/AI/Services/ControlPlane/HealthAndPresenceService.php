@@ -11,6 +11,7 @@ use App\Modules\Core\AI\Enums\ControlPlaneTarget;
 use App\Modules\Core\AI\Enums\PresenceState;
 use App\Modules\Core\AI\Enums\ToolHealthState;
 use App\Modules\Core\AI\Enums\ToolReadiness;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\AI\Services\ToolReadinessService;
 
@@ -239,41 +240,23 @@ class HealthAndPresenceService
      */
     private function computeAgentHealth(int $employeeId): ToolHealthState
     {
-        $sessions = $this->sessionManager->list($employeeId);
+        $recentRuns = AiRun::query()
+            ->where('employee_id', $employeeId)
+            ->latest('started_at')
+            ->limit(5)
+            ->get();
 
-        if ($sessions === []) {
+        if ($recentRuns->isEmpty()) {
             return ToolHealthState::UNKNOWN;
         }
 
-        // Check the most recent session's runs for error patterns
-        $latestSession = $sessions[0];
-
-        if ($latestSession->runs === []) {
-            return ToolHealthState::UNKNOWN;
-        }
-
-        $recentRuns = array_slice($latestSession->runs, -5, null, true);
-        $errorCount = 0;
-        $totalCount = 0;
-
-        foreach ($recentRuns as $run) {
-            $totalCount++;
-            $meta = $run['meta'] ?? [];
-
-            if (isset($meta['error'])) {
-                $errorCount++;
-            }
-        }
-
-        if ($totalCount === 0) {
-            return ToolHealthState::UNKNOWN;
-        }
+        $errorCount = $recentRuns->whereNotNull('error_type')->count();
 
         if ($errorCount === 0) {
             return ToolHealthState::HEALTHY;
         }
 
-        if ($errorCount / $totalCount < 0.5) {
+        if ($errorCount / $recentRuns->count() < 0.5) {
             return ToolHealthState::DEGRADED;
         }
 

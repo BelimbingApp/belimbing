@@ -13,6 +13,7 @@ use App\Base\AI\Services\AiRuntimeLogger;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\Message;
+use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use Illuminate\Support\Str;
 
 /**
@@ -29,8 +30,6 @@ use Illuminate\Support\Str;
  */
 class AgenticRuntime
 {
-    private const MAX_ITERATIONS = 10;
-
     public function __construct(
         private readonly ConfigResolver $configResolver,
         private readonly LlmClient $llmClient,
@@ -40,6 +39,7 @@ class AgenticRuntime
         private readonly RuntimeResponseFactory $responseFactory,
         private readonly AiRuntimeLogger $runtimeLogger,
         private readonly RuntimeHookCoordinator $hookCoordinator,
+        private readonly RunRecorder $runRecorder,
     ) {}
 
     /**
@@ -58,14 +58,27 @@ class AgenticRuntime
     public function run(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null): array
     {
         $runId = 'run_'.Str::random(12);
+
+        $this->runRecorder->start(
+            runId: $runId,
+            employeeId: $employeeId,
+            source: 'chat',
+            executionMode: 'interactive',
+            actingForUserId: auth()->id(),
+            timeoutSeconds: (int) config('ai.llm.timeout', 60),
+        );
+
         $configs = $this->configResolver->resolveWithDefaultFallback($employeeId);
 
         if ($configs === []) {
+            $configError = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
+            $this->runRecorder->fail($runId, $configError);
+
             return $this->responseFactory->error(
                 $runId,
                 'unknown',
                 'unknown',
-                AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId),
+                $configError,
                 ['employee_id' => $employeeId],
             );
         }
@@ -96,6 +109,8 @@ class AgenticRuntime
             $result = $this->runToolCallingLoop($runId, $config, $credentials, $messages, $systemPrompt, $fallbackAttempts);
             $result['meta']['fallback_attempts'] = $fallbackAttempts;
 
+            $this->runRecorder->complete($runId, $result['meta']);
+
             return $result;
         }
 
@@ -106,6 +121,8 @@ class AgenticRuntime
             AiRuntimeError::fromType(AiErrorType::ConfigError, 'All provider configurations failed'),
         );
         $result['meta']['fallback_attempts'] = $fallbackAttempts;
+
+        $this->runRecorder->fail($runId, AiRuntimeError::fromType(AiErrorType::ConfigError, 'All provider configurations failed'), $result['meta']);
 
         return $result;
     }
@@ -128,11 +145,22 @@ class AgenticRuntime
     public function runStream(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null): \Generator
     {
         $runId = 'run_'.Str::random(12);
+
+        $this->runRecorder->start(
+            runId: $runId,
+            employeeId: $employeeId,
+            source: 'stream',
+            executionMode: 'interactive',
+            actingForUserId: auth()->id(),
+            timeoutSeconds: (int) config('ai.llm.timeout', 60),
+        );
+
         $configs = $this->configResolver->resolveWithDefaultFallback($employeeId);
 
         if ($configs === []) {
             $error = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
             $this->runtimeLogger->runFailed($runId, $error, ['employee_id' => $employeeId, 'streaming' => true]);
+            $this->runRecorder->fail($runId, $error);
             yield ['event' => 'error', 'data' => [
                 'message' => $error->userMessage,
                 'run_id' => $runId,
@@ -174,6 +202,10 @@ class AgenticRuntime
         }
 
         $error = $lastError ?? AiRuntimeError::fromType(AiErrorType::ConfigError, 'All provider configurations failed');
+        $this->runRecorder->fail($runId, $error, [
+            'fallback_attempts' => $fallbackAttempts,
+        ]);
+
         $errorConfig = $lastConfig ?? $configs[0];
         yield ['event' => 'error', 'data' => [
             'message' => $error->userMessage,
@@ -252,7 +284,9 @@ class AgenticRuntime
         $retryAttempts = [];
         $hookMetadata = [];
 
-        for ($iteration = 0; $iteration < self::MAX_ITERATIONS; $iteration++) {
+        $iteration = 0;
+
+        while (true) {
             // Hook: PreLlmCall — observe or augment before each LLM call
             $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $hookMetadata);
 
@@ -298,16 +332,9 @@ class AgenticRuntime
 
             $this->appendAssistantToolCallMessage($apiMessages, $result);
             $this->executeToolCallsWithHooks($runId, $employeeId, $result['tool_calls'], $apiMessages, $toolActions, $clientActions, $hookMetadata);
+
+            $iteration++;
         }
-
-        $maxIterResult = $this->maxIterationsResult($runId, $config);
-        $maxIterResult['meta']['retry_attempts'] = $retryAttempts;
-
-        // Hook: PostRun on max iterations
-        $this->hookCoordinator->postRun($runId, $employeeId, false, $hookMetadata);
-        $maxIterResult['meta']['hooks'] = $hookMetadata;
-
-        return $maxIterResult;
     }
 
     /**
@@ -482,22 +509,6 @@ class AgenticRuntime
     }
 
     /**
-     * Build the standard max-iteration failure response.
-     *
-     * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}  $config
-     * @return array{content: string, run_id: string, meta: array<string, mixed>}
-     */
-    private function maxIterationsResult(string $runId, array $config): array
-    {
-        return $this->responseFactory->error(
-            $runId,
-            $config['model'],
-            (string) ($config['provider_name'] ?? 'unknown'),
-            AiRuntimeError::fromType(AiErrorType::MaxIterations, 'Reached '.self::MAX_ITERATIONS.' tool-calling iterations'),
-        );
-    }
-
-    /**
      * Build a success result, guarding against blank responses.
      *
      * If the LLM returned empty content and there are no client actions,
@@ -573,7 +584,9 @@ class AgenticRuntime
 
         yield ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => $runId]];
 
-        for ($iteration = 0; $iteration < self::MAX_ITERATIONS; $iteration++) {
+        $iteration = 0;
+
+        while (true) {
             // Hook: PreLlmCall
             $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $hookMetadata);
 
@@ -658,34 +671,9 @@ class AgenticRuntime
                     'run_id' => $runId,
                 ]];
             }
+
+            $iteration++;
         }
-
-        $maxIterError = AiRuntimeError::fromType(AiErrorType::MaxIterations, 'Reached '.self::MAX_ITERATIONS.' streaming tool-calling iterations');
-        $this->runtimeLogger->runFailed($runId, $maxIterError, [
-            'model' => $config['model'],
-            'provider_name' => $config['provider_name'] ?? 'unknown',
-            'streaming' => true,
-        ]);
-
-        // Hook: PostRun on max iterations
-        $this->hookCoordinator->postRun($runId, $employeeId, false, $hookMetadata);
-
-        yield ['event' => 'error', 'data' => [
-            'message' => $maxIterError->userMessage,
-            'run_id' => $runId,
-            'meta' => array_merge(
-                $this->responseFactory->errorMeta(
-                    $config['model'],
-                    (string) ($config['provider_name'] ?? 'unknown'),
-                    $maxIterError,
-                ),
-                [
-                    'retry_attempts' => $retryAttempts,
-                    'fallback_attempts' => $fallbackAttempts,
-                    'hooks' => $hookMetadata,
-                ],
-            ),
-        ]];
     }
 
     /**
@@ -782,6 +770,8 @@ class AgenticRuntime
             $meta['hooks'] = $streamState['hooks'];
         }
 
+        $this->runRecorder->complete($runId, $meta);
+
         yield ['event' => 'done', 'data' => [
             'run_id' => $runId,
             'content' => $fullContent,
@@ -823,6 +813,7 @@ class AgenticRuntime
                 'provider_name' => $config['provider_name'] ?? 'unknown',
                 'streaming' => true,
             ]);
+            $this->runRecorder->fail($runId, $runtimeError);
         }
 
         return ['event' => 'error', 'data' => [
@@ -864,6 +855,7 @@ class AgenticRuntime
             'provider_name' => $config['provider_name'] ?? 'unknown',
             'streaming' => true,
         ]);
+        $this->runRecorder->fail($runId, $emptyError);
 
         return ['event' => 'error', 'data' => [
             'message' => $emptyError->userMessage,

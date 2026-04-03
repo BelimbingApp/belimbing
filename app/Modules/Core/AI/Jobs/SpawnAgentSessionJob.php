@@ -93,7 +93,6 @@ class SpawnAgentSessionJob implements ShouldQueue
             );
 
             $envelope = $session->spawn_envelope ?? [];
-            $maxIterations = $envelope['max_iterations'] ?? 10;
             $modelOverride = $envelope['model_override'] ?? null;
 
             $systemPrompt = $this->buildSystemPrompt($session);
@@ -109,7 +108,6 @@ class SpawnAgentSessionJob implements ShouldQueue
                 employeeId: $session->child_employee_id,
                 systemPrompt: $systemPrompt,
                 modelOverride: $modelOverride,
-                maxIterations: $maxIterations,
             );
 
             $this->recordResult($session, $result);

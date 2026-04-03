@@ -23,7 +23,6 @@ final readonly class SpawnEnvelope
      * @param  string|null  $parentDispatchId  Parent dispatch ID (if routed through dispatch)
      * @param  string|null  $taskType  Task type discriminator
      * @param  array<string, mixed>  $contextPayload  Additional context to inject into child prompt
-     * @param  int  $maxIterations  Maximum tool-calling iterations for the child
      * @param  string|null  $modelOverride  Optional model override for the child session
      * @param  int|null  $actingForUserId  Human user on whose behalf the child acts
      */
@@ -36,7 +35,6 @@ final readonly class SpawnEnvelope
         public ?string $parentDispatchId = null,
         public ?string $taskType = null,
         public array $contextPayload = [],
-        public int $maxIterations = 10,
         public ?string $modelOverride = null,
         public ?int $actingForUserId = null,
     ) {}
@@ -65,7 +63,6 @@ final readonly class SpawnEnvelope
             'parent_dispatch_id' => $this->parentDispatchId,
             'task_type' => $this->taskType,
             'context_payload' => $this->contextPayload !== [] ? $this->contextPayload : null,
-            'max_iterations' => $this->maxIterations,
             'model_override' => $this->modelOverride,
             'acting_for_user_id' => $this->actingForUserId,
         ], fn (mixed $v): bool => $v !== null);

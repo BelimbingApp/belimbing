@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Company\Models\Company;
@@ -224,20 +226,22 @@ it('allows message append and read for Lara sessions', function (): void {
         $session->id,
         'Hi!',
         'run_meta_test',
-        [
-            'provider_name' => 'openai',
-            'model' => 'gpt-5.3',
-            'llm' => [
-                'provider' => 'openai',
-                'model' => 'gpt-5.3',
-            ],
-        ],
     );
 
+    AiRun::query()->create([
+        'id' => 'run_meta_test',
+        'employee_id' => Employee::LARA_ID,
+        'session_id' => $session->id,
+        'source' => 'chat',
+        'execution_mode' => 'interactive',
+        'status' => AiRunStatus::Succeeded,
+        'provider_name' => 'openai',
+        'model' => 'gpt-5.3',
+        'started_at' => now(),
+        'finished_at' => now(),
+    ]);
+
     $messages = $messageManager->read(Employee::LARA_ID, $session->id);
-    $sessionMetaPath = $sessionManager->metaPath(Employee::LARA_ID, $session->id);
-    $sessionMetaData = json_decode((string) file_get_contents($sessionMetaPath), true);
-    $sessionMeta = is_array($sessionMetaData) ? $sessionMetaData : [];
     $transcriptPath = $sessionManager->transcriptPath(Employee::LARA_ID, $session->id);
     $transcriptLines = file($transcriptPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
     $assistantLine = json_decode($transcriptLines[1] ?? '{}', true);
@@ -248,17 +252,10 @@ it('allows message append and read for Lara sessions', function (): void {
         ->and($messages[1]->runId)->toBe('run_meta_test')
         ->and($messages[1]->meta['provider_name'])->toBe('openai')
         ->and($messages[1]->meta['model'])->toBe('gpt-5.3')
-        ->and(array_key_exists('meta', is_array($assistantLine) ? $assistantLine : []))->toBeFalse()
-        ->and($sessionMeta['runs']['run_meta_test']['meta']['provider_name'] ?? null)->toBe('openai')
-        ->and($sessionMeta['runs']['run_meta_test']['recorded_at'] ?? null)->not->toBeNull()
-        ->and($sessionMeta['llm']['strategy'] ?? null)->toBe('follow_default')
-        ->and($sessionMeta['llm']['provider_name'] ?? null)->toBe('openai')
-        ->and($sessionMeta['llm']['model'] ?? null)->toBe('gpt-5.3')
-        ->and($sessionMeta['llm']['resolved_at'] ?? null)->not->toBeNull()
-        ->and($sessionMeta['llm']['last_changed_at'] ?? null)->not->toBeNull();
+        ->and(array_key_exists('meta', is_array($assistantLine) ? $assistantLine : []))->toBeFalse();
 });
 
-it('updates session LLM binding when assistant runtime model changes', function (): void {
+it('records run metadata in ai_runs table, not session meta', function (): void {
     $fixture = createLaraFixture();
     $this->actingAs($fixture['userA']);
 
@@ -271,32 +268,13 @@ it('updates session LLM binding when assistant runtime model changes', function 
         $session->id,
         'First reply',
         'run_one',
-        [
-            'provider_name' => 'openai',
-            'model' => 'gpt-5.3',
-        ],
-    );
-    $messageManager->appendAssistantMessage(
-        Employee::LARA_ID,
-        $session->id,
-        'Second reply',
-        'run_two',
-        [
-            'provider_name' => 'anthropic',
-            'model' => 'claude-opus-4.6',
-        ],
     );
 
     $sessionMetaPath = $sessionManager->metaPath(Employee::LARA_ID, $session->id);
     $sessionMetaData = json_decode((string) file_get_contents($sessionMetaPath), true);
     $sessionMeta = is_array($sessionMetaData) ? $sessionMetaData : [];
 
-    expect($sessionMeta['runs']['run_one']['meta']['model'] ?? null)->toBe('gpt-5.3')
-        ->and($sessionMeta['runs']['run_two']['meta']['model'] ?? null)->toBe('claude-opus-4.6')
-        ->and($sessionMeta['llm']['strategy'] ?? null)->toBe('follow_default')
-        ->and($sessionMeta['llm']['provider_name'] ?? null)->toBe('anthropic')
-        ->and($sessionMeta['llm']['model'] ?? null)->toBe('claude-opus-4.6')
-        ->and($sessionMeta['llm']['last_changed_at'] ?? null)->not->toBeNull();
+    expect($sessionMeta)->not->toHaveKey('runs');
 });
 
 it('does not leak Lara sessions across users via messages', function (): void {

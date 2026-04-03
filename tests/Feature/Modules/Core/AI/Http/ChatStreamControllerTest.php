@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\SessionManager;
@@ -54,7 +56,7 @@ it('persists provider and model metadata for streaming runtime errors', function
     $messageManager->appendUserMessage(Employee::LARA_ID, $session->id, 'Hello Lara');
 
     $runtime = Mockery::mock(AgenticRuntime::class);
-    $runtime->shouldReceive('runStream')->once()->andReturn((function (): \Generator {
+    $runtime->shouldReceive('runStream')->once()->andReturn((function (): Generator {
         yield [
             'event' => 'error',
             'data' => [
@@ -75,6 +77,21 @@ it('persists provider and model metadata for streaming runtime errors', function
     })());
 
     app()->instance(AgenticRuntime::class, $runtime);
+
+    AiRun::query()->create([
+        'id' => 'run_stream_timeout',
+        'employee_id' => Employee::LARA_ID,
+        'session_id' => $session->id,
+        'source' => 'stream',
+        'execution_mode' => 'interactive',
+        'status' => AiRunStatus::Failed,
+        'provider_name' => 'google',
+        'model' => 'gemma-3',
+        'error_type' => 'timeout',
+        'error_message' => 'The AI provider did not respond in time. Please try again.',
+        'started_at' => now(),
+        'finished_at' => now(),
+    ]);
 
     $response = $this->get(route('ai.chat.stream', [
         'employee_id' => Employee::LARA_ID,

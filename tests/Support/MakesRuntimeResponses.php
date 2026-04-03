@@ -14,6 +14,7 @@ use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
+use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRegistry;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRunner;
 use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
@@ -150,6 +151,7 @@ trait MakesRuntimeResponses
             new RuntimeResponseFactory($runtimeLogger),
             $runtimeLogger,
             new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
+            \Mockery::mock(RunRecorder::class)->shouldIgnoreMissing(),
         );
     }
 

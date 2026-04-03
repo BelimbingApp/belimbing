@@ -39,6 +39,7 @@ class SessionManager
             title: $title,
             createdAt: $now,
             lastActivityAt: $now,
+            transcriptVersion: 2,
         );
 
         $dir = $this->sessionsPath($employeeId);
@@ -131,7 +132,7 @@ class SessionManager
             title: $session->title,
             createdAt: $session->createdAt,
             lastActivityAt: new DateTimeImmutable,
-            runs: $session->runs,
+            transcriptVersion: $session->transcriptVersion,
             llm: $session->llm,
         );
 
@@ -163,60 +164,8 @@ class SessionManager
             title: $title,
             createdAt: $session->createdAt,
             lastActivityAt: $session->lastActivityAt,
-            runs: $session->runs,
+            transcriptVersion: $session->transcriptVersion,
             llm: $session->llm,
-        );
-
-        file_put_contents(
-            $this->metaPath($employeeId, $sessionId),
-            json_encode($updated->toMeta(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-        );
-    }
-
-    /**
-     * Get run metadata indexed by run ID for a session.
-     *
-     * @return array<string, array{meta: array<string, mixed>, recorded_at: string}>
-     */
-    public function runMetadata(int $employeeId, string $sessionId): array
-    {
-        $session = $this->get($employeeId, $sessionId);
-
-        return $session?->runs ?? [];
-    }
-
-    /**
-     * Persist assistant run metadata in session meta.json and track current session LLM binding.
-     *
-     * @param  array<string, mixed>  $meta
-     */
-    public function storeRunMeta(int $employeeId, string $sessionId, string $runId, array $meta): void
-    {
-        if ($runId === '' || $meta === []) {
-            return;
-        }
-
-        $session = $this->get($employeeId, $sessionId);
-        if ($session === null) {
-            return;
-        }
-
-        $now = new DateTimeImmutable;
-        $runs = $session->runs;
-        $runs[$runId] = [
-            'meta' => $meta,
-            'recorded_at' => $now->format('c'),
-        ];
-
-        $updated = new Session(
-            id: $session->id,
-            employeeId: $session->employeeId,
-            channelType: $session->channelType,
-            title: $session->title,
-            createdAt: $session->createdAt,
-            lastActivityAt: $session->lastActivityAt,
-            runs: $runs,
-            llm: $this->updatedLlmState($session->llm, $meta, $now),
         );
 
         file_put_contents(
@@ -250,7 +199,7 @@ class SessionManager
             title: $session->title,
             createdAt: $session->createdAt,
             lastActivityAt: $session->lastActivityAt,
-            runs: $session->runs,
+            transcriptVersion: $session->transcriptVersion,
             llm: $llm,
         );
 
@@ -339,55 +288,5 @@ class SessionManager
         if (! $user instanceof User || ! $user->canAccessSupervisedAgent($employeeId)) {
             throw new AuthorizationException(__('Unauthorized Agent session access.'));
         }
-    }
-
-    /**
-     * @param  array{strategy: string, provider_name: string, model: string, resolved_at: string, last_changed_at: string}|null  $existing
-     * @param  array<string, mixed>  $meta
-     * @return array{strategy: string, provider_name: string, model: string, resolved_at: string, last_changed_at: string}|null
-     */
-    private function updatedLlmState(?array $existing, array $meta, DateTimeImmutable $now): ?array
-    {
-        $provider = $this->extractProviderName($meta);
-        $model = $this->extractModelName($meta);
-
-        if ($provider === null || $model === null) {
-            return $existing;
-        }
-
-        $resolvedAt = $now->format('c');
-        $changed = ! is_array($existing)
-            || ($existing['provider_name'] ?? null) !== $provider
-            || ($existing['model'] ?? null) !== $model;
-
-        return [
-            'strategy' => 'follow_default',
-            'provider_name' => $provider,
-            'model' => $model,
-            'resolved_at' => $resolvedAt,
-            'last_changed_at' => $changed
-                ? $resolvedAt
-                : (string) ($existing['last_changed_at'] ?? $resolvedAt),
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $meta
-     */
-    private function extractProviderName(array $meta): ?string
-    {
-        $provider = $meta['provider_name'] ?? ($meta['llm']['provider'] ?? null);
-
-        return is_string($provider) && $provider !== '' ? $provider : null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $meta
-     */
-    private function extractModelName(array $meta): ?string
-    {
-        $model = $meta['model'] ?? ($meta['llm']['model'] ?? null);
-
-        return is_string($model) && $model !== '' ? $model : null;
     }
 }

@@ -5,38 +5,41 @@
 
 namespace App\Modules\Core\AI\Console\Commands;
 
+use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
 use App\Modules\Core\AI\Services\ControlPlane\RunInspectionService;
 use Illuminate\Console\Command;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
- * Inspect a specific AI run or all runs in a session.
+ * Inspect AI runs by run ID, dispatch ID, or session.
  *
- * Assembles normalized run facts from session metadata and dispatch
- * records. Operators see provider, model, timing, tool actions,
- * fallback/retry history, and outcome in one view.
+ * Assembles normalized run facts from the ai_runs ledger. Operators
+ * see provider, model, timing, tool actions, fallback/retry history,
+ * and outcome in one view.
  */
 #[AsCommand(name: 'blb:ai:inspect:run')]
 class InspectRunCommand extends Command
 {
-    protected $description = 'Inspect an AI run or all runs in a session';
+    protected $description = 'Inspect AI runs by run ID, dispatch ID, or session';
 
     protected $signature = 'blb:ai:inspect:run
-        {employee : Agent employee ID}
-        {session : Session ID}
-        {--run= : Specific run ID (omit to show all runs in the session)}';
+        {--run= : Inspect a specific run by ID}
+        {--employee= : Agent employee ID (for session inspection)}
+        {--session= : Session ID (for session inspection)}
+        {--dispatch= : Dispatch ID (for dispatch inspection)}';
 
     public function handle(RunInspectionService $service): int
     {
-        $employeeId = (int) $this->argument('employee');
-        $sessionId = (string) $this->argument('session');
         $runId = $this->option('run');
+        $dispatchId = $this->option('dispatch');
+        $employeeId = $this->option('employee');
+        $sessionId = $this->option('session');
 
         if ($runId !== null) {
-            $inspection = $service->inspectRun($employeeId, $sessionId, $runId);
+            $inspection = $service->inspectRun($runId);
 
             if ($inspection === null) {
-                $this->components->error("Run '{$runId}' not found in session '{$sessionId}'.");
+                $this->components->error("Run '{$runId}' not found.");
 
                 return self::FAILURE;
             }
@@ -46,10 +49,32 @@ class InspectRunCommand extends Command
             return self::SUCCESS;
         }
 
-        $inspections = $service->inspectSession($employeeId, $sessionId);
+        if ($dispatchId !== null) {
+            return $this->displayRunList($service->inspectDispatchRun($dispatchId), 'dispatch');
+        }
 
+        if ($employeeId !== null && $sessionId !== null) {
+            return $this->displayRunList(
+                $service->inspectSession((int) $employeeId, $sessionId),
+                'session',
+            );
+        }
+
+        $this->components->error('Provide --run, --dispatch, or both --employee and --session.');
+
+        return self::FAILURE;
+    }
+
+    /**
+     * Display a list of run inspections with a contextual label.
+     *
+     * @param  list<RunInspection>  $inspections
+     * @param  string  $context  Label for the "no runs" message (e.g. 'session', 'dispatch')
+     */
+    private function displayRunList(array $inspections, string $context): int
+    {
         if ($inspections === []) {
-            $this->components->info('No runs found in this session.');
+            $this->components->info("No runs found for this {$context}.");
 
             return self::SUCCESS;
         }

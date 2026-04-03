@@ -5,6 +5,9 @@
 
 namespace App\Modules\Core\AI\DTO\ControlPlane;
 
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
+
 /**
  * Normalized view of a single AI runtime run.
  *
@@ -88,6 +91,40 @@ final readonly class RunInspection
             errorType: $meta['error_type'] ?? null,
             errorMessage: $meta['error'] ?? null,
             recordedAt: $recordedAt,
+        );
+    }
+
+    /**
+     * Build from an AiRun model instance.
+     *
+     * Maps the Eloquent model directly to the inspection DTO.
+     */
+    public static function fromAiRun(AiRun $run): self
+    {
+        return new self(
+            runId: $run->id,
+            employeeId: $run->employee_id,
+            sessionId: $run->session_id ?? '',
+            dispatchId: $run->dispatch_id,
+            provider: $run->provider_name ?? 'unknown',
+            model: $run->model ?? 'unknown',
+            outcome: match ($run->status) {
+                AiRunStatus::Succeeded => 'success',
+                AiRunStatus::Failed, AiRunStatus::TimedOut => 'error',
+                AiRunStatus::Cancelled => 'cancelled',
+                default => 'unknown',
+            },
+            latencyMs: $run->latency_ms,
+            tokens: [
+                'prompt' => $run->prompt_tokens,
+                'completion' => $run->completion_tokens,
+            ],
+            toolActions: self::normalizeToolActions($run->tool_actions ?? []),
+            fallbackAttempts: $run->fallback_attempts ?? [],
+            retryAttempts: count($run->retry_attempts ?? []),
+            errorType: $run->error_type,
+            errorMessage: $run->error_message,
+            recordedAt: $run->created_at?->toIso8601String() ?? '',
         );
     }
 

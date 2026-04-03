@@ -6,11 +6,10 @@
 namespace App\Modules\Core\AI\Services\ControlPlane;
 
 use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
-use App\Modules\Core\AI\Models\OperationDispatch;
-use App\Modules\Core\AI\Services\SessionManager;
+use App\Modules\Core\AI\Models\AiRun;
 
 /**
- * Assembles coherent run inspections from session metadata and dispatch records.
+ * Assembles coherent run inspections from the ai_runs ledger.
  *
  * Provides one normalized view of a run instead of forcing operators to
  * correlate fragments from logs, session files, and dispatch tables.
@@ -18,49 +17,26 @@ use App\Modules\Core\AI\Services\SessionManager;
  */
 class RunInspectionService
 {
-    public function __construct(
-        private readonly SessionManager $sessionManager,
-    ) {}
-
     /**
-     * Inspect a single run by ID within a session.
+     * Inspect a single run by ID.
      *
-     * @param  int  $employeeId  Agent employee ID
-     * @param  string  $sessionId  Session identifier
      * @param  string  $runId  Run identifier
      */
-    public function inspectRun(int $employeeId, string $sessionId, string $runId): ?RunInspection
+    public function inspectRun(string $runId): ?RunInspection
     {
-        $runData = $this->sessionManager->runMetadata($employeeId, $sessionId);
+        $run = AiRun::query()->find($runId);
 
-        if (! isset($runData[$runId])) {
+        if ($run === null) {
             return null;
         }
 
-        $entry = $runData[$runId];
-        $meta = $entry['meta'] ?? [];
-        $recordedAt = $entry['recorded_at'] ?? now()->toIso8601String();
-
-        // Look for a linked dispatch by run_id
-        $dispatch = OperationDispatch::query()
-            ->where('run_id', $runId)
-            ->first();
-
-        return RunInspection::fromRunMeta(
-            runId: $runId,
-            employeeId: $employeeId,
-            sessionId: $sessionId,
-            meta: $meta,
-            recordedAt: $recordedAt,
-            dispatchId: $dispatch?->id,
-        );
+        return RunInspection::fromAiRun($run);
     }
 
     /**
      * Inspect all runs within a session.
      *
-     * Returns runs ordered by recorded_at (oldest first) so operators
-     * can follow the session timeline.
+     * Returns runs ordered by started_at ascending (timeline order).
      *
      * @param  int  $employeeId  Agent employee ID
      * @param  string  $sessionId  Session identifier
@@ -68,74 +44,28 @@ class RunInspectionService
      */
     public function inspectSession(int $employeeId, string $sessionId): array
     {
-        $session = $this->sessionManager->get($employeeId, $sessionId);
+        $runs = AiRun::query()
+            ->where('employee_id', $employeeId)
+            ->where('session_id', $sessionId)
+            ->orderBy('started_at')
+            ->get();
 
-        if ($session === null) {
-            return [];
-        }
-
-        $runData = $session->runs;
-
-        if ($runData === []) {
-            return [];
-        }
-
-        // Pre-load dispatches linked to this session's runs
-        $runIds = array_keys($runData);
-        $dispatches = OperationDispatch::query()
-            ->whereIn('run_id', $runIds)
-            ->pluck('id', 'run_id')
-            ->all();
-
-        $inspections = [];
-
-        foreach ($runData as $runId => $entry) {
-            $meta = $entry['meta'] ?? [];
-            $recordedAt = $entry['recorded_at'] ?? '';
-
-            $inspections[] = RunInspection::fromRunMeta(
-                runId: $runId,
-                employeeId: $employeeId,
-                sessionId: $sessionId,
-                meta: $meta,
-                recordedAt: $recordedAt,
-                dispatchId: $dispatches[$runId] ?? null,
-            );
-        }
-
-        // Sort by recordedAt ascending (timeline order)
-        usort($inspections, fn (RunInspection $a, RunInspection $b) => $a->recordedAt <=> $b->recordedAt);
-
-        return $inspections;
+        return $runs->map(fn (AiRun $run) => RunInspection::fromAiRun($run))->all();
     }
 
     /**
-     * Inspect a run linked to an operation dispatch.
+     * Inspect runs linked to an operation dispatch.
      *
-     * Locates the run through the dispatch record's run_id and agent context,
-     * then finds the matching session. Returns null if the run cannot be located.
+     * @param  string  $dispatchId  Operation dispatch ID
+     * @return list<RunInspection>
      */
-    public function inspectDispatchRun(string $dispatchId): ?RunInspection
+    public function inspectDispatchRun(string $dispatchId): array
     {
-        $dispatch = OperationDispatch::query()->find($dispatchId);
+        $runs = AiRun::query()
+            ->where('dispatch_id', $dispatchId)
+            ->orderBy('started_at')
+            ->get();
 
-        if ($dispatch === null || $dispatch->run_id === null || $dispatch->employee_id === null) {
-            return null;
-        }
-
-        // Search through the agent's sessions for the run
-        $sessions = $this->sessionManager->list($dispatch->employee_id);
-
-        foreach ($sessions as $session) {
-            if (isset($session->runs[$dispatch->run_id])) {
-                return $this->inspectRun(
-                    $dispatch->employee_id,
-                    $session->id,
-                    $dispatch->run_id,
-                );
-            }
-        }
-
-        return null;
+        return $runs->map(fn (AiRun $run) => RunInspection::fromAiRun($run))->all();
     }
 }

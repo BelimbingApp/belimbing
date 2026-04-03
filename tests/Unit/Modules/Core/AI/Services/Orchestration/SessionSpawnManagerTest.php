@@ -70,7 +70,6 @@ function makeSpawnEnvelope(int $parentId, int $childId, array $overrides = []): 
         parentDispatchId: $overrides['parentDispatchId'] ?? null,
         taskType: $overrides['taskType'] ?? SPAWN_TASK_TYPE,
         contextPayload: $overrides['contextPayload'] ?? [],
-        maxIterations: $overrides['maxIterations'] ?? 10,
         modelOverride: $overrides['modelOverride'] ?? null,
         actingForUserId: $overrides['actingForUserId'] ?? null,
     );

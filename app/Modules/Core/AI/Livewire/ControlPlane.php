@@ -70,26 +70,23 @@ class ControlPlane extends Component
     // ---------------------------------------------------------------
 
     /**
-     * Inspect a single run by run ID and employee ID.
+     * Inspect a single run by run ID.
      */
     public function inspectRun(): void
     {
         $this->resetRunInspection();
 
-        if ($this->inspectRunId === '' || $this->inspectEmployeeId === 0) {
-            $this->inspectionError = __('Run ID and Employee ID are required.');
+        if ($this->inspectRunId === '') {
+            $this->inspectionError = __('Run ID is required.');
 
             return;
         }
 
         $service = app(RunInspectionService::class);
-        $result = $service->inspectRun(
-            $this->inspectEmployeeId,
-            $this->inspectRunId,
-        );
+        $result = $service->inspectRun($this->inspectRunId);
 
         if ($result === null) {
-            $this->inspectionError = __('Run not found for the given employee and run ID.');
+            $this->inspectionError = __('Run not found.');
 
             return;
         }

@@ -23,7 +23,6 @@ enum AiErrorType: string
     case BadRequest = 'bad_request';
     case EmptyResponse = 'empty_response';
     case ConfigError = 'config_error';
-    case MaxIterations = 'max_iterations';
     case UnexpectedError = 'unexpected_error';
 
     /**
@@ -58,7 +57,6 @@ enum AiErrorType: string
             self::UnsupportedResponseShape => __('The AI provider returned an invalid response. Please ask an administrator to check the provider endpoint.'),
             self::EmptyResponse => __('The AI model returned an empty reply. Please try again or switch to a different model.'),
             self::ConfigError => __('AI chat is not fully configured. Please ask an administrator to set up an AI provider.'),
-            self::MaxIterations => __('Maximum tool-calling iterations reached. Please try a simpler request.'),
             self::UnexpectedError => __('An unexpected error occurred. Please try again.'),
         };
     }

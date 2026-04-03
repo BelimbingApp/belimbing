@@ -9,6 +9,9 @@ use DateTimeImmutable;
 
 final readonly class Session
 {
+    /**
+     * @param  array{strategy: string, provider_name: string, model: string, resolved_at: string, last_changed_at: string}|null  $llm
+     */
     public function __construct(
         public string $id,
         public int $employeeId,
@@ -16,9 +19,7 @@ final readonly class Session
         public ?string $title,
         public DateTimeImmutable $createdAt,
         public DateTimeImmutable $lastActivityAt,
-        /** @var array<string, array{meta: array<string, mixed>, recorded_at: string}> */
-        public array $runs = [],
-        /** @var array{strategy: string, provider_name: string, model: string, resolved_at: string, last_changed_at: string}|null */
+        public int $transcriptVersion = 1,
         public ?array $llm = null,
     ) {}
 
@@ -36,7 +37,7 @@ final readonly class Session
             title: $data['title'] ?? null,
             createdAt: new DateTimeImmutable($data['created_at']),
             lastActivityAt: new DateTimeImmutable($data['last_activity_at']),
-            runs: is_array($data['runs'] ?? null) ? $data['runs'] : [],
+            transcriptVersion: (int) ($data['transcript_version'] ?? 1),
             llm: is_array($data['llm'] ?? null) ? $data['llm'] : null,
         );
     }
@@ -55,11 +56,8 @@ final readonly class Session
             'title' => $this->title,
             'created_at' => $this->createdAt->format('c'),
             'last_activity_at' => $this->lastActivityAt->format('c'),
+            'transcript_version' => $this->transcriptVersion,
         ];
-
-        if ($this->runs !== []) {
-            $meta['runs'] = $this->runs;
-        }
 
         if (is_array($this->llm)) {
             $meta['llm'] = $this->llm;

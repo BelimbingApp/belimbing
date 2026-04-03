@@ -12,6 +12,7 @@ final readonly class Message
     /**
      * @param  'user'|'assistant'|'system'  $role
      * @param  array<string, mixed>  $meta
+     * @param  'message'|'tool_call'|'tool_result'|'thinking'  $type  Entry type for v2 transcripts
      */
     public function __construct(
         public string $role,
@@ -19,21 +20,25 @@ final readonly class Message
         public DateTimeImmutable $timestamp,
         public ?string $runId = null,
         public array $meta = [],
+        public string $type = 'message',
     ) {}
 
     /**
      * Create from a decoded JSONL line.
+     *
+     * Backward compatible: lines without a `type` field default to 'message'.
      *
      * @param  array<string, mixed>  $data
      */
     public static function fromJsonLine(array $data): self
     {
         return new self(
-            role: $data['role'],
-            content: $data['content'],
+            role: $data['role'] ?? 'assistant',
+            content: $data['content'] ?? '',
             timestamp: new DateTimeImmutable($data['timestamp']),
             runId: $data['run_id'] ?? null,
             meta: $data['meta'] ?? [],
+            type: $data['type'] ?? 'message',
         );
     }
 
@@ -47,6 +52,10 @@ final readonly class Message
             'content' => $this->content,
             'timestamp' => $this->timestamp->format('c'),
         ];
+
+        if ($this->type !== 'message') {
+            $payload['type'] = $this->type;
+        }
 
         if (is_string($this->runId)) {
             $payload['run_id'] = $this->runId;
