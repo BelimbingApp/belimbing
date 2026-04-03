@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Index
 **Purpose:** Entry point for BLB's AI architecture and the canonical path to current implemented behavior
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-03
 
 ---
 
@@ -12,7 +12,7 @@ For what is **implemented in code today**, use:
 
 - [current-state.md](current-state.md)
 
-That document is the canonical implementation reference for BLB AI as of OpenClaw parity Phases 1-6.
+That document is the canonical implementation reference for BLB AI as of OpenClaw parity Phases 1-6, the completed Claw Code runtime parity work, and the completed AI Run Ledger work.
 
 ---
 
@@ -20,7 +20,7 @@ That document is the canonical implementation reference for BLB AI as of OpenCla
 
 | Document | Purpose |
 |----------|---------|
-| [current-state.md](current-state.md) | Implemented AI architecture through OpenClaw parity Phase 6: surfaces, routes, tools, commands, services, and persistence |
+| [current-state.md](current-state.md) | Implemented AI architecture through OpenClaw parity Phase 6, Claw Code runtime parity work, and AI Run Ledger delivery: surfaces, routes, tools, commands, execution policy, run inspection, and persistence |
 | [agent-model.md](agent-model.md) | Foundational agent architecture: agent-as-employee model, supervision, workspace, memory, and provider configuration |
 | [lara.md](lara.md) | Lara's role as BLB's system agent, activation model, orchestration role, and user access model |
 | [capability-map.md](capability-map.md) | OpenClaw capability mapping, BLB tool/runtime direction, implemented phases, and remaining roadmap |

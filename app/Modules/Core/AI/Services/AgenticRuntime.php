@@ -983,6 +983,7 @@ class AgenticRuntime
                     'result_preview' => $denialMessage,
                     'status' => 'denied',
                     'denial_reason' => $hookVerdict['reason'],
+                    'denial_source' => 'hook',
                 ];
                 $apiMessages[] = [
                     'role' => 'tool',
@@ -994,6 +995,7 @@ class AgenticRuntime
                     'phase' => 'tool_denied',
                     'tool' => $functionName,
                     'reason' => $hookVerdict['reason'],
+                    'source' => 'hook',
                     'run_id' => $runId,
                 ]];
 
@@ -1034,6 +1036,17 @@ class AgenticRuntime
                 'run_id' => $runId,
             ]];
 
+            // Emit authorization denial as a hook_action for transcript visibility
+            if (($toolExecution['action']['error_payload']['code'] ?? null) === 'permission_denied') {
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'tool_denied',
+                    'tool' => $functionName,
+                    'reason' => $toolExecution['action']['error_payload']['message'] ?? 'permission denied',
+                    'source' => 'authorization',
+                    'run_id' => $runId,
+                ]];
+            }
+
             $toolIndex++;
         }
     }
@@ -1073,6 +1086,7 @@ class AgenticRuntime
                     'result_preview' => $denialMessage,
                     'status' => 'denied',
                     'denial_reason' => $hookVerdict['reason'],
+                    'denial_source' => 'hook',
                 ];
                 $apiMessages[] = [
                     'role' => 'tool',

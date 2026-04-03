@@ -66,6 +66,16 @@ use App\Modules\Core\AI\Livewire\RunDetail;
                                     :result-length="$message->meta['result_length'] ?? 0"
                                     :error-payload="$message->meta['error_payload'] ?? null"
                                 />
+                            @elseif ($message->type === 'hook_action')
+                                <x-ai.activity.hook-action
+                                    :stage="$message->meta['stage'] ?? 'unknown'"
+                                    :action="$message->meta['action'] ?? 'unknown'"
+                                    :tool="$message->meta['tool'] ?? null"
+                                    :tools-removed="$message->meta['tools_removed'] ?? []"
+                                    :reason="$message->meta['reason'] ?? null"
+                                    :source="$message->meta['source'] ?? null"
+                                    :timestamp="$message->timestamp"
+                                />
                             @elseif ($message->role === 'user')
                                 <x-ai.activity.user-message :content="$message->content" :timestamp="$message->timestamp" />
                             @elseif ($message->role === 'assistant' && ($message->meta['message_type'] ?? null) === 'error')

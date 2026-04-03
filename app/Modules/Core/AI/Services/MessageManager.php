@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Collection;
 class MessageManager
 {
     /** @var list<string> Valid transcript entry types for v2 format */
-    private const KNOWN_ENTRY_TYPES = ['message', 'tool_call', 'tool_result', 'thinking'];
+    private const KNOWN_ENTRY_TYPES = ['message', 'tool_call', 'tool_result', 'thinking', 'hook_action'];
 
     public function __construct(
         private readonly SessionManager $sessionManager,
@@ -175,6 +175,41 @@ class MessageManager
             runId: $runId,
             meta: $entry->toMeta(),
             type: 'tool_result',
+        ));
+    }
+
+    /**
+     * Append a hook action entry to a session transcript.
+     *
+     * Records hook-stage outcomes as first-class transcript entries:
+     * PreToolRegistry removals, PreToolUse denials, and post-tool
+     * hook summaries that materially affect execution.
+     *
+     * @param  int  $employeeId  Agent employee ID
+     * @param  string  $sessionId  Session UUID
+     * @param  string  $runId  Runtime run ID
+     * @param  string  $stage  Hook stage (e.g., 'pre_tool_registry', 'pre_tool_use', 'post_tool_result')
+     * @param  string  $action  What the hook did (e.g., 'tools_removed', 'tool_denied')
+     * @param  array<string, mixed>  $details  Stage-specific details (tool names, reasons, etc.)
+     */
+    public function appendHookAction(
+        int $employeeId,
+        string $sessionId,
+        string $runId,
+        string $stage,
+        string $action,
+        array $details = [],
+    ): void {
+        $this->append($employeeId, $sessionId, new Message(
+            role: 'assistant',
+            content: '',
+            timestamp: new DateTimeImmutable,
+            runId: $runId,
+            meta: array_merge([
+                'stage' => $stage,
+                'action' => $action,
+            ], $details),
+            type: 'hook_action',
         ));
     }
 

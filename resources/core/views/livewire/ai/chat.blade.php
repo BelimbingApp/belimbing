@@ -400,6 +400,16 @@
                                 :result-length="$message->meta['result_length'] ?? 0"
                                 :error-payload="$message->meta['error_payload'] ?? null"
                             />
+                        @elseif ($message->type === 'hook_action')
+                            <x-ai.activity.hook-action
+                                :stage="$message->meta['stage'] ?? 'unknown'"
+                                :action="$message->meta['action'] ?? 'unknown'"
+                                :tool="$message->meta['tool'] ?? null"
+                                :tools-removed="$message->meta['tools_removed'] ?? []"
+                                :reason="$message->meta['reason'] ?? null"
+                                :source="$message->meta['source'] ?? null"
+                                :timestamp="$message->timestamp"
+                            />
                         @elseif ($message->role === 'user')
                             <x-ai.activity.user-message :content="$message->content" :timestamp="$message->timestamp" />
                         @elseif ($message->role === 'assistant' && ($message->meta['message_type'] ?? null) === 'error')
@@ -529,6 +539,9 @@
                                                     <template x-if="entry.status === 'error'">
                                                         <span class="inline-flex items-center rounded-full bg-red-500/10 px-1.5 py-0.5 text-[9px] font-medium text-red-600 dark:text-red-400">{{ __('Error') }}</span>
                                                     </template>
+                                                    <template x-if="entry.status === 'denied'">
+                                                        <span class="inline-flex items-center rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 dark:text-amber-400">{{ __('Denied') }}</span>
+                                                    </template>
                                                     <x-icon
                                                         name="heroicon-o-chevron-right"
                                                         class="w-3 h-3 text-muted transition-transform"
@@ -551,6 +564,34 @@
                                                 </template>
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            {{-- Hook action (policy enforcement) --}}
+                            <template x-if="entry.type === 'hook_action'">
+                                <div class="flex gap-2 py-1">
+                                    <div class="shrink-0 mt-0.5">
+                                        <x-icon name="heroicon-o-shield-check" class="w-4 h-4 text-amber-500/70" />
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center gap-1.5 text-xs text-muted">
+                                            <template x-if="entry.action === 'tools_removed'">
+                                                <span x-text="(entry.toolsRemoved?.length || 0) + ' tool(s) hidden by policy'"></span>
+                                            </template>
+                                            <template x-if="entry.action === 'tool_denied'">
+                                                <span x-text="(entry.tool || 'Tool') + ' denied'"></span>
+                                            </template>
+                                            <template x-if="entry.source">
+                                                <span class="inline-flex items-center rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 dark:text-amber-400" x-text="entry.source === 'authorization' ? '{{ __('authz') }}' : '{{ __('hook') }}'"></span>
+                                            </template>
+                                            <template x-if="entry.reason">
+                                                <span class="text-muted/70 truncate max-w-[16rem]" x-text="'— ' + entry.reason"></span>
+                                            </template>
+                                        </div>
+                                        <template x-if="entry.action === 'tools_removed' && entry.toolsRemoved?.length">
+                                            <div class="mt-0.5 text-[10px] text-muted/60 truncate" x-text="entry.toolsRemoved.join(', ')"></div>
+                                        </template>
                                     </div>
                                 </div>
                             </template>
@@ -812,6 +853,22 @@
                             entry.resultLength = data.result_length || 0;
                             entry.errorPayload = data.error_payload || null;
                         }
+                    } else if (data.phase === 'hook_action') {
+                        this.streamEntries.push({
+                            type: 'hook_action',
+                            stage: data.stage || '',
+                            action: 'tools_removed',
+                            toolsRemoved: data.tools_removed || [],
+                        });
+                    } else if (data.phase === 'tool_denied') {
+                        this.streamEntries.push({
+                            type: 'hook_action',
+                            stage: 'pre_tool_use',
+                            action: 'tool_denied',
+                            tool: data.tool || '',
+                            reason: data.reason || '',
+                            source: data.source || 'hook',
+                        });
                     }
                 } catch {}
                 this.scrollToBottom(scrollContainer);

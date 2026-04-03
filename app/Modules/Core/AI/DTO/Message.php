@@ -12,7 +12,7 @@ final readonly class Message
     /**
      * @param  'user'|'assistant'|'system'  $role
      * @param  array<string, mixed>  $meta
-     * @param  'message'|'tool_call'|'tool_result'|'thinking'  $type  Entry type for v2 transcripts
+     * @param  'message'|'tool_call'|'tool_result'|'thinking'|'hook_action'  $type  Entry type for v2 transcripts
      */
     public function __construct(
         public string $role,

@@ -439,9 +439,9 @@ Compare two runs side-by-side for debugging regressions or provider differences:
 
 ## Runtime Parity Appendix
 
-Gaps identified by `docs/todo/clawcode-parity/00-runtime-parity-gap-audit.md` that go beyond the core ledger/activity-stream work. These are documented for awareness and future planning — not blocking Phase 0–2 delivery.
+Gaps identified by `docs/todo/clawcode-parity/00-runtime-parity-gap-audit.md` that go beyond the core ledger/activity-stream work. Status reflects work done in `04-selective-runtime-parity-follow-up-todo.md`.
 
-1. **Permission escalation:** BLB uses binary capability-gated tool registration (`AgentToolRegistry` + `AuthorizationService`). Claw-code uses runtime permission escalation with interactive prompts (`PermissionPolicy` + `PermissionPrompter`). Future: `PreToolUse` hook stage that can deny a tool call before execution, with an SSE event for approval prompts.
-2. **Sandbox observability:** Claw-code reports sandbox request vs. active status per bash execution (`sandboxStatus` in `BashCommandOutput`). BLB tools declare `riskClass()` but do not report execution isolation status at runtime. Future: tool execution isolation report in activity stream entries.
-3. **Hook outcome visibility:** Hook actions (tool denial, registry modification) should appear as first-class activity stream entries, not just run-level metadata. Current `RuntimeHookCoordinator` stages store outcomes in `$hookMetadata` but the transcript and activity stream do not render them.
-4. **Usage reconstruction from transcript:** Claw-code's `UsageTracker::from_session()` rebuilds cumulative usage from session messages. BLB should persist `meta.tokens` on assistant transcript entries so usage can be reconstructed from the transcript alone, with `ai_runs` as the query-optimized path.
+1. **Permission escalation:** BLB uses binary capability-gated tool registration (`AgentToolRegistry` + `AuthorizationService`). Claw-code uses runtime permission escalation with interactive prompts. **BLB supports approval _visibility_ (denials appear as `hook_action` transcript entries with source attribution), not interactive permission granting.** Interactive escalation is deferred pending a product decision.
+2. **Sandbox observability:** Claw-code reports sandbox request vs. active status per bash execution. BLB tools declare `riskClass()` but do not report execution isolation status at runtime. **Deferred** until BLB introduces a real sandbox/isolation boundary.
+3. **Hook outcome visibility:** ✅ **Closed.** Hook actions (tool denial, registry modification) now appear as first-class `hook_action` transcript entries, rendered in the chat timeline, run detail, and streaming activity stream.
+4. **Usage reconstruction from transcript:** ✅ **Closed.** Assistant transcript entries carry `meta.tokens`; `sessionUsage()` reconstructs cumulative usage from `ai_runs` (query-optimized) with transcript fallback.

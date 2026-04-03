@@ -3,8 +3,8 @@
 **Document Type:** Implementation Reference
 **Status:** Active
 **Purpose:** Source of truth for BLB AI features implemented in code
-**Coverage:** OpenClaw parity Phases 1-6
-**Last Updated:** 2026-04-02
+**Coverage:** OpenClaw parity Phases 1-6, Claw Code runtime parity (hook transcript entries + approval visibility), and AI Run Ledger Phases 0-3
+**Last Updated:** 2026-04-03
 **Related:** [agent-model.md](agent-model.md), [lara.md](lara.md), [capability-map.md](capability-map.md), `docs/Base/AI/tool-framework.md`
 
 ---
@@ -24,7 +24,7 @@ This document describes the AI system that is implemented in code under:
 - `resources/core/views/livewire/admin/ai/`
 - `tests/Unit/Modules/Core/AI/`
 
-It covers the completed OpenClaw parity work through Phase 6:
+It covers the completed OpenClaw parity work through Phase 6, the delivered Claw Code runtime parity work, and the delivered AI Run Ledger work:
 
 1. Workspace-driven runtime
 2. Memory and recall
@@ -32,6 +32,8 @@ It covers the completed OpenClaw parity work through Phase 6:
 4. Messaging, scheduling, and background work
 5. Orchestration and extension kernel
 6. Operator control plane and policy depth
+7. Claw Code runtime parity gaps around hook visibility, transcript fidelity, and usage reconstruction
+8. Run ledger, activity stream, execution policy, and background chat UX
 
 ---
 
@@ -48,6 +50,7 @@ These are the authenticated browser-visible AI surfaces in the product today.
 | `/admin/ai/providers/setup/{providerKey}` | `admin.ai.providers.setup` | Provider-specific setup flow |
 | `/admin/ai/tools/{toolName?}` | `admin.ai.tools` | Tool catalog and per-tool workspace |
 | `/admin/ai/control-plane` | `admin.ai.control-plane` | Operator control plane |
+| `/admin/ai/runs/{runId}` | `admin.ai.runs.show` | Standalone run detail page |
 
 The unauthenticated integration endpoint currently exposed is:
 
@@ -252,6 +255,44 @@ Added commands:
 - `blb:ai:lifecycle:preview`
 - `blb:ai:lifecycle:execute`
 
+### 5.7 AI Run Ledger, Activity Stream, and Execution Policy
+
+Implemented outcome:
+
+- BLB now persists each runtime execution as a first-class run ledger entry instead of relying on transient UI state or ad hoc logs
+- session transcripts use a richer activity-stream format with explicit `thinking`, `tool_call`, `tool_result`, and `hook_action` entries
+- run inspection is available both inside the control plane and through a deep-linkable standalone run page
+- runtime execution now uses explicit execution policies for interactive, heavy foreground, and background workloads
+- hook outcomes (tool removal, tool denial) are persisted as canonical `hook_action` transcript entries with source attribution (authz vs hook)
+- approval visibility: denied or prevented actions appear as first-class timeline events in chat, run detail, and transcript replay
+- chat timeouts can offload work to the background queue while keeping progress visible in the chat surface
+
+Implemented services and runtime pieces:
+
+- `AiRun` ledger-backed runtime persistence
+- `ExecutionPolicy` and `ExecutionMode`
+- `RunAgentChatJob` for background chat execution
+- `RuntimeHookCoordinator::preToolUse()`
+- `MessageManager::sessionUsage()` and `appendHookAction()`
+- standalone `RunDetail` Livewire page
+- `HandlesBackgroundChat` Livewire concern
+
+User-visible features:
+
+- transcript timeline renders thinking, tool call, tool result, hook action, and assistant entries from the persisted transcript
+- hook actions show stage, affected tools, denial reason, and source (authz vs hook) in the activity stream
+- run metadata and retry/fallback details are visible in run inspection
+- `/admin/ai/runs/{runId}` provides a standalone, deep-linkable run-inspection surface for the owning user
+- timed-out interactive chat requests automatically move to background execution with queued/running/completed visibility
+- the chat composer shows cumulative session token usage derived from `ai_runs`, with transcript fallback for older sessions
+
+Implementation notes:
+
+- `AgenticRuntime::run()` and `runStream()` accept an optional `ExecutionPolicy`
+- `ExecutionPolicy::forMode()` resolves timeout tiers for `interactive`, `heavy_foreground`, and `background`
+- timeout retry logic skips same-budget retries once a call has already consumed a material portion of the budget
+- denied tools surface in both the transcript and streaming events, rather than disappearing into internal hook logic
+
 ---
 
 ## 6. Tool Inventory
@@ -326,11 +367,13 @@ The implemented runtime is layered like this:
 Implemented persistent AI state now spans:
 
 - workspace directories under `storage/app/workspace/{employee_id}/`
+- `ai_runs` canonical run ledger rows
 - session `.jsonl` transcript files
 - session `.meta.json` metadata files
+- transcript activity-stream entries (`message`, `thinking`, `tool_call`, `tool_result`)
 - per-agent memory indexes
 - provider and model database tables
-- operations dispatch ledger
+- `ai_operation_dispatches` operations dispatch ledger
 - browser sessions and browser artifacts
 - telemetry events and lifecycle request ledgers
 
@@ -352,7 +395,7 @@ Use the companion docs for that:
 
 ## 10. Status Summary
 
-As of 2026-04-02, BLB's AI system includes:
+As of 2026-04-03, BLB's AI system includes:
 
 1. provider and model management
 2. workspace-driven prompt assembly
@@ -362,5 +405,10 @@ As of 2026-04-02, BLB's AI system includes:
 6. queued delegation and orchestration
 7. messaging, scheduling, and background work
 8. unified operator control plane
+9. canonical AI run ledger persistence
+10. transparent transcript activity stream and standalone run detail views
+11. explicit execution policies for interactive, heavy, and background runs
+12. background chat offload with in-chat progress visibility
+13. session token usage reconstruction from `ai_runs` with transcript fallback
 
 This is the current implementation baseline.

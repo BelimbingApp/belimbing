@@ -353,6 +353,38 @@ class ChatStreamController
                     errorPayload: is_array($data['error_payload'] ?? null) ? $data['error_payload'] : null,
                 ),
             );
+
+            return;
+        }
+
+        if ($phase === 'hook_action') {
+            $messageManager->appendHookAction(
+                $employeeId,
+                $sessionId,
+                $runId,
+                (string) ($data['stage'] ?? 'unknown'),
+                'tools_removed',
+                array_filter([
+                    'tools_removed' => $data['tools_removed'] ?? [],
+                ]),
+            );
+
+            return;
+        }
+
+        if ($phase === 'tool_denied') {
+            $messageManager->appendHookAction(
+                $employeeId,
+                $sessionId,
+                $runId,
+                'pre_tool_use',
+                'tool_denied',
+                [
+                    'tool' => (string) ($data['tool'] ?? ''),
+                    'reason' => (string) ($data['reason'] ?? 'denied by policy'),
+                    'source' => (string) ($data['source'] ?? 'hook'),
+                ],
+            );
         }
     }
 }

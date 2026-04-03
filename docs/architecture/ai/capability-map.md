@@ -1,8 +1,8 @@
 # Agent Tools Blueprint — Mirroring OpenClaw Capabilities for BLB
 
 **Document Type:** Architecture Blueprint (Study & Plan)
-**Status:** Active parity map with implemented Phases 1-6 and later roadmap sections
-**Last Updated:** 2026-04-02
+**Status:** Active parity map with implemented OpenClaw-parity Phases 1-6 plus later runtime and ledger updates
+**Last Updated:** 2026-04-03
 **Related:** `docs/Base/AI/tool-framework.md` (tool abstraction layer), `docs/architecture/ai/lara.md` §3 (Lara vs agents), §14 (Tool Calling), `docs/architecture/ai/agent-model.md` §13–§14, `docs/architecture/ai/current-state.md`
 
 > **Important:** The tool-calling infrastructure described here is **agent-generic**, not Lara-specific. All tools implement the `Tool` contract (`App\Base\AI\Contracts\Tool`), extend `AbstractTool` or `AbstractActionTool`, are registered in the shared `AgentToolRegistry`, and execute through the common `AgenticRuntime`. Lara is distinguished from other agents by her framework-controlled identity, personality, and mission — not by unique tool code. Which tools a agent can use is a **policy decision** controlled by authz role assignment. See `docs/architecture/ai/lara.md` §3 for the full distinction.
@@ -117,14 +117,14 @@ OpenClaw organizes tools into groups with an allow/deny policy system:
 
 | OpenClaw Capability | BLB Equivalent | Gap |
 |---------------------|----------------|-----|
-| `exec` + `process` | `ArtisanTool` (artisan-only) | No general shell, no background processes |
-| `read` / `write` / `edit` | — | No file system tools |
-| `web_search` / `web_fetch` | — | No web capabilities |
-| `browser` | `NavigateTool` (SPA nav only) | No browser automation / page inspection — **Phase 5 planned** |
-| `memory_search` / `memory_get` | `LaraKnowledgeNavigator` (curated) | No semantic memory, no per-agent memory |
-| `sessions_spawn` / sub-agents | `LaraTaskDispatcher` (stub) | Dispatch skeleton only, no actual execution |
-| `cron` | — | No scheduled task management |
-| `message` | — | No messaging integration — **Phase 6 planned** |
+| `exec` + `process` | `bash` tool + background command dispatch ledger | Implemented shell execution and queued background work, but not OpenClaw-style process-session polling |
+| `read` / `write` / `edit` | `edit_file` / `edit_data` tools | Partial parity; BLB favors deeper editing tools over a raw read/write/apply_patch suite |
+| `web_search` / `web_fetch` | `web_search` / `web_fetch` tools | Implemented |
+| `browser` | `BrowserTool` + persistent browser session subsystem | Implemented; differs from OpenClaw by using BLB-managed server-side browser infrastructure |
+| `memory_search` / `memory_get` | `memory_search` / `memory_get` tools + per-agent memory index | Implemented |
+| `sessions_spawn` / sub-agents | `delegate_task`, `delegation_status`, `SpawnAgentSessionJob`, dispatch ledger | Implemented as Lara-led delegation, not peer-to-peer session spawning |
+| `cron` | `schedule_task` + schedule planner/tick services | Implemented |
+| `message` | `message` tool + channel adapter infrastructure | Implemented |
 | `image` / `pdf` / `tts` | — | No media analysis tools |
 | `canvas` / `nodes` | — | No device/canvas integration |
 | Tool profiles + groups | — | No tool policy system |

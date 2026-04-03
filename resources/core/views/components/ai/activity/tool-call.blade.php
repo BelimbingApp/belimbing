@@ -17,6 +17,7 @@
 @php
     $statusBadge = match ($status) {
         'error' => ['variant' => 'danger', 'label' => __('Error')],
+        'denied' => ['variant' => 'warning', 'label' => __('Denied')],
         'running' => ['variant' => 'info', 'label' => __('Running')],
         default => ['variant' => 'success', 'label' => __('Done')],
     };
