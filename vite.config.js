@@ -36,10 +36,14 @@ export default defineConfig({
         laravel({
             input: ['resources/app.css', 'resources/core/js/app.js'],
             refresh: [
-                'resources/core/views/**',
-                'resources/core/css/**',
-                'resources/core/js/**',
-                ...(process.env.VITE_THEME_DIR ? [`resources/extensions/${process.env.VITE_THEME_DIR}/**`] : []),
+                'resources/core/views/**/*.blade.php',
+                'resources/core/css/**/*.css',
+                'resources/core/js/**/*.{js,ts,vue}',
+                ...(process.env.VITE_THEME_DIR ? [
+                    `resources/extensions/${process.env.VITE_THEME_DIR}/views/**/*.blade.php`,
+                    `resources/extensions/${process.env.VITE_THEME_DIR}/css/**/*.css`,
+                    `resources/extensions/${process.env.VITE_THEME_DIR}/js/**/*.{js,ts,vue}`,
+                ] : []),
             ],
         }),
         tailwindcss(),
