@@ -9,7 +9,6 @@ use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
-use App\Base\AI\Services\AiRuntimeLogger;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\Message;
@@ -37,7 +36,6 @@ class AgenticRuntime
         private readonly RuntimeCredentialResolver $credentialResolver,
         private readonly RuntimeMessageBuilder $messageBuilder,
         private readonly RuntimeResponseFactory $responseFactory,
-        private readonly AiRuntimeLogger $runtimeLogger,
         private readonly RuntimeHookCoordinator $hookCoordinator,
         private readonly RunRecorder $runRecorder,
     ) {}
@@ -79,7 +77,6 @@ class AgenticRuntime
                 'unknown',
                 'unknown',
                 $configError,
-                ['employee_id' => $employeeId],
             );
         }
 
@@ -100,7 +97,6 @@ class AgenticRuntime
                     $config['model'],
                     (string) ($config['provider_name'] ?? 'unknown'),
                     $credentials['runtime_error'],
-                    ['employee_id' => $employeeId],
                 );
 
                 continue;
@@ -159,7 +155,6 @@ class AgenticRuntime
 
         if ($configs === []) {
             $error = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
-            $this->runtimeLogger->runFailed($runId, $error, ['employee_id' => $employeeId, 'streaming' => true]);
             $this->runRecorder->fail($runId, $error);
             yield ['event' => 'error', 'data' => [
                 'message' => $error->userMessage,
@@ -184,12 +179,6 @@ class AgenticRuntime
             if (isset($credentials['runtime_error'])) {
                 $error = $credentials['runtime_error'];
                 $fallbackAttempts[] = $this->buildFallbackAttempt($config, $error);
-                $this->runtimeLogger->runFailed($runId, $error, [
-                    'employee_id' => $employeeId,
-                    'model' => $config['model'],
-                    'provider_name' => $config['provider_name'] ?? 'unknown',
-                    'streaming' => true,
-                ]);
                 $lastError = $error;
                 $lastConfig = $config;
 
@@ -373,12 +362,6 @@ class AgenticRuntime
             'error_type' => $runtimeError->errorType->value,
             'latency_ms' => $runtimeError->latencyMs,
         ];
-
-        $this->runtimeLogger->retryAttempted(
-            providerName: (string) ($config['provider_name'] ?? 'unknown'),
-            model: $config['model'],
-            error: $runtimeError,
-        );
 
         return $this->chatWithTools($credentials, $config, $apiMessages, $tools);
     }
@@ -594,12 +577,6 @@ class AgenticRuntime
 
             if (isset($result['runtime_error'])) {
                 $runtimeError = $result['runtime_error'];
-                $this->runtimeLogger->runFailed($runId, $runtimeError, [
-                    'model' => $config['model'],
-                    'provider_name' => $config['provider_name'] ?? 'unknown',
-                    'streaming' => true,
-                    'iteration' => $iteration,
-                ]);
 
                 // Hook: PostRun on error
                 $this->hookCoordinator->postRun($runId, $employeeId, false, $hookMetadata);
@@ -808,11 +785,6 @@ class AgenticRuntime
             : ($event['message'] ?? __('An unexpected error occurred. Please try again.'));
 
         if ($runtimeError instanceof AiRuntimeError) {
-            $this->runtimeLogger->runFailed($runId, $runtimeError, [
-                'model' => $config['model'],
-                'provider_name' => $config['provider_name'] ?? 'unknown',
-                'streaming' => true,
-            ]);
             $this->runRecorder->fail($runId, $runtimeError);
         }
 
@@ -850,11 +822,6 @@ class AgenticRuntime
             'Streaming response completed with no content',
             latencyMs: $latencyMs,
         );
-        $this->runtimeLogger->runFailed($runId, $emptyError, [
-            'model' => $config['model'],
-            'provider_name' => $config['provider_name'] ?? 'unknown',
-            'streaming' => true,
-        ]);
         $this->runRecorder->fail($runId, $emptyError);
 
         return ['event' => 'error', 'data' => [

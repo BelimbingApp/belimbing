@@ -5,7 +5,6 @@ namespace Tests\Support;
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Enums\AiErrorType;
-use App\Base\AI\Services\AiRuntimeLogger;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
@@ -140,16 +139,13 @@ trait MakesRuntimeResponses
         ?ConfigResolver $configResolver = null,
         ?AgentToolRegistry $toolRegistry = null,
     ): AgenticRuntime {
-        $runtimeLogger = app(AiRuntimeLogger::class);
-
         return new AgenticRuntime(
             $configResolver ?? $this->mockResolvedConfigResolver([$this->makeConfig('test-provider', 'gpt-4', 'test-key')]),
             $llmClient,
             $toolRegistry ?? $this->makeToolRegistry(),
             $this->makePassthroughCredentialResolver(),
             new RuntimeMessageBuilder,
-            new RuntimeResponseFactory($runtimeLogger),
-            $runtimeLogger,
+            new RuntimeResponseFactory,
             new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
             \Mockery::mock(RunRecorder::class)->shouldIgnoreMissing(),
         );
@@ -159,14 +155,12 @@ trait MakesRuntimeResponses
         ConfigResolver $configResolver,
         LlmClient $llmClient,
     ): AgentRuntime {
-        $runtimeLogger = app(AiRuntimeLogger::class);
-
         return new AgentRuntime(
             $configResolver,
             $llmClient,
             $this->makePassthroughCredentialResolver(),
             new RuntimeMessageBuilder,
-            new RuntimeResponseFactory($runtimeLogger),
+            new RuntimeResponseFactory,
         );
     }
 

@@ -9,9 +9,9 @@ use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
-use App\Base\AI\Services\AiRuntimeLogger;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\DTO\ProviderTestResult;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Runs end-to-end connectivity tests against a configured provider+model.
@@ -32,7 +32,6 @@ final readonly class ProviderTestService
         private ConfigResolver $configResolver,
         private RuntimeCredentialResolver $credentialResolver,
         private LlmClient $llmClient,
-        private AiRuntimeLogger $runtimeLogger,
     ) {}
 
     /**
@@ -138,16 +137,22 @@ final readonly class ProviderTestService
     }
 
     /**
-     * Log a test result via the runtime logger.
+     * Log a test result via the default log channel.
      */
     private function logResult(string $providerName, string $model, ProviderTestResult $result): void
     {
-        $this->runtimeLogger->providerTestCompleted(
-            providerName: $providerName,
-            model: $model,
-            connected: $result->connected,
-            latencyMs: $result->latencyMs,
-            error: $result->error,
-        );
+        $context = [
+            'provider_name' => $providerName,
+            'model' => $model,
+            'connected' => $result->connected,
+            'latency_ms' => $result->latencyMs,
+        ];
+
+        if ($result->error !== null) {
+            $context = array_merge($context, $result->error->toLogContext());
+        }
+
+        $level = $result->connected ? 'info' : 'warning';
+        Log::log($level, 'AI provider test completed', $context);
     }
 }

@@ -5,7 +5,6 @@
 
 namespace App\Modules\Core\AI\Jobs;
 
-use App\Base\AI\Services\AiRuntimeLogger;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
@@ -115,15 +114,7 @@ class RunAgentTaskJob implements ShouldQueue
 
             $this->recordResult($dispatch, $result, $promptMeta);
         } catch (\Throwable $e) {
-            app(AiRuntimeLogger::class)->unhandledException(
-                $result['run_id'] ?? 'dispatch_'.$this->dispatchId,
-                $e,
-                [
-                    'dispatch_id' => $this->dispatchId,
-                    'employee_id' => $dispatch?->employee_id,
-                    'acting_for_user_id' => $dispatch?->acting_for_user_id,
-                ],
-            );
+            report($e);
 
             if ($dispatch !== null && ! $dispatch->isTerminal()) {
                 $dispatch->markFailed($e->getMessage());

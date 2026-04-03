@@ -7,7 +7,6 @@ namespace App\Modules\Core\AI\Livewire;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
-use App\Base\AI\Services\AiRuntimeLogger;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
@@ -170,10 +169,7 @@ class Chat extends Component
         } catch (\Throwable $e) {
             $runId = 'run_'.Str::random(12);
 
-            app(AiRuntimeLogger::class)->unhandledException($runId, $e, [
-                'employee_id' => $this->employeeId,
-                'session_id' => $this->selectedSessionId,
-            ]);
+            report($e);
 
             $error = AiRuntimeError::unexpected($e->getMessage());
             $fallback = app(RuntimeResponseFactory::class)->error(
@@ -181,7 +177,6 @@ class Chat extends Component
                 'unknown',
                 'unknown',
                 $error,
-                ['employee_id' => $this->employeeId],
             );
 
             $messageManager->appendAssistantMessage(

@@ -20,6 +20,8 @@
 | Runtime integration — `RunRecorder` wired into `AgenticRuntime` sync + streaming paths (`ai-run-ledger.md` §0.4) | ✅ |
 | Remove duplicated storage — `Session::$runs`, `storeRunMeta()`, `runMetadata()` removed (`ai-run-ledger.md` §0.5) | ✅ |
 | Read path migration — `RunInspectionService` queries `ai_runs`, `MessageManager::read()` hydrates from `ai_runs` (`ai-run-ledger.md` §0.7) | ✅ |
+| `AiRuntimeLogger` removal — all 7 consumers migrated, class deleted, `ai` channel removed (`ai-run-ledger.md` §0.6 + §0.11) | ✅ |
+| Streaming path verification — `ChatStreamController` delegates to `AgenticRuntime` which uses `RunRecorder`; no double-writes (`ai-run-ledger.md` §0.10) | ✅ |
 | `RunInspection::fromAiRun()` factory + signature cleanup (`03-runtime-parity-todo.md` §9.2, partial) | ✅ |
 
 ---
@@ -30,7 +32,7 @@
 
 These finish Phase 0. None depend on each other.
 
-- [ ] **§0.6 + §0.11: Remove `AiRuntimeLogger`** — `03-runtime-parity-todo.md` §4
+- [x] **§0.6 + §0.11: Remove `AiRuntimeLogger`** — `03-runtime-parity-todo.md` §4
   - Migrate 7 consumers per the table in `ai-run-ledger.md` §0.11
   - `AgenticRuntime` + `RuntimeResponseFactory`: replace `$runtimeLogger` with `RunRecorder`
   - `Chat.php`, `RunAgentTaskJob`, `SpawnAgentSessionJob`: replace with `report($e)`
@@ -46,7 +48,7 @@ These finish Phase 0. None depend on each other.
   - Archive existing v1 session files
   - Only needed if dev workspace has pre-migration sessions
 
-- [ ] **§0.10: Streaming path `RunRecorder` in `ChatStreamController`** — `ai-run-ledger.md` §0.10
+- [x] **§0.10: Streaming path `RunRecorder` in `ChatStreamController`** — `ai-run-ledger.md` §0.10
   - `ChatStreamController` already receives events from `AgenticRuntime` which now calls `RunRecorder`.
   - Verify no double-writes. If `ChatStreamController` has its own metadata persistence, remove it.
   - This may already be satisfied by the §0.4 work — verify.

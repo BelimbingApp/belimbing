@@ -5,7 +5,6 @@
 
 namespace App\Modules\Core\AI\Jobs;
 
-use App\Base\AI\Services\AiRuntimeLogger;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\OrchestrationSession;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
@@ -112,15 +111,7 @@ class SpawnAgentSessionJob implements ShouldQueue
 
             $this->recordResult($session, $result);
         } catch (\Throwable $e) {
-            app(AiRuntimeLogger::class)->unhandledException(
-                $result['run_id'] ?? 'spawn_'.$this->orchestrationSessionId,
-                $e,
-                [
-                    'orchestration_session_id' => $this->orchestrationSessionId,
-                    'child_employee_id' => $session?->child_employee_id,
-                    'parent_employee_id' => $session?->parent_employee_id,
-                ],
-            );
+            report($e);
 
             if ($session !== null && ! $session->isTerminal()) {
                 $session->markFailed($e->getMessage());

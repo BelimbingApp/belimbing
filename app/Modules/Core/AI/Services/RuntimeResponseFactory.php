@@ -6,17 +6,12 @@
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
-use App\Base\AI\Services\AiRuntimeLogger;
 
 /**
  * Builds consistent runtime response payloads for chat success and error states.
  */
 class RuntimeResponseFactory
 {
-    public function __construct(
-        private readonly AiRuntimeLogger $runtimeLogger,
-    ) {}
-
     /**
      * Build a success result with standard LLM metadata.
      *
@@ -57,14 +52,14 @@ class RuntimeResponseFactory
     /**
      * Build an error result from a structured AiRuntimeError.
      *
-     * Logs the failure and returns a response with safe user-facing text.
-     * Raw diagnostic detail is logged but never exposed to end users.
+     * Returns a response with safe user-facing text.
+     * Raw diagnostic detail is stored in ai_runs.meta.diagnostic via RunRecorder,
+     * never exposed to end users.
      *
      * @param  string  $runId  Unique run identifier
      * @param  string  $model  Model identifier
      * @param  string  $providerName  Provider name
      * @param  AiRuntimeError  $error  Structured error data
-     * @param  array<string, mixed>  $extraContext  Additional log context (employee_id, session_id, etc.)
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
     public function error(
@@ -72,13 +67,7 @@ class RuntimeResponseFactory
         string $model,
         string $providerName,
         AiRuntimeError $error,
-        array $extraContext = [],
     ): array {
-        $this->runtimeLogger->runFailed($runId, $error, array_merge(
-            ['model' => $model, 'provider_name' => $providerName],
-            $extraContext,
-        ));
-
         return [
             'content' => __('⚠ :detail', ['detail' => $error->userMessage]),
             'run_id' => $runId,
