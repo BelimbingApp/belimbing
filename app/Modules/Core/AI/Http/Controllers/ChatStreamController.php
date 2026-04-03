@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Http\Controllers;
 
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\DTO\PageSnapshot;
+use App\Modules\Core\AI\DTO\ToolResultEntry;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
@@ -343,12 +344,14 @@ class ChatStreamController
                 $employeeId,
                 $sessionId,
                 $runId,
-                (string) ($data['tool'] ?? ''),
-                (string) ($data['result_preview'] ?? ''),
-                (int) ($data['result_length'] ?? 0),
-                (string) ($data['status'] ?? 'success'),
-                (int) ($data['duration_ms'] ?? 0),
-                is_array($data['error_payload'] ?? null) ? $data['error_payload'] : null,
+                new ToolResultEntry(
+                    toolName: (string) ($data['tool'] ?? ''),
+                    resultPreview: (string) ($data['result_preview'] ?? ''),
+                    resultLength: (int) ($data['result_length'] ?? 0),
+                    status: (string) ($data['status'] ?? 'success'),
+                    durationMs: (int) ($data['duration_ms'] ?? 0),
+                    errorPayload: is_array($data['error_payload'] ?? null) ? $data['error_payload'] : null,
+                ),
             );
         }
     }

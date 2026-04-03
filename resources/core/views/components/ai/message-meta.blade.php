@@ -87,8 +87,6 @@
                     @click.outside="popoverOpen = false"
                     @keydown.escape.window="popoverOpen = false"
                     x-transition.opacity.duration.100ms
-                    role="dialog"
-                    aria-label="{{ __('Run details') }}"
                     class="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-xl border border-border-default bg-surface-card shadow-lg p-2.5 text-[11px] text-ink"
                 >
                     <div class="font-medium text-muted mb-1.5">{{ __('Run') }}</div>
