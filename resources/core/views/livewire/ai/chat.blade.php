@@ -351,41 +351,70 @@
             <section class="flex-1 min-w-0 min-h-0 flex flex-col"
                 x-data="{
                     pendingMessage: null,
-                    streamingContent: '',
-                    streamingStatus: null,
+                    streamEntries: [],
                     _eventSource: null,
+                    _currentRunId: null,
+                    followTail: true,
                 }"
-                x-on:agent-chat-response-ready.window="pendingMessage = null; streamingContent = ''; streamingStatus = null"
+                x-on:agent-chat-response-ready.window="pendingMessage = null; streamEntries = []; _currentRunId = null"
             >
                 <div
-                    class="flex-1 min-w-0 min-h-0 overflow-y-auto px-4 py-3 space-y-3"
+                    class="flex-1 min-w-0 min-h-0 overflow-y-auto px-4 py-3 space-y-3 relative"
                     x-ref="agentScroll"
                     x-init="$nextTick(() => $el.scrollTop = $el.scrollHeight)"
-                    x-effect="$nextTick(() => $refs.agentScroll.scrollTop = $refs.agentScroll.scrollHeight)"
+                    @scroll.throttle.100ms="
+                        const el = $refs.agentScroll;
+                        followTail = (el.scrollHeight - el.scrollTop - el.clientHeight) < 50;
+                    "
+                    x-effect="if (followTail) $nextTick(() => $refs.agentScroll.scrollTop = $refs.agentScroll.scrollHeight)"
                 >
                     @forelse($messages as $message)
                         @php
                             $messageProvider = $message->meta['provider_name'] ?? $message->meta['llm']['provider'] ?? null;
                             $messageModel = $message->meta['model'] ?? $message->meta['llm']['model'] ?? null;
+                            $messageTokens = $message->meta['tokens'] ?? null;
+                            $messageLatencyMs = $message->meta['latency_ms'] ?? null;
+                            $messageTimeoutSeconds = $message->meta['timeout_seconds'] ?? null;
+                            $messageRetryAttempts = $message->meta['retry_attempts'] ?? null;
+                            $messageFallbackAttempts = $message->meta['fallback_attempts'] ?? null;
+                            $messageErrorType = $message->meta['error_type'] ?? null;
+                            $messageErrorMessage = $message->meta['error'] ?? null;
+                            $messageRunStatus = $message->meta['status'] ?? null;
                         @endphp
-                        <div class="flex {{ $message->role === 'user' ? 'justify-end' : 'justify-start' }}">
-                            @if ($message->role === 'assistant' && ($message->meta['message_type'] ?? null) === 'error')
-                                {{-- Error message --}}
-                                <div class="max-w-[80%] rounded-2xl px-3 py-2 text-sm bg-red-500/10 text-ink border border-red-500/20">
-                                    <div class="flex items-center gap-1.5 mb-0.5">
-                                        <x-icon name="heroicon-o-exclamation-triangle" class="w-3.5 h-3.5 text-red-500" />
-                                        <span class="text-[10px] font-semibold uppercase tracking-wider text-red-500">{{ __('Error') }}</span>
-                                    </div>
-                                    <div class="agent-prose max-w-full overflow-x-auto">{!! $markdown->render($message->content) !!}</div>
-                                    <x-ai.message-meta
-                                        :timestamp="$message->timestamp"
-                                        :provider="$messageProvider"
-                                        :model="$messageModel"
-                                        :run-id="$message->runId"
-                                    />
-                                </div>
-                            @elseif ($message->role === 'assistant' && ($message->meta['orchestration']['status'] ?? null) !== null)
-                                {{-- Action message (navigation, guide, models, etc.) --}}
+
+                        @if ($message->type === 'thinking')
+                            <x-ai.activity.thinking :timestamp="$message->timestamp" :active="false" />
+                        @elseif ($message->type === 'tool_call')
+                            <x-ai.activity.tool-call
+                                :tool="$message->meta['tool'] ?? ''"
+                                :args-summary="$message->meta['args_summary'] ?? '{}'"
+                                status="success"
+                            />
+                        @elseif ($message->type === 'tool_result')
+                            <x-ai.activity.tool-call
+                                :tool="$message->meta['tool'] ?? ''"
+                                :args-summary="''"
+                                :status="$message->meta['status'] ?? 'success'"
+                                :duration-ms="$message->meta['duration_ms'] ?? null"
+                                :result-preview="$message->meta['result_preview'] ?? ''"
+                                :result-length="$message->meta['result_length'] ?? 0"
+                                :error-payload="$message->meta['error_payload'] ?? null"
+                            />
+                        @elseif ($message->role === 'user')
+                            <x-ai.activity.user-message :content="$message->content" :timestamp="$message->timestamp" />
+                        @elseif ($message->role === 'assistant' && ($message->meta['message_type'] ?? null) === 'error')
+                            <x-ai.activity.error
+                                :message="$message->content"
+                                :error-type="$messageErrorType"
+                                :timestamp="$message->timestamp"
+                                :run-id="$message->runId"
+                                :provider="$messageProvider"
+                                :model="$messageModel"
+                                :markdown="$markdown"
+                            />
+                        @elseif ($message->role === 'assistant' && ($message->meta['orchestration']['status'] ?? null) !== null)
+                            {{-- Action message (navigation, guide, models, etc.) --}}
+                            <div class="flex justify-start">
                                 <div class="max-w-[80%] rounded-2xl px-3 py-2 text-sm bg-accent/10 text-ink border border-accent/20">
                                     <div class="flex items-center gap-1.5 mb-0.5">
                                         <x-icon name="heroicon-o-bolt" class="w-3.5 h-3.5 text-accent" />
@@ -397,27 +426,33 @@
                                         :provider="$messageProvider"
                                         :model="$messageModel"
                                         :run-id="$message->runId"
+                                        :tokens="$messageTokens"
+                                        :latency-ms="$messageLatencyMs"
+                                        :timeout-seconds="$messageTimeoutSeconds"
+                                        :retry-attempts="$messageRetryAttempts"
+                                        :fallback-attempts="$messageFallbackAttempts"
+                                        :error-type="$messageErrorType"
+                                        :error-message="$messageErrorMessage"
+                                        :run-status="$messageRunStatus"
                                     />
                                 </div>
-                            @else
-                                <div class="max-w-[80%] rounded-2xl px-3 py-2 text-sm
-                                    {{ $message->role === 'user' ? 'bg-accent text-accent-on' : 'bg-surface-subtle text-ink' }}"
-                                >
-                                    @if ($message->role === 'assistant')
-                                        <div class="agent-prose max-w-full overflow-x-auto">{!! $markdown->render($message->content) !!}</div>
-                                    @else
-                                        <div class="whitespace-pre-wrap break-words">{{ $message->content }}</div>
-                                    @endif
-                                    <x-ai.message-meta
-                                        :timestamp="$message->timestamp"
-                                        :provider="$message->role === 'assistant' ? $messageProvider : null"
-                                        :model="$message->role === 'assistant' ? $messageModel : null"
-                                        :run-id="$message->role === 'assistant' ? $message->runId : null"
-                                        :tone="$message->role === 'user' ? 'inverse' : 'muted'"
-                                    />
-                                </div>
-                            @endif
-                        </div>
+                            </div>
+                        @elseif ($message->role === 'assistant')
+                            <x-ai.activity.assistant-result
+                                :content="$message->content"
+                                :timestamp="$message->timestamp"
+                                :run-id="$message->runId"
+                                :provider="$messageProvider"
+                                :model="$messageModel"
+                                :markdown="$markdown"
+                                :tokens="$messageTokens"
+                                :latency-ms="$messageLatencyMs"
+                                :timeout-seconds="$messageTimeoutSeconds"
+                                :retry-attempts="$messageRetryAttempts"
+                                :fallback-attempts="$messageFallbackAttempts"
+                                :run-status="$messageRunStatus"
+                            />
+                        @endif
                     @empty
                         <div x-show="!pendingMessage" class="h-full flex flex-col items-center justify-center gap-4">
                             <p class="text-sm text-muted">{{ __('Send a message to start chatting with :name.', ['name' => $agentIdentity['name']]) }}</p>
@@ -447,25 +482,111 @@
                         </div>
                     </template>
 
-                    {{-- Streaming response bubble --}}
-                    <template x-if="streamingContent">
-                        <div class="flex justify-start">
-                            <div class="max-w-[80%] rounded-2xl px-3 py-2 text-sm bg-surface-subtle text-ink">
-                                <div class="agent-prose max-w-full overflow-x-auto whitespace-pre-wrap break-words" x-text="streamingContent"></div>
-                            </div>
+                    {{-- Live stream activity entries --}}
+                    <template x-for="(entry, idx) in streamEntries" :key="idx">
+                        <div>
+                            {{-- Thinking --}}
+                            <template x-if="entry.type === 'thinking'">
+                                <div class="flex gap-2 py-1">
+                                    <div class="shrink-0 mt-0.5">
+                                        <x-icon name="heroicon-o-light-bulb" class="w-4 h-4 text-muted" />
+                                    </div>
+                                    <div class="flex items-center gap-1.5 text-xs text-muted">
+                                        <template x-if="entry.active">
+                                            <span class="w-2 h-2 bg-accent rounded-full animate-pulse"></span>
+                                        </template>
+                                        <span>{{ __('Thinking…') }}</span>
+                                    </div>
+                                </div>
+                            </template>
+
+                            {{-- Tool call --}}
+                            <template x-if="entry.type === 'tool_call'">
+                                <div class="flex gap-2 py-1">
+                                    <div class="shrink-0 mt-0.5">
+                                        <x-icon name="heroicon-o-wrench-screwdriver" class="w-4 h-4 text-accent" />
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div x-data="{ expanded: false }" class="rounded-lg border border-border-default bg-surface-card">
+                                            <button
+                                                type="button"
+                                                @click="expanded = !expanded"
+                                                class="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-surface-subtle/50 transition-colors rounded-lg"
+                                                :aria-expanded="expanded"
+                                            >
+                                                <span class="font-medium text-ink truncate" x-text="entry.tool"></span>
+                                                <span class="text-muted truncate max-w-[10rem]" x-text="entry.argsSummary ? entry.argsSummary.substring(0, 60) : ''"></span>
+                                                <span class="ml-auto flex items-center gap-1.5 shrink-0">
+                                                    <template x-if="entry.status === 'running'">
+                                                        <span class="w-2 h-2 bg-accent rounded-full animate-pulse"></span>
+                                                    </template>
+                                                    <template x-if="entry.durationMs !== undefined">
+                                                        <span class="tabular-nums text-muted" x-text="(entry.durationMs / 1000).toFixed(1) + 's'"></span>
+                                                    </template>
+                                                    <template x-if="entry.status === 'success'">
+                                                        <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:text-emerald-400">{{ __('Done') }}</span>
+                                                    </template>
+                                                    <template x-if="entry.status === 'error'">
+                                                        <span class="inline-flex items-center rounded-full bg-red-500/10 px-1.5 py-0.5 text-[9px] font-medium text-red-600 dark:text-red-400">{{ __('Error') }}</span>
+                                                    </template>
+                                                    <x-icon
+                                                        name="heroicon-o-chevron-right"
+                                                        class="w-3 h-3 text-muted transition-transform"
+                                                        ::class="expanded ? 'rotate-90' : ''"
+                                                    />
+                                                </span>
+                                            </button>
+                                            <div x-show="expanded" x-cloak x-collapse class="border-t border-border-default px-2.5 py-2 text-xs">
+                                                <template x-if="entry.errorPayload">
+                                                    <div class="space-y-1 text-red-500">
+                                                        <div x-show="entry.errorPayload?.code"><span class="font-medium">{{ __('Code') }}:</span> <span x-text="entry.errorPayload?.code"></span></div>
+                                                        <div x-text="entry.errorPayload?.message"></div>
+                                                    </div>
+                                                </template>
+                                                <template x-if="!entry.errorPayload && entry.resultPreview">
+                                                    <div>
+                                                        <div class="text-muted whitespace-pre-wrap break-words" x-text="entry.resultPreview"></div>
+                                                        <div x-show="entry.resultLength > 200" class="mt-1 text-muted/70 tabular-nums" x-text="entry.resultLength.toLocaleString() + ' {{ __('chars total') }}'"></div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            {{-- Streaming assistant text (drafting state) --}}
+                            <template x-if="entry.type === 'assistant_streaming'">
+                                <div class="flex justify-start">
+                                    <div class="max-w-[90%] text-sm text-ink">
+                                        <div class="relative">
+                                            <div class="agent-prose max-w-full overflow-x-auto whitespace-pre-wrap break-words opacity-90" x-text="entry.content"></div>
+                                            <div class="inline-flex items-center gap-1 mt-1 text-[10px] text-muted">
+                                                <span class="w-1.5 h-1.5 bg-accent rounded-full animate-pulse"></span>
+                                                <span>{{ __('Writing…') }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            {{-- Error --}}
+                            <template x-if="entry.type === 'error'">
+                                <div class="flex justify-start">
+                                    <div class="max-w-[80%] rounded-2xl px-3 py-2 text-sm bg-red-500/10 text-ink border border-red-500/20">
+                                        <div class="flex items-center gap-1.5 mb-0.5">
+                                            <x-icon name="heroicon-o-exclamation-triangle" class="w-3.5 h-3.5 text-red-500" />
+                                            <span class="text-[10px] font-semibold uppercase tracking-wider text-red-500">{{ __('Error') }}</span>
+                                        </div>
+                                        <div class="whitespace-pre-wrap break-words" x-text="entry.message"></div>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </template>
 
-                    {{-- Tool status indicator --}}
-                    <div x-show="streamingStatus && !streamingContent" x-cloak class="flex justify-start">
-                        <div class="bg-surface-subtle rounded-2xl px-3 py-2 text-xs text-muted flex items-center gap-1.5">
-                            <span class="w-2 h-2 bg-accent rounded-full animate-pulse"></span>
-                            <span x-text="streamingStatus"></span>
-                        </div>
-                    </div>
-
                     {{-- Loading dots: shown while waiting for non-streaming response --}}
-                    <div x-show="pendingMessage && !streamingContent && !streamingStatus" x-cloak class="flex justify-start">
+                    <div x-show="pendingMessage && streamEntries.length === 0" x-cloak class="flex justify-start">
                         <div class="bg-surface-subtle rounded-2xl px-3 py-2">
                             <div class="flex gap-1">
                                 <span class="w-2 h-2 bg-muted/50 rounded-full animate-pulse"></span>
@@ -474,6 +595,18 @@
                             </div>
                         </div>
                     </div>
+
+                    {{-- Jump to latest floating button --}}
+                    <button
+                        x-show="!followTail"
+                        x-cloak
+                        @click="followTail = true; $refs.agentScroll.scrollTop = $refs.agentScroll.scrollHeight"
+                        class="sticky bottom-2 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1 rounded-full bg-surface-card border border-border-default shadow-lg px-3 py-1.5 text-xs text-muted hover:text-ink transition-colors"
+                        aria-label="{{ __('Jump to latest') }}"
+                    >
+                        <x-icon name="heroicon-o-arrow-down" class="w-3.5 h-3.5" />
+                        {{ __('Jump to latest') }}
+                    </button>
                 </div>
 
                 {{-- Composer --}}
@@ -559,20 +692,56 @@
                 this._eventSource.close();
             }
 
-            this.streamingContent = '';
-            this.streamingStatus = null;
+            this.streamEntries = [];
+            this.followTail = true;
+            this._currentRunId = null;
             const source = new EventSource(url);
             this._eventSource = source;
+
+            // Track which tool_call entry index corresponds to which tool_call_index
+            const toolCallMap = {};
 
             source.addEventListener('status', (e) => {
                 try {
                     const data = JSON.parse(e.data);
+
+                    if (data.run_id) {
+                        this._currentRunId = data.run_id;
+                    }
+
                     if (data.phase === 'thinking') {
-                        this.streamingStatus = '{{ __('Thinking...') }}';
+                        // Add thinking entry only once
+                        const existingThinking = this.streamEntries.find(entry => entry.type === 'thinking');
+                        if (!existingThinking) {
+                            this.streamEntries.push({
+                                type: 'thinking',
+                                active: true,
+                            });
+                        }
                     } else if (data.phase === 'tool_started') {
-                        this.streamingStatus = '🔧 ' + (data.tool || '{{ __('Running tool...') }}');
+                        // Deactivate thinking
+                        const thinking = this.streamEntries.find(entry => entry.type === 'thinking');
+                        if (thinking) thinking.active = false;
+
+                        const idx = this.streamEntries.length;
+                        toolCallMap[data.tool_call_index ?? idx] = idx;
+
+                        this.streamEntries.push({
+                            type: 'tool_call',
+                            tool: data.tool || '',
+                            argsSummary: data.args_summary || '',
+                            status: 'running',
+                        });
                     } else if (data.phase === 'tool_finished') {
-                        this.streamingStatus = null;
+                        const callIdx = toolCallMap[data.tool_call_index ?? -1];
+                        if (callIdx !== undefined && this.streamEntries[callIdx]) {
+                            const entry = this.streamEntries[callIdx];
+                            entry.status = data.status || 'success';
+                            entry.durationMs = data.duration_ms;
+                            entry.resultPreview = data.result_preview || '';
+                            entry.resultLength = data.result_length || 0;
+                            entry.errorPayload = data.error_payload || null;
+                        }
                     }
                 } catch {}
                 this.scrollToBottom(scrollContainer);
@@ -582,8 +751,19 @@
                 try {
                     const data = JSON.parse(e.data);
                     if (data.text) {
-                        this.streamingContent += data.text;
-                        this.streamingStatus = null;
+                        // Deactivate thinking
+                        const thinking = this.streamEntries.find(entry => entry.type === 'thinking');
+                        if (thinking) thinking.active = false;
+
+                        const last = this.streamEntries[this.streamEntries.length - 1];
+                        if (last && last.type === 'assistant_streaming') {
+                            last.content += data.text;
+                        } else {
+                            this.streamEntries.push({
+                                type: 'assistant_streaming',
+                                content: data.text,
+                            });
+                        }
                     }
                 } catch {}
                 this.scrollToBottom(scrollContainer);
@@ -601,7 +781,10 @@
                     try {
                         const data = JSON.parse(e.data);
                         if (data.message) {
-                            this.streamingContent = '⚠ ' + data.message;
+                            this.streamEntries.push({
+                                type: 'error',
+                                message: data.message,
+                            });
                         }
                     } catch {}
                 }
@@ -618,7 +801,8 @@
                 this._eventSource = null;
 
                 // If no content was streamed, fall back to sync
-                if (!this.streamingContent) {
+                const hasContent = this.streamEntries.some(e => e.type === 'assistant_streaming');
+                if (!hasContent) {
                     this.$wire.sendMessage();
                 } else {
                     this.$wire.finalizeStreamingRun();
@@ -627,9 +811,11 @@
         },
 
         scrollToBottom(container) {
-            this.$nextTick(() => {
-                if (container) container.scrollTop = container.scrollHeight;
-            });
+            if (this.followTail) {
+                this.$nextTick(() => {
+                    if (container) container.scrollTop = container.scrollHeight;
+                });
+            }
         },
 
     }));

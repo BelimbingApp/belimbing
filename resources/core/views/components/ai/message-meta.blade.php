@@ -9,6 +9,14 @@
     'model' => null,
     'runId' => null,
     'tone' => 'muted',
+    'tokens' => null,
+    'latencyMs' => null,
+    'timeoutSeconds' => null,
+    'retryAttempts' => null,
+    'fallbackAttempts' => null,
+    'errorType' => null,
+    'errorMessage' => null,
+    'runStatus' => null,
 ])
 
 @php
@@ -31,6 +39,10 @@
         'inverse' => 'text-accent-on/70 focus-visible:ring-accent-on/40',
         default => 'text-muted focus-visible:ring-accent/40',
     };
+
+    $hasRunMeta = $runIdLabel !== null && ($tokens !== null || $latencyMs !== null || $retryAttempts !== null || $fallbackAttempts !== null || $errorType !== null);
+    $promptTokens = $tokens['prompt'] ?? null;
+    $completionTokens = $tokens['completion'] ?? null;
 @endphp
 
 <div x-data="{ tooltipOpen: false }" class="relative mt-1 inline-flex max-w-full text-[10px]">
@@ -58,27 +70,87 @@
 
         @if ($runIdLabel !== null)
             <span aria-hidden="true" class="shrink-0">·</span>
-            <span class="relative inline-flex" x-data="{ runIdTooltipOpen: false }">
+            <span class="relative inline-flex" x-data="{ popoverOpen: false }">
                 <button
                     type="button"
-                    @mouseenter="runIdTooltipOpen = true"
-                    @mouseleave="runIdTooltipOpen = false"
-                    @focus="runIdTooltipOpen = true"
-                    @blur="runIdTooltipOpen = false"
+                    @click="popoverOpen = !popoverOpen"
+                    @keydown.escape="popoverOpen = false"
                     tabindex="0"
-                    class="truncate outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0"
+                    class="truncate outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0 hover:text-ink transition-colors"
+                    :aria-expanded="popoverOpen"
                 >
-                    {{ $runIdLabel }}
+                    {{ \Illuminate\Support\Str::limit($runIdLabel, 8, '…') }}
                 </button>
-                <span
-                    x-show="runIdTooltipOpen"
+                <div
+                    x-show="popoverOpen"
                     x-cloak
+                    @click.outside="popoverOpen = false"
+                    @keydown.escape.window="popoverOpen = false"
                     x-transition.opacity.duration.100ms
-                    role="tooltip"
-                    class="pointer-events-none absolute bottom-full left-0 z-20 mb-1 whitespace-nowrap rounded-lg border border-border-default bg-surface-card px-2 py-1 text-[10px] text-ink shadow-sm"
+                    role="dialog"
+                    aria-label="{{ __('Run details') }}"
+                    class="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-xl border border-border-default bg-surface-card shadow-lg p-2.5 text-[11px] text-ink"
                 >
-                    {{ __('Run ID') }}
-                </span>
+                    <div class="font-medium text-muted mb-1.5">{{ __('Run') }}</div>
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between">
+                            <span class="text-muted">{{ __('ID') }}</span>
+                            <span class="font-mono truncate max-w-[10rem]" title="{{ $runIdLabel }}">{{ $runIdLabel }}</span>
+                        </div>
+
+                        @if ($runStatus !== null)
+                            <div class="flex justify-between">
+                                <span class="text-muted">{{ __('Status') }}</span>
+                                <span>{{ $runStatus }}</span>
+                            </div>
+                        @endif
+
+                        @if ($promptTokens !== null || $completionTokens !== null)
+                            <div class="flex justify-between">
+                                <span class="text-muted">{{ __('Tokens') }}</span>
+                                <span class="tabular-nums">{{ number_format($promptTokens ?? 0) }} → {{ number_format($completionTokens ?? 0) }}</span>
+                            </div>
+                        @endif
+
+                        @if ($latencyMs !== null)
+                            <div class="flex justify-between">
+                                <span class="text-muted">{{ __('Latency') }}</span>
+                                <span class="tabular-nums">
+                                    {{ number_format($latencyMs / 1000, 1) }}s
+                                    @if ($timeoutSeconds !== null)
+                                        <span class="text-muted">/ {{ $timeoutSeconds }}s</span>
+                                    @endif
+                                </span>
+                            </div>
+                        @endif
+
+                        @if (is_array($retryAttempts) && count($retryAttempts) > 0)
+                            <div class="flex justify-between">
+                                <span class="text-muted">{{ __('Retries') }}</span>
+                                <span>{{ count($retryAttempts) }}</span>
+                            </div>
+                        @endif
+
+                        @if (is_array($fallbackAttempts) && count($fallbackAttempts) > 0)
+                            <div class="flex justify-between">
+                                <span class="text-muted">{{ __('Fallbacks') }}</span>
+                                <span>{{ count($fallbackAttempts) }}</span>
+                            </div>
+                        @endif
+
+                        @if ($errorType !== null)
+                            <div class="border-t border-border-default pt-1.5 mt-1.5">
+                                <div class="flex justify-between">
+                                    <span class="text-red-500">{{ __('Error') }}</span>
+                                    <span class="text-red-500">{{ $errorType }}</span>
+                                </div>
+                                @if ($errorMessage !== null)
+                                    <div class="text-muted mt-0.5 line-clamp-2">{{ $errorMessage }}</div>
+                                @endif
+                            </div>
+                        @endif
+                    </div>
+                </div>
             </span>
         @endif
     </span>

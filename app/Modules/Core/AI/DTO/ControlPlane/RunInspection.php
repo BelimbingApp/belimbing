@@ -24,7 +24,7 @@ final readonly class RunInspection
      * @param  string|null  $dispatchId  Linked operation dispatch ID (if dispatched)
      * @param  string  $provider  Provider name used for this run
      * @param  string  $model  Model identifier used for this run
-     * @param  string  $outcome  Run outcome: 'success', 'error', or 'unknown'
+     * @param  string  $outcome  Run outcome: 'success', 'error', 'cancelled', or 'unknown'
      * @param  int|null  $latencyMs  Total run latency in milliseconds
      * @param  array{prompt: int|null, completion: int|null}  $tokens  Token usage
      * @param  list<array{tool: string, result_length: int|null}>  $toolActions  Summary of tool invocations
@@ -33,6 +33,13 @@ final readonly class RunInspection
      * @param  string|null  $errorType  Error type if the run failed
      * @param  string|null  $errorMessage  User-safe error message if the run failed
      * @param  string  $recordedAt  ISO 8601 timestamp when run metadata was recorded
+     * @param  string  $source  Run origin: chat, stream, delegate_task, orchestration, cron
+     * @param  string  $executionMode  Execution mode: interactive, background
+     * @param  AiRunStatus|null  $status  Structured run status from the ai_runs ledger
+     * @param  int|null  $timeoutSeconds  Configured timeout budget for this run
+     * @param  string|null  $startedAt  ISO 8601 timestamp when the run started
+     * @param  string|null  $finishedAt  ISO 8601 timestamp when the run finished
+     * @param  int|null  $actingForUserId  User on whose behalf the agent acted
      */
     public function __construct(
         public string $runId,
@@ -50,6 +57,13 @@ final readonly class RunInspection
         public ?string $errorType,
         public ?string $errorMessage,
         public string $recordedAt,
+        public string $source = '',
+        public string $executionMode = '',
+        public ?AiRunStatus $status = null,
+        public ?int $timeoutSeconds = null,
+        public ?string $startedAt = null,
+        public ?string $finishedAt = null,
+        public ?int $actingForUserId = null,
     ) {}
 
     /**
@@ -125,6 +139,13 @@ final readonly class RunInspection
             errorType: $run->error_type,
             errorMessage: $run->error_message,
             recordedAt: $run->created_at?->toIso8601String() ?? '',
+            source: $run->source ?? '',
+            executionMode: $run->execution_mode ?? '',
+            status: $run->status,
+            timeoutSeconds: $run->timeout_seconds,
+            startedAt: $run->started_at?->toIso8601String(),
+            finishedAt: $run->finished_at?->toIso8601String(),
+            actingForUserId: $run->acting_for_user_id,
         );
     }
 
@@ -149,6 +170,13 @@ final readonly class RunInspection
             'error_type' => $this->errorType,
             'error_message' => $this->errorMessage,
             'recorded_at' => $this->recordedAt,
+            'source' => $this->source,
+            'execution_mode' => $this->executionMode,
+            'status' => $this->status?->value,
+            'timeout_seconds' => $this->timeoutSeconds,
+            'started_at' => $this->startedAt,
+            'finished_at' => $this->finishedAt,
+            'acting_for_user_id' => $this->actingForUserId,
         ];
     }
 

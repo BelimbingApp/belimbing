@@ -9,6 +9,7 @@ use App\Modules\Core\AI\Http\Controllers\ProviderSetupController;
 use App\Modules\Core\AI\Livewire\ControlPlane;
 use App\Modules\Core\AI\Livewire\Playground;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
+use App\Modules\Core\AI\Livewire\RunDetail;
 use App\Modules\Core\AI\Livewire\Setup\Kodi;
 use App\Modules\Core\AI\Livewire\Setup\Lara;
 use App\Modules\Core\AI\Livewire\Tools;
@@ -53,4 +54,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('admin/ai/control-plane', ControlPlane::class)
         ->name('admin.ai.control-plane');
+
+    Route::get('admin/ai/runs/{runId}', RunDetail::class)
+        ->name('admin.ai.runs.show')
+        ->where('runId', '[0-9a-f\-]+');
 });

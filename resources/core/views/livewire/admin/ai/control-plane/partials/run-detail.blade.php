@@ -15,11 +15,17 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
             <p class="text-sm text-ink mt-1 font-mono tabular-nums">{{ $run->runId }}</p>
         </div>
         <div>
-            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Outcome') }}</span>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Status') }}</span>
             <p class="mt-1">
-                <x-ui.badge :variant="$run->outcome === 'success' ? 'success' : ($run->outcome === 'error' ? 'danger' : 'default')">
-                    {{ ucfirst($run->outcome) }}
-                </x-ui.badge>
+                @if($run->status)
+                    <x-ui.badge :variant="$run->status->color()">
+                        {{ $run->status->label() }}
+                    </x-ui.badge>
+                @else
+                    <x-ui.badge :variant="$run->outcome === 'success' ? 'success' : ($run->outcome === 'error' ? 'danger' : 'default')">
+                        {{ ucfirst($run->outcome) }}
+                    </x-ui.badge>
+                @endif
             </p>
         </div>
         <div>
@@ -27,8 +33,43 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
             <p class="text-sm text-ink mt-1">{{ $run->provider }} / {{ $run->model }}</p>
         </div>
         <div>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Source') }}</span>
+            <p class="mt-1">
+                @if($run->source !== '')
+                    <x-ui.badge variant="default">{{ $run->source }}</x-ui.badge>
+                @else
+                    <span class="text-sm text-muted">—</span>
+                @endif
+            </p>
+        </div>
+    </div>
+
+    {{-- Execution details --}}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Execution Mode') }}</span>
+            <p class="text-sm text-ink mt-1">{{ $run->executionMode !== '' ? ucfirst($run->executionMode) : '—' }}</p>
+        </div>
+        <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Latency') }}</span>
             <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->latencyMs !== null ? $run->latencyMs . ' ms' : '—' }}</p>
+        </div>
+        <div>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Timeout Budget') }}</span>
+            <p class="text-sm text-ink mt-1 tabular-nums">
+                @if($run->timeoutSeconds !== null)
+                    {{ number_format($run->timeoutSeconds) }}s
+                    @if($run->latencyMs !== null)
+                        <span class="text-muted">(used {{ number_format($run->latencyMs / 1000, 1) }}s)</span>
+                    @endif
+                @else
+                    —
+                @endif
+            </p>
+        </div>
+        <div>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Acting For User') }}</span>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->actingForUserId ?? '—' }}</p>
         </div>
     </div>
 
@@ -52,6 +93,22 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
         </div>
     </div>
 
+    {{-- Timestamps and context --}}
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Started At') }}</span>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->startedAt ?? '—' }}</p>
+        </div>
+        <div>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Finished At') }}</span>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->finishedAt ?? '—' }}</p>
+        </div>
+        <div>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Employee') }}</span>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->employeeId }}</p>
+        </div>
+    </div>
+
     {{-- Dispatch and session context --}}
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
@@ -61,10 +118,6 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Dispatch') }}</span>
             <p class="text-sm text-ink mt-1 font-mono tabular-nums">{{ $run->dispatchId ?? '—' }}</p>
-        </div>
-        <div>
-            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Employee') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->employeeId }}</p>
         </div>
     </div>
 

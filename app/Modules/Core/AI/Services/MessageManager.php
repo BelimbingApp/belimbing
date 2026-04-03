@@ -13,6 +13,9 @@ use DateTimeImmutable;
 
 class MessageManager
 {
+    /** @var list<string> Valid transcript entry types for v2 format */
+    private const KNOWN_ENTRY_TYPES = ['message', 'tool_call', 'tool_result', 'thinking'];
+
     public function __construct(
         private readonly SessionManager $sessionManager,
     ) {}
@@ -82,7 +85,7 @@ class MessageManager
             content: $content,
             timestamp: $timestamp,
             runId: $runId,
-            meta: [],
+            meta: $this->extractTranscriptMeta($meta),
         );
 
         $this->append($employeeId, $sessionId, $persistedMessage);
@@ -94,6 +97,105 @@ class MessageManager
             runId: $runId,
             meta: $meta,
         );
+    }
+
+    /**
+     * Append a thinking indicator entry to a session transcript.
+     *
+     * @param  int  $employeeId  Agent employee ID
+     * @param  string  $sessionId  Session UUID
+     * @param  string  $runId  Runtime run ID
+     */
+    public function appendThinking(int $employeeId, string $sessionId, string $runId): void
+    {
+        $this->append($employeeId, $sessionId, new Message(
+            role: 'assistant',
+            content: '',
+            timestamp: new DateTimeImmutable,
+            runId: $runId,
+            type: 'thinking',
+        ));
+    }
+
+    /**
+     * Append a tool call entry to a session transcript.
+     *
+     * @param  int  $employeeId  Agent employee ID
+     * @param  string  $sessionId  Session UUID
+     * @param  string  $runId  Runtime run ID
+     * @param  string  $toolName  Tool name
+     * @param  string  $argsSummary  Truncated args (≤200 chars)
+     * @param  int  $toolCallIndex  Sequential index within the run
+     */
+    public function appendToolCall(
+        int $employeeId,
+        string $sessionId,
+        string $runId,
+        string $toolName,
+        string $argsSummary,
+        int $toolCallIndex,
+    ): void {
+        $this->append($employeeId, $sessionId, new Message(
+            role: 'assistant',
+            content: '',
+            timestamp: new DateTimeImmutable,
+            runId: $runId,
+            meta: [
+                'tool' => $toolName,
+                'args_summary' => $argsSummary,
+                'tool_call_index' => $toolCallIndex,
+            ],
+            type: 'tool_call',
+        ));
+    }
+
+    /**
+     * Append a tool result entry to a session transcript.
+     *
+     * Full result content is NOT persisted — only a truncated preview
+     * and the result length. See Phase 0 §0.8 redaction rules.
+     *
+     * @param  int  $employeeId  Agent employee ID
+     * @param  string  $sessionId  Session UUID
+     * @param  string  $runId  Runtime run ID
+     * @param  string  $toolName  Tool name
+     * @param  string  $resultPreview  Truncated preview (≤200 chars)
+     * @param  int  $resultLength  Full result string length
+     * @param  string  $status  'success' or 'error'
+     * @param  int  $durationMs  Tool execution duration in milliseconds
+     * @param  array<string, mixed>|null  $errorPayload  Error details when status is 'error'
+     */
+    public function appendToolResult(
+        int $employeeId,
+        string $sessionId,
+        string $runId,
+        string $toolName,
+        string $resultPreview,
+        int $resultLength,
+        string $status,
+        int $durationMs,
+        ?array $errorPayload = null,
+    ): void {
+        $meta = [
+            'tool' => $toolName,
+            'result_preview' => $resultPreview,
+            'result_length' => $resultLength,
+            'status' => $status,
+            'duration_ms' => $durationMs,
+        ];
+
+        if ($errorPayload !== null) {
+            $meta['error_payload'] = $errorPayload;
+        }
+
+        $this->append($employeeId, $sessionId, new Message(
+            role: 'assistant',
+            content: '',
+            timestamp: new DateTimeImmutable,
+            runId: $runId,
+            meta: $meta,
+            type: 'tool_result',
+        ));
     }
 
     /**
@@ -191,6 +293,9 @@ class MessageManager
     /**
      * Read all messages from a session transcript in order.
      *
+     * Version-aware: v1 lines (no `type` field) default to 'message'.
+     * Unknown `type` values are skipped gracefully — never crashes.
+     *
      * @param  int  $employeeId  Agent employee ID
      * @param  string  $sessionId  Session UUID
      * @return list<Message>
@@ -214,9 +319,15 @@ class MessageManager
                 continue;
             }
 
+            $type = $data['type'] ?? 'message';
+
+            if (! in_array($type, self::KNOWN_ENTRY_TYPES, true)) {
+                continue;
+            }
+
             $messages[] = Message::fromJsonLine($data);
 
-            if (($data['role'] ?? '') === 'assistant' && isset($data['run_id']) && ($data['meta'] ?? []) === []) {
+            if ($type === 'message' && ($data['role'] ?? '') === 'assistant' && isset($data['run_id'])) {
                 $runIds[] = $data['run_id'];
             }
         }
@@ -225,13 +336,13 @@ class MessageManager
             $runMeta = $this->batchLoadRunMeta(array_unique($runIds));
 
             $messages = array_map(function (Message $msg) use ($runMeta) {
-                if ($msg->role === 'assistant' && $msg->runId !== null && $msg->meta === [] && isset($runMeta[$msg->runId])) {
+                if ($msg->role === 'assistant' && $msg->runId !== null && isset($runMeta[$msg->runId])) {
                     return new Message(
                         role: $msg->role,
                         content: $msg->content,
                         timestamp: $msg->timestamp,
                         runId: $msg->runId,
-                        meta: $runMeta[$msg->runId],
+                        meta: array_merge($msg->meta, $runMeta[$msg->runId]),
                         type: $msg->type,
                     );
                 }
@@ -284,6 +395,8 @@ class MessageManager
                 'prompt' => $run->prompt_tokens,
                 'completion' => $run->completion_tokens,
             ],
+            'timeout_seconds' => $run->timeout_seconds,
+            'status' => $run->status?->value,
         ];
 
         if ($run->error_type !== null) {
@@ -305,5 +418,25 @@ class MessageManager
         }
 
         return $meta;
+    }
+
+    /**
+     * Extract minimal metadata to persist in transcript entries.
+     *
+     * Keeps the transcript self-sufficient for usage reconstruction
+     * while ai_runs remains the indexed projection for queries.
+     *
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private function extractTranscriptMeta(array $meta): array
+    {
+        $tokens = $meta['tokens'] ?? null;
+
+        if (! is_array($tokens)) {
+            return [];
+        }
+
+        return ['tokens' => $tokens];
     }
 }

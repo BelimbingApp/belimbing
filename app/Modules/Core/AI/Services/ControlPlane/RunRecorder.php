@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Services\ControlPlane;
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Services\MessageManager;
 
 /**
  * Records AI run lifecycle events to the ai_runs ledger.
@@ -139,6 +140,69 @@ class RunRecorder
     public function find(string $runId): ?AiRun
     {
         return AiRun::query()->find($runId);
+    }
+
+    /**
+     * Reconstruct an ai_runs row from transcript entries.
+     *
+     * Reads the v2 transcript for the given session/run, computes tool actions,
+     * timing, and outcome, then upserts the ai_runs row. This is a repair tool,
+     * not the hot path — start()/complete()/fail() remain the normal write path.
+     */
+    public function reconstructFromTranscript(int $employeeId, string $sessionId, string $runId): void
+    {
+        $messageManager = app(MessageManager::class);
+        $messages = $messageManager->read($employeeId, $sessionId);
+
+        $toolActions = [];
+        $tokens = ['prompt' => null, 'completion' => null];
+        $hasAssistantMessage = false;
+        $hasError = false;
+
+        foreach ($messages as $message) {
+            if ($message->runId !== $runId && $message->type === 'message') {
+                continue;
+            }
+
+            if ($message->type === 'tool_result') {
+                $toolActions[] = [
+                    'tool' => $message->meta['tool'] ?? 'unknown',
+                    'result_length' => $message->meta['result_length'] ?? null,
+                ];
+            }
+
+            if ($message->type === 'message' && $message->role === 'assistant' && $message->runId === $runId) {
+                $hasAssistantMessage = true;
+
+                if (isset($message->meta['tokens'])) {
+                    $tokens = $message->meta['tokens'];
+                }
+
+                if (($message->meta['message_type'] ?? null) === 'error') {
+                    $hasError = true;
+                }
+            }
+        }
+
+        $status = match (true) {
+            $hasError => AiRunStatus::Failed,
+            $hasAssistantMessage => AiRunStatus::Succeeded,
+            default => AiRunStatus::Running,
+        };
+
+        AiRun::query()->updateOrCreate(
+            ['id' => $runId],
+            [
+                'employee_id' => $employeeId,
+                'session_id' => $sessionId,
+                'source' => 'reconstructed',
+                'execution_mode' => 'interactive',
+                'status' => $status,
+                'prompt_tokens' => $tokens['prompt'] ?? null,
+                'completion_tokens' => $tokens['completion'] ?? null,
+                'tool_actions' => $toolActions !== [] ? $toolActions : null,
+            ],
+        );
     }
 
     /**

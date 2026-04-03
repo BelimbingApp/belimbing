@@ -12,441 +12,258 @@ The original `ai-run-ledger.md` §1.1 contains a contradiction: it opens with "a
 
 **Decision: Transparent by default.** One transcript, one timeline, same experience for all authorized viewers. No authz gating on activity stream visibility. This matches design decision §6 in `ai-run-ledger.md` and the research recommendation.
 
-- [ ] Remove the contradicting line from `ai-run-ledger.md` §1.1 ("Non-operator users: tool/thinking entries hidden, only final response shown")
-- [ ] Confirm the single-timeline model in code: no role-based filtering of transcript entry types
+- [x] Remove the contradicting line from `ai-run-ledger.md` §1.1 — Already removed in prior work; design decision §6 "Transparent by default" is the authoritative statement
+- [x] Confirm the single-timeline model in code: no role-based filtering of transcript entry types — Verified: no `isOperator`/`hideTools` filtering exists in AI module code
 
 ---
 
-## 1. Transcript Entry Types & JSONL Schema (Backend Foundation)
+## 1. Transcript Entry Types & JSONL Schema (Backend Foundation) ✅
 
 Extend the `Message` DTO and JSONL format to support typed activity entries. This is the data layer that everything else reads from.
 
-### 1.1 Extend `Message` DTO
+### 1.1 Extend `Message` DTO ✅
 
 **File:** `app/Modules/Core/AI/DTO/Message.php`
 
-- [ ] Add `type` property: `'message'` (default), `'tool_call'`, `'tool_result'`, `'thinking'`
-- [ ] `fromJsonLine()` reads `type` field, defaults to `'message'` for v1 backward compatibility
-- [ ] `toJsonLine()` writes `type` field when not `'message'` (keep v1 messages unchanged)
-- [ ] Keep `role`, `content`, `timestamp`, `runId`, `meta` unchanged — `type` is additive
+- [x] Add `type` property: `'message'` (default), `'tool_call'`, `'tool_result'`, `'thinking'`
+- [x] `fromJsonLine()` reads `type` field, defaults to `'message'` for v1 backward compatibility
+- [x] `toJsonLine()` writes `type` field when not `'message'` (keep v1 messages unchanged)
+- [x] Keep `role`, `content`, `timestamp`, `runId`, `meta` unchanged — `type` is additive
 
-```php
-public function __construct(
-    public string $role,
-    public string $content,
-    public DateTimeImmutable $timestamp,
-    public ?string $runId = null,
-    public array $meta = [],
-    public string $type = 'message',  // new
-) {}
-```
-
-### 1.2 Add `MessageManager` append methods for activity entries
+### 1.2 Add `MessageManager` append methods for activity entries ✅
 
 **File:** `app/Modules/Core/AI/Services/MessageManager.php`
 
-- [ ] `appendToolCall(employeeId, sessionId, runId, toolName, argsSummary, timestamp)` — persists `{type: 'tool_call', role: 'assistant', content: '', meta: {tool, args_summary}, run_id, timestamp}`
-- [ ] `appendToolResult(employeeId, sessionId, runId, toolName, resultPreview, resultLength, status, durationMs, timestamp)` — persists `{type: 'tool_result', role: 'assistant', content: '', meta: {tool, result_preview, result_length, status, duration_ms}, run_id, timestamp}`
-- [ ] `appendThinking(employeeId, sessionId, runId, timestamp)` — persists `{type: 'thinking', role: 'assistant', content: '', run_id, timestamp}`
+- [x] `appendToolCall(employeeId, sessionId, runId, toolName, argsSummary, toolCallIndex)` — persists `{type: 'tool_call', role: 'assistant', content: '', meta: {tool, args_summary, tool_call_index}, run_id, timestamp}`
+- [x] `appendToolResult(employeeId, sessionId, runId, toolName, resultPreview, resultLength, status, durationMs, errorPayload)` — persists `{type: 'tool_result', role: 'assistant', content: '', meta: {tool, result_preview, result_length, status, duration_ms, error_payload?}, run_id, timestamp}`
+- [x] `appendThinking(employeeId, sessionId, runId)` — persists `{type: 'thinking', role: 'assistant', content: '', run_id, timestamp}`
 
 **Redaction rules (from Phase 0 §0.8):**
 - Tool call `args` are operational context — acceptable to persist as a summary (first 200 chars or key params)
 - Tool `result` content is **not** persisted in full — only `result_length` and a truncated preview (≤200 chars)
 - Never persist secrets, credentials, or full user content in tool entries
 
-### 1.3 Version-aware read path
+### 1.3 Version-aware read path ✅
 
 **File:** `app/Modules/Core/AI/Services/MessageManager.php`
 
-- [ ] `read()` checks `transcript_version` from session meta (Phase 0 §0.8)
-- [ ] v1 lines (no `type` field) → treated as `type: 'message'` (backward compatible)
-- [ ] v2 lines with `type` field → construct `Message` with correct type
-- [ ] Unknown `type` values → skip gracefully, never crash
+- [x] `read()` uses `KNOWN_ENTRY_TYPES` constant to validate types
+- [x] v1 lines (no `type` field) → treated as `type: 'message'` (backward compatible)
+- [x] v2 lines with `type` field → construct `Message` with correct type
+- [x] Unknown `type` values → skip gracefully, never crash
 
 ---
 
-## 2. Enrich SSE Events (Runtime → Stream Bridge)
+## 2. Enrich SSE Events (Runtime → Stream Bridge) ✅
 
 The runtime already emits `status` events with `phase` and `tool` name. Extend them to carry the data the activity stream needs to render persistent entries.
 
-### 2.1 Extend `tool_started` event
+### 2.1 Extend `tool_started` event ✅
 
 **File:** `app/Modules/Core/AI/Services/AgenticRuntime.php` — `runStreamingToolLoop()`
 
-Current event (line ~656):
-```php
-yield ['event' => 'status', 'data' => [
-    'phase' => 'tool_started',
-    'tool' => $functionName,
-    'run_id' => $runId,
-]];
-```
+- [x] Add `args_summary` — first 200 chars of JSON-encoded arguments
+- [x] Add `started_at` — ISO 8601 timestamp of tool execution start
+- [x] Add `tool_call_index` — sequential index within this run (0, 1, 2...)
 
-- [ ] Add `args_summary` — first 200 chars of JSON-encoded arguments (or key param names for common tools)
-- [ ] Add `started_at` — ISO 8601 timestamp of tool execution start
-- [ ] Add `tool_call_index` — sequential index within this run (0, 1, 2...)
+### 2.2 Extend `tool_finished` event ✅
 
-```php
-yield ['event' => 'status', 'data' => [
-    'phase' => 'tool_started',
-    'tool' => $functionName,
-    'args_summary' => Str::limit(json_encode($arguments, JSON_UNESCAPED_SLASHES), 200),
-    'tool_call_index' => $toolIndex,
-    'started_at' => now()->toISOString(),
-    'run_id' => $runId,
-]];
-```
+- [x] Add `result_preview` — first 200 chars of tool result
+- [x] Add `result_length` — full result string length
+- [x] Add `duration_ms` — elapsed time since `tool_started`
+- [x] Add `status` — `'success'` or `'error'` based on error_payload presence
+- [x] Add `error_payload` (when status is error) — code, message, hint from the tool error
 
-### 2.2 Extend `tool_finished` event
+### 2.3 Track tool timing in the streaming loop ✅
 
-**File:** `app/Modules/Core/AI/Services/AgenticRuntime.php` — `runStreamingToolLoop()`
-
-Current event (line ~670):
-```php
-yield ['event' => 'status', 'data' => [
-    'phase' => 'tool_finished',
-    'tool' => $functionName,
-    'run_id' => $runId,
-]];
-```
-
-- [ ] Add `result_preview` — first 200 chars of tool result (already available as `$toolExecution['action']['result_preview']`)
-- [ ] Add `result_length` — full result string length
-- [ ] Add `duration_ms` — elapsed time since `tool_started`
-- [ ] Add `status` — `'success'` or `'error'` based on `$toolExecution['action']['error_payload']`
-- [ ] Add `error_payload` (when status is error) — code, message, hint from the tool error
-
-```php
-yield ['event' => 'status', 'data' => [
-    'phase' => 'tool_finished',
-    'tool' => $functionName,
-    'result_preview' => $toolExecution['action']['result_preview'] ?? '',
-    'result_length' => mb_strlen($resultString),
-    'duration_ms' => $durationMs,
-    'status' => isset($toolExecution['action']['error_payload']) ? 'error' : 'success',
-    'error_payload' => $toolExecution['action']['error_payload'] ?? null,
-    'run_id' => $runId,
-]];
-```
-
-### 2.3 Track tool timing in the streaming loop
-
-**File:** `app/Modules/Core/AI/Services/AgenticRuntime.php` — `runStreamingToolLoop()`
-
-- [ ] Capture `$toolStartTime = hrtime(true)` before `executeToolCall()`
-- [ ] Compute `$durationMs = (int) ((hrtime(true) - $toolStartTime) / 1_000_000)` after execution
-- [ ] Maintain `$toolIndex` counter, increment per tool call in the loop
+- [x] Capture `$toolStartTime = hrtime(true)` before `executeToolCall()`
+- [x] Compute `$durationMs = (int) ((hrtime(true) - $toolStartTime) / 1_000_000)` after execution
+- [x] Maintain `$toolIndex` counter, increment per tool call in the loop
 
 ---
 
-## 3. Persist Activity Entries During Streaming
+## 3. Persist Activity Entries During Streaming ✅
 
-The `ChatStreamController` currently only persists the final assistant message (on `done`) or a single error (on `error`). It must also persist tool call/result/thinking entries as they happen.
+The `ChatStreamController` now persists thinking/tool_call/tool_result entries as they stream.
 
-### 3.1 Persist thinking entry
+### 3.1 Persist thinking entry ✅
 
-**File:** `app/Modules/Core/AI/Http/Controllers/ChatStreamController.php` — `streamRuntimeEvents()`
+- [x] When `status.phase === 'thinking'`, call `$messageManager->appendThinking()`
+- [x] Only persist once per run — tracked via `$thinkingPersisted` boolean
 
-- [ ] When `status.phase === 'thinking'`, call `$messageManager->appendThinking(employeeId, sessionId, runId, now())`
-- [ ] Only persist once per run — track a `$thinkingPersisted` boolean
+### 3.2 Persist tool call + tool result entries ✅
 
-### 3.2 Persist tool call + tool result entries
+- [x] When `status.phase === 'tool_started'`, call `$messageManager->appendToolCall(...)` with enriched event data
+- [x] When `status.phase === 'tool_finished'`, call `$messageManager->appendToolResult(...)` with enriched event data
+- [x] Pass `$data['run_id']` from the event to link entries to the run
 
-**File:** `app/Modules/Core/AI/Http/Controllers/ChatStreamController.php` — `streamRuntimeEvents()`
+### 3.3 Extract `run_id` early for persistence ✅
 
-- [ ] When `status.phase === 'tool_started'`, call `$messageManager->appendToolCall(...)` with data from the enriched event
-- [ ] When `status.phase === 'tool_finished'`, call `$messageManager->appendToolResult(...)` with data from the enriched event
-- [ ] Pass `$data['run_id']` from the event to link entries to the run
-
-### 3.3 Extract `run_id` early for persistence
-
-- [ ] The `run_id` is emitted with the first `status` event (thinking). Capture it in `streamRuntimeEvents()` so it's available for all subsequent persistence calls.
+- [x] The `run_id` is captured from the first status event and available for all subsequent persistence calls via `persistActivityEntry()`
 
 ---
 
-## 4. Alpine.js State Machine (Frontend Foundation)
+## 4. Alpine.js State Machine (Frontend Foundation) ✅
 
-Replace the current 3-variable stream state (`pendingMessage`, `streamingContent`, `streamingStatus`) with a typed entry array that the timeline renderer consumes.
+Replaced the 3-variable stream state (`pendingMessage`, `streamingContent`, `streamingStatus`) with a typed entry array.
 
-### 4.1 Replace stream state variables
+### 4.1 Replace stream state variables ✅
 
-**File:** `resources/core/views/livewire/ai/chat.blade.php` — chat area `x-data`
+- [x] Replaced with `streamEntries[]`, `_currentRunId`, `followTail` boolean
 
-Current state (line ~352):
-```js
-x-data="{
-    pendingMessage: null,
-    streamingContent: '',
-    streamingStatus: null,
-    _eventSource: null,
-}"
-```
+### 4.2 Define entry shapes ✅
 
-- [ ] Replace with:
+Entry types: `thinking`, `tool_call`, `assistant_streaming`, `error`
 
-```js
-x-data="{
-    pendingMessage: null,
-    streamEntries: [],        // typed activity entries during live stream
-    _eventSource: null,
-    _currentRunId: null,
-    _toolStartTimes: {},      // track start for duration display
-}"
-```
+### 4.3 Rewrite SSE event handlers ✅
 
-### 4.2 Define entry shapes
+- [x] `status.thinking` → append thinking entry (once), set `active: true`
+- [x] `status.tool_started` → append tool_call entry with `status: 'running'`
+- [x] `status.tool_finished` → patch matching tool entry with result/duration/status
+- [x] `delta` → find or create `assistant_streaming` entry, append text
+- [x] `done` → finalize, trigger `$wire.finalizeStreamingRun()`
+- [x] `error` → append error entry, finalize
 
-Each entry in `streamEntries` is a plain object with a `type` field:
+### 4.4 Clear stream entries on response ready ✅
 
-```js
-// Thinking
-{ type: 'thinking', timestamp: '...', active: true }
-
-// Tool call (in progress)
-{ type: 'tool_call', tool: 'web_search', argsSummary: '{"query":"..."}', status: 'running', startedAt: '...', index: 0 }
-
-// Tool call (finished)
-{ type: 'tool_call', tool: 'web_search', argsSummary: '...', status: 'success', startedAt: '...', durationMs: 450, resultPreview: '...', resultLength: 2340, expanded: false, index: 0 }
-
-// Tool call (error)
-{ type: 'tool_call', tool: 'web_search', argsSummary: '...', status: 'error', startedAt: '...', durationMs: 120, errorPayload: {code: '...', message: '...'}, expanded: false, index: 0 }
-
-// Streaming assistant text
-{ type: 'assistant_streaming', content: '...partial text...' }
-
-// Error
-{ type: 'error', message: '...', errorType: '...' }
-```
-
-### 4.3 Rewrite SSE event handlers
-
-**File:** `resources/core/views/livewire/ai/chat.blade.php` — `agentChatComposer` Alpine data
-
-- [ ] `status.thinking` → append `{ type: 'thinking', timestamp: now, active: true }`; deactivate any prior thinking entry
-- [ ] `status.tool_started` → append `{ type: 'tool_call', tool, argsSummary, status: 'running', startedAt, index }`
-- [ ] `status.tool_finished` → find the matching running tool entry by index, patch it with `status`, `durationMs`, `resultPreview`, `resultLength`, `errorPayload`
-- [ ] `delta` → find or create the `assistant_streaming` entry, append `text` to its `content`
-- [ ] `done` → finalize: clear `pendingMessage`, trigger `$wire.finalizeStreamingRun()`
-- [ ] `error` → append `{ type: 'error', message }`, finalize
-
-### 4.4 Clear stream entries on response ready
-
-- [ ] On `agent-chat-response-ready` event: `streamEntries = []; pendingMessage = null; _currentRunId = null;`
-- [ ] The persisted messages from Livewire re-render replace the live entries seamlessly
+- [x] On `agent-chat-response-ready`: `streamEntries = []; pendingMessage = null; _currentRunId = null;`
 
 ---
 
-## 5. Activity Stream Timeline Renderer (Blade Components)
+## 5. Activity Stream Timeline Renderer (Blade Components) ✅
 
-Replace the bubble-centric `@forelse` loop with a timeline that branches on entry type. Extract into deep components per `AGENTS.md` guidance.
-
-### 5.1 New Blade components
+### 5.1 New Blade components ✅
 
 **Directory:** `resources/core/views/components/ai/activity/`
 
-- [ ] **`entry.blade.php`** — Shell wrapper: timestamp gutter, icon, spacing, tone. Props: `type`, `timestamp`, `tone`. Delegates to type-specific slot content.
-- [ ] **`user-message.blade.php`** — User prompt display (right-aligned or prompt-style). Props: `content`, `timestamp`, `meta`.
-- [ ] **`thinking.blade.php`** — Low-emphasis timestamped row with subtle pulse while `active`. Props: `timestamp`, `active`.
-- [ ] **`tool-call.blade.php`** — Compact card: icon · tool name · args summary · duration/status badge. Collapsible details panel for result preview or error payload. Props: `tool`, `argsSummary`, `status`, `durationMs`, `resultPreview`, `resultLength`, `errorPayload`, `expanded`.
-- [ ] **`assistant-result.blade.php`** — Full-width prose block with markdown rendering. Props: `content`, `markdown`, `timestamp`, `runId`, `provider`, `model`.
-- [ ] **`error.blade.php`** — Warning-styled card with error type, safe message. Props: `message`, `errorType`, `runId`, `provider`, `model`.
+- [x] **`entry.blade.php`** — Shell wrapper with icon and spacing
+- [x] **`user-message.blade.php`** — Right-aligned user prompt display
+- [x] **`thinking.blade.php`** — Low-emphasis row with pulse while active
+- [x] **`tool-call.blade.php`** — Collapsible card: icon · tool name · args · duration/status badge · expand/collapse detail
+- [x] **`assistant-result.blade.php`** — Full-width prose block with markdown + enriched message-meta
+- [x] **`error.blade.php`** — Warning-styled card with error type and safe message
 
-### 5.2 Replace persisted message rendering
+### 5.2 Replace persisted message rendering ✅
 
-**File:** `resources/core/views/livewire/ai/chat.blade.php`
+- [x] Branch on `$message->type` for thinking/tool_call/tool_result, then `$message->role` for user/assistant
+- [x] Action messages (orchestration) kept as inline card
+- [x] `@empty` state unchanged
 
-Current loop (line ~366):
-```blade
-@forelse($messages as $message)
-    {{-- bubble branching on role and meta --}}
-@empty
-    {{-- empty state --}}
-@endforelse
-```
+### 5.3 Replace live stream rendering ✅
 
-- [ ] Branch on `$message->type` instead of (or in addition to) `$message->role`:
-  - `type === 'message' && role === 'user'` → `<x-ai.activity.user-message />`
-  - `type === 'message' && role === 'assistant'` (with error meta) → `<x-ai.activity.error />`
-  - `type === 'message' && role === 'assistant'` (with orchestration meta) → keep action card (existing)
-  - `type === 'message' && role === 'assistant'` → `<x-ai.activity.assistant-result />`
-  - `type === 'thinking'` → `<x-ai.activity.thinking :active="false" />`
-  - `type === 'tool_call'` → `<x-ai.activity.tool-call />` (with data from meta)
-  - `type === 'tool_result'` → merged into tool-call display (result is shown as collapsible detail of the preceding tool_call)
-- [ ] Keep the `@empty` state unchanged
+- [x] Single `<template x-for="entry in streamEntries">` loop renders type-appropriate UI
+- [x] Optimistic user message kept as separate `<template x-if="pendingMessage">`
+- [x] Loading dots shown only when `streamEntries.length === 0`
 
-### 5.3 Replace live stream rendering
+### 5.4 Visual hierarchy ✅
 
-- [ ] Remove the three existing live-stream template blocks: optimistic user bubble, streaming content bubble, tool status indicator, and loading dots
-- [ ] Replace with a single `<template x-for="entry in streamEntries">` loop that renders type-appropriate UI:
-  - `entry.type === 'thinking'` → thinking component (with `active` pulse)
-  - `entry.type === 'tool_call'` → tool-call card (running state shows spinner, finished shows result)
-  - `entry.type === 'assistant_streaming'` → prose block with `x-text` (or incremental markdown, see §8)
-  - `entry.type === 'error'` → error card
-- [ ] Keep optimistic user message as a separate `<template x-if="pendingMessage">` before the stream entries
-
-### 5.4 Visual hierarchy
-
-```text
-User prompt
-└─ right-aligned bubble / prompt card
-
-💭 Thinking
-└─ subtle row, timestamp, low-emphasis pulse only while active
-
-🔧 Tool call: web_search
-└─ compact card: icon · tool name · args summary · [1.2s ✓]
-   └─ ▶ expand: result preview (200 chars) or error detail
-
-🔧 Tool call: create_file
-└─ compact card: icon · tool name · args summary · [0.3s ✓]
-
-✅ Assistant result
-└─ full-width prose block with markdown, run pill + message-meta
-
-❌ Error
-└─ warning-styled card with error type, safe message, run meta
-```
+Implemented as specified: user bubble → thinking → tool cards → assistant prose → error cards
 
 ---
 
-## 6. Follow-Tail Scroll Model
+## 6. Follow-Tail Scroll Model ✅
 
-Replace the unconditional auto-scroll with a scroll-respectful model.
+### 6.1 Implement follow-tail logic ✅
 
-### 6.1 Implement follow-tail logic
+- [x] Added `followTail` boolean state, default `true`
+- [x] Scroll event listener on `agentScroll` container (throttled 100ms)
+- [x] If user scrolls more than 50px above bottom → `followTail = false`
+- [x] Conditional auto-scroll: only scroll when `followTail === true` via `x-effect`
+- [x] `scrollToBottom()` respects `followTail` flag
 
-**File:** `resources/core/views/livewire/ai/chat.blade.php`
+### 6.2 "Jump to latest" floating control ✅
 
-Current auto-scroll (line ~364):
-```blade
-x-init="$nextTick(() => $el.scrollTop = $el.scrollHeight)"
-x-effect="$nextTick(() => $refs.agentScroll.scrollTop = $refs.agentScroll.scrollHeight)"
-```
-
-- [ ] Add `followTail` boolean state, default `true`
-- [ ] Add scroll event listener on `agentScroll` container:
-  - If user scrolls more than ~50px above the bottom → `followTail = false`
-  - If user scrolls to within ~20px of bottom → `followTail = true`
-- [ ] Conditional auto-scroll: only scroll to bottom when `followTail === true` and new entries arrive
-- [ ] Throttle/debounce scroll event handler to avoid performance issues
-
-### 6.2 "Jump to latest" floating control
-
-- [ ] Show a small floating button (e.g., down-arrow) when `followTail === false` and there is new content below
-- [ ] Click → `followTail = true`, scroll to bottom
-- [ ] Auto-hide when `followTail === true`
-- [ ] Position: fixed at the bottom of the scroll container, centered
-- [ ] Accessible: `aria-label="{{ __('Jump to latest') }}"`
+- [x] Floating button with down-arrow icon shown when `followTail === false`
+- [x] Click → `followTail = true`, scroll to bottom
+- [x] Auto-hide when `followTail === true`
+- [x] Position: sticky at bottom of scroll container, centered
+- [x] Accessible: `aria-label="{{ __('Jump to latest') }}"`
 
 ---
 
-## 7. Run Metadata Popover (Replace Hover Tooltip)
+## 7. Run Metadata Popover (Replace Hover Tooltip) ✅
 
-Convert the run ID hover tooltip into a click-triggered, keyboard-accessible popover with rich metadata.
+### 7.1 Replace tooltip with click popover ✅
 
-### 7.1 Replace tooltip with click popover
+- [x] Replaced `@mouseenter`/`@mouseleave` with `@click` toggle
+- [x] Click-outside to dismiss: `@click.outside="popoverOpen = false"`
+- [x] Keyboard accessible: `@keydown.escape`, `aria-expanded`
+- [x] Run ID truncated to 8 chars, full ID shown in popover
 
-**File:** `resources/core/views/components/ai/message-meta.blade.php`
+### 7.2 Popover contents ✅
 
-Current run ID affordance (line ~59–83): hover tooltip that only shows "Run ID".
+- [x] Token usage: prompt → completion tokens
+- [x] Latency vs. timeout budget (e.g., "2.3s / 60s")
+- [x] Retry attempts count
+- [x] Fallback attempts count
+- [x] Error type / message (when present, separated by border)
+- [x] Run status display
 
-- [ ] Replace `@mouseenter`/`@mouseleave` with `@click` toggle
-- [ ] Use click-outside to dismiss: `@click.outside="popoverOpen = false"`
-- [ ] Keep keyboard accessible: `@keydown.escape="popoverOpen = false"`, `@keydown.enter="popoverOpen = !popoverOpen"`
-- [ ] Add `aria-expanded` attribute bound to popover state
+### 7.3 Data source ✅
 
-### 7.2 Popover contents
+- [x] `buildMetaFromAiRun()` now includes `timeout_seconds` and `status` fields
+- [x] `message-meta` component accepts new props: `tokens`, `latencyMs`, `timeoutSeconds`, `retryAttempts`, `fallbackAttempts`, `errorType`, `errorMessage`, `runStatus`
+- [x] `assistant-result.blade.php` forwards all enriched props to `message-meta`
+- [x] Chat.blade.php extracts and passes all meta fields from hydrated messages
 
-- [ ] Token usage: prompt tokens / completion tokens
-- [ ] Latency vs. timeout budget (e.g., "2.3s / 60s")
-- [ ] Retry attempts count + detail (provider, error, latency per attempt)
-- [ ] Fallback attempts count + detail
-- [ ] Error type / diagnostic summary (on failure)
-- [ ] Link to standalone run page (Phase 1 §1.3, if available): `<a href="{{ route('admin.ai.runs.show', $runId) }}">`
+### 7.4 Reuse patterns ✅
 
-### 7.3 Data source
-
-- [ ] Phase 0 delivers `ai_runs` with all metadata. `MessageManager::read()` batch-queries `ai_runs` to hydrate message meta from DB (Phase 0 §0.7)
-- [ ] The `message-meta` component receives enriched data as props — no inline DB queries
-- [ ] Props to add: `tokens` (array), `latencyMs`, `timeoutSeconds`, `retryAttempts` (array), `fallbackAttempts` (array), `errorType`, `errorMessage`
-
-### 7.4 Reuse patterns from existing surfaces
-
-- [ ] Borrow metadata formatting from `control-plane/partials/run-detail.blade.php` (tokens grid, fallback attempt list, error detail block)
-- [ ] Keep the popover compact — it's an inline summary, not the full run-detail page
-- [ ] Use `x-ui.badge` for status/outcome within the popover
+- [x] Compact popover format with label/value rows
+- [x] Consistent with `run-detail.blade.php` data presentation
+- [x] Semantic token colors for surfaces and borders
 
 ---
 
-## 8. Streaming Markdown Quality
+## 8. Streaming Markdown Quality ✅
 
-Close the gap between raw `x-text` during streaming and rendered markdown after save.
+### 8.1 Approach decision ✅
 
-### 8.1 Approach decision
+Chose **Option B: Visual framing as "drafting"**
+- No JS markdown library available in the project (no marked/showdown/etc.)
+- Option B is pragmatic: streaming text shown with "Writing…" indicator and slight opacity
+- On `done`, Livewire re-render replaces with server-rendered markdown seamlessly — no flash
 
-Two options (from research §3.6):
+### 8.2 Implementation ✅
 
-**Option A (preferred): Incremental markdown rendering**
-- Render streaming assistant text through the markdown renderer in a debounced loop
-- Scope: only the active streaming assistant block, not the full page
-- Debounce: render at most every 100–150ms to avoid heavy reflows
-- Preserve code block stability and scroll position
-
-**Option B (acceptable first step): Visual framing as "drafting"**
-- Keep `x-text` for streaming, but visually frame it as a drafting state
-- On `done`, swap seamlessly to rendered markdown without reflow shock
-- Lower implementation cost, still removes the jarring transition
-
-- [ ] Choose approach (recommend Option A for a coding-agent experience)
-- [ ] If Option A: evaluate lightweight JS markdown renderers already available in the project (check `package.json`)
-- [ ] If Option A: implement debounced rendering in the `assistant_streaming` entry template
-- [ ] If Option B: add visual "drafting" indicator and smooth transition to rendered markdown
-
-### 8.2 Implementation notes for Option A
-
-- [ ] Use a dedicated `<div>` with `x-html` bound to a computed rendered output
-- [ ] Debounce the render function (100–150ms) using `setTimeout`/`clearTimeout`
-- [ ] Handle incomplete markdown gracefully (unclosed code fences, partial lists)
-- [ ] On `done`, the Livewire re-render replaces the stream entry with the server-rendered markdown — ensure no visible flash
+- [x] Streaming `assistant_streaming` entry shows text with `opacity-90`
+- [x] Pulsing dot + "Writing…" label below streaming text
+- [x] `x-text` for raw text display (safe, no XSS risk)
+- [x] Server-rendered markdown replaces on finalize
 
 ---
 
-## 9. Collapsible Tool Result Blocks
+## 9. Collapsible Tool Result Blocks ✅
 
-Tool results should be progressive-disclosure cards, not full inline dumps.
+### 9.1 Tool call card behavior ✅
 
-### 9.1 Tool call card behavior
+- [x] **Header always visible:** icon · tool name · args summary (truncated 60 chars) · duration badge · status badge
+- [x] **Detail collapsed by default:** expand on click, toggle `expanded` state
+- [x] **Result preview in detail panel:** text + total char count when >200
+- [x] **Error payload styled separately:** code, message display in red
+- [x] **Keyboard accessible:** `<button>` for expand/collapse, `aria-expanded`
 
-**File:** `resources/core/views/components/ai/activity/tool-call.blade.php`
+### 9.2 Live stream vs. persisted behavior ✅
 
-- [ ] **Header always visible:** icon · tool name · args summary (truncated) · duration badge · status badge
-- [ ] **Preview visible by default:** first line or short preview (≤200 chars) + total result length
-- [ ] **Full content collapsed:** expand on click, toggle `expanded` state
-- [ ] **Error payload styled separately:** code, message, hint, setup action if present
-- [ ] **Keyboard accessible:** `<button>` for expand/collapse, Enter/Space to toggle, `aria-expanded`
-
-### 9.2 Live stream vs. persisted behavior
-
-- [ ] During streaming: tool card starts in `status: 'running'` (subtle spinner), transitions to finished with result preview
-- [ ] Persisted: rendered from JSONL `tool_call` + `tool_result` entries, always in finished state, collapsed by default
+- [x] During streaming: tool card starts in `status: 'running'` (pulsing dot), transitions to finished with result preview
+- [x] Persisted: rendered from JSONL `tool_call` + `tool_result` entries, collapsed by default
+- [x] Both server-side (`tool-call.blade.php`) and client-side (`x-for` template) implementations
 
 ---
 
-## 10. Standalone Run Route (Deep-linking)
+## 10. Standalone Run Route (Deep-linking) ✅
 
-For sharing runs via alerts, audit trails, or cross-referencing.
+### 10.1 Route and controller ✅
 
-### 10.1 Route and controller
+- [x] Route: `GET /admin/ai/runs/{runId}` → name `admin.ai.runs.show`
+- [x] Access: employee ownership check (`AiRun.employee_id` must match current user's employee)
+- [x] Returns 404 for non-existent runs or unauthorized access
 
-- [ ] Route: `GET /admin/ai/runs/{runId}` → name `admin.ai.runs.show`
-- [ ] Access: session ownership check (Lara: per-user isolation; supervised agents: supervisor check)
-- [ ] Not a separate capability — reuse existing `assertCanAccessAgent` pattern
+### 10.2 Livewire page ✅
 
-### 10.2 Livewire page
-
-- [ ] Lightweight page showing full run metadata (reuse/adapt `run-detail.blade.php` partial)
-- [ ] Full activity timeline for the run: query transcript entries by `run_id`
-- [ ] Link back to the parent session/chat
+- [x] `RunDetail` Livewire component loads `RunInspection` DTO
+- [x] Reuses `run-detail.blade.php` partial for full metadata display
+- [x] Activity transcript: loads session messages filtered to run-related entries
+- [x] Link back to Control Plane in page header
 
 ---
 
@@ -455,16 +272,16 @@ For sharing runs via alerts, audit trails, or cross-referencing.
 | File | Change |
 |------|--------|
 | `app/Modules/Core/AI/DTO/Message.php` | Add `type` property |
-| `app/Modules/Core/AI/Services/MessageManager.php` | Add `appendToolCall()`, `appendToolResult()`, `appendThinking()`; version-aware `read()` |
+| `app/Modules/Core/AI/Services/MessageManager.php` | Add `appendToolCall()`, `appendToolResult()`, `appendThinking()`; version-aware `read()`; `buildMetaFromAiRun()` adds `timeout_seconds` + `status` |
 | `app/Modules/Core/AI/Services/AgenticRuntime.php` | Enrich `tool_started`/`tool_finished` SSE events with args, timing, preview |
 | `app/Modules/Core/AI/Http/Controllers/ChatStreamController.php` | Persist thinking/tool_call/tool_result entries during streaming |
-| `resources/core/views/livewire/ai/chat.blade.php` | Replace stream state with typed entries; replace bubble loop with timeline; follow-tail scroll |
-| `resources/core/views/components/ai/message-meta.blade.php` | Replace hover tooltip with click popover |
+| `resources/core/views/livewire/ai/chat.blade.php` | Replace stream state with `streamEntries[]`; type-branching timeline; follow-tail scroll; "Jump to latest" button; drafting frame for streaming text |
+| `resources/core/views/components/ai/message-meta.blade.php` | Replace hover tooltip with click popover; new props for tokens/latency/retries/errors |
 | `resources/core/views/components/ai/activity/entry.blade.php` | New — timeline entry shell |
 | `resources/core/views/components/ai/activity/user-message.blade.php` | New — user prompt display |
 | `resources/core/views/components/ai/activity/thinking.blade.php` | New — thinking indicator |
 | `resources/core/views/components/ai/activity/tool-call.blade.php` | New — collapsible tool call card |
-| `resources/core/views/components/ai/activity/assistant-result.blade.php` | New — full-width prose result |
+| `resources/core/views/components/ai/activity/assistant-result.blade.php` | New — full-width prose result with enriched meta forwarding |
 | `resources/core/views/components/ai/activity/error.blade.php` | New — error display card |
 | `docs/todo/ai-run-ledger.md` | Remove visibility contradiction in §1.1 |
 

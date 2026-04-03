@@ -109,12 +109,30 @@ class ChatStreamController
         $runId = null;
         $meta = null;
         $hadError = false;
+        $thinkingPersisted = false;
 
         foreach ($runtime->runStream($messages, $employeeId, $systemPrompt, $modelOverride) as $event) {
             $eventName = $event['event'];
             $data = $event['data'];
 
             $this->emitEvent($eventName, $data);
+
+            $eventRunId = $data['run_id'] ?? $runId;
+
+            if ($eventRunId !== null && $runId === null) {
+                $runId = $eventRunId;
+            }
+
+            if ($eventName === 'status') {
+                $this->persistActivityEntry(
+                    $messageManager,
+                    $employeeId,
+                    $sessionId,
+                    $eventRunId,
+                    $data,
+                    $thinkingPersisted,
+                );
+            }
 
             if ($eventName === 'done') {
                 [$fullContent, $runId, $meta] = $this->captureDoneEvent($data);
@@ -278,5 +296,60 @@ class ChatStreamController
             $runId,
             $meta,
         );
+    }
+
+    /**
+     * Persist thinking, tool_call, and tool_result entries to the transcript
+     * as they stream, so the activity history is durable.
+     *
+     * @param  array<string, mixed>  $data  SSE status event payload
+     */
+    private function persistActivityEntry(
+        MessageManager $messageManager,
+        int $employeeId,
+        string $sessionId,
+        ?string $runId,
+        array $data,
+        bool &$thinkingPersisted,
+    ): void {
+        if ($runId === null) {
+            return;
+        }
+
+        $phase = $data['phase'] ?? '';
+
+        if ($phase === 'thinking' && ! $thinkingPersisted) {
+            $messageManager->appendThinking($employeeId, $sessionId, $runId);
+            $thinkingPersisted = true;
+
+            return;
+        }
+
+        if ($phase === 'tool_started') {
+            $messageManager->appendToolCall(
+                $employeeId,
+                $sessionId,
+                $runId,
+                (string) ($data['tool'] ?? ''),
+                (string) ($data['args_summary'] ?? '{}'),
+                (int) ($data['tool_call_index'] ?? 0),
+            );
+
+            return;
+        }
+
+        if ($phase === 'tool_finished') {
+            $messageManager->appendToolResult(
+                $employeeId,
+                $sessionId,
+                $runId,
+                (string) ($data['tool'] ?? ''),
+                (string) ($data['result_preview'] ?? ''),
+                (int) ($data['result_length'] ?? 0),
+                (string) ($data['status'] ?? 'success'),
+                (int) ($data['duration_ms'] ?? 0),
+                is_array($data['error_payload'] ?? null) ? $data['error_payload'] : null,
+            );
+        }
     }
 }

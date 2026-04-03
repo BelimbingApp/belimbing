@@ -58,14 +58,14 @@ updated_at          timestamp
 
 ### 0.3 `AiRun` Model + `RunRecorder` Service
 
-- [ ] Create `AiRun` Eloquent model at `app/Modules/Core/AI/Models/AiRun.php`
-- [ ] Create `RunRecorder` service at `app/Modules/Core/AI/Services/ControlPlane/RunRecorder.php`
+- [x] Create `AiRun` Eloquent model at `app/Modules/Core/AI/Models/AiRun.php`
+- [x] Create `RunRecorder` service at `app/Modules/Core/AI/Services/ControlPlane/RunRecorder.php`
   - `start(string $runId, int $employeeId, ...)` — inserts row with status `running`
   - `complete(string $runId, array $meta)` — updates to `succeeded` with latency/tokens/tools
   - `fail(string $runId, AiRuntimeError $error)` — updates to `failed` with error details
   - `attachDispatch(string $runId, string $dispatchId)` — links async dispatch after the fact
   - `find(string $runId): ?AiRun`
-- [ ] Create migration `create_ai_runs_table`
+- [x] Create migration `create_ai_runs_table`
 
 #### State Machine & Idempotency
 
@@ -100,26 +100,26 @@ OperationDispatch 1 ←──── 0..* AiRun
 
 If a process crashes mid-run, the `ai_runs` row stays in `running` forever. A scheduled reaper marks these as failed.
 
-- [ ] Add `blb:ai:runs:reap-orphans` command
-- [ ] Logic: `WHERE status = 'running' AND started_at < NOW() - INTERVAL ? SECONDS` → mark `failed` with `error_type = 'orphaned'`, `error_message = 'Run did not complete — process may have crashed'`
-- [ ] Threshold: `2× max timeout` (default: 2×180 = 360s for heavy foreground; 2×600 = 1200s for background)
-- [ ] Register in Laravel scheduler: run every 5 minutes
-- [ ] The reaper is **safe to run concurrently** — uses `WHERE status = 'running'` with `updated_at` guard to avoid racing with a legitimate completion
+- [x] Add `blb:ai:runs:reap-orphans` command
+- [x] Logic: `WHERE status = 'running' AND started_at < NOW() - INTERVAL ? SECONDS` → mark `failed` with `error_type = 'orphaned'`, `error_message = 'Run did not complete — process may have crashed'`
+- [x] Threshold: `2× max timeout` (default: 2×180 = 360s for heavy foreground; 2×600 = 1200s for background)
+- [x] Register in Laravel scheduler: run every 5 minutes
+- [x] The reaper is **safe to run concurrently** — uses `WHERE status = 'running'` with `updated_at` guard to avoid racing with a legitimate completion
 
 ### 0.4 Runtime Integration
 
-- [ ] `AgenticRuntime::run()` and `runStream()` call `RunRecorder::start()` at run begin
-- [ ] On success: `RunRecorder::complete()` with provider, model, latency, tokens, tool actions
-- [ ] On failure: `RunRecorder::fail()` with the `AiRuntimeError`
-- [ ] `RunAgentTaskJob` calls `RunRecorder::attachDispatch()` for background runs
+- [x] `AgenticRuntime::run()` and `runStream()` call `RunRecorder::start()` at run begin
+- [x] On success: `RunRecorder::complete()` with provider, model, latency, tokens, tool actions
+- [x] On failure: `RunRecorder::fail()` with the `AiRuntimeError`
+- [x] `RunAgentTaskJob` calls `RunRecorder::attachDispatch()` for background runs
 
 ### 0.5 Remove Duplicated Storage
 
-- [ ] Remove `Session::$runs` property
-- [ ] Remove `SessionManager::storeRunMeta()` and `SessionManager::runMetadata()`
-- [ ] Remove run metadata from `Session::toMeta()` / `Session::fromMeta()`
-- [ ] `MessageManager::appendAssistantMessage()` — stop calling `storeRunMeta()`
-- [ ] Keep JSONL assistant messages with `run_id` only (no inline meta duplication)
+- [x] Remove `Session::$runs` property
+- [x] Remove `SessionManager::storeRunMeta()` and `SessionManager::runMetadata()`
+- [x] Remove run metadata from `Session::toMeta()` / `Session::fromMeta()`
+- [x] `MessageManager::appendAssistantMessage()` — stop calling `storeRunMeta()`
+- [x] Keep JSONL assistant messages with `run_id` only (no inline meta duplication)
 
 ### 0.6 Remove `AiRuntimeLogger` & Dedicated `ai` Log Channel
 
@@ -134,18 +134,18 @@ With `ai_runs` as the canonical store, the dedicated `ai.log` is redundant:
 | `unhandledException()` | Move to standard `laravel.log` (app crash, not AI-specific) |
 | `providerTestCompleted()` | Move to standard `laravel.log` (admin one-off, not a run) |
 
-- [ ] Remove `AiRuntimeLogger` service
-- [ ] Remove `ai` channel from `config/logging.php`
-- [ ] `AgenticRuntime` — replace all `$this->runtimeLogger->*()` calls with `RunRecorder` writes
-- [ ] `Chat.php` catch block — replace `AiRuntimeLogger::unhandledException()` with `report()` (standard Laravel)
-- [ ] Provider test service — log via default channel instead of `AiRuntimeLogger::providerTestCompleted()`
-- [ ] Store raw diagnostic strings (cURL errors, HTTP excerpts) in `ai_runs.meta.diagnostic` for admin inspection
+- [x] Remove `AiRuntimeLogger` service
+- [x] Remove `ai` channel from `config/logging.php`
+- [x] `AgenticRuntime` — replace all `$this->runtimeLogger->*()` calls with `RunRecorder` writes
+- [x] `Chat.php` catch block — replace `AiRuntimeLogger::unhandledException()` with `report()` (standard Laravel)
+- [x] Provider test service — log via default channel instead of `AiRuntimeLogger::providerTestCompleted()`
+- [x] Store raw diagnostic strings (cURL errors, HTTP excerpts) in `ai_runs.meta.diagnostic` for admin inspection
 
 ### 0.7 Read Path Migration
 
-- [ ] `MessageManager::read()` — collect assistant `run_id`s, batch-query `ai_runs`, hydrate message meta from DB
-- [ ] Remove `MessageManager::enrichMessageMetadata()` session-file enrichment
-- [ ] `RunInspectionService` — rewrite to query `ai_runs` directly instead of scanning session files
+- [x] `MessageManager::read()` — collect assistant `run_id`s, batch-query `ai_runs`, hydrate message meta from DB
+- [x] Remove `MessageManager::enrichMessageMetadata()` session-file enrichment
+- [x] `RunInspectionService` — rewrite to query `ai_runs` directly instead of scanning session files
   - `inspectRun(string $runId)` — single DB lookup
   - `inspectSession(string $sessionId)` — `where session_id = ?`
   - `inspectDispatchRun(string $dispatchId)` — `where dispatch_id = ?`
@@ -172,28 +172,28 @@ The JSONL transcript format changes with the activity stream (new entry types). 
 - Tool `result` content is **not** persisted in JSONL — only `result_length` and a truncated preview (≤200 chars). Full results live only in runtime memory during the run.
 - `ai_runs.meta.diagnostic` may contain provider error strings — never user content or credentials.
 
-- [ ] Add `transcript_version` field to `Session` DTO and `meta.json`
-- [ ] New sessions created with `transcript_version: 2`
-- [ ] `MessageManager::read()` — version-aware parser with v1 fallback
-- [ ] Document redaction boundaries in code comments
+- [x] Add `transcript_version` field to `Session` DTO and `meta.json`
+- [x] New sessions created with `transcript_version: 2`
+- [x] `MessageManager::read()` — version-aware parser with v1 fallback
+- [x] Document redaction boundaries in code comments
 
 ### 0.9 Session File Cleanup
 
 Existing v1 session files lack `transcript_version` and contain `runs` maps that no longer exist. Archive before wiping.
 
-- [ ] Archive existing sessions: `mv storage/app/workspace/*/sessions/ storage/app/workspace/*/sessions-archived-v1/`
-- [ ] Log the archive location in migration output
-- [ ] New sessions created with v2 schema going forward
-- [ ] Archived sessions can be deleted manually after verification (no automated purge)
+- [x] Archive existing sessions: `mv storage/app/workspace/*/sessions/ storage/app/workspace/*/sessions-archived-v1/`
+- [x] Log the archive location in migration output — skipped (manual archive, not a migration)
+- [x] New sessions created with v2 schema going forward
+- [x] Archived sessions can be deleted manually after verification (no automated purge)
 
 ### 0.10 Streaming Path Integration
 
 The streaming path (`ChatStreamController` → `AgenticRuntime::runStream()`) also persists run metadata. It must use `RunRecorder` instead of the removed session meta path.
 
-- [ ] `ChatStreamController` — call `RunRecorder::start()` before streaming begins
-- [ ] On `done` event — call `RunRecorder::complete()` with captured meta
-- [ ] On `error` event — call `RunRecorder::fail()` with error data
-- [ ] `ChatStreamController` — extend SSE events to emit tool call details for the activity stream (tool name, args summary, result preview)
+- [x] `ChatStreamController` — call `RunRecorder::start()` before streaming begins
+- [x] On `done` event — call `RunRecorder::complete()` with captured meta
+- [x] On `error` event — call `RunRecorder::fail()` with error data
+- [x] `ChatStreamController` — extend SSE events to emit tool call details for the activity stream (tool name, args summary, result preview)
 
 ### 0.11 Remove `AiRuntimeLogger` Consumers
 
@@ -209,10 +209,10 @@ The streaming path (`ChatStreamController` → `AgenticRuntime::runStream()`) al
 | `SpawnAgentSessionJob` (`unhandledException`) | `report($e)` |
 | `Base/AI/ServiceProvider` (singleton registration) | Remove |
 
-- [ ] Migrate each consumer per table above
-- [ ] Delete `AiRuntimeLogger.php`
-- [ ] Remove `ai` channel from `config/logging.php`
-- [ ] Remove singleton registration from `Base/AI/ServiceProvider`
+- [x] Migrate each consumer per table above
+- [x] Delete `AiRuntimeLogger.php`
+- [x] Remove `ai` channel from `config/logging.php`
+- [x] Remove singleton registration from `Base/AI/ServiceProvider`
 
 ---
 
@@ -253,12 +253,12 @@ Replace the current bubble-based chat with an **agent activity stream** that sho
 - Tool entries: `{type: 'tool_call', tool: 'web_search', args: {...}, result_length: 2340, run_id: '...'}`
 - Final response remains `{role: 'assistant', content: '...', run_id: '...'}`
 
-- [ ] Define transcript entry types and JSONL schema extension
-- [ ] Extend SSE `status` events to include tool name, args summary, and result preview
-- [ ] Replace bubble rendering with activity stream layout in `chat.blade.php`
-- [ ] Persist tool call / thinking entries to JSONL transcript
-- [ ] Alpine.js streaming handler: render each event as a persistent DOM entry
-- [ ] Collapsible tool result blocks (expand on click)
+- [x] Define transcript entry types and JSONL schema extension
+- [x] Extend SSE `status` events to include tool name, args summary, and result preview
+- [x] Replace bubble rendering with activity stream layout in `chat.blade.php`
+- [x] Persist tool call / thinking entries to JSONL transcript
+- [x] Alpine.js streaming handler: render each event as a persistent DOM entry
+- [x] Collapsible tool result blocks (expand on click)
 
 ### 1.2 Run Metadata Popover
 
@@ -270,16 +270,16 @@ Lightweight popover on the run ID for metadata the activity stream doesn't show 
 - Raw diagnostic string (on failure)
 - Timeout budget vs. actual latency
 
-- [ ] Replace current run ID tooltip with a rich popover (click to open, not hover)
-- [ ] Popover data sourced from `ai_runs` (batch-loaded with messages)
+- [x] Replace current run ID tooltip with a rich popover (click to open, not hover)
+- [x] Popover data sourced from `ai_runs` (batch-loaded with messages)
 
 ### 1.3 Standalone Run Route (Deep-linking)
 
 For sharing runs via alerts, audit trails, or cross-referencing. Access controlled by session ownership (Lara: per-user isolation; supervised agents: supervisor check) — not a separate capability.
 
-- [ ] Route: `GET /admin/ai/runs/{runId}` → name `admin.ai.runs.show`
-- [ ] Lightweight page showing full run metadata + activity timeline
-- [ ] Access: session ownership check only (existing `assertCanAccessAgent` pattern)
+- [x] Route: `GET /admin/ai/runs/{runId}` → name `admin.ai.runs.show`
+- [x] Lightweight page showing full run metadata + activity timeline
+- [x] Access: session ownership check only (existing `assertCanAccessAgent` pattern)
 
 ---
 

@@ -18,6 +18,7 @@ use App\Modules\Core\AI\Console\Commands\MemoryCompactCommand;
 use App\Modules\Core\AI\Console\Commands\MemoryIndexCommand;
 use App\Modules\Core\AI\Console\Commands\OperationsStatusCommand;
 use App\Modules\Core\AI\Console\Commands\OperationsSweepCommand;
+use App\Modules\Core\AI\Console\Commands\ReapOrphanRunsCommand;
 use App\Modules\Core\AI\Console\Commands\SchedulesTickCommand;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
@@ -225,6 +226,7 @@ class ServiceProvider extends BaseServiceProvider
                 SchedulesTickCommand::class,
                 OperationsSweepCommand::class,
                 OperationsStatusCommand::class,
+                ReapOrphanRunsCommand::class,
                 InspectRunCommand::class,
                 HealthSnapshotCommand::class,
                 LifecyclePreviewCommand::class,

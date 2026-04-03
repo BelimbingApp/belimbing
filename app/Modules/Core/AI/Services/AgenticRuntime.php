@@ -568,6 +568,7 @@ class AgenticRuntime
         yield ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => $runId]];
 
         $iteration = 0;
+        $toolIndex = 0;
 
         while (true) {
             // Hook: PreLlmCall
@@ -627,14 +628,25 @@ class AgenticRuntime
 
             foreach ($result['tool_calls'] as $toolCall) {
                 $functionName = (string) ($toolCall['function']['name'] ?? '');
+                $arguments = $this->decodeToolArguments($toolCall);
+                $argsSummary = Str::limit(
+                    json_encode($arguments, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}',
+                    200,
+                );
 
                 yield ['event' => 'status', 'data' => [
                     'phase' => 'tool_started',
                     'tool' => $functionName,
+                    'args_summary' => $argsSummary,
+                    'tool_call_index' => $toolIndex,
+                    'started_at' => now()->toIso8601String(),
                     'run_id' => $runId,
                 ]];
 
+                $toolStartTime = hrtime(true);
                 $toolExecution = $this->executeToolCall($toolCall);
+                $durationMs = (int) ((hrtime(true) - $toolStartTime) / 1_000_000);
+
                 $toolActions[] = $toolExecution['action'];
                 array_push($clientActions, ...$toolExecution['client_actions']);
                 $apiMessages[] = $toolExecution['message'];
@@ -642,11 +654,20 @@ class AgenticRuntime
                 // Hook: PostToolResult
                 $this->hookCoordinator->postToolResult($runId, $employeeId, $toolExecution['action'], $hookMetadata);
 
+                $resultString = $toolExecution['message']['content'] ?? '';
+
                 yield ['event' => 'status', 'data' => [
                     'phase' => 'tool_finished',
                     'tool' => $functionName,
+                    'result_preview' => $toolExecution['action']['result_preview'] ?? '',
+                    'result_length' => mb_strlen($resultString),
+                    'duration_ms' => $durationMs,
+                    'status' => isset($toolExecution['action']['error_payload']) ? 'error' : 'success',
+                    'error_payload' => $toolExecution['action']['error_payload'] ?? null,
                     'run_id' => $runId,
                 ]];
+
+                $toolIndex++;
             }
 
             $iteration++;

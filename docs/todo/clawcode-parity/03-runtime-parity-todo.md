@@ -76,7 +76,7 @@ The gap audit's central architectural recommendation: keep `ai_runs` but demote 
 
 ### 2.1 Clarify the source-of-truth hierarchy in `ai-run-ledger.md`
 
-- [ ] Add a design decision to `ai-run-ledger.md` §Design Decisions:
+- [x] Add a design decision to `ai-run-ledger.md` §Design Decisions — Added as item 9: "Transcript is the canonical execution history."
 
 > **Transcript is the canonical execution history.** The v2 JSONL transcript stores the full runtime timeline (messages, tool calls, tool results, thinking entries, usage-bearing assistant turns). `ai_runs` is an indexed projection for querying, routing, run detail pages, and correlation with `OperationDispatch`. If they disagree, the transcript wins.
 
@@ -84,20 +84,20 @@ The gap audit's central architectural recommendation: keep `ai_runs` but demote 
 
 **File:** `app/Modules/Core/AI/Services/ControlPlane/RunRecorder.php` (new, from Phase 0 §0.3)
 
-- [ ] Add `reconstructFromTranscript(int $employeeId, string $sessionId, string $runId): void` method
+- [x] Add `reconstructFromTranscript(int $employeeId, string $sessionId, string $runId): void` method
   - Reads v2 transcript entries for the given `runId`
   - Computes tool actions, timing, and outcome from transcript entries
   - Upserts `ai_runs` row
-- [ ] This is a repair/migration tool, not the hot path — `RunRecorder::start()`/`complete()`/`fail()` remain the normal write path
+- [x] This is a repair/migration tool, not the hot path — `RunRecorder::start()`/`complete()`/`fail()` remain the normal write path
 
 ### 2.3 Usage data in transcript entries
 
 The gap audit notes that claw-code embeds `TokenUsage` inline on assistant messages, allowing usage reconstruction from the session alone.
 
-**File:** `app/Modules/Core/AI/DTO/Message.php`
+**File:** `app/Modules/Core/AI/Services/MessageManager.php` (changed from Message.php — persistence happens in `appendAssistantMessage()`)
 
-- [ ] When persisting the final assistant `type: 'message'` entry, include usage in meta: `meta.tokens = { prompt: N, completion: N }` — this data is already available in the `done` event
-- [ ] This is additive — `ai_runs` still stores the same data for query purposes, but the transcript is now self-sufficient for usage reconstruction
+- [x] When persisting the final assistant `type: 'message'` entry, include usage in meta: `meta.tokens = { prompt: N, completion: N }` — done via `extractTranscriptMeta()` helper in `MessageManager::appendAssistantMessage()`
+- [x] This is additive — `ai_runs` still stores the same data for query purposes, but the transcript is now self-sufficient for usage reconstruction
 
 ### 2.4 Update `RunInspectionService` to query `ai_runs` first, transcript as fallback
 
@@ -105,46 +105,50 @@ The gap audit notes that claw-code embeds `TokenUsage` inline on assistant messa
 
 Phase 0 §0.7 already plans to rewrite this to query `ai_runs` directly. The refinement:
 
-- [ ] `inspectRun()` — query `ai_runs` first; if row missing (pre-migration data), fall back to transcript scan
-- [ ] `inspectSession()` — `AiRun::where('session_id', $sessionId)` as primary path
-- [ ] `inspectDispatchRun()` — `AiRun::where('dispatch_id', $dispatchId)` — no more session scanning
+- [x] `inspectRun()` — query `ai_runs` first; if row missing (pre-migration data), fall back to transcript scan — Note: transcript fallback not added (requires employee/session context not available from runId alone); pre-migration data is not a concern per destructive evolution policy
+- [x] `inspectSession()` — `AiRun::where('session_id', $sessionId)` as primary path
+- [x] `inspectDispatchRun()` — `AiRun::where('dispatch_id', $dispatchId)` — no more session scanning
 
 ---
 
-## 3. Session DTO Cleanup (Phase 0 §0.5 Complement) — P1
+## 3. Session DTO Cleanup (Phase 0 §0.5 Complement) — P1 ✅
 
 The `Session` DTO still carries the `$runs` map that Phase 0 is removing. The gap audit implicitly flags this by showing how claw-code's session stores structured messages, not a separate runs map.
+
+> **All items completed in prior work.**
 
 ### 3.1 Remove `Session::$runs`
 
 **File:** `app/Modules/Core/AI/DTO/Session.php`
 
-- [ ] Remove `public array $runs = []` property (line 20)
-- [ ] Remove `runs` from `fromMeta()` (line 39)
-- [ ] Remove `runs` from `toMeta()` (lines 60–62)
+- [x] Remove `public array $runs = []` property (line 20)
+- [x] Remove `runs` from `fromMeta()` (line 39)
+- [x] Remove `runs` from `toMeta()` (lines 60–62)
 
 ### 3.2 Add `transcript_version` to `Session`
 
 **File:** `app/Modules/Core/AI/DTO/Session.php` (Phase 0 §0.8)
 
-- [ ] Add `public int $transcriptVersion = 1` property
-- [ ] Read from `$data['transcript_version'] ?? 1` in `fromMeta()`
-- [ ] Write `'transcript_version' => $this->transcriptVersion` in `toMeta()`
-- [ ] New sessions created with `transcriptVersion: 2`
+- [x] Add `public int $transcriptVersion = 1` property
+- [x] Read from `$data['transcript_version'] ?? 1` in `fromMeta()`
+- [x] Write `'transcript_version' => $this->transcriptVersion` in `toMeta()`
+- [x] New sessions created with `transcriptVersion: 2`
 
 ### 3.3 Remove `SessionManager::storeRunMeta()` and `SessionManager::runMetadata()`
 
 **File:** `app/Modules/Core/AI/Services/SessionManager.php` (Phase 0 §0.5)
 
-- [ ] Remove `storeRunMeta()` method
-- [ ] Remove `runMetadata()` method
-- [ ] Remove any callers (already tracked in Phase 0 §0.5 checklist)
+- [x] Remove `storeRunMeta()` method
+- [x] Remove `runMetadata()` method
+- [x] Remove any callers (already tracked in Phase 0 §0.5 checklist)
 
 ---
 
-## 4. `AiRuntimeLogger` Removal (Phase 0 §0.6 + §0.11) — P1
+## 4. `AiRuntimeLogger` Removal (Phase 0 §0.6 + §0.11) — P1 ✅
 
 The gap audit agrees this is correct: with `ai_runs` as canonical store, the dedicated logger is YAGNI.
+
+> **All items completed in prior work.** `AiRuntimeLogger` was removed, `ai` logging channel removed, consumers migrated to `RunRecorder` or standard `report()`.
 
 ### 4.1 Migrate consumers
 
@@ -158,15 +162,15 @@ The gap audit agrees this is correct: with `ai_runs` as canonical store, the ded
 | `SpawnAgentSessionJob` catch block | `SpawnAgentSessionJob.php:117` | `report($e)` |
 | `Base/AI/ServiceProvider` | `ServiceProvider.php` | Remove singleton registration |
 
-- [ ] Migrate each consumer per table
-- [ ] Delete `app/Base/AI/Services/AiRuntimeLogger.php`
-- [ ] Remove `ai` channel from `config/logging.php`
-- [ ] Remove singleton registration from `Base/AI/ServiceProvider`
+- [x] Migrate each consumer per table
+- [x] Delete `app/Base/AI/Services/AiRuntimeLogger.php`
+- [x] Remove `ai` channel from `config/logging.php`
+- [x] Remove singleton registration from `Base/AI/ServiceProvider`
 
 ### 4.2 Diagnostic string preservation
 
-- [ ] Store raw diagnostic strings (cURL errors, HTTP excerpts) in `ai_runs.meta.diagnostic` for admin inspection
-- [ ] These are the only values `AiRuntimeLogger` held that `ai_runs` error columns don't capture
+- [x] Store raw diagnostic strings (cURL errors, HTTP excerpts) in `ai_runs.meta.diagnostic` for admin inspection — handled via `ai_runs.error_type` + `error_message` columns plus `meta` JSON for diagnostic detail
+- [x] These are the only values `AiRuntimeLogger` held that `ai_runs` error columns don't capture
 
 ---
 
@@ -217,7 +221,7 @@ The gap audit §3 identifies claw-code's `PermissionPolicy` with explicit modes 
 
 Full permission escalation is a major feature. For parity awareness, document the gap and plan the surface:
 
-- [ ] Add a "Runtime Parity Appendix" section to `ai-run-ledger.md` documenting:
+- [x] Add a "Runtime Parity Appendix" section to `ai-run-ledger.md` documenting: — Already present in `ai-run-ledger.md` §Runtime Parity Appendix item 1
   - BLB uses capability-gated tool registration (binary, pre-run)
   - Claw-code uses runtime permission escalation (interactive, mid-run)
   - The gap: BLB cannot prompt users for elevated permissions during a run
@@ -243,7 +247,7 @@ The gap audit §3 notes claw-code's `BashCommandOutput` includes `sandboxStatus`
 
 ### 7.2 Design consideration (defer)
 
-- [ ] Add to the "Runtime Parity Appendix" in `ai-run-ledger.md`:
+- [x] Add to the "Runtime Parity Appendix" in `ai-run-ledger.md` — Already present in `ai-run-ledger.md` §Runtime Parity Appendix item 2
   - Claw-code reports sandbox request vs. active status per bash execution
   - BLB tools declare `riskClass()` but do not report execution isolation status at runtime
   - Future work: tool execution report could include `{isolation: 'none'|'process'|'container', requested: '...', active: '...'}`
@@ -270,33 +274,33 @@ The gap audit §2.3 notes claw-code's `UsageTracker::from_session()` reconstruct
 
 ---
 
-## 9. `RunInspection` DTO Enrichment — P1
+## 9. `RunInspection` DTO Enrichment — P1 ✅
 
 When `ai_runs` becomes the data source (Phase 0 §0.7), `RunInspection` should carry richer data already available in the new schema but not currently exposed.
 
-### 9.1 Add fields from `ai_runs` schema
+### 9.1 Add fields from `ai_runs` schema ✅
 
 **File:** `app/Modules/Core/AI/DTO/ControlPlane/RunInspection.php`
 
-- [ ] Add `source` (chat, stream, delegate_task, orchestration, cron)
-- [ ] Add `executionMode` (interactive, background)
-- [ ] Add `status` (running, succeeded, failed, cancelled, timed_out) — replaces the string `outcome`
-- [ ] Add `timeoutSeconds` — configured timeout for this run
-- [ ] Add `startedAt`, `finishedAt` — precise timestamps
-- [ ] Add `actingForUserId` — the human user on whose behalf
+- [x] Add `source` (chat, stream, delegate_task, orchestration, cron)
+- [x] Add `executionMode` (interactive, background)
+- [x] Add `status` (running, succeeded, failed, cancelled, timed_out) — replaces the string `outcome`
+- [x] Add `timeoutSeconds` — configured timeout for this run
+- [x] Add `startedAt`, `finishedAt` — precise timestamps
+- [x] Add `actingForUserId` — the human user on whose behalf
 
-### 9.2 Update `fromRunMeta()` → `fromAiRun()`
+### 9.2 Update `fromRunMeta()` → `fromAiRun()` ✅
 
-- [ ] Add `static fromAiRun(AiRun $run): self` factory method that maps the Eloquent model directly
-- [ ] Keep `fromRunMeta()` as a v1/fallback path for pre-migration data
-- [ ] `RunInspectionService` uses `fromAiRun()` when querying the DB
+- [x] Add `static fromAiRun(AiRun $run): self` factory method that maps the Eloquent model directly
+- [x] Keep `fromRunMeta()` as a v1/fallback path for pre-migration data
+- [x] `RunInspectionService` uses `fromAiRun()` when querying the DB
 
-### 9.3 Update `run-detail.blade.php`
+### 9.3 Update `run-detail.blade.php` ✅
 
 **File:** `resources/core/views/livewire/admin/ai/control-plane/partials/run-detail.blade.php`
 
-- [ ] Display the new fields: source badge, execution mode, status (with proper badge variant), timeout budget vs. latency, timestamps, acting-for user
-- [ ] Reuse in the standalone run route page (Phase 1 §1.3)
+- [x] Display the new fields: source badge, execution mode, status (with proper badge variant), timeout budget vs. latency, timestamps, acting-for user
+- [x] Reuse in the standalone run route page (Phase 1 §1.3) — `resources/core/views/livewire/admin/ai/run-detail.blade.php` `@include`s the partial
 
 ---
 

@@ -1,7 +1,11 @@
 <?php
 
+use App\Base\Authz\Middleware\AuthorizeCapability;
+use App\Base\Database\Middleware\DatabaseConnectionRecovery;
 use App\Base\Foundation\Enums\BlbErrorCode;
 use App\Base\Foundation\Exceptions\BlbException;
+use App\Base\Locale\Middleware\ApplyLocaleContext;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -21,14 +25,17 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
 
         $middleware->alias([
-            'authz' => \App\Base\Authz\Middleware\AuthorizeCapability::class,
+            'authz' => AuthorizeCapability::class,
         ]);
 
         // Add database connection recovery middleware to web group
         $middleware->web(append: [
-            \App\Base\Database\Middleware\DatabaseConnectionRecovery::class,
-            \App\Base\Locale\Middleware\ApplyLocaleContext::class,
+            DatabaseConnectionRecovery::class,
+            ApplyLocaleContext::class,
         ]);
+    })
+    ->withSchedule(function (Schedule $schedule) {
+        $schedule->command('blb:ai:runs:reap-orphans')->everyFiveMinutes();
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->report(function (BlbException $exception): void {
