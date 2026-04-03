@@ -259,7 +259,7 @@ describe('AgenticRuntime', function () {
 
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')->once()->andReturn(
-            $this->makeErrorResponse(AiErrorType::Timeout, 'Connection timed out', 30000)
+            $this->makeErrorResponse(AiErrorType::Timeout, 'Connection timed out', 5000)
         );
         $llmClient->shouldReceive('chat')->once()->andReturn(
             $this->makeFinalResponse('Success after retry!')
@@ -271,5 +271,22 @@ describe('AgenticRuntime', function () {
         expect($result['content'])->toBe('Success after retry!');
         expect($result['meta']['retry_attempts'])->toHaveCount(1);
         expect($result['meta']['retry_attempts'][0]['error_type'])->toBe('timeout');
+    });
+
+    it('does not retry timeout when full budget was consumed', function () {
+        $configResolver = $this->mockResolvedConfigResolver([
+            $this->makeConfig('test-provider', 'gpt-4', 'test-key'),
+        ]);
+
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeErrorResponse(AiErrorType::Timeout, 'Request timed out', 55000)
+        );
+
+        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
+        $result = $runtime->run([$this->makeMessage('user', 'Hello')], 1, 'Prompt');
+
+        expect($result['meta']['error_type'])->toBe('timeout');
+        expect($result['meta']['retry_attempts'])->toBeEmpty();
     });
 });

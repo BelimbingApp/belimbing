@@ -1,13 +1,11 @@
 <?php
 
 use App\Modules\Core\AI\Livewire\RunDetail;
-use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
-
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 /** @var RunDetail $this */
-/** @var RunInspection|null $inspection */
+/** @var array<string, mixed>|null $inspection */
 /** @var list<\App\Modules\Core\AI\DTO\Message> $transcript */
 ?>
 <div>
@@ -15,7 +13,7 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
 
     <x-ui.page-header :title="__('Run Detail')">
         <x-slot name="actions">
-            @if($inspection?->sessionId)
+            @if($inspection['session_id'] ?? null)
                 <a
                     href="{{ route('admin.ai.control-plane') }}"
                     wire:navigate

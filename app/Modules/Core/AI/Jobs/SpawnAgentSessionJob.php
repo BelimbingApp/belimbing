@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Jobs;
 
+use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\OrchestrationSession;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
@@ -107,6 +108,7 @@ class SpawnAgentSessionJob implements ShouldQueue
                 employeeId: $session->child_employee_id,
                 systemPrompt: $systemPrompt,
                 modelOverride: $modelOverride,
+                policy: ExecutionPolicy::background(),
             );
 
             $this->recordResult($session, $result);

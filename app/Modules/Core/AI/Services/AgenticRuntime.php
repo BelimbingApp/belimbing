@@ -11,6 +11,7 @@ use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Support\Json as BlbJson;
+use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use Illuminate\Support\Str;
@@ -51,19 +52,21 @@ class AgenticRuntime
      * @param  int  $employeeId  Agent employee ID
      * @param  string|null  $systemPrompt  System prompt
      * @param  string|null  $modelOverride  Optional model ID to override the resolved config
+     * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
-    public function run(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null): array
+    public function run(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null, ?ExecutionPolicy $policy = null): array
     {
         $runId = 'run_'.Str::random(12);
+        $policy ??= ExecutionPolicy::interactive();
 
         $this->runRecorder->start(
             runId: $runId,
             employeeId: $employeeId,
             source: 'chat',
-            executionMode: 'interactive',
+            executionMode: $policy->mode->value,
             actingForUserId: auth()->id(),
-            timeoutSeconds: (int) config('ai.llm.timeout', 60),
+            timeoutSeconds: $policy->timeoutSeconds,
         );
 
         $configs = $this->configResolver->resolveWithDefaultFallback($employeeId);
@@ -102,6 +105,8 @@ class AgenticRuntime
                 continue;
             }
 
+            $config['timeout'] = $policy->timeoutSeconds;
+
             $result = $this->runToolCallingLoop($runId, $config, $credentials, $messages, $systemPrompt, $fallbackAttempts);
             $result['meta']['fallback_attempts'] = $fallbackAttempts;
 
@@ -136,19 +141,21 @@ class AgenticRuntime
      * @param  int  $employeeId  Agent employee ID
      * @param  string|null  $systemPrompt  System prompt
      * @param  string|null  $modelOverride  Optional model ID override
+     * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
-    public function runStream(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null): \Generator
+    public function runStream(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null, ?ExecutionPolicy $policy = null): \Generator
     {
         $runId = 'run_'.Str::random(12);
+        $policy ??= ExecutionPolicy::interactive();
 
         $this->runRecorder->start(
             runId: $runId,
             employeeId: $employeeId,
             source: 'stream',
-            executionMode: 'interactive',
+            executionMode: $policy->mode->value,
             actingForUserId: auth()->id(),
-            timeoutSeconds: (int) config('ai.llm.timeout', 60),
+            timeoutSeconds: $policy->timeoutSeconds,
         );
 
         $configs = $this->configResolver->resolveWithDefaultFallback($employeeId);
@@ -184,6 +191,8 @@ class AgenticRuntime
 
                 continue;
             }
+
+            $config['timeout'] = $policy->timeoutSeconds;
 
             yield from $this->runStreamingToolLoop($runId, $config, $credentials, $messages, $systemPrompt, $fallbackAttempts);
 
@@ -266,12 +275,19 @@ class AgenticRuntime
         $tools = $this->toolRegistry->toolDefinitionsForCurrentUser();
 
         // Hook: PreToolRegistry — add/remove tools before the LLM sees them
+        $originalToolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
         $tools = $this->hookCoordinator->preToolRegistry($runId, $employeeId, $tools);
+        $filteredToolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
+        $removedTools = array_values(array_diff($originalToolNames, $filteredToolNames));
 
         $toolActions = [];
         $clientActions = [];
         $retryAttempts = [];
         $hookMetadata = [];
+
+        if ($removedTools !== []) {
+            $hookMetadata['pre_tool_registry_removed'] = $removedTools;
+        }
 
         $iteration = 0;
 
@@ -353,6 +369,16 @@ class AgenticRuntime
 
         if (! $runtimeError->retryable) {
             return $result;
+        }
+
+        // Don't retry timeouts that consumed most of the budget — retrying
+        // with the same budget will fail identically.
+        if ($runtimeError->errorType === AiErrorType::Timeout) {
+            $budgetMs = ($config['timeout'] ?? 60) * 1000;
+
+            if ($runtimeError->latencyMs >= $budgetMs * 0.5) {
+                return $result;
+            }
         }
 
         $retryAttempts[] = [
@@ -558,17 +584,30 @@ class AgenticRuntime
         $tools = $this->toolRegistry->toolDefinitionsForCurrentUser();
 
         // Hook: PreToolRegistry — add/remove tools before the LLM sees them
+        $originalToolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
         $tools = $this->hookCoordinator->preToolRegistry($runId, $employeeId, $tools);
+        $filteredToolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
+        $removedTools = array_values(array_diff($originalToolNames, $filteredToolNames));
 
         $toolActions = [];
         $clientActions = [];
         $retryAttempts = [];
         $hookMetadata = [];
 
+        if ($removedTools !== []) {
+            $hookMetadata['pre_tool_registry_removed'] = $removedTools;
+        }
+
         yield ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => $runId]];
 
-        $iteration = 0;
-        $toolIndex = 0;
+        if ($removedTools !== []) {
+            yield ['event' => 'status', 'data' => [
+                'phase' => 'hook_action',
+                'stage' => 'pre_tool_registry',
+                'tools_removed' => $removedTools,
+                'run_id' => $runId,
+            ]];
+        }
 
         while (true) {
             // Hook: PreLlmCall
@@ -629,10 +668,42 @@ class AgenticRuntime
             foreach ($result['tool_calls'] as $toolCall) {
                 $functionName = (string) ($toolCall['function']['name'] ?? '');
                 $arguments = $this->decodeToolArguments($toolCall);
+                $toolCallId = (string) ($toolCall['id'] ?? '');
                 $argsSummary = Str::limit(
                     json_encode($arguments, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}',
                     200,
                 );
+
+                // Hook: PreToolUse — can deny the tool call
+                $hookVerdict = $this->hookCoordinator->preToolUse($runId, $employeeId, $functionName, $arguments, $hookMetadata);
+
+                if ($hookVerdict['denied']) {
+                    $denialMessage = 'Tool call denied: '.($hookVerdict['reason'] ?? 'denied by policy');
+
+                    $toolActions[] = [
+                        'tool' => $functionName,
+                        'arguments' => $arguments,
+                        'result_preview' => $denialMessage,
+                        'status' => 'denied',
+                        'denial_reason' => $hookVerdict['reason'],
+                    ];
+                    $apiMessages[] = [
+                        'role' => 'tool',
+                        'tool_call_id' => $toolCallId,
+                        'content' => $denialMessage,
+                    ];
+
+                    yield ['event' => 'status', 'data' => [
+                        'phase' => 'tool_denied',
+                        'tool' => $functionName,
+                        'reason' => $hookVerdict['reason'],
+                        'run_id' => $runId,
+                    ]];
+
+                    $toolIndex++;
+
+                    continue;
+                }
 
                 yield ['event' => 'status', 'data' => [
                     'phase' => 'tool_started',
@@ -900,6 +971,30 @@ class AgenticRuntime
         array &$hookMetadata,
     ): void {
         foreach ($toolCalls as $toolCall) {
+            $functionName = (string) ($toolCall['function']['name'] ?? '');
+            $arguments = $this->decodeToolArguments($toolCall);
+            $toolCallId = (string) ($toolCall['id'] ?? '');
+
+            $hookVerdict = $this->hookCoordinator->preToolUse($runId, $employeeId, $functionName, $arguments, $hookMetadata);
+
+            if ($hookVerdict['denied']) {
+                $denialMessage = 'Tool call denied: '.($hookVerdict['reason'] ?? 'denied by policy');
+                $toolActions[] = [
+                    'tool' => $functionName,
+                    'arguments' => $arguments,
+                    'result_preview' => $denialMessage,
+                    'status' => 'denied',
+                    'denial_reason' => $hookVerdict['reason'],
+                ];
+                $apiMessages[] = [
+                    'role' => 'tool',
+                    'tool_call_id' => $toolCallId,
+                    'content' => $denialMessage,
+                ];
+
+                continue;
+            }
+
             $toolExecution = $this->executeToolCall($toolCall);
 
             $toolActions[] = $toolExecution['action'];

@@ -377,6 +377,63 @@ class MessageManager
     }
 
     /**
+     * Compute cumulative token usage across all runs in a session.
+     *
+     * Uses ai_runs as the primary source (query-optimized). Falls back
+     * to transcript scanning only if no ai_runs rows exist.
+     *
+     * @return array{total_prompt_tokens: int|null, total_completion_tokens: int|null, run_count: int}
+     */
+    public function sessionUsage(int $employeeId, string $sessionId): array
+    {
+        $runs = AiRun::query()
+            ->where('employee_id', $employeeId)
+            ->where('session_id', $sessionId)
+            ->get(['prompt_tokens', 'completion_tokens']);
+
+        if ($runs->isNotEmpty()) {
+            return [
+                'total_prompt_tokens' => $runs->sum('prompt_tokens') ?: null,
+                'total_completion_tokens' => $runs->sum('completion_tokens') ?: null,
+                'run_count' => $runs->count(),
+            ];
+        }
+
+        // Fallback: reconstruct from transcript meta.tokens
+        $messages = $this->read($employeeId, $sessionId);
+        $promptTokens = 0;
+        $completionTokens = 0;
+        $runCount = 0;
+        $seenRuns = [];
+
+        foreach ($messages as $message) {
+            if ($message->type !== 'message' || $message->role !== 'assistant') {
+                continue;
+            }
+
+            $tokens = $message->meta['tokens'] ?? null;
+
+            if ($tokens === null) {
+                continue;
+            }
+
+            $promptTokens += (int) ($tokens['prompt'] ?? 0);
+            $completionTokens += (int) ($tokens['completion'] ?? 0);
+
+            if ($message->runId !== null && ! isset($seenRuns[$message->runId])) {
+                $seenRuns[$message->runId] = true;
+                $runCount++;
+            }
+        }
+
+        return [
+            'total_prompt_tokens' => $promptTokens > 0 ? $promptTokens : null,
+            'total_completion_tokens' => $completionTokens > 0 ? $completionTokens : null,
+            'run_count' => $runCount,
+        ];
+    }
+
+    /**
      * Build message-compatible meta array from an AiRun model.
      *
      * @return array<string, mixed>

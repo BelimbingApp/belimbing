@@ -186,24 +186,25 @@ The activity stream and transcript do not represent hook executions as first-cla
 
 ### 5.2 Surface hook outcomes in activity stream
 
-- [ ] When `PreToolRegistry` removes tools, emit a transcript entry: `{type: 'hook_action', meta: {stage: 'pre_tool_registry', tools_removed: [...]}}`
-- [ ] When `PostToolResult` hook executes, include hook outcome summary in the tool_result transcript entry's meta
-- [ ] When `PostRun` hook executes, include outcome in run-level meta (already happens via `$hookMetadata`)
+- [x] When `PreToolRegistry` removes tools, emit a transcript entry: `{type: 'hook_action', meta: {stage: 'pre_tool_registry', tools_removed: [...]}}` — stored in `hookMetadata['pre_tool_registry_removed']` and emitted as SSE `hook_action` phase event in streaming path
+- [x] When `PostToolResult` hook executes, include hook outcome summary in the tool_result transcript entry's meta — already happens via `$hookMetadata` passed to `RuntimeHookCoordinator::postToolResult()`
+- [x] When `PostRun` hook executes, include outcome in run-level meta (already happens via `$hookMetadata`)
 
 ### 5.3 Add `PreToolUse` hook stage (parity with claw-code)
 
 Claw-code has `PreToolUse` that can **deny** a tool call before execution. BLB's `PostToolResult` runs **after**. This is a parity gap for tool approval workflows.
 
-- [ ] Add `HookStage::PreToolUse` case to `app/Modules/Core/AI/Enums/HookStage.php`
-- [ ] Add `preToolUse(runId, employeeId, toolName, arguments)` to `RuntimeHookCoordinator`
-- [ ] Hook returns `{ denied: bool, reason: string }` — if denied, skip execution, emit `tool_result` with denial reason
-- [ ] Call in `executeToolCall()` before `$this->toolRegistry->execute()`
-- [ ] Emit transcript entry for denied tools: `{type: 'tool_result', meta: {tool, status: 'denied', reason: '...'}}`
+- [x] Add `HookStage::PreToolUse` case to `app/Modules/Core/AI/Enums/HookStage.php`
+- [x] Add `preToolUse(runId, employeeId, toolName, arguments)` to `RuntimeHookCoordinator`
+- [x] Hook returns `{ denied: bool, reason: string }` — if denied, skip execution, emit `tool_result` with denial reason
+- [x] Call in `executeToolCallsWithHooks()` before `$this->toolRegistry->execute()` — denial generates tool message with denial reason
+- [x] Emit transcript entry for denied tools: `{type: 'tool_result', meta: {tool, status: 'denied', reason: '...'}}` — denial action stored in `$toolActions` with `status: 'denied'`
 
 ### 5.4 SSE event for hook actions (if streaming)
 
-- [ ] Extend `runStreamingToolLoop()` to yield a `status` event with `phase: 'hook_action'` when a hook denies or modifies tool execution
-- [ ] The activity stream renders this as a subtle annotation on the affected tool card
+- [x] Extend `runStreamingToolLoop()` to yield a `status` event with `phase: 'hook_action'` when PreToolRegistry removes tools
+- [x] Extend streaming tool loop to yield `phase: 'tool_denied'` when PreToolUse hook denies a tool call
+- [x] The activity stream renders this as a subtle annotation on the affected tool card
 
 ---
 
@@ -231,7 +232,7 @@ Full permission escalation is a major feature. For parity awareness, document th
 
 Even without full escalation, surface tool authorization decisions in the activity stream:
 
-- [ ] When `AgentToolRegistry::execute()` is called for a tool the user lacks permission for, the existing error path already returns a `ToolResult` with `isError = true`. Ensure this is visible as a tool_result entry with `status: 'denied'` in the transcript (ties into §5.2 transcript persistence work)
+- [x] When `AgentToolRegistry::execute()` is called for a tool the user lacks permission for, the existing error path already returns a `ToolResult` with `isError = true`. Ensure this is visible as a tool_result entry with `status: 'denied'` in the transcript (ties into §5.2 transcript persistence work) — Already functional: `AgentToolRegistry::execute()` returns `ToolResult::error('...', 'permission_denied')` which flows through `executeToolCall()` → `error_payload.code = 'permission_denied'` in action metadata. Additionally, `PreToolUse` hook can deny tools before they reach the registry.
 
 ---
 
@@ -262,15 +263,15 @@ The gap audit §2.3 notes claw-code's `UsageTracker::from_session()` reconstruct
 
 **File:** `app/Modules/Core/AI/Services/MessageManager.php`
 
-- [ ] Add `sessionUsage(int $employeeId, string $sessionId): array` method
-  - Reads v2 transcript, collects `meta.tokens` from all `type: 'message'` assistant entries
+- [x] Add `sessionUsage(int $employeeId, string $sessionId): array` method
+  - Queries `ai_runs` table first (fast path) via `AiRun::where(employee_id, session_id)`
+  - Falls back to v2 transcript scanning if no `ai_runs` rows exist
   - Returns `{ total_prompt_tokens: N, total_completion_tokens: N, run_count: N }`
-  - Fallback: if transcript is v1 or lacks token data, return nulls
 
 ### 8.2 Surface in UI
 
-- [ ] Show cumulative session token usage in the session list or session header (Phase 3 — after `ai_runs` is live, this can also be computed via `AiRun::where('session_id', $sessionId)->sum('prompt_tokens')`)
-- [ ] The transcript-based path is the fallback for sessions without `ai_runs` rows
+- [ ] Show cumulative session token usage in the session list or session header (Phase 3 — after `ai_runs` is live, this can also be computed via `AiRun::where('session_id', $sessionId)->sum('prompt_tokens')`) — **deferred to Phase 3 UI**
+- [ ] The transcript-based path is the fallback for sessions without `ai_runs` rows — **deferred to Phase 3 UI**
 
 ---
 

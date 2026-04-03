@@ -325,24 +325,24 @@ The tool-calling loop should run until the model produces a final text response,
 
 ### 2.4 Implementation
 
-- [ ] Create `ExecutionPolicy` DTO: `mode` (interactive/background), `timeout_seconds`, `allow_retry`
-- [ ] `AgenticRuntime` accepts optional `ExecutionPolicy` parameter (overrides config defaults)
-- [ ] Config: `ai.llm.timeout_tiers` with interactive/heavy/background defaults
-- [ ] On timeout of an interactive run: return structured suggestion "This task may take longer. Run in background?" instead of generic retry
+- [x] Create `ExecutionPolicy` DTO: `mode` (interactive/background), `timeout_seconds`, `allow_retry` — `app/Modules/Core/AI/DTO/ExecutionPolicy.php`
+- [x] `AgenticRuntime` accepts optional `ExecutionPolicy` parameter (overrides config defaults) — 5th param on `run()` and `runStream()`
+- [x] Config: `ai.llm.timeout_tiers` with interactive/heavy/background defaults — `ExecutionPolicy::forMode()` reads from config with sensible fallbacks
+- [ ] On timeout of an interactive run: return structured suggestion "This task may take longer. Run in background?" instead of generic retry — **deferred to UI phase**
 
 ### 2.5 Background Chat Execution
 
-- [ ] Create `RunAgentChatJob` — chat-specific queued job (distinct from delegated-agent tasks)
-- [ ] Job flow: execute `AgenticRuntime::run()` → persist assistant message to session transcript → update `ai_runs` status
-- [ ] Chat UI shows progress for background runs:
+- [x] Create `RunAgentChatJob` — chat-specific queued job (distinct from delegated-agent tasks) — `app/Modules/Core/AI/Jobs/RunAgentChatJob.php`
+- [x] Job flow: execute `AgenticRuntime::run()` → persist assistant message to session transcript → update `ai_runs` status
+- [ ] Chat UI shows progress for background runs: — **deferred to UI phase**
   - "Queued…" → "Running: drafting document…" → "Completed" with response appended
   - Link to run detail page for full inspection
-- [ ] Progress stored in `ai_runs.meta` as `{progress: {phase, label, updated_at}}`
+- [ ] Progress stored in `ai_runs.meta` as `{progress: {phase, label, updated_at}}` — **deferred to UI phase**
 
 ### 2.6 Timeout Retry Policy Fix
 
-- [ ] When `AiErrorType::Timeout` occurs on a run that already used the full budget, do **not** retry with the same timeout
-- [ ] Only retry timeout if the failure was clearly transient (e.g., < 50% of budget elapsed)
+- [x] When `AiErrorType::Timeout` occurs on a run that already used the full budget, do **not** retry with the same timeout — in `chatWithRetry()` at latency >= 50% budget
+- [x] Only retry timeout if the failure was clearly transient (e.g., < 50% of budget elapsed)
 
 ---
 

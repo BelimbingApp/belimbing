@@ -150,6 +150,44 @@ class RuntimeHookCoordinator
     }
 
     /**
+     * Run pre-tool-use hooks. Can deny a tool call before execution.
+     *
+     * @param  array<string, mixed>  $arguments
+     * @param  array<string, array<string, mixed>>  $hookMetadata
+     * @return array{denied: bool, reason: string|null}
+     */
+    public function preToolUse(
+        string $runId,
+        int $employeeId,
+        string $toolName,
+        array $arguments,
+        array &$hookMetadata,
+    ): array {
+        if (! $this->hookRunner->hasHooksFor(HookStage::PreToolUse)) {
+            return ['denied' => false, 'reason' => null];
+        }
+
+        $result = $this->hookRunner->run(
+            HookStage::PreToolUse,
+            $this->buildPayload(
+                HookStage::PreToolUse,
+                $runId,
+                $employeeId,
+                ['tool_name' => $toolName, 'arguments' => $arguments],
+            ),
+        );
+
+        if ($result->hasExecutions()) {
+            $hookMetadata['pre_tool_use_'.$toolName] = $result->toArray();
+        }
+
+        $denied = (bool) ($result->augmentations['denied'] ?? false);
+        $reason = $denied ? ($result->augmentations['reason'] ?? 'Denied by hook') : null;
+
+        return ['denied' => $denied, 'reason' => $reason];
+    }
+
+    /**
      * @param  array<string, mixed>  $data
      */
     private function buildPayload(HookStage $stage, string $runId, int $employeeId, array $data = []): HookPayload

@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Jobs;
 
+use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
@@ -110,6 +111,7 @@ class RunAgentTaskJob implements ShouldQueue
                 employeeId: $dispatch->employee_id,
                 systemPrompt: $systemPrompt,
                 modelOverride: data_get($dispatch->meta, 'model_override'),
+                policy: ExecutionPolicy::background(),
             );
 
             $this->recordResult($dispatch, $result, $promptMeta);

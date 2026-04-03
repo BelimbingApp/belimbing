@@ -24,6 +24,9 @@ enum HookStage: string
     /** Immediately before each LLM API call. */
     case PreLlmCall = 'pre_llm_call';
 
+    /** Before a tool executes — can deny the call. */
+    case PreToolUse = 'pre_tool_use';
+
     /** After a tool executes and before its result feeds back to the LLM. */
     case PostToolResult = 'post_tool_result';
 
@@ -39,6 +42,7 @@ enum HookStage: string
             self::PreContextBuild => 'Pre-Context Build',
             self::PreToolRegistry => 'Pre-Tool Registry',
             self::PreLlmCall => 'Pre-LLM Call',
+            self::PreToolUse => 'Pre-Tool Use',
             self::PostToolResult => 'Post-Tool Result',
             self::PostRun => 'Post-Run',
         };
@@ -53,7 +57,7 @@ enum HookStage: string
     public function isPreCommit(): bool
     {
         return match ($this) {
-            self::PreContextBuild, self::PreToolRegistry, self::PreLlmCall => true,
+            self::PreContextBuild, self::PreToolRegistry, self::PreLlmCall, self::PreToolUse => true,
             self::PostToolResult, self::PostRun => false,
         };
     }

@@ -136,18 +136,18 @@ use App\Modules\Core\AI\Livewire\ControlPlane;
                                 </thead>
                                 <tbody class="bg-surface-card divide-y divide-border-default">
                                     @foreach($toolSnapshots as $snapshot)
-                                        <tr wire:key="tool-health-{{ $snapshot->targetId }}" class="hover:bg-surface-subtle/50 transition-colors">
-                                            <td class="px-table-cell-x py-table-cell-y font-medium text-ink">{{ $snapshot->targetId }}</td>
+                                        <tr wire:key="tool-health-{{ $snapshot['target_id'] }}" class="hover:bg-surface-subtle/50 transition-colors">
+                                            <td class="px-table-cell-x py-table-cell-y font-medium text-ink">{{ $snapshot['target_id'] }}</td>
                                             <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                                <x-ui.badge :variant="$snapshot->readiness->color()">{{ $snapshot->readiness->label() }}</x-ui.badge>
+                                                <x-ui.badge :variant="$snapshot['readiness_color']">{{ $snapshot['readiness_label'] }}</x-ui.badge>
                                             </td>
                                             <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                                <x-ui.badge :variant="$snapshot->health->color()">{{ $snapshot->health->label() }}</x-ui.badge>
+                                                <x-ui.badge :variant="$snapshot['health_color']">{{ $snapshot['health_label'] }}</x-ui.badge>
                                             </td>
                                             <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                                <x-ui.badge :variant="$snapshot->presence->color()">{{ $snapshot->presence->label() }}</x-ui.badge>
+                                                <x-ui.badge :variant="$snapshot['presence_color']">{{ $snapshot['presence_label'] }}</x-ui.badge>
                                             </td>
-                                            <td class="px-table-cell-x py-table-cell-y text-xs text-muted hidden md:table-cell">{{ $snapshot->explanation }}</td>
+                                            <td class="px-table-cell-x py-table-cell-y text-xs text-muted hidden md:table-cell">{{ $snapshot['explanation'] }}</td>
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -178,22 +178,22 @@ use App\Modules\Core\AI\Livewire\ControlPlane;
                         <div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
                             <div>
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Readiness') }}</span>
-                                <div class="mt-1"><x-ui.badge :variant="$agentSnapshot->readiness->color()">{{ $agentSnapshot->readiness->label() }}</x-ui.badge></div>
+                                <div class="mt-1"><x-ui.badge :variant="$agentSnapshot['readiness_color']">{{ $agentSnapshot['readiness_label'] }}</x-ui.badge></div>
                             </div>
                             <div>
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Health') }}</span>
-                                <div class="mt-1"><x-ui.badge :variant="$agentSnapshot->health->color()">{{ $agentSnapshot->health->label() }}</x-ui.badge></div>
+                                <div class="mt-1"><x-ui.badge :variant="$agentSnapshot['health_color']">{{ $agentSnapshot['health_label'] }}</x-ui.badge></div>
                             </div>
                             <div>
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Presence') }}</span>
-                                <div class="mt-1"><x-ui.badge :variant="$agentSnapshot->presence->color()">{{ $agentSnapshot->presence->label() }}</x-ui.badge></div>
+                                <div class="mt-1"><x-ui.badge :variant="$agentSnapshot['presence_color']">{{ $agentSnapshot['presence_label'] }}</x-ui.badge></div>
                             </div>
                             <div>
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Measured') }}</span>
-                                <div class="mt-1 text-sm text-ink tabular-nums">{{ $agentSnapshot->measuredAt }}</div>
+                                <div class="mt-1 text-sm text-ink tabular-nums">{{ $agentSnapshot['measured_at'] }}</div>
                             </div>
                         </div>
-                        <p class="mt-2 text-xs text-muted">{{ $agentSnapshot->explanation }}</p>
+                        <p class="mt-2 text-xs text-muted">{{ $agentSnapshot['explanation'] }}</p>
                     @endif
                 </x-ui.card>
             </div>
@@ -291,30 +291,30 @@ use App\Modules\Core\AI\Livewire\ControlPlane;
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
                             <div>
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Action') }}</span>
-                                <p class="text-sm text-ink mt-1">{{ $lifecyclePreview->action->label() }}</p>
+                                <p class="text-sm text-ink mt-1">{{ $lifecyclePreview['action_label'] }}</p>
                             </div>
                             <div>
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Affected') }}</span>
-                                <p class="text-sm text-ink mt-1 tabular-nums">{{ $lifecyclePreview->affectedCount }}</p>
+                                <p class="text-sm text-ink mt-1 tabular-nums">{{ $lifecyclePreview['affected_count'] }}</p>
                             </div>
                             <div>
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Destructive') }}</span>
                                 <p class="mt-1">
-                                    <x-ui.badge :variant="$lifecyclePreview->isDestructive ? 'danger' : 'success'">
-                                        {{ $lifecyclePreview->isDestructive ? __('Yes') : __('No') }}
+                                    <x-ui.badge :variant="$lifecyclePreview['is_destructive'] ? 'danger' : 'success'">
+                                        {{ $lifecyclePreview['is_destructive'] ? __('Yes') : __('No') }}
                                     </x-ui.badge>
                                 </p>
                             </div>
                             <div>
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Generated') }}</span>
-                                <p class="text-sm text-ink mt-1 tabular-nums">{{ $lifecyclePreview->generatedAt }}</p>
+                                <p class="text-sm text-ink mt-1 tabular-nums">{{ $lifecyclePreview['generated_at'] }}</p>
                             </div>
                         </div>
-                        @if($lifecyclePreview->affectedSummary !== [])
+                        @if($lifecyclePreview['affected_summary'] !== [])
                             <div class="border-t border-border-default pt-3">
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Summary') }}</span>
                                 <ul class="mt-1 space-y-1">
-                                    @foreach($lifecyclePreview->affectedSummary as $line)
+                                    @foreach($lifecyclePreview['affected_summary'] as $line)
                                         <li class="text-sm text-muted">{{ $line }}</li>
                                     @endforeach
                                 </ul>
@@ -330,27 +330,27 @@ use App\Modules\Core\AI\Livewire\ControlPlane;
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             <div>
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Request ID') }}</span>
-                                <p class="text-sm text-ink mt-1 font-mono tabular-nums">{{ $lifecycleResult->requestId }}</p>
+                                <p class="text-sm text-ink mt-1 font-mono tabular-nums">{{ $lifecycleResult['request_id'] }}</p>
                             </div>
                             <div>
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Status') }}</span>
-                                <p class="mt-1"><x-ui.badge :variant="$lifecycleResult->status->color()">{{ $lifecycleResult->status->label() }}</x-ui.badge></p>
+                                <p class="mt-1"><x-ui.badge :variant="$lifecycleResult['status_color']">{{ $lifecycleResult['status_label'] }}</x-ui.badge></p>
                             </div>
                             <div>
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Executed') }}</span>
-                                <p class="text-sm text-ink mt-1 tabular-nums">{{ $lifecycleResult->executedAt ?? '—' }}</p>
+                                <p class="text-sm text-ink mt-1 tabular-nums">{{ $lifecycleResult['executed_at'] ?? '—' }}</p>
                             </div>
-                            @if($lifecycleResult->errorMessage)
+                            @if($lifecycleResult['error_message'])
                                 <div>
                                     <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Error') }}</span>
-                                    <p class="text-sm text-danger mt-1">{{ $lifecycleResult->errorMessage }}</p>
+                                    <p class="text-sm text-danger mt-1">{{ $lifecycleResult['error_message'] }}</p>
                                 </div>
                             @endif
                         </div>
-                        @if($lifecycleResult->result)
+                        @if($lifecycleResult['result'])
                             <div class="border-t border-border-default pt-3 mt-3">
                                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Result') }}</span>
-                                <pre class="mt-1 text-xs text-muted bg-surface-subtle rounded-lg p-3 overflow-x-auto">{{ json_encode($lifecycleResult->result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                                <pre class="mt-1 text-xs text-muted bg-surface-subtle rounded-lg p-3 overflow-x-auto">{{ json_encode($lifecycleResult['result'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
                             </div>
                         @endif
                     </x-ui.card>
@@ -379,14 +379,14 @@ use App\Modules\Core\AI\Livewire\ControlPlane;
                                 </thead>
                                 <tbody class="bg-surface-card divide-y divide-border-default">
                                     @foreach($recentLifecycleRequests as $req)
-                                        <tr wire:key="lc-{{ $req->requestId }}" class="hover:bg-surface-subtle/50 transition-colors">
-                                            <td class="px-table-cell-x py-table-cell-y font-mono text-xs tabular-nums">{{ $req->requestId }}</td>
-                                            <td class="px-table-cell-x py-table-cell-y">{{ $req->action->label() }}</td>
+                                        <tr wire:key="lc-{{ $req['request_id'] }}" class="hover:bg-surface-subtle/50 transition-colors">
+                                            <td class="px-table-cell-x py-table-cell-y font-mono text-xs tabular-nums">{{ $req['request_id'] }}</td>
+                                            <td class="px-table-cell-x py-table-cell-y">{{ $req['action_label'] }}</td>
                                             <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                                <x-ui.badge :variant="$req->status->color()">{{ $req->status->label() }}</x-ui.badge>
+                                                <x-ui.badge :variant="$req['status_color']">{{ $req['status_label'] }}</x-ui.badge>
                                             </td>
-                                            <td class="px-table-cell-x py-table-cell-y text-xs text-muted tabular-nums hidden md:table-cell">{{ $req->createdAt }}</td>
-                                            <td class="px-table-cell-x py-table-cell-y text-xs text-muted tabular-nums hidden lg:table-cell">{{ $req->executedAt ?? '—' }}</td>
+                                            <td class="px-table-cell-x py-table-cell-y text-xs text-muted tabular-nums hidden md:table-cell">{{ $req['created_at'] }}</td>
+                                            <td class="px-table-cell-x py-table-cell-y text-xs text-muted tabular-nums hidden lg:table-cell">{{ $req['executed_at'] ?? '—' }}</td>
                                         </tr>
                                     @endforeach
                                 </tbody>

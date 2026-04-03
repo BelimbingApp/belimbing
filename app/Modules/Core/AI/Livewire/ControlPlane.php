@@ -28,19 +28,21 @@ class ControlPlane extends Component
 
     public int $inspectEmployeeId = 0;
 
-    /** @var list<RunInspection> */
+    /** @var list<array<string, mixed>> */
     public array $runInspections = [];
 
-    public ?RunInspection $singleRunInspection = null;
+    /** @var array<string, mixed>|null */
+    public ?array $singleRunInspection = null;
 
     public string $inspectionError = '';
 
     // -- Health & Presence state --
 
-    /** @var list<HealthSnapshot> */
+    /** @var list<array<string, mixed>> */
     public array $toolSnapshots = [];
 
-    public ?HealthSnapshot $agentSnapshot = null;
+    /** @var array<string, mixed>|null */
+    public ?array $agentSnapshot = null;
 
     public int $healthAgentId = 0;
 
@@ -56,13 +58,15 @@ class ControlPlane extends Component
 
     public string $lifecycleSessionId = '';
 
-    public ?LifecyclePreview $lifecyclePreview = null;
+    /** @var array<string, mixed>|null */
+    public ?array $lifecyclePreview = null;
 
-    public ?LifecycleRequestDTO $lifecycleResult = null;
+    /** @var array<string, mixed>|null */
+    public ?array $lifecycleResult = null;
 
     public string $lifecycleError = '';
 
-    /** @var list<LifecycleRequestDTO> */
+    /** @var list<array<string, mixed>> */
     public array $recentLifecycleRequests = [];
 
     // ---------------------------------------------------------------
@@ -91,7 +95,7 @@ class ControlPlane extends Component
             return;
         }
 
-        $this->singleRunInspection = $result;
+        $this->singleRunInspection = $this->mapRunInspection($result);
     }
 
     /**
@@ -119,7 +123,7 @@ class ControlPlane extends Component
             return;
         }
 
-        $this->runInspections = $results;
+        $this->runInspections = array_map(fn (RunInspection $run): array => $this->mapRunInspection($run), $results);
     }
 
     // ---------------------------------------------------------------
@@ -132,7 +136,7 @@ class ControlPlane extends Component
     public function loadToolSnapshots(): void
     {
         $service = app(HealthAndPresenceService::class);
-        $this->toolSnapshots = $service->allToolSnapshots();
+        $this->toolSnapshots = array_map(fn (HealthSnapshot $snapshot): array => $this->mapHealthSnapshot($snapshot), $service->allToolSnapshots());
     }
 
     /**
@@ -147,7 +151,7 @@ class ControlPlane extends Component
         }
 
         $service = app(HealthAndPresenceService::class);
-        $this->agentSnapshot = $service->agentSnapshot($this->healthAgentId);
+        $this->agentSnapshot = $this->mapHealthSnapshot($service->agentSnapshot($this->healthAgentId));
     }
 
     // ---------------------------------------------------------------
@@ -172,7 +176,7 @@ class ControlPlane extends Component
         }
 
         $service = app(LifecycleControlService::class);
-        $this->lifecyclePreview = $service->preview($action, $this->buildLifecycleScope($action));
+        $this->lifecyclePreview = $this->mapLifecyclePreview($service->preview($action, $this->buildLifecycleScope($action)));
     }
 
     /**
@@ -192,11 +196,11 @@ class ControlPlane extends Component
         }
 
         $service = app(LifecycleControlService::class);
-        $this->lifecycleResult = $service->execute(
+        $this->lifecycleResult = $this->mapLifecycleRequest($service->execute(
             $action,
             $this->buildLifecycleScope($action),
             requestedBy: auth()->id(),
-        );
+        ));
 
         // Refresh recent requests
         $this->loadRecentLifecycleRequests();
@@ -208,7 +212,7 @@ class ControlPlane extends Component
     public function loadRecentLifecycleRequests(): void
     {
         $service = app(LifecycleControlService::class);
-        $this->recentLifecycleRequests = $service->recent(10);
+        $this->recentLifecycleRequests = array_map(fn (LifecycleRequestDTO $request): array => $this->mapLifecycleRequest($request), $service->recent(10));
     }
 
     // ---------------------------------------------------------------
@@ -263,5 +267,67 @@ class ControlPlane extends Component
                 'stale_minutes' => $this->lifecycleStaleMinutes,
             ],
         };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapRunInspection(RunInspection $run): array
+    {
+        $data = $run->toArray();
+        $status = $run->status;
+
+        $data['status_label'] = $status?->label();
+        $data['status_color'] = $status?->color();
+        $data['outcome_label'] = ucfirst((string) $data['outcome']);
+        $data['outcome_color'] = match ($data['outcome']) {
+            'success' => 'success',
+            'error' => 'danger',
+            default => 'default',
+        };
+
+        return $data;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapHealthSnapshot(HealthSnapshot $snapshot): array
+    {
+        $data = $snapshot->toArray();
+
+        $data['readiness_label'] = $snapshot->readiness->label();
+        $data['readiness_color'] = $snapshot->readiness->color();
+        $data['health_label'] = $snapshot->health->label();
+        $data['health_color'] = $snapshot->health->color();
+        $data['presence_label'] = $snapshot->presence->label();
+        $data['presence_color'] = $snapshot->presence->color();
+
+        return $data;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapLifecyclePreview(LifecyclePreview $preview): array
+    {
+        $data = $preview->toArray();
+        $data['action_label'] = $preview->action->label();
+
+        return $data;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapLifecycleRequest(LifecycleRequestDTO $request): array
+    {
+        $data = $request->toArray();
+        $data['action_label'] = $request->action->label();
+        $data['status_label'] = $request->status->label();
+        $data['status_color'] = $request->status->color();
+        $data['preview'] = $request->preview ? $this->mapLifecyclePreview($request->preview) : null;
+
+        return $data;
     }
 }

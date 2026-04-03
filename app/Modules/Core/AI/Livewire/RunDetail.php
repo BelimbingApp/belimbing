@@ -7,7 +7,6 @@
 
 namespace App\Modules\Core\AI\Livewire;
 
-use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\ControlPlane\RunInspectionService;
@@ -20,7 +19,8 @@ class RunDetail extends Component
 {
     public string $runId;
 
-    public ?RunInspection $inspection = null;
+    /** @var array<string, mixed>|null */
+    public ?array $inspection = null;
 
     /** @var list<Message> */
     public array $transcript = [];
@@ -46,7 +46,8 @@ class RunDetail extends Component
             throw new NotFoundHttpException(__('Run not found.'));
         }
 
-        $this->inspection = app(RunInspectionService::class)->inspectRun($runId);
+        $inspection = app(RunInspectionService::class)->inspectRun($runId);
+        $this->inspection = $inspection?->toArray();
         $this->loadTranscript($run);
     }
 

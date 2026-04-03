@@ -40,6 +40,16 @@
 | Source-of-truth hierarchy — `reconstructFromTranscript()`, usage in transcript, `ai_runs`-first inspection (`03-runtime-parity-todo.md` §2) | ✅ |
 | Session DTO cleanup — `$runs` removed, `transcriptVersion` added, stale methods removed (`03-runtime-parity-todo.md` §3) | ✅ |
 | `AiRuntimeLogger` removal — all consumers migrated, class deleted, channel removed (`03-runtime-parity-todo.md` §4) | ✅ |
+| `ExecutionPolicy` DTO — three-tier timeout with `interactive()`, `heavyForeground()`, `background()` factories (`ai-run-ledger.md` §2.4) | ✅ |
+| `AgenticRuntime` policy threading — `?ExecutionPolicy` param on `run()`/`runStream()`, timeout override (`ai-run-ledger.md` §2.4) | ✅ |
+| `RunAgentChatJob` — background chat execution via queue (`ai-run-ledger.md` §2.5) | ✅ |
+| Timeout retry fix — skip retry when latency >= 50% of budget (`ai-run-ledger.md` §2.6) | ✅ |
+| `HookStage::PreToolUse` — hook stage that can deny tool calls before execution (`03-runtime-parity-todo.md` §5.3) | ✅ |
+| `RuntimeHookCoordinator::preToolUse()` — pre-tool-use hook with deny/reason outcome (`03-runtime-parity-todo.md` §5.3) | ✅ |
+| Hook wiring in `AgenticRuntime` — `preToolUse` in both sync and streaming paths, denial handling (`03-runtime-parity-todo.md` §5.3–5.4) | ✅ |
+| PreToolRegistry tool removal tracking — detect removed tools, store in hookMetadata, emit SSE event (`03-runtime-parity-todo.md` §5.2) | ✅ |
+| Tool auth denial visibility — `AgentToolRegistry` permission_denied flows through error_payload, plus PreToolUse hook denial (`03-runtime-parity-todo.md` §6.3) | ✅ |
+| `sessionUsage()` — session-level token aggregation via `ai_runs` with transcript fallback (`03-runtime-parity-todo.md` §8) | ✅ |
 
 ---
 
@@ -152,17 +162,30 @@ These finish Phase 0. None depend on each other.
 
 ### Tier 6: Phase 2 (independent — after Phase 0+1 stable)
 
-- [ ] **Execution policy** — `ai-run-ledger.md` §2.3–2.6
-  - `ExecutionPolicy` DTO, three-tier timeout config
-  - `RunAgentChatJob` for background chat execution
-  - Timeout retry policy fix
+- [x] **Execution policy** — `ai-run-ledger.md` §2.3–2.6
+  - `ExecutionPolicy` DTO with `interactive()`, `heavyForeground()`, `background()` factory methods
+  - `ExecutionMode` enum: `Interactive`, `HeavyForeground`, `Background`
+  - `AgenticRuntime` accepts `?ExecutionPolicy` on `run()`/`runStream()`, overrides timeout
+  - `RunAgentChatJob` for background chat execution, uses `ExecutionPolicy::background()`
+  - Timeout retry fix: skip retry when latency >= 50% of budget
+  - Background jobs (`RunAgentTaskJob`, `SpawnAgentSessionJob`) now pass `ExecutionPolicy::background()`
+  - **Deferred:** Interactive timeout → background suggestion UI, progress tracking in `ai_runs.meta`
 
 ### Tier 7: P2 Parity Items (deferred — after Phase 2)
 
-- [ ] **Hook outcome visibility** — `03-runtime-parity-todo.md` §5
-- [ ] **Approval/permission escalation observability** — `03-runtime-parity-todo.md` §6
-- [ ] **Sandbox observability** — `03-runtime-parity-todo.md` §7
-- [ ] **Usage reconstruction** — `03-runtime-parity-todo.md` §8
+- [x] **Hook outcome visibility** — `03-runtime-parity-todo.md` §5
+  - `HookStage::PreToolUse` added, `RuntimeHookCoordinator::preToolUse()` implemented
+  - `executeToolCallsWithHooks()` calls `preToolUse()` before tool execution; denied tools get denial message as tool_result
+  - Streaming path emits `tool_denied` and `hook_action` SSE events
+  - PreToolRegistry tool removal tracked in `hookMetadata['pre_tool_registry_removed']`
+- [x] **Approval/permission escalation observability** — `03-runtime-parity-todo.md` §6
+  - §6.2: Documented in Runtime Parity Appendix (design deferred)
+  - §6.3: Tool auth denial visible via `error_payload.code = 'permission_denied'` + PreToolUse hook denial
+- [x] **Sandbox observability** — `03-runtime-parity-todo.md` §7
+  - §7.2: Documented in Runtime Parity Appendix (design deferred — no sandbox infrastructure yet)
+- [x] **Usage reconstruction** — `03-runtime-parity-todo.md` §8
+  - `MessageManager::sessionUsage()` queries `ai_runs` first, transcript fallback
+  - UI surface deferred to Phase 3
 
 ---
 

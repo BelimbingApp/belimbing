@@ -1,42 +1,40 @@
 <?php
 
-use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
-
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-/** @var RunInspection $run */
+/** @var array<string, mixed> $run */
 ?>
 <div class="space-y-3">
     {{-- Key facts row --}}
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Run ID') }}</span>
-            <p class="text-sm text-ink mt-1 font-mono tabular-nums">{{ $run->runId }}</p>
+            <p class="text-sm text-ink mt-1 font-mono tabular-nums">{{ $run['run_id'] }}</p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Status') }}</span>
             <p class="mt-1">
-                @if($run->status)
-                    <x-ui.badge :variant="$run->status->color()">
-                        {{ $run->status->label() }}
+                @if($run['status_label'])
+                    <x-ui.badge :variant="$run['status_color']">
+                        {{ $run['status_label'] }}
                     </x-ui.badge>
                 @else
-                    <x-ui.badge :variant="$run->outcome === 'success' ? 'success' : ($run->outcome === 'error' ? 'danger' : 'default')">
-                        {{ ucfirst($run->outcome) }}
+                    <x-ui.badge :variant="$run['outcome_color']">
+                        {{ $run['outcome_label'] }}
                     </x-ui.badge>
                 @endif
             </p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Provider / Model') }}</span>
-            <p class="text-sm text-ink mt-1">{{ $run->provider }} / {{ $run->model }}</p>
+            <p class="text-sm text-ink mt-1">{{ $run['provider'] }} / {{ $run['model'] }}</p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Source') }}</span>
             <p class="mt-1">
-                @if($run->source !== '')
-                    <x-ui.badge variant="default">{{ $run->source }}</x-ui.badge>
+                @if($run['source'] !== '')
+                    <x-ui.badge variant="default">{{ $run['source'] }}</x-ui.badge>
                 @else
                     <span class="text-sm text-muted">—</span>
                 @endif
@@ -48,19 +46,19 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Execution Mode') }}</span>
-            <p class="text-sm text-ink mt-1">{{ $run->executionMode !== '' ? ucfirst($run->executionMode) : '—' }}</p>
+            <p class="text-sm text-ink mt-1">{{ $run['execution_mode'] !== '' ? ucfirst($run['execution_mode']) : '—' }}</p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Latency') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->latencyMs !== null ? $run->latencyMs . ' ms' : '—' }}</p>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['latency_ms'] !== null ? $run['latency_ms'] . ' ms' : '—' }}</p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Timeout Budget') }}</span>
             <p class="text-sm text-ink mt-1 tabular-nums">
-                @if($run->timeoutSeconds !== null)
-                    {{ number_format($run->timeoutSeconds) }}s
-                    @if($run->latencyMs !== null)
-                        <span class="text-muted">(used {{ number_format($run->latencyMs / 1000, 1) }}s)</span>
+                @if($run['timeout_seconds'] !== null)
+                    {{ number_format($run['timeout_seconds']) }}s
+                    @if($run['latency_ms'] !== null)
+                        <span class="text-muted">(used {{ number_format($run['latency_ms'] / 1000, 1) }}s)</span>
                     @endif
                 @else
                     —
@@ -69,7 +67,7 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Acting For User') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->actingForUserId ?? '—' }}</p>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['acting_for_user_id'] ?? '—' }}</p>
         </div>
     </div>
 
@@ -77,19 +75,19 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Tokens (prompt)') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->tokens['prompt'] ?? '—' }}</p>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['tokens']['prompt'] ?? '—' }}</p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Tokens (completion)') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->tokens['completion'] ?? '—' }}</p>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['tokens']['completion'] ?? '—' }}</p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Retries') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->retryAttempts }}</p>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['retry_attempts'] }}</p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Recorded') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->recordedAt }}</p>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['recorded_at'] }}</p>
         </div>
     </div>
 
@@ -97,15 +95,15 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Started At') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->startedAt ?? '—' }}</p>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['started_at'] ?? '—' }}</p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Finished At') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->finishedAt ?? '—' }}</p>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['finished_at'] ?? '—' }}</p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Employee') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run->employeeId }}</p>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['employee_id'] }}</p>
         </div>
     </div>
 
@@ -113,20 +111,20 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Session') }}</span>
-            <p class="text-sm text-ink mt-1 font-mono tabular-nums">{{ $run->sessionId }}</p>
+            <p class="text-sm text-ink mt-1 font-mono tabular-nums">{{ $run['session_id'] }}</p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Dispatch') }}</span>
-            <p class="text-sm text-ink mt-1 font-mono tabular-nums">{{ $run->dispatchId ?? '—' }}</p>
+            <p class="text-sm text-ink mt-1 font-mono tabular-nums">{{ $run['dispatch_id'] ?? '—' }}</p>
         </div>
     </div>
 
     {{-- Tool actions --}}
-    @if($run->toolActions !== [])
+    @if($run['tool_actions'] !== [])
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Tool Actions') }}</span>
             <div class="mt-1 flex flex-wrap gap-1.5">
-                @foreach($run->toolActions as $action)
+                @foreach($run['tool_actions'] as $action)
                     <x-ui.badge variant="default">
                         {{ $action['tool'] }}
                         @if($action['result_length'] !== null)
@@ -139,11 +137,11 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
     @endif
 
     {{-- Fallback attempts --}}
-    @if($run->fallbackAttempts !== [])
+    @if($run['fallback_attempts'] !== [])
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Fallback Attempts') }}</span>
             <div class="mt-1 space-y-1">
-                @foreach($run->fallbackAttempts as $attempt)
+                @foreach($run['fallback_attempts'] as $attempt)
                     <p class="text-xs text-muted">
                         {{ $attempt['provider'] ?? '?' }} / {{ $attempt['model'] ?? '?' }}
                         — <span class="text-danger">{{ $attempt['error'] ?? __('unknown error') }}</span>
@@ -154,14 +152,14 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
     @endif
 
     {{-- Error details --}}
-    @if($run->errorType || $run->errorMessage)
+    @if($run['error_type'] || $run['error_message'])
         <div class="rounded-lg bg-surface-subtle p-3">
             <span class="text-[11px] uppercase tracking-wider font-semibold text-danger">{{ __('Error') }}</span>
-            @if($run->errorType)
-                <p class="text-xs text-muted mt-1">{{ __('Type') }}: {{ $run->errorType }}</p>
+            @if($run['error_type'])
+                <p class="text-xs text-muted mt-1">{{ __('Type') }}: {{ $run['error_type'] }}</p>
             @endif
-            @if($run->errorMessage)
-                <p class="text-sm text-danger mt-1">{{ $run->errorMessage }}</p>
+            @if($run['error_message'])
+                <p class="text-sm text-danger mt-1">{{ $run['error_message'] }}</p>
             @endif
         </div>
     @endif
