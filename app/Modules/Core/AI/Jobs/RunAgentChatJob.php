@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Jobs;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
+use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
@@ -19,16 +20,14 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 /**
  * Queue job that executes a chat message through the agentic runtime in the background.
  *
- * Unlike RunAgentTaskJob (which works with OperationDispatch), this job
- * operates directly on a chat session. It runs the agentic tool-calling
- * loop with a background execution policy and persists the assistant
- * response to the session transcript.
- *
- * Status lifecycle: queued → running → completed/failed.
+ * Tracks lifecycle through OperationDispatch (queued → running → succeeded/failed).
+ * Runs the agentic tool-calling loop with a background execution policy and
+ * persists the assistant response to the session transcript.
  */
 class RunAgentChatJob implements ShouldQueue
 {
@@ -45,18 +44,10 @@ class RunAgentChatJob implements ShouldQueue
     public int $timeout = 600;
 
     /**
-     * @param  int  $employeeId  The AI employee running the chat
-     * @param  string  $sessionId  The chat session UUID
-     * @param  string  $userMessage  The user's message content
-     * @param  string|null  $modelOverride  Optional model selection override
-     * @param  int|null  $actingForUserId  The human user on whose behalf
+     * @param  string  $dispatchId  The ai_operation_dispatches primary key
      */
     public function __construct(
-        public int $employeeId,
-        public string $sessionId,
-        public string $userMessage,
-        public ?string $modelOverride = null,
-        public ?int $actingForUserId = null,
+        public string $dispatchId,
     ) {
         $this->onQueue(self::QUEUE);
     }
@@ -66,7 +57,7 @@ class RunAgentChatJob implements ShouldQueue
      */
     public function displayName(): string
     {
-        return 'RunAgentChat['.$this->sessionId.']';
+        return 'RunAgentChat['.$this->dispatchId.']';
     }
 
     /**
@@ -77,44 +68,66 @@ class RunAgentChatJob implements ShouldQueue
         MessageManager $messageManager,
         RuntimeResponseFactory $responseFactory,
     ): void {
+        $dispatch = OperationDispatch::query()->find($this->dispatchId);
+
+        if ($dispatch === null || $dispatch->isTerminal()) {
+            return;
+        }
+
+        $dispatch->markRunning();
+
+        $employeeId = (int) $dispatch->employee_id;
+        $sessionId = (string) data_get($dispatch->meta, 'session_id');
+        $modelOverride = data_get($dispatch->meta, 'model_override');
+        $actingForUserId = $dispatch->acting_for_user_id;
+
         try {
-            if ($this->actingForUserId !== null) {
-                Auth::loginUsingId($this->actingForUserId);
+            if ($actingForUserId !== null) {
+                Auth::loginUsingId($actingForUserId);
             }
 
-            $messages = $messageManager->read($this->employeeId, $this->sessionId);
-
-            $systemPrompt = $this->resolveSystemPrompt();
+            $messages = $messageManager->read($employeeId, $sessionId);
+            $systemPrompt = $this->resolveSystemPrompt($employeeId, $dispatch->task);
 
             $result = $runtime->run(
                 messages: $messages,
-                employeeId: $this->employeeId,
+                employeeId: $employeeId,
                 systemPrompt: $systemPrompt,
-                modelOverride: $this->modelOverride,
+                modelOverride: $modelOverride,
                 policy: ExecutionPolicy::background(),
             );
 
             $messageManager->appendAssistantMessage(
-                $this->employeeId,
-                $this->sessionId,
+                $employeeId,
+                $sessionId,
                 $result['content'],
                 $result['run_id'],
+                $result['meta'],
+            );
+
+            $dispatch->markSucceeded(
+                $result['run_id'],
+                Str::limit($result['content'], 200),
                 $result['meta'],
             );
         } catch (\Throwable $e) {
             report($e);
 
-            $runId = 'run_'.str()->random(12);
+            $runId = 'run_'.Str::random(12);
             $error = AiRuntimeError::unexpected($e->getMessage());
             $fallback = $responseFactory->error($runId, 'unknown', 'unknown', $error);
 
             $messageManager->appendAssistantMessage(
-                $this->employeeId,
-                $this->sessionId,
+                $employeeId,
+                $sessionId,
                 $fallback['content'],
                 $fallback['run_id'],
                 $fallback['meta'],
             );
+
+            if (! $dispatch->isTerminal()) {
+                $dispatch->markFailed($e->getMessage());
+            }
 
             throw $e;
         } finally {
@@ -129,11 +142,11 @@ class RunAgentChatJob implements ShouldQueue
      * Returns null for employees without a dedicated prompt factory — the
      * runtime falls back to its default system prompt.
      */
-    private function resolveSystemPrompt(): ?string
+    private function resolveSystemPrompt(int $employeeId, string $userMessage): ?string
     {
-        if ($this->employeeId === Employee::LARA_ID) {
+        if ($employeeId === Employee::LARA_ID) {
             $factory = app(LaraPromptFactory::class);
-            $package = $factory->buildPackage($this->userMessage);
+            $package = $factory->buildPackage($userMessage);
 
             return app(PromptRenderer::class)->render($package);
         }

@@ -24,13 +24,16 @@ enum OperationType: string
     /** Child agent session spawned through orchestration. */
     case ChildSession = 'child_session';
 
+    /** Interactive chat message offloaded to background queue. */
+    case BackgroundChat = 'background_chat';
+
     /**
      * Determine whether the operation type targets an agent employee.
      */
     public function targetsAgent(): bool
     {
         return match ($this) {
-            self::AgentTask, self::ScheduledTask, self::ChildSession => true,
+            self::AgentTask, self::ScheduledTask, self::ChildSession, self::BackgroundChat => true,
             self::BackgroundCommand => false,
         };
     }
@@ -45,6 +48,7 @@ enum OperationType: string
             self::ScheduledTask => 'Scheduled Task',
             self::BackgroundCommand => 'Background Command',
             self::ChildSession => 'Child Session',
+            self::BackgroundChat => 'Background Chat',
         };
     }
 }

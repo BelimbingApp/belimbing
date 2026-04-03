@@ -270,8 +270,8 @@ The gap audit §2.3 notes claw-code's `UsageTracker::from_session()` reconstruct
 
 ### 8.2 Surface in UI
 
-- [ ] Show cumulative session token usage in the session list or session header (Phase 3 — after `ai_runs` is live, this can also be computed via `AiRun::where('session_id', $sessionId)->sum('prompt_tokens')`) — **deferred to Phase 3 UI**
-- [ ] The transcript-based path is the fallback for sessions without `ai_runs` rows — **deferred to Phase 3 UI**
+- [x] Show cumulative session token usage in the chat composer area — token counter displayed next to model picker, showing total tokens + run count in tooltip
+- [x] The `sessionUsage()` method queries `ai_runs` first (fast DB path), falls back to transcript scanning for sessions without `ai_runs` rows
 
 ---
 

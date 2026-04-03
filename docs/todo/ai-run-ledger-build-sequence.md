@@ -50,6 +50,10 @@
 | PreToolRegistry tool removal tracking — detect removed tools, store in hookMetadata, emit SSE event (`03-runtime-parity-todo.md` §5.2) | ✅ |
 | Tool auth denial visibility — `AgentToolRegistry` permission_denied flows through error_payload, plus PreToolUse hook denial (`03-runtime-parity-todo.md` §6.3) | ✅ |
 | `sessionUsage()` — session-level token aggregation via `ai_runs` with transcript fallback (`03-runtime-parity-todo.md` §8) | ✅ |
+| Background chat UX — `HandlesBackgroundChat` trait, timeout→background offload, polling UI (`ai-run-ledger.md` §2.4–2.5) | ✅ |
+| `RunAgentChatJob` via `OperationDispatch` — lifecycle tracking with queued/running/succeeded/failed (`ai-run-ledger.md` §2.5) | ✅ |
+| `OperationType::BackgroundChat` — new enum case for background chat dispatches | ✅ |
+| Session token usage display — cumulative token counter in chat composer area (`03-runtime-parity-todo.md` §8.2) | ✅ |
 
 ---
 

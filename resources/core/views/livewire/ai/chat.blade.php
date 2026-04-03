@@ -596,6 +596,67 @@
                         </div>
                     </div>
 
+                    {{-- Background run progress banner --}}
+                    @if ($backgroundDispatchId)
+                        <div
+                            x-data="{
+                                status: 'queued',
+                                label: '{{ __('Queued…') }}',
+                                finished: false,
+                                error: null,
+                                polling: null,
+                                init() {
+                                    this.polling = setInterval(() => this.poll(), 3000);
+                                },
+                                async poll() {
+                                    const result = await $wire.pollBackgroundChat();
+                                    this.status = result.status;
+                                    this.label = result.label;
+                                    this.error = result.error;
+                                    this.finished = result.finished;
+                                    if (this.finished) {
+                                        clearInterval(this.polling);
+                                        this.polling = null;
+                                        if (this.status === 'succeeded') {
+                                            $wire.$refresh();
+                                        }
+                                    }
+                                },
+                                destroy() {
+                                    if (this.polling) clearInterval(this.polling);
+                                },
+                            }"
+                            class="flex justify-start"
+                        >
+                            <div class="bg-surface-subtle border border-border-default rounded-xl px-4 py-3 max-w-md space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <template x-if="!finished">
+                                        <span class="inline-block w-2 h-2 bg-info rounded-full animate-pulse"></span>
+                                    </template>
+                                    <template x-if="finished && status === 'succeeded'">
+                                        <x-icon name="heroicon-o-check-circle" class="w-4 h-4 text-success" />
+                                    </template>
+                                    <template x-if="finished && status !== 'succeeded'">
+                                        <x-icon name="heroicon-o-x-circle" class="w-4 h-4 text-danger" />
+                                    </template>
+                                    <span class="text-sm font-medium text-ink" x-text="label"></span>
+                                </div>
+                                <template x-if="error">
+                                    <p class="text-xs text-danger" x-text="error"></p>
+                                </template>
+                                <template x-if="!finished">
+                                    <button
+                                        type="button"
+                                        wire:click="cancelBackgroundChat"
+                                        class="text-xs text-muted hover:text-danger transition-colors"
+                                    >
+                                        {{ __('Cancel') }}
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    @endif
+
                     {{-- Jump to latest floating button --}}
                     <button
                         x-show="!followTail"
@@ -611,24 +672,33 @@
 
                 {{-- Composer --}}
                 <div class="border-t border-border-default px-4 py-3 space-y-2">
-                    {{-- Model picker (authz-gated) --}}
-                    @if ($canSelectModel && count($availableModels) > 0)
-                        <div class="flex items-center gap-1">
-                            <x-icon name="heroicon-o-cpu-chip" class="w-3 h-3 text-muted shrink-0" />
-                            <x-ai.model-selector
-                                :models="$availableModels"
-                                wire:model.live="selectedModel"
-                                class="max-w-xs !py-0.5 !text-[11px]"
-                                aria-label="{{ __('AI model') }}"
-                                :empty-label="$currentModel"
-                            />
-                        </div>
-                    @else
-                        <div class="inline-flex items-center gap-1 text-[11px] text-muted">
-                            <x-icon name="heroicon-o-cpu-chip" class="w-3 h-3" />
-                            <span class="truncate max-w-[12rem]">{{ $currentModel }}</span>
-                        </div>
-                    @endif
+                    {{-- Model picker + session usage --}}
+                    <div class="flex items-center justify-between gap-2">
+                        @if ($canSelectModel && count($availableModels) > 0)
+                            <div class="flex items-center gap-1">
+                                <x-icon name="heroicon-o-cpu-chip" class="w-3 h-3 text-muted shrink-0" />
+                                <x-ai.model-selector
+                                    :models="$availableModels"
+                                    wire:model.live="selectedModel"
+                                    class="max-w-xs !py-0.5 !text-[11px]"
+                                    aria-label="{{ __('AI model') }}"
+                                    :empty-label="$currentModel"
+                                />
+                            </div>
+                        @else
+                            <div class="inline-flex items-center gap-1 text-[11px] text-muted">
+                                <x-icon name="heroicon-o-cpu-chip" class="w-3 h-3" />
+                                <span class="truncate max-w-[12rem]">{{ $currentModel }}</span>
+                            </div>
+                        @endif
+
+                        @if ($sessionUsage && ($sessionUsage['total_prompt_tokens'] > 0 || $sessionUsage['total_completion_tokens'] > 0))
+                            <div class="inline-flex items-center gap-1 text-[10px] text-muted tabular-nums" title="{{ __('Session tokens: :prompt prompt + :completion completion across :runs run(s)', ['prompt' => number_format($sessionUsage['total_prompt_tokens']), 'completion' => number_format($sessionUsage['total_completion_tokens']), 'runs' => $sessionUsage['run_count']]) }}">
+                                <x-icon name="heroicon-o-chart-bar" class="w-3 h-3" />
+                                <span>{{ number_format($sessionUsage['total_prompt_tokens'] + $sessionUsage['total_completion_tokens']) }} {{ __('tokens') }}</span>
+                            </div>
+                        @endif
+                    </div>
 
                     <form
                         wire:submit="sendMessage"

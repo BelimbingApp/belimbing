@@ -10,6 +10,7 @@ use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
+use App\Modules\Core\AI\Livewire\Concerns\HandlesBackgroundChat;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesStreaming;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesChatSessions;
 use App\Modules\Core\AI\Services\AgenticRuntime;
@@ -35,6 +36,7 @@ use Livewire\WithFileUploads;
 class Chat extends Component
 {
     use HandlesAttachments;
+    use HandlesBackgroundChat;
     use HandlesStreaming;
     use ManagesChatSessions;
     use ResolvesAvailableModels;
@@ -151,6 +153,13 @@ class Chat extends Component
             $messages = $messageManager->read($this->employeeId, $this->selectedSessionId);
 
             $result = $this->runAi($hasAttachments, $messages, $content);
+
+            // Timeout on interactive run → offload to background
+            if (($result['meta']['error_type'] ?? null) === 'timeout') {
+                $this->handleTimeoutWithBackgroundOffer($content);
+
+                return;
+            }
 
             $messageManager->appendAssistantMessage(
                 $this->employeeId,
@@ -321,13 +330,16 @@ class Chat extends Component
 
         $sessions = [];
         $messages = [];
+        $sessionUsage = null;
 
         if ($agentActivated) {
             $sessions = app(SessionManager::class)->list($this->employeeId);
         }
 
         if ($agentActivated && $this->selectedSessionId !== null) {
-            $messages = app(MessageManager::class)->read($this->employeeId, $this->selectedSessionId);
+            $messageManager = app(MessageManager::class);
+            $messages = $messageManager->read($this->employeeId, $this->selectedSessionId);
+            $sessionUsage = $messageManager->sessionUsage($this->employeeId, $this->selectedSessionId);
         }
 
         $markdown = app(ChatMarkdownRenderer::class);
@@ -351,6 +363,7 @@ class Chat extends Component
             'canAttachFiles' => $canAttach,
             'availableModels' => $this->canSelectModel() ? $this->availableModels() : [],
             'currentModel' => $this->resolveCurrentModelLabel(),
+            'sessionUsage' => $sessionUsage,
             'markdown' => $markdown,
             'quickActions' => $quickActions,
         ]);
