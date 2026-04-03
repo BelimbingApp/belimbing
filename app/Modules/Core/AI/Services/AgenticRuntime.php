@@ -30,6 +30,8 @@ use Illuminate\Support\Str;
  */
 class AgenticRuntime
 {
+    private const ALL_PROVIDER_CONFIGURATIONS_FAILED = 'All provider configurations failed';
+
     public function __construct(
         private readonly ConfigResolver $configResolver,
         private readonly LlmClient $llmClient,
@@ -119,11 +121,15 @@ class AgenticRuntime
             $runId,
             'unknown',
             'unknown',
-            AiRuntimeError::fromType(AiErrorType::ConfigError, 'All provider configurations failed'),
+            AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED),
         );
         $result['meta']['fallback_attempts'] = $fallbackAttempts;
 
-        $this->runRecorder->fail($runId, AiRuntimeError::fromType(AiErrorType::ConfigError, 'All provider configurations failed'), $result['meta']);
+        $this->runRecorder->fail(
+            $runId,
+            AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED),
+            $result['meta'],
+        );
 
         return $result;
     }
@@ -199,7 +205,7 @@ class AgenticRuntime
             return;
         }
 
-        $error = $lastError ?? AiRuntimeError::fromType(AiErrorType::ConfigError, 'All provider configurations failed');
+        $error = $lastError ?? AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED);
         $this->runRecorder->fail($runId, $error, [
             'fallback_attempts' => $fallbackAttempts,
         ]);
@@ -576,170 +582,66 @@ class AgenticRuntime
         array $fallbackAttempts,
     ): \Generator {
         $employeeId = (int) ($config['employee_id'] ?? 0);
-
-        // Hook: PreContextBuild — augment system prompt before message assembly
-        $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
-
-        $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
-        $tools = $this->toolRegistry->toolDefinitionsForCurrentUser();
-
-        // Hook: PreToolRegistry — add/remove tools before the LLM sees them
-        $originalToolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
-        $tools = $this->hookCoordinator->preToolRegistry($runId, $employeeId, $tools);
-        $filteredToolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
-        $removedTools = array_values(array_diff($originalToolNames, $filteredToolNames));
-
-        $toolActions = [];
-        $clientActions = [];
-        $retryAttempts = [];
-        $hookMetadata = [];
-
-        if ($removedTools !== []) {
-            $hookMetadata['pre_tool_registry_removed'] = $removedTools;
-        }
+        $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt);
 
         yield ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => $runId]];
+        yield from $this->streamRemovedToolStatuses($runId, $toolLoopState['removedTools']);
 
-        if ($removedTools !== []) {
-            yield ['event' => 'status', 'data' => [
-                'phase' => 'hook_action',
-                'stage' => 'pre_tool_registry',
-                'tools_removed' => $removedTools,
-                'run_id' => $runId,
-            ]];
-        }
+        $iteration = 0;
+        $toolIndex = 0;
 
         while (true) {
             // Hook: PreLlmCall
-            $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $hookMetadata);
+            $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $toolLoopState['hookMetadata']);
 
-            $result = $this->chatWithRetry($credentials, $config, $apiMessages, $tools, $retryAttempts);
+            $result = $this->chatWithRetry(
+                $credentials,
+                $config,
+                $toolLoopState['apiMessages'],
+                $toolLoopState['tools'],
+                $toolLoopState['retryAttempts'],
+            );
 
             if (isset($result['runtime_error'])) {
-                $runtimeError = $result['runtime_error'];
-
-                // Hook: PostRun on error
-                $this->hookCoordinator->postRun($runId, $employeeId, false, $hookMetadata);
-
-                yield ['event' => 'error', 'data' => [
-                    'message' => $runtimeError->userMessage,
-                    'run_id' => $runId,
-                    'meta' => array_merge(
-                        $this->responseFactory->errorMeta(
-                            $config['model'],
-                            (string) ($config['provider_name'] ?? 'unknown'),
-                            $runtimeError,
-                        ),
-                        [
-                            'retry_attempts' => $retryAttempts,
-                            'fallback_attempts' => $fallbackAttempts,
-                            'hooks' => $hookMetadata,
-                        ],
-                    ),
-                ]];
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+                yield $this->streamRuntimeErrorEvent($runId, $config, $result['runtime_error'], $toolLoopState, $fallbackAttempts);
 
                 return;
             }
 
             if (($result['tool_calls'] ?? []) === []) {
                 // Hook: PostRun on success
-                $this->hookCoordinator->postRun($runId, $employeeId, true, $hookMetadata);
+                $this->hookCoordinator->postRun($runId, $employeeId, true, $toolLoopState['hookMetadata']);
 
                 yield from $this->streamFinalResponse(
                     $runId,
                     $config,
                     $credentials,
                     [
-                        'api_messages' => $apiMessages,
-                        'tools' => $tools,
-                        'tool_actions' => $toolActions,
-                        'client_actions' => $clientActions,
-                        'retry_attempts' => $retryAttempts,
+                        'api_messages' => $toolLoopState['apiMessages'],
+                        'tools' => $toolLoopState['tools'],
+                        'tool_actions' => $toolLoopState['toolActions'],
+                        'client_actions' => $toolLoopState['clientActions'],
+                        'retry_attempts' => $toolLoopState['retryAttempts'],
                         'fallback_attempts' => $fallbackAttempts,
-                        'hooks' => $hookMetadata,
+                        'hooks' => $toolLoopState['hookMetadata'],
                     ],
                 );
 
                 return;
             }
 
-            $this->appendAssistantToolCallMessage($apiMessages, $result);
-
-            foreach ($result['tool_calls'] as $toolCall) {
-                $functionName = (string) ($toolCall['function']['name'] ?? '');
-                $arguments = $this->decodeToolArguments($toolCall);
-                $toolCallId = (string) ($toolCall['id'] ?? '');
-                $argsSummary = Str::limit(
-                    json_encode($arguments, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}',
-                    200,
-                );
-
-                // Hook: PreToolUse — can deny the tool call
-                $hookVerdict = $this->hookCoordinator->preToolUse($runId, $employeeId, $functionName, $arguments, $hookMetadata);
-
-                if ($hookVerdict['denied']) {
-                    $denialMessage = 'Tool call denied: '.($hookVerdict['reason'] ?? 'denied by policy');
-
-                    $toolActions[] = [
-                        'tool' => $functionName,
-                        'arguments' => $arguments,
-                        'result_preview' => $denialMessage,
-                        'status' => 'denied',
-                        'denial_reason' => $hookVerdict['reason'],
-                    ];
-                    $apiMessages[] = [
-                        'role' => 'tool',
-                        'tool_call_id' => $toolCallId,
-                        'content' => $denialMessage,
-                    ];
-
-                    yield ['event' => 'status', 'data' => [
-                        'phase' => 'tool_denied',
-                        'tool' => $functionName,
-                        'reason' => $hookVerdict['reason'],
-                        'run_id' => $runId,
-                    ]];
-
-                    $toolIndex++;
-
-                    continue;
-                }
-
-                yield ['event' => 'status', 'data' => [
-                    'phase' => 'tool_started',
-                    'tool' => $functionName,
-                    'args_summary' => $argsSummary,
-                    'tool_call_index' => $toolIndex,
-                    'started_at' => now()->toIso8601String(),
-                    'run_id' => $runId,
-                ]];
-
-                $toolStartTime = hrtime(true);
-                $toolExecution = $this->executeToolCall($toolCall);
-                $durationMs = (int) ((hrtime(true) - $toolStartTime) / 1_000_000);
-
-                $toolActions[] = $toolExecution['action'];
-                array_push($clientActions, ...$toolExecution['client_actions']);
-                $apiMessages[] = $toolExecution['message'];
-
-                // Hook: PostToolResult
-                $this->hookCoordinator->postToolResult($runId, $employeeId, $toolExecution['action'], $hookMetadata);
-
-                $resultString = $toolExecution['message']['content'] ?? '';
-
-                yield ['event' => 'status', 'data' => [
-                    'phase' => 'tool_finished',
-                    'tool' => $functionName,
-                    'result_preview' => $toolExecution['action']['result_preview'] ?? '',
-                    'result_length' => mb_strlen($resultString),
-                    'duration_ms' => $durationMs,
-                    'status' => isset($toolExecution['action']['error_payload']) ? 'error' : 'success',
-                    'error_payload' => $toolExecution['action']['error_payload'] ?? null,
-                    'run_id' => $runId,
-                ]];
-
-                $toolIndex++;
-            }
+            $this->appendAssistantToolCallMessage($toolLoopState['apiMessages'], $result);
+            yield from $this->streamToolCalls(
+                $runId,
+                $employeeId,
+                $result['tool_calls'],
+                $toolLoopState['apiMessages'],
+                $toolLoopState['toolActions'],
+                $toolLoopState['clientActions'],
+                $toolLoopState['hookMetadata'],
+                $toolIndex,
+            );
 
             $iteration++;
         }
@@ -948,6 +850,192 @@ class AgenticRuntime
             'error_type' => $error->errorType->value,
             'latency_ms' => $error->latencyMs,
         ];
+    }
+
+    /**
+     * Prepare the shared state for a tool-calling loop.
+     *
+     * @param  list<Message>  $messages
+     * @return array{
+     *     apiMessages: list<array<string, mixed>>,
+     *     tools: list<array<string, mixed>>,
+     *     toolActions: list<array<string, mixed>>,
+     *     clientActions: list<string>,
+     *     retryAttempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
+     *     hookMetadata: array<string, mixed>,
+     *     removedTools: list<string>
+     * }
+     */
+    private function initializeToolLoopState(string $runId, int $employeeId, array $messages, ?string $systemPrompt): array
+    {
+        $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
+        $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
+        $tools = $this->toolRegistry->toolDefinitionsForCurrentUser();
+
+        $originalToolNames = array_map(fn (array $tool): string => $tool['function']['name'] ?? '', $tools);
+        $tools = $this->hookCoordinator->preToolRegistry($runId, $employeeId, $tools);
+        $filteredToolNames = array_map(fn (array $tool): string => $tool['function']['name'] ?? '', $tools);
+        $removedTools = array_values(array_diff($originalToolNames, $filteredToolNames));
+
+        $hookMetadata = [];
+
+        if ($removedTools !== []) {
+            $hookMetadata['pre_tool_registry_removed'] = $removedTools;
+        }
+
+        return [
+            'apiMessages' => $apiMessages,
+            'tools' => $tools,
+            'toolActions' => [],
+            'clientActions' => [],
+            'retryAttempts' => [],
+            'hookMetadata' => $hookMetadata,
+            'removedTools' => $removedTools,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $removedTools
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function streamRemovedToolStatuses(string $runId, array $removedTools): \Generator
+    {
+        if ($removedTools === []) {
+            return;
+        }
+
+        yield ['event' => 'status', 'data' => [
+            'phase' => 'hook_action',
+            'stage' => 'pre_tool_registry',
+            'tools_removed' => $removedTools,
+            'run_id' => $runId,
+        ]];
+    }
+
+    /**
+     * @param  array{
+     *     retryAttempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
+     *     hookMetadata: array<string, mixed>
+     * }  $toolLoopState
+     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
+     * @return array{event: string, data: array<string, mixed>}
+     */
+    private function streamRuntimeErrorEvent(
+        string $runId,
+        array $config,
+        AiRuntimeError $runtimeError,
+        array $toolLoopState,
+        array $fallbackAttempts,
+    ): array {
+        return ['event' => 'error', 'data' => [
+            'message' => $runtimeError->userMessage,
+            'run_id' => $runId,
+            'meta' => array_merge(
+                $this->responseFactory->errorMeta(
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $runtimeError,
+                ),
+                [
+                    'retry_attempts' => $toolLoopState['retryAttempts'],
+                    'fallback_attempts' => $fallbackAttempts,
+                    'hooks' => $toolLoopState['hookMetadata'],
+                ],
+            ),
+        ]];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $toolCalls
+     * @param  list<array<string, mixed>>  $apiMessages
+     * @param  list<array<string, mixed>>  $toolActions
+     * @param  list<string>  $clientActions
+     * @param  array<string, mixed>  $hookMetadata
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function streamToolCalls(
+        string $runId,
+        int $employeeId,
+        array $toolCalls,
+        array &$apiMessages,
+        array &$toolActions,
+        array &$clientActions,
+        array &$hookMetadata,
+        int &$toolIndex,
+    ): \Generator {
+        foreach ($toolCalls as $toolCall) {
+            $functionName = (string) ($toolCall['function']['name'] ?? '');
+            $arguments = $this->decodeToolArguments($toolCall);
+            $toolCallId = (string) ($toolCall['id'] ?? '');
+            $argsSummary = Str::limit(
+                json_encode($arguments, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}',
+                200,
+            );
+
+            $hookVerdict = $this->hookCoordinator->preToolUse($runId, $employeeId, $functionName, $arguments, $hookMetadata);
+
+            if ($hookVerdict['denied']) {
+                $denialMessage = 'Tool call denied: '.($hookVerdict['reason'] ?? 'denied by policy');
+
+                $toolActions[] = [
+                    'tool' => $functionName,
+                    'arguments' => $arguments,
+                    'result_preview' => $denialMessage,
+                    'status' => 'denied',
+                    'denial_reason' => $hookVerdict['reason'],
+                ];
+                $apiMessages[] = [
+                    'role' => 'tool',
+                    'tool_call_id' => $toolCallId,
+                    'content' => $denialMessage,
+                ];
+
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'tool_denied',
+                    'tool' => $functionName,
+                    'reason' => $hookVerdict['reason'],
+                    'run_id' => $runId,
+                ]];
+
+                $toolIndex++;
+
+                continue;
+            }
+
+            yield ['event' => 'status', 'data' => [
+                'phase' => 'tool_started',
+                'tool' => $functionName,
+                'args_summary' => $argsSummary,
+                'tool_call_index' => $toolIndex,
+                'started_at' => now()->toIso8601String(),
+                'run_id' => $runId,
+            ]];
+
+            $toolStartTime = hrtime(true);
+            $toolExecution = $this->executeToolCall($toolCall);
+            $durationMs = (int) ((hrtime(true) - $toolStartTime) / 1_000_000);
+
+            $toolActions[] = $toolExecution['action'];
+            array_push($clientActions, ...$toolExecution['client_actions']);
+            $apiMessages[] = $toolExecution['message'];
+
+            $this->hookCoordinator->postToolResult($runId, $employeeId, $toolExecution['action'], $hookMetadata);
+
+            $resultString = $toolExecution['message']['content'] ?? '';
+
+            yield ['event' => 'status', 'data' => [
+                'phase' => 'tool_finished',
+                'tool' => $functionName,
+                'result_preview' => $toolExecution['action']['result_preview'] ?? '',
+                'result_length' => mb_strlen($resultString),
+                'duration_ms' => $durationMs,
+                'status' => isset($toolExecution['action']['error_payload']) ? 'error' : 'success',
+                'error_payload' => $toolExecution['action']['error_payload'] ?? null,
+                'run_id' => $runId,
+            ]];
+
+            $toolIndex++;
+        }
     }
 
     /**

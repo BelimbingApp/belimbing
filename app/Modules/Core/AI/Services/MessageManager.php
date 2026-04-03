@@ -8,8 +8,10 @@ namespace App\Modules\Core\AI\Services;
 use App\Base\Support\Json as BlbJson;
 use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\DTO\Message;
+use App\Modules\Core\AI\DTO\ToolResultEntry;
 use App\Modules\Core\AI\Models\AiRun;
 use DateTimeImmutable;
+use Illuminate\Database\Eloquent\Collection;
 
 class MessageManager
 {
@@ -158,42 +160,20 @@ class MessageManager
      * @param  int  $employeeId  Agent employee ID
      * @param  string  $sessionId  Session UUID
      * @param  string  $runId  Runtime run ID
-     * @param  string  $toolName  Tool name
-     * @param  string  $resultPreview  Truncated preview (≤200 chars)
-     * @param  int  $resultLength  Full result string length
-     * @param  string  $status  'success' or 'error'
-     * @param  int  $durationMs  Tool execution duration in milliseconds
-     * @param  array<string, mixed>|null  $errorPayload  Error details when status is 'error'
+     * @param  ToolResultEntry  $entry  Tool result metadata
      */
     public function appendToolResult(
         int $employeeId,
         string $sessionId,
         string $runId,
-        string $toolName,
-        string $resultPreview,
-        int $resultLength,
-        string $status,
-        int $durationMs,
-        ?array $errorPayload = null,
+        ToolResultEntry $entry,
     ): void {
-        $meta = [
-            'tool' => $toolName,
-            'result_preview' => $resultPreview,
-            'result_length' => $resultLength,
-            'status' => $status,
-            'duration_ms' => $durationMs,
-        ];
-
-        if ($errorPayload !== null) {
-            $meta['error_payload'] = $errorPayload;
-        }
-
         $this->append($employeeId, $sessionId, new Message(
             role: 'assistant',
             content: '',
             timestamp: new DateTimeImmutable,
             runId: $runId,
-            meta: $meta,
+            meta: $entry->toMeta(),
             type: 'tool_result',
         ));
     }
@@ -392,45 +372,73 @@ class MessageManager
             ->get(['prompt_tokens', 'completion_tokens']);
 
         if ($runs->isNotEmpty()) {
-            return [
-                'total_prompt_tokens' => $runs->sum('prompt_tokens') ?: null,
-                'total_completion_tokens' => $runs->sum('completion_tokens') ?: null,
-                'run_count' => $runs->count(),
-            ];
+            return $this->usageFromRuns($runs);
         }
 
-        // Fallback: reconstruct from transcript meta.tokens
-        $messages = $this->read($employeeId, $sessionId);
-        $promptTokens = 0;
-        $completionTokens = 0;
-        $runCount = 0;
+        return $this->usageFromTranscript($this->read($employeeId, $sessionId));
+    }
+
+    /**
+     * @return array{total_prompt_tokens: int|null, total_completion_tokens: int|null, run_count: int}
+     */
+    private function usageFromRuns(Collection $runs): array
+    {
+        return [
+            'total_prompt_tokens' => $runs->sum('prompt_tokens') ?: null,
+            'total_completion_tokens' => $runs->sum('completion_tokens') ?: null,
+            'run_count' => $runs->count(),
+        ];
+    }
+
+    /**
+     * @param  list<Message>  $messages
+     * @return array{total_prompt_tokens: int|null, total_completion_tokens: int|null, run_count: int}
+     */
+    private function usageFromTranscript(array $messages): array
+    {
+        $usage = [
+            'total_prompt_tokens' => 0,
+            'total_completion_tokens' => 0,
+            'run_count' => 0,
+        ];
         $seenRuns = [];
 
         foreach ($messages as $message) {
-            if ($message->type !== 'message' || $message->role !== 'assistant') {
-                continue;
-            }
-
-            $tokens = $message->meta['tokens'] ?? null;
-
-            if ($tokens === null) {
-                continue;
-            }
-
-            $promptTokens += (int) ($tokens['prompt'] ?? 0);
-            $completionTokens += (int) ($tokens['completion'] ?? 0);
-
-            if ($message->runId !== null && ! isset($seenRuns[$message->runId])) {
-                $seenRuns[$message->runId] = true;
-                $runCount++;
-            }
+            $this->accumulateTranscriptUsage($message, $usage, $seenRuns);
         }
 
         return [
-            'total_prompt_tokens' => $promptTokens > 0 ? $promptTokens : null,
-            'total_completion_tokens' => $completionTokens > 0 ? $completionTokens : null,
-            'run_count' => $runCount,
+            'total_prompt_tokens' => $usage['total_prompt_tokens'] > 0 ? $usage['total_prompt_tokens'] : null,
+            'total_completion_tokens' => $usage['total_completion_tokens'] > 0 ? $usage['total_completion_tokens'] : null,
+            'run_count' => $usage['run_count'],
         ];
+    }
+
+    /**
+     * @param  array{total_prompt_tokens: int, total_completion_tokens: int, run_count: int}  $usage
+     * @param  array<string, bool>  $seenRuns
+     */
+    private function accumulateTranscriptUsage(Message $message, array &$usage, array &$seenRuns): void
+    {
+        if ($message->type !== 'message' || $message->role !== 'assistant') {
+            return;
+        }
+
+        $tokens = $message->meta['tokens'] ?? null;
+
+        if ($tokens === null) {
+            return;
+        }
+
+        $usage['total_prompt_tokens'] += (int) ($tokens['prompt'] ?? 0);
+        $usage['total_completion_tokens'] += (int) ($tokens['completion'] ?? 0);
+
+        if ($message->runId === null || isset($seenRuns[$message->runId])) {
+            return;
+        }
+
+        $seenRuns[$message->runId] = true;
+        $usage['run_count']++;
     }
 
     /**

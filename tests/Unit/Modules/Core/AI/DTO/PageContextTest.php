@@ -47,7 +47,7 @@ describe('PageContext DTO', function () {
             ->toHaveKey('tabs', ['Details', 'Addresses'])
             ->toHaveKey('active_tab', 'Details')
             ->toHaveKey('visible_actions', ['Edit', 'Delete'])
-            ->toHaveKey('breadcrumbs', ['Employees', 'Jane Doe'])
+            ->toHaveKey('breadcrumbs', ['Employees', PAGE_CONTEXT_TEST_TITLE])
             ->toHaveKey('filters', ['status:active'])
             ->toHaveKey('search_query', 'jane');
     });
@@ -68,7 +68,7 @@ describe('PageContext DTO', function () {
             ->toStartWith('<current_page ')
             ->toEndWith('/>')
             ->toContain('route="admin.employees.show"')
-            ->toContain('title="Jane Doe"')
+            ->toContain('title="'.PAGE_CONTEXT_TEST_TITLE.'"')
             ->toContain('module="Employee"')
             ->toContain('resource_type="employee"')
             ->toContain('resource_id="42"');

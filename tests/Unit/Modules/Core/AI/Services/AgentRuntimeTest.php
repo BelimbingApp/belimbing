@@ -3,49 +3,36 @@
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\DTO\Message;
-use App\Modules\Core\AI\Services\ConfigResolver;
 use Tests\Support\MakesRuntimeResponses;
 use Tests\TestCase;
 
 uses(TestCase::class, MakesRuntimeResponses::class);
 
-function makeRuntime(
-    ConfigResolver $configResolver,
-    LlmClient $llmClient,
-): \App\Modules\Core\AI\Services\AgentRuntime {
-    return test()->makeAgentRuntime($configResolver, $llmClient);
-}
-
-function stubResolvedConfigs(ConfigResolver $configResolver, array $configs): void
+/**
+ * @param  list<array<string, mixed>>  $configs
+ * @param  callable(LlmClient): void  $configureClient
+ * @return array{content: string, run_id: string, meta: array<string, mixed>}
+ */
+function runRuntimeConversation(array $configs, callable $configureClient): array
 {
-    $configResolver->shouldReceive('resolve')->with(1)->andReturn($configs);
-    $configResolver->shouldReceive('resolveWithDefaultFallback')->with(1)->andReturn($configs);
-}
+    $llmClient = Mockery::mock(LlmClient::class);
+    $configureClient($llmClient);
 
-function runRuntimeConversation(
-    ConfigResolver $configResolver,
-    LlmClient $llmClient,
-): array {
-    return makeRuntime($configResolver, $llmClient)
+    return test()
+        ->makeAgentRuntime(test()->mockResolvedConfigResolver($configs), $llmClient)
         ->run([
             new Message(
                 role: 'user',
                 content: 'Hi',
-                timestamp: new \DateTimeImmutable,
+                timestamp: new DateTimeImmutable,
             ),
         ], 1);
 }
 
 it('returns empty fallback_attempts on first model success', function (): void {
-    $configResolver = Mockery::mock(ConfigResolver::class);
-    stubResolvedConfigs($configResolver, [
+    $result = runRuntimeConversation([
         $this->makeConfig('openai', 'gpt-4o'),
-    ]);
-
-    $llmClient = Mockery::mock(LlmClient::class);
-    $llmClient->shouldReceive('chat')->once()->andReturn($this->makeSuccessResponse('Hello!'));
-
-    $result = runRuntimeConversation($configResolver, $llmClient);
+    ], fn (LlmClient $llmClient) => $llmClient->shouldReceive('chat')->once()->andReturn($this->makeSuccessResponse('Hello!')));
 
     expect($result['content'])->toBe('Hello!')
         ->and($result['meta']['fallback_attempts'])->toBeArray()->toBeEmpty()
@@ -56,12 +43,7 @@ it('returns empty fallback_attempts on first model success', function (): void {
 });
 
 it('returns no-configuration error when no workspace and default config are available', function (): void {
-    $configResolver = Mockery::mock(ConfigResolver::class);
-    stubResolvedConfigs($configResolver, []);
-
-    $llmClient = Mockery::mock(LlmClient::class);
-
-    $result = runRuntimeConversation($configResolver, $llmClient);
+    $result = runRuntimeConversation([], static fn (LlmClient $llmClient) => $llmClient);
 
     expect($result['content'])->toContain('⚠')
         ->and($result['meta']['error_type'])->toBe('config_error')
@@ -70,28 +52,21 @@ it('returns no-configuration error when no workspace and default config are avai
 });
 
 it('collects fallback attempt entries on transient failures before success', function (): void {
-    $configResolver = Mockery::mock(ConfigResolver::class);
-    stubResolvedConfigs($configResolver, [
+    $result = runRuntimeConversation([
         $this->makeConfig('provider-a', 'model-a'),
         $this->makeConfig('provider-b', 'model-b'),
         $this->makeConfig('provider-c', 'model-c'),
-    ]);
-
-    $llmClient = Mockery::mock(LlmClient::class);
-    // First call: server error (fallback-worthy)
-    $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
-        $this->makeErrorResponse(AiErrorType::ServerError, 'HTTP 500: Internal Server Error', 150)
-    );
-    // Second call: rate limit (fallback-worthy)
-    $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
-        $this->makeErrorResponse(AiErrorType::RateLimit, 'HTTP 429: Too Many Requests', 50)
-    );
-    // Third call: success
-    $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
-        $this->makeSuccessResponse('Finally worked!', 300)
-    );
-
-    $result = runRuntimeConversation($configResolver, $llmClient);
+    ], function (LlmClient $llmClient): void {
+        $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
+            $this->makeErrorResponse(AiErrorType::ServerError, 'HTTP 500: Internal Server Error', 150)
+        );
+        $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
+            $this->makeErrorResponse(AiErrorType::RateLimit, 'HTTP 429: Too Many Requests', 50)
+        );
+        $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
+            $this->makeSuccessResponse('Finally worked!', 300)
+        );
+    });
 
     expect($result['content'])->toBe('Finally worked!')
         ->and($result['meta']['model'])->toBe('model-c')
@@ -102,21 +77,17 @@ it('collects fallback attempt entries on transient failures before success', fun
 });
 
 it('includes fallback attempts when all models fail', function (): void {
-    $configResolver = Mockery::mock(ConfigResolver::class);
-    stubResolvedConfigs($configResolver, [
+    $result = runRuntimeConversation([
         $this->makeConfig('prov-a', 'model-a'),
         $this->makeConfig('prov-b', 'model-b'),
-    ]);
-
-    $llmClient = Mockery::mock(LlmClient::class);
-    $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
-        $this->makeErrorResponse(AiErrorType::ServerError, 'HTTP 500: Server Error', 100)
-    );
-    $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
-        $this->makeErrorResponse(AiErrorType::ConnectionError, 'Connection refused', 50)
-    );
-
-    $result = runRuntimeConversation($configResolver, $llmClient);
+    ], function (LlmClient $llmClient): void {
+        $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
+            $this->makeErrorResponse(AiErrorType::ServerError, 'HTTP 500: Server Error', 100)
+        );
+        $llmClient->shouldReceive('chat')->once()->ordered()->andReturn(
+            $this->makeErrorResponse(AiErrorType::ConnectionError, 'Connection refused', 50)
+        );
+    });
 
     // Last failure is returned as the result — user sees safe message, not raw diagnostic
     expect($result['meta']['error_type'])->toBe('connection_error')
@@ -130,19 +101,12 @@ it('includes fallback attempts when all models fail', function (): void {
 });
 
 it('does not fall back on client errors and still records empty attempts', function (): void {
-    $configResolver = Mockery::mock(ConfigResolver::class);
-    stubResolvedConfigs($configResolver, [
+    $result = runRuntimeConversation([
         $this->makeConfig('openai', 'gpt-4o'),
         $this->makeConfig('anthropic', 'claude-3'),
-    ]);
-
-    $llmClient = Mockery::mock(LlmClient::class);
-    // Client error (401) — should NOT trigger fallback
-    $llmClient->shouldReceive('chat')->once()->andReturn(
+    ], fn (LlmClient $llmClient) => $llmClient->shouldReceive('chat')->once()->andReturn(
         $this->makeErrorResponse(AiErrorType::AuthError, 'HTTP 401: Unauthorized', 30)
-    );
-
-    $result = runRuntimeConversation($configResolver, $llmClient);
+    ));
 
     // Should stop at first model, no fallback — user sees safe message
     expect($result['meta']['error_type'])->toBe('auth_error')
@@ -150,15 +114,10 @@ it('does not fall back on client errors and still records empty attempts', funct
 });
 
 it('records config_error in result without fallback since not transient', function (): void {
-    $configResolver = Mockery::mock(ConfigResolver::class);
-    stubResolvedConfigs($configResolver, [
+    $result = runRuntimeConversation([
         $this->makeConfig('broken', 'model-a', '', 'https://api.example.com/v1'),
         $this->makeConfig('working', 'model-b'),
-    ]);
-
-    $llmClient = Mockery::mock(LlmClient::class);
-
-    $result = runRuntimeConversation($configResolver, $llmClient);
+    ], static fn (LlmClient $llmClient) => $llmClient);
 
     // config_error is NOT in the shouldFallback transient list, so no fallback
     expect($result['meta']['error_type'])->toBe('config_error')

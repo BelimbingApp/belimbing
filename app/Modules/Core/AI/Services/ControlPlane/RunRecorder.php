@@ -6,6 +6,7 @@
 namespace App\Modules\Core\AI\Services\ControlPlane;
 
 use App\Base\AI\DTO\AiRuntimeError;
+use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\MessageManager;
@@ -160,48 +161,22 @@ class RunRecorder
         $hasError = false;
 
         foreach ($messages as $message) {
-            if ($message->runId !== $runId && $message->type === 'message') {
+            if (! $this->messageBelongsToReconstructedRun($message, $runId)) {
                 continue;
             }
 
             if ($message->type === 'tool_result') {
-                $toolActions[] = [
-                    'tool' => $message->meta['tool'] ?? 'unknown',
-                    'result_length' => $message->meta['result_length'] ?? null,
-                ];
+                $toolActions[] = $this->reconstructedToolAction($message);
+
+                continue;
             }
 
-            if ($message->type === 'message' && $message->role === 'assistant' && $message->runId === $runId) {
-                $hasAssistantMessage = true;
-
-                if (isset($message->meta['tokens'])) {
-                    $tokens = $message->meta['tokens'];
-                }
-
-                if (($message->meta['message_type'] ?? null) === 'error') {
-                    $hasError = true;
-                }
-            }
+            $this->captureAssistantMessageState($message, $runId, $tokens, $hasAssistantMessage, $hasError);
         }
-
-        $status = match (true) {
-            $hasError => AiRunStatus::Failed,
-            $hasAssistantMessage => AiRunStatus::Succeeded,
-            default => AiRunStatus::Running,
-        };
 
         AiRun::query()->updateOrCreate(
             ['id' => $runId],
-            [
-                'employee_id' => $employeeId,
-                'session_id' => $sessionId,
-                'source' => 'reconstructed',
-                'execution_mode' => 'interactive',
-                'status' => $status,
-                'prompt_tokens' => $tokens['prompt'] ?? null,
-                'completion_tokens' => $tokens['completion'] ?? null,
-                'tool_actions' => $toolActions !== [] ? $toolActions : null,
-            ],
+            $this->reconstructedRunPayload($employeeId, $sessionId, $tokens, $toolActions, $hasAssistantMessage, $hasError),
         );
     }
 
@@ -252,5 +227,80 @@ class RunRecorder
         }
 
         return $safe;
+    }
+
+    private function messageBelongsToReconstructedRun(Message $message, string $runId): bool
+    {
+        return $message->runId === $runId;
+    }
+
+    /**
+     * @return array{tool: mixed, result_length: mixed}
+     */
+    private function reconstructedToolAction(Message $message): array
+    {
+        return [
+            'tool' => $message->meta['tool'] ?? 'unknown',
+            'result_length' => $message->meta['result_length'] ?? null,
+        ];
+    }
+
+    /**
+     * @param  array{prompt: int|null, completion: int|null}  $tokens
+     */
+    private function captureAssistantMessageState(
+        Message $message,
+        string $runId,
+        array &$tokens,
+        bool &$hasAssistantMessage,
+        bool &$hasError,
+    ): void {
+        if ($message->type !== 'message' || $message->role !== 'assistant' || $message->runId !== $runId) {
+            return;
+        }
+
+        $hasAssistantMessage = true;
+
+        if (isset($message->meta['tokens'])) {
+            $tokens = $message->meta['tokens'];
+        }
+
+        if (($message->meta['message_type'] ?? null) === 'error') {
+            $hasError = true;
+        }
+    }
+
+    /**
+     * @param  array{prompt: int|null, completion: int|null}  $tokens
+     * @param  list<array{tool: mixed, result_length: mixed}>  $toolActions
+     * @return array<string, mixed>
+     */
+    private function reconstructedRunPayload(
+        int $employeeId,
+        string $sessionId,
+        array $tokens,
+        array $toolActions,
+        bool $hasAssistantMessage,
+        bool $hasError,
+    ): array {
+        return [
+            'employee_id' => $employeeId,
+            'session_id' => $sessionId,
+            'source' => 'reconstructed',
+            'execution_mode' => 'interactive',
+            'status' => $this->reconstructedStatus($hasAssistantMessage, $hasError),
+            'prompt_tokens' => $tokens['prompt'] ?? null,
+            'completion_tokens' => $tokens['completion'] ?? null,
+            'tool_actions' => $toolActions !== [] ? $toolActions : null,
+        ];
+    }
+
+    private function reconstructedStatus(bool $hasAssistantMessage, bool $hasError): AiRunStatus
+    {
+        return match (true) {
+            $hasError => AiRunStatus::Failed,
+            $hasAssistantMessage => AiRunStatus::Succeeded,
+            default => AiRunStatus::Running,
+        };
     }
 }

@@ -9,6 +9,7 @@ use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Tools\ToolResult;
+use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use Illuminate\Foundation\Testing\TestCase;
 use Tests\Support\MakesRuntimeResponses;
@@ -133,12 +134,27 @@ function buildNavigateActionTool(): Tool
     );
 }
 
+function defaultAgenticConfigResolver(): ConfigResolver
+{
+    return test()->mockResolvedConfigResolver([
+        test()->makeConfig('test-provider', 'gpt-4', 'test-key'),
+    ]);
+}
+
+function runAgenticConversation(
+    LlmClient $llmClient,
+    ?ConfigResolver $configResolver = null,
+    ?AgentToolRegistry $toolRegistry = null,
+    string $userMessage = 'Hello',
+    string $systemPrompt = 'Prompt',
+): array {
+    return test()
+        ->makeAgenticRuntime($llmClient, $configResolver ?? defaultAgenticConfigResolver(), $toolRegistry)
+        ->run([test()->makeMessage('user', $userMessage)], 1, $systemPrompt);
+}
+
 describe('AgenticRuntime', function () {
     it('returns direct response when LLM produces no tool calls', function () {
-        $configResolver = $this->mockResolvedConfigResolver([
-            $this->makeConfig('test-provider', 'gpt-4', 'test-key'),
-        ]);
-
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')->once()->andReturn([
             'content' => 'Hello, I am Lara!',
@@ -146,8 +162,7 @@ describe('AgenticRuntime', function () {
             'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 8],
         ]);
 
-        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
-        $result = $runtime->run([$this->makeMessage('user', 'Hi')], 1, AGENTIC_RUNTIME_SYSTEM_PROMPT);
+        $result = runAgenticConversation($llmClient, userMessage: 'Hi', systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT);
 
         expect($result['content'])->toBe('Hello, I am Lara!');
         expect($result['run_id'])->toStartWith('run_');
@@ -157,10 +172,6 @@ describe('AgenticRuntime', function () {
     });
 
     it('executes tool calls and feeds results back to LLM', function () {
-        $configResolver = $this->mockResolvedConfigResolver([
-            $this->makeConfig('test-provider', 'gpt-4', 'test-key'),
-        ]);
-
         $llmClient = Mockery::mock(LlmClient::class);
 
         // First call: LLM wants to call a tool
@@ -173,8 +184,12 @@ describe('AgenticRuntime', function () {
             $this->makeFinalResponse('The echo result was: executed:echo_tool:world')
         );
 
-        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver, $this->makeToolRegistry(buildEchoTool()));
-        $result = $runtime->run([$this->makeMessage('user', 'Echo world')], 1, AGENTIC_RUNTIME_SYSTEM_PROMPT);
+        $result = runAgenticConversation(
+            $llmClient,
+            toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+            userMessage: 'Echo world',
+            systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        );
 
         expect($result['content'])->toContain('executed:echo_tool:world');
         expect($result['meta']['tool_actions'])->toHaveCount(1);
@@ -183,10 +198,6 @@ describe('AgenticRuntime', function () {
     });
 
     it('prepends client actions collected from tool results to final content', function () {
-        $configResolver = $this->mockResolvedConfigResolver([
-            $this->makeConfig('test-provider', 'gpt-4', 'test-key'),
-        ]);
-
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')->once()->andReturn(
             $this->makeToolCallResponse('call_002', 'navigate_tool', '{}')
@@ -195,8 +206,12 @@ describe('AgenticRuntime', function () {
             $this->makeFinalResponse('Navigated successfully.')
         );
 
-        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver, $this->makeToolRegistry(buildNavigateActionTool()));
-        $result = $runtime->run([$this->makeMessage('user', 'Go to dashboard')], 1, AGENTIC_RUNTIME_SYSTEM_PROMPT);
+        $result = runAgenticConversation(
+            $llmClient,
+            toolRegistry: $this->makeToolRegistry(buildNavigateActionTool()),
+            userMessage: 'Go to dashboard',
+            systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        );
 
         expect($result['content'])->toStartWith('<agent-action>Livewire.navigate(\'/dashboard\')</agent-action>')
             ->and($result['content'])->toContain('Navigated successfully.');
@@ -207,26 +222,19 @@ describe('AgenticRuntime', function () {
         $configResolver->shouldReceive('resolveWithDefaultFallback')->with(1)->andReturn([]);
 
         $llmClient = Mockery::mock(LlmClient::class);
-        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
-
-        $result = $runtime->run([$this->makeMessage('user', 'Hello')], 1, 'Prompt');
+        $result = runAgenticConversation($llmClient, $configResolver);
 
         expect($result['content'])->toContain('⚠');
         expect($result['meta'])->toHaveKey('error');
     });
 
     it('returns error when LLM call fails with non-retryable error', function () {
-        $configResolver = $this->mockResolvedConfigResolver([
-            $this->makeConfig('test-provider', 'gpt-4', 'test-key'),
-        ]);
-
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')->once()->andReturn(
             $this->makeErrorResponse(AiErrorType::AuthError, 'Invalid API key', 50)
         );
 
-        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
-        $result = $runtime->run([$this->makeMessage('user', 'Hello')], 1, 'Prompt');
+        $result = runAgenticConversation($llmClient);
 
         expect($result['content'])->toContain('⚠');
         expect($result['meta']['error_type'])->toBe('auth_error');
@@ -234,17 +242,12 @@ describe('AgenticRuntime', function () {
     });
 
     it('retries once on retryable error then returns error if retry also fails', function () {
-        $configResolver = $this->mockResolvedConfigResolver([
-            $this->makeConfig('test-provider', 'gpt-4', 'test-key'),
-        ]);
-
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')->twice()->andReturn(
             $this->makeErrorResponse(AiErrorType::RateLimit, 'Rate limit exceeded', 50)
         );
 
-        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
-        $result = $runtime->run([$this->makeMessage('user', 'Hello')], 1, 'Prompt');
+        $result = runAgenticConversation($llmClient);
 
         expect($result['content'])->toContain('⚠');
         expect($result['meta']['error_type'])->toBe('rate_limit');
@@ -253,10 +256,6 @@ describe('AgenticRuntime', function () {
     });
 
     it('retries once on retryable error then succeeds if retry works', function () {
-        $configResolver = $this->mockResolvedConfigResolver([
-            $this->makeConfig('test-provider', 'gpt-4', 'test-key'),
-        ]);
-
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')->once()->andReturn(
             $this->makeErrorResponse(AiErrorType::Timeout, 'Connection timed out', 5000)
@@ -265,8 +264,7 @@ describe('AgenticRuntime', function () {
             $this->makeFinalResponse('Success after retry!')
         );
 
-        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
-        $result = $runtime->run([$this->makeMessage('user', 'Hello')], 1, 'Prompt');
+        $result = runAgenticConversation($llmClient);
 
         expect($result['content'])->toBe('Success after retry!');
         expect($result['meta']['retry_attempts'])->toHaveCount(1);
@@ -274,17 +272,12 @@ describe('AgenticRuntime', function () {
     });
 
     it('does not retry timeout when full budget was consumed', function () {
-        $configResolver = $this->mockResolvedConfigResolver([
-            $this->makeConfig('test-provider', 'gpt-4', 'test-key'),
-        ]);
-
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')->once()->andReturn(
             $this->makeErrorResponse(AiErrorType::Timeout, 'Request timed out', 55000)
         );
 
-        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
-        $result = $runtime->run([$this->makeMessage('user', 'Hello')], 1, 'Prompt');
+        $result = runAgenticConversation($llmClient);
 
         expect($result['meta']['error_type'])->toBe('timeout');
         expect($result['meta']['retry_attempts'])->toBeEmpty();
