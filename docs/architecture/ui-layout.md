@@ -167,7 +167,10 @@ State lives on the `<body>` element via `x-data`:
 | `sidebarOpen` | `boolean` | No | Mobile sidebar drawer visibility |
 | `sidebarWidth` | `number` | `localStorage` | Desktop sidebar width in pixels |
 | `sidebarRail` | `boolean` | `localStorage` | Whether sidebar is in icon-rail mode |
-| `laraChatOpen` | `boolean` | No | Lara chat overlay visibility |
+| `laraChatOpen` | `boolean` | `localStorage` | Lara chat overlay visibility |
+| `laraChatMode` | `string` | `localStorage` | Chat display mode (`overlay` or `docked`) |
+| `laraChatFullscreen` | `boolean` | `localStorage` | Whether chat is in fullscreen mode |
+| `laraDockWidth` | `number` | `localStorage` | Docked panel width in pixels |
 
 State lives on the sidebar `<aside>` element via `x-data`:
 

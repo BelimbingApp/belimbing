@@ -10,6 +10,7 @@
         sessionsOpen: false,
         sessionWidth: parseInt(localStorage.getItem('agent-chat-session-width')) || 224,
         pageAwareness: localStorage.getItem('blb-lara-page-awareness') || 'page',
+        _draftKey: 'blb-lara-draft-{{ auth()->id() }}',
         _sessionDragging: false,
         SESSION_MIN: 160,
         SESSION_MAX: 320,
@@ -47,9 +48,39 @@
         }
     }"
     x-init="
+        const savedSession = localStorage.getItem('blb-lara-session');
+        if (savedSession && !$wire.selectedSessionId) {
+            $wire.set('selectedSessionId', savedSession);
+        }
         $nextTick(() => $refs.agentComposer?.focus());
         $wire.set('pageUrl', window.location.href);
         $watch('pageAwareness', v => $wire.set('pageAwareness', v));
+        $watch('$wire.selectedSessionId', v => {
+            if (v) {
+                localStorage.setItem('blb-lara-session', v);
+            } else {
+                localStorage.removeItem('blb-lara-session');
+            }
+        });
+
+        const savedDraft = localStorage.getItem(this._draftKey);
+        if (savedDraft && !$wire.messageInput) {
+            $wire.set('messageInput', savedDraft);
+            $nextTick(() => {
+                if ($refs.agentComposer) {
+                    $refs.agentComposer.value = savedDraft;
+                    window.sharedChatComposerAutoResize($refs.agentComposer);
+                }
+            });
+        }
+
+        $watch('$wire.messageInput', v => {
+            if (v && v.trim()) {
+                localStorage.setItem(this._draftKey, v);
+            } else {
+                localStorage.removeItem(this._draftKey);
+            }
+        });
     "
     @navigate.window="$wire.set('pageUrl', window.location.href)"
     @agent-chat-focus-composer.window="$nextTick(() => $refs.agentComposer?.focus())"
@@ -356,6 +387,10 @@
                     _currentRunId: null,
                     followTail: true,
                 }"
+                x-effect="
+                    const busy = !!pendingMessage || !!$wire.backgroundDispatchId;
+                    window.dispatchEvent(new CustomEvent(busy ? 'agent-chat-busy' : 'agent-chat-idle'));
+                "
                 x-on:agent-chat-response-ready.window="pendingMessage = null; streamEntries = []; _currentRunId = null"
             >
                 <div
@@ -658,10 +693,9 @@
                                     if (this.finished) {
                                         clearInterval(this.polling);
                                         this.polling = null;
-                                        if (this.status === 'succeeded') {
-                                            $wire.$refresh();
-                                        }
                                     }
+                                    // Refresh transcript to show progressive activity entries
+                                    $wire.$refresh();
                                 },
                                 destroy() {
                                     if (this.polling) clearInterval(this.polling);
@@ -713,6 +747,26 @@
 
                 {{-- Composer --}}
                 <div class="border-t border-border-default px-4 py-3 space-y-2">
+                    {{-- Cancel button for active runs --}}
+                    <div x-show="pendingMessage" x-cloak class="flex justify-center">
+                        <button
+                            type="button"
+                            @click="
+                                if (_eventSource) {
+                                    _eventSource.close();
+                                    _eventSource = null;
+                                }
+                                $wire.finalizeStreamingRun();
+                                pendingMessage = null;
+                                streamEntries = [];
+                            "
+                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-border-default bg-surface-card text-xs text-muted hover:text-ink hover:border-accent/40 transition-colors"
+                        >
+                            <x-icon name="heroicon-o-stop" class="w-3.5 h-3.5" />
+                            {{ __('Stop') }}
+                        </button>
+                    </div>
+
                     {{-- Model picker + session usage --}}
                     <div class="flex items-center justify-between gap-2">
                         @if ($canSelectModel && count($availableModels) > 0)
@@ -775,6 +829,7 @@
             this.pendingMessage = value || '📎';
             textarea.value = '';
             textarea.style.height = 'auto';
+            localStorage.removeItem(this._draftKey);
             this.$nextTick(() => {
                 if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
             });

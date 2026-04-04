@@ -53,6 +53,7 @@ trait HandlesBackgroundChat
             'meta' => [
                 'session_id' => $this->selectedSessionId,
                 'model_override' => $this->selectedModel,
+                'page_context' => $this->capturePageContextForBackground(),
             ],
         ]);
 
@@ -153,6 +154,28 @@ trait HandlesBackgroundChat
         );
 
         $this->dispatchBackgroundChat($userMessage);
+    }
+
+    /**
+     * Capture current page context so the background job can hydrate it.
+     *
+     * @return array{consent: string, context: array<string, mixed>|null, snapshot: array<string, mixed>|null}|null
+     */
+    private function capturePageContextForBackground(): ?array
+    {
+        $holder = app(\App\Modules\Core\AI\Services\PageContextHolder::class);
+
+        if ($holder->getConsentLevel() === 'off') {
+            return null;
+        }
+
+        $context = $holder->getContext();
+
+        return [
+            'consent' => $holder->getConsentLevel(),
+            'context' => $context?->toArray(),
+            'snapshot' => $holder->getSnapshot()?->toArray(),
+        ];
     }
 
     /**

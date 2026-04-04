@@ -33,6 +33,7 @@
         laraChatMode: localStorage.getItem('agent-chat-1-mode') || 'overlay',
         laraChatFullscreen: (localStorage.getItem('agent-chat-1-fullscreen') ?? '0') === '1',
         laraPrefillPrompt: null,
+        laraBusy: false,
 
         {{-- Docked panel drag-resize --}}
         laraDockWidth: parseInt(localStorage.getItem('agent-chat-1-dock-width')) || 448,
@@ -199,6 +200,8 @@
     @keydown.meta.shift.k.window.prevent="toggleLaraChatMode()"
     @keydown.ctrl.shift.f.window.prevent="toggleLaraFullscreen()"
     @keydown.meta.shift.f.window.prevent="toggleLaraFullscreen()"
+    @agent-chat-busy.window="laraBusy = true"
+    @agent-chat-idle.window="laraBusy = false"
     @keydown.escape.window="closeLaraChat()"
     class="h-screen overflow-hidden bg-surface-page flex flex-col"
 >

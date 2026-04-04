@@ -9,8 +9,10 @@ use App\Base\AI\DTO\AiRuntimeError;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgenticRuntime;
+use App\Modules\Core\AI\Services\ChatRunPersister;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
+use App\Modules\Core\AI\Services\PageContextHolder;
 use App\Modules\Core\AI\Services\RuntimeResponseFactory;
 use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\Employee\Models\Employee;
@@ -25,9 +27,13 @@ use Illuminate\Support\Str;
 /**
  * Queue job that executes a chat message through the agentic runtime in the background.
  *
+ * Uses the streaming generator (`runStream`) so tool-calling activity
+ * is persisted to the transcript progressively, giving the client
+ * visibility into background work via polling.
+ *
  * Tracks lifecycle through OperationDispatch (queued → running → succeeded/failed).
- * Runs the agentic tool-calling loop with a background execution policy and
- * persists the assistant response to the session transcript.
+ * Checks for cancellation between streamed events so a user-initiated cancel
+ * is honoured cooperatively.
  */
 class RunAgentChatJob implements ShouldQueue
 {
@@ -62,11 +68,16 @@ class RunAgentChatJob implements ShouldQueue
 
     /**
      * Execute the background chat run.
+     *
+     * Uses `runStream()` to iterate events and persists activity entries
+     * (thinking, tool calls, results) as they occur. Checks for
+     * cancellation between events.
      */
     public function handle(
         AgenticRuntime $runtime,
         MessageManager $messageManager,
         RuntimeResponseFactory $responseFactory,
+        ChatRunPersister $persister,
     ): void {
         $dispatch = OperationDispatch::query()->find($this->dispatchId);
 
@@ -86,29 +97,21 @@ class RunAgentChatJob implements ShouldQueue
                 Auth::loginUsingId($actingForUserId);
             }
 
+            $this->hydratePageContext($dispatch);
+
             $messages = $messageManager->read($employeeId, $sessionId);
             $systemPrompt = $this->resolveSystemPrompt($employeeId, $dispatch->task);
 
-            $result = $runtime->run(
-                messages: $messages,
-                employeeId: $employeeId,
-                systemPrompt: $systemPrompt,
-                modelOverride: $modelOverride,
-                policy: ExecutionPolicy::background(),
-            );
-
-            $messageManager->appendAssistantMessage(
+            $this->executeStreamingRun(
+                $runtime,
+                $messageManager,
+                $persister,
+                $dispatch,
                 $employeeId,
                 $sessionId,
-                $result['content'],
-                $result['run_id'],
-                $result['meta'],
-            );
-
-            $dispatch->markSucceeded(
-                $result['run_id'],
-                Str::limit($result['content'], 200),
-                $result['meta'],
+                $messages,
+                $systemPrompt,
+                $modelOverride,
             );
         } catch (\Throwable $e) {
             report($e);
@@ -132,6 +135,134 @@ class RunAgentChatJob implements ShouldQueue
             throw $e;
         } finally {
             Auth::logout();
+        }
+    }
+
+    /**
+     * Iterate the streaming generator, persisting activity and checking cancellation.
+     *
+     * @param  list<mixed>  $messages
+     */
+    private function executeStreamingRun(
+        AgenticRuntime $runtime,
+        MessageManager $messageManager,
+        ChatRunPersister $persister,
+        OperationDispatch $dispatch,
+        int $employeeId,
+        string $sessionId,
+        array $messages,
+        ?string $systemPrompt,
+        ?string $modelOverride,
+    ): void {
+        $thinkingPersisted = false;
+        $fullContent = null;
+        $runId = null;
+        $meta = null;
+        $hadError = false;
+
+        foreach ($runtime->runStream($messages, $employeeId, $systemPrompt, $modelOverride, ExecutionPolicy::background()) as $event) {
+            // Cooperative cancellation check
+            if ($this->isCancelled($dispatch)) {
+                return;
+            }
+
+            $eventName = $event['event'];
+            $data = $event['data'];
+
+            $eventRunId = $data['run_id'] ?? $runId;
+            if ($eventRunId !== null && $runId === null) {
+                $runId = $eventRunId;
+            }
+
+            if ($eventName === 'status') {
+                $persister->persistStatusEvent(
+                    $messageManager,
+                    $employeeId,
+                    $sessionId,
+                    $eventRunId,
+                    $data,
+                    $thinkingPersisted,
+                );
+            }
+
+            if ($eventName === 'done') {
+                $fullContent = $data['content'] ?? '';
+                $runId = $data['run_id'] ?? $runId;
+                $meta = is_array($data['meta'] ?? null) ? $data['meta'] : [];
+
+                continue;
+            }
+
+            if ($eventName === 'error') {
+                $hadError = true;
+                $persister->persistError($messageManager, $employeeId, $sessionId, $data);
+            }
+        }
+
+        // Final cancellation check before persisting result
+        if ($this->isCancelled($dispatch)) {
+            return;
+        }
+
+        if (! $hadError && $fullContent !== null && $runId !== null) {
+            $persister->persistAssistantMessage(
+                $messageManager,
+                $employeeId,
+                $sessionId,
+                $fullContent,
+                $runId,
+                $meta ?? [],
+            );
+
+            $dispatch->markSucceeded(
+                $runId,
+                Str::limit($fullContent, 200),
+                $meta ?? [],
+            );
+        } elseif (! $hadError && ! $dispatch->isTerminal()) {
+            $dispatch->markFailed('Run completed without producing a response');
+        } elseif ($hadError && ! $dispatch->isTerminal()) {
+            $dispatch->markFailed('Run encountered an error');
+        }
+    }
+
+    /**
+     * Check whether the dispatch has been cancelled by the user.
+     *
+     * Refreshes the model from the database to pick up cancellation
+     * that may have occurred while the run was in progress.
+     */
+    private function isCancelled(OperationDispatch $dispatch): bool
+    {
+        $dispatch->refresh();
+
+        return $dispatch->isTerminal();
+    }
+
+    /**
+     * Hydrate the request-scoped PageContextHolder from dispatch metadata.
+     *
+     * When a run is offloaded from interactive to background, the page
+     * context that was resolved on the original request is stored in
+     * the dispatch meta so the background worker can reconstruct it.
+     */
+    private function hydratePageContext(OperationDispatch $dispatch): void
+    {
+        $pageContext = data_get($dispatch->meta, 'page_context');
+
+        if (! is_array($pageContext)) {
+            return;
+        }
+
+        $holder = app(PageContextHolder::class);
+        $holder->setConsentLevel($pageContext['consent'] ?? 'page');
+
+        if (isset($pageContext['context']) && is_array($pageContext['context'])) {
+            $holder->setContext(\App\Modules\Core\AI\DTO\PageContext::fromArray($pageContext['context']));
+        }
+
+        if (isset($pageContext['snapshot']) && is_array($pageContext['snapshot'])) {
+            $holder->setSnapshot(\App\Modules\Core\AI\DTO\PageSnapshot::fromArray($pageContext['snapshot']));
         }
     }
 

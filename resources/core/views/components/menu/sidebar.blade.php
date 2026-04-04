@@ -157,6 +157,7 @@
                             x-show="sidebarRail"
                             x-cloak
                             :href="pin.url"
+                            wire:navigate
                             :title="pin.label"
                             :aria-label="pin.label"
                             class="flex items-center justify-center w-full h-8 rounded-none transition text-link hover:bg-surface-subtle"
@@ -179,6 +180,7 @@
                             >&#x2801;&#x2801;</span>
                             <a
                                 :href="pin.url"
+                                wire:navigate
                                 :aria-label="pin.label"
                                 class="truncate flex-1"
                                 @click.stop

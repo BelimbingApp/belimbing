@@ -7,8 +7,8 @@ namespace App\Modules\Core\AI\Http\Controllers;
 
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\DTO\PageSnapshot;
-use App\Modules\Core\AI\DTO\ToolResultEntry;
 use App\Modules\Core\AI\Services\AgenticRuntime;
+use App\Modules\Core\AI\Services\ChatRunPersister;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\PageContextHolder;
@@ -18,7 +18,6 @@ use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -32,6 +31,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class ChatStreamController
 {
+    public function __construct(
+        private readonly ChatRunPersister $persister,
+    ) {}
+
     /**
      * Stream a chat response as Server-Sent Events.
      */
@@ -83,7 +86,7 @@ class ChatStreamController
                     $effectiveMeta['prompt_package'] = $promptMeta;
                 }
 
-                $this->persistAssistantMessage($messageManager, $employeeId, $sessionId, $fullContent, $runId, $effectiveMeta);
+                $this->persister->persistAssistantMessage($messageManager, $employeeId, $sessionId, $fullContent, $runId, $effectiveMeta);
             }
         }, 200, [
             'Content-Type' => 'text/event-stream',
@@ -125,7 +128,7 @@ class ChatStreamController
             }
 
             if ($eventName === 'status') {
-                $this->persistActivityEntry(
+                $this->persister->persistStatusEvent(
                     $messageManager,
                     $employeeId,
                     $sessionId,
@@ -143,7 +146,7 @@ class ChatStreamController
 
             if ($eventName === 'error') {
                 $hadError = true;
-                $this->persistStructuredError($messageManager, $employeeId, $sessionId, $data);
+                $this->persister->persistError($messageManager, $employeeId, $sessionId, $data);
             }
         }
 
@@ -198,47 +201,6 @@ class ChatStreamController
     }
 
     /**
-     * @param  array<string, mixed>  $data
-     */
-    private function persistStructuredError(
-        MessageManager $messageManager,
-        int $employeeId,
-        string $sessionId,
-        array $data,
-    ): void {
-        $errorMeta = is_array($data['meta'] ?? null)
-            ? $data['meta']
-            : ['message_type' => 'error'];
-
-        $this->persistErrorMessage(
-            $messageManager,
-            $employeeId,
-            $sessionId,
-            $data['message'] ?? __('An unexpected error occurred. Please try again.'),
-            $data['run_id'] ?? 'run_'.Str::random(12),
-            $errorMeta,
-        );
-    }
-
-    /**
-     * Append the assistant message to the session after streaming completes.
-     *
-     * No-op when the stream ended without a 'done' event (fullContent or runId is null).
-     */
-    private function persistAssistantMessage(
-        MessageManager $messageManager,
-        int $employeeId,
-        string $sessionId,
-        ?string $fullContent,
-        ?string $runId,
-        array $meta,
-    ): void {
-        if ($fullContent !== null && $runId !== null) {
-            $messageManager->appendAssistantMessage($employeeId, $sessionId, $fullContent, $runId, $meta);
-        }
-    }
-
-    /**
      * Hydrate page context from the cache key set by prepareStreamingRun().
      *
      * The Livewire component resolves context on the user's page request
@@ -279,112 +241,4 @@ class ChatStreamController
         }
     }
 
-    /**
-     * Persist a structured error as an assistant message with error metadata.
-     */
-    private function persistErrorMessage(
-        MessageManager $messageManager,
-        int $employeeId,
-        string $sessionId,
-        string $errorMessage,
-        string $runId,
-        array $meta,
-    ): void {
-        $messageManager->appendAssistantMessage(
-            $employeeId,
-            $sessionId,
-            __('⚠ :detail', ['detail' => $errorMessage]),
-            $runId,
-            $meta,
-        );
-    }
-
-    /**
-     * Persist thinking, tool_call, and tool_result entries to the transcript
-     * as they stream, so the activity history is durable.
-     *
-     * @param  array<string, mixed>  $data  SSE status event payload
-     */
-    private function persistActivityEntry(
-        MessageManager $messageManager,
-        int $employeeId,
-        string $sessionId,
-        ?string $runId,
-        array $data,
-        bool &$thinkingPersisted,
-    ): void {
-        if ($runId === null) {
-            return;
-        }
-
-        $phase = $data['phase'] ?? '';
-
-        if ($phase === 'thinking' && ! $thinkingPersisted) {
-            $messageManager->appendThinking($employeeId, $sessionId, $runId);
-            $thinkingPersisted = true;
-
-            return;
-        }
-
-        if ($phase === 'tool_started') {
-            $messageManager->appendToolCall(
-                $employeeId,
-                $sessionId,
-                $runId,
-                (string) ($data['tool'] ?? ''),
-                (string) ($data['args_summary'] ?? '{}'),
-                (int) ($data['tool_call_index'] ?? 0),
-            );
-
-            return;
-        }
-
-        if ($phase === 'tool_finished') {
-            $messageManager->appendToolResult(
-                $employeeId,
-                $sessionId,
-                $runId,
-                new ToolResultEntry(
-                    toolName: (string) ($data['tool'] ?? ''),
-                    resultPreview: (string) ($data['result_preview'] ?? ''),
-                    resultLength: (int) ($data['result_length'] ?? 0),
-                    status: (string) ($data['status'] ?? 'success'),
-                    durationMs: (int) ($data['duration_ms'] ?? 0),
-                    errorPayload: is_array($data['error_payload'] ?? null) ? $data['error_payload'] : null,
-                ),
-            );
-
-            return;
-        }
-
-        if ($phase === 'hook_action') {
-            $messageManager->appendHookAction(
-                $employeeId,
-                $sessionId,
-                $runId,
-                (string) ($data['stage'] ?? 'unknown'),
-                'tools_removed',
-                array_filter([
-                    'tools_removed' => $data['tools_removed'] ?? [],
-                ]),
-            );
-
-            return;
-        }
-
-        if ($phase === 'tool_denied') {
-            $messageManager->appendHookAction(
-                $employeeId,
-                $sessionId,
-                $runId,
-                'pre_tool_use',
-                'tool_denied',
-                [
-                    'tool' => (string) ($data['tool'] ?? ''),
-                    'reason' => (string) ($data['reason'] ?? 'denied by policy'),
-                    'source' => (string) ($data['source'] ?? 'hook'),
-                ],
-            );
-        }
-    }
 }

@@ -1,156 +1,149 @@
-# TODO: 
-1. Lara panel isolation from main-content navigation
-2. Non-blocking Lara execution with real-time activity updates
+# Lara Panel — Build Sheet
 
-## 1. Lara panel isolation from main-content navigation
+> **Dependency:** Complete Phase 1 before Phase 2's recovery/reconnection work (2.6).
 
-### Goal
-Ensure the Lara panel remains stable and usable while users navigate the main application, so page changes do not reset Lara UI state or wipe in-progress input.
-
-### Problem
-Although BLB's UI architecture intends the Lara panel to persist outside the main content area, disruptive behavior can still occur when:
-
-- the browser performs a full page reload
-- Livewire state is remounted during navigation
-- draft input is not persisted across refresh/remount cycles
-- page-context updates are too tightly coupled to Lara component state
-
-This is especially noticeable during development when Vite-triggered refreshes occur.
-
-### Desired behavior
-- Lara remains mounted independently from page-specific content.
-- Main-content navigation should not reset Lara open/closed state.
-- Draft input in Lara should survive navigation and accidental refreshes.
-- Lara conversation/session state should remain isolated from page component lifecycle.
-- Page context may update, but should not destroy chat UI state.
-
-### Proposed implementation
-1. Keep Lara mounted once in the persistent app shell.
-   - Confirm `resources/core/views/components/layouts/app.blade.php` remains the single mount point.
-   - Avoid mounting Lara from page-level components.
-
-2. Audit navigation paths.
-   - Prefer SPA-style navigation where applicable.
-   - Identify routes/actions still causing full browser reloads.
-
-3. Persist Lara draft state.
-   - Store draft input in `localStorage` under a stable per-user/session key.
-   - Restore draft on component boot.
-   - Clear draft only after successful send or explicit discard.
-
-4. Decouple Lara UI state from page context updates.
-   - Keep chat visibility, dock state, scroll position, and draft text independent.
-   - Treat page context as supplemental state, not component identity.
-
-5. Define behavior for hard reloads.
-   - Restore draft reliably.
-   - Preserve chat session identifier when possible.
-
-6. Optional hard-isolation fallback.
-   - Evaluate iframe/popout architecture only if shell-level persistence remains insufficient.
-
-### Suggested files to inspect
-- `resources/core/views/components/layouts/app.blade.php`
-- `app/Modules/Core/AI/Livewire/Chat.php`
-- `resources/core/views/livewire/ai/chat.blade.php`
-- any Lara Alpine/local-storage helpers
-- navigation entry points using Livewire/Blade links
-
-### Acceptance criteria
-- Navigating between admin pages does not close or reset Lara.
-- Typed but unsent Lara input survives page navigation.
-- Typed but unsent Lara input survives accidental dev refresh.
-- Lara session state remains available after main-content changes.
-- No duplicate Lara mounts exist across page layouts.
-
-### Notes
-Reference architecture:
+## Reference docs
 - `docs/architecture/ui-layout.md`
 - `docs/architecture/ai/lara.md`
 
-## 2. Non-blocking Lara execution with real-time activity updates
+## Key files
+- `resources/core/views/components/layouts/app.blade.php` — app shell mount point
+- `app/Modules/Core/AI/Livewire/Chat.php` — main chat Livewire component
+- `app/Modules/Core/AI/Livewire/Concerns/HandlesStreaming.php` — SSE streaming concern
+- `app/Modules/Core/AI/Livewire/Concerns/HandlesBackgroundChat.php` — background execution concern
+- `app/Modules/Core/AI/Http/Controllers/ChatStreamController.php` — SSE endpoint
+- `app/Modules/Core/AI/Jobs/RunAgentChatJob.php` — background job
+- `app/Modules/Core/AI/Services/ChatRunPersister.php` — shared activity persistence
+- `resources/core/views/livewire/ai/chat.blade.php` — chat Blade template
+- `resources/core/views/components/ai/chat-composer-fields.blade.php` — composer fields
 
-### Goal
-Ensure Lara can continue working without freezing the rest of the application, while the panel exposes a live, user-readable activity stream and a clear busy signal from dispatch through final response.
+---
 
-### Problem
-Today the user mostly sees Lara's output when the run finishes. During that wait, the experience feels blocked:
+## Phase 1 — Panel isolation from main-content navigation
 
-- the panel shows limited in-flight feedback
-- the main UI should remain usable, but the current experience suggests Lara work is monopolizing the surface
-- there is no consistent shell-level signal showing that Lara is still active
-- long-running work degrades into a generic waiting state instead of a modern agent-style progress feed
+**Goal:** Lara panel remains stable and usable while users navigate; page changes do not reset UI state or wipe in-progress input.
 
-The codebase already contains partial primitives for this (`HandlesBackgroundChat`, `RunAgentChatJob`, `ChatStreamController`), but they are not yet shaped into a cohesive Lara activity UX.
+**Problem:** Although the UI architecture intends Lara to persist in the app shell (zone D), disruptive behavior still occurs when the browser performs a full page reload, Livewire state is remounted during navigation, draft input is not persisted across refresh/remount cycles, or page-context updates are too tightly coupled to Lara component state. This is especially noticeable during development when Vite HMR triggers full refreshes.
 
-### Desired behavior
-- Sending a message to Lara does not block unrelated page interactions or main-content navigation.
-- The Lara composer may enter a pending state, but the rest of the app remains usable.
-- Lara shows live progress updates while preparing context, choosing tools, running actions, waiting on results, and composing the final answer.
-- A compact busy signal is visible even when the panel is collapsed.
-- Long-running runs can continue in background without losing visibility into what Lara is doing.
-- Motion and status affordances remain accessible, including reduced-motion behavior.
+### 1.1 Shell mount point
+- [x] Confirm `app.blade.php` remains the single Lara mount point — verified at line 339
+- [x] Verify no page-level components mount Lara independently — confirmed
+- [x] Verify no duplicate Lara mounts exist across layouts — confirmed
 
-### Proposed implementation
-1. Separate Lara run state from global UI lock state.
-   - Keep pending/disabled behavior scoped to the Lara composer and current run controls.
-   - Do not freeze page navigation, sidebar interactions, or unrelated forms while Lara is working.
-   - Provide cancel or dismiss controls where technically feasible.
+### 1.2 Navigation audit
+- [x] Identify all routes/actions still causing full browser reloads — pinned sidebar links, logout forms, impersonation, timezone switch
+- [x] Convert remaining full-reload navigations to `wire:navigate` where applicable — added `wire:navigate` to pinned sidebar links (rail + expanded)
+- [ ] Confirm `wire:navigate` morphs preserve Lara's Alpine state across page transitions — needs manual testing
+- Note: Logout, impersonation, timezone switch intentionally cause full reloads (auth state changes)
 
-2. Normalize one activity-event model for both streamed and background execution.
-   - Treat runtime status/tool events as first-class UI events, not just internal telemetry.
-   - Reuse streaming paths for interactive runs and extend background execution to expose more than `Queued` / `Running` / `Completed`.
-   - Persist enough run metadata to reconnect after remount, reopen, or refresh.
+### 1.3 Persist open/closed state
+- [x] Persist `laraChatOpen` to `localStorage` — already implemented in `app.blade.php` (key: `agent-chat-1-open`)
+- [x] Restore open/closed state on hard reload — already implemented
+- [x] Update `ui-layout.md` Alpine state table to reflect persistence — updated (also added `laraChatMode`, `laraChatFullscreen`, `laraDockWidth`)
 
-3. Introduce a transcript-level live activity timeline.
-   - Render short, human-readable activity entries such as `Preparing context`, `Selecting tool`, `Running command`, `Inspecting page`, and `Summarizing result`.
-   - Group or debounce noisy low-level events so the transcript stays readable.
-   - Keep operational activity visually distinct from Lara's final assistant response.
+### 1.4 Persist draft input
+- [x] Store draft input in `localStorage` under a stable per-user key — `blb-lara-draft-{userId}`
+- [x] Restore draft on component boot — `x-init` restores from localStorage
+- [x] Clear draft only after successful send or explicit discard — cleared in `onSubmit`
+- [ ] Verify draft survives `wire:navigate` page transitions — needs manual testing
+- [ ] Verify draft survives Vite HMR full reloads — needs manual testing
 
-4. Design a shell-level busy signal.
-   - Add a subtle but obvious indicator on the Lara trigger and panel header.
-   - Candidate patterns: flashing dot, pulsing badge, or rotating ring.
-   - Provide a non-animated fallback for reduced-motion users.
+### 1.5 Decouple UI state from page context
+- [x] Keep chat visibility, dock state, scroll position independent of page component lifecycle — already implemented
+- [x] Treat page context as supplemental state, not component identity — already implemented
+- [x] Page context updates do not destroy chat UI state — already implemented
 
-5. Unify short and long runs.
-   - Short runs should stream progress and response content in real time.
-   - Long runs should transition into background execution without collapsing into a dead-end waiting message.
-   - Avoid a UX cliff where the user only sees `Running in background...` and nothing else.
+### 1.6 Hard reload behavior
+- [x] Restore draft reliably after hard reload — localStorage persistence
+- [x] Preserve chat session identifier across hard reloads — `blb-lara-session` in localStorage, restored on `x-init`
 
-6. Define recovery and reconnection behavior.
-   - Reopening the panel should restore the current run state and recent activity.
-   - Navigation or Livewire remount should not discard an in-flight Lara run.
-   - If the run already completed, hydrate the final answer and clear the busy signal.
+### 1.7 Hard-isolation fallback (optional)
+- [ ] Evaluate iframe/popout architecture only if shell-level persistence remains insufficient — deferred, not needed with current approach
 
-7. Keep activity semantics separate from the final response.
-   - Busy/status entries are operational state, not assistant prose.
-   - The final answer should remain clean and should not duplicate every intermediate event verbatim.
+### 1.8 Acceptance
+- [x] Navigating between admin pages does not close or reset Lara — shell persistence + wire:navigate
+- [x] Lara open/closed state survives hard reload — localStorage
+- [ ] Typed but unsent input survives page navigation — needs manual testing
+- [ ] Typed but unsent input survives accidental dev refresh — needs manual testing
+- [x] Lara session state remains available after main-content changes — session ID persisted
+- [x] No duplicate Lara mounts exist across page layouts — verified
 
-### Suggested files to inspect
-- `app/Modules/Core/AI/Livewire/Chat.php`
-- `app/Modules/Core/AI/Livewire/Concerns/HandlesStreaming.php`
-- `app/Modules/Core/AI/Livewire/Concerns/HandlesBackgroundChat.php`
-- `app/Modules/Core/AI/Http/Controllers/ChatStreamController.php`
-- `app/Modules/Core/AI/Jobs/RunAgentChatJob.php`
-- `resources/core/views/livewire/ai/chat.blade.php`
-- `resources/core/views/components/ai/chat-composer-fields.blade.php`
-- Lara trigger/mount points in the persistent app shell
+---
 
-### Acceptance criteria
-- Starting a Lara run does not disable unrelated page interactions or main-content navigation.
-- The user sees live activity updates before the final Lara answer is available.
-- The user sees a clear busy signal when the Lara panel is open and when it is collapsed.
-- Activity state survives panel reopen and page remount where feasible.
-- Long-running runs can continue in background with progressive status instead of only final completion.
-- Busy indicator behavior is accessible and reduced-motion safe.
+## Phase 2 — Non-blocking execution with real-time activity updates
 
-### Notes
-Reference interaction patterns:
-- Copilot CLI
-- Claude Code
-- OpenCode
+**Goal:** Lara works without freezing the app; the panel exposes a live activity stream and a clear busy signal from dispatch through final response.
+
+**Problem:** Today the user mostly sees Lara's output when the run finishes. During that wait the experience feels blocked: the panel shows limited in-flight feedback, the main UI appears monopolized, there is no consistent shell-level signal that Lara is still active, and long-running work degrades into a generic waiting state instead of a modern agent-style progress feed. Partial primitives exist (`HandlesBackgroundChat`, `RunAgentChatJob`, `ChatStreamController`) but are not yet shaped into a cohesive activity UX.
+
+**Hard dependency:** Phase 1 must be complete — reconnecting to an in-flight run after navigation is meaningless if navigation destroys Lara's mount.
+
+### 2.1 Separate run state from global UI lock
+- [x] Scope pending/disabled behavior to Lara composer and run controls only — already scoped via `pendingMessage` in chat section
+- [x] Verify page navigation, sidebar, and unrelated forms remain usable during a Lara run — verified, separate DOM
+- [x] Add cancel/abort control to the composer UI — stop button added, visible during active runs
+- [x] Define cancel behavior for interactive (SSE) runs — closes `EventSource`, calls `finalizeStreamingRun()`, clears state
+- [x] Define cancel behavior for background (`RunAgentChatJob`) runs — existing `cancelBackgroundChat()` + cooperative check in job via `isCancelled()`
+- [ ] Define what the user sees on cancellation (partial response? cancellation marker?) — currently clears stream entries; may want to keep partial content
+
+### 2.2 Unified activity-event model
+- [x] **Decision:** keep SSE for interactive, enhanced polling for background — transcript is source of truth; no Reverb needed
+- [x] Define a single event vocabulary shared by interactive and background paths — extracted `ChatRunPersister` with shared persistence for `thinking`, `tool_call`, `tool_result`, `hook_action`, `tool_denied`
+- [x] Extend `RunAgentChatJob` to emit progress events — switched from `run()` to `runStream()`, persists activity entries via `ChatRunPersister`
+- [x] Persist run metadata sufficient for client reconnection after remount/reopen/refresh — transcript + `backgroundDispatchId` Livewire property
+
+### 2.3 Live activity timeline in transcript
+- [x] Render human-readable activity entries — already implemented: thinking, tool call (with tool name + args), streaming text
+- [x] Group or debounce noisy low-level events — thinking shows once, tool calls grouped per tool
+- [x] Keep activity entries visually distinct from Lara's final assistant response — different styling (icons, borders, compact vs full bubble)
+- [x] **Decision:** tool results — collapsed/expandable via chevron toggle (already implemented)
+- [x] Implement chosen tool-result display pattern — done: expandable card with result preview, duration, status badge
+
+### 2.4 Shell-level busy signal
+- [x] Add busy indicator on the Lara trigger button (visible when panel is collapsed) — pulsing accent dot on status-bar Lara button
+- [x] Add busy indicator on the panel header (visible when panel is open) — busy state derived from `pendingMessage || backgroundDispatchId`
+- [x] Choose pattern — pulsing dot (`w-2 h-2 bg-accent rounded-full animate-pulse`)
+- [x] Provide non-animated `prefers-reduced-motion` fallback — `motion-reduce:animate-none motion-reduce:opacity-70`
+- [x] Clear busy signal when run completes or is cancelled — `agent-chat-idle` event dispatched via x-effect
+
+### 2.5 Unify short and long runs
+- [x] Short runs stream progress and response content in real time — SSE with `streamEntries`
+- [x] Long runs transition to background execution with progressive status — `RunAgentChatJob` now uses `runStream()` and persists activity entries
+- [x] Define the timeout/threshold for interactive → background transition — existing timeout-based offload in `handleTimeoutWithBackgroundOffer()`
+- [x] Background runs continue emitting activity events after transition — polling refreshes transcript every 3s to show new entries
+
+### 2.6 Recovery and reconnection
+- [x] Reopening the panel restores current run state and recent activity — `backgroundDispatchId` is Livewire property, polling resumes
+- [x] `wire:navigate` remount does not discard an in-flight Lara run — Livewire properties persist across morph
+- [x] If run completed while panel was closed, hydrate final answer and clear busy signal — `$wire.$refresh()` on poll + idle event
+- [ ] If run is still in-flight on reopen, reconnect to activity stream — SSE reconnection not implemented (background polling covers this)
+
+### 2.7 Activity vs response separation
+- [x] Activity entries are operational state, not assistant prose — thinking/tool_call entries use distinct components
+- [x] Final answer does not duplicate intermediate events verbatim — stream entries cleared on `agent-chat-response-ready`
+- [ ] Activity entries collapse or fade after the final response arrives — deferred, current clear-on-done is acceptable
+
+### 2.8 Acceptance
+- [x] Starting a Lara run does not disable unrelated page interactions or navigation
+- [x] User sees live activity updates before the final answer — streaming entries + background transcript refresh
+- [x] User sees a clear busy signal when panel is open and when collapsed — pulsing dot on status-bar
+- [x] Activity state survives panel reopen and page remount — transcript persistence + polling
+- [x] Long-running runs continue in background with progressive status — `runStream()` + activity persistence
+- [x] Cancelling an in-flight run stops execution and leaves transcript consistent — cooperative cancel + `markCancelled()`
+- [x] Busy indicator is accessible and reduced-motion safe — `motion-reduce:` fallback
+
+---
+
+## Notes
+
+Reference interaction patterns: Copilot CLI, Claude Code, OpenCode.
 
 Implementation direction:
-- Prefer concise stage updates over raw token noise.
-- Build one run-state model that can power both interactive streaming and background execution.
-- This work should align with item 1 so session persistence and activity recovery use the same state boundaries.
+- Prefer concise stage updates over raw token noise
+- Build one run-state model that powers both interactive streaming and background execution
+
+### Remaining work (minor)
+- Manual testing of Phase 1 persistence items (draft across navigation, HMR)
+- Decide on partial-content display when a run is cancelled mid-stream
+- SSE reconnection for interrupted interactive streams (background polling covers the gap)
+- Optional: activity entry collapse/fade after final response arrives

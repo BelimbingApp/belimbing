@@ -67,6 +67,7 @@
                     aria-label="{{ __('Open Lara chat (Ctrl+K)') }}"
                 >
                     <x-ai.lara-identity compact :show-role="false" />
+                    <span x-show="laraBusy" x-cloak class="w-2 h-2 bg-accent rounded-full animate-pulse motion-reduce:animate-none motion-reduce:opacity-70"></span>
                 </button>
             @else
                 <a
