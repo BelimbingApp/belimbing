@@ -39,16 +39,14 @@ Think of Laravel as the Level 0 foundation and BLB as a Level 1 framework built 
 2. **Consider framework perspective** — How does this help adopters?
 3. **Document the divergence** — Why BLB does it differently
 
-## 4. Top-Down Planning
-When you are tasked to create a plan:
-- **State the problem's essence in one sentence.** If you cannot, the design is fuzzy.
-- **Define the public interface first.** What operations exist, what they promise, and what they will not do.
-- **Decompose into major responsibilities.** Identify 2–4 top-level components; defer internal details.
-- **Sketch each component's contract.** Inputs, outputs, invariants; avoid implementation details.
-- **Define module-level policies.** Document whether the module retries, propagates, or wraps errors.
-- **Identify expected uses and call patterns.** Understanding callers helps you choose interfaces that feel obvious.
-- **Spot potential "complexity hotspots."** Note inputs that may grow, error cases, or cross-cutting concerns.
-- **Stop before coding.** Planning ends at contracts and structure; implementation comes after approval.
+## 4. Planning Through Todo Docs
+When work needs a real plan, create or update a document in `docs/todo/` and use that document as the visible implementation plan.
+
+- **Use the todo doc as the source of truth.** Do not keep the only actionable plan in hidden session state, tool-managed plans, or private scratch notes.
+- **Plan in the repository.** The user should be able to open the todo doc and see the design, current phase, and implementation progress.
+- **Follow the todo-doc guide.** `docs/todo/AGENTS.md` defines how planning documents in that directory should be structured and maintained.
+- **Keep the plan live.** As the design changes or implementation advances, update the todo doc so it remains the current truth.
+- **Use judgment on scope.** Not every tiny task needs a todo doc, but any task that benefits from explicit planning, phased execution, or user review should have one.
 
 ## 5. PHP Coding Conventions
 
