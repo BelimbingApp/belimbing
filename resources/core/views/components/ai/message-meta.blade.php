@@ -43,6 +43,15 @@
     };
 
     $hasRunMeta = $runIdLabel !== null && ($tokens !== null || $latencyMs !== null || $retryAttempts !== null || $fallbackAttempts !== null || $errorType !== null);
+
+    $canAccessControlPlane = false;
+    if ($hasRunMeta && auth()->check()) {
+        $actor = \App\Base\Authz\DTO\Actor::forUser(auth()->user());
+        $canAccessControlPlane = app(\App\Base\Authz\Contracts\AuthorizationService::class)
+            ->can($actor, 'admin.ai.control-plane')
+            ->allowed;
+    }
+
     $promptTokens = $tokens['prompt'] ?? null;
     $completionTokens = $tokens['completion'] ?? null;
 @endphp
@@ -151,9 +160,22 @@
                         @endif
 
                         @if (is_array($fallbackAttempts) && count($fallbackAttempts) > 0)
-                            <div class="flex justify-between">
-                                <span class="text-muted">{{ __('Fallbacks') }}</span>
-                                <span>{{ count($fallbackAttempts) }}</span>
+                            <div class="border-t border-border-default pt-1.5 mt-1.5">
+                                <div class="flex justify-between">
+                                    <span class="text-amber-500">{{ __('Fallbacks') }}</span>
+                                    <span class="text-amber-500">{{ count($fallbackAttempts) }}</span>
+                                </div>
+                                @foreach ($fallbackAttempts as $attempt)
+                                    @php
+                                        $attemptError = ($canAccessControlPlane && ! empty($attempt['diagnostic']))
+                                            ? $attempt['diagnostic']
+                                            : ($attempt['error'] ?? __('unknown error'));
+                                    @endphp
+                                    <div class="text-muted mt-0.5 text-[10px]">
+                                        {{ $attempt['provider'] ?? '?' }}/{{ $attempt['model'] ?? '?' }}
+                                        — <span class="text-red-400 line-clamp-3">{{ $attemptError }}</span>
+                                    </div>
+                                @endforeach
                             </div>
                         @endif
 
@@ -166,6 +188,18 @@
                                 @if ($errorMessage !== null)
                                     <div class="text-muted mt-0.5 line-clamp-2">{{ $errorMessage }}</div>
                                 @endif
+                            </div>
+                        @endif
+
+                        @if ($canAccessControlPlane)
+                            <div class="border-t border-border-default pt-1.5 mt-1.5">
+                                <a
+                                    href="{{ route('admin.ai.control-plane', ['inspectRunId' => $runIdLabel]) }}"
+                                    wire:navigate
+                                    class="text-[10px] text-accent hover:underline"
+                                >
+                                    {{ __('View in Control Plane') }} →
+                                </a>
                             </div>
                         @endif
                     </div>

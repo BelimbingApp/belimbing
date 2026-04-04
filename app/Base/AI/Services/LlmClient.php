@@ -390,7 +390,7 @@ class LlmClient
                         'role' => 'user',
                         'content' => is_string($content)
                             ? [['type' => 'input_text', 'text' => $content]]
-                            : $content,
+                            : $this->convertContentPartsToResponses($content),
                     ];
                     break;
 
@@ -430,6 +430,35 @@ class LlmClient
         }
 
         return $input;
+    }
+
+    /**
+     * Convert Chat Completions multimodal content parts to Responses API format.
+     *
+     * Chat Completions: {type: "text", text: "..."}, {type: "image_url", image_url: {url: "..."}}
+     * Responses API:    {type: "input_text", text: "..."}, {type: "input_image", image_url: "..."}
+     *
+     * @param  list<array<string, mixed>>  $parts
+     * @return list<array<string, mixed>>
+     */
+    private function convertContentPartsToResponses(array $parts): array
+    {
+        $converted = [];
+
+        foreach ($parts as $part) {
+            $type = $part['type'] ?? '';
+
+            $converted[] = match ($type) {
+                'text' => ['type' => 'input_text', 'text' => $part['text'] ?? ''],
+                'image_url' => [
+                    'type' => 'input_image',
+                    'image_url' => $part['image_url']['url'] ?? $part['image_url'] ?? '',
+                ],
+                default => $part,
+            };
+        }
+
+        return $converted;
     }
 
     /**

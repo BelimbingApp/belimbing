@@ -74,6 +74,7 @@ class AgentRuntime
                     'error' => $attemptResult['meta']['error'] ?? 'Unknown error',
                     'error_type' => $attemptResult['meta']['error_type'] ?? 'unknown',
                     'latency_ms' => $attemptResult['meta']['latency_ms'] ?? 0,
+                    'diagnostic' => $attemptResult['meta']['diagnostic'] ?? null,
                 ];
 
                 $lastResult = $attemptResult;

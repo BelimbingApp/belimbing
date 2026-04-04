@@ -146,6 +146,9 @@
                         {{ $attempt['provider'] ?? '?' }} / {{ $attempt['model'] ?? '?' }}
                         — <span class="text-danger">{{ $attempt['error'] ?? __('unknown error') }}</span>
                     </p>
+                    @if(! empty($attempt['diagnostic']))
+                        <p class="text-xs text-muted font-mono ml-4 mt-0.5">{{ $attempt['diagnostic'] }}</p>
+                    @endif
                 @endforeach
             </div>
         </div>

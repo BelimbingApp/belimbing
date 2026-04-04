@@ -124,7 +124,7 @@ class Playground extends Component
         }
 
         // Run LLM
-        $result = $runtime->run($messages, $this->selectedAgentId, $systemPrompt);
+        $result = $runtime->run($messages, $this->selectedAgentId, $systemPrompt, sessionId: $this->selectedSessionId);
 
         // Append assistant message
         $messageManager->appendAssistantMessage(

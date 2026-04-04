@@ -204,7 +204,7 @@ class RunRecorder
         $safe = array_diff_key($meta, array_flip([
             'provider_name', 'model', 'latency_ms', 'tokens',
             'retry_attempts', 'fallback_attempts', 'tool_actions',
-            'error', 'error_type', 'message_type',
+            'error', 'error_type', 'diagnostic', 'message_type',
             'llm',
         ]));
 

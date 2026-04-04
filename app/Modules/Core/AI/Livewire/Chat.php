@@ -231,7 +231,7 @@ class Chat extends Component
             $systemPrompt = app(PromptRenderer::class)->render($package);
         }
 
-        $result = $runtime->run($messages, $this->employeeId, $systemPrompt, $this->selectedModel);
+        $result = $runtime->run($messages, $this->employeeId, $systemPrompt, $this->selectedModel, sessionId: $this->selectedSessionId);
 
         $actionJs = $this->extractAgentAction($result['content']);
         if ($actionJs !== null) {

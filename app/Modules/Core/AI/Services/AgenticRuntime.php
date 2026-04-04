@@ -55,9 +55,10 @@ class AgenticRuntime
      * @param  string|null  $systemPrompt  System prompt
      * @param  string|null  $modelOverride  Optional model ID to override the resolved config
      * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
+     * @param  string|null  $sessionId  Chat session ID for run ledger correlation
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
-    public function run(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null, ?ExecutionPolicy $policy = null): array
+    public function run(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null, ?ExecutionPolicy $policy = null, ?string $sessionId = null): array
     {
         $runId = 'run_'.Str::random(12);
         $policy ??= ExecutionPolicy::interactive();
@@ -67,6 +68,7 @@ class AgenticRuntime
             employeeId: $employeeId,
             source: 'chat',
             executionMode: $policy->mode->value,
+            sessionId: $sessionId,
             actingForUserId: auth()->id(),
             timeoutSeconds: $policy->timeoutSeconds,
         );
@@ -148,9 +150,10 @@ class AgenticRuntime
      * @param  string|null  $systemPrompt  System prompt
      * @param  string|null  $modelOverride  Optional model ID override
      * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
+     * @param  string|null  $sessionId  Chat session ID for run ledger correlation
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
-    public function runStream(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null, ?ExecutionPolicy $policy = null): \Generator
+    public function runStream(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null, ?ExecutionPolicy $policy = null, ?string $sessionId = null): \Generator
     {
         $runId = 'run_'.Str::random(12);
         $policy ??= ExecutionPolicy::interactive();
@@ -160,6 +163,7 @@ class AgenticRuntime
             employeeId: $employeeId,
             source: 'stream',
             executionMode: $policy->mode->value,
+            sessionId: $sessionId,
             actingForUserId: auth()->id(),
             timeoutSeconds: $policy->timeoutSeconds,
         );
@@ -839,7 +843,7 @@ class AgenticRuntime
      * Build a structured fallback attempt entry for metadata.
      *
      * @param  array<string, mixed>  $config
-     * @return array{provider: string, model: string, error: string, error_type: string, latency_ms: int}
+     * @return array{provider: string, model: string, error: string, error_type: string, latency_ms: int, diagnostic: string|null}
      */
     private function buildFallbackAttempt(array $config, AiRuntimeError $error): array
     {
@@ -849,6 +853,7 @@ class AgenticRuntime
             'error' => $error->userMessage,
             'error_type' => $error->errorType->value,
             'latency_ms' => $error->latencyMs,
+            'diagnostic' => $error->diagnostic !== '' ? $error->diagnostic : null,
         ];
     }
 

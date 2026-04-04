@@ -115,7 +115,7 @@ class ChatStreamController
         $hadError = false;
         $thinkingPersisted = false;
 
-        foreach ($runtime->runStream($messages, $employeeId, $systemPrompt, $modelOverride) as $event) {
+        foreach ($runtime->runStream($messages, $employeeId, $systemPrompt, $modelOverride, sessionId: $sessionId) as $event) {
             $eventName = $event['event'];
             $data = $event['data'];
 

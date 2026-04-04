@@ -92,6 +92,7 @@ class RuntimeResponseFactory
             'latency_ms' => $error->latencyMs,
             'error' => $error->userMessage,
             'error_type' => $error->errorType->value,
+            'diagnostic' => $error->diagnostic !== '' ? $error->diagnostic : null,
             'message_type' => 'error',
             'fallback_attempts' => [],
         ];

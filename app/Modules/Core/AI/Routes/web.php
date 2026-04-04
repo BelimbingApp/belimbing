@@ -57,5 +57,5 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('admin/ai/runs/{runId}', RunDetail::class)
         ->name('admin.ai.runs.show')
-        ->where('runId', '[0-9a-f\-]+');
+        ->where('runId', '[a-zA-Z0-9_\-]+');
 });

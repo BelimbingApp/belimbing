@@ -34,7 +34,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $prompt_tokens
  * @property int|null $completion_tokens
  * @property list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>|null $retry_attempts
- * @property list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>|null $fallback_attempts
+ * @property list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int, diagnostic: string|null}>|null $fallback_attempts
  * @property list<array{tool: string, result_length: int|null}>|null $tool_actions
  * @property string|null $error_type
  * @property string|null $error_message

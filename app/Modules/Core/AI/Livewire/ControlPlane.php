@@ -11,10 +11,13 @@ use App\Modules\Core\AI\DTO\ControlPlane\HealthSnapshot;
 use App\Modules\Core\AI\DTO\ControlPlane\LifecyclePreview;
 use App\Modules\Core\AI\DTO\ControlPlane\LifecycleRequest as LifecycleRequestDTO;
 use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
+use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Enums\LifecycleAction;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\ControlPlane\HealthAndPresenceService;
 use App\Modules\Core\AI\Services\ControlPlane\LifecycleControlService;
 use App\Modules\Core\AI\Services\ControlPlane\RunInspectionService;
+use App\Modules\Core\AI\Services\MessageManager;
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
 
@@ -33,6 +36,9 @@ class ControlPlane extends Component
 
     /** @var array<string, mixed>|null */
     public ?array $singleRunInspection = null;
+
+    /** @var list<Message> */
+    public array $runTranscript = [];
 
     public string $inspectionError = '';
 
@@ -70,6 +76,19 @@ class ControlPlane extends Component
     public array $recentLifecycleRequests = [];
 
     // ---------------------------------------------------------------
+    // Mount
+    // ---------------------------------------------------------------
+
+    public function mount(): void
+    {
+        $runId = request()->query('inspectRunId');
+        if (is_string($runId) && $runId !== '') {
+            $this->inspectRunId = $runId;
+            $this->inspectRun();
+        }
+    }
+
+    // ---------------------------------------------------------------
     // Run Inspector actions
     // ---------------------------------------------------------------
 
@@ -96,6 +115,7 @@ class ControlPlane extends Component
         }
 
         $this->singleRunInspection = $this->mapRunInspection($result);
+        $this->loadRunTranscript($this->inspectRunId);
     }
 
     /**
@@ -232,7 +252,32 @@ class ControlPlane extends Component
     {
         $this->runInspections = [];
         $this->singleRunInspection = null;
+        $this->runTranscript = [];
         $this->inspectionError = '';
+    }
+
+    /**
+     * Load transcript entries for a run, filtered to that run's messages.
+     */
+    private function loadRunTranscript(string $runId): void
+    {
+        $this->runTranscript = [];
+
+        $run = AiRun::query()->find($runId);
+        if ($run === null || $run->session_id === null) {
+            return;
+        }
+
+        $messageManager = app(MessageManager::class);
+        $allMessages = $messageManager->read($run->employee_id, $run->session_id);
+
+        $this->runTranscript = array_values(array_filter(
+            $allMessages,
+            fn (Message $msg) => $msg->runId === $runId
+                || $msg->type === 'thinking'
+                || $msg->type === 'tool_call'
+                || $msg->type === 'tool_result',
+        ));
     }
 
     private function resolveLifecycleAction(): ?LifecycleAction

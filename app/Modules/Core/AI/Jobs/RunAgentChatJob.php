@@ -160,7 +160,7 @@ class RunAgentChatJob implements ShouldQueue
         $meta = null;
         $hadError = false;
 
-        foreach ($runtime->runStream($messages, $employeeId, $systemPrompt, $modelOverride, ExecutionPolicy::background()) as $event) {
+        foreach ($runtime->runStream($messages, $employeeId, $systemPrompt, $modelOverride, ExecutionPolicy::background(), $sessionId) as $event) {
             // Cooperative cancellation check
             if ($this->isCancelled($dispatch)) {
                 return;
