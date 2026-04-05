@@ -6,6 +6,7 @@
 use App\Modules\Core\AI\Http\Controllers\ChatStreamController;
 use App\Modules\Core\AI\Http\Controllers\MessagingWebhookController;
 use App\Modules\Core\AI\Http\Controllers\ProviderSetupController;
+use App\Modules\Core\AI\Http\Controllers\TurnEventStreamController;
 use App\Modules\Core\AI\Livewire\ControlPlane;
 use App\Modules\Core\AI\Livewire\Playground;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
@@ -25,6 +26,9 @@ Route::middleware(['auth'])->group(function () {
     // Agent chat streaming (SSE)
     Route::get('api/ai/chat/stream', ChatStreamController::class)
         ->name('ai.chat.stream');
+    // Turn event replay/follow (SSE resume)
+    Route::get('api/ai/chat/turns/{turnId}/events', TurnEventStreamController::class)
+        ->name('ai.chat.turn.events');
     // Lara setup
     Route::get('admin/setup/lara', Lara::class)
         ->name('admin.setup.lara');

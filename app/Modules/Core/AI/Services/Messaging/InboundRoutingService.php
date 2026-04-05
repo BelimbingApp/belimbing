@@ -7,8 +7,8 @@ namespace App\Modules\Core\AI\Services\Messaging;
 
 use App\Modules\Core\AI\Enums\MessageDirection;
 use App\Modules\Core\AI\Enums\SignalAuthenticityStatus;
-use App\Modules\Core\AI\Models\Conversation;
-use App\Modules\Core\AI\Models\ConversationMessage;
+use App\Modules\Core\AI\Models\ChannelConversation;
+use App\Modules\Core\AI\Models\ChannelConversationMessage;
 use App\Modules\Core\AI\Models\InboundSignal;
 
 /**
@@ -18,7 +18,7 @@ use App\Modules\Core\AI\Models\InboundSignal;
  * service decides how the signal maps to the BLB domain:
  *
  * 1. Assigns the signal to an existing or new conversation
- * 2. Creates a ConversationMessage record for the inbound content
+ * 2. Creates a ChannelConversationMessage record for the inbound content
  * 3. Marks the signal as routed with any resulting operation ID
  *
  * Future extensions will add domain workflow routing (e.g., auto-assign
@@ -69,7 +69,7 @@ class InboundRoutingService
      * Uses the channel + account + sender/conversation identifier as
      * the deduplication key.
      */
-    private function resolveConversation(InboundSignal $signal): Conversation
+    private function resolveConversation(InboundSignal $signal): ChannelConversation
     {
         $externalId = $signal->conversation_identifier ?? $signal->sender_identifier;
 
@@ -83,7 +83,7 @@ class InboundRoutingService
             $companyId = 1;
         }
 
-        return Conversation::query()->firstOrCreate(
+        return ChannelConversation::query()->firstOrCreate(
             [
                 'company_id' => $companyId,
                 'channel' => $signal->channel,
@@ -97,13 +97,13 @@ class InboundRoutingService
     }
 
     /**
-     * Persist the inbound message content as a ConversationMessage.
+     * Persist the inbound message content as a ChannelConversationMessage.
      */
-    private function persistInboundMessage(Conversation $conversation, InboundSignal $signal): ConversationMessage
+    private function persistInboundMessage(ChannelConversation $conversation, InboundSignal $signal): ChannelConversationMessage
     {
         $normalizedPayload = $signal->normalized_payload ?? [];
 
-        return ConversationMessage::query()->create([
+        return ChannelConversationMessage::query()->create([
             'conversation_id' => $conversation->id,
             'direction' => MessageDirection::Inbound,
             'external_message_id' => $normalizedPayload['message_id'] ?? null,

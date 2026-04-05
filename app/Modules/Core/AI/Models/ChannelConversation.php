@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * Messaging conversation — tracks message threads across channels.
+ * Channel conversation — tracks message threads across external channels.
  *
  * @property int $id
  * @property int $company_id
@@ -28,14 +28,14 @@ use Illuminate\Support\Carbon;
  * @property-read Company $company
  * @property-read ChannelAccount|null $channelAccount
  */
-class Conversation extends Model
+class ChannelConversation extends Model
 {
     /**
      * The table associated with the model.
      *
      * @var string
      */
-    protected $table = 'ai_conversations';
+    protected $table = 'ai_channel_conversations';
 
     /**
      * The attributes that are mass assignable.
@@ -87,7 +87,7 @@ class Conversation extends Model
      */
     public function messages(): HasMany
     {
-        return $this->hasMany(ConversationMessage::class, 'conversation_id');
+        return $this->hasMany(ChannelConversationMessage::class, 'conversation_id');
     }
 
     /**

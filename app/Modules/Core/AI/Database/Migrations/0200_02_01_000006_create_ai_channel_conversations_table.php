@@ -14,7 +14,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('ai_conversations', function (Blueprint $table): void {
+        Schema::create('ai_channel_conversations', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('company_id')->constrained('companies');
             $table->string('channel', 30);
@@ -29,9 +29,9 @@ return new class extends Migration
             $table->index(['channel_account_id', 'external_id']);
         });
 
-        Schema::create('ai_conversation_messages', function (Blueprint $table): void {
+        Schema::create('ai_channel_conversation_messages', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('conversation_id')->constrained('ai_conversations')->cascadeOnDelete();
+            $table->foreignId('conversation_id')->constrained('ai_channel_conversations')->cascadeOnDelete();
             $table->string('direction', 10)->comment('inbound or outbound');
             $table->string('external_message_id')->nullable()->comment('Platform message ID');
             $table->text('content')->nullable();
@@ -52,7 +52,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('ai_conversation_messages');
-        Schema::dropIfExists('ai_conversations');
+        Schema::dropIfExists('ai_channel_conversation_messages');
+        Schema::dropIfExists('ai_channel_conversations');
     }
 };

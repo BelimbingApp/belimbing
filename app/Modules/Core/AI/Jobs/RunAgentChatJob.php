@@ -280,7 +280,7 @@ class RunAgentChatJob implements ShouldQueue
     /**
      * Hydrate the request-scoped PageContextHolder from dispatch metadata.
      *
-     * When a run is offloaded from interactive to background, the page
+     * When a run is dispatched from interactive to a worker, the page
      * context that was resolved on the original request is stored in
      * the dispatch meta so the background worker can reconstruct it.
      */

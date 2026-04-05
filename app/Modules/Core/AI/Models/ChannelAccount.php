@@ -92,7 +92,7 @@ class ChannelAccount extends Model
      */
     public function conversations(): HasMany
     {
-        return $this->hasMany(Conversation::class, 'channel_account_id');
+        return $this->hasMany(ChannelConversation::class, 'channel_account_id');
     }
 
     /**

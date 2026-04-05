@@ -10,8 +10,8 @@ use App\Modules\Core\AI\Enums\MessageDirection;
 use App\Modules\Core\AI\Exceptions\ChannelNotAvailableException;
 use App\Modules\Core\AI\Exceptions\NoChannelAccountException;
 use App\Modules\Core\AI\Models\ChannelAccount;
-use App\Modules\Core\AI\Models\Conversation;
-use App\Modules\Core\AI\Models\ConversationMessage;
+use App\Modules\Core\AI\Models\ChannelConversation;
+use App\Modules\Core\AI\Models\ChannelConversationMessage;
 
 /**
  * Orchestrates outbound message delivery across all channels.
@@ -103,7 +103,7 @@ class OutboundMessageService
         }
 
         // Find the original message to discover the conversation and target
-        $originalMessage = ConversationMessage::query()
+        $originalMessage = ChannelConversationMessage::query()
             ->where('external_message_id', $messageId)
             ->first();
 
@@ -113,7 +113,7 @@ class OutboundMessageService
             );
         }
 
-        /** @var Conversation $conversation */
+        /** @var ChannelConversation $conversation */
         $conversation = $originalMessage->conversation;
         $accountModel = ChannelAccount::query()->find($conversation->channel_account_id);
 
@@ -174,9 +174,9 @@ class OutboundMessageService
      * @param  int  $channelAccountId  Account record ID
      * @param  string  $target  Recipient identifier (becomes part of participants)
      */
-    private function findOrCreateConversation(int $companyId, string $channel, int $channelAccountId, string $target): Conversation
+    private function findOrCreateConversation(int $companyId, string $channel, int $channelAccountId, string $target): ChannelConversation
     {
-        return Conversation::query()->firstOrCreate(
+        return ChannelConversation::query()->firstOrCreate(
             [
                 'company_id' => $companyId,
                 'channel' => $channel,
@@ -192,18 +192,18 @@ class OutboundMessageService
     /**
      * Persist an outbound message record.
      *
-     * @param  Conversation  $conversation  Parent conversation
+     * @param  ChannelConversation  $conversation  Parent conversation
      * @param  SendResult  $sendResult  Transport result
      * @param  string  $text  Message content
      * @param  string|null  $mediaPath  Optional media path
      */
     private function recordOutboundMessage(
-        Conversation $conversation,
+        ChannelConversation $conversation,
         SendResult $sendResult,
         string $text,
         ?string $mediaPath = null,
-    ): ConversationMessage {
-        return ConversationMessage::query()->create([
+    ): ChannelConversationMessage {
+        return ChannelConversationMessage::query()->create([
             'conversation_id' => $conversation->id,
             'direction' => MessageDirection::Outbound,
             'external_message_id' => $sendResult->messageId,
@@ -220,9 +220,9 @@ class OutboundMessageService
     /**
      * Resolve the reply target from conversation participants.
      *
-     * @param  Conversation  $conversation  The conversation to extract target from
+     * @param  ChannelConversation  $conversation  The conversation to extract target from
      */
-    private function resolveReplyTarget(Conversation $conversation): ?string
+    private function resolveReplyTarget(ChannelConversation $conversation): ?string
     {
         // The external_id typically holds the primary participant identifier
         if ($conversation->external_id !== null) {

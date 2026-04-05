@@ -13,6 +13,7 @@ use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesBackgroundChat;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesStreaming;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesChatSessions;
+use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -154,7 +155,7 @@ class Chat extends Component
 
             $result = $this->runAi($hasAttachments, $messages, $content);
 
-            // Timeout on interactive run → offload to background
+            // Timeout on interactive run → dispatch to worker
             if (($result['meta']['error_type'] ?? null) === 'timeout') {
                 $this->handleTimeoutWithBackgroundOffer($content);
 
@@ -352,6 +353,17 @@ class Chat extends Component
 
         $settingsUrl = $this->settingsUrl();
 
+        // Detect any active (non-terminal) turn for resume-on-load
+        $activeTurn = null;
+        if ($agentActivated && $this->selectedSessionId !== null) {
+            $activeTurn = ChatTurn::query()
+                ->where('session_id', $this->selectedSessionId)
+                ->where('acting_for_user_id', auth()->id())
+                ->whereNotIn('status', ['completed', 'failed', 'cancelled'])
+                ->latest()
+                ->first(['id', 'status', 'current_phase', 'current_label']);
+        }
+
         return view('livewire.ai.chat', [
             'agentExists' => $agentExists,
             'agentActivated' => $agentActivated,
@@ -366,6 +378,10 @@ class Chat extends Component
             'sessionUsage' => $sessionUsage,
             'markdown' => $markdown,
             'quickActions' => $quickActions,
+            'activeTurnId' => $activeTurn?->id,
+            'activeTurnResumeUrl' => $activeTurn
+                ? route('ai.chat.turn.events', ['turnId' => $activeTurn->id])
+                : null,
         ]);
     }
 

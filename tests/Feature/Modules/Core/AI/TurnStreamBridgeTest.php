@@ -60,7 +60,7 @@ function turnEventTypes(ChatTurn $turn): array
 // ------------------------------------------------------------------
 
 describe('TurnStreamBridge', function () {
-    it('passes through original runtime events unchanged', function () {
+    it('yields turn event SSE payloads instead of raw runtime events', function () {
         $turn = createBridgeTurn();
         $bridge = app(TurnStreamBridge::class);
 
@@ -70,12 +70,28 @@ describe('TurnStreamBridge', function () {
             ['event' => 'done', 'data' => ['content' => 'Hi there', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ];
 
-        $output = iterator_to_array($bridge->wrap($turn, runtimeStream($input)));
+        $output = iterator_to_array($bridge->wrap($turn, runtimeStream($input)), false);
 
-        expect($output)->toHaveCount(3)
-            ->and($output[0]['event'])->toBe('status')
-            ->and($output[1]['event'])->toBe('delta')
-            ->and($output[2]['event'])->toBe('done');
+        // Each yielded payload must be an SSE payload with turn_id, seq, event_type
+        expect(count($output))->toBeGreaterThan(3);
+
+        foreach ($output as $payload) {
+            expect($payload)->toHaveKey('turn_id')
+                ->and($payload)->toHaveKey('seq')
+                ->and($payload)->toHaveKey('event_type')
+                ->and($payload['turn_id'])->toBe($turn->id);
+        }
+
+        // First event should be turn.started
+        expect($output[0]['event_type'])->toBe('turn.started');
+
+        // Should contain the key event types
+        $types = array_column($output, 'event_type');
+        expect($types)->toContain('turn.started')
+            ->and($types)->toContain('run.started')
+            ->and($types)->toContain('assistant.output_delta')
+            ->and($types)->toContain('turn.completed')
+            ->and($types)->toContain('turn.ready_for_input');
     });
 
     it('transitions turn through Queued → Booting → Running → Completed', function () {

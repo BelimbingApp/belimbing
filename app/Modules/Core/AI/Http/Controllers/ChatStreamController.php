@@ -125,8 +125,8 @@ class ChatStreamController
     /**
      * Stream runtime events through the bridge and emit as SSE.
      *
-     * The bridge publishes durable turn events; this method only handles
-     * SSE emission. Transcript materialization happens after the stream.
+     * The bridge yields turn event SSE payloads (same format as the resume
+     * endpoint), so the client receives a unified event stream.
      *
      * @param  array<int, object>  $messages
      */
@@ -144,8 +144,8 @@ class ChatStreamController
             sessionId: $sessionId, turnId: $turn->id,
         );
 
-        foreach ($this->bridge->wrap($turn, $runtimeStream) as $event) {
-            $this->emitEvent($event['event'], $event['data']);
+        foreach ($this->bridge->wrap($turn, $runtimeStream) as $turnEvent) {
+            $this->emitTurnEvent($turnEvent);
         }
     }
 
@@ -169,12 +169,19 @@ class ChatStreamController
     }
 
     /**
-     * @param  array<string, mixed>  $data
+     * Emit a turn event as SSE.
+     *
+     * Uses the event_type as the SSE event name so the client can listen
+     * for specific event types (e.g., `source.addEventListener('tool.started', ...)`).
+     *
+     * @param  array<string, mixed>  $payload
      */
-    private function emitEvent(string $eventName, array $data): void
+    private function emitTurnEvent(array $payload): void
     {
-        echo "event: {$eventName}\n";
-        echo 'data: '.json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n\n";
+        $eventType = $payload['event_type'] ?? 'turn_event';
+
+        echo "event: {$eventType}\n";
+        echo 'data: '.json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n\n";
 
         if (ob_get_level() > 0) {
             ob_flush();

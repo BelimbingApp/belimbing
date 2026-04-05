@@ -10,6 +10,7 @@ use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Jobs\RunAgentChatJob;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\MessageManager;
+use App\Modules\Core\AI\Services\PageContextHolder;
 use App\Modules\Core\AI\Services\SessionManager;
 use Illuminate\Support\Str;
 
@@ -144,7 +145,7 @@ trait HandlesBackgroundChat
     {
         $messageManager = app(MessageManager::class);
 
-        $notice = __('This task is taking longer than expected. Running it in the background — you\'ll see the response when it\'s ready.');
+        $notice = __('This task is taking longer than expected. Processing continues — you\'ll see progress here.');
         $messageManager->appendAssistantMessage(
             $this->employeeId,
             $this->selectedSessionId,
@@ -163,7 +164,7 @@ trait HandlesBackgroundChat
      */
     private function capturePageContextForBackground(): ?array
     {
-        $holder = app(\App\Modules\Core\AI\Services\PageContextHolder::class);
+        $holder = app(PageContextHolder::class);
 
         if ($holder->getConsentLevel() === 'off') {
             return null;

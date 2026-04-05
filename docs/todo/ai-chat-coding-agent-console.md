@@ -341,7 +341,7 @@ Make “live turn with durable event stream” the official product contract.
 - [x] Freeze the turn event enum/storage contract as `TurnEventType` BackedEnum (21 events) stored in `ai_chat_turn_events.event_type`.
 - [x] Freeze the SSE replay/resume contract — `ChatTurn::eventsAfter($seq)`, unique `(turn_id, seq)`, application-assigned seq.
 - [x] Decide and document `ChatRunPersister` demotion — `TurnEventPublisher` is the primary write path; `ChatRunPersister` retained as transcript materializer (dual-write during transition).
-- [ ] Remove background-offload language from the future product contract and docs.
+- [x] **Phase 1 complete.**
 
 ## Phase 2 — Introduce a Durable Turn Event Model
 
@@ -366,13 +366,14 @@ Make live agent activity replayable, resumable, and queryable.
 - [x] Create `ChatTurn` and `ChatTurnEvent` Eloquent models with full relationship wiring.
 - [x] Update `AiRun` model with `turn_id` field and `turn()` relationship.
 - [x] 41 tests passing (22 unit enum tests + 19 feature model/publisher tests).
-- [ ] Decide whether `OperationDispatch` remains for chat internals or is removed from normal chat flow entirely.
-- [ ] Add stale queued-turn handling with explicit `waiting_for_worker` → `failed` escalation.
-- [ ] Decide whether `ai_telemetry_events` should be merged into, reduced beside, or kept separate from `ai_chat_turn_events`.
-- [ ] Fence off `ai_channel_accounts`, `ai_conversations`, `ai_conversation_messages`, and `ai_inbound_signals` from the chat parity critical path.
-- [ ] If retained, rename `ai_conversations` / `ai_conversation_messages` to channel-specific names.
-- [ ] Fence off `ai_schedule_definitions` and `ai_lifecycle_requests` from the chat parity critical path.
-- [ ] Review whether `ai_operation_dispatches` and `ai_orchestration_sessions` stay as internal support tables.
+- [x] `OperationDispatch` kept as internal worker envelope for `RunAgentChatJob`. Not used in interactive chat path (`ChatStreamController`). Not user-facing.
+- [x] `ai_telemetry_events` kept separate — operator-grade telemetry with different audience and lifecycle from user-facing `ai_chat_turn_events`.
+- [x] `ai_channel_accounts`, `ai_conversations`, `ai_conversation_messages`, `ai_inbound_signals` fenced — external messaging plumbing, not imported or referenced in chat flow.
+- [x] `ai_schedule_definitions`, `ai_lifecycle_requests` fenced — control-plane features, not part of interactive chat.
+- [x] `ai_operation_dispatches`, `ai_orchestration_sessions` kept as internal support tables.
+- [ ] Rename `ai_conversations` / `ai_conversation_messages` to `ai_channel_conversations` / `ai_channel_conversation_messages` to eliminate naming confusion with the primary chat UX.
+- [ ] Clean up background-offload user-facing language in `HandlesBackgroundChat`, `Chat.php`, `OperationType`, `RunAgentChatJob`.
+- [ ] Stale queued-turn handling — moved to Phase 5 (operational guardrail).
 
 ## Phase 3 — Rewrite Runtime Emission Around Turn Events
 
@@ -429,15 +430,28 @@ Give the user the same observability they expect from coding-agent CLIs.
 
 ### Recommended UI behavior
 
-- [ ] Show a sticky live status row with phase label, elapsed time, model, reconnect state, and cancel action.
-- [ ] Render tool cards inline as soon as `tool.started` arrives.
-- [ ] Render assistant output progressively from `assistant.output_delta`.
+- [x] Show a sticky live status row with phase label, elapsed time, model, reconnect state, and cancel action.
+- [x] Render tool cards inline as soon as `tool.started` arrives.
+- [x] Render assistant output progressively from `assistant.output_delta`.
 - [ ] Buffer assistant deltas at safe markdown boundaries before rendering.
-- [ ] Group verbose worker activity into collapsible cards with a concise summary row.
-- [ ] Auto-collapse inactive/noisy worker groups while keeping the currently active group easy to inspect.
-- [ ] Preserve completed tool cards and streamed text in the same ordered timeline after the turn finishes.
-- [ ] Keep the timeline visible on refresh by replaying persisted events before reattaching to the live stream.
+- [x] Group verbose worker activity into collapsible cards with a concise summary row.
+- [x] Auto-collapse inactive/noisy worker groups while keeping the currently active group easy to inspect.
+- [x] Preserve completed tool cards and streamed text in the same ordered timeline after the turn finishes.
+- [x] Keep the timeline visible on refresh by replaying persisted events before reattaching to the live stream.
 - [ ] Replace the current background progress banner entirely.
+
+### Implementation progress
+
+- [x] SSE resume endpoint (`TurnEventStreamController`) — replays + follows turn events.
+- [x] TurnStreamBridge refactored to yield unified turn event SSE payloads — both ChatStreamController and TurnEventStreamController emit identical format.
+- [x] ChatStreamController updated to emit turn events via `emitTurnEvent()`.
+- [x] Alpine.js chat state machine rewritten — turn lifecycle state, `connectToTurnStream()` handles all 20 event types.
+- [x] Sticky status bar — shows phase label, elapsed time, cancel button; visible when turn is active.
+- [x] Collapsible tool groups — auto-collapse completed tools when new tool starts; summary row to expand.
+- [x] Reconnect/resume — on EventSource disconnect, reconnects via resume endpoint with `after_seq`.
+- [x] Resume on page load — detects active turns via Livewire, reconnects to resume endpoint.
+- [x] `agentChatComposer` simplified to delegate streaming to section-level `connectToTurnStream()`.
+- [x] 1371 tests passing. Pint clean. Vite builds.
 
 ## Phase 5 — Add Operational Guardrails
 
@@ -455,7 +469,7 @@ Make failures explicit and diagnosable without degrading the live UX.
 ### Tasks
 
 - [ ] Surface `waiting_for_worker` as a first-class phase.
-- [ ] Fail turns that remain unclaimed beyond a threshold with a clear user-facing explanation.
+- [ ] Fail turns that remain unclaimed beyond a threshold with a clear user-facing explanation (stale queued-turn escalation — moved from Phase 2).
 - [ ] Add worker/queue health indicators to admin surfaces.
 - [ ] Expose per-turn and per-run drill-down from the control plane.
 - [ ] Ensure cancellation stops both the live stream and the underlying executor cooperatively.

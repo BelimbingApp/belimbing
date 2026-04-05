@@ -24,7 +24,7 @@ enum OperationType: string
     /** Child agent session spawned through orchestration. */
     case ChildSession = 'child_session';
 
-    /** Interactive chat message offloaded to background queue. */
+    /** Interactive chat message dispatched to worker queue. */
     case BackgroundChat = 'background_chat';
 
     /**

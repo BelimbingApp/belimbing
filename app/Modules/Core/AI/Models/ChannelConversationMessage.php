@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * Individual message within a conversation.
+ * Individual message within a channel conversation.
  *
  * @property int $id
  * @property int $conversation_id
@@ -25,16 +25,16 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $delivered_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
- * @property-read Conversation $conversation
+ * @property-read ChannelConversation $conversation
  */
-class ConversationMessage extends Model
+class ChannelConversationMessage extends Model
 {
     /**
      * The table associated with the model.
      *
      * @var string
      */
-    protected $table = 'ai_conversation_messages';
+    protected $table = 'ai_channel_conversation_messages';
 
     /**
      * The attributes that are mass assignable.
@@ -74,6 +74,6 @@ class ConversationMessage extends Model
      */
     public function conversation(): BelongsTo
     {
-        return $this->belongsTo(Conversation::class, 'conversation_id');
+        return $this->belongsTo(ChannelConversation::class, 'conversation_id');
     }
 }

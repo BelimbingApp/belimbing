@@ -384,19 +384,269 @@
                     pendingMessage: null,
                     streamEntries: [],
                     _eventSource: null,
-                    _currentRunId: null,
                     followTail: true,
+
+                    // Turn lifecycle (coding-agent console)
+                    activeTurnId: null,
+                    turnPhase: null,
+                    turnLabel: null,
+                    turnStartedAt: null,
+                    elapsedSeconds: 0,
+                    _elapsedTimer: null,
+                    _lastSeq: 0,
+                    _toolMap: {},
+                    _completedToolCount: 0,
+                    toolsCollapsed: false,
+
+                    get isBusy() {
+                        return !!this.pendingMessage || !!this.activeTurnId;
+                    },
+
+                    resetTurnState() {
+                        this.activeTurnId = null;
+                        this.turnPhase = null;
+                        this.turnLabel = null;
+                        this.turnStartedAt = null;
+                        this.elapsedSeconds = 0;
+                        this._lastSeq = 0;
+                        this._toolMap = {};
+                        this._completedToolCount = 0;
+                        this.toolsCollapsed = false;
+                        if (this._elapsedTimer) {
+                            clearInterval(this._elapsedTimer);
+                            this._elapsedTimer = null;
+                        }
+                    },
+
+                    startElapsedTimer() {
+                        this.turnStartedAt = Date.now();
+                        this._elapsedTimer = setInterval(() => {
+                            this.elapsedSeconds = Math.floor((Date.now() - this.turnStartedAt) / 1000);
+                        }, 1000);
+                    },
+
+                    connectToTurnStream(url, scrollContainer) {
+                        if (this._eventSource) {
+                            this._eventSource.close();
+                        }
+
+                        this.followTail = true;
+                        this._toolMap = {};
+                        const source = new EventSource(url);
+                        this._eventSource = source;
+
+                        const handleEvent = (eventType, data) => {
+                            if (data.seq) this._lastSeq = data.seq;
+                            if (data.turn_id && !this.activeTurnId) {
+                                this.activeTurnId = data.turn_id;
+                            }
+
+                            switch (eventType) {
+                                case 'turn.started':
+                                    if (!this.turnStartedAt) this.startElapsedTimer();
+                                    this.turnPhase = 'booting';
+                                    this.turnLabel = '{{ __('Starting…') }}';
+                                    break;
+
+                                case 'turn.phase_changed':
+                                    this.turnPhase = data.payload?.phase || data.phase;
+                                    this.turnLabel = data.payload?.label || data.label || this.turnPhase;
+                                    break;
+
+                                case 'run.started':
+                                    break;
+
+                                case 'assistant.thinking_started': {
+                                    const existing = this.streamEntries.find(e => e.type === 'thinking');
+                                    if (!existing) {
+                                        this.streamEntries.push({ type: 'thinking', active: true });
+                                    }
+                                    break;
+                                }
+
+                                case 'tool.started': {
+                                    // Deactivate thinking
+                                    const thinking = this.streamEntries.find(e => e.type === 'thinking');
+                                    if (thinking) thinking.active = false;
+
+                                    // Auto-collapse previous completed tools
+                                    if (this._completedToolCount > 0 && !this.toolsCollapsed) {
+                                        this.toolsCollapsed = true;
+                                    }
+
+                                    const payload = data.payload || data;
+                                    const idx = this.streamEntries.length;
+                                    const toolKey = payload.tool_call_index ?? idx;
+                                    this._toolMap[toolKey] = idx;
+
+                                    this.streamEntries.push({
+                                        type: 'tool_call',
+                                        tool: payload.tool || '',
+                                        argsSummary: payload.args_summary || '',
+                                        status: 'running',
+                                        collapsed: false,
+                                    });
+                                    break;
+                                }
+
+                                case 'tool.finished': {
+                                    const payload = data.payload || data;
+                                    const toolKey = payload.tool_call_index ?? -1;
+                                    const callIdx = this._toolMap[toolKey];
+
+                                    if (callIdx !== undefined && this.streamEntries[callIdx]) {
+                                        const entry = this.streamEntries[callIdx];
+                                        entry.status = payload.status || 'success';
+                                        entry.durationMs = payload.duration_ms;
+                                        entry.resultPreview = payload.result_preview || '';
+                                        entry.resultLength = payload.result_length || 0;
+                                        entry.errorPayload = payload.error_payload || null;
+                                        this._completedToolCount++;
+                                    }
+                                    break;
+                                }
+
+                                case 'tool.denied': {
+                                    const payload = data.payload || data;
+                                    this.streamEntries.push({
+                                        type: 'hook_action',
+                                        stage: 'pre_tool_use',
+                                        action: 'tool_denied',
+                                        tool: payload.tool || '',
+                                        reason: payload.reason || '',
+                                        source: payload.source || 'hook',
+                                    });
+                                    break;
+                                }
+
+                                case 'assistant.output_delta': {
+                                    // Deactivate thinking
+                                    const thinking = this.streamEntries.find(e => e.type === 'thinking');
+                                    if (thinking) thinking.active = false;
+
+                                    const payload = data.payload || data;
+                                    const text = payload.text || '';
+                                    if (!text) break;
+
+                                    const last = this.streamEntries[this.streamEntries.length - 1];
+                                    if (last && last.type === 'assistant_streaming') {
+                                        last.content += text;
+                                    } else {
+                                        this.streamEntries.push({
+                                            type: 'assistant_streaming',
+                                            content: text,
+                                        });
+                                    }
+                                    break;
+                                }
+
+                                case 'assistant.output_block_committed':
+                                    break;
+
+                                case 'turn.completed':
+                                case 'turn.ready_for_input':
+                                    source.close();
+                                    this._eventSource = null;
+                                    this.resetTurnState();
+                                    this.$wire.finalizeStreamingRun();
+                                    return;
+
+                                case 'turn.failed': {
+                                    const payload = data.payload || data;
+                                    this.streamEntries.push({
+                                        type: 'error',
+                                        message: payload.message || '{{ __('Turn failed') }}',
+                                    });
+                                    source.close();
+                                    this._eventSource = null;
+                                    this.resetTurnState();
+                                    this.$wire.finalizeStreamingRun();
+                                    return;
+                                }
+
+                                case 'turn.cancelled':
+                                    source.close();
+                                    this._eventSource = null;
+                                    this.resetTurnState();
+                                    this.$wire.finalizeStreamingRun();
+                                    return;
+
+                                case 'meta':
+                                    if (data.payload?.reason === 'terminal_state' || data.payload?.reason === 'idle_timeout') {
+                                        source.close();
+                                        this._eventSource = null;
+                                        this.resetTurnState();
+                                        this.$wire.finalizeStreamingRun();
+                                        return;
+                                    }
+                                    break;
+                            }
+
+                            this.scrollToBottom(scrollContainer);
+                        };
+
+                        // Register listeners for all turn event types
+                        const eventTypes = [
+                            'turn.started', 'turn.phase_changed', 'turn.completed',
+                            'turn.failed', 'turn.cancelled', 'turn.ready_for_input',
+                            'run.started', 'run.failed',
+                            'assistant.thinking_started', 'assistant.output_delta',
+                            'assistant.output_block_committed',
+                            'tool.started', 'tool.finished', 'tool.denied',
+                            'usage.updated', 'heartbeat', 'meta',
+                            'recovery.attempted', 'recovery.succeeded', 'recovery.failed',
+                        ];
+
+                        eventTypes.forEach(type => {
+                            source.addEventListener(type, (e) => {
+                                try {
+                                    handleEvent(type, JSON.parse(e.data));
+                                } catch {}
+                            });
+                        });
+
+                        // Connection error: attempt reconnect via resume endpoint
+                        source.onerror = () => {
+                            if (source.readyState === EventSource.CLOSED) return;
+                            source.close();
+                            this._eventSource = null;
+
+                            if (this.activeTurnId && this._lastSeq > 0) {
+                                const resumeUrl = '{{ route('ai.chat.turn.events', ['turnId' => '__TURN__']) }}'.replace('__TURN__', this.activeTurnId)
+                                    + '?after_seq=' + this._lastSeq;
+                                setTimeout(() => this.connectToTurnStream(resumeUrl, scrollContainer), 1000);
+                            } else {
+                                const hasContent = this.streamEntries.some(e => e.type === 'assistant_streaming');
+                                if (!hasContent) {
+                                    this.$wire.sendMessage();
+                                } else {
+                                    this.$wire.finalizeStreamingRun();
+                                }
+                            }
+                        };
+                    },
+
+                    scrollToBottom(container) {
+                        if (this.followTail) {
+                            this.$nextTick(() => {
+                                if (container) container.scrollTop = container.scrollHeight;
+                            });
+                        }
+                    },
                 }"
-                x-effect="
-                    const busy = !!pendingMessage || !!$wire.backgroundDispatchId;
-                    window.dispatchEvent(new CustomEvent(busy ? 'agent-chat-busy' : 'agent-chat-idle'));
-                "
-                x-on:agent-chat-response-ready.window="pendingMessage = null; streamEntries = []; _currentRunId = null"
+                x-effect="window.dispatchEvent(new CustomEvent(isBusy ? 'agent-chat-busy' : 'agent-chat-idle'))"
+                x-on:agent-chat-response-ready.window="pendingMessage = null; streamEntries = []; resetTurnState()"
             >
                 <div
                     class="flex-1 min-w-0 min-h-0 overflow-y-auto px-4 py-3 space-y-3 relative"
                     x-ref="agentScroll"
-                    x-init="$nextTick(() => $el.scrollTop = $el.scrollHeight)"
+                    x-init="
+                        $nextTick(() => $el.scrollTop = $el.scrollHeight);
+                        const resumeUrl = @js($activeTurnResumeUrl);
+                        if (resumeUrl) {
+                            $nextTick(() => connectToTurnStream(resumeUrl + '?after_seq=0', $el));
+                        }
+                    "
                     @scroll.throttle.100ms="
                         const el = $refs.agentScroll;
                         followTail = (el.scrollHeight - el.scrollTop - el.clientHeight) < 50;
@@ -540,8 +790,25 @@
                     </template>
 
                     {{-- Live stream activity entries --}}
+                    {{-- Collapsed tools summary (shows when older tools are collapsed) --}}
+                    <template x-if="toolsCollapsed && _completedToolCount > 0">
+                        <button
+                            type="button"
+                            @click="toolsCollapsed = false"
+                            class="flex items-center gap-1.5 py-1 text-xs text-muted hover:text-ink transition-colors"
+                        >
+                            <x-icon name="heroicon-o-wrench-screwdriver" class="w-3.5 h-3.5" />
+                            <span x-text="_completedToolCount + ' {{ __('tool call(s) completed') }}'"></span>
+                            <x-icon name="heroicon-o-chevron-down" class="w-3 h-3" />
+                        </button>
+                    </template>
+
                     <template x-for="(entry, idx) in streamEntries" :key="idx">
-                        <div>
+                        <div x-show="
+                            entry.type !== 'tool_call'
+                            || !toolsCollapsed
+                            || entry.status === 'running'
+                        ">
                             {{-- Thinking --}}
                             <template x-if="entry.type === 'thinking'">
                                 <div class="flex gap-2 py-1">
@@ -780,27 +1047,40 @@
                     </div>
                 @endif
 
+                {{-- Sticky turn status bar (coding-agent console) --}}
+                <div
+                    x-show="isBusy"
+                    x-cloak
+                    class="border-t border-border-default bg-surface-subtle/60 px-4 py-1.5 flex items-center gap-3 text-xs shrink-0"
+                >
+                    <span class="w-2 h-2 bg-accent rounded-full animate-pulse shrink-0"></span>
+                    <span class="text-muted truncate" x-text="turnLabel || '{{ __('Processing…') }}'"></span>
+                    <span class="tabular-nums text-muted/70 shrink-0" x-text="
+                        elapsedSeconds < 60
+                            ? elapsedSeconds + 's'
+                            : Math.floor(elapsedSeconds / 60) + 'm ' + (elapsedSeconds % 60) + 's'
+                    "></span>
+                    <button
+                        type="button"
+                        @click="
+                            if (_eventSource) {
+                                _eventSource.close();
+                                _eventSource = null;
+                            }
+                            resetTurnState();
+                            $wire.finalizeStreamingRun();
+                            pendingMessage = null;
+                            streamEntries = [];
+                        "
+                        class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-border-default bg-surface-card text-muted hover:text-ink hover:border-accent/40 transition-colors shrink-0"
+                    >
+                        <x-icon name="heroicon-o-stop" class="w-3 h-3" />
+                        {{ __('Stop') }}
+                    </button>
+                </div>
+
                 {{-- Composer --}}
                 <div class="border-t border-border-default px-4 py-3 space-y-2">
-                    {{-- Cancel button for active runs --}}
-                    <div x-show="pendingMessage" x-cloak class="flex justify-center">
-                        <button
-                            type="button"
-                            @click="
-                                if (_eventSource) {
-                                    _eventSource.close();
-                                    _eventSource = null;
-                                }
-                                $wire.finalizeStreamingRun();
-                                pendingMessage = null;
-                                streamEntries = [];
-                            "
-                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-border-default bg-surface-card text-xs text-muted hover:text-ink hover:border-accent/40 transition-colors"
-                        >
-                            <x-icon name="heroicon-o-stop" class="w-3.5 h-3.5" />
-                            {{ __('Stop') }}
-                        </button>
-                    </div>
 
                     {{-- Model picker + session usage --}}
                     <div class="flex items-center justify-between gap-2">
@@ -862,6 +1142,8 @@
             if (!value && !hasAttachments) return;
 
             this.pendingMessage = value || '📎';
+            this.streamEntries = [];
+            this.resetTurnState();
             textarea.value = '';
             textarea.style.height = 'auto';
             localStorage.removeItem(this._draftKey);
@@ -869,15 +1151,13 @@
                 if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
             });
 
-            // Capture the real page URL before the Livewire update fires
             await this.$wire.set('pageUrl', window.location.href);
 
-            // Try streaming first
             try {
                 const result = await this.$wire.prepareStreamingRun();
 
                 if (result && result.url) {
-                    this.startStream(result.url, scrollContainer);
+                    this.connectToTurnStream(result.url, scrollContainer);
                     return;
                 }
             } catch (e) {
@@ -885,156 +1165,7 @@
             }
 
             // Fallback: synchronous Livewire sendMessage
-            // (also handles orchestration commands that returned null from prepareStreamingRun)
         },
-
-        startStream(url, scrollContainer) {
-            if (this._eventSource) {
-                this._eventSource.close();
-            }
-
-            this.streamEntries = [];
-            this.followTail = true;
-            this._currentRunId = null;
-            const source = new EventSource(url);
-            this._eventSource = source;
-
-            // Track which tool_call entry index corresponds to which tool_call_index
-            const toolCallMap = {};
-
-            source.addEventListener('status', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-
-                    if (data.run_id) {
-                        this._currentRunId = data.run_id;
-                    }
-
-                    if (data.phase === 'thinking') {
-                        // Add thinking entry only once
-                        const existingThinking = this.streamEntries.find(entry => entry.type === 'thinking');
-                        if (!existingThinking) {
-                            this.streamEntries.push({
-                                type: 'thinking',
-                                active: true,
-                            });
-                        }
-                    } else if (data.phase === 'tool_started') {
-                        // Deactivate thinking
-                        const thinking = this.streamEntries.find(entry => entry.type === 'thinking');
-                        if (thinking) thinking.active = false;
-
-                        const idx = this.streamEntries.length;
-                        toolCallMap[data.tool_call_index ?? idx] = idx;
-
-                        this.streamEntries.push({
-                            type: 'tool_call',
-                            tool: data.tool || '',
-                            argsSummary: data.args_summary || '',
-                            status: 'running',
-                        });
-                    } else if (data.phase === 'tool_finished') {
-                        const callIdx = toolCallMap[data.tool_call_index ?? -1];
-                        if (callIdx !== undefined && this.streamEntries[callIdx]) {
-                            const entry = this.streamEntries[callIdx];
-                            entry.status = data.status || 'success';
-                            entry.durationMs = data.duration_ms;
-                            entry.resultPreview = data.result_preview || '';
-                            entry.resultLength = data.result_length || 0;
-                            entry.errorPayload = data.error_payload || null;
-                        }
-                    } else if (data.phase === 'hook_action') {
-                        this.streamEntries.push({
-                            type: 'hook_action',
-                            stage: data.stage || '',
-                            action: 'tools_removed',
-                            toolsRemoved: data.tools_removed || [],
-                        });
-                    } else if (data.phase === 'tool_denied') {
-                        this.streamEntries.push({
-                            type: 'hook_action',
-                            stage: 'pre_tool_use',
-                            action: 'tool_denied',
-                            tool: data.tool || '',
-                            reason: data.reason || '',
-                            source: data.source || 'hook',
-                        });
-                    }
-                } catch {}
-                this.scrollToBottom(scrollContainer);
-            });
-
-            source.addEventListener('delta', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data.text) {
-                        // Deactivate thinking
-                        const thinking = this.streamEntries.find(entry => entry.type === 'thinking');
-                        if (thinking) thinking.active = false;
-
-                        const last = this.streamEntries[this.streamEntries.length - 1];
-                        if (last && last.type === 'assistant_streaming') {
-                            last.content += data.text;
-                        } else {
-                            this.streamEntries.push({
-                                type: 'assistant_streaming',
-                                content: data.text,
-                            });
-                        }
-                    }
-                } catch {}
-                this.scrollToBottom(scrollContainer);
-            });
-
-            source.addEventListener('done', (e) => {
-                source.close();
-                this._eventSource = null;
-                this.$wire.finalizeStreamingRun();
-            });
-
-            source.addEventListener('error', (e) => {
-                // Check if this is an SSE error event from our server
-                if (e.data) {
-                    try {
-                        const data = JSON.parse(e.data);
-                        if (data.message) {
-                            this.streamEntries.push({
-                                type: 'error',
-                                message: data.message,
-                            });
-                        }
-                    } catch {}
-                }
-
-                source.close();
-                this._eventSource = null;
-                this.$wire.finalizeStreamingRun();
-            });
-
-            // EventSource built-in error (connection lost)
-            source.onerror = () => {
-                if (source.readyState === EventSource.CLOSED) return;
-                source.close();
-                this._eventSource = null;
-
-                // If no content was streamed, fall back to sync
-                const hasContent = this.streamEntries.some(e => e.type === 'assistant_streaming');
-                if (!hasContent) {
-                    this.$wire.sendMessage();
-                } else {
-                    this.$wire.finalizeStreamingRun();
-                }
-            };
-        },
-
-        scrollToBottom(container) {
-            if (this.followTail) {
-                this.$nextTick(() => {
-                    if (container) container.scrollTop = container.scrollHeight;
-                });
-            }
-        },
-
     }));
 </script>
 @endscript
