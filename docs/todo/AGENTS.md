@@ -177,7 +177,7 @@ Do not do the following:
 - create a separate observability section when the document itself can carry status
 - split assumptions, risks, and progress away from the phase they belong to unless the document has a strong reason
 - keep the real implementation plan only in hidden agent/session state while the todo doc drifts behind
-- commit or push automatically after implementation
+- commit or push automatically after implementation — wait for the user to ask for a commit, even when all tests pass
 - mix architecture, task order, and low-level notes into an unreadable blob
 - leave stale content after the plan changes
 - pad the document with neutral options when one recommendation is already defensible
