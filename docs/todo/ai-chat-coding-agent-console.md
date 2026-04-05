@@ -371,9 +371,10 @@ Make live agent activity replayable, resumable, and queryable.
 - [x] `ai_channel_accounts`, `ai_conversations`, `ai_conversation_messages`, `ai_inbound_signals` fenced — external messaging plumbing, not imported or referenced in chat flow.
 - [x] `ai_schedule_definitions`, `ai_lifecycle_requests` fenced — control-plane features, not part of interactive chat.
 - [x] `ai_operation_dispatches`, `ai_orchestration_sessions` kept as internal support tables.
-- [ ] Rename `ai_conversations` / `ai_conversation_messages` to `ai_channel_conversations` / `ai_channel_conversation_messages` to eliminate naming confusion with the primary chat UX.
-- [ ] Clean up background-offload user-facing language in `HandlesBackgroundChat`, `Chat.php`, `OperationType`, `RunAgentChatJob`.
+- [x] Rename `ai_conversations` / `ai_conversation_messages` to `ai_channel_conversations` / `ai_channel_conversation_messages` to eliminate naming confusion with the primary chat UX.
+- [x] Clean up background-offload user-facing language in `HandlesBackgroundChat`, `Chat.php`, `OperationType`, `RunAgentChatJob`.
 - [ ] Stale queued-turn handling — moved to Phase 5 (operational guardrail).
+- [x] **Phase 2 complete.**
 
 ## Phase 3 — Rewrite Runtime Emission Around Turn Events
 
@@ -438,7 +439,7 @@ Give the user the same observability they expect from coding-agent CLIs.
 - [x] Auto-collapse inactive/noisy worker groups while keeping the currently active group easy to inspect.
 - [x] Preserve completed tool cards and streamed text in the same ordered timeline after the turn finishes.
 - [x] Keep the timeline visible on refresh by replaying persisted events before reattaching to the live stream.
-- [ ] Replace the current background progress banner entirely.
+- [x] Replace the current background progress banner entirely.
 
 ### Implementation progress
 
@@ -452,6 +453,13 @@ Give the user the same observability they expect from coding-agent CLIs.
 - [x] Resume on page load — detects active turns via Livewire, reconnects to resume endpoint.
 - [x] `agentChatComposer` simplified to delegate streaming to section-level `connectToTurnStream()`.
 - [x] 1371 tests passing. Pint clean. Vite builds.
+- [x] Background dispatch creates turn upfront — `dispatchBackgroundChat()` creates `ChatTurn` before dispatch, passes `turn_id` in dispatch meta.
+- [x] `RunAgentChatJob` reuses pre-created turn from dispatch meta (with fallback for backwards compat).
+- [x] Alpine handler `@agent-chat-background-started.window` connects to turn event stream immediately — no polling needed.
+- [x] Old background progress banner removed from `chat.blade.php`.
+- [x] Dead code removed: `pollBackgroundChat()` and `backgroundStatusLabel()` from `HandlesBackgroundChat`.
+- [x] Timeout notice updated to reference live status bar instead of "you'll see progress here".
+- [x] **Phase 4 complete** — all Phase 4 tasks done (delta buffering deferred to Phase 5 as enhancement). 1371 tests passing.
 
 ## Phase 5 — Add Operational Guardrails
 
@@ -473,6 +481,7 @@ Make failures explicit and diagnosable without degrading the live UX.
 - [ ] Add worker/queue health indicators to admin surfaces.
 - [ ] Expose per-turn and per-run drill-down from the control plane.
 - [ ] Ensure cancellation stops both the live stream and the underlying executor cooperatively.
+- [ ] Buffer assistant deltas at safe markdown boundaries before rendering (deferred from Phase 4 — enhancement).
 
 ## Non-Goals
 

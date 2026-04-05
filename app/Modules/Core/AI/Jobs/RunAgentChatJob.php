@@ -114,13 +114,21 @@ class RunAgentChatJob implements ShouldQueue
             $messages = $messageManager->read($employeeId, $sessionId);
             $systemPrompt = $this->resolveSystemPrompt($employeeId, $dispatch->task);
 
-            $turn = ChatTurn::query()->create([
-                'employee_id' => $employeeId,
-                'session_id' => $sessionId,
-                'acting_for_user_id' => $actingForUserId,
-                'status' => TurnStatus::Queued,
-                'current_phase' => TurnPhase::WaitingForWorker,
-            ]);
+            // Use pre-created turn from dispatch meta, or create one if absent
+            $turnId = data_get($dispatch->meta, 'turn_id');
+            $turn = $turnId !== null
+                ? ChatTurn::query()->find($turnId)
+                : null;
+
+            if ($turn === null) {
+                $turn = ChatTurn::query()->create([
+                    'employee_id' => $employeeId,
+                    'session_id' => $sessionId,
+                    'acting_for_user_id' => $actingForUserId,
+                    'status' => TurnStatus::Queued,
+                    'current_phase' => TurnPhase::WaitingForWorker,
+                ]);
+            }
 
             $this->executeStreamingRun(
                 $runtime,

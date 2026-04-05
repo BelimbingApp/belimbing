@@ -7,7 +7,10 @@ namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
+use App\Modules\Core\AI\Enums\TurnPhase;
+use App\Modules\Core\AI\Enums\TurnStatus;
 use App\Modules\Core\AI\Jobs\RunAgentChatJob;
+use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\PageContextHolder;
@@ -20,6 +23,9 @@ use Illuminate\Support\Str;
  * When an interactive chat run times out or the user explicitly requests
  * background execution, this trait creates an OperationDispatch record,
  * dispatches RunAgentChatJob, and provides polling for the client.
+ *
+ * The turn is created upfront so the client can immediately attach to
+ * the turn event stream via the resume endpoint — no polling needed.
  *
  * Expects the using class to have: $employeeId, $selectedSessionId,
  * $selectedModel, $messageInput, $isLoading properties.
@@ -34,8 +40,9 @@ trait HandlesBackgroundChat
     /**
      * Dispatch the current chat message to run in the background.
      *
-     * Creates an OperationDispatch record and queues RunAgentChatJob.
-     * The user message must already be persisted to the transcript.
+     * Creates the ChatTurn upfront and an OperationDispatch record, then
+     * queues RunAgentChatJob. The turn ID is stored in dispatch meta so
+     * the job reuses it instead of creating a new one.
      */
     public function dispatchBackgroundChat(string $userMessage): void
     {
@@ -43,6 +50,15 @@ trait HandlesBackgroundChat
             $session = app(SessionManager::class)->create($this->employeeId);
             $this->selectedSessionId = $session->id;
         }
+
+        // Create the turn upfront so the client can attach to its event stream
+        $turn = ChatTurn::query()->create([
+            'employee_id' => $this->employeeId,
+            'session_id' => $this->selectedSessionId,
+            'acting_for_user_id' => auth()->id(),
+            'status' => TurnStatus::Queued,
+            'current_phase' => TurnPhase::WaitingForWorker,
+        ]);
 
         $dispatch = OperationDispatch::query()->create([
             'id' => OperationDispatch::ID_PREFIX.Str::random(20),
@@ -55,6 +71,7 @@ trait HandlesBackgroundChat
                 'session_id' => $this->selectedSessionId,
                 'model_override' => $this->selectedModel,
                 'page_context' => $this->capturePageContextForBackground(),
+                'turn_id' => $turn->id,
             ],
         ]);
 
@@ -63,56 +80,9 @@ trait HandlesBackgroundChat
         $this->backgroundDispatchId = $dispatch->id;
         $this->isLoading = false;
 
-        $this->dispatch('agent-chat-background-started', dispatchId: $dispatch->id);
-    }
-
-    /**
-     * Poll the status of an active background chat run.
-     *
-     * Called by the client on an interval. Returns the current status
-     * and clears the dispatch ID when the run reaches a terminal state.
-     *
-     * @return array{status: string, label: string, result_summary: string|null, error: string|null, finished: bool}
-     */
-    public function pollBackgroundChat(): array
-    {
-        if ($this->backgroundDispatchId === null) {
-            return [
-                'status' => 'none',
-                'label' => '',
-                'result_summary' => null,
-                'error' => null,
-                'finished' => true,
-            ];
-        }
-
-        $dispatch = OperationDispatch::query()->find($this->backgroundDispatchId);
-
-        if ($dispatch === null) {
-            $this->backgroundDispatchId = null;
-
-            return [
-                'status' => 'not_found',
-                'label' => __('Background run not found'),
-                'result_summary' => null,
-                'error' => null,
-                'finished' => true,
-            ];
-        }
-
-        $finished = $dispatch->isTerminal();
-
-        if ($finished) {
-            $this->backgroundDispatchId = null;
-        }
-
-        return [
-            'status' => $dispatch->status->value,
-            'label' => $this->backgroundStatusLabel($dispatch->status),
-            'result_summary' => $dispatch->result_summary,
-            'error' => $dispatch->error_message,
-            'finished' => $finished,
-        ];
+        // Emit the turn's resume URL so the client can attach immediately
+        $resumeUrl = route('ai.chat.turn.events', ['turnId' => $turn->id]);
+        $this->dispatch('agent-chat-background-started', dispatchId: $dispatch->id, turnId: $turn->id, resumeUrl: $resumeUrl);
     }
 
     /**
@@ -145,7 +115,7 @@ trait HandlesBackgroundChat
     {
         $messageManager = app(MessageManager::class);
 
-        $notice = __('This task is taking longer than expected. Processing continues — you\'ll see progress here.');
+        $notice = __('This task is taking longer than expected. Continuing in background — you can see live progress in the status bar.');
         $messageManager->appendAssistantMessage(
             $this->employeeId,
             $this->selectedSessionId,
@@ -177,19 +147,5 @@ trait HandlesBackgroundChat
             'context' => $context?->toArray(),
             'snapshot' => $holder->getSnapshot()?->toArray(),
         ];
-    }
-
-    /**
-     * Human-readable label for a background run status.
-     */
-    private function backgroundStatusLabel(OperationStatus $status): string
-    {
-        return match ($status) {
-            OperationStatus::Queued => __('Queued…'),
-            OperationStatus::Running => __('Running in background…'),
-            OperationStatus::Succeeded => __('Completed'),
-            OperationStatus::Failed => __('Failed'),
-            OperationStatus::Cancelled => __('Cancelled'),
-        };
     }
 }

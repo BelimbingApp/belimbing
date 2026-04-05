@@ -636,6 +636,13 @@
                 }"
                 x-effect="window.dispatchEvent(new CustomEvent(isBusy ? 'agent-chat-busy' : 'agent-chat-idle'))"
                 x-on:agent-chat-response-ready.window="pendingMessage = null; streamEntries = []; resetTurnState()"
+                @agent-chat-background-started.window="
+                    if ($event.detail?.resumeUrl) {
+                        activeTurnId = $event.detail.turnId;
+                        startElapsedTimer();
+                        connectToTurnStream($event.detail.resumeUrl + '?after_seq=0', $refs.agentScroll);
+                    }
+                "
             >
                 <div
                     class="flex-1 min-w-0 min-h-0 overflow-y-auto px-4 py-3 space-y-3 relative"
@@ -950,66 +957,6 @@
                             </div>
                         </div>
                     </div>
-
-                    {{-- Background run progress banner --}}
-                    @if ($backgroundDispatchId)
-                        <div
-                            x-data="{
-                                status: 'queued',
-                                label: '{{ __('Queued…') }}',
-                                finished: false,
-                                error: null,
-                                polling: null,
-                                init() {
-                                    this.polling = setInterval(() => this.poll(), 3000);
-                                },
-                                async poll() {
-                                    const result = await $wire.pollBackgroundChat();
-                                    this.status = result.status;
-                                    this.label = result.label;
-                                    this.error = result.error;
-                                    this.finished = result.finished;
-                                    if (this.finished) {
-                                        clearInterval(this.polling);
-                                        this.polling = null;
-                                    }
-                                    // Refresh transcript to show progressive activity entries
-                                    $wire.$refresh();
-                                },
-                                destroy() {
-                                    if (this.polling) clearInterval(this.polling);
-                                },
-                            }"
-                            class="flex justify-start"
-                        >
-                            <div class="bg-surface-subtle border border-border-default rounded-xl px-4 py-3 max-w-md space-y-2">
-                                <div class="flex items-center gap-2">
-                                    <template x-if="!finished">
-                                        <span class="inline-block w-2 h-2 bg-info rounded-full animate-pulse"></span>
-                                    </template>
-                                    <template x-if="finished && status === 'succeeded'">
-                                        <x-icon name="heroicon-o-check-circle" class="w-4 h-4 text-success" />
-                                    </template>
-                                    <template x-if="finished && status !== 'succeeded'">
-                                        <x-icon name="heroicon-o-x-circle" class="w-4 h-4 text-danger" />
-                                    </template>
-                                    <span class="text-sm font-medium text-ink" x-text="label"></span>
-                                </div>
-                                <template x-if="error">
-                                    <p class="text-xs text-danger" x-text="error"></p>
-                                </template>
-                                <template x-if="!finished">
-                                    <button
-                                        type="button"
-                                        wire:click="cancelBackgroundChat"
-                                        class="text-xs text-muted hover:text-danger transition-colors"
-                                    >
-                                        {{ __('Cancel') }}
-                                    </button>
-                                </template>
-                            </div>
-                        </div>
-                    @endif
 
                     {{-- Jump to latest floating button --}}
                     <button
