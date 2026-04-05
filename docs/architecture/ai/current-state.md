@@ -4,7 +4,7 @@
 **Status:** Active
 **Purpose:** Source of truth for BLB AI features implemented in code
 **Coverage:** OpenClaw parity Phases 1-6, Claw Code runtime parity (hook transcript entries + approval visibility), and AI Run Ledger Phases 0-3
-**Last Updated:** 2026-04-03
+**Last Updated:** 2026-04-05
 **Related:** [agent-model.md](agent-model.md), [lara.md](lara.md), [capability-map.md](capability-map.md), `docs/Base/AI/tool-framework.md`
 
 ---
@@ -410,5 +410,6 @@ As of 2026-04-03, BLB's AI system includes:
 11. explicit execution policies for interactive, heavy, and background runs
 12. background chat offload with in-chat progress visibility
 13. session token usage reconstruction from `ai_runs` with transcript fallback
+14. per-agent backup model configuration (max 2 entries in `llm.models[]`) with UI-configurable backup provider+model, inline fallback notices, and thread-level fallback banners
 
 This is the current implementation baseline.

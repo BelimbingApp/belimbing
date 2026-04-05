@@ -403,6 +403,18 @@
                     "
                     x-effect="if (followTail) $nextTick(() => $refs.agentScroll.scrollTop = $refs.agentScroll.scrollHeight)"
                 >
+                    @php
+                        $sessionHadFallback = false;
+                        $lastFallbackAttempt = null;
+                        foreach ($messages as $msg) {
+                            $fa = $msg->meta['fallback_attempts'] ?? [];
+                            if (is_array($fa) && count($fa) > 0) {
+                                $sessionHadFallback = true;
+                                $lastFallbackAttempt = end($fa);
+                            }
+                        }
+                    @endphp
+
                     @forelse($messages as $message)
                         @php
                             $messageProvider = $message->meta['provider_name'] ?? $message->meta['llm']['provider'] ?? null;
@@ -744,6 +756,29 @@
                         {{ __('Jump to latest') }}
                     </button>
                 </div>
+
+                {{-- Fallback banner --}}
+                @if ($sessionHadFallback && $lastFallbackAttempt !== null)
+                    <div
+                        x-data="{ dismissed: false }"
+                        x-show="!dismissed"
+                        x-cloak
+                        class="border-t border-amber-500/20 bg-amber-500/5 px-4 py-2 flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400"
+                    >
+                        <x-icon name="heroicon-o-exclamation-triangle" class="w-4 h-4 shrink-0 mt-0.5" />
+                        <div class="flex-1 min-w-0">
+                            <span>{{ __('Primary model (:provider/:model) failed: :error.', [
+                                'provider' => $lastFallbackAttempt['provider'] ?? '?',
+                                'model' => $lastFallbackAttempt['model'] ?? '?',
+                                'error' => $lastFallbackAttempt['error'] ?? __('unknown error'),
+                            ]) }}</span>
+                            <span class="text-muted">{{ __('Consider switching to another model.') }}</span>
+                        </div>
+                        <button type="button" @click="dismissed = true" class="shrink-0 text-amber-500 hover:text-amber-700 dark:hover:text-amber-300" aria-label="{{ __('Dismiss') }}">
+                            <x-icon name="heroicon-o-x-mark" class="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                @endif
 
                 {{-- Composer --}}
                 <div class="border-t border-border-default px-4 py-3 space-y-2">

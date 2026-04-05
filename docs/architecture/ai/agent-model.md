@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Status:** Active foundational specification
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-05
 **Related:** `docs/architecture/user-employee-company.md`, `docs/architecture/authorization.md`, `docs/architecture/database.md`, `docs/architecture/ai/current-state.md`, `docs/architecture/ai/lara.md`
 
 ---
@@ -521,7 +521,8 @@ workspace/{employee_id}/
 }
 ```
 
-- `models`: ordered list of model configurations. First entry is primary; subsequent entries are fallbacks tried on transient failures (connection error, HTTP 429, 5xx).
+- `models`: ordered list of model configurations (maximum two entries). First entry is primary; the optional second entry is a backup tried on transient failures (timeout, connection error, rate limit, server error, empty response).
+- The backup model is configured through the Lara/Kodi setup UI ("Backup Model" card) and can use a different provider than the primary.
 - `provider`: references `ai_providers.name` within the agent's company.
 - `model`: the specific model within that provider.
 - `max_tokens`, `temperature`: optional per-agent overrides; fall back to global `config('ai.llm.*')` defaults.
@@ -569,11 +570,12 @@ Inspired by OpenClaw's `FallbackAttempt` type (`openclaw/src/agents/model-fallba
 **Behavior:**
 - On success (first or fallback model), `meta.fallback_attempts` is an empty array (no failures to report) or contains entries for each prior failed model.
 - On total failure (all models exhausted), `meta.fallback_attempts` contains entries for every attempted model, and the final result carries the last model's error.
-- Non-transient errors (`client_error`, `config_error`) halt the fallback chain immediately; the attempts array will be empty since no fallback was tried.
+- Non-transient errors (`auth_error`, `config_error`, `bad_request`, etc.) halt the fallback chain immediately; the attempts array will be empty since no fallback was tried.
 - The playground debug panel shows a collapsible "Fallback Attempts" section when `fallback_attempts` is non-empty, displaying provider, model, error, error_type, and latency for each attempt.
+- **Chat thread visibility:** When a fallback was used, an inline amber notice appears above the assistant response (`"⚠ {error}. Switched to {provider}/{model}."`). A dismissible thread-level banner above the composer suggests the user may want to switch models.
 
-**Fallback-worthy error types:** `connection_error`, `rate_limit`, `server_error`
-**Non-fallback error types:** `client_error`, `config_error`, `auth_error`
+**Fallback-worthy error types:** `timeout`, `connection_error`, `rate_limit`, `server_error`, `empty_response`
+**Non-fallback error types:** `auth_error`, `not_found`, `bad_request`, `html_response`, `unsupported_response_shape`, `config_error`, `unexpected_error`
 
 ---
 
@@ -634,3 +636,4 @@ This separation means:
 | 0.5 | 2026-02-28 | AI + Kiat | Added §15 Per-agent LLM Configuration (provider credentials, workspace config.json, config resolution); §16 Agent Onboarding (flow, authorization, separation of concerns) |
 | 0.6 | 2026-02-28 | AI + Kiat | Updated §15.2 config.json to multi-model format (`llm.models[]`); added §15.5 Fallback Attempt Trace (OpenClaw-inspired runtime observability) |
 | 0.7 | 2026-03-04 | AI + Kiat | Refined §15.3 to match current resolver/runtime behavior and added Stage 0 hardening notes for capability middleware |
+| 0.8 | 2026-04-05 | AI + Kiat | §15.2: Updated config.json to max 2 entries (backup model), documented UI-configurable backup. §15.5: Corrected fallback-worthy error types to match `AiErrorType::retryable()` (added `timeout`, `empty_response`); added chat thread fallback visibility (inline notice + thread banner). |

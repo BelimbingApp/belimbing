@@ -65,6 +65,37 @@ class Lara extends Component
     public function updatedSelectedModelId(): void
     {
         $this->clearProviderTestResult();
+        $this->autoSaveIfActivated();
+    }
+
+    /**
+     * Keep backup model selection in sync when backup provider changes.
+     */
+    public function updatedBackupProviderId(): void
+    {
+        $this->hydrateBackupModel(forceDefault: true);
+        $this->autoSaveIfActivated();
+    }
+
+    /**
+     * Auto-save when backup model selection changes.
+     */
+    public function updatedBackupModelId(): void
+    {
+        $this->autoSaveIfActivated();
+    }
+
+    /**
+     * Clear the backup model and auto-save.
+     */
+    public function removeBackup(): void
+    {
+        $this->clearBackup();
+        $this->autoSaveIfActivated();
+    }
+
+    private function autoSaveIfActivated(): void
+    {
         if (Employee::laraActivationState() !== true) {
             return;
         }
@@ -100,10 +131,13 @@ class Lara extends Component
 
         $providers = collect();
         $models = collect();
+        $backupModels = collect();
         $activeSelection = [
             'isUsingDefault' => false,
             'activeProviderName' => null,
             'activeModelId' => null,
+            'activeBackupProviderName' => null,
+            'activeBackupModelId' => null,
         ];
 
         if ($licenseeExists) {
@@ -112,6 +146,10 @@ class Lara extends Component
 
         if ($this->selectedProviderId) {
             $models = $this->availableModels();
+        }
+
+        if ($this->backupProviderId) {
+            $backupModels = $this->availableBackupModels();
         }
 
         if ($laraActivated) {
@@ -124,9 +162,12 @@ class Lara extends Component
             'laraActivated' => $laraActivated,
             'providers' => $providers,
             'models' => $models,
+            'backupModels' => $backupModels,
             'isUsingDefault' => $activeSelection['isUsingDefault'],
             'activeProviderName' => $activeSelection['activeProviderName'],
             'activeModelId' => $activeSelection['activeModelId'],
+            'activeBackupProviderName' => $activeSelection['activeBackupProviderName'],
+            'activeBackupModelId' => $activeSelection['activeBackupModelId'],
         ]);
     }
 }

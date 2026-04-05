@@ -53,6 +53,14 @@
                     @endif
                 </div>
 
+                @if ($activeBackupModelId !== null)
+                    <div class="flex items-baseline gap-3 mt-2">
+                        <span class="text-sm text-muted">{{ __('Backup') }}</span>
+                        <span class="text-sm font-medium text-ink font-mono">{{ $activeBackupProviderName ?? '—' }}/{{ $activeBackupModelId }}</span>
+                        <x-ui.badge variant="warning">{{ __('Backup') }}</x-ui.badge>
+                    </div>
+                @endif
+
                 @if ($isUsingDefault)
                     <p class="text-xs text-muted mt-3">{{ __('Kodi is using the company\'s default provider and model. Set a specific model below to override.') }}</p>
                 @endif
@@ -76,6 +84,29 @@
                 <p class="text-xs text-muted">
                     {{ __('Changes are saved automatically when you select a model.') }}
                 </p>
+            </x-ui.card>
+
+            <x-ui.card>
+                <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-2">{{ __('Backup Model') }} <span class="normal-case tracking-normal font-normal">{{ __('(Optional)') }}</span></h3>
+                <p class="text-xs text-muted mb-4">{{ __('If the primary model fails, the system will automatically retry with this model.') }}</p>
+
+                @if ($backupProviderId !== null)
+                    <div class="mb-3 flex items-center justify-end">
+                        <x-ui.button variant="ghost" size="sm" wire:click="removeBackup" class="text-red-500 hover:text-red-600">
+                            <x-icon name="heroicon-o-x-mark" class="w-3.5 h-3.5" />
+                            {{ __('Clear backup') }}
+                        </x-ui.button>
+                    </div>
+                @endif
+
+                @include('livewire.admin.setup.partials.llm-provider-model-picker', [
+                    'context' => 'kodi-backup',
+                    'providers' => $providers,
+                    'models' => $backupModels,
+                    'selectedProviderId' => $backupProviderId,
+                    'providerBinding' => 'backupProviderId',
+                    'modelBinding' => 'backupModelId',
+                ])
             </x-ui.card>
         @endif
     </div>

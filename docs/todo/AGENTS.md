@@ -141,15 +141,14 @@ The user will identify concerns by reading the plan. The agent's job is to give 
 
 ## Progress Discipline
 
-Keep the document alive while the work evolves.
+The todo document should remain readable as the current truth, not a historical dump.
 
-- Update status when the phase or direction changes.
-- Update the relevant phase directly rather than creating detached status sections.
-- Remove stale checklists, stale prose, and abandoned branches of the plan.
-- If a previous approach is no longer the plan, delete or rewrite it rather than leaving contradictory text behind.
-- When claiming progress, include evidence that makes the claim credible: touched files, completed phases, tests run, or specific behavior now working.
-
-The todo document should remain readable as the current truth, not a historical dump of every thought the agent ever had.
+- Update phases directly as work progresses. Do not create detached status sections.
+- Delete stale content — abandoned approaches, dead checklists, contradictory prose. If it is no longer the plan, remove it.
+- Back progress claims with evidence: touched files, tests run, behavior now working.
+- Use `- [ ]` / `- [x]` for actionable tasks within phases. Description headers that group sub-tasks get no checkbox — only the concrete items beneath them.
+- Add tasks and sub-tasks freely during implementation. Scope sharpens as you build — the boy-scout rule surfaces improvements, new opportunities emerge. Capture them in the doc; the initial plan is a starting point, not a ceiling.
+- When a new task emerges mid-build, decide by proximity: if it touches the same file or is tightly coupled to the current work, handle it inline — switching back later costs more. If it is independent or in a different area, finish the current phase first, then address it.
 
 ## When To Split Documents
 
@@ -166,7 +165,6 @@ If you split, make the relationship explicit near the top of both files.
 
 - Write in concrete, direct language.
 - Prefer short sections over dense walls of prose.
-- Use checklists for execution tracking, not for architectural thinking.
 - Avoid filler headings that restate obvious things.
 - Avoid speculative branches that have no recommendation.
 - Keep the document useful to both the agent and the user during active work.
