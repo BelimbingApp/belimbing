@@ -38,16 +38,9 @@
             <x-ui.card>
                 <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Current Configuration') }}</h3>
 
-                <div class="flex items-baseline gap-3 mb-1">
-                    <span class="text-sm text-muted">{{ __('Provider') }}</span>
-                    <span class="text-sm font-medium text-ink">{{ $activeProviderName ?? '—' }}</span>
-                    @if ($isUsingDefault)
-                        <x-ui.badge variant="info">{{ __('Default') }}</x-ui.badge>
-                    @endif
-                </div>
                 <div class="flex items-baseline gap-3">
-                    <span class="text-sm text-muted">{{ __('Model') }}</span>
-                    <span class="text-sm font-medium text-ink font-mono">{{ $activeModelId ?? '—' }}</span>
+                    <span class="text-sm text-muted">{{ __('Primary') }}</span>
+                    <span class="text-sm font-medium text-ink font-mono">{{ ($activeProviderName ?? '—') . '/' . ($activeModelId ?? '—') }}</span>
                     @if ($isUsingDefault)
                         <x-ui.badge variant="info">{{ __('Default') }}</x-ui.badge>
                     @endif
@@ -67,7 +60,7 @@
             </x-ui.card>
 
             <x-ui.card>
-                <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Change Model') }}</h3>
+                <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Primary Model') }}</h3>
                 <p class="text-xs text-muted mb-4">{{ __('Select a provider and model for Kodi. For code-heavy tasks, frontier models (Claude Opus, GPT-5 class) are recommended.') }}</p>
 
                 @include('livewire.admin.setup.partials.llm-provider-model-picker', [
