@@ -5,10 +5,13 @@
 
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
+use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\PageContextResolver;
 use App\Modules\Core\AI\Services\SessionManager;
+use App\Modules\Core\AI\Services\TurnEventPublisher;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -154,5 +157,43 @@ trait HandlesStreaming
         $this->isLoading = false;
         $this->dispatch('agent-chat-response-ready');
         $this->dispatch('agent-chat-focus-composer');
+    }
+
+    /**
+     * Cancel the active turn for the current user and session.
+     *
+     * Called by the UI stop button. Marks the turn as cancelled so the
+     * background job (if any) sees the terminal state on its next
+     * cooperative cancellation check. Also cancels the OperationDispatch
+     * so the job detects it via `isCancelled()`.
+     */
+    public function cancelActiveTurn(string $turnId): void
+    {
+        $turn = ChatTurn::query()->find($turnId);
+
+        if ($turn === null || $turn->isTerminal()) {
+            return;
+        }
+
+        // Ownership guard: only the acting user can cancel
+        if ((int) $turn->acting_for_user_id !== (int) auth()->id()) {
+            return;
+        }
+
+        $publisher = app(TurnEventPublisher::class);
+        $publisher->turnCancelled($turn, 'User pressed stop');
+
+        // Also cancel the background dispatch if present
+        if ($this->backgroundDispatchId !== null) {
+            $dispatch = OperationDispatch::query()->find($this->backgroundDispatchId);
+
+            if ($dispatch !== null && ! $dispatch->isTerminal()) {
+                $dispatch->markCancelled();
+            }
+
+            $this->backgroundDispatchId = null;
+        }
+
+        $this->isLoading = false;
     }
 }

@@ -35,6 +35,7 @@ use App\Modules\Core\AI\Livewire\ControlPlane;
 
     <x-ui.tabs :tabs="[
         ['id' => 'inspector', 'label' => __('Run Inspector'), 'icon' => 'heroicon-o-magnifying-glass'],
+        ['id' => 'turns', 'label' => __('Turn Inspector'), 'icon' => 'heroicon-o-queue-list'],
         ['id' => 'health', 'label' => __('Health & Presence'), 'icon' => 'heroicon-o-heart'],
         ['id' => 'lifecycle', 'label' => __('Lifecycle Controls'), 'icon' => 'heroicon-o-arrow-path'],
     ]" default="inspector">
@@ -186,10 +187,158 @@ use App\Modules\Core\AI\Livewire\ControlPlane;
         </x-ui.tab>
 
         {{-- ============================================================ --}}
+        {{-- TAB: Turn Inspector                                          --}}
+        {{-- ============================================================ --}}
+        <x-ui.tab id="turns">
+            <div class="space-y-section-gap">
+                {{-- Turn lookup --}}
+                <x-ui.card>
+                    <div class="space-y-4">
+                        <h3 class="text-sm font-medium text-ink">{{ __('Inspect Turn') }}</h3>
+                        <div class="flex gap-3">
+                            <x-ui.input
+                                id="inspectTurnId"
+                                wire:model="inspectTurnId"
+                                :placeholder="__('Turn ID (ULID)')"
+                                class="flex-1"
+                            />
+                            <x-ui.button wire:click="inspectTurn" variant="primary" size="sm">
+                                {{ __('Inspect') }}
+                            </x-ui.button>
+                        </div>
+
+                        @if ($turnInspectionError)
+                            <p class="text-sm text-danger">{{ $turnInspectionError }}</p>
+                        @endif
+                    </div>
+                </x-ui.card>
+
+                {{-- Turn details --}}
+                @if ($turnInspection)
+                    <x-ui.card>
+                        <h3 class="text-sm font-medium text-ink mb-3">{{ __('Turn Details') }}</h3>
+                        <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+                            <div>
+                                <dt class="text-muted">{{ __('ID') }}</dt>
+                                <dd class="text-ink font-mono text-xs">{{ $turnInspection['id'] }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-muted">{{ __('Status') }}</dt>
+                                <dd>
+                                    <x-ui.badge :variant="$turnInspection['status_color']">{{ $turnInspection['status_label'] }}</x-ui.badge>
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-muted">{{ __('Phase') }}</dt>
+                                <dd class="text-ink">{{ $turnInspection['current_phase_label'] ?? '—' }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-muted">{{ __('Employee') }}</dt>
+                                <dd class="text-ink">{{ $turnInspection['employee_id'] }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-muted">{{ __('Session') }}</dt>
+                                <dd class="text-ink font-mono text-xs truncate">{{ $turnInspection['session_id'] }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-muted">{{ __('User') }}</dt>
+                                <dd class="text-ink">{{ $turnInspection['acting_for_user_id'] ?? '—' }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-muted">{{ __('Run ID') }}</dt>
+                                <dd class="text-ink font-mono text-xs">{{ $turnInspection['current_run_id'] ?? '—' }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-muted">{{ __('Events') }}</dt>
+                                <dd class="text-ink">{{ $turnInspection['event_count'] }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-muted">{{ __('Created') }}</dt>
+                                <dd class="text-ink text-xs">{{ $turnInspection['created_at'] }}</dd>
+                            </div>
+                        </dl>
+                    </x-ui.card>
+
+                    {{-- Turn event log --}}
+                    @if ($turnEvents !== [])
+                        <x-ui.card>
+                            <h3 class="text-sm font-medium text-ink mb-3">{{ __('Event Log') }} ({{ count($turnEvents) }})</h3>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="border-b border-border-default">
+                                            <th class="text-left py-1 px-2 text-muted font-medium">{{ __('Seq') }}</th>
+                                            <th class="text-left py-1 px-2 text-muted font-medium">{{ __('Event') }}</th>
+                                            <th class="text-left py-1 px-2 text-muted font-medium">{{ __('Payload') }}</th>
+                                            <th class="text-left py-1 px-2 text-muted font-medium">{{ __('Time') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($turnEvents as $evt)
+                                            <tr class="border-b border-border-subtle">
+                                                <td class="py-1 px-2 tabular-nums text-muted">{{ $evt['seq'] }}</td>
+                                                <td class="py-1 px-2 font-mono text-ink">{{ $evt['event_type'] }}</td>
+                                                <td class="py-1 px-2 text-muted max-w-xs truncate">
+                                                    @if ($evt['payload'])
+                                                        <code class="text-[10px]">{{ \Illuminate\Support\Str::limit(json_encode($evt['payload'], JSON_UNESCAPED_SLASHES), 120) }}</code>
+                                                    @else
+                                                        —
+                                                    @endif
+                                                </td>
+                                                <td class="py-1 px-2 tabular-nums text-muted whitespace-nowrap">{{ $evt['created_at'] }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </x-ui.card>
+                    @endif
+                @endif
+            </div>
+        </x-ui.tab>
+
+        {{-- ============================================================ --}}
         {{-- TAB: Health & Presence                                       --}}
         {{-- ============================================================ --}}
         <x-ui.tab id="health">
             <div class="space-y-section-gap">
+                {{-- Turn queue health --}}
+                <x-ui.card>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium text-ink">{{ __('Turn Queue Health') }}</h3>
+                        <x-ui.button wire:click="loadTurnHealthCounts" variant="secondary" size="sm">
+                            {{ __('Refresh') }}
+                        </x-ui.button>
+                    </div>
+
+                    @if ($turnHealthCounts)
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div class="rounded-lg border border-border-default p-3">
+                                <p class="text-xs text-muted">{{ __('Active (queued + booting + running)') }}</p>
+                                <p class="text-xl font-semibold text-ink tabular-nums">
+                                    {{ $turnHealthCounts['queued'] + $turnHealthCounts['booting'] + $turnHealthCounts['running'] }}
+                                </p>
+                            </div>
+                            <div class="rounded-lg border {{ ($turnHealthCounts['stale_queued'] + $turnHealthCounts['stale_running']) > 0 ? 'border-danger/40 bg-danger/5' : 'border-border-default' }} p-3">
+                                <p class="text-xs text-muted">{{ __('Stale (needs attention)') }}</p>
+                                <p class="text-xl font-semibold {{ ($turnHealthCounts['stale_queued'] + $turnHealthCounts['stale_running']) > 0 ? 'text-danger' : 'text-ink' }} tabular-nums">
+                                    {{ $turnHealthCounts['stale_queued'] + $turnHealthCounts['stale_running'] }}
+                                </p>
+                            </div>
+                            <div class="rounded-lg border border-border-default p-3">
+                                <p class="text-xs text-muted">{{ __('Completed (last hour)') }}</p>
+                                <p class="text-xl font-semibold text-success tabular-nums">{{ $turnHealthCounts['completed_last_hour'] }}</p>
+                            </div>
+                            <div class="rounded-lg border {{ $turnHealthCounts['failed_last_hour'] > 0 ? 'border-warning/40 bg-warning/5' : 'border-border-default' }} p-3">
+                                <p class="text-xs text-muted">{{ __('Failed (last hour)') }}</p>
+                                <p class="text-xl font-semibold {{ $turnHealthCounts['failed_last_hour'] > 0 ? 'text-warning' : 'text-ink' }} tabular-nums">{{ $turnHealthCounts['failed_last_hour'] }}</p>
+                            </div>
+                        </div>
+                    @else
+                        <p class="text-sm text-muted">{{ __('Click Refresh to load turn queue health.') }}</p>
+                    @endif
+                </x-ui.card>
+
                 {{-- Tool health overview --}}
                 <x-ui.card>
                     <div class="flex items-center justify-between mb-3">

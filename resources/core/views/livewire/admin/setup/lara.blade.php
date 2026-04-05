@@ -29,7 +29,6 @@
                     <div class="flex items-baseline gap-3 mt-2">
                         <span class="text-sm text-muted">{{ __('Backup') }}</span>
                         <span class="text-sm font-medium text-ink font-mono">{{ $activeBackupProviderName ?? '—' }}/{{ $activeBackupModelId }}</span>
-                        <x-ui.badge variant="warning">{{ __('Backup') }}</x-ui.badge>
                     </div>
                 @endif
 

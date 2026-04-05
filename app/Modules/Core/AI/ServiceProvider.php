@@ -20,6 +20,7 @@ use App\Modules\Core\AI\Console\Commands\OperationsStatusCommand;
 use App\Modules\Core\AI\Console\Commands\OperationsSweepCommand;
 use App\Modules\Core\AI\Console\Commands\ReapOrphanRunsCommand;
 use App\Modules\Core\AI\Console\Commands\SchedulesTickCommand;
+use App\Modules\Core\AI\Console\Commands\SweepStaleTurnsCommand;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgentRuntime;
@@ -227,6 +228,7 @@ class ServiceProvider extends BaseServiceProvider
                 OperationsSweepCommand::class,
                 OperationsStatusCommand::class,
                 ReapOrphanRunsCommand::class,
+                SweepStaleTurnsCommand::class,
                 InspectRunCommand::class,
                 HealthSnapshotCommand::class,
                 LifecyclePreviewCommand::class,

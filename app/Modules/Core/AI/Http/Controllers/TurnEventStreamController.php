@@ -59,6 +59,22 @@ class TurnEventStreamController
                 $lastSeq = $event->seq;
             }
 
+            // If no events replayed and the turn is still active, emit a
+            // synthetic phase event so the client shows the current state
+            // (e.g. "Waiting for worker…" before the job starts).
+            if ($lastSeq === $afterSeq && $afterSeq === 0) {
+                $turn->refresh();
+
+                if (! $turn->isTerminal() && $turn->current_phase !== null) {
+                    $this->emitMeta('current_phase', [
+                        'turn_id' => $turn->id,
+                        'phase' => $turn->current_phase->value,
+                        'label' => $turn->current_label ?? $turn->current_phase->label(),
+                        'status' => $turn->status->value,
+                    ]);
+                }
+            }
+
             // If the turn is already terminal, close immediately after replay
             $turn->refresh();
 

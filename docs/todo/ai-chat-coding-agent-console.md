@@ -476,12 +476,25 @@ Make failures explicit and diagnosable without degrading the live UX.
 
 ### Tasks
 
-- [ ] Surface `waiting_for_worker` as a first-class phase.
-- [ ] Fail turns that remain unclaimed beyond a threshold with a clear user-facing explanation (stale queued-turn escalation — moved from Phase 2).
-- [ ] Add worker/queue health indicators to admin surfaces.
-- [ ] Expose per-turn and per-run drill-down from the control plane.
-- [ ] Ensure cancellation stops both the live stream and the underlying executor cooperatively.
-- [ ] Buffer assistant deltas at safe markdown boundaries before rendering (deferred from Phase 4 — enhancement).
+- [x] Surface `waiting_for_worker` as a first-class phase.
+- [x] Fail turns that remain unclaimed beyond a threshold with a clear user-facing explanation (stale queued-turn escalation — moved from Phase 2).
+- [x] Add worker/queue health indicators to admin surfaces.
+- [x] Expose per-turn and per-run drill-down from the control plane.
+- [x] Ensure cancellation stops both the live stream and the underlying executor cooperatively.
+- [x] Buffer assistant deltas at safe markdown boundaries before rendering (deferred from Phase 4 — enhancement).
+
+### Implementation progress
+
+- [x] `TurnEventStreamController` emits synthetic `current_phase` meta event when connecting to a turn with no events yet — client sees "Waiting for worker…" immediately.
+- [x] Alpine background handler sets `turnPhase = 'waiting_for_worker'` and label on dispatch.
+- [x] Alpine handles `current_phase` meta event from resume endpoint for reconnection/page-load cases.
+- [x] `SweepStaleTurnsCommand` (`blb:ai:turns:sweep-stale`) — fails turns stuck in queued/booting (10m) or running (30m) with user-facing messages and `turn.failed` events. 6 tests.
+- [x] `cancelActiveTurn()` method in `HandlesStreaming` — cancels the turn via `TurnEventPublisher`, also cancels background dispatch if present. Ownership-guarded.
+- [x] Stop button calls `$wire.cancelActiveTurn(activeTurnId)` before closing EventSource — cooperative cancellation across both interactive and background flows.
+- [x] Delta buffering — accumulates text in `_deltaBuffer`, flushes on newlines (safe markdown boundary) or after 80ms debounce. `flushDeltaBuffer()` called on block commit and terminal events.
+- [x] Turn Queue Health card in ControlPlane Health tab — shows active, stale, completed, failed counts with visual danger/warning indicators.
+- [x] Turn Inspector tab in ControlPlane — lookup by ULID, shows turn details (status, phase, session, employee, run ID, timestamps) and full event log table.
+- [x] **Phase 5 complete** — 1377 tests passing. Pint clean. Vite builds.
 
 ## Non-Goals
 

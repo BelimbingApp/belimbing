@@ -397,6 +397,8 @@
                     _toolMap: {},
                     _completedToolCount: 0,
                     toolsCollapsed: false,
+                    _deltaBuffer: '',
+                    _deltaFlushTimer: null,
 
                     get isBusy() {
                         return !!this.pendingMessage || !!this.activeTurnId;
@@ -412,10 +414,31 @@
                         this._toolMap = {};
                         this._completedToolCount = 0;
                         this.toolsCollapsed = false;
+                        this.flushDeltaBuffer();
+                        this._deltaBuffer = '';
                         if (this._elapsedTimer) {
                             clearInterval(this._elapsedTimer);
                             this._elapsedTimer = null;
                         }
+                    },
+
+                    flushDeltaBuffer() {
+                        if (this._deltaFlushTimer) {
+                            clearTimeout(this._deltaFlushTimer);
+                            this._deltaFlushTimer = null;
+                        }
+                        if (!this._deltaBuffer) return;
+
+                        const last = this.streamEntries[this.streamEntries.length - 1];
+                        if (last && last.type === 'assistant_streaming') {
+                            last.content += this._deltaBuffer;
+                        } else {
+                            this.streamEntries.push({
+                                type: 'assistant_streaming',
+                                content: this._deltaBuffer,
+                            });
+                        }
+                        this._deltaBuffer = '';
                     },
 
                     startElapsedTimer() {
@@ -528,19 +551,22 @@
                                     const text = payload.text || '';
                                     if (!text) break;
 
-                                    const last = this.streamEntries[this.streamEntries.length - 1];
-                                    if (last && last.type === 'assistant_streaming') {
-                                        last.content += text;
+                                    this._deltaBuffer += text;
+
+                                    // Flush at safe markdown boundaries (newline, double-newline,
+                                    // end of fenced code block) or after 80ms debounce
+                                    const hasBoundary = /\n/.test(text);
+                                    if (hasBoundary) {
+                                        this.flushDeltaBuffer();
                                     } else {
-                                        this.streamEntries.push({
-                                            type: 'assistant_streaming',
-                                            content: text,
-                                        });
+                                        if (this._deltaFlushTimer) clearTimeout(this._deltaFlushTimer);
+                                        this._deltaFlushTimer = setTimeout(() => this.flushDeltaBuffer(), 80);
                                     }
                                     break;
                                 }
 
                                 case 'assistant.output_block_committed':
+                                    this.flushDeltaBuffer();
                                     break;
 
                                 case 'turn.completed':
@@ -578,6 +604,13 @@
                                         this.resetTurnState();
                                         this.$wire.finalizeStreamingRun();
                                         return;
+                                    }
+                                    // Synthetic phase from resume endpoint (e.g. waiting_for_worker)
+                                    if (data.type === 'current_phase' || data.payload?.type === 'current_phase') {
+                                        const meta = data.type === 'current_phase' ? data : data.payload;
+                                        this.turnPhase = meta.phase || this.turnPhase;
+                                        this.turnLabel = meta.label || this.turnLabel;
+                                        if (!this.turnStartedAt) this.startElapsedTimer();
                                     }
                                     break;
                             }
@@ -639,6 +672,8 @@
                 @agent-chat-background-started.window="
                     if ($event.detail?.resumeUrl) {
                         activeTurnId = $event.detail.turnId;
+                        turnPhase = 'waiting_for_worker';
+                        turnLabel = '{{ __('Waiting for worker…') }}';
                         startElapsedTimer();
                         connectToTurnStream($event.detail.resumeUrl + '?after_seq=0', $refs.agentScroll);
                     }
@@ -1010,6 +1045,9 @@
                     <button
                         type="button"
                         @click="
+                            if (activeTurnId) {
+                                $wire.cancelActiveTurn(activeTurnId);
+                            }
                             if (_eventSource) {
                                 _eventSource.close();
                                 _eventSource = null;

@@ -14,6 +14,7 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Enums\LifecycleAction;
 use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Services\ControlPlane\HealthAndPresenceService;
 use App\Modules\Core\AI\Services\ControlPlane\LifecycleControlService;
 use App\Modules\Core\AI\Services\ControlPlane\RunInspectionService;
@@ -51,6 +52,21 @@ class ControlPlane extends Component
     public ?array $agentSnapshot = null;
 
     public int $healthAgentId = 0;
+
+    /** @var array<string, int>|null */
+    public ?array $turnHealthCounts = null;
+
+    // -- Turn Inspector state --
+
+    public string $inspectTurnId = '';
+
+    /** @var array<string, mixed>|null */
+    public ?array $turnInspection = null;
+
+    /** @var list<array<string, mixed>> */
+    public array $turnEvents = [];
+
+    public string $turnInspectionError = '';
 
     // -- Lifecycle state --
 
@@ -172,6 +188,94 @@ class ControlPlane extends Component
 
         $service = app(HealthAndPresenceService::class);
         $this->agentSnapshot = $this->mapHealthSnapshot($service->agentSnapshot($this->healthAgentId));
+    }
+
+    /**
+     * Load turn health counts — active, stale, and recent failed turns.
+     */
+    public function loadTurnHealthCounts(): void
+    {
+        $now = now();
+
+        $this->turnHealthCounts = [
+            'queued' => ChatTurn::query()->where('status', 'queued')->count(),
+            'booting' => ChatTurn::query()->where('status', 'booting')->count(),
+            'running' => ChatTurn::query()->where('status', 'running')->count(),
+            'stale_queued' => ChatTurn::query()
+                ->whereIn('status', ['queued', 'booting'])
+                ->where('created_at', '<', $now->copy()->subMinutes(10))
+                ->count(),
+            'stale_running' => ChatTurn::query()
+                ->where('status', 'running')
+                ->where('created_at', '<', $now->copy()->subMinutes(30))
+                ->count(),
+            'failed_last_hour' => ChatTurn::query()
+                ->where('status', 'failed')
+                ->where('finished_at', '>=', $now->copy()->subHour())
+                ->count(),
+            'completed_last_hour' => ChatTurn::query()
+                ->where('status', 'completed')
+                ->where('finished_at', '>=', $now->copy()->subHour())
+                ->count(),
+        ];
+    }
+
+    // ---------------------------------------------------------------
+    // Turn Inspector actions
+    // ---------------------------------------------------------------
+
+    /**
+     * Inspect a turn by its ID.
+     */
+    public function inspectTurn(): void
+    {
+        $this->turnInspection = null;
+        $this->turnEvents = [];
+        $this->turnInspectionError = '';
+
+        if ($this->inspectTurnId === '') {
+            $this->turnInspectionError = __('Turn ID is required.');
+
+            return;
+        }
+
+        $turn = ChatTurn::query()->find($this->inspectTurnId);
+
+        if ($turn === null) {
+            $this->turnInspectionError = __('Turn not found.');
+
+            return;
+        }
+
+        $this->turnInspection = [
+            'id' => $turn->id,
+            'employee_id' => $turn->employee_id,
+            'session_id' => $turn->session_id,
+            'acting_for_user_id' => $turn->acting_for_user_id,
+            'status' => $turn->status->value,
+            'status_label' => $turn->status->label(),
+            'status_color' => $turn->status->color(),
+            'current_phase' => $turn->current_phase?->value,
+            'current_phase_label' => $turn->current_phase?->label(),
+            'current_label' => $turn->current_label,
+            'last_event_seq' => $turn->last_event_seq,
+            'current_run_id' => $turn->current_run_id,
+            'started_at' => $turn->started_at?->toIso8601String(),
+            'finished_at' => $turn->finished_at?->toIso8601String(),
+            'created_at' => $turn->created_at?->toIso8601String(),
+            'event_count' => $turn->events()->count(),
+        ];
+
+        $this->turnEvents = $turn->events()
+            ->orderBy('seq')
+            ->get()
+            ->map(fn ($event): array => [
+                'seq' => $event->seq,
+                'event_type' => $event->event_type->value,
+                'payload' => $event->payload,
+                'created_at' => $event->created_at?->toIso8601String(),
+            ])
+            ->all();
     }
 
     // ---------------------------------------------------------------
