@@ -208,7 +208,7 @@ describe('LlmClient tool calling responses api handling', function () {
         });
     });
 
-    it('uses a generic user message for bad requests', function () {
+    it('composes user message from label and provider diagnostic for bad requests', function () {
         Http::fake([
             '*/responses' => Http::response([
                 'error' => [
@@ -230,7 +230,8 @@ describe('LlmClient tool calling responses api handling', function () {
             ->toHaveKey('runtime_error')
             ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
             ->and($result['runtime_error']->errorType)->toBe(AiErrorType::BadRequest)
-            ->and($result['runtime_error']->userMessage)->toBe('The AI provider rejected the request. Please ask an administrator to review the model and request settings.')
+            ->and($result['runtime_error']->userMessage)->toStartWith(AiErrorType::BadRequest->userMessage())
+            ->and($result['runtime_error']->userMessage)->toContain("Unsupported parameter: 'temperature'")
             ->and($result['runtime_error']->hint)->toContain("Unsupported parameter: 'temperature'");
     });
 });

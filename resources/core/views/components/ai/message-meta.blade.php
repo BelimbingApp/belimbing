@@ -110,21 +110,18 @@
                     @if ($runDetailsTitleId !== null)
                         aria-labelledby="{{ $runDetailsTitleId }}"
                     @endif
-                    class="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-xl border border-border-default bg-surface-card shadow-lg p-2.5 text-[11px] text-ink"
+                    class="absolute bottom-full left-0 z-30 mb-1 w-46 rounded-xl border border-border-default bg-surface-card shadow-lg p-2.5 text-[11px] text-ink"
                 >
                     <div
                         @if ($runDetailsTitleId !== null)
                             id="{{ $runDetailsTitleId }}"
                         @endif
-                        class="font-medium text-muted mb-1.5"
+                        class="mb-1.5 flex items-center justify-between gap-2"
                     >
-                        {{ __('Run') }}
+                        <span class="font-medium text-muted whitespace-nowrap">{{ __('Run ID') }}</span>
+                        <span class="min-w-0 flex-1 truncate text-right font-mono" title="{{ $runIdLabel }}">{{ $runIdLabel }}</span>
                     </div>
                     <div class="space-y-1.5">
-                        <div class="flex justify-between">
-                            <span class="text-muted">{{ __('ID') }}</span>
-                            <span class="font-mono truncate max-w-[10rem]" title="{{ $runIdLabel }}">{{ $runIdLabel }}</span>
-                        </div>
 
                         @if ($runStatus !== null)
                             <div class="flex justify-between">

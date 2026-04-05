@@ -41,23 +41,27 @@ enum AiErrorType: string
     }
 
     /**
-     * Return a safe, actionable, translatable message for end users.
+     * Return a short, translatable label for end users.
+     *
+     * This is the first sentence only — the full user-facing message is
+     * composed by {@see \App\Base\AI\DTO\AiRuntimeError} which appends
+     * the provider diagnostic when available.
      */
     public function userMessage(): string
     {
         return match ($this) {
             self::Timeout,
-            self::ConnectionError => __('The AI provider did not respond in time. Please try again.'),
-            self::RateLimit => __('The AI provider is busy right now. Please try again in a moment.'),
-            self::ServerError => __('The AI provider encountered a server error. Please try again later.'),
-            self::AuthError => __('AI provider authentication failed. Please ask an administrator to check the provider credentials.'),
-            self::NotFound => __('The configured AI model or endpoint could not be found. Please ask an administrator to verify the setup.'),
-            self::BadRequest => __('The AI provider rejected the request. Please ask an administrator to review the model and request settings.'),
+            self::ConnectionError => __('The AI provider did not respond in time.'),
+            self::RateLimit => __('The AI provider is busy right now.'),
+            self::ServerError => __('The AI provider encountered a server error.'),
+            self::AuthError => __('AI provider authentication failed.'),
+            self::NotFound => __('The configured AI model or endpoint could not be found.'),
+            self::BadRequest => __('The AI provider rejected the request.'),
             self::HtmlResponse,
-            self::UnsupportedResponseShape => __('The AI provider returned an invalid response. Please ask an administrator to check the provider endpoint.'),
-            self::EmptyResponse => __('The AI model returned an empty reply. Please try again or switch to a different model.'),
-            self::ConfigError => __('AI chat is not fully configured. Please ask an administrator to set up an AI provider.'),
-            self::UnexpectedError => __('An unexpected error occurred. Please try again.'),
+            self::UnsupportedResponseShape => __('The AI provider returned an invalid response.'),
+            self::EmptyResponse => __('The AI model returned an empty reply.'),
+            self::ConfigError => __('AI chat is not fully configured.'),
+            self::UnexpectedError => __('An unexpected error occurred.'),
         };
     }
 }

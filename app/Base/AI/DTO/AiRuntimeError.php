@@ -25,8 +25,25 @@ final readonly class AiRuntimeError
         public int $latencyMs = 0,
         ?bool $retryable = null,
     ) {
-        $this->userMessage = $userMessage ?? $errorType->userMessage();
+        $this->userMessage = $userMessage ?? self::composeUserMessage($errorType, $diagnostic);
         $this->retryable = $retryable ?? $errorType->retryable();
+    }
+
+    /**
+     * Compose a user-facing message from the enum label and provider diagnostic.
+     *
+     * Appends the raw diagnostic so end users see the actual provider error
+     * instead of a generic "ask your administrator" second sentence.
+     */
+    private static function composeUserMessage(AiErrorType $errorType, string $diagnostic): string
+    {
+        $label = $errorType->userMessage();
+
+        if ($diagnostic === '') {
+            return $label;
+        }
+
+        return $label.' '.$diagnostic;
     }
 
     /**

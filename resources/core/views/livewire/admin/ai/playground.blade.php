@@ -168,7 +168,7 @@
                     @if($lastRunMeta)
                         <dl class="mt-2 space-y-1.5 text-xs">
                             <div>
-                                <dt class="text-muted">{{ __('Run ID') }}</dt>
+                                <dt class="text-muted whitespace-nowrap">{{ __('Run ID') }}</dt>
                                 <dd class="text-ink font-mono tabular-nums">{{ $lastRunMeta['run_id'] ?? '-' }}</dd>
                             </div>
                             <div>
