@@ -7,12 +7,17 @@ namespace App\Modules\Core\AI\Http\Controllers;
 
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\DTO\PageSnapshot;
+use App\Modules\Core\AI\Enums\TurnPhase;
+use App\Modules\Core\AI\Enums\TurnStatus;
+use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\ChatRunPersister;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\PageContextHolder;
 use App\Modules\Core\AI\Services\SessionManager;
+use App\Modules\Core\AI\Services\TurnEventPublisher;
+use App\Modules\Core\AI\Services\TurnStreamBridge;
 use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Http\Request;
@@ -33,6 +38,8 @@ class ChatStreamController
 {
     public function __construct(
         private readonly ChatRunPersister $persister,
+        private readonly TurnStreamBridge $bridge,
+        private readonly TurnEventPublisher $turnPublisher,
     ) {}
 
     /**
@@ -68,25 +75,44 @@ class ChatStreamController
 
         $runtime = app(AgenticRuntime::class);
 
-        return new StreamedResponse(function () use ($runtime, $messages, $employeeId, $systemPrompt, $modelOverride, $messageManager, $sessionId, $promptMeta): void {
-            [$fullContent, $runId, $meta, $hadError] = $this->streamRuntimeEvents(
-                runtime: $runtime,
-                messages: $messages,
-                employeeId: $employeeId,
-                systemPrompt: $systemPrompt,
-                modelOverride: $modelOverride,
-                messageManager: $messageManager,
-                sessionId: $sessionId,
-            );
+        $turn = ChatTurn::query()->create([
+            'employee_id' => $employeeId,
+            'session_id' => $sessionId,
+            'acting_for_user_id' => auth()->id(),
+            'status' => TurnStatus::Queued,
+            'current_phase' => TurnPhase::WaitingForWorker,
+        ]);
 
-            if (! $hadError) {
-                $effectiveMeta = $meta ?? [];
+        $extraMeta = $promptMeta !== null ? ['prompt_package' => $promptMeta] : [];
 
-                if ($promptMeta !== null) {
-                    $effectiveMeta['prompt_package'] = $promptMeta;
+        return new StreamedResponse(function () use ($turn, $runtime, $messages, $employeeId, $systemPrompt, $modelOverride, $messageManager, $sessionId, $extraMeta): void {
+            try {
+                $this->streamAndEmit(
+                    turn: $turn,
+                    runtime: $runtime,
+                    messages: $messages,
+                    employeeId: $employeeId,
+                    systemPrompt: $systemPrompt,
+                    modelOverride: $modelOverride,
+                    sessionId: $sessionId,
+                );
+
+                $this->persister->materializeFromTurn($turn, $messageManager, $employeeId, $sessionId, $extraMeta);
+            } catch (\Throwable $e) {
+                $turn->refresh();
+
+                if (! $turn->isTerminal()) {
+                    $this->turnPublisher->turnFailed($turn, 'runtime_exception', $e->getMessage());
                 }
 
-                $this->persister->persistAssistantMessage($messageManager, $employeeId, $sessionId, $fullContent, $runId, $effectiveMeta);
+                // Best-effort transcript materialization on exception
+                try {
+                    $this->persister->materializeFromTurn($turn->refresh(), $messageManager, $employeeId, $sessionId, $extraMeta);
+                } catch (\Throwable) {
+                    // Don't mask the original exception
+                }
+
+                throw $e;
             }
         }, 200, [
             'Content-Type' => 'text/event-stream',
@@ -97,60 +123,30 @@ class ChatStreamController
     }
 
     /**
+     * Stream runtime events through the bridge and emit as SSE.
+     *
+     * The bridge publishes durable turn events; this method only handles
+     * SSE emission. Transcript materialization happens after the stream.
+     *
      * @param  array<int, object>  $messages
-     * @return array{0: ?string, 1: ?string, 2: ?array<string, mixed>, 3: bool}
      */
-    private function streamRuntimeEvents(
+    private function streamAndEmit(
+        ChatTurn $turn,
         AgenticRuntime $runtime,
         array $messages,
         int $employeeId,
         ?string $systemPrompt,
         ?string $modelOverride,
-        MessageManager $messageManager,
         string $sessionId,
-    ): array {
-        $fullContent = null;
-        $runId = null;
-        $meta = null;
-        $hadError = false;
-        $thinkingPersisted = false;
+    ): void {
+        $runtimeStream = $runtime->runStream(
+            $messages, $employeeId, $systemPrompt, $modelOverride,
+            sessionId: $sessionId, turnId: $turn->id,
+        );
 
-        foreach ($runtime->runStream($messages, $employeeId, $systemPrompt, $modelOverride, sessionId: $sessionId) as $event) {
-            $eventName = $event['event'];
-            $data = $event['data'];
-
-            $this->emitEvent($eventName, $data);
-
-            $eventRunId = $data['run_id'] ?? $runId;
-
-            if ($eventRunId !== null && $runId === null) {
-                $runId = $eventRunId;
-            }
-
-            if ($eventName === 'status') {
-                $this->persister->persistStatusEvent(
-                    $messageManager,
-                    $employeeId,
-                    $sessionId,
-                    $eventRunId,
-                    $data,
-                    $thinkingPersisted,
-                );
-            }
-
-            if ($eventName === 'done') {
-                [$fullContent, $runId, $meta] = $this->captureDoneEvent($data);
-
-                continue;
-            }
-
-            if ($eventName === 'error') {
-                $hadError = true;
-                $this->persister->persistError($messageManager, $employeeId, $sessionId, $data);
-            }
+        foreach ($this->bridge->wrap($turn, $runtimeStream) as $event) {
+            $this->emitEvent($event['event'], $event['data']);
         }
-
-        return [$fullContent, $runId, $meta, $hadError];
     }
 
     /**
@@ -185,19 +181,6 @@ class ChatStreamController
         }
 
         flush();
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     * @return array{0: ?string, 1: ?string, 2: array<string, mixed>}
-     */
-    private function captureDoneEvent(array $data): array
-    {
-        return [
-            $data['content'] ?? '',
-            $data['run_id'] ?? null,
-            is_array($data['meta'] ?? null) ? $data['meta'] : [],
-        ];
     }
 
     /**
@@ -240,5 +223,4 @@ class ChatStreamController
             $holder->setSnapshot(PageSnapshot::fromArray($payload['snapshot']));
         }
     }
-
 }

@@ -35,6 +35,7 @@ class RunRecorder
      * @param  string|null  $sessionId  Chat session ID (null for headless/cron runs)
      * @param  int|null  $actingForUserId  User on whose behalf (null for system-initiated)
      * @param  int|null  $timeoutSeconds  Configured timeout for this run
+     * @param  string|null  $turnId  Chat turn ULID that spawned this run
      */
     public function start(
         string $runId,
@@ -44,6 +45,7 @@ class RunRecorder
         ?string $sessionId = null,
         ?int $actingForUserId = null,
         ?int $timeoutSeconds = null,
+        ?string $turnId = null,
     ): void {
         AiRun::query()->firstOrCreate(
             ['id' => $runId],
@@ -51,6 +53,7 @@ class RunRecorder
                 'employee_id' => $employeeId,
                 'session_id' => $sessionId,
                 'acting_for_user_id' => $actingForUserId,
+                'turn_id' => $turnId,
                 'source' => $source,
                 'execution_mode' => $executionMode,
                 'status' => AiRunStatus::Running,

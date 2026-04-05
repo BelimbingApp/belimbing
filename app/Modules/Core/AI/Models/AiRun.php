@@ -24,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $session_id
  * @property int|null $acting_for_user_id
  * @property string|null $dispatch_id
+ * @property string|null $turn_id
  * @property string $source
  * @property string $execution_mode
  * @property AiRunStatus $status
@@ -46,6 +47,7 @@ use Illuminate\Support\Carbon;
  * @property-read Employee $employee
  * @property-read User|null $actingForUser
  * @property-read OperationDispatch|null $dispatch
+ * @property-read ChatTurn|null $turn
  */
 class AiRun extends Model
 {
@@ -81,6 +83,7 @@ class AiRun extends Model
         'session_id',
         'acting_for_user_id',
         'dispatch_id',
+        'turn_id',
         'source',
         'execution_mode',
         'status',
@@ -140,5 +143,13 @@ class AiRun extends Model
     public function dispatch(): BelongsTo
     {
         return $this->belongsTo(OperationDispatch::class, 'dispatch_id');
+    }
+
+    /**
+     * Get the user-facing chat turn that triggered this run.
+     */
+    public function turn(): BelongsTo
+    {
+        return $this->belongsTo(ChatTurn::class, 'turn_id');
     }
 }

@@ -6,163 +6,134 @@
 namespace App\Modules\Core\AI\Services;
 
 use App\Modules\Core\AI\DTO\ToolResultEntry;
-use Illuminate\Support\Str;
+use App\Modules\Core\AI\Enums\TurnEventType;
+use App\Modules\Core\AI\Models\ChatTurn;
 
 /**
- * Stateless service that persists chat run activity (status events,
- * assistant messages, errors) to the transcript via MessageManager.
+ * Materializes transcript entries from a completed turn's event stream.
  *
- * Extracted from ChatStreamController so both the SSE controller
- * and background jobs can reuse the same persistence logic.
+ * The turn event stream (ai_chat_turn_events) is the live contract — the
+ * source of truth during an active turn. This service reads those events
+ * after the turn completes and writes the equivalent transcript entries
+ * via MessageManager so the conversation history is available for page
+ * reload, context building, and search.
+ *
+ * Replaces the previous inline persistence pattern where ChatRunPersister
+ * consumed raw runtime events during the stream. Now all persistence
+ * flows through turn events first.
  */
 class ChatRunPersister
 {
     /**
-     * Persist a status-event phase (thinking, tool_started, tool_finished,
-     * hook_action, tool_denied) to the transcript.
+     * Materialize transcript entries from a turn's durable event stream.
      *
+     * Reads the turn's events in seq order and writes thinking, tool call,
+     * tool result, and assistant message entries to the transcript. Handles
+     * both successful and failed turns.
+     *
+     * @param  ChatTurn  $turn  The completed (or failed) turn
      * @param  MessageManager  $mm  Message manager instance
      * @param  int  $employeeId  Agent employee ID
      * @param  string  $sessionId  Session UUID
-     * @param  ?string  $runId  Current run ID (no-op when null)
-     * @param  array<string, mixed>  $data  SSE status event payload
-     * @param  bool  &$thinkingPersisted  Guard flag — set to true after first thinking entry
+     * @param  array<string, mixed>  $extraMeta  Extra metadata for the assistant message (e.g., prompt_package)
      */
-    public function persistStatusEvent(
+    public function materializeFromTurn(
+        ChatTurn $turn,
         MessageManager $mm,
         int $employeeId,
         string $sessionId,
-        ?string $runId,
-        array $data,
-        bool &$thinkingPersisted,
+        array $extraMeta = [],
     ): void {
-        if ($runId === null) {
-            return;
+        $events = $turn->events()->orderBy('seq')->get();
+        $runId = null;
+        $thinkingPersisted = false;
+        $fullContent = '';
+        $hadError = false;
+        $usageMeta = [];
+
+        foreach ($events as $event) {
+            $type = $event->event_type;
+            $payload = is_array($event->payload) ? $event->payload : [];
+
+            if ($type === TurnEventType::RunStarted) {
+                $runId = $payload['run_id'] ?? $runId;
+            }
+
+            if ($type === TurnEventType::AssistantThinkingStarted && ! $thinkingPersisted && $runId !== null) {
+                $mm->appendThinking($employeeId, $sessionId, $runId);
+                $thinkingPersisted = true;
+            }
+
+            if ($type === TurnEventType::ToolStarted && $runId !== null) {
+                $mm->appendToolCall(
+                    $employeeId,
+                    $sessionId,
+                    $runId,
+                    (string) ($payload['tool'] ?? ''),
+                    (string) ($payload['args_summary'] ?? '{}'),
+                    (int) ($payload['tool_call_index'] ?? 0),
+                );
+            }
+
+            if ($type === TurnEventType::ToolFinished && $runId !== null) {
+                $mm->appendToolResult(
+                    $employeeId,
+                    $sessionId,
+                    $runId,
+                    new ToolResultEntry(
+                        toolName: (string) ($payload['tool'] ?? ''),
+                        resultPreview: (string) ($payload['result_preview'] ?? ''),
+                        resultLength: (int) ($payload['result_length'] ?? 0),
+                        status: (string) ($payload['status'] ?? 'success'),
+                        durationMs: (int) ($payload['duration_ms'] ?? 0),
+                        errorPayload: is_array($payload['error_payload'] ?? null) ? $payload['error_payload'] : null,
+                    ),
+                );
+            }
+
+            if ($type === TurnEventType::ToolDenied && $runId !== null) {
+                $mm->appendHookAction(
+                    $employeeId,
+                    $sessionId,
+                    $runId,
+                    'pre_tool_use',
+                    'tool_denied',
+                    [
+                        'tool' => (string) ($payload['tool'] ?? ''),
+                        'reason' => (string) ($payload['reason'] ?? 'denied by policy'),
+                        'source' => (string) ($payload['source'] ?? 'hook'),
+                    ],
+                );
+            }
+
+            if ($type === TurnEventType::AssistantOutputBlockCommitted) {
+                $fullContent = (string) ($payload['content'] ?? '');
+            }
+
+            if ($type === TurnEventType::UsageUpdated) {
+                $usageMeta['tokens'] = $payload;
+            }
+
+            if ($type === TurnEventType::TurnFailed) {
+                $hadError = true;
+                $errorMessage = $payload['message'] ?? __('An unexpected error occurred. Please try again.');
+                $errorMeta = is_array($payload['meta'] ?? null)
+                    ? $payload['meta']
+                    : ['message_type' => 'error'];
+
+                $mm->appendAssistantMessage(
+                    $employeeId,
+                    $sessionId,
+                    __('⚠ :detail', ['detail' => $errorMessage]),
+                    $runId ?? $turn->current_run_id ?? 'run_unknown',
+                    $errorMeta,
+                );
+            }
         }
 
-        $phase = $data['phase'] ?? '';
-
-        if ($phase === 'thinking' && ! $thinkingPersisted) {
-            $mm->appendThinking($employeeId, $sessionId, $runId);
-            $thinkingPersisted = true;
-
-            return;
-        }
-
-        if ($phase === 'tool_started') {
-            $mm->appendToolCall(
-                $employeeId,
-                $sessionId,
-                $runId,
-                (string) ($data['tool'] ?? ''),
-                (string) ($data['args_summary'] ?? '{}'),
-                (int) ($data['tool_call_index'] ?? 0),
-            );
-
-            return;
-        }
-
-        if ($phase === 'tool_finished') {
-            $mm->appendToolResult(
-                $employeeId,
-                $sessionId,
-                $runId,
-                new ToolResultEntry(
-                    toolName: (string) ($data['tool'] ?? ''),
-                    resultPreview: (string) ($data['result_preview'] ?? ''),
-                    resultLength: (int) ($data['result_length'] ?? 0),
-                    status: (string) ($data['status'] ?? 'success'),
-                    durationMs: (int) ($data['duration_ms'] ?? 0),
-                    errorPayload: is_array($data['error_payload'] ?? null) ? $data['error_payload'] : null,
-                ),
-            );
-
-            return;
-        }
-
-        if ($phase === 'hook_action') {
-            $mm->appendHookAction(
-                $employeeId,
-                $sessionId,
-                $runId,
-                (string) ($data['stage'] ?? 'unknown'),
-                'tools_removed',
-                array_filter([
-                    'tools_removed' => $data['tools_removed'] ?? [],
-                ]),
-            );
-
-            return;
-        }
-
-        if ($phase === 'tool_denied') {
-            $mm->appendHookAction(
-                $employeeId,
-                $sessionId,
-                $runId,
-                'pre_tool_use',
-                'tool_denied',
-                [
-                    'tool' => (string) ($data['tool'] ?? ''),
-                    'reason' => (string) ($data['reason'] ?? 'denied by policy'),
-                    'source' => (string) ($data['source'] ?? 'hook'),
-                ],
-            );
-        }
-    }
-
-    /**
-     * Append the assistant message to the session transcript.
-     *
-     * No-op when fullContent or runId is null (stream ended without a 'done' event).
-     *
-     * @param  MessageManager  $mm  Message manager instance
-     * @param  int  $employeeId  Agent employee ID
-     * @param  string  $sessionId  Session UUID
-     * @param  ?string  $fullContent  Accumulated assistant response text
-     * @param  ?string  $runId  Run identifier
-     * @param  array<string, mixed>  $meta  Extra metadata to store
-     */
-    public function persistAssistantMessage(
-        MessageManager $mm,
-        int $employeeId,
-        string $sessionId,
-        ?string $fullContent,
-        ?string $runId,
-        array $meta,
-    ): void {
-        if ($fullContent !== null && $runId !== null) {
+        if (! $hadError && $fullContent !== '' && $runId !== null) {
+            $meta = array_merge($usageMeta, $extraMeta);
             $mm->appendAssistantMessage($employeeId, $sessionId, $fullContent, $runId, $meta);
         }
-    }
-
-    /**
-     * Persist a structured error as an assistant message with error metadata.
-     *
-     * @param  MessageManager  $mm  Message manager instance
-     * @param  int  $employeeId  Agent employee ID
-     * @param  string  $sessionId  Session UUID
-     * @param  array<string, mixed>  $data  Error event payload (message, meta, run_id)
-     */
-    public function persistError(
-        MessageManager $mm,
-        int $employeeId,
-        string $sessionId,
-        array $data,
-    ): void {
-        $errorMeta = is_array($data['meta'] ?? null)
-            ? $data['meta']
-            : ['message_type' => 'error'];
-
-        $errorMessage = $data['message'] ?? __('An unexpected error occurred. Please try again.');
-        $runId = $data['run_id'] ?? 'run_'.Str::random(12);
-
-        $mm->appendAssistantMessage(
-            $employeeId,
-            $sessionId,
-            __('⚠ :detail', ['detail' => $errorMessage]),
-            $runId,
-            $errorMeta,
-        );
     }
 }

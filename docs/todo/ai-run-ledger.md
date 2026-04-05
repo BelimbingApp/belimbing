@@ -1,5 +1,7 @@
 # AI Run Ledger & Production Readiness
 
+> **Deprecated / superseded:** This document is no longer the active UX plan for BLB chat. The current direction is defined in `docs/todo/ai-chat-coding-agent-console.md`, which replaces the old background-chat framing with a live coding-agent console model. Keep this document only as historical context for the `ai_runs` ledger work.
+
 **Problem:** Run data is scattered across session `meta.json`, JSONL transcripts, `ai.log`, and `OperationDispatch` — no single source of truth for "what happened in run X?"
 
 **Scope:** Agent-agnostic — applies to Lara, Kodi, and any future agent.

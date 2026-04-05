@@ -7,6 +7,12 @@ namespace App\Modules\Core\AI\Jobs;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
+use App\Modules\Core\AI\DTO\PageContext;
+use App\Modules\Core\AI\DTO\PageSnapshot;
+use App\Modules\Core\AI\Enums\TurnEventType;
+use App\Modules\Core\AI\Enums\TurnPhase;
+use App\Modules\Core\AI\Enums\TurnStatus;
+use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\ChatRunPersister;
@@ -14,6 +20,8 @@ use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\PageContextHolder;
 use App\Modules\Core\AI\Services\RuntimeResponseFactory;
+use App\Modules\Core\AI\Services\TurnEventPublisher;
+use App\Modules\Core\AI\Services\TurnStreamBridge;
 use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Bus\Queueable;
@@ -28,8 +36,8 @@ use Illuminate\Support\Str;
  * Queue job that executes a chat message through the agentic runtime in the background.
  *
  * Uses the streaming generator (`runStream`) so tool-calling activity
- * is persisted to the transcript progressively, giving the client
- * visibility into background work via polling.
+ * is persisted to the turn event stream progressively, giving the client
+ * visibility into background work via the turn events SSE endpoint.
  *
  * Tracks lifecycle through OperationDispatch (queued → running → succeeded/failed).
  * Checks for cancellation between streamed events so a user-initiated cancel
@@ -69,15 +77,17 @@ class RunAgentChatJob implements ShouldQueue
     /**
      * Execute the background chat run.
      *
-     * Uses `runStream()` to iterate events and persists activity entries
-     * (thinking, tool calls, results) as they occur. Checks for
-     * cancellation between events.
+     * Uses `runStream()` to iterate events and publishes turn events
+     * as they occur. Transcript is materialized after the stream completes.
+     * Checks for cancellation between events.
      */
     public function handle(
         AgenticRuntime $runtime,
         MessageManager $messageManager,
         RuntimeResponseFactory $responseFactory,
         ChatRunPersister $persister,
+        TurnStreamBridge $bridge,
+        TurnEventPublisher $turnPublisher,
     ): void {
         $dispatch = OperationDispatch::query()->find($this->dispatchId);
 
@@ -92,6 +102,8 @@ class RunAgentChatJob implements ShouldQueue
         $modelOverride = data_get($dispatch->meta, 'model_override');
         $actingForUserId = $dispatch->acting_for_user_id;
 
+        $turn = null;
+
         try {
             if ($actingForUserId !== null) {
                 Auth::loginUsingId($actingForUserId);
@@ -102,10 +114,21 @@ class RunAgentChatJob implements ShouldQueue
             $messages = $messageManager->read($employeeId, $sessionId);
             $systemPrompt = $this->resolveSystemPrompt($employeeId, $dispatch->task);
 
+            $turn = ChatTurn::query()->create([
+                'employee_id' => $employeeId,
+                'session_id' => $sessionId,
+                'acting_for_user_id' => $actingForUserId,
+                'status' => TurnStatus::Queued,
+                'current_phase' => TurnPhase::WaitingForWorker,
+            ]);
+
             $this->executeStreamingRun(
                 $runtime,
                 $messageManager,
                 $persister,
+                $bridge,
+                $turnPublisher,
+                $turn,
                 $dispatch,
                 $employeeId,
                 $sessionId,
@@ -116,17 +139,29 @@ class RunAgentChatJob implements ShouldQueue
         } catch (\Throwable $e) {
             report($e);
 
-            $runId = 'run_'.Str::random(12);
-            $error = AiRuntimeError::unexpected($e->getMessage());
-            $fallback = $responseFactory->error($runId, 'unknown', 'unknown', $error);
+            if ($turn !== null && ! $turn->fresh()->isTerminal()) {
+                $turnPublisher->turnFailed($turn, 'runtime_exception', $e->getMessage());
+            }
 
-            $messageManager->appendAssistantMessage(
-                $employeeId,
-                $sessionId,
-                $fallback['content'],
-                $fallback['run_id'],
-                $fallback['meta'],
-            );
+            // Best-effort transcript materialization on exception
+            if ($turn !== null) {
+                try {
+                    $persister->materializeFromTurn($turn->refresh(), $messageManager, $employeeId, $sessionId);
+                } catch (\Throwable) {
+                    // Fall back to direct error message write
+                    $runId = 'run_'.Str::random(12);
+                    $error = AiRuntimeError::unexpected($e->getMessage());
+                    $fallback = $responseFactory->error($runId, 'unknown', 'unknown', $error);
+
+                    $messageManager->appendAssistantMessage(
+                        $employeeId,
+                        $sessionId,
+                        $fallback['content'],
+                        $fallback['run_id'],
+                        $fallback['meta'],
+                    );
+                }
+            }
 
             if (! $dispatch->isTerminal()) {
                 $dispatch->markFailed($e->getMessage());
@@ -139,7 +174,11 @@ class RunAgentChatJob implements ShouldQueue
     }
 
     /**
-     * Iterate the streaming generator, persisting activity and checking cancellation.
+     * Iterate the streaming generator, publishing turn events and checking cancellation.
+     *
+     * Transcript materialization happens after the stream completes via
+     * ChatRunPersister::materializeFromTurn, which reads the turn's durable
+     * event stream and writes equivalent transcript entries.
      *
      * @param  list<mixed>  $messages
      */
@@ -147,6 +186,9 @@ class RunAgentChatJob implements ShouldQueue
         AgenticRuntime $runtime,
         MessageManager $messageManager,
         ChatRunPersister $persister,
+        TurnStreamBridge $bridge,
+        TurnEventPublisher $turnPublisher,
+        ChatTurn $turn,
         OperationDispatch $dispatch,
         int $employeeId,
         string $sessionId,
@@ -154,76 +196,72 @@ class RunAgentChatJob implements ShouldQueue
         ?string $systemPrompt,
         ?string $modelOverride,
     ): void {
-        $thinkingPersisted = false;
-        $fullContent = null;
-        $runId = null;
-        $meta = null;
-        $hadError = false;
+        $runtimeStream = $runtime->runStream(
+            $messages, $employeeId, $systemPrompt, $modelOverride,
+            ExecutionPolicy::background(), $sessionId, turnId: $turn->id,
+        );
 
-        foreach ($runtime->runStream($messages, $employeeId, $systemPrompt, $modelOverride, ExecutionPolicy::background(), $sessionId) as $event) {
+        $cancelled = false;
+
+        foreach ($bridge->wrap($turn, $runtimeStream) as $event) {
             // Cooperative cancellation check
             if ($this->isCancelled($dispatch)) {
-                return;
-            }
+                $turn->refresh();
 
-            $eventName = $event['event'];
-            $data = $event['data'];
+                if (! $turn->isTerminal()) {
+                    $turnPublisher->turnCancelled($turn, 'User cancelled');
+                }
 
-            $eventRunId = $data['run_id'] ?? $runId;
-            if ($eventRunId !== null && $runId === null) {
-                $runId = $eventRunId;
-            }
+                $cancelled = true;
 
-            if ($eventName === 'status') {
-                $persister->persistStatusEvent(
-                    $messageManager,
-                    $employeeId,
-                    $sessionId,
-                    $eventRunId,
-                    $data,
-                    $thinkingPersisted,
-                );
-            }
-
-            if ($eventName === 'done') {
-                $fullContent = $data['content'] ?? '';
-                $runId = $data['run_id'] ?? $runId;
-                $meta = is_array($data['meta'] ?? null) ? $data['meta'] : [];
-
-                continue;
-            }
-
-            if ($eventName === 'error') {
-                $hadError = true;
-                $persister->persistError($messageManager, $employeeId, $sessionId, $data);
+                break;
             }
         }
 
-        // Final cancellation check before persisting result
+        if ($cancelled) {
+            return;
+        }
+
+        // Final cancellation check before materializing
         if ($this->isCancelled($dispatch)) {
             return;
         }
 
-        if (! $hadError && $fullContent !== null && $runId !== null) {
-            $persister->persistAssistantMessage(
-                $messageManager,
-                $employeeId,
-                $sessionId,
-                $fullContent,
-                $runId,
-                $meta ?? [],
-            );
+        // Materialize transcript from turn events
+        $persister->materializeFromTurn($turn, $messageManager, $employeeId, $sessionId);
 
+        // Mark dispatch based on turn outcome
+        $turn->refresh();
+
+        if ($turn->status === TurnStatus::Completed) {
+            $content = $this->extractContentFromTurn($turn);
             $dispatch->markSucceeded(
-                $runId,
-                Str::limit($fullContent, 200),
-                $meta ?? [],
+                $turn->current_run_id ?? 'unknown',
+                Str::limit($content, 200),
+                [],
             );
-        } elseif (! $hadError && ! $dispatch->isTerminal()) {
-            $dispatch->markFailed('Run completed without producing a response');
-        } elseif ($hadError && ! $dispatch->isTerminal()) {
-            $dispatch->markFailed('Run encountered an error');
+        } elseif (! $dispatch->isTerminal()) {
+            $dispatch->markFailed($turn->status === TurnStatus::Failed
+                ? 'Turn failed'
+                : 'Run completed without producing a response');
         }
+    }
+
+    /**
+     * Extract the final assistant content from a completed turn's events.
+     */
+    private function extractContentFromTurn(ChatTurn $turn): string
+    {
+        $blockEvent = $turn->events()
+            ->where('event_type', TurnEventType::AssistantOutputBlockCommitted->value)
+            ->orderByDesc('seq')
+            ->first();
+
+        if ($blockEvent !== null) {
+            return (string) ($blockEvent->payload['content'] ?? '');
+        }
+
+        return '';
     }
 
     /**
@@ -258,11 +296,11 @@ class RunAgentChatJob implements ShouldQueue
         $holder->setConsentLevel($pageContext['consent'] ?? 'page');
 
         if (isset($pageContext['context']) && is_array($pageContext['context'])) {
-            $holder->setContext(\App\Modules\Core\AI\DTO\PageContext::fromArray($pageContext['context']));
+            $holder->setContext(PageContext::fromArray($pageContext['context']));
         }
 
         if (isset($pageContext['snapshot']) && is_array($pageContext['snapshot'])) {
-            $holder->setSnapshot(\App\Modules\Core\AI\DTO\PageSnapshot::fromArray($pageContext['snapshot']));
+            $holder->setSnapshot(PageSnapshot::fromArray($pageContext['snapshot']));
         }
     }
 

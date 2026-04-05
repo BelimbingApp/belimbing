@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('session_id')->nullable();
             $table->foreignId('acting_for_user_id')->nullable()->constrained('users');
             $table->string('dispatch_id')->nullable();
+            $table->ulid('turn_id')->nullable();
             $table->string('source', 30);
             $table->string('execution_mode', 20);
             $table->string('status', 20)->default('running');
@@ -41,10 +42,16 @@ return new class extends Migration
 
             $table->index('session_id');
             $table->index('dispatch_id');
+            $table->index('turn_id');
             $table->index('employee_id');
             $table->index('acting_for_user_id');
             $table->index('status');
             $table->index('created_at');
+
+            $table->foreign('turn_id')
+                ->references('id')
+                ->on('ai_chat_turns')
+                ->nullOnDelete();
         });
     }
 

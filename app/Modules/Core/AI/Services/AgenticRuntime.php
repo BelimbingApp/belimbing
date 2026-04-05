@@ -151,9 +151,10 @@ class AgenticRuntime
      * @param  string|null  $modelOverride  Optional model ID override
      * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
      * @param  string|null  $sessionId  Chat session ID for run ledger correlation
+     * @param  string|null  $turnId  Chat turn ULID for linking the run to a turn
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
-    public function runStream(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null, ?ExecutionPolicy $policy = null, ?string $sessionId = null): \Generator
+    public function runStream(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null, ?ExecutionPolicy $policy = null, ?string $sessionId = null, ?string $turnId = null): \Generator
     {
         $runId = 'run_'.Str::random(12);
         $policy ??= ExecutionPolicy::interactive();
@@ -166,6 +167,7 @@ class AgenticRuntime
             sessionId: $sessionId,
             actingForUserId: auth()->id(),
             timeoutSeconds: $policy->timeoutSeconds,
+            turnId: $turnId,
         );
 
         $configs = $this->configResolver->resolveWithDefaultFallback($employeeId);
@@ -185,6 +187,7 @@ class AgenticRuntime
         $fallbackAttempts = [];
         $lastError = null;
         $lastConfig = null;
+        $fallbackAttemptIndex = 0;
 
         foreach ($configs as $config) {
             if ($modelOverride !== null) {
@@ -198,6 +201,14 @@ class AgenticRuntime
                 $fallbackAttempts[] = $this->buildFallbackAttempt($config, $error);
                 $lastError = $error;
                 $lastConfig = $config;
+                $fallbackAttemptIndex++;
+
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'recovery_attempted',
+                    'attempt' => $fallbackAttemptIndex,
+                    'reason' => 'provider_fallback: '.$error->userMessage,
+                    'run_id' => $runId,
+                ]];
 
                 continue;
             }
@@ -598,6 +609,8 @@ class AgenticRuntime
             // Hook: PreLlmCall
             $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $toolLoopState['hookMetadata']);
 
+            $prevRetryCount = count($toolLoopState['retryAttempts']);
+
             $result = $this->chatWithRetry(
                 $credentials,
                 $config,
@@ -605,6 +618,29 @@ class AgenticRuntime
                 $toolLoopState['tools'],
                 $toolLoopState['retryAttempts'],
             );
+
+            // Emit recovery events when a retry was attempted
+            $newRetryCount = count($toolLoopState['retryAttempts']);
+
+            if ($newRetryCount > $prevRetryCount) {
+                $lastRetry = $toolLoopState['retryAttempts'][$newRetryCount - 1];
+
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'recovery_attempted',
+                    'attempt' => $newRetryCount,
+                    'reason' => 'retry: '.$lastRetry['error'],
+                    'run_id' => $runId,
+                ]];
+
+                if (! isset($result['runtime_error'])) {
+                    yield ['event' => 'status', 'data' => [
+                        'phase' => 'recovery_succeeded',
+                        'attempt' => $newRetryCount,
+                        'reason' => 'retry',
+                        'run_id' => $runId,
+                    ]];
+                }
+            }
 
             if (isset($result['runtime_error'])) {
                 $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
