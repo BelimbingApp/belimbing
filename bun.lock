@@ -11,7 +11,7 @@
         "concurrently": "^9.2.1",
         "laravel-echo": "^2.3.1",
         "laravel-vite-plugin": "^3.0.0",
-        "pusher-js": "^8.4.3",
+        "pusher-js": "^8.5.0",
         "sortablejs": "^1.15.7",
         "tailwindcss": "^4.2.2",
         "vite": "^8.0.3",
@@ -262,7 +262,7 @@
 
     "proxy-from-env": ["proxy-from-env@2.1.0", "", {}, "sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA=="],
 
-    "pusher-js": ["pusher-js@8.4.3", "", { "dependencies": { "tweetnacl": "^1.0.3" } }, "sha512-MYnVYhKxq2Oeg3HmTQxnKDj1oAZjqJCkEcYj8hYbH1Rw5pT0g8KtgOYVUKDRnyrPtwRvA9QR4wunwJW5xIbq0Q=="],
+    "pusher-js": ["pusher-js@8.5.0", "", { "dependencies": { "tweetnacl": "^1.0.3" } }, "sha512-V7uzGi9bqOOOyM/6IkJdpFyjGZj7llz1v0oWnYkZKcYLvbz6VcHVLmzKqkvegjuMumpfIEKGLmWHwFb39XFCpw=="],
 
     "require-directory": ["require-directory@2.1.1", "", {}, ""],
 
