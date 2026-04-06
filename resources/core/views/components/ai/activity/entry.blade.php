@@ -12,7 +12,6 @@
 @php
     $icon = match ($type) {
         'thinking' => 'heroicon-o-light-bulb',
-        'tool_call', 'tool_result' => 'heroicon-o-wrench-screwdriver',
         'hook_action' => 'heroicon-o-shield-check',
         'error' => 'heroicon-o-exclamation-triangle',
         default => null,
@@ -20,7 +19,6 @@
 
     $iconColor = match ($type) {
         'thinking' => 'text-muted',
-        'tool_call', 'tool_result' => 'text-accent',
         'hook_action' => 'text-amber-500/70',
         'error' => 'text-red-500',
         default => 'text-muted',

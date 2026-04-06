@@ -833,17 +833,7 @@
 
                     {{-- Live stream activity entries --}}
                     {{-- Collapsed tools summary (shows when older tools are collapsed) --}}
-                    <template x-if="toolsCollapsed && _completedToolCount > 0">
-                        <button
-                            type="button"
-                            @click="toolsCollapsed = false"
-                            class="flex items-center gap-1.5 py-1 text-xs text-muted hover:text-ink transition-colors"
-                        >
-                            <x-icon name="heroicon-o-wrench-screwdriver" class="w-3.5 h-3.5" />
-                            <span x-text="_completedToolCount + ' {{ __('tool call(s) completed') }}'"></span>
-                            <x-icon name="heroicon-o-chevron-down" class="w-3 h-3" />
-                        </button>
-                    </template>
+                    <template x-if="false"></template>
 
                     <template x-for="(entry, idx) in streamEntries" :key="idx">
                         <div x-show="
@@ -868,20 +858,11 @@
 
                             {{-- Tool call --}}
                             <template x-if="entry.type === 'tool_call'">
-                                <div class="flex gap-2 py-1">
-                                    <div class="shrink-0 mt-0.5">
-                                        <x-icon name="heroicon-o-wrench-screwdriver" class="w-4 h-4 text-accent" />
-                                    </div>
-                                    <div class="min-w-0 flex-1">
-                                        <div x-data="{ expanded: false }" class="rounded-lg border border-border-default bg-surface-card">
-                                            <button
-                                                type="button"
-                                                @click="expanded = !expanded"
-                                                class="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-surface-subtle/50 transition-colors rounded-lg"
-                                                :aria-expanded="expanded"
-                                            >
-                                                <span class="font-medium text-ink truncate" x-text="entry.tool"></span>
-                                                <span class="text-muted truncate max-w-[10rem]" x-text="entry.argsSummary ? entry.argsSummary.substring(0, 60) : ''"></span>
+                                <div class="py-1">
+                                    <div class="min-w-0">
+                                        <div class="rounded-lg border border-border-default bg-surface-card px-2.5 py-1.5 text-xs">
+                                            <div class="flex items-start gap-2">
+                                                <span class="min-w-0 flex-1 font-medium text-ink break-words" x-text="entry.tool"></span>
                                                 <span class="ml-auto flex items-center gap-1.5 shrink-0">
                                                     <template x-if="entry.status === 'running'">
                                                         <span class="w-2 h-2 bg-accent rounded-full animate-pulse"></span>
@@ -898,14 +879,16 @@
                                                     <template x-if="entry.status === 'denied'">
                                                         <span class="inline-flex items-center rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 dark:text-amber-400">{{ __('Denied') }}</span>
                                                     </template>
-                                                    <x-icon
-                                                        name="heroicon-o-chevron-right"
-                                                        class="w-3 h-3 text-muted transition-transform"
-                                                        ::class="expanded ? 'rotate-90' : ''"
-                                                    />
                                                 </span>
-                                            </button>
-                                            <div x-show="expanded" x-cloak x-collapse class="border-t border-border-default px-2.5 py-2 text-xs">
+                                            </div>
+                                            <template x-if="entry.argsSummary">
+                                                <div
+                                                    class="mt-1 text-muted whitespace-pre-wrap break-all"
+                                                    :class="entry.tool === 'bash' ? 'font-mono text-[11px]' : ''"
+                                                    x-text="entry.argsSummary"
+                                                ></div>
+                                            </template>
+                                            <div class="mt-2 border-t border-border-default pt-2">
                                                 <template x-if="entry.errorPayload">
                                                     <div class="space-y-1 text-red-500">
                                                         <div x-show="entry.errorPayload?.code"><span class="font-medium">{{ __('Code') }}:</span> <span x-text="entry.errorPayload?.code"></span></div>
@@ -1058,26 +1041,33 @@
 
                     {{-- Model picker + session usage --}}
                     <div class="flex items-center justify-between gap-2">
-                        @if ($canSelectModel && count($availableModels) > 0)
-                            <div class="flex items-center gap-1">
-                                <x-icon name="heroicon-o-cpu-chip" class="w-3 h-3 text-muted shrink-0" />
-                                <x-ai.model-selector
-                                    :models="$availableModels"
-                                    wire:model.live="selectedModel"
-                                    class="max-w-xs !py-0.5 !text-[11px]"
-                                    aria-label="{{ __('AI model') }}"
-                                    :empty-label="$currentModel"
-                                />
-                            </div>
-                        @else
-                            <div class="inline-flex items-center gap-1 text-[11px] text-muted">
-                                <x-icon name="heroicon-o-cpu-chip" class="w-3 h-3" />
-                                <span class="truncate max-w-[12rem]">{{ $currentModel }}</span>
-                            </div>
-                        @endif
+                        <div class="flex items-center gap-2 min-w-0">
+                            @if ($canSelectModel && count($availableModels) > 0)
+                                <div class="flex items-center gap-1 min-w-0">
+                                    <x-icon name="heroicon-o-cpu-chip" class="w-3 h-3 text-muted shrink-0" />
+                                    <x-ai.model-selector
+                                        :models="$availableModels"
+                                        wire:model.live="selectedModel"
+                                        class="max-w-xs !py-0.5 !text-[11px]"
+                                        aria-label="{{ __('AI model') }}"
+                                        :empty-label="$currentModel"
+                                    />
+                                </div>
+                            @else
+                                <div class="inline-flex items-center gap-1 text-[11px] text-muted min-w-0">
+                                    <x-icon name="heroicon-o-cpu-chip" class="w-3 h-3 shrink-0" />
+                                    <span class="truncate max-w-[12rem]">{{ $currentModel }}</span>
+                                </div>
+                            @endif
+
+                            <x-ui.button variant="ghost" size="sm" wire:click="createSession" class="shrink-0">
+                                <x-icon name="heroicon-o-plus" class="w-3 h-3" />
+                                <span>{{ __('New session') }}</span>
+                            </x-ui.button>
+                        </div>
 
                         @if ($sessionUsage && ($sessionUsage['total_prompt_tokens'] > 0 || $sessionUsage['total_completion_tokens'] > 0))
-                            <div class="inline-flex items-center gap-1 text-[10px] text-muted tabular-nums" title="{{ __('Session tokens: :prompt prompt + :completion completion across :runs run(s)', ['prompt' => number_format($sessionUsage['total_prompt_tokens']), 'completion' => number_format($sessionUsage['total_completion_tokens']), 'runs' => $sessionUsage['run_count']]) }}">
+                            <div class="inline-flex items-center gap-1 text-[10px] text-muted tabular-nums shrink-0" title="{{ __('Session tokens: :prompt prompt + :completion completion across :runs run(s)', ['prompt' => number_format($sessionUsage['total_prompt_tokens']), 'completion' => number_format($sessionUsage['total_completion_tokens']), 'runs' => $sessionUsage['run_count']]) }}">
                                 <x-icon name="heroicon-o-chart-bar" class="w-3 h-3" />
                                 <span>{{ number_format($sessionUsage['total_prompt_tokens'] + $sessionUsage['total_completion_tokens']) }} {{ __('tokens') }}</span>
                             </div>
@@ -1130,9 +1120,12 @@
                 const result = await this.$wire.prepareStreamingRun();
 
                 if (result && result.url) {
+                    this.pendingMessage = null;
                     this.connectToTurnStream(result.url, scrollContainer);
                     return;
                 }
+
+                this.pendingMessage = null;
             } catch (e) {
                 this.streamEntries.push({
                     type: 'error',

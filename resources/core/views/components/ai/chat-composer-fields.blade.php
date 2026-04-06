@@ -23,7 +23,7 @@
                     @if ($file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile && str_starts_with($file->getMimeType() ?? '', 'image/'))
                         <x-icon name="heroicon-o-photo" class="w-3.5 h-3.5 text-muted shrink-0" />
                     @else
-                        <x-icon name="heroicon-o-document" class="w-3.5 h-3.5 text-muted shrink-0" />
+                        <x-icon name="heroicon-o-document-text" class="w-3.5 h-3.5 text-muted shrink-0" />
                     @endif
                     <span class="truncate max-w-32">{{ $file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile ? $file->getClientOriginalName() : __('File') }}</span>
                     <button
@@ -42,7 +42,7 @@
     <div class="flex items-center gap-2">
         @if ($canAttachFiles)
             <label class="shrink-0 cursor-pointer text-muted hover:text-ink transition-colors p-1" title="{{ __('Attach file') }}" aria-label="{{ __('Attach file') }}">
-                <x-icon name="heroicon-o-arrow-down-tray" class="w-4 h-4" />
+                <x-icon name="heroicon-o-paperclip" class="w-4 h-4" />
                 <input
                     x-ref="attachmentInput"
                     type="file"
