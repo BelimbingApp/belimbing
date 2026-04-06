@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/setup-steps/75-ssl-trust.sh
 # Title: SSL Certificate Trust Setup (tls internal fallback)
-# Purpose: Install Caddy's self-signed root CA into the system trust store.
+# Purpose: Install FrankenPHP/Caddy's self-signed root CA into the system trust store.
 #          Only needed when BLB falls back to `tls internal` (i.e., mkcert certs
 #          are missing). The normal dev path uses mkcert, which handles trust
 #          automatically via `mkcert -install` at start time.
@@ -39,20 +39,10 @@ main() {
     # Load existing configuration
     load_setup_state
 
-    # Check if Caddy is being used
-    if [[ "${PROXY_TYPE:-}" != "caddy" ]]; then
-        echo -e "${YELLOW}ℹ${NC} Caddy is not configured as the reverse proxy"
-        echo -e "  Current proxy type: ${CYAN}${PROXY_TYPE:-none}${NC}"
-        echo ""
-        echo -e "${CYAN}This step is only needed if you're using Caddy for HTTPS.${NC}"
-        echo -e "Skip this step or run ${CYAN}./scripts/setup-steps/70-caddy.sh${NC} first."
-        exit 0
-    fi
-
-    echo -e "${CYAN}This step installs Caddy's internal CA into the system trust store${NC}"
+    echo -e "${CYAN}This step installs the internal CA into the system trust store${NC}"
     echo -e "${CYAN}so browsers stop warning about self-signed certificates.${NC}"
     echo ""
-    echo -e "${YELLOW}Note:${NC} The preferred approach is mkcert — run ${CYAN}./scripts/setup-steps/70-caddy.sh${NC}"
+    echo -e "${YELLOW}Note:${NC} The preferred approach is mkcert — run ${CYAN}./scripts/setup-steps/70-domains.sh${NC}"
     echo -e "to generate mkcert certs, which are trusted automatically at start time."
     echo ""
 

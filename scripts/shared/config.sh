@@ -12,7 +12,6 @@
 # - JWT_SECRET, JWT_EXPIRATION_HOURS, JWT_REFRESH_EXPIRATION_DAYS
 # - FRONTEND_DOMAIN, BACKEND_DOMAIN
 # - BACKEND_PORT, FRONTEND_PORT
-# - PROXY_TYPE
 # - BACKEND_URL
 
 # Source version constants (must be sourced before using version-related functions)
@@ -33,7 +32,6 @@ unset _CONFIG_DIR
 # PostgreSQL superuser account unless the operator explicitly opts in.
 DEFAULT_DB_USER="belimbing_app"
 DEFAULT_DB_PORT="5432"
-DEFAULT_PROXY_TYPE="caddy"
 
 # Generate a random token for per-installation secrets (DB passwords, API keys, etc.).
 # Uses openssl if available, falls back to /dev/urandom.

@@ -54,7 +54,7 @@ install_dependencies() {
 
     if ! command_exists composer; then
         echo -e "${RED}✗${NC} Composer not found" >&2
-        echo -e "  Run ${CYAN}./scripts/setup-steps/20-php.sh${NC} first" >&2
+        echo -e "  Run ${CYAN}./scripts/setup-steps/15-php.sh${NC} first" >&2
         return 1
     fi
 
@@ -82,7 +82,7 @@ generate_app_key() {
     # Check prerequisites
     if ! command_exists php; then
         echo -e "${RED}✗${NC} PHP not found" >&2
-        echo -e "  Run ${CYAN}./scripts/setup-steps/20-php.sh${NC} first" >&2
+        echo -e "  Run ${CYAN}./scripts/setup-steps/15-php.sh${NC} first" >&2
         return 1
     fi
 
@@ -112,10 +112,10 @@ main() {
     # Load existing configuration
     load_setup_state
 
-    # Check prerequisites (php/composer verified by 20-php.sh; guard for standalone runs)
+    # Check prerequisites (php/composer verified by 15-php.sh; guard for standalone runs)
     if ! command_exists php || ! command_exists composer; then
         echo -e "${RED}✗${NC} PHP and Composer are required" >&2
-        echo -e "  Run ${CYAN}./scripts/setup-steps/20-php.sh${NC} first" >&2
+        echo -e "  Run ${CYAN}./scripts/setup-steps/15-php.sh${NC} first" >&2
         exit 1
     fi
 

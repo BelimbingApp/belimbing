@@ -12,10 +12,11 @@
     "license": "AGPL-3.0-only",
     "require": {
         "php": "^8.2",
-        "laravel/framework": "^13.2.0",
-        "laravel/reverb": "^1.9.0",
+        "laravel/framework": "^13.3.0",
+        "laravel/octane": "^2.17.1",
+        "laravel/reverb": "^1.10.0",
         "laravel/tinker": "^3.0.0",
-        "livewire/livewire": "^4.2.2"
+        "livewire/livewire": "^4.2.4"
     },
     "require-dev": {
         "barryvdh/laravel-ide-helper": "^3.7.0",
@@ -23,8 +24,8 @@
         "laravel/pail": "^1.2.6",
         "laravel/pint": "^1.29.0",
         "mockery/mockery": "^1.6.12",
-        "nunomaduro/collision": "^8.9.1",
-        "pestphp/pest": "^4.4.3",
+        "nunomaduro/collision": "^8.9.2",
+        "pestphp/pest": "^4.4.5",
         "pestphp/pest-plugin-laravel": "^4.1.0"
     },
     "autoload": {

@@ -18,7 +18,7 @@
 # so the admin row survives migrate:fresh runs.
 #
 # Prerequisites:
-# - PHP and Composer installed (20-php.sh)
+# - PHP and Composer installed (15-php.sh)
 # - Laravel configured with APP_KEY (25-laravel.sh)
 # - Database configured and accessible (40-database.sh)
 
@@ -132,19 +132,57 @@ main() {
     fi
     echo ""
 
-    # Prompt for framework primitives (licensee company, admin user).
-    # These are passed as transient env vars to php artisan migrate.
-    local company_name company_code admin_name admin_email admin_password
-    company_name=$(ask_input "Licensee company name" "My Company")
-    company_code=$(ask_input "Licensee company code" "$(default_company_code_from_name "$company_name")")
-    admin_name=$(ask_input "Admin name" "Administrator")
-    admin_email=$(ask_input "Admin email" "$(detect_admin_email)")
-    admin_password=$(ask_password "Admin password (min 8 chars)")
-    if [[ -z "$admin_password" ]]; then
-        admin_password="password"
-        echo -e "  ${YELLOW}ℹ${NC} Using default password: ${CYAN}password${NC}"
+    # Check if framework primitives (licensee company + admin user) already exist in the DB.
+    # If they do, inform the user and skip prompting. Otherwise, prompt for values.
+    local company_name="" company_code="" admin_name="" admin_email="" admin_password=""
+    local primitives_exist=false
+
+    local existing
+    existing=$(php artisan tinker --execute="
+        \$c = App\Modules\Core\Company\Models\Company::query()->find(App\Modules\Core\Company\Models\Company::LICENSEE_ID);
+        \$u = \$c ? App\Models\User::query()->where('company_id', \$c->id)->first() : null;
+        if (\$c && \$u) {
+            echo json_encode(['company_name' => \$c->name, 'company_code' => \$c->code, 'admin_name' => \$u->name, 'admin_email' => \$u->email]);
+        } else {
+            echo 'none';
+        }
+    " 2>/dev/null || echo "none")
+
+    # Strip any leading/trailing whitespace or Tinker decoration
+    existing=$(echo "$existing" | grep -o '{.*}' 2>/dev/null || echo "none")
+
+    if [[ "$existing" != "none" ]] && command_exists php; then
+        # Parse existing values from JSON
+        company_name=$(echo "$existing" | php -r 'echo json_decode(file_get_contents("php://stdin"))->company_name;' 2>/dev/null || echo "")
+        company_code=$(echo "$existing" | php -r 'echo json_decode(file_get_contents("php://stdin"))->company_code;' 2>/dev/null || echo "")
+        admin_name=$(echo "$existing" | php -r 'echo json_decode(file_get_contents("php://stdin"))->admin_name;' 2>/dev/null || echo "")
+        admin_email=$(echo "$existing" | php -r 'echo json_decode(file_get_contents("php://stdin"))->admin_email;' 2>/dev/null || echo "")
+
+        if [[ -n "$company_name" && -n "$admin_email" ]]; then
+            primitives_exist=true
+            echo -e "${GREEN}✓${NC} Framework primitives already set up:"
+            echo -e "  Company: ${CYAN}${company_name}${NC} (${company_code})"
+            echo -e "  Admin:   ${CYAN}${admin_name}${NC} <${admin_email}>"
+            echo ""
+        fi
     fi
-    echo ""
+
+    if [[ "$primitives_exist" = false ]]; then
+        # Prompt for framework primitives (licensee company, admin user).
+        # These are passed as transient env vars to php artisan migrate.
+        company_name=$(ask_input "Licensee company name" "My Company")
+        local default_code
+        default_code=$(default_company_code_from_name "$company_name")
+        company_code=$(ask_input "Licensee company code" "$default_code")
+        admin_name=$(ask_input "Admin name" "Administrator")
+        admin_email=$(ask_input "Admin email" "$(detect_admin_email)")
+        admin_password=$(ask_password "Admin password (min 8 chars)")
+        if [[ -z "$admin_password" ]]; then
+            admin_password="password"
+            echo -e "  ${YELLOW}ℹ${NC} Using default password: ${CYAN}password${NC}"
+        fi
+        echo ""
+    fi
 
     # Run migrations with framework primitive env vars
     local migrate_args=()

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# scripts/setup-steps/20-php.sh
+# scripts/setup-steps/15-php.sh
 # Title: PHP & Composer
 # Purpose: Install and configure PHP and Composer for Belimbing
-# Usage: ./scripts/setup-steps/20-php.sh [local|staging|production|testing]
+# Usage: ./scripts/setup-steps/15-php.sh [local|staging|production|testing]
 # Can be run standalone or called by main setup.sh
 #
 # This script:

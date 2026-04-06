@@ -41,3 +41,6 @@ package-lock.json
 /auth.json
 /docs/deprecated
 /docs/scratch
+**/caddy
+frankenphp
+frankenphp-worker.php

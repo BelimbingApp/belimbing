@@ -29,7 +29,6 @@ source "$SCRIPT_DIR/shared/colors.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/shared/config.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/shared/validation.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/shared/runtime.sh" 2>/dev/null || true
-source "$SCRIPT_DIR/shared/caddy.sh" 2>/dev/null || true
 
 APP_ENV="${1:-local}"
 PORTS_FILE="$PROJECT_ROOT/storage/app/.devops/ports.env"
@@ -52,16 +51,6 @@ FRONTEND_DOMAIN=$(get_env_var "FRONTEND_DOMAIN" "")
 
 echo -e "${YELLOW}Stopping ${APP_ENV} environment services (Laravel ${APP_PORT}, Vite ${VITE_PORT}, Reverb ${REVERB_SERVER_PORT})...${NC}"
 stop_dev_services "$APP_ENV" "$APP_PORT" "$VITE_PORT" "$REVERB_SERVER_PORT"
-
-# Deregister from shared Caddy
-if [[ -n "$FRONTEND_DOMAIN" ]]; then
-    echo -e "${CYAN}Removing Caddy site fragment for ${FRONTEND_DOMAIN}...${NC}"
-    remove_site_fragment "$FRONTEND_DOMAIN"
-    if pgrep -x "caddy" > /dev/null; then
-        caddy reload --config "$BLB_CADDY_MAIN" --adapter caddyfile 2>/dev/null || true
-    fi
-    maybe_stop_shared_caddy
-fi
 
 rm -f "$PORTS_FILE"
 echo -e "\n${GREEN}✓ Services stopped.${NC}"

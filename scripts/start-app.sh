@@ -17,8 +17,6 @@ source "$SCRIPT_DIR/shared/config.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/shared/validation.sh" 2>/dev/null || true
 # shellcheck source=shared/runtime.sh
 source "$SCRIPT_DIR/shared/runtime.sh" 2>/dev/null || true
-# shellcheck source=shared/caddy.sh
-source "$SCRIPT_DIR/shared/caddy.sh" 2>/dev/null || true
 
 if ! command -v stop_dev_services >/dev/null 2>&1; then
     echo -e "${RED}✗${NC} stop_dev_services is not available (failed to load shared/runtime.sh)" >&2
@@ -35,7 +33,6 @@ VITE_PORT=""
 FRONTEND_DOMAIN=""
 BACKEND_DOMAIN=""
 HTTPS_PORT=""
-PROXY_TYPE=""
 
 # Logging function
 log() {
@@ -73,9 +70,6 @@ check_dependencies() {
         fi
     fi
 
-    if ! command -v caddy &> /dev/null; then
-        missing+=("caddy")
-    fi
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         echo -e "${RED}✗${NC} Missing required dependencies:" >&2
@@ -88,13 +82,10 @@ check_dependencies() {
         echo "" >&2
         echo -e "${CYAN}Or install manually:${NC}" >&2
         if [[ " ${missing[*]} " =~ " composer " ]]; then
-            echo -e "  • PHP/Composer: ${CYAN}./scripts/setup-steps/20-php.sh${NC}" >&2
+            echo -e "  • PHP/Composer: ${CYAN}./scripts/setup-steps/15-php.sh${NC}" >&2
         fi
         if [[ " ${missing[*]} " =~ " npm " ]] || [[ " ${missing[*]} " =~ " node " ]] || [[ " ${missing[*]} " =~ " bun " ]]; then
             echo -e "  • JavaScript runtime (Bun recommended): ${CYAN}./scripts/setup-steps/30-js.sh${NC}" >&2
-        fi
-        if [[ " ${missing[*]} " =~ " caddy " ]]; then
-            echo -e "  • Caddy: ${CYAN}./scripts/setup-steps/70-caddy.sh${NC}" >&2
         fi
         log "ERROR: Missing dependencies: ${missing[*]}"
         exit 1
@@ -104,6 +95,41 @@ check_dependencies() {
         echo -e "${GREEN}✓${NC} All dependencies available (using Bun)"
     else
         echo -e "${GREEN}✓${NC} All dependencies available (using Node.js/npm)"
+    fi
+    return 0
+}
+
+# Ensure the FrankenPHP binary has cap_net_bind_service so it can bind to port 443 (Linux only).
+ensure_frankenphp_bind_capability() {
+    [[ "$(uname -s)" != "Linux" ]] && return 0
+
+    local binary
+    binary=$(command -v frankenphp 2>/dev/null || true)
+
+    # Octane prefers ./frankenphp (project root) over PATH
+    if [[ -x "$PROJECT_ROOT/frankenphp" ]]; then
+        binary="$PROJECT_ROOT/frankenphp"
+    fi
+
+    [[ -z "$binary" || ! -f "$binary" ]] && return 0
+
+    local caps
+    caps=$(getcap "$binary" 2>/dev/null || true)
+
+    if [[ "$caps" == *"cap_net_bind_service"* ]]; then
+        return 0
+    fi
+
+    echo -e "${YELLOW}⚠${NC} FrankenPHP needs cap_net_bind_service to listen on port 443 (HTTPS)"
+    echo -e "  Running: ${CYAN}sudo setcap cap_net_bind_service=+ep $binary${NC}"
+    if sudo setcap cap_net_bind_service=+ep "$binary" 2>/dev/null; then
+        echo -e "${GREEN}✓${NC} FrankenPHP port binding capability set"
+        log "setcap cap_net_bind_service applied to $binary"
+    else
+        echo -e "${RED}✗${NC} Failed to set capability. Run manually:" >&2
+        echo -e "  ${CYAN}sudo setcap cap_net_bind_service=+ep $binary${NC}" >&2
+        log "ERROR: Failed to setcap on $binary"
+        return 1
     fi
     return 0
 }
@@ -150,12 +176,6 @@ read_app_env() {
     log "Environment: $APP_ENV, Frontend: $FRONTEND_DOMAIN, Backend: $BACKEND_DOMAIN"
 
     echo -e "${GREEN}Using environment: ${APP_ENV}${NC}"
-    return 0
-}
-
-# Read PROXY_TYPE from .env (used to decide whether to start Caddy).
-read_proxy_type() {
-    PROXY_TYPE=$(get_env_var "PROXY_TYPE" "caddy")
     return 0
 }
 
@@ -349,21 +369,6 @@ check_and_stop_services() {
     exit 1
 }
 
-# Deregister this instance from the shared Caddy.
-# Removes the site fragment and stops Caddy if no sites remain.
-deregister_caddy() {
-    if [[ -n "${FRONTEND_DOMAIN:-}" ]]; then
-        echo -e "${CYAN}Removing Caddy site fragment...${NC}"
-        log "Removing site fragment for $FRONTEND_DOMAIN"
-        remove_site_fragment "$FRONTEND_DOMAIN"
-        if pgrep -x "caddy" > /dev/null; then
-            caddy reload --config "$BLB_CADDY_MAIN" --adapter caddyfile 2>/dev/null || true
-        fi
-        maybe_stop_shared_caddy
-    fi
-    return 0
-}
-
 # Set up cleanup handler
 cleanup() {
     local exit_code="${1:-0}"
@@ -375,8 +380,6 @@ cleanup() {
     local stop_user
     stop_user=$(whoami 2>/dev/null || echo "${USER:-unknown}")
     log "[$stop_user] Stopping services"
-
-    deregister_caddy
 
     if [[ -n "${APP_ENV:-}" ]]; then
         stop_dev_services "$APP_ENV" "$APP_PORT" "$VITE_PORT" "$REVERB_SERVER_PORT"
@@ -398,18 +401,8 @@ cleanup() {
             echo ""
             echo -e "${YELLOW}Reason:${NC} $failure_reason"
         fi
-        if [[ -n "${BLB_CADDY_LAST_OUTPUT:-}" ]]; then
-            echo ""
-            echo -e "${CYAN}Caddy output:${NC}"
-            echo "$BLB_CADDY_LAST_OUTPUT" | tail -n 10 | while IFS= read -r line; do
-                echo -e "  ${BULLET} $line"
-            done
-        fi
         echo ""
         echo -e "${CYAN}Troubleshooting:${NC}"
-        echo -e "  ${BULLET} Validate config:  ${YELLOW}caddy validate --config $BLB_CADDY_MAIN --adapter caddyfile${NC}"
-        echo -e "  ${BULLET} Check port 443:   ${YELLOW}sudo lsof -i :443${NC}"
-        echo -e "  ${BULLET} Caddy privileges:  ${YELLOW}sudo setcap 'cap_net_bind_service=+ep' \$(command -v caddy)${NC}"
         if [[ -n "$LOG_FILE" ]]; then
             echo -e "  ${BULLET} Log file:          ${YELLOW}$LOG_FILE${NC}"
         fi
@@ -429,8 +422,7 @@ wait_for_service() {
 
     echo -e "${CYAN}Waiting for $service_name to be ready...${NC}"
     while [[ $attempt -le $max_attempts ]]; do
-        if curl -s -f --connect-timeout 1 --max-time 2 "$url" >/dev/null 2>&1 || \
-           curl -s -f -k --connect-timeout 1 --max-time 2 "https://$url" >/dev/null 2>&1; then
+        if curl -s -f -k --connect-timeout 1 --max-time 2 "$url" >/dev/null 2>&1; then
             echo -e "${GREEN}✓${NC} $service_name is ready"
             log "$service_name ready in $(( $(now_epoch_s) - start_ts ))s"
             return 0
@@ -444,61 +436,43 @@ wait_for_service() {
     return 1
 }
 
-# Register this instance with the shared Caddy and ensure Caddy is running.
-# All BLB instances share one Caddy process on :443 via host-based routing.
-start_caddy() {
+# Export environment variables that FrankenPHP's embedded Caddy reads from the Caddyfile.
+# The project Caddyfile uses {$VAR:default} syntax, resolved by Caddy at startup.
+export_caddy_env() {
     export APP_DOMAIN="$FRONTEND_DOMAIN"
+    export BACKEND_DOMAIN="$BACKEND_DOMAIN"
     export APP_PORT="$APP_PORT"
-    export APP_HOST="127.0.0.1"
     export VITE_PORT="$VITE_PORT"
     export VITE_HOST="127.0.0.1"
     export REVERB_SERVER_PORT="$REVERB_SERVER_PORT"
-    export HTTPS_PORT="$HTTPS_PORT"
 
-    local tls_mode tls_directive
-    local mkcert_cert="$PROJECT_ROOT/certs/${APP_DOMAIN}.pem"
-    local mkcert_key="$PROJECT_ROOT/certs/${APP_DOMAIN}-key.pem"
+    local mkcert_cert="$PROJECT_ROOT/certs/${FRONTEND_DOMAIN}.pem"
+    local mkcert_key="$PROJECT_ROOT/certs/${FRONTEND_DOMAIN}-key.pem"
 
     if [[ "$APP_ENV" = "local" ]] || [[ "$APP_ENV" = "testing" ]]; then
         if command_exists mkcert && [[ -f "$mkcert_cert" ]] && [[ -f "$mkcert_key" ]]; then
-            tls_mode="mkcert"
-            tls_directive="tls $mkcert_cert $mkcert_key"
-            # Ensure mkcert CA is trusted in all stores (system, NSS db, Windows on WSL2)
+            export TLS_DIRECTIVE="tls $mkcert_cert $mkcert_key"
             mkcert -install > /dev/null 2>&1 || true
         else
-            tls_mode="internal"
-            tls_directive="tls internal"
-            echo -e "${YELLOW}⚠${NC} mkcert certs not found — falling back to Caddy internal CA (browser warnings expected)"
-            echo -e "  Run ${CYAN}./scripts/setup-steps/70-caddy.sh${NC} to generate mkcert certs"
+            export TLS_DIRECTIVE="tls internal"
+            echo -e "${YELLOW}⚠${NC} mkcert certs not found — falling back to internal CA (browser warnings expected)"
+            echo -e "  Run ${CYAN}./scripts/setup-steps/70-domains.sh${NC} to generate mkcert certs"
         fi
     else
+        local tls_mode
         tls_mode=$(get_env_var "TLS_MODE" "internal")
         if [[ "$tls_mode" = "mkcert" ]] && [[ -f "$mkcert_cert" ]] && [[ -f "$mkcert_key" ]]; then
-            tls_directive="tls $mkcert_cert $mkcert_key"
-            # Ensure mkcert CA is trusted in all stores (system, NSS db, Windows on WSL2)
+            export TLS_DIRECTIVE="tls $mkcert_cert $mkcert_key"
             mkcert -install > /dev/null 2>&1 || true
         else
-            tls_directive="tls internal"
+            export TLS_DIRECTIVE="tls internal"
         fi
     fi
-    export TLS_MODE="$tls_mode"
-    export TLS_DIRECTIVE="$tls_directive"
-    export CADDY_LOG_DIR="$PROJECT_ROOT/.caddy/logs"
 
+    export CADDY_LOG_DIR="$PROJECT_ROOT/.caddy/logs"
     mkdir -p "$CADDY_LOG_DIR"
 
-    local fragment_file
-    fragment_file=$(write_site_fragment "$PROJECT_ROOT") || return 1
-    echo -e "${CYAN}ℹ${NC} Site fragment: ${fragment_file}"
-    log "Wrote Caddy site fragment: $fragment_file"
-
-    ensure_shared_caddy || {
-        local reason="${BLB_CADDY_LAST_ERROR:-Failed to start/reload shared Caddy}"
-        log "ERROR: $reason"
-        cleanup 1 "$reason"
-    }
-
-    log "Shared Caddy ready (sites on :443)"
+    log "Caddy env exported (TLS_DIRECTIVE=$TLS_DIRECTIVE)"
     return 0
 }
 
@@ -506,7 +480,7 @@ start_caddy() {
 
 # Start development services
 start_services() {
-    echo -e "${GREEN}Starting Laravel server, Vite, queue worker, Reverb, and log watcher...${NC}"
+    echo -e "${GREEN}Starting FrankenPHP (Octane), Vite, queue worker, and Reverb...${NC}"
 
     # Create a separate log file for dev services output
     local dev_log_file
@@ -550,8 +524,8 @@ main() {
     local t_init
     t_init=$(now_epoch_s)
     read_app_env
-    read_proxy_type
     get_ports
+    export_caddy_env
     log "Init completed in $(( $(now_epoch_s) - t_init ))s"
 
     # Check hosts entries (warn but don't block)
@@ -565,6 +539,9 @@ main() {
     t_deps=$(now_epoch_s)
     check_dependencies
     log "Dependency check completed in $(( $(now_epoch_s) - t_deps ))s"
+
+    # Ensure FrankenPHP can bind to port 443 (Linux only)
+    ensure_frankenphp_bind_capability
 
     # Check and stop services if needed
     local t_ports
@@ -585,46 +562,27 @@ main() {
     start_services
     log "Dev services started in $(( $(now_epoch_s) - t_start ))s (PID $DEV_PID)"
 
-    # Wait for Laravel to be ready
-    wait_for_service "http://127.0.0.1:$APP_PORT" "Laravel server" || true
+    # Wait for FrankenPHP/Octane to be ready (serves HTTPS on :443 via project Caddyfile)
+    wait_for_service "https://${FRONTEND_DOMAIN}" "FrankenPHP (Octane)" || true
     log "Start-app total time so far: $(( $(now_epoch_s) - t0 ))s"
 
     local frontend_url="https://${FRONTEND_DOMAIN}"
     local backend_url="https://${BACKEND_DOMAIN}"
 
-    # Inform user that web app is ready (before Caddy starts and takes over terminal)
+    # Display final success message
     echo ""
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}✓ Belimbing is ready for access!${NC}"
+    echo -e "${GREEN}✓ Belimbing is ready!${NC}"
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     echo -e "${CYAN}Access your application:${NC}"
     echo -e "  ${GREEN}Frontend:${NC} ${YELLOW}${frontend_url}${NC}"
     echo -e "  ${GREEN}Backend:${NC}  ${YELLOW}${backend_url}${NC}"
     echo ""
-    echo -e "${CYAN}Internal services:${NC}"
-    echo -e "  ${BULLET} Laravel: http://127.0.0.1:$APP_PORT"
-    echo -e "  ${BULLET} Vite:    http://127.0.0.1:$VITE_PORT"
-    echo -e "  ${BULLET} Reverb:  ws://127.0.0.1:$REVERB_SERVER_PORT"
-    echo ""
-
-    # Start Caddy only when PROXY_TYPE=caddy. Start if not running, skip if already running (or reload if our config).
-    if [[ "$PROXY_TYPE" = "caddy" ]]; then
-        echo -e "${CYAN}Starting Caddy reverse proxy...${NC}"
-        echo ""
-        start_caddy
-        # Setup SSL certificate trust
-        ensure_ssl_trust "$PROJECT_ROOT" "${TLS_MODE:-internal}" || true
-    else
-        echo -e "${CYAN}ℹ${NC} Proxy type: ${PROXY_TYPE:-none} (skipping Caddy)"
-        echo ""
-    fi
-
-    # Display final success message
-    echo ""
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}✓ Development environment is ready!${NC}"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}Services:${NC}"
+    echo -e "  ${BULLET} FrankenPHP (Octane): https://${FRONTEND_DOMAIN} (:443)"
+    echo -e "  ${BULLET} Vite:                http://127.0.0.1:$VITE_PORT"
+    echo -e "  ${BULLET} Reverb:              ws://127.0.0.1:$REVERB_SERVER_PORT"
     echo ""
     echo -e "${CYAN}Log file:${NC} ${LOG_FILE}"
     echo ""

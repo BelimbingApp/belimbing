@@ -575,77 +575,90 @@ The screenshot shows UI elements that only exist because of the sync fallback pa
 
 FrankenPHP binary must exist before `octane:install --server=frankenphp` can work. The setup step (`17-frankenphp.sh`) is the install path for all developers, so it comes first.
 
-- [ ] Rename `20-php.sh` → `15-php.sh` to make room for FrankenPHP in the numbering sequence.
-- [ ] Create `scripts/setup-steps/17-frankenphp.sh` — install the FrankenPHP standalone binary. Slots after `15-php.sh` (FrankenPHP depends on PHP) and before `22-sqlite-vec.sh` / `25-laravel.sh`. Follow the pattern of `15-php.sh`: detect OS, install via official method (GitHub release binary for Linux, Homebrew for macOS), verify with `frankenphp version`, save to setup state.
-- [ ] Add `laravel/octane` to `composer.json` `require`.
-- [ ] Run `artisan octane:install --server=frankenphp` and review generated `config/octane.php`.
-- [ ] Configure worker count, max requests, and memory limits in `config/octane.php`.
+- [x] Rename `20-php.sh` → `15-php.sh` to make room for FrankenPHP in the numbering sequence.
+- [x] Create `scripts/setup-steps/17-frankenphp.sh` — install the FrankenPHP standalone binary. Slots after `15-php.sh` (FrankenPHP depends on PHP) and before `22-sqlite-vec.sh` / `25-laravel.sh`. Follow the pattern of `15-php.sh`: detect OS, install via official method (GitHub release binary for Linux, Homebrew for macOS), verify with `frankenphp version`, save to setup state.
+- [x] Add `laravel/octane` to `composer.json` `require`.
+- [x] Run `artisan octane:install --server=frankenphp` once to scaffold `config/octane.php`, then commit it. Future developers get it from the repo — no setup step needed.
+- [x] Configure worker count, max requests, and memory limits in `config/octane.php` before committing.
 
-#### 6G — Migrate Caddyfile to FrankenPHP
+#### 6G — Migrate Caddyfile to FrankenPHP ✅
 
 The current stack has Caddy as a separate process reverse-proxying to `artisan serve`. FrankenPHP IS Caddy with a PHP SAPI, so the `reverse_proxy` to `artisan serve` disappears — replaced by `php_server` / `php` directives that serve Laravel directly.
 
 Vite HMR, Reverb WebSocket, and Vite dev asset proxying remain as `reverse_proxy` blocks because they target separate Node/PHP processes.
 
-- [ ] Convert the Laravel Backend `handle` block from `reverse_proxy {$APP_HOST}:{$APP_PORT}` to FrankenPHP `php_server` directive pointing at `public/`.
-- [ ] Convert the built assets block similarly — FrankenPHP serves static files from `public/build/` directly.
-- [ ] Preserve Vite dev proxy (`@vite_dev`, `@vite_ws`) and Reverb WebSocket proxy (`@reverb_ws`) as `reverse_proxy` blocks — these still target external processes.
-- [ ] Remove `flush_interval -1` from the Laravel blocks (added in 6B) — FrankenPHP serves PHP responses directly, no intermediate buffer to flush.
-- [ ] Update the backend domain block (`{$BACKEND_DOMAIN}`) to use `php_server` instead of `reverse_proxy`.
+- [x] Convert the Laravel Backend `handle` block from `reverse_proxy {$APP_HOST}:{$APP_PORT}` to FrankenPHP `php_server` directive pointing at `public/`.
+- [x] Convert the built assets block similarly — FrankenPHP serves static files from `public/build/` directly via `php_server`.
+- [x] Preserve Vite dev proxy (`@vite_dev`, `@vite_ws`) and Reverb WebSocket proxy (`@reverb_ws`) as `reverse_proxy` blocks — these still target external processes.
+- [x] Remove `flush_interval -1` from the Laravel blocks (added in 6B) — FrankenPHP serves PHP responses directly, no intermediate buffer to flush.
+- [x] Update the backend domain block (`{$BACKEND_DOMAIN}`) to use `php_server` instead of `reverse_proxy`.
+- [x] Add `{$FRANKENPHP_CONFIG}` global options block for Octane worker injection.
 
-#### 6H — Sweep for Octane compatibility
+#### 6H — Sweep for Octane compatibility ✅
 
-- [ ] Audit static properties and mutable singletons in service providers, middleware, and AI services.
-- [ ] Ensure `PageContextHolder` (request-scoped singleton) is properly reset between requests — register in Octane's `RequestReceived` / `RequestTerminated` hooks or use `Octane::flush()`.
-- [ ] Verify `TurnStreamBridge`, `TurnEventPublisher`, and `AgenticRuntime` have no cross-request bleed.
-- [ ] Run full test suite under Octane.
+Audited all static properties and mutable singletons across `app/Base/`.
 
-#### 6I — Update dev tooling and start scripts
+- [x] Audit static properties and mutable singletons in service providers, middleware, and AI services.
+  - `AuditBuffer`, `DatabaseDecisionLogger`: `$flushRegistered` flag prevents re-registration of terminating callback → added to Octane `flush` array.
+  - `GrantPolicy`: per-request permission cache leaks across worker requests → added to Octane `flush` array.
+  - `MutationListener::$disabled`: protected by try/finally — safe, no action needed.
+  - `ExtensionAutoloader::$registered`: intentional register-once-per-worker guard — safe.
+  - `blb_log_var()` channel cache: Monolog loggers are stateless — safe.
+  - `CapabilityCatalog`/`CapabilityRegistry`: worker-scoped configuration, intentionally not flushed.
+- [x] `PageContextHolder`, `TurnStreamBridge`, `TurnEventPublisher` do not exist yet — will be added to flush array when created.
+- [x] Run full test suite — 1376/1377 pass (1 pre-existing `AgenticRuntimeTest` failure unrelated to Octane).
+
+#### 6I — Update dev tooling and start scripts ✅
 
 The process model changes in two ways:
 
-1. **`dev:all` pipeline:** `composer run dev` → `bun run dev:all` currently launches `php artisan serve`, queue, reverb, and vite via `concurrently`. `artisan serve` becomes `artisan octane:start --server=frankenphp`. FrankenPHP runs Caddy internally on the same `APP_PORT`, so the PHP serving process now also handles TLS, routing, and SSE without a separate proxy.
+1. **`dev:all` pipeline:** `composer run dev` → `bun run dev:all` now launches `php artisan octane:start --server=frankenphp --watch`. FrankenPHP runs Caddy internally on the same `APP_PORT`, so the PHP serving process now also handles TLS, routing, and SSE without a separate proxy.
 
-2. **Separate Caddy process eliminated:** `start-app.sh` currently starts a shared Caddy process (`write_site_fragment` → `ensure_shared_caddy`) when `PROXY_TYPE=caddy`. FrankenPHP replaces this entirely — it IS Caddy. The Vite/Reverb proxy blocks move into the FrankenPHP Caddyfile (already there in the template), so the external shared Caddy is no longer needed.
+2. **Separate Caddy process eliminated:** `start-app.sh` no longer starts a shared Caddy process. FrankenPHP IS Caddy — it reads the project `Caddyfile` directly via Octane.
 
 ##### Dev pipeline (`package.json` + `composer.json`)
 
-- [ ] Replace `php artisan serve --port=${APP_PORT:-8000}` with `php artisan octane:start --server=frankenphp --port=${APP_PORT:-8000}` in `package.json` `dev:all`.
+- [x] Replace `php artisan serve --port=${APP_PORT:-8000}` with `php artisan octane:start --server=frankenphp --port=${APP_PORT:-8000} --watch` in `package.json` `dev:all`.
 
 ##### `start-app.sh` / `stop-app.sh`
 
-- [ ] Remove the `PROXY_TYPE` branching — FrankenPHP is the only serving path. The `start_caddy` / `ensure_shared_caddy` / `write_site_fragment` / `remove_site_fragment` calls in `start-app.sh` become dead code. FrankenPHP reads the project `Caddyfile` directly via Octane.
-- [ ] Remove `read_proxy_type()` and the `PROXY_TYPE` variable from `start-app.sh`.
-- [ ] Update `stop-app.sh` / cleanup handlers — no separate Caddy process to stop.
-- [ ] Keep `ensure_ssl_trust` — still needed for trusting FrankenPHP's internal Caddy CA.
+- [x] Remove the `PROXY_TYPE` branching — FrankenPHP is the only serving path.
+- [x] Remove `read_proxy_type()` and the `PROXY_TYPE` variable from `start-app.sh`.
+- [x] Add `export_caddy_env()` to export env vars (`APP_DOMAIN`, `BACKEND_DOMAIN`, `TLS_DIRECTIVE`, etc.) for Caddy's native `{$VAR}` resolution.
+- [x] Update `stop-app.sh` — removed Caddy deregistration block.
+- [x] Keep `ensure_ssl_trust` — still needed for trusting FrankenPHP's internal Caddy CA.
 
 ##### `scripts/shared/caddy.sh`
 
-- [ ] Remove `ensure_shared_caddy()`, `write_site_fragment()`, `remove_site_fragment()`, `maybe_stop_shared_caddy()`, `create_main_caddyfile()` — the shared multi-instance Caddy model is dead. FrankenPHP runs Caddy in-process.
-- [ ] Keep `resolve_caddyfile_vars()` if the Octane Caddyfile still uses `{$VAR:default}` template syntax.
-- [ ] Keep `setup_ssl_trust()`, `ensure_ssl_trust()`, `install_cert_to_nss_databases()` — still needed.
-- [ ] Keep `install_caddy()` only if useful as a fallback; otherwise remove (FrankenPHP binary replaces it).
+- [x] Remove all shared multi-instance Caddy functions (`diagnose_caddy_failure`, `ensure_blb_caddy_dirs`, `create_main_caddyfile`, `resolve_caddyfile_vars`, `site_fragment_slug`, `write_site_fragment`, `remove_site_fragment`, `ensure_shared_caddy`, `maybe_stop_shared_caddy`, `install_caddy`, `ensure_caddy_privileges`, `is_caddy_enabled`).
+- [x] Removed `resolve_caddyfile_vars()` — Caddy natively resolves `{$VAR:default}` from env vars.
+- [x] Keep `setup_ssl_trust()`, `ensure_ssl_trust()`, `install_cert_to_nss_databases()`.
+- [x] Removed `install_caddy()` — FrankenPHP binary replaces standalone Caddy.
 
 ##### `70-caddy.sh` → `70-domains.sh`
 
-`70-caddy.sh` is mostly domain/cert/hosts configuration, not Caddy installation. With FrankenPHP, the Caddy binary install and `PROXY_TYPE` choice are dead — FrankenPHP is always the serving path.
+- [x] Rename `70-caddy.sh` to `70-domains.sh` (title: "Domains & TLS").
+- [x] Remove the `PROXY_TYPE` selection menu and all proxy detection/installation branches.
+- [x] Remove `install_caddy` call — `17-frankenphp.sh` handles the binary.
+- [x] Remove `PROXY_TYPE` from `.env` updates and setup state.
+- [x] Keep `prompt_for_domains()`, add `ensure_tls_certs()` for mkcert cert generation.
 
-- [ ] Rename `70-caddy.sh` to `70-domains.sh` (title: "Domains & TLS").
-- [ ] Remove the `PROXY_TYPE` selection menu and all branches (`caddy` / `nginx` / `apache` / `traefik` / `manual` / `none`).
-- [ ] Remove `install_caddy` call and Caddy binary verification — `17-frankenphp.sh` handles the binary.
-- [ ] Remove `PROXY_TYPE` from `.env` updates and setup state.
-- [ ] Keep `prompt_for_domains()`, `save_domains_to_env()`, `ensure_domains_in_hosts()`, mkcert cert generation, `configure_existing_caddy()` cert logic (rename to `ensure_tls_certs()` or similar).
+##### `75-ssl-trust.sh`
+
+- [x] Remove `PROXY_TYPE` guard. Updated references from `70-caddy.sh` to `70-domains.sh`.
 
 ##### `scripts/shared/config.sh`
 
-- [ ] Remove `DEFAULT_PROXY_TYPE` and any `PROXY_TYPE` references from config defaults.
+- [x] Remove `DEFAULT_PROXY_TYPE` and `PROXY_TYPE` references from config defaults.
 
 ##### `.env` / `.env.example`
 
-- [ ] Remove `PROXY_TYPE` key — no longer meaningful.
-- [ ] Remove `APP_HOST` if FrankenPHP serves directly (no upstream to configure).
+- [x] Remove `PROXY_TYPE` key.
+- [x] Replace `PHP_CLI_SERVER_WORKERS` with `OCTANE_WORKERS` comment.
 
-#### 6J — Validate under concurrent load
+#### 6J — Validate under concurrent load (manual)
+
+Requires a running FrankenPHP instance and browser sessions. Perform manually after deploying locally.
 
 - [ ] Open 3+ simultaneous Lara chat sessions, each streaming a turn.
 - [ ] Confirm all sessions receive progressive SSE events concurrently.

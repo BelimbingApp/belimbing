@@ -68,7 +68,7 @@ return [
             'ssrf_allow_private' => env('AI_WEB_FETCH_SSRF_ALLOW_PRIVATE', false),
         ],
         'browser' => [
-            'enabled' => env('AI_BROWSER_ENABLED', false),
+            'enabled' => env('AI_BROWSER_ENABLED', true),
             'executable_path' => env('AI_BROWSER_PATH', null),
             'headless' => env('AI_BROWSER_HEADLESS', env('APP_ENV', 'production') !== 'local'),
             'max_contexts_per_company' => 3,
