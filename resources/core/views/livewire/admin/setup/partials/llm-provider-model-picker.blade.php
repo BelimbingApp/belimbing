@@ -13,7 +13,7 @@
 
 <div>
     {{-- Provider picker --}}
-    <div class="mb-4">
+    <div class="mb-3">
         <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Provider') }}</span>
         @if ($errors->has($providerErrorKey))
             <p class="text-xs text-status-danger mt-1">{{ $errors->first($providerErrorKey) }}</p>
@@ -38,7 +38,7 @@
 
     {{-- Model picker --}}
     @if ($selectedProviderId)
-        <div class="mb-4">
+        <div class="mb-3">
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Model') }}</span>
             @if ($errors->has($modelErrorKey))
                 <p class="text-xs text-status-danger mt-1">{{ $errors->first($modelErrorKey) }}</p>
@@ -60,7 +60,7 @@
                         />
                     @endif
 
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 max-h-64 overflow-y-auto">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1 max-h-64 overflow-y-auto">
                         @foreach($models as $model)
                             @php($modelId = 'llm-model-'.$context.'-'.$model->id)
                             <label

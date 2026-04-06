@@ -10,7 +10,7 @@
     <div class="space-y-section-gap">
         <x-ui.page-header
             :title="$laraActivated ? __('Lara') : __('Set Up Lara')"
-            :subtitle="$laraActivated ? __('Manage Lara\'s AI configuration') : __('Activate BLB\'s built-in AI assistant')"
+            :subtitle="$laraActivated ? __('Manage Lara\'s AI configuration') : __('Activate Belimbing\'s built-in AI assistant')"
         />
 
         @if ($laraActivated)
@@ -38,8 +38,8 @@
             </x-ui.card>
 
             <x-ui.card>
-                <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Primary Model') }}</h3>
-                <p class="text-xs text-muted mb-4">{{ __('Select a provider and model for Lara. Frontier models (Claude Opus, GPT-5 class) are recommended for orchestration and reasoning.') }}</p>
+                <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-2">{{ __('Primary Model') }}</h3>
+                <p class="text-xs text-muted mb-1">{{ __('Select a provider and model for Lara. Frontier models (Claude Opus, GPT-5 class) are recommended for orchestration and reasoning.') }}</p>
 
                 @include('livewire.admin.setup.partials.llm-provider-model-picker', [
                     'context' => 'lara-change',
@@ -51,20 +51,21 @@
                 ])
 
                 @include('livewire.admin.setup.partials.provider-diagnostics')
+
+                <x-action-message on="primary-saved" class="text-xs text-status-success" />
             </x-ui.card>
 
             <x-ui.card>
-                <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-2">{{ __('Backup Model') }} <span class="normal-case tracking-normal font-normal">{{ __('(Optional)') }}</span></h3>
-                <p class="text-xs text-muted mb-4">{{ __('If the primary model fails, the system will automatically retry with this model.') }}</p>
-
-                @if ($backupProviderId !== null)
-                    <div class="mb-3 flex items-center justify-end">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Backup Model') }} <span class="normal-case tracking-normal font-normal">{{ __('(Optional)') }}</span></h3>
+                    @if ($backupProviderId !== null)
                         <x-ui.button variant="ghost" size="sm" wire:click="removeBackup" class="text-red-500 hover:text-red-600">
                             <x-icon name="heroicon-o-x-mark" class="w-3.5 h-3.5" />
                             {{ __('Clear backup') }}
                         </x-ui.button>
-                    </div>
-                @endif
+                    @endif
+                </div>
+                <p class="text-xs text-muted mb-1">{{ __('If the primary model fails, the system will automatically retry with this model.') }}</p>
 
                 @include('livewire.admin.setup.partials.llm-provider-model-picker', [
                     'context' => 'lara-backup',
@@ -74,10 +75,19 @@
                     'providerBinding' => 'backupProviderId',
                     'modelBinding' => 'backupModelId',
                 ])
+
+                @include('livewire.admin.setup.partials.provider-diagnostics', [
+                    'testAction' => 'testBackupProvider',
+                    'testProviderId' => $backupProviderId,
+                    'testModelId' => $backupModelId,
+                    'testResult' => $this->backupProviderTestResult,
+                ])
+
+                <x-action-message on="backup-saved" class="text-xs text-status-success" />
             </x-ui.card>
         @elseif (! $licenseeExists)
             <x-ui.alert variant="info">
-                {{ __('Lara Belimbing is BLB\'s built-in AI assistant — your guide to setup, configuration, and daily operations. She needs an AI provider to function.') }}
+                {{ __('Lara is Belimbing\'s built-in AI assistant — your guide to setup, configuration, and daily operations. She needs an AI provider to function.') }}
             </x-ui.alert>
 
             <x-ui.alert variant="warning">
@@ -88,7 +98,7 @@
             </x-ui.alert>
         @elseif (! $laraExists)
             <x-ui.alert variant="info">
-                {{ __('Lara Belimbing is BLB\'s built-in AI assistant — your guide to setup, configuration, and daily operations. She needs an AI provider to function.') }}
+                {{ __('Lara is Belimbing\'s built-in AI assistant — your guide to setup, configuration, and daily operations. She needs an AI provider to function.') }}
             </x-ui.alert>
 
             <x-ui.card>
@@ -103,7 +113,7 @@
             </x-ui.card>
         @elseif (! $laraActivated)
             <x-ui.alert variant="info">
-                {{ __('Lara Belimbing is BLB\'s built-in AI assistant — your guide to setup, configuration, and daily operations. She needs an AI provider to function.') }}
+                {{ __('Lara is Belimbing\'s built-in AI assistant — your guide to setup, configuration, and daily operations. She needs an AI provider to function.') }}
             </x-ui.alert>
 
             @if ($providers->isEmpty())
@@ -119,7 +129,7 @@
             @else
                 <x-ui.card>
                     <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Activate Lara') }}</h3>
-                    <p class="text-xs text-muted mb-4">{{ __('Select an AI provider and model for Lara. Frontier models (Claude Opus, GPT-5 class) are recommended for the best experience with orchestration and reasoning.') }}</p>
+                    <p class="text-xs text-muted mb-1">{{ __('Select an AI provider and model for Lara. Frontier models (Claude Opus, GPT-5 class) are recommended for the best experience with orchestration and reasoning.') }}</p>
 
                     @include('livewire.admin.setup.partials.llm-provider-model-picker', [
                         'context' => 'lara-activate',

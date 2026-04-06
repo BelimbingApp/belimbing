@@ -11,7 +11,6 @@ use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 
 class Kodi extends Component
@@ -54,7 +53,7 @@ class Kodi extends Component
     public function updatedSelectedModelId(): void
     {
         $this->clearProviderTestResult();
-        $this->autoSaveIfActivated();
+        $this->autoSaveIfActivated('primary');
     }
 
     /**
@@ -62,8 +61,9 @@ class Kodi extends Component
      */
     public function updatedBackupProviderId(): void
     {
+        $this->clearBackupProviderTestResult();
         $this->hydrateBackupModel(forceDefault: true);
-        $this->autoSaveIfActivated();
+        $this->autoSaveIfActivated('backup');
     }
 
     /**
@@ -71,7 +71,8 @@ class Kodi extends Component
      */
     public function updatedBackupModelId(): void
     {
-        $this->autoSaveIfActivated();
+        $this->clearBackupProviderTestResult();
+        $this->autoSaveIfActivated('backup');
     }
 
     /**
@@ -80,10 +81,11 @@ class Kodi extends Component
     public function removeBackup(): void
     {
         $this->clearBackup();
-        $this->autoSaveIfActivated();
+        $this->clearBackupProviderTestResult();
+        $this->autoSaveIfActivated('backup');
     }
 
-    private function autoSaveIfActivated(): void
+    private function autoSaveIfActivated(string $changed = 'primary'): void
     {
         if (Employee::laraActivationState() !== true) {
             return;
@@ -96,7 +98,14 @@ class Kodi extends Component
         $this->validateProviderAndModel();
         $this->writeConfig(Employee::KODI_ID);
 
-        Session::flash('success', __('Kodi has been updated.'));
+        $message = match ($changed) {
+            'backup' => $this->backupModelId !== null
+                ? __('Backup saved: :model', ['model' => $this->backupModelId])
+                : __('Backup cleared.'),
+            default => __('Primary saved: :model', ['model' => $this->selectedModelId]),
+        };
+
+        $this->dispatch($changed === 'backup' ? 'backup-saved' : 'primary-saved', message: $message);
     }
 
     public function render(): View

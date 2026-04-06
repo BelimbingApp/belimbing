@@ -1,19 +1,16 @@
-<div class="space-y-6">
-    @if (session()->has('success'))
-        <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
-    @endif
+<?php
+// SPDX-License-Identifier: AGPL-3.0-only
+// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-    @if (session()->has('error'))
-        <x-ui.alert variant="danger">{{ session('error') }}</x-ui.alert>
-    @endif
+/** @var \App\Modules\Core\AI\Livewire\Setup\Kodi $this */
+?>
+<div class="space-y-section-gap">
+    <x-ui.page-header
+        :title="__('Kodi Setup')"
+        :subtitle="__('Kodi is Belimbing\'s system developer — he builds modules, writes code, and works through IT tickets assigned by supervisors. Configure his primary and backup models here.')"
+    />
 
-    <div>
-        <h1 class="text-xl font-semibold text-ink">{{ __('Kodi Setup') }}</h1>
-        <p class="text-sm text-muted mt-1">{{ __('Configure the company’s default primary and backup models for delegated tasks.') }}</p>
-    </div>
-
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div class="space-y-6">
+    <div class="space-y-section-gap">
             <x-ui.card>
                 <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-2">{{ __('Current Configuration') }}</h3>
                 <div class="space-y-2 text-sm">
@@ -38,93 +35,62 @@
                     </div>
                 @endif
 
-                <div class="mt-4 text-xs text-muted space-y-2">
-                    <p>{{ __('Kodi uses the company’s primary model by default. If that model cannot be used, the backup model is applied automatically when available.') }}</p>
-                    <p>{{ __('The primary model must stay delegated-agent enabled and active so task routing remains available.') }}</p>
-                </div>
+
             </x-ui.card>
 
             <x-ui.card>
                 <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-2">{{ __('Primary Model') }}</h3>
-                <p class="text-xs text-muted mb-4">{{ __('Select the default primary model for delegated task execution.') }}</p>
+                <p class="text-xs text-muted mb-1">{{ __('Select the default primary model for delegated task execution.') }}</p>
 
-                @if ($providerId === null)
-                    <div class="rounded-2xl border border-dashed border-line/70 px-4 py-6 text-sm text-muted">
-                        {{ __('No delegated-agent providers are currently enabled. Enable at least one provider and delegated model before configuring Kodi.') }}
-                    </div>
-                @else
-                    <div class="space-y-3">
-                        <x-ui.select wire:model.live="providerId" label="{{ __('Provider') }}">
-                            @foreach ($providers as $provider)
-                                <option value="{{ $provider['id'] }}">{{ $provider['display_name'] }}</option>
-                            @endforeach
-                        </x-ui.select>
+                @include('livewire.admin.setup.partials.llm-provider-model-picker', [
+                    'context' => 'kodi-primary',
+                    'providers' => $providers,
+                    'models' => $models,
+                    'selectedProviderId' => $selectedProviderId,
+                    'providerBinding' => 'selectedProviderId',
+                    'modelBinding' => 'selectedModelId',
+                ])
 
-                        <x-ui.select wire:model="modelId" label="{{ __('Model') }}">
-                            @forelse ($models as $model)
-                                <option value="{{ $model['id'] }}">{{ $model['display_name'] }}</option>
-                            @empty
-                                <option value="">{{ __('No delegated models available for this provider.') }}</option>
-                            @endforelse
-                        </x-ui.select>
+                @include('livewire.admin.setup.partials.provider-diagnostics')
 
-                        <div class="flex items-center justify-end">
-                            <x-ui.button wire:click="save" :disabled="$models->isEmpty() || blank($modelId)">
-                                {{ __('Save primary model') }}
-                            </x-ui.button>
-                        </div>
-                    </div>
-                @endif
+                <x-action-message on="primary-saved" class="text-xs text-status-success" />
             </x-ui.card>
 
             <x-ui.card>
-                <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-2">{{ __('Backup Model') }} <span class="normal-case tracking-normal font-normal">{{ __('(Optional)') }}</span></h3>
-                <p class="text-xs text-muted mb-4">{{ __('If the primary model fails, the system will automatically retry with this model.') }}</p>
-
-                @if ($backupProviderId !== null)
-                    <div class="mb-3 flex items-center justify-end">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Backup Model') }} <span class="normal-case tracking-normal font-normal">{{ __('(Optional)') }}</span></h3>
+                    @if ($backupProviderId !== null)
                         <x-ui.button variant="ghost" size="sm" wire:click="removeBackup" class="text-red-500 hover:text-red-600">
                             <x-icon name="heroicon-o-x-mark" class="w-3.5 h-3.5" />
                             {{ __('Clear backup') }}
                         </x-ui.button>
-                    </div>
-                @endif
+                    @endif
+                </div>
+                <p class="text-xs text-muted mb-1">{{ __('If the primary model fails, the system will automatically retry with this model.') }}</p>
 
-                @if ($providerId === null)
+                @if ($selectedProviderId === null || blank($selectedModelId))
                     <div class="rounded-2xl border border-dashed border-line/70 px-4 py-6 text-sm text-muted">
                         {{ __('Configure a primary model first before selecting a backup.') }}
                     </div>
                 @else
-                    <div class="space-y-3">
-                        <x-ui.select wire:model.live="backupProviderId" label="{{ __('Provider') }}" placeholder="{{ __('No backup provider selected') }}">
-                            @foreach ($providers as $provider)
-                                <option value="{{ $provider['id'] }}">{{ $provider['display_name'] }}</option>
-                            @endforeach
-                        </x-ui.select>
+                    @include('livewire.admin.setup.partials.llm-provider-model-picker', [
+                        'context' => 'kodi-backup',
+                        'providers' => $providers,
+                        'models' => $backupModels,
+                        'selectedProviderId' => $backupProviderId,
+                        'providerBinding' => 'backupProviderId',
+                        'modelBinding' => 'backupModelId',
+                    ])
 
-                        <x-ui.select wire:model="backupModelId" label="{{ __('Model') }}" placeholder="{{ __('No backup model selected') }}">
-                            @foreach ($backupModels as $model)
-                                <option value="{{ $model['id'] }}">{{ $model['display_name'] }}</option>
-                            @endforeach
-                        </x-ui.select>
+                    @include('livewire.admin.setup.partials.provider-diagnostics', [
+                        'testAction' => 'testBackupProvider',
+                        'testProviderId' => $backupProviderId,
+                        'testModelId' => $backupModelId,
+                        'testResult' => $this->backupProviderTestResult,
+                    ])
 
-                        <div class="flex items-center justify-end">
-                            <x-ui.button variant="secondary" wire:click="saveBackup" :disabled="$backupModels->isEmpty() || blank($backupModelId)">
-                                {{ __('Save backup model') }}
-                            </x-ui.button>
-                        </div>
-                    </div>
+                    <x-action-message on="backup-saved" class="text-xs text-status-success" />
                 @endif
             </x-ui.card>
-        </div>
-
-        <x-ui.card class="h-fit">
-            <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-2">{{ __('How Kodi uses this') }}</h3>
-            <ol class="space-y-3 text-sm text-muted list-decimal list-inside">
-                <li>{{ __('Tasks delegated from Lara default to this primary model.') }}</li>
-                <li>{{ __('If the primary model is unavailable, Kodi retries with the configured backup model.') }}</li>
-                <li>{{ __('Only delegated-agent enabled models appear in these lists.') }}</li>
-            </ol>
-        </x-ui.card>
     </div>
 </div>

@@ -65,7 +65,7 @@ class Lara extends Component
     public function updatedSelectedModelId(): void
     {
         $this->clearProviderTestResult();
-        $this->autoSaveIfActivated();
+        $this->autoSaveIfActivated('primary');
     }
 
     /**
@@ -73,8 +73,9 @@ class Lara extends Component
      */
     public function updatedBackupProviderId(): void
     {
+        $this->clearBackupProviderTestResult();
         $this->hydrateBackupModel(forceDefault: true);
-        $this->autoSaveIfActivated();
+        $this->autoSaveIfActivated('backup');
     }
 
     /**
@@ -82,7 +83,8 @@ class Lara extends Component
      */
     public function updatedBackupModelId(): void
     {
-        $this->autoSaveIfActivated();
+        $this->clearBackupProviderTestResult();
+        $this->autoSaveIfActivated('backup');
     }
 
     /**
@@ -91,10 +93,11 @@ class Lara extends Component
     public function removeBackup(): void
     {
         $this->clearBackup();
-        $this->autoSaveIfActivated();
+        $this->clearBackupProviderTestResult();
+        $this->autoSaveIfActivated('backup');
     }
 
-    private function autoSaveIfActivated(): void
+    private function autoSaveIfActivated(string $changed = 'primary'): void
     {
         if (Employee::laraActivationState() !== true) {
             return;
@@ -106,6 +109,15 @@ class Lara extends Component
 
         $this->validateProviderAndModel();
         $this->writeConfig(Employee::LARA_ID);
+
+        $message = match ($changed) {
+            'backup' => $this->backupModelId !== null
+                ? __('Backup saved: :model', ['model' => $this->backupModelId])
+                : __('Backup cleared.'),
+            default => __('Primary saved: :model', ['model' => $this->selectedModelId]),
+        };
+
+        $this->dispatch($changed === 'backup' ? 'backup-saved' : 'primary-saved', message: $message);
     }
 
     /**

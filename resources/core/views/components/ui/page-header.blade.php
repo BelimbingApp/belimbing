@@ -47,13 +47,13 @@
                         <x-icon name="heroicon-o-pin" class="w-4 h-4" />
                     </button>
                 @endif
-                @if($subtitle)
-                    <p class="text-sm text-muted">{!! $subtitle !!}</p>
-                @endif
                 @if($help)
                     <x-ui.help size="lg" @click="helpOpen = !helpOpen" ::aria-expanded="helpOpen" />
                 @endif
             </div>
+            @if($subtitle)
+                <p class="text-sm text-muted">{!! $subtitle !!}</p>
+            @endif
         </div>
         @if($actions)
             <div class="shrink-0 flex items-center gap-2">
