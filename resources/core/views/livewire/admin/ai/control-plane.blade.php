@@ -35,7 +35,7 @@ use App\Modules\Core\AI\Livewire\ControlPlane;
 
     <x-ui.tabs :tabs="[
         ['id' => 'inspector', 'label' => __('Run Inspector'), 'icon' => 'heroicon-o-magnifying-glass'],
-        ['id' => 'turns', 'label' => __('Turn Inspector'), 'icon' => 'heroicon-o-queue-list'],
+        ['id' => 'turns', 'label' => __('Turn Inspector'), 'icon' => 'heroicon-o-chat-bubble-left-right'],
         ['id' => 'health', 'label' => __('Health & Presence'), 'icon' => 'heroicon-o-heart'],
         ['id' => 'lifecycle', 'label' => __('Lifecycle Controls'), 'icon' => 'heroicon-o-arrow-path'],
     ]" default="inspector">

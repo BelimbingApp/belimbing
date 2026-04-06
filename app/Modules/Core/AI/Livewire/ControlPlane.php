@@ -38,9 +38,6 @@ class ControlPlane extends Component
     /** @var array<string, mixed>|null */
     public ?array $singleRunInspection = null;
 
-    /** @var list<Message> */
-    public array $runTranscript = [];
-
     public string $inspectionError = '';
 
     // -- Health & Presence state --
@@ -131,7 +128,6 @@ class ControlPlane extends Component
         }
 
         $this->singleRunInspection = $this->mapRunInspection($result);
-        $this->loadRunTranscript($this->inspectRunId);
     }
 
     /**
@@ -345,7 +341,9 @@ class ControlPlane extends Component
 
     public function render(): View
     {
-        return view('livewire.admin.ai.control-plane');
+        return view('livewire.admin.ai.control-plane', [
+            'runTranscript' => $this->loadRunTranscript(),
+        ]);
     }
 
     // ---------------------------------------------------------------
@@ -356,26 +354,33 @@ class ControlPlane extends Component
     {
         $this->runInspections = [];
         $this->singleRunInspection = null;
-        $this->runTranscript = [];
         $this->inspectionError = '';
     }
 
     /**
      * Load transcript entries for a run, filtered to that run's messages.
+     *
+     * Returned as view data (not a public property) because Message DTOs
+     * contain DateTimeImmutable which Livewire cannot dehydrate.
+     *
+     * @return list<Message>
      */
-    private function loadRunTranscript(string $runId): void
+    private function loadRunTranscript(): array
     {
-        $this->runTranscript = [];
+        if ($this->inspectRunId === '' || $this->singleRunInspection === null) {
+            return [];
+        }
 
-        $run = AiRun::query()->find($runId);
+        $run = AiRun::query()->find($this->inspectRunId);
         if ($run === null || $run->session_id === null) {
-            return;
+            return [];
         }
 
         $messageManager = app(MessageManager::class);
         $allMessages = $messageManager->read($run->employee_id, $run->session_id);
+        $runId = $this->inspectRunId;
 
-        $this->runTranscript = array_values(array_filter(
+        return array_values(array_filter(
             $allMessages,
             fn (Message $msg) => $msg->runId === $runId
                 || $msg->type === 'thinking'

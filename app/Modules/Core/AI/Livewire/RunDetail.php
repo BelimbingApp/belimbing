@@ -22,8 +22,11 @@ class RunDetail extends Component
     /** @var array<string, mixed>|null */
     public ?array $inspection = null;
 
-    /** @var list<Message> */
-    public array $transcript = [];
+    /** Employee ID for the run (used to reload transcript in render). */
+    private int $runEmployeeId = 0;
+
+    /** Session ID for the run (used to reload transcript in render). */
+    private ?string $runSessionId = null;
 
     /**
      * Mount the component with a run ID from the route.
@@ -48,27 +51,34 @@ class RunDetail extends Component
 
         $inspection = app(RunInspectionService::class)->inspectRun($runId);
         $this->inspection = $inspection?->toArray();
-        $this->loadTranscript($run);
+        $this->runEmployeeId = $run->employee_id;
+        $this->runSessionId = $run->session_id;
     }
 
     public function render(): View
     {
-        return view('livewire.admin.ai.run-detail');
+        return view('livewire.admin.ai.run-detail', [
+            'transcript' => $this->loadTranscript(),
+        ]);
     }
 
     /**
      * Load transcript entries for this run's session, filtered to just this run.
+     *
+     * Returned as view data (not a public property) because Message DTOs
+     * contain DateTimeImmutable which Livewire cannot dehydrate.
+     *
+     * @return list<Message>
      */
-    private function loadTranscript(AiRun $run): void
+    private function loadTranscript(): array
     {
-        if ($run->session_id === null) {
-            return;
+        if ($this->runSessionId === null) {
+            return [];
         }
 
-        $messageManager = app(MessageManager::class);
-        $allMessages = $messageManager->read($run->employee_id, $run->session_id);
+        $allMessages = app(MessageManager::class)->read($this->runEmployeeId, $this->runSessionId);
 
-        $this->transcript = array_values(array_filter(
+        return array_values(array_filter(
             $allMessages,
             fn (Message $msg) => $msg->runId === $this->runId
                 || $msg->type === 'thinking'

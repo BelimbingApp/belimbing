@@ -4,20 +4,20 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "dev:all": "bunx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" \"php artisan octane:start --server=frankenphp --caddyfile=Caddyfile --port=${APP_PORT:-8000} --watch\" \"php artisan queue:listen --tries=1\" \"php artisan reverb:start\" \"bun run dev\" --names=server,queue,reverb,vite"
+        "dev:all": "bunx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" --restart-tries=3 --restart-after=1000 \"php artisan octane:start --server=frankenphp --caddyfile=Caddyfile --port=${APP_PORT:-8000} --watch\" \"php artisan queue:work --queue=ai-agent-tasks,ai-background-commands,ai-schedules,default --tries=1 --timeout=900 --sleep=1\" \"php artisan reverb:start\" \"bun run dev\" --names=server,queue,reverb,vite"
     },
     "dependencies": {
         "@tailwindcss/vite": "^4.2.2",
-        "alpinejs": "^3.15.9",
+        "alpinejs": "^3.15.11",
         "autoprefixer": "^10.4.27",
         "axios": "^1.14.0",
         "concurrently": "^9.2.1",
-        "laravel-echo": "^2.3.1",
-        "laravel-vite-plugin": "^3.0.0",
-        "pusher-js": "^8.4.3",
+        "laravel-echo": "^2.3.3",
+        "laravel-vite-plugin": "^3.0.1",
+        "pusher-js": "^8.5.0",
         "sortablejs": "^1.15.7",
         "tailwindcss": "^4.2.2",
-        "vite": "^8.0.3"
+        "vite": "^8.0.4"
     },
     "optionalDependencies": {
         "@rollup/rollup-linux-x64-gnu": "4.60.1",

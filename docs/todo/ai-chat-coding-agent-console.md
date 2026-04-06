@@ -6,7 +6,7 @@ The current AI chat is still built like a request/response messenger with a fall
 
 ## Status
 
-In Progress — Phases 1–5 complete. Phase 6 tasks 6A–6E complete (sync path eliminated, Caddy SSE unbuffered, Responses API gaps closed, timeout budget fixed, stale UI removed). Tasks 6F–6J (FrankenPHP + Octane migration) next.
+In Progress — Phases 1–5 complete. Phase 6 tasks 6A–6I complete. 6J (concurrent-load validation) in progress — critical stabilization fixes applied (see 6K below).
 
 ## Desired Outcome
 
@@ -664,6 +664,19 @@ Requires a running FrankenPHP instance and browser sessions. Perform manually af
 - [ ] Confirm all sessions receive progressive SSE events concurrently.
 - [ ] Confirm non-SSE page loads remain responsive while SSE connections are active.
 - [ ] Confirm Reverb WebSocket and Vite HMR still function through FrankenPHP's Caddy routing.
+
+#### 6K — Stabilize SSE under FrankenPHP worker mode ✅
+
+FrankenPHP workers crashed with SIGSEGV/SIGABRT when Lara was prompted. `dmesg` showed fatal signals 11 and 6 in `php-0`/`php-1` workers, followed by the main `frankenphp` process aborting. Crash intervals (~30s) matched `max_execution_time`. Root cause: long-running SSE connections (`ChatStreamController` holds a worker for the full LLM call; `TurnEventStreamController` polls for up to 5 minutes) exceeded the 30-second PHP execution timer, which FrankenPHP's Go runtime does not handle gracefully — the `SIGALRM`-based timer causes native crashes rather than clean PHP fatal errors.
+
+Secondary issue: `queue:listen` has a built-in 60-second child timeout that kills long AI agent jobs.
+
+- [x] Set `max_execution_time` to `0` in `config/octane.php` — disables the PHP timer that triggered worker crashes.
+- [x] Replace `queue:listen --tries=1` with `queue:work --queue=ai-agent-tasks,ai-background-commands,ai-schedules,default --tries=1 --timeout=900 --sleep=1` in `package.json` — eliminates 60s child timeout, adds 15-minute per-job limit, covers all AI queue names.
+- [x] Add `connection_aborted()` check to `ChatStreamController::streamAndEmit()` — stops streaming to disconnected clients, freeing workers sooner.
+- [x] Add `--restart-tries=3 --restart-after=1000` to `concurrently` in `package.json` — auto-restarts crashed processes with 1-second delay.
+
+**Known architectural debt (medium-term):** `ChatStreamController` holds a FrankenPHP worker for the entire LLM call duration (30–300s). This is fundamentally wasteful in worker mode. The medium-term fix is to always dispatch LLM execution via `RunAgentChatJob` (background) and use `TurnEventStreamController` (or Reverb WebSocket) for live tailing only. The background job path already exists and works.
 
 ## Non-Goals
 

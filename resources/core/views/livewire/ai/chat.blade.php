@@ -380,300 +380,20 @@
 
             {{-- Chat area --}}
             <section class="flex-1 min-w-0 min-h-0 flex flex-col"
-                x-data="{
-                    pendingMessage: null,
-                    streamEntries: [],
-                    _eventSource: null,
-                    followTail: true,
-
-                    // Turn lifecycle (coding-agent console)
-                    activeTurnId: null,
-                    turnPhase: null,
-                    turnLabel: null,
-                    turnStartedAt: null,
-                    elapsedSeconds: 0,
-                    _elapsedTimer: null,
-                    _lastSeq: 0,
-                    _toolMap: {},
-                    _completedToolCount: 0,
-                    toolsCollapsed: false,
-                    _deltaBuffer: '',
-                    _deltaFlushTimer: null,
-
-                    get isBusy() {
-                        return !!this.pendingMessage || !!this.activeTurnId;
-                    },
-
-                    resetTurnState() {
-                        this.activeTurnId = null;
-                        this.turnPhase = null;
-                        this.turnLabel = null;
-                        this.turnStartedAt = null;
-                        this.elapsedSeconds = 0;
-                        this._lastSeq = 0;
-                        this._toolMap = {};
-                        this._completedToolCount = 0;
-                        this.toolsCollapsed = false;
-                        this.flushDeltaBuffer();
-                        this._deltaBuffer = '';
-                        if (this._elapsedTimer) {
-                            clearInterval(this._elapsedTimer);
-                            this._elapsedTimer = null;
-                        }
-                    },
-
-                    flushDeltaBuffer() {
-                        if (this._deltaFlushTimer) {
-                            clearTimeout(this._deltaFlushTimer);
-                            this._deltaFlushTimer = null;
-                        }
-                        if (!this._deltaBuffer) return;
-
-                        const last = this.streamEntries[this.streamEntries.length - 1];
-                        if (last && last.type === 'assistant_streaming') {
-                            last.content += this._deltaBuffer;
-                        } else {
-                            this.streamEntries.push({
-                                type: 'assistant_streaming',
-                                content: this._deltaBuffer,
-                            });
-                        }
-                        this._deltaBuffer = '';
-                    },
-
-                    startElapsedTimer() {
-                        this.turnStartedAt = Date.now();
-                        this._elapsedTimer = setInterval(() => {
-                            this.elapsedSeconds = Math.floor((Date.now() - this.turnStartedAt) / 1000);
-                        }, 1000);
-                    },
-
-                    connectToTurnStream(url, scrollContainer) {
-                        if (this._eventSource) {
-                            this._eventSource.close();
-                        }
-
-                        this.followTail = true;
-                        this._toolMap = {};
-                        const source = new EventSource(url);
-                        this._eventSource = source;
-
-                        const handleEvent = (eventType, data) => {
-                            if (data.seq) this._lastSeq = data.seq;
-                            if (data.turn_id && !this.activeTurnId) {
-                                this.activeTurnId = data.turn_id;
-                            }
-
-                            switch (eventType) {
-                                case 'turn.started':
-                                    if (!this.turnStartedAt) this.startElapsedTimer();
-                                    this.turnPhase = 'booting';
-                                    this.turnLabel = '{{ __('Starting…') }}';
-                                    break;
-
-                                case 'turn.phase_changed':
-                                    this.turnPhase = data.payload?.phase || data.phase;
-                                    this.turnLabel = data.payload?.label || data.label || this.turnPhase;
-                                    break;
-
-                                case 'run.started':
-                                    break;
-
-                                case 'assistant.thinking_started': {
-                                    const existing = this.streamEntries.find(e => e.type === 'thinking');
-                                    if (!existing) {
-                                        this.streamEntries.push({ type: 'thinking', active: true });
-                                    }
-                                    break;
-                                }
-
-                                case 'tool.started': {
-                                    // Deactivate thinking
-                                    const thinking = this.streamEntries.find(e => e.type === 'thinking');
-                                    if (thinking) thinking.active = false;
-
-                                    // Auto-collapse previous completed tools
-                                    if (this._completedToolCount > 0 && !this.toolsCollapsed) {
-                                        this.toolsCollapsed = true;
-                                    }
-
-                                    const payload = data.payload || data;
-                                    const idx = this.streamEntries.length;
-                                    const toolKey = payload.tool_call_index ?? idx;
-                                    this._toolMap[toolKey] = idx;
-
-                                    this.streamEntries.push({
-                                        type: 'tool_call',
-                                        tool: payload.tool || '',
-                                        argsSummary: payload.args_summary || '',
-                                        status: 'running',
-                                        collapsed: false,
-                                    });
-                                    break;
-                                }
-
-                                case 'tool.finished': {
-                                    const payload = data.payload || data;
-                                    const toolKey = payload.tool_call_index ?? -1;
-                                    const callIdx = this._toolMap[toolKey];
-
-                                    if (callIdx !== undefined && this.streamEntries[callIdx]) {
-                                        const entry = this.streamEntries[callIdx];
-                                        entry.status = payload.status || 'success';
-                                        entry.durationMs = payload.duration_ms;
-                                        entry.resultPreview = payload.result_preview || '';
-                                        entry.resultLength = payload.result_length || 0;
-                                        entry.errorPayload = payload.error_payload || null;
-                                        this._completedToolCount++;
-                                    }
-                                    break;
-                                }
-
-                                case 'tool.denied': {
-                                    const payload = data.payload || data;
-                                    this.streamEntries.push({
-                                        type: 'hook_action',
-                                        stage: 'pre_tool_use',
-                                        action: 'tool_denied',
-                                        tool: payload.tool || '',
-                                        reason: payload.reason || '',
-                                        source: payload.source || 'hook',
-                                    });
-                                    break;
-                                }
-
-                                case 'assistant.output_delta': {
-                                    // Deactivate thinking
-                                    const thinking = this.streamEntries.find(e => e.type === 'thinking');
-                                    if (thinking) thinking.active = false;
-
-                                    const payload = data.payload || data;
-                                    const text = payload.text || '';
-                                    if (!text) break;
-
-                                    this._deltaBuffer += text;
-
-                                    // Flush at safe markdown boundaries (newline, double-newline,
-                                    // end of fenced code block) or after 80ms debounce
-                                    const hasBoundary = /\n/.test(text);
-                                    if (hasBoundary) {
-                                        this.flushDeltaBuffer();
-                                    } else {
-                                        if (this._deltaFlushTimer) clearTimeout(this._deltaFlushTimer);
-                                        this._deltaFlushTimer = setTimeout(() => this.flushDeltaBuffer(), 80);
-                                    }
-                                    break;
-                                }
-
-                                case 'assistant.output_block_committed':
-                                    this.flushDeltaBuffer();
-                                    break;
-
-                                case 'turn.completed':
-                                case 'turn.ready_for_input':
-                                    source.close();
-                                    this._eventSource = null;
-                                    this.resetTurnState();
-                                    this.$wire.finalizeStreamingRun();
-                                    return;
-
-                                case 'turn.failed': {
-                                    const payload = data.payload || data;
-                                    this.streamEntries.push({
-                                        type: 'error',
-                                        message: payload.message || '{{ __('Turn failed') }}',
-                                    });
-                                    source.close();
-                                    this._eventSource = null;
-                                    this.resetTurnState();
-                                    this.$wire.finalizeStreamingRun();
-                                    return;
-                                }
-
-                                case 'turn.cancelled':
-                                    source.close();
-                                    this._eventSource = null;
-                                    this.resetTurnState();
-                                    this.$wire.finalizeStreamingRun();
-                                    return;
-
-                                case 'meta':
-                                    if (data.payload?.reason === 'terminal_state' || data.payload?.reason === 'idle_timeout') {
-                                        source.close();
-                                        this._eventSource = null;
-                                        this.resetTurnState();
-                                        this.$wire.finalizeStreamingRun();
-                                        return;
-                                    }
-                                    // Synthetic phase from resume endpoint (e.g. waiting_for_worker)
-                                    if (data.type === 'current_phase' || data.payload?.type === 'current_phase') {
-                                        const meta = data.type === 'current_phase' ? data : data.payload;
-                                        this.turnPhase = meta.phase || this.turnPhase;
-                                        this.turnLabel = meta.label || this.turnLabel;
-                                        if (!this.turnStartedAt) this.startElapsedTimer();
-                                    }
-                                    break;
-                            }
-
-                            this.scrollToBottom(scrollContainer);
-                        };
-
-                        // Register listeners for all turn event types
-                        const eventTypes = [
-                            'turn.started', 'turn.phase_changed', 'turn.completed',
-                            'turn.failed', 'turn.cancelled', 'turn.ready_for_input',
-                            'run.started', 'run.failed',
-                            'assistant.thinking_started', 'assistant.output_delta',
-                            'assistant.output_block_committed',
-                            'tool.started', 'tool.finished', 'tool.denied',
-                            'usage.updated', 'heartbeat', 'meta',
-                            'recovery.attempted', 'recovery.succeeded', 'recovery.failed',
-                        ];
-
-                        eventTypes.forEach(type => {
-                            source.addEventListener(type, (e) => {
-                                try {
-                                    handleEvent(type, JSON.parse(e.data));
-                                } catch {}
-                            });
-                        });
-
-                        // Connection error: attempt reconnect via resume endpoint
-                        source.onerror = () => {
-                            if (source.readyState === EventSource.CLOSED) return;
-                            source.close();
-                            this._eventSource = null;
-
-                            if (this.activeTurnId && this._lastSeq > 0) {
-                                const resumeUrl = '{{ route('ai.chat.turn.events', ['turnId' => '__TURN__']) }}'.replace('__TURN__', this.activeTurnId)
-                                    + '?after_seq=' + this._lastSeq;
-                                setTimeout(() => this.connectToTurnStream(resumeUrl, scrollContainer), 1000);
-                            } else {
-                                this.streamEntries.push({
-                                    type: 'error',
-                                    message: '{{ __('Connection lost. Please try again.') }}',
-                                });
-                                this.resetTurnState();
-                                this.$wire.finalizeStreamingRun();
-                            }
-                        };
-                    },
-
-                    scrollToBottom(container) {
-                        if (this.followTail) {
-                            this.$nextTick(() => {
-                                if (container) container.scrollTop = container.scrollHeight;
-                            });
-                        }
-                    },
-                }"
+                x-data="agentChatStream({
+                    startingLabel: @js(__('Starting…')),
+                    waitingForWorkerLabel: @js(__('Waiting for worker…')),
+                    turnFailedMessage: @js(__('Turn failed')),
+                    connectionLostMessage: @js(__('Connection lost. Please try again.')),
+                    resumeUrlTemplate: @js(route('ai.chat.turn.events', ['turnId' => '__TURN__'])),
+                })"
                 x-effect="window.dispatchEvent(new CustomEvent(isBusy ? 'agent-chat-busy' : 'agent-chat-idle'))"
                 x-on:agent-chat-response-ready.window="pendingMessage = null; streamEntries = []; resetTurnState()"
                 @agent-chat-background-started.window="
                     if ($event.detail?.resumeUrl) {
                         activeTurnId = $event.detail.turnId;
                         turnPhase = 'waiting_for_worker';
-                        turnLabel = '{{ __('Waiting for worker…') }}';
+                        turnLabel = waitingForWorkerLabel;
                         startElapsedTimer();
                         connectToTurnStream($event.detail.resumeUrl + '?after_seq=0', $refs.agentScroll);
                     }
@@ -1016,19 +736,7 @@
                     "></span>
                     <button
                         type="button"
-                        @click="
-                            if (activeTurnId) {
-                                $wire.cancelActiveTurn(activeTurnId);
-                            }
-                            if (_eventSource) {
-                                _eventSource.close();
-                                _eventSource = null;
-                            }
-                            resetTurnState();
-                            $wire.finalizeStreamingRun();
-                            pendingMessage = null;
-                            streamEntries = [];
-                        "
+                        @click="stopStreaming()"
                         class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-border-default bg-surface-card text-muted hover:text-ink hover:border-accent/40 transition-colors shrink-0"
                     >
                         <x-icon name="heroicon-o-stop" class="w-3 h-3" />
@@ -1133,6 +841,351 @@
                 });
                 this.pendingMessage = null;
                 this.$wire.finalizeStreamingRun();
+            }
+        },
+    }));
+
+    Alpine.data('agentChatStream', (config = {}) => ({
+        pendingMessage: null,
+        streamEntries: [],
+        _eventSource: null,
+        followTail: true,
+
+        activeTurnId: null,
+        turnPhase: null,
+        turnLabel: null,
+        turnStartedAt: null,
+        elapsedSeconds: 0,
+        _elapsedTimer: null,
+        _lastSeq: 0,
+        _toolMap: {},
+        _completedToolCount: 0,
+        toolsCollapsed: false,
+        _deltaBuffer: '',
+        _deltaFlushTimer: null,
+
+        startingLabel: config.startingLabel ?? 'Starting…',
+        waitingForWorkerLabel: config.waitingForWorkerLabel ?? 'Waiting for worker…',
+        turnFailedMessage: config.turnFailedMessage ?? 'Turn failed',
+        connectionLostMessage: config.connectionLostMessage ?? 'Connection lost. Please try again.',
+        resumeUrlTemplate: config.resumeUrlTemplate ?? '',
+
+        get isBusy() {
+            return !!this.pendingMessage || !!this.activeTurnId;
+        },
+
+        resetTurnState() {
+            this.activeTurnId = null;
+            this.turnPhase = null;
+            this.turnLabel = null;
+            this.turnStartedAt = null;
+            this.elapsedSeconds = 0;
+            this._lastSeq = 0;
+            this._toolMap = {};
+            this._completedToolCount = 0;
+            this.toolsCollapsed = false;
+            this.flushDeltaBuffer();
+            this._deltaBuffer = '';
+            if (this._elapsedTimer) {
+                clearInterval(this._elapsedTimer);
+                this._elapsedTimer = null;
+            }
+        },
+
+        flushDeltaBuffer() {
+            if (this._deltaFlushTimer) {
+                clearTimeout(this._deltaFlushTimer);
+                this._deltaFlushTimer = null;
+            }
+            if (!this._deltaBuffer) return;
+
+            const last = this.streamEntries[this.streamEntries.length - 1];
+            if (last && last.type === 'assistant_streaming') {
+                last.content += this._deltaBuffer;
+            } else {
+                this.streamEntries.push({
+                    type: 'assistant_streaming',
+                    content: this._deltaBuffer,
+                });
+            }
+            this._deltaBuffer = '';
+        },
+
+        startElapsedTimer() {
+            this.turnStartedAt = Date.now();
+            this._elapsedTimer = setInterval(() => {
+                this.elapsedSeconds = Math.floor((Date.now() - this.turnStartedAt) / 1000);
+            }, 1000);
+        },
+
+        closeTurnStream() {
+            if (this._eventSource) {
+                this._eventSource.close();
+                this._eventSource = null;
+            }
+        },
+
+        finalizeTurnStream() {
+            this.closeTurnStream();
+            this.resetTurnState();
+            this.$wire.finalizeStreamingRun();
+        },
+
+        connectToTurnStream(url, scrollContainer) {
+            this.closeTurnStream();
+
+            this.followTail = true;
+            this._toolMap = {};
+            const source = new EventSource(url);
+            this._eventSource = source;
+
+            const eventTypes = [
+                'turn.started', 'turn.phase_changed', 'turn.completed',
+                'turn.failed', 'turn.cancelled', 'turn.ready_for_input',
+                'run.started', 'run.failed',
+                'assistant.thinking_started', 'assistant.output_delta',
+                'assistant.output_block_committed',
+                'tool.started', 'tool.finished', 'tool.denied',
+                'usage.updated', 'heartbeat', 'meta',
+                'recovery.attempted', 'recovery.succeeded', 'recovery.failed',
+            ];
+
+            eventTypes.forEach(type => {
+                source.addEventListener(type, (e) => {
+                    try {
+                        this.handleTurnEvent(type, JSON.parse(e.data), scrollContainer);
+                    } catch {}
+                });
+            });
+
+            source.onerror = () => {
+                if (source.readyState === EventSource.CLOSED) return;
+
+                this.closeTurnStream();
+
+                if (this.activeTurnId && this._lastSeq > 0) {
+                    setTimeout(() => this.reconnectToTurnStream(scrollContainer), 1000);
+
+                    return;
+                }
+
+                this.streamEntries.push({
+                    type: 'error',
+                    message: this.connectionLostMessage,
+                });
+                this.finalizeTurnStream();
+            };
+        },
+
+        reconnectToTurnStream(scrollContainer) {
+            if (!this.activeTurnId || this.resumeUrlTemplate === '') {
+                return;
+            }
+
+            const resumeUrl = this.resumeUrlTemplate.replace('__TURN__', this.activeTurnId)
+                + '?after_seq=' + this._lastSeq;
+            this.connectToTurnStream(resumeUrl, scrollContainer);
+        },
+
+        handleTurnEvent(eventType, data, scrollContainer) {
+            if (data.seq) this._lastSeq = data.seq;
+            if (data.turn_id && !this.activeTurnId) {
+                this.activeTurnId = data.turn_id;
+            }
+
+            switch (eventType) {
+                case 'turn.started':
+                    this.onTurnStarted();
+                    break;
+
+                case 'turn.phase_changed':
+                    this.onPhaseChanged(data);
+                    break;
+
+                case 'run.started':
+                    break;
+
+                case 'assistant.thinking_started':
+                    this.onThinkingStarted();
+                    break;
+
+                case 'tool.started':
+                    this.onToolStarted(data);
+                    break;
+
+                case 'tool.finished':
+                    this.onToolFinished(data);
+                    break;
+
+                case 'tool.denied':
+                    this.onToolDenied(data);
+                    break;
+
+                case 'assistant.output_delta':
+                    this.onOutputDelta(data);
+                    break;
+
+                case 'assistant.output_block_committed':
+                    this.flushDeltaBuffer();
+                    break;
+
+                case 'turn.completed':
+                case 'turn.ready_for_input':
+                    this.finalizeTurnStream();
+                    return;
+
+                case 'turn.failed':
+                    this.onTurnFailed(data);
+                    return;
+
+                case 'turn.cancelled':
+                    this.finalizeTurnStream();
+                    return;
+
+                case 'meta':
+                    if (this.onMetaEvent(data)) {
+                        return;
+                    }
+                    break;
+            }
+
+            this.scrollToBottom(scrollContainer);
+        },
+
+        onTurnStarted() {
+            if (!this.turnStartedAt) this.startElapsedTimer();
+            this.turnPhase = 'booting';
+            this.turnLabel = this.startingLabel;
+        },
+
+        onPhaseChanged(data) {
+            this.turnPhase = data.payload?.phase || data.phase;
+            this.turnLabel = data.payload?.label || data.label || this.turnPhase;
+        },
+
+        onThinkingStarted() {
+            const existing = this.streamEntries.find((entry) => entry.type === 'thinking');
+            if (!existing) {
+                this.streamEntries.push({ type: 'thinking', active: true });
+            }
+        },
+
+        onToolStarted(data) {
+            this.deactivateThinking();
+
+            if (this._completedToolCount > 0 && !this.toolsCollapsed) {
+                this.toolsCollapsed = true;
+            }
+
+            const payload = data.payload || data;
+            const idx = this.streamEntries.length;
+            const toolKey = payload.tool_call_index ?? idx;
+            this._toolMap[toolKey] = idx;
+
+            this.streamEntries.push({
+                type: 'tool_call',
+                tool: payload.tool || '',
+                argsSummary: payload.args_summary || '',
+                status: 'running',
+                collapsed: false,
+            });
+        },
+
+        onToolFinished(data) {
+            const payload = data.payload || data;
+            const toolKey = payload.tool_call_index ?? -1;
+            const callIdx = this._toolMap[toolKey];
+
+            if (callIdx === undefined || !this.streamEntries[callIdx]) {
+                return;
+            }
+
+            const entry = this.streamEntries[callIdx];
+            entry.status = payload.status || 'success';
+            entry.durationMs = payload.duration_ms;
+            entry.resultPreview = payload.result_preview || '';
+            entry.resultLength = payload.result_length || 0;
+            entry.errorPayload = payload.error_payload || null;
+            this._completedToolCount++;
+        },
+
+        onToolDenied(data) {
+            const payload = data.payload || data;
+            this.streamEntries.push({
+                type: 'hook_action',
+                stage: 'pre_tool_use',
+                action: 'tool_denied',
+                tool: payload.tool || '',
+                reason: payload.reason || '',
+                source: payload.source || 'hook',
+            });
+        },
+
+        onOutputDelta(data) {
+            this.deactivateThinking();
+
+            const payload = data.payload || data;
+            const text = payload.delta || payload.text || '';
+            if (!text) return;
+
+            this._deltaBuffer += text;
+
+            const hasBoundary = /\n/.test(text);
+            if (hasBoundary) {
+                this.flushDeltaBuffer();
+
+                return;
+            }
+
+            if (this._deltaFlushTimer) clearTimeout(this._deltaFlushTimer);
+            this._deltaFlushTimer = setTimeout(() => this.flushDeltaBuffer(), 80);
+        },
+
+        onTurnFailed(data) {
+            const payload = data.payload || data;
+            this.streamEntries.push({
+                type: 'error',
+                message: payload.message || this.turnFailedMessage,
+            });
+            this.finalizeTurnStream();
+        },
+
+        onMetaEvent(data) {
+            if (data.payload?.reason === 'terminal_state' || data.payload?.reason === 'idle_timeout') {
+                this.finalizeTurnStream();
+
+                return true;
+            }
+
+            if (data.type === 'current_phase' || data.payload?.type === 'current_phase') {
+                const meta = data.type === 'current_phase' ? data : data.payload;
+                this.turnPhase = meta.phase || this.turnPhase;
+                this.turnLabel = meta.label || this.turnLabel;
+                if (!this.turnStartedAt) this.startElapsedTimer();
+            }
+
+            return false;
+        },
+
+        deactivateThinking() {
+            const thinking = this.streamEntries.find((entry) => entry.type === 'thinking');
+            if (thinking) thinking.active = false;
+        },
+
+        stopStreaming() {
+            if (this.activeTurnId) {
+                this.$wire.cancelActiveTurn(this.activeTurnId);
+            }
+            this.finalizeTurnStream();
+            this.pendingMessage = null;
+            this.streamEntries = [];
+        },
+
+        scrollToBottom(container) {
+            if (this.followTail) {
+                this.$nextTick(() => {
+                    if (container) container.scrollTop = container.scrollHeight;
+                });
             }
         },
     }));

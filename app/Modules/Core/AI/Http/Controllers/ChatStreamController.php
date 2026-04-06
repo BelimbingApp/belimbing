@@ -145,6 +145,10 @@ class ChatStreamController
         );
 
         foreach ($this->bridge->wrap($turn, $runtimeStream) as $turnEvent) {
+            if (connection_aborted()) {
+                break;
+            }
+
             $this->emitTurnEvent($turnEvent);
         }
     }
