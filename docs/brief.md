@@ -4,13 +4,13 @@
 **Purpose:** High-level overview of Belimbing's vision, principles, and approach
 **Audience:** AI Coding Agents, contributors, potential adopters and adoptees, and stakeholders
 **Specific:** Laravel
-**Last Updated:** 2026-01-20
+**Last Updated:** 2026-04-06
 
 ---
 
 ## Executive Summary
 
-Belimbing is a **business process framework** designed to democratize enterprise-grade capabilities for businesses of all sizes. Born from the recognition that the current ERP/BPM landscape is fundamentally broken — expensive, inflexible, and riddled with vendor lock-in — Belimbing provides a radically different approach: an open-source, AI-native framework that empowers businesses to build, customize, and own their operational systems.
+Belimbing is a **general business framework** designed to democratize enterprise-grade capabilities for businesses of all sizes. Born from the recognition that the current ERP/BPM landscape is fundamentally broken — expensive, inflexible, and riddled with vendor lock-in — Belimbing provides a radically different approach: an open-source, AI-native framework that empowers businesses to build, customize, and own their operational systems.
 
 Belimbing exists to remove the SMB digitization bottleneck: making it practical to ship production-grade operational systems without hiring a large software team.
 
@@ -18,7 +18,7 @@ Belimbing exists to remove the SMB digitization bottleneck: making it practical 
 - A **framework** for building customizable business processes (ERP, CRM, HR, logistics, or custom processes)
 - **Not** a SaaS platform that hosts your data
 - **Not** chasing speed to market at the expense of quality
-- **DIY-enabling** - Businesses (and the developers they partner with) build their own operational systems instead of buying inflexible off-the-shelf solutions
+- **DIY-enabling** - Belimbing’s built-in coding agent enables businesses (and the developers they partner with) to build their own operational systems instead of buying inflexible off-the-shelf solutions
 
 **What Makes Belimbing Different:**
 - **Open Source Forever (AGPLv3)**: Self-hosted, transparent, free from licensing fees and vendor lock-in
@@ -77,7 +77,7 @@ The current business process management landscape is fundamentally broken:
 
 ### The Market Gap
 
-What businesses actually need is a **framework that lets them DIY their own business processes** at low costs while still reaching production-grade quality. They need:
+What businesses actually need is a **framework that lets them DIY their own business application** at low costs while still reaching production-grade quality. They need:
 - Modern AI assistance (making sophisticated customization accessible without deep technical expertise)
 - Clean, maintainable architecture
 - Full ownership and control
@@ -94,7 +94,7 @@ Belimbing addresses these problems through five immutable core principles:
 
 ### 1. Customizable Framework
 
-**A foundation for building business processes.**
+**A foundation for building business application.**
 
 - Deep extension system with hooks at every layer (events, dependency injection, middleware, schema extensions, rule engines, workflows, DSL scripting, data transformers)
 - Scope-based configuration for multi-company/multi-department scenarios
