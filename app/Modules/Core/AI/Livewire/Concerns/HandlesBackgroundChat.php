@@ -12,7 +12,6 @@ use App\Modules\Core\AI\Enums\TurnStatus;
 use App\Modules\Core\AI\Jobs\RunAgentChatJob;
 use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\OperationDispatch;
-use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\PageContextHolder;
 use App\Modules\Core\AI\Services\SessionManager;
 use Illuminate\Support\Str;
@@ -20,9 +19,9 @@ use Illuminate\Support\Str;
 /**
  * Handles background chat dispatch and progress polling.
  *
- * When an interactive chat run times out or the user explicitly requests
- * background execution, this trait creates an OperationDispatch record,
- * dispatches RunAgentChatJob, and provides polling for the client.
+ * When the user explicitly requests background execution, this trait
+ * creates an OperationDispatch record, dispatches RunAgentChatJob,
+ * and provides polling for the client.
  *
  * The turn is created upfront so the client can immediately attach to
  * the turn event stream via the resume endpoint — no polling needed.
@@ -101,30 +100,6 @@ trait HandlesBackgroundChat
         }
 
         $this->backgroundDispatchId = null;
-    }
-
-    /**
-     * Handle a timeout from an interactive run by offering background execution.
-     *
-     * Called from sendMessage() when the result indicates a timeout error.
-     * Persists a system notice to the transcript and dispatches the job.
-     *
-     * @param  string  $userMessage  The original user message
-     */
-    protected function handleTimeoutWithBackgroundOffer(string $userMessage): void
-    {
-        $messageManager = app(MessageManager::class);
-
-        $notice = __('This task is taking longer than expected. Continuing in background — you can see live progress in the status bar.');
-        $messageManager->appendAssistantMessage(
-            $this->employeeId,
-            $this->selectedSessionId,
-            $notice,
-            'run_bg_'.Str::random(8),
-            ['source' => 'background_offload', 'original_error' => 'timeout'],
-        );
-
-        $this->dispatchBackgroundChat($userMessage);
     }
 
     /**

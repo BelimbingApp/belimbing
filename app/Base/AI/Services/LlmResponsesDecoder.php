@@ -93,6 +93,15 @@ final class LlmResponsesDecoder
         ?string &$currentToolCallName,
     ): Generator {
         switch ($event) {
+            case 'response.created':
+                $resp = $data['response'] ?? $data;
+                yield [
+                    'type' => 'response_created',
+                    'response_id' => $resp['id'] ?? null,
+                ];
+
+                return;
+
             case 'response.output_text.delta':
                 $deltaEvent = self::responseTextDeltaEvent($data);
 
@@ -100,6 +109,30 @@ final class LlmResponsesDecoder
                     yield $deltaEvent;
                 }
 
+                return;
+
+            case 'response.output_text.annotation.added':
+                $annotation = $data['annotation'] ?? $data;
+                yield [
+                    'type' => 'annotation',
+                    'annotation_type' => $annotation['type'] ?? 'unknown',
+                    'url' => $annotation['url'] ?? null,
+                    'title' => $annotation['title'] ?? null,
+                    'start_index' => $annotation['start_index'] ?? null,
+                    'end_index' => $annotation['end_index'] ?? null,
+                ];
+
+                return;
+
+            case 'response.refusal.delta':
+                $delta = $data['delta'] ?? '';
+                if ($delta !== '') {
+                    yield ['type' => 'content_delta', 'text' => $delta];
+                }
+
+                return;
+
+            case 'response.refusal.done':
                 return;
 
             case 'response.output_item.added':

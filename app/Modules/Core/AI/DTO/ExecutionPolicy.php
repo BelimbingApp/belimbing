@@ -29,9 +29,9 @@ final readonly class ExecutionPolicy
         $tiers = config('ai.llm.timeout_tiers', []);
 
         $timeout = match ($mode) {
-            ExecutionMode::Interactive => (int) ($tiers['interactive'] ?? 60),
-            ExecutionMode::HeavyForeground => (int) ($tiers['heavy_foreground'] ?? 180),
-            ExecutionMode::Background => (int) ($tiers['background'] ?? 600),
+            ExecutionMode::Interactive => (int) ($tiers['interactive'] ?? 180),
+            ExecutionMode::HeavyForeground => (int) ($tiers['heavy_foreground'] ?? 300),
+            ExecutionMode::Background => (int) ($tiers['background'] ?? 900),
         };
 
         return new self(

@@ -649,12 +649,12 @@
                                     + '?after_seq=' + this._lastSeq;
                                 setTimeout(() => this.connectToTurnStream(resumeUrl, scrollContainer), 1000);
                             } else {
-                                const hasContent = this.streamEntries.some(e => e.type === 'assistant_streaming');
-                                if (!hasContent) {
-                                    this.$wire.sendMessage();
-                                } else {
-                                    this.$wire.finalizeStreamingRun();
-                                }
+                                this.streamEntries.push({
+                                    type: 'error',
+                                    message: '{{ __('Connection lost. Please try again.') }}',
+                                });
+                                this.resetTurnState();
+                                this.$wire.finalizeStreamingRun();
                             }
                         };
                     },
@@ -982,17 +982,6 @@
                         </div>
                     </template>
 
-                    {{-- Loading dots: shown while waiting for non-streaming response --}}
-                    <div x-show="pendingMessage && streamEntries.length === 0" x-cloak class="flex justify-start">
-                        <div class="bg-surface-subtle rounded-2xl px-3 py-2">
-                            <div class="flex gap-1">
-                                <span class="w-2 h-2 bg-muted/50 rounded-full animate-pulse"></span>
-                                <span class="w-2 h-2 bg-muted/50 rounded-full animate-pulse" style="animation-delay: 150ms"></span>
-                                <span class="w-2 h-2 bg-muted/50 rounded-full animate-pulse" style="animation-delay: 300ms"></span>
-                            </div>
-                        </div>
-                    </div>
-
                     {{-- Jump to latest floating button --}}
                     <button
                         x-show="!followTail"
@@ -1096,9 +1085,8 @@
                     </div>
 
                     <form
-                        wire:submit="sendMessage"
                         x-data="agentChatComposer()"
-                        x-on:submit="onSubmit($refs.agentComposer, $refs.agentScroll)"
+                        x-on:submit.prevent="onSubmit($refs.agentComposer, $refs.agentScroll)"
                         class="space-y-2"
                     >
                         <x-ai.chat-composer-fields
@@ -1146,10 +1134,13 @@
                     return;
                 }
             } catch (e) {
-                // Streaming unavailable — fall through to sync
+                this.streamEntries.push({
+                    type: 'error',
+                    message: e?.message || 'Failed to start streaming run',
+                });
+                this.pendingMessage = null;
+                this.$wire.finalizeStreamingRun();
             }
-
-            // Fallback: synchronous Livewire sendMessage
         },
     }));
 </script>

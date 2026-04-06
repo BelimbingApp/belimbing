@@ -348,13 +348,17 @@ class LlmClient
     /**
      * Build the Responses API request payload.
      *
-     * Translates Chat Completions message format to Responses API input items.
+     * System messages are extracted into the top-level `instructions` field
+     * rather than converted to developer-role input items.
      */
     private function buildResponsesPayload(ChatRequest $request, bool $stream): array
     {
+        [$instructions, $input] = $this->convertToResponsesInputWithInstructions($request->messages);
+
         return array_filter([
             'model' => $request->model,
-            'input' => $this->convertToResponsesInput($request->messages),
+            'instructions' => $instructions,
+            'input' => $input,
             'max_output_tokens' => $request->maxTokens,
             'stream' => $stream,
             'store' => false,
@@ -364,26 +368,29 @@ class LlmClient
     }
 
     /**
-     * Convert Chat Completions messages to Responses API input items.
+     * Convert Chat Completions messages to Responses API input, extracting system prompts.
+     *
+     * System/developer messages are extracted as the top-level `instructions` field
+     * (concatenated if multiple). Remaining messages become input items.
      *
      * @param  list<array<string, mixed>>  $messages
-     * @return list<array<string, mixed>>
+     * @return array{0: ?string, 1: list<array<string, mixed>>}
      */
-    private function convertToResponsesInput(array $messages): array
+    private function convertToResponsesInputWithInstructions(array $messages): array
     {
+        $instructions = [];
         $input = [];
 
         foreach ($messages as $msg) {
             $role = $msg['role'] ?? '';
 
-            switch ($role) {
-                case 'system':
-                    $input[] = [
-                        'role' => 'developer',
-                        'content' => $msg['content'] ?? '',
-                    ];
-                    break;
+            if ($role === 'system') {
+                $instructions[] = $msg['content'] ?? '';
 
+                continue;
+            }
+
+            switch ($role) {
                 case 'user':
                     $content = $msg['content'] ?? '';
                     $input[] = [
@@ -423,13 +430,12 @@ class LlmClient
                         'output' => $msg['content'] ?? '',
                     ];
                     break;
-
-                default:
-                    break;
             }
         }
 
-        return $input;
+        $instructionText = implode("\n\n", array_filter($instructions));
+
+        return [$instructionText !== '' ? $instructionText : null, $input];
     }
 
     /**

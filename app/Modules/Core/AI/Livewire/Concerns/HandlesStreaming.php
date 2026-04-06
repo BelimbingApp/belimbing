@@ -26,9 +26,8 @@ trait HandlesStreaming
      *
      * The client opens an EventSource to the returned URL. The SSE endpoint
      * streams the response and persists the assistant message on completion.
-     * Falls back to synchronous sendMessage() if streaming is unavailable.
      *
-     * @return array{url: string, session_id: string}|null Null signals fallback to sync
+     * @return array{url: string, session_id: string}|null Null when an orchestration shortcut handled the message or input was invalid
      */
     public function prepareStreamingRun(): ?array
     {

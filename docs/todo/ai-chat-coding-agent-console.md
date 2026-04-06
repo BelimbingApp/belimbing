@@ -6,7 +6,7 @@ The current AI chat is still built like a request/response messenger with a fall
 
 ## Status
 
-In Progress — Phases 1–3 complete (contract enums, schema, runtime bridge, materializer). Phase 4 UI rewrite next.
+In Progress — Phases 1–5 complete. Phase 6 tasks 6A–6E complete (sync path eliminated, Caddy SSE unbuffered, Responses API gaps closed, timeout budget fixed, stale UI removed). Tasks 6F–6J (FrankenPHP + Octane migration) next.
 
 ## Desired Outcome
 
@@ -495,6 +495,162 @@ Make failures explicit and diagnosable without degrading the live UX.
 - [x] Turn Queue Health card in ControlPlane Health tab — shows active, stale, completed, failed counts with visual danger/warning indicators.
 - [x] Turn Inspector tab in ControlPlane — lookup by ULID, shows turn details (status, phase, session, employee, run ID, timestamps) and full event log table.
 - [x] **Phase 5 complete** — 1377 tests passing. Pint clean. Vite builds.
+
+## Phase 6 — Replace Serving Stack with FrankenPHP + Octane
+
+### Goal
+
+Eliminate the single-threaded `artisan serve` bottleneck and the Caddy reverse-proxy buffering layer so SSE streams reach the browser with zero intermediate buffering, and concurrent users can hold live turn connections without blocking each other.
+
+### Problem
+
+The current serving stack is `Caddy → php artisan serve → PHP`. This has two compounding defects:
+
+1. **Caddy buffers SSE.** The `reverse_proxy` directive defaults to buffering responses. Without `flush_interval -1`, turn events accumulate in Caddy's buffer and arrive in bursts — the user sees "jump to finish" instead of progressive streaming. This is the immediate cause of the broken TTFT.
+2. **`artisan serve` is single-threaded.** Each SSE connection holds the sole PHP worker for the duration of the turn. With N users on Lara, the N+1th request (page load, API call, or another SSE stream) blocks until a connection closes. This is fundamentally incompatible with a multi-user live console.
+
+### Design Decision
+
+**FrankenPHP + Laravel Octane replaces both Caddy and `artisan serve` in a single process.**
+
+FrankenPHP embeds Caddy as its HTTP server and runs PHP workers natively — no FastCGI, no reverse proxy, no intermediate buffering. SSE `echo` + `flush()` in PHP goes directly to the HTTP/2 stream. The stack collapses from three processes to one:
+
+- Before: `Caddy (TLS, routing) → reverse_proxy → artisan serve (single PHP worker)`
+- After: `FrankenPHP (TLS, routing, N PHP workers)`
+
+Caddy features BLB already uses (TLS, mkcert, Reverb WebSocket proxy, Vite HMR proxy) are preserved because FrankenPHP IS Caddy with a PHP SAPI module.
+
+### Risks
+
+- **Persistent-worker state leaks.** Octane workers persist across requests. Static properties, singletons, and mutable service container bindings carry over. BLB already favors constructor DI over facades, so the migration surface is small, but a sweep is needed.
+- **Worker memory growth.** Long-running workers can accumulate memory. Octane's `--max-requests` flag mitigates this.
+- **Dev/prod parity.** `artisan serve` is gone. Local development uses the same FrankenPHP binary as production. This is a feature (parity), but means contributors need FrankenPHP installed.
+
+### Tasks
+
+#### 6A — Eliminate the sync fallback path (the real TTFT bug)
+
+The sync path (`Chat::sendMessage()` → `$runtime->run()`) bypasses the entire turn-event system. No turn is created, no events are published, no streaming occurs, and TTFT is undefined. This is the root cause: chats that hit this path produce zero turn artifacts and appear to "jump to finish."
+
+- [x] Remove `Chat::sendMessage()` and `Chat::runAi()` as LLM execution paths — all LLM-bound chats must go through `prepareStreamingRun()` → `ChatStreamController`. Also removed `dispatchPostRunEvents()`, `extractAgentAction()`, `resolvePageContext()`, and 9 unused imports.
+- [x] Keep the orchestration shortcut (`LaraOrchestrationService::dispatchFromMessage()`) as a fast non-LLM response — already lives in `prepareStreamingRun()`, never falls through to sync LLM.
+- [x] Remove the Alpine fallback that calls `$wire.sendMessage()` when `prepareStreamingRun()` returns null — replaced with error display in `onSubmit` catch block and SSE `onerror` handler.
+- [x] Remove `handleTimeoutWithBackgroundOffer()` from `HandlesBackgroundChat` — only caller was the deleted `sendMessage()`.
+- [x] Remove `wire:submit="sendMessage"` from the form — form now uses `x-on:submit.prevent` only.
+- [x] Verify: every chat interaction that hits the LLM creates a `ChatTurn`, writes to `ai_chat_turn_events`, and streams via SSE. The only null-return from `prepareStreamingRun()` is orchestration shortcuts (non-LLM) or empty input.
+
+#### 6B — Immediate Caddy fix (unblocks streaming now)
+
+- [x] Add `flush_interval -1` to all three Laravel `reverse_proxy` blocks in `Caddyfile` (built assets, Laravel backend, backend domain) — disables response buffering so SSE events flow immediately.
+- [ ] Verify TTFT: open a Lara chat, confirm turn events (`turn.started`, `turn.phase_changed`, `tool.started`, `assistant.output_delta`) arrive progressively in the browser EventSource, not in a burst at the end.
+
+#### 6C — Close Responses API streaming gaps
+
+The `LlmResponsesDecoder` handles the core Responses API events but silently drops several event types that carry meaningful data.
+
+- [x] Handle `response.refusal.delta` / `response.refusal.done` — refusal text surfaced as `content_delta` events so the user sees the refusal message.
+- [x] Handle `response.output_text.annotation.added` — captured as `annotation` event type with type/url/title/index data.
+- [x] Capture `response.id` from `response.created` — emitted as `response_created` event with the OpenAI-assigned response ID.
+- [x] Use `instructions` top-level field instead of `system` → `developer` role conversion — replaced `convertToResponsesInput()` with `convertToResponsesInputWithInstructions()` that extracts system messages into the Responses API `instructions` field.
+
+#### 6D — Fix timeout budget for agentic streaming
+
+The OpenAI SDK default client timeout is **10 minutes** (600s). BLB's `ExecutionPolicy` sets interactive chat to **60 seconds** and heavy foreground to **180 seconds**. This is the Guzzle HTTP connect+read timeout passed to the provider — if the LLM is thinking (reasoning models, large context) and hasn't sent the first SSE byte within 60s, BLB kills the connection with a timeout error.
+
+For streaming, the timeout should govern **time to first byte**, not total request duration — once SSE chunks are flowing, the connection should stay alive indefinitely. Guzzle's `stream: true` + `timeout` applies to individual read operations, so 60s means "60s without any data" which is reasonable for inter-chunk silence but too short for initial reasoning.
+
+- [x] Raise interactive to **180s**, heavy foreground to **300s**, background to **900s** — both in config (`ai.llm.timeout_tiers`) and in `ExecutionPolicy::forMode()` hardcoded fallbacks.
+- [x] Added `timeout_tiers` key to `app/Base/AI/Config/ai.php` so tiers are tunable without code changes.
+- [x] Guzzle with `stream: true` + `timeout` is a read-idle timeout (time between chunks), not total-duration — 180s is safe for reasoning model TTFB.
+
+#### 6E — Clean up stale sync-path UI artifacts
+
+The screenshot shows UI elements that only exist because of the sync fallback path and the old messenger-style UX.
+
+- [x] Remove the 3-dot loading indicator — deleted the `pendingMessage && streamEntries.length === 0` bouncing dots block.
+- [x] `pendingMessage` kept for the optimistic user bubble and empty-state gating — these are still useful for the streaming path (shows the user's message before SSE events arrive). Not dead code.
+- [x] All `$wire.sendMessage()` references removed from Alpine — `onSubmit` catch block shows error; SSE `onerror` shows connection-lost message instead of falling back to sync.
+
+#### 6F — Install FrankenPHP + Octane
+
+FrankenPHP binary must exist before `octane:install --server=frankenphp` can work. The setup step (`17-frankenphp.sh`) is the install path for all developers, so it comes first.
+
+- [ ] Rename `20-php.sh` → `15-php.sh` to make room for FrankenPHP in the numbering sequence.
+- [ ] Create `scripts/setup-steps/17-frankenphp.sh` — install the FrankenPHP standalone binary. Slots after `15-php.sh` (FrankenPHP depends on PHP) and before `22-sqlite-vec.sh` / `25-laravel.sh`. Follow the pattern of `15-php.sh`: detect OS, install via official method (GitHub release binary for Linux, Homebrew for macOS), verify with `frankenphp version`, save to setup state.
+- [ ] Add `laravel/octane` to `composer.json` `require`.
+- [ ] Run `artisan octane:install --server=frankenphp` and review generated `config/octane.php`.
+- [ ] Configure worker count, max requests, and memory limits in `config/octane.php`.
+
+#### 6G — Migrate Caddyfile to FrankenPHP
+
+The current stack has Caddy as a separate process reverse-proxying to `artisan serve`. FrankenPHP IS Caddy with a PHP SAPI, so the `reverse_proxy` to `artisan serve` disappears — replaced by `php_server` / `php` directives that serve Laravel directly.
+
+Vite HMR, Reverb WebSocket, and Vite dev asset proxying remain as `reverse_proxy` blocks because they target separate Node/PHP processes.
+
+- [ ] Convert the Laravel Backend `handle` block from `reverse_proxy {$APP_HOST}:{$APP_PORT}` to FrankenPHP `php_server` directive pointing at `public/`.
+- [ ] Convert the built assets block similarly — FrankenPHP serves static files from `public/build/` directly.
+- [ ] Preserve Vite dev proxy (`@vite_dev`, `@vite_ws`) and Reverb WebSocket proxy (`@reverb_ws`) as `reverse_proxy` blocks — these still target external processes.
+- [ ] Remove `flush_interval -1` from the Laravel blocks (added in 6B) — FrankenPHP serves PHP responses directly, no intermediate buffer to flush.
+- [ ] Update the backend domain block (`{$BACKEND_DOMAIN}`) to use `php_server` instead of `reverse_proxy`.
+
+#### 6H — Sweep for Octane compatibility
+
+- [ ] Audit static properties and mutable singletons in service providers, middleware, and AI services.
+- [ ] Ensure `PageContextHolder` (request-scoped singleton) is properly reset between requests — register in Octane's `RequestReceived` / `RequestTerminated` hooks or use `Octane::flush()`.
+- [ ] Verify `TurnStreamBridge`, `TurnEventPublisher`, and `AgenticRuntime` have no cross-request bleed.
+- [ ] Run full test suite under Octane.
+
+#### 6I — Update dev tooling and start scripts
+
+The process model changes in two ways:
+
+1. **`dev:all` pipeline:** `composer run dev` → `bun run dev:all` currently launches `php artisan serve`, queue, reverb, and vite via `concurrently`. `artisan serve` becomes `artisan octane:start --server=frankenphp`. FrankenPHP runs Caddy internally on the same `APP_PORT`, so the PHP serving process now also handles TLS, routing, and SSE without a separate proxy.
+
+2. **Separate Caddy process eliminated:** `start-app.sh` currently starts a shared Caddy process (`write_site_fragment` → `ensure_shared_caddy`) when `PROXY_TYPE=caddy`. FrankenPHP replaces this entirely — it IS Caddy. The Vite/Reverb proxy blocks move into the FrankenPHP Caddyfile (already there in the template), so the external shared Caddy is no longer needed.
+
+##### Dev pipeline (`package.json` + `composer.json`)
+
+- [ ] Replace `php artisan serve --port=${APP_PORT:-8000}` with `php artisan octane:start --server=frankenphp --port=${APP_PORT:-8000}` in `package.json` `dev:all`.
+
+##### `start-app.sh` / `stop-app.sh`
+
+- [ ] Remove the `PROXY_TYPE` branching — FrankenPHP is the only serving path. The `start_caddy` / `ensure_shared_caddy` / `write_site_fragment` / `remove_site_fragment` calls in `start-app.sh` become dead code. FrankenPHP reads the project `Caddyfile` directly via Octane.
+- [ ] Remove `read_proxy_type()` and the `PROXY_TYPE` variable from `start-app.sh`.
+- [ ] Update `stop-app.sh` / cleanup handlers — no separate Caddy process to stop.
+- [ ] Keep `ensure_ssl_trust` — still needed for trusting FrankenPHP's internal Caddy CA.
+
+##### `scripts/shared/caddy.sh`
+
+- [ ] Remove `ensure_shared_caddy()`, `write_site_fragment()`, `remove_site_fragment()`, `maybe_stop_shared_caddy()`, `create_main_caddyfile()` — the shared multi-instance Caddy model is dead. FrankenPHP runs Caddy in-process.
+- [ ] Keep `resolve_caddyfile_vars()` if the Octane Caddyfile still uses `{$VAR:default}` template syntax.
+- [ ] Keep `setup_ssl_trust()`, `ensure_ssl_trust()`, `install_cert_to_nss_databases()` — still needed.
+- [ ] Keep `install_caddy()` only if useful as a fallback; otherwise remove (FrankenPHP binary replaces it).
+
+##### `70-caddy.sh` → `70-domains.sh`
+
+`70-caddy.sh` is mostly domain/cert/hosts configuration, not Caddy installation. With FrankenPHP, the Caddy binary install and `PROXY_TYPE` choice are dead — FrankenPHP is always the serving path.
+
+- [ ] Rename `70-caddy.sh` to `70-domains.sh` (title: "Domains & TLS").
+- [ ] Remove the `PROXY_TYPE` selection menu and all branches (`caddy` / `nginx` / `apache` / `traefik` / `manual` / `none`).
+- [ ] Remove `install_caddy` call and Caddy binary verification — `17-frankenphp.sh` handles the binary.
+- [ ] Remove `PROXY_TYPE` from `.env` updates and setup state.
+- [ ] Keep `prompt_for_domains()`, `save_domains_to_env()`, `ensure_domains_in_hosts()`, mkcert cert generation, `configure_existing_caddy()` cert logic (rename to `ensure_tls_certs()` or similar).
+
+##### `scripts/shared/config.sh`
+
+- [ ] Remove `DEFAULT_PROXY_TYPE` and any `PROXY_TYPE` references from config defaults.
+
+##### `.env` / `.env.example`
+
+- [ ] Remove `PROXY_TYPE` key — no longer meaningful.
+- [ ] Remove `APP_HOST` if FrankenPHP serves directly (no upstream to configure).
+
+#### 6J — Validate under concurrent load
+
+- [ ] Open 3+ simultaneous Lara chat sessions, each streaming a turn.
+- [ ] Confirm all sessions receive progressive SSE events concurrently.
+- [ ] Confirm non-SSE page loads remain responsive while SSE connections are active.
+- [ ] Confirm Reverb WebSocket and Vite HMR still function through FrankenPHP's Caddy routing.
 
 ## Non-Goals
 
