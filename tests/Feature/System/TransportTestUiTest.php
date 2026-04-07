@@ -2,6 +2,7 @@
 
 use App\Base\System\Events\ReverbTestMessageOccurred;
 use App\Base\System\Http\Controllers\TestReverbDispatchController;
+use App\Modules\Core\AI\Enums\TurnEventType;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -44,7 +45,7 @@ it('renders the transport test pages for admins', function (): void {
         ->assertOk()
         ->assertSee('TestReverb')
         ->assertSee('system.reverb-test.'.$user->id)
-        ->assertSee('Dispatch 5 events');
+        ->assertSee('Dispatch 3 turns (30 events)');
 });
 
 it('streams long-lived coding-agent events over sse', function (): void {
@@ -83,12 +84,15 @@ it('dispatches reverb test events on the current users channel', function (): vo
         ->assertOk()
         ->assertJson([
             'ok' => true,
-            'message' => __('Dispatched :count Reverb test events.', ['count' => TestReverbDispatchController::BURST_SIZE]),
+            'message' => __('Dispatched :events Reverb coding-agent events across :turns turns.', [
+                'events' => TestReverbDispatchController::EVENT_COUNT,
+                'turns' => TestReverbDispatchController::TURN_COUNT,
+            ]),
         ]);
 
     $events = Event::dispatched(ReverbTestMessageOccurred::class);
 
-    expect($events)->toHaveCount(TestReverbDispatchController::BURST_SIZE);
+    expect($events)->toHaveCount(TestReverbDispatchController::EVENT_COUNT);
 
     Event::assertDispatched(ReverbTestMessageOccurred::class, function (ReverbTestMessageOccurred $event) use ($user): bool {
         return $event->userId === $user->id
@@ -96,6 +100,13 @@ it('dispatches reverb test events on the current users channel', function (): vo
             && $event->broadcastOn()->name === FEATURE_SYSTEM_REVERB_CHANNEL_PREFIX.$user->id
             && $event->payload['connection'] === 'reverb'
             && $event->payload['transport'] === 'websocket'
-            && $event->payload['sequence'] === 1;
+            && $event->payload['sequence'] === 1
+            && $event->payload['turn_number'] === 1
+            && $event->payload['event_type'] === TurnEventType::TurnStarted->value;
+    });
+
+    Event::assertDispatched(ReverbTestMessageOccurred::class, function (ReverbTestMessageOccurred $event): bool {
+        return $event->payload['turn_number'] === TestReverbDispatchController::TURN_COUNT
+            && $event->payload['event_type'] === TurnEventType::TurnCompleted->value;
     });
 });

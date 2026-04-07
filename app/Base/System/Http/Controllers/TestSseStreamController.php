@@ -5,6 +5,7 @@
 
 namespace App\Base\System\Http\Controllers;
 
+use App\Base\System\Support\CodingAgentTransportSimulator;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -26,49 +27,9 @@ class TestSseStreamController
 
     private const RETRY_MS = 1000;
 
-    /**
-     * @var list<string>
-     */
-    private const TOOL_NAMES = [
-        'rg',
-        'view',
-        'bash',
-        'glob',
-        'web_fetch',
-    ];
-
-    /**
-     * @var list<string>
-     */
-    private const TOOL_STDOUT_MESSAGES = [
-        'Searching the codebase for matching files.',
-        'Reading the relevant module to confirm behavior.',
-        'Running a narrow command to confirm the current state.',
-        'Collecting surrounding context before making the next decision.',
-        'Parsing the latest output from the running command.',
-    ];
-
-    /**
-     * @var list<string>
-     */
-    private const ASSISTANT_OUTPUT_MESSAGES = [
-        'Summarizing the current findings before taking the next action.',
-        'Explaining the change that will be made next.',
-        'Describing the tradeoff between the available implementation paths.',
-        'Preparing the next visible update for the operator.',
-        'Writing the next incremental response chunk.',
-    ];
-
-    /**
-     * @var list<string>
-     */
-    private const PHASE_LABELS = [
-        'Inspecting the surrounding code paths.',
-        'Reviewing the latest command output.',
-        'Planning the next tool step.',
-        'Applying a focused change to the implementation.',
-        'Validating the updated behavior.',
-    ];
+    public function __construct(
+        private readonly CodingAgentTransportSimulator $simulator,
+    ) {}
 
     public function __invoke(Request $request): StreamedResponse
     {
@@ -112,7 +73,7 @@ class TestSseStreamController
 
                 if ($now >= $nextFeedAt) {
                     $feedSequence++;
-                    $payload = $this->makeAgentFeedPayload($feedSequence, $activeTool);
+                    $payload = $this->simulator->makeFeedPayload($feedSequence, $activeTool);
 
                     $this->writeEvent(self::FEED_EVENT_NAME, [
                         ...$payload,
@@ -181,83 +142,6 @@ class TestSseStreamController
     private function encodePayload(array $payload): string
     {
         return json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function makeAgentFeedPayload(int $sequence, ?string &$activeTool): array
-    {
-        if ($sequence === 1) {
-            return [
-                'sequence' => $sequence,
-                'event_type' => 'turn.started',
-                'message' => __('The simulated coding-agent turn started and is now working.'),
-            ];
-        }
-
-        if ($activeTool === null) {
-            return match (random_int(1, 3)) {
-                1 => [
-                    'sequence' => $sequence,
-                    'event_type' => 'turn.phase_changed',
-                    'phase' => 'thinking',
-                    'message' => self::PHASE_LABELS[array_rand(self::PHASE_LABELS)],
-                ],
-                2 => $this->startToolPayload($sequence, $activeTool),
-                default => [
-                    'sequence' => $sequence,
-                    'event_type' => 'assistant.output_delta',
-                    'message' => self::ASSISTANT_OUTPUT_MESSAGES[array_rand(self::ASSISTANT_OUTPUT_MESSAGES)],
-                ],
-            };
-        }
-
-        return match (random_int(1, 3)) {
-            1 => [
-                'sequence' => $sequence,
-                'event_type' => 'tool.stdout_delta',
-                'tool_name' => $activeTool,
-                'message' => self::TOOL_STDOUT_MESSAGES[array_rand(self::TOOL_STDOUT_MESSAGES)],
-            ],
-            2 => $this->finishToolPayload($sequence, $activeTool),
-            default => [
-                'sequence' => $sequence,
-                'event_type' => 'assistant.output_delta',
-                'message' => self::ASSISTANT_OUTPUT_MESSAGES[array_rand(self::ASSISTANT_OUTPUT_MESSAGES)],
-            ],
-        };
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function startToolPayload(int $sequence, ?string &$activeTool): array
-    {
-        $activeTool = self::TOOL_NAMES[array_rand(self::TOOL_NAMES)];
-
-        return [
-            'sequence' => $sequence,
-            'event_type' => 'tool.started',
-            'tool_name' => $activeTool,
-            'message' => __('Started tool :tool.', ['tool' => $activeTool]),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function finishToolPayload(int $sequence, ?string &$activeTool): array
-    {
-        $finishedTool = $activeTool;
-        $activeTool = null;
-
-        return [
-            'sequence' => $sequence,
-            'event_type' => 'tool.finished',
-            'tool_name' => $finishedTool,
-            'message' => __('Finished tool :tool and returned control to the agent.', ['tool' => $finishedTool]),
-        ];
     }
 
     private function runtimeSeconds(Request $request): int

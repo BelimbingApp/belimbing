@@ -18,7 +18,8 @@ class Index extends Component
             'broadcastDriver' => (string) config('broadcasting.default'),
             'channelName' => 'system.reverb-test.'.(int) auth()->id(),
             'eventName' => ReverbTestMessageOccurred::EVENT_NAME,
-            'burstSize' => TestReverbDispatchController::BURST_SIZE,
+            'turnCount' => TestReverbDispatchController::TURN_COUNT,
+            'eventCount' => TestReverbDispatchController::EVENT_COUNT,
             'burstIntervalMs' => (int) (TestReverbDispatchController::BURST_INTERVAL_MICROSECONDS / 1000),
             'dispatchUrl' => route('admin.system.test-reverb.dispatch'),
         ]);

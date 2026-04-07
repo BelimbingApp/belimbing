@@ -5,14 +5,16 @@
         dispatchUrl: @js($dispatchUrl),
         entries: [],
         entryLabel: @js(__('entries')),
+        lastFeedAt: @js(__('Waiting for first Reverb event...')),
         connectionState: @js(__('Waiting for Echo...')),
         dispatching: false,
         echoChannel: null,
         connectionCleanup: null,
         subscribed: false,
-        append(message, payload = null) {
+        append(kind, message, payload = null) {
             this.entries.unshift({
                 id: `${Date.now()}-${Math.random()}`,
+                kind,
                 message,
                 payload,
                 seenAt: new Date().toLocaleTimeString(),
@@ -38,7 +40,7 @@
                     ? @js(__('Reverb connection failed:')).concat(' ', message)
                     : @js(__('Reverb connection failed.'));
 
-                this.append(this.connectionState, error ?? null);
+                this.append('error', this.connectionState, error ?? null);
             };
 
             pusher.connection.bind('state_change', handleStateChange);
@@ -67,7 +69,7 @@
                 .subscribed(() => {
                     this.subscribed = true;
                     this.connectionState = @js(__('Listening on the Reverb channel.'));
-                    this.append(@js(__('Reverb subscription is active.')));
+                    this.append('state', @js(__('Reverb subscription is active.')));
                 })
                 .error((error) => {
                     this.subscribed = false;
@@ -75,10 +77,11 @@
                     this.connectionState = error?.message
                         ? @js(__('Subscription failed:')).concat(' ', error.message)
                         : @js(__('Subscription failed.'));
-                    this.append(this.connectionState, error ?? null);
+                    this.append('error', this.connectionState, error ?? null);
                 })
                 .listen(`.${this.eventName}`, (payload) => {
-                    this.append(payload.message ?? @js(__('Received a Reverb event.')), payload);
+                    this.lastFeedAt = payload.sent_at ?? new Date().toLocaleTimeString();
+                    this.append(payload.event_type ?? 'message', payload.message ?? @js(__('Received a Reverb event.')), payload);
                 });
         },
         async dispatchBurst() {
@@ -105,6 +108,7 @@
                 }
             } catch (error) {
                 this.append(
+                    'error',
                     error instanceof Error ? error.message : @js(__('The dispatch request failed.')),
                     error instanceof Error ? { message: error.message } : null,
                 );
@@ -120,6 +124,7 @@
             this.echoChannel = null;
             this.subscribed = false;
             this.connectionState = @js(__('Unsubscribed.'));
+            this.append('state', this.connectionState);
         },
     }"
     x-init="
@@ -132,7 +137,7 @@
             connectionState = event?.detail?.message
                 ? @js(__('Echo failed:')).concat(' ', event.detail.message)
                 : @js(__('Echo failed to initialize.'));
-            append(connectionState);
+            append('error', connectionState);
         };
         const cleanup = () => {
             window.removeEventListener('blb-echo-ready', onReady);
@@ -160,7 +165,7 @@
     <div class="space-y-section-gap">
         <x-ui.page-header
             :title="__('TestReverb')"
-            :subtitle="__('Subscribe the browser to a user-scoped Reverb channel, then dispatch backend broadcasts into the live log.')"
+            :subtitle="__('Subscribe the browser to a user-scoped Reverb channel, then dispatch a multi-turn coding-agent simulation into the live log over WebSocket.')"
         />
 
         @if ($broadcastDriver !== 'reverb')
@@ -169,7 +174,7 @@
             </x-ui.alert>
         @else
             <x-ui.alert variant="default">
-                {{ __('The browser subscribes to a user-scoped Reverb channel. Use the dispatch button to emit a short backend burst and confirm the browser receives each WebSocket event live.') }}
+                {{ __('This page keeps the browser subscribed to a real Reverb channel. Use the dispatch button to emit a finite coding-agent transcript with multiple turns, tool events, and assistant deltas, then confirm the browser receives each WebSocket event live.') }}
             </x-ui.alert>
         @endif
 
@@ -183,12 +188,26 @@
 
                     <div class="space-y-2 text-sm">
                         <div>
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Last feed event') }}</p>
+                            <p class="mt-1 text-ink" x-text="lastFeedAt"></p>
+                        </div>
+                        <div>
                             <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Broadcast driver') }}</p>
                             <p class="mt-1 text-ink">{{ $broadcastDriver }}</p>
                         </div>
                         <div>
                             <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Channel') }}</p>
                             <code class="mt-1 block break-all rounded-2xl bg-surface-subtle px-3 py-2 text-xs text-ink">{{ $channelName }}</code>
+                        </div>
+                        <div>
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Transport') }}</p>
+                            <p class="mt-1 text-ink">{{ __('Reverb via WebSocket') }}</p>
+                        </div>
+                        <div>
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Simulation profile') }}</p>
+                            <p class="mt-1 text-ink">
+                                {{ __(':turns turns, :events total events, roughly :ms ms between dispatches.', ['turns' => $turnCount, 'events' => $eventCount, 'ms' => $burstIntervalMs]) }}
+                            </p>
                         </div>
                         <div>
                             <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Event name') }}</p>
@@ -198,16 +217,12 @@
 
                     <div class="flex flex-wrap gap-2">
                         <x-ui.button type="button" variant="primary" @click="dispatchBurst()" x-bind:disabled="dispatching">
-                            {{ __('Dispatch :count events', ['count' => $burstSize]) }}
+                            {{ __('Dispatch :turns turns (:events events)', ['turns' => $turnCount, 'events' => $eventCount]) }}
                         </x-ui.button>
                         <x-ui.button type="button" variant="ghost" @click="entries = []">
                             {{ __('Clear log') }}
                         </x-ui.button>
                     </div>
-
-                    <p class="text-xs text-muted">
-                        {{ __('Burst cadence: one event roughly every :ms ms.', ['ms' => $burstIntervalMs]) }}
-                    </p>
                 </div>
             </x-ui.card>
 
@@ -215,7 +230,7 @@
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <h3 class="text-sm font-medium text-ink">{{ __('Live event log') }}</h3>
-                        <p class="text-xs text-muted">{{ __('Each entry below is appended by the Echo listener, not by the Livewire action response.') }}</p>
+                        <p class="text-xs text-muted">{{ __('Newest entry first. The browser should receive coding-agent turn events progressively from Echo while the HTTP dispatch request simply triggers the backend burst.') }}</p>
                     </div>
                     <p class="text-xs text-muted" x-text="entries.length + ' ' + entryLabel"></p>
                 </div>
@@ -230,7 +245,10 @@
                     <template x-for="entry in entries" :key="entry.id">
                         <article class="rounded-2xl border border-border-default bg-surface-subtle px-4 py-3">
                             <div class="flex items-start justify-between gap-4">
-                                <p class="text-sm text-ink" x-text="entry.message"></p>
+                                <div>
+                                    <p class="text-[11px] font-semibold uppercase tracking-wider text-muted" x-text="entry.kind"></p>
+                                    <p class="mt-1 text-sm text-ink" x-text="entry.message"></p>
+                                </div>
                                 <time class="shrink-0 text-xs tabular-nums text-muted" x-text="entry.seenAt"></time>
                             </div>
 

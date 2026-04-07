@@ -6,36 +6,46 @@
 namespace App\Base\System\Http\Controllers;
 
 use App\Base\System\Events\ReverbTestMessageOccurred;
+use App\Base\System\Support\CodingAgentTransportSimulator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class TestReverbDispatchController
 {
-    public const BURST_SIZE = 5;
+    public const TURN_COUNT = 3;
 
-    public const BURST_INTERVAL_MICROSECONDS = 250000;
+    public const EVENT_COUNT = self::TURN_COUNT * CodingAgentTransportSimulator::EVENTS_PER_TURN;
+
+    public const BURST_INTERVAL_MICROSECONDS = 150000;
+
+    public function __construct(
+        private readonly CodingAgentTransportSimulator $simulator,
+    ) {}
 
     public function __invoke(Request $request): JsonResponse
     {
         $userId = (int) $request->user()->getAuthIdentifier();
+        $payloads = $this->simulator->makeTurnBurstPayloads(self::TURN_COUNT);
 
-        foreach (range(1, self::BURST_SIZE) as $sequence) {
+        foreach ($payloads as $index => $payload) {
             ReverbTestMessageOccurred::dispatch($userId, [
+                ...$payload,
                 'connection' => 'reverb',
                 'transport' => 'websocket',
-                'sequence' => $sequence,
-                'message' => __('Reverb event #:sequence reached the browser.', ['sequence' => $sequence]),
                 'sent_at' => now()->toIso8601String(),
             ]);
 
-            if ($sequence < self::BURST_SIZE) {
+            if ($index < count($payloads) - 1) {
                 usleep(self::BURST_INTERVAL_MICROSECONDS);
             }
         }
 
         return response()->json([
             'ok' => true,
-            'message' => __('Dispatched :count Reverb test events.', ['count' => self::BURST_SIZE]),
+            'message' => __('Dispatched :events Reverb coding-agent events across :turns turns.', [
+                'events' => self::EVENT_COUNT,
+                'turns' => self::TURN_COUNT,
+            ]),
         ]);
     }
 }
