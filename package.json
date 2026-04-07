@@ -4,7 +4,7 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "dev:all": "bunx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" --restart-tries=3 --restart-after=1000 \"php artisan octane:start --server=frankenphp --caddyfile=Caddyfile --port=${APP_PORT:-8000} --watch\" \"php artisan queue:work --queue=ai-agent-tasks,ai-background-commands,ai-schedules,default --tries=1 --timeout=900 --sleep=1\" \"php artisan reverb:start\" \"bun run dev\" --names=server,queue,reverb,vite"
+        "dev:all": "bunx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" \"php artisan octane:start --server=frankenphp --caddyfile=Caddyfile --port=${APP_PORT:-8000} --watch\" \"php artisan queue:work --queue=ai-agent-tasks,ai-background-commands,ai-schedules,default --tries=1 --timeout=900 --sleep=1\" \"php artisan reverb:start\" \"bun run dev\" --names=server,queue,reverb,vite"
     },
     "dependencies": {
         "@tailwindcss/vite": "^4.2.2",

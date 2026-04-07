@@ -9,6 +9,7 @@ use App\Base\AI\DTO\AiRuntimeError;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\DTO\PageSnapshot;
+use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Enums\TurnEventType;
 use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Enums\TurnStatus;
@@ -112,7 +113,7 @@ class RunAgentChatJob implements ShouldQueue
             $this->hydratePageContext($dispatch);
 
             $messages = $messageManager->read($employeeId, $sessionId);
-            $systemPrompt = $this->resolveSystemPrompt($employeeId, $dispatch->task);
+            [$systemPrompt, $promptMeta] = $this->resolvePromptPackage($employeeId, $messages);
 
             // Use pre-created turn from dispatch meta, or create one if absent
             $turnId = data_get($dispatch->meta, 'turn_id');
@@ -142,6 +143,7 @@ class RunAgentChatJob implements ShouldQueue
                 $sessionId,
                 $messages,
                 $systemPrompt,
+                $promptMeta,
                 $modelOverride,
             );
         } catch (\Throwable $e) {
@@ -152,9 +154,11 @@ class RunAgentChatJob implements ShouldQueue
             }
 
             // Best-effort transcript materialization on exception
+            $extraMeta = $promptMeta !== null ? ['prompt_package' => $promptMeta] : [];
+
             if ($turn !== null) {
                 try {
-                    $persister->materializeFromTurn($turn->refresh(), $messageManager, $employeeId, $sessionId);
+                    $persister->materializeFromTurn($turn->refresh(), $messageManager, $employeeId, $sessionId, $extraMeta);
                 } catch (\Throwable) {
                     // Fall back to direct error message write
                     $runId = 'run_'.Str::random(12);
@@ -189,6 +193,7 @@ class RunAgentChatJob implements ShouldQueue
      * event stream and writes equivalent transcript entries.
      *
      * @param  list<mixed>  $messages
+     * @param  array<string, mixed>|null  $promptMeta  Prompt package metadata from resolvePromptPackage
      */
     private function executeStreamingRun(
         AgenticRuntime $runtime,
@@ -202,11 +207,14 @@ class RunAgentChatJob implements ShouldQueue
         string $sessionId,
         array $messages,
         ?string $systemPrompt,
+        ?array $promptMeta,
         ?string $modelOverride,
     ): void {
+        $policy = $this->resolveExecutionPolicy($dispatch);
+
         $runtimeStream = $runtime->runStream(
             $messages, $employeeId, $systemPrompt, $modelOverride,
-            ExecutionPolicy::background(), $sessionId, turnId: $turn->id,
+            $policy, $sessionId, turnId: $turn->id,
         );
 
         $cancelled = false;
@@ -236,7 +244,8 @@ class RunAgentChatJob implements ShouldQueue
         }
 
         // Materialize transcript from turn events
-        $persister->materializeFromTurn($turn, $messageManager, $employeeId, $sessionId);
+        $extraMeta = $promptMeta !== null ? ['prompt_package' => $promptMeta] : [];
+        $persister->materializeFromTurn($turn, $messageManager, $employeeId, $sessionId, $extraMeta);
 
         // Mark dispatch based on turn outcome
         $turn->refresh();
@@ -313,21 +322,49 @@ class RunAgentChatJob implements ShouldQueue
     }
 
     /**
-     * Build the system prompt for the employee.
+     * Build the system prompt and prompt metadata from persisted messages.
      *
-     * Delegates to the appropriate prompt factory based on employee identity.
-     * Returns null for employees without a dedicated prompt factory — the
-     * runtime falls back to its default system prompt.
+     * Uses the last
+     * message content to build the prompt package so the job and inline
+     * paths produce identical system prompts.
+     *
+     * Returns [systemPrompt, promptMeta] or [null, null] for employees
+     * without a dedicated prompt factory.
+     *
+     * @param  list<mixed>  $messages  Persisted conversation messages
+     * @return array{?string, ?array<string, mixed>}
      */
-    private function resolveSystemPrompt(int $employeeId, string $userMessage): ?string
+    private function resolvePromptPackage(int $employeeId, array $messages): array
     {
-        if ($employeeId === Employee::LARA_ID) {
-            $factory = app(LaraPromptFactory::class);
-            $package = $factory->buildPackage($userMessage);
-
-            return app(PromptRenderer::class)->render($package);
+        if ($employeeId !== Employee::LARA_ID) {
+            return [null, null];
         }
 
-        return null;
+        $factory = app(LaraPromptFactory::class);
+        $package = $factory->buildPackage($messages[count($messages) - 1]->content ?? '');
+
+        return [
+            app(PromptRenderer::class)->render($package),
+            $package->describe(),
+        ];
+    }
+
+    /**
+     * Resolve execution policy from dispatch metadata.
+     *
+     * Reads `execution_mode` from the dispatch meta and converts to an
+     * ExecutionPolicy. Falls back to background policy when absent.
+     */
+    private function resolveExecutionPolicy(OperationDispatch $dispatch): ExecutionPolicy
+    {
+        $modeValue = data_get($dispatch->meta, 'execution_mode');
+
+        if ($modeValue !== null) {
+            $mode = ExecutionMode::from($modeValue);
+
+            return ExecutionPolicy::forMode($mode);
+        }
+
+        return ExecutionPolicy::background();
     }
 }

@@ -6,7 +6,7 @@ The current AI chat is still built like a request/response messenger with a fall
 
 ## Status
 
-In Progress — Phases 1–5 complete. Phase 6 tasks 6A–6I complete. 6J (concurrent-load validation) in progress — critical stabilization fixes applied (see 6K below).
+In Progress — Phases 1–7 complete. Phase 8 (dispatch-first architecture) in progress.
 
 ## Desired Outcome
 
@@ -739,6 +739,83 @@ Stream tool execution output in real-time so action boxes fill progressively ins
 - Do not add WebSocket transport (Reverb) in this phase — that's a separate architectural migration.
 - Do not stream tool *input* (args) incrementally — args are already available at `tool.started`.
 - Do not implement speculative UI (showing predicted tool output before execution).
+
+## Phase 8 — Dispatch-First Architecture
+
+### Goal
+
+Eliminate worker-blocking SSE by moving all LLM execution to the background queue. SSE connections become lightweight event tailers, not LLM executors.
+
+### Problem
+
+`ChatStreamController` holds a FrankenPHP worker for the entire LLM call (30–300s). With 4 workers, 4 concurrent chats saturate the server — page loads and API calls block entirely. Additionally, FrankenPHP resets `max_execution_time` to the PHP ini default (30s) per request, ignoring Octane's `max_execution_time: 0` config. Both SSE controllers crash at 30s with `Maximum execution time of 30 seconds exceeded` at `TurnEventStreamController.php:90`.
+
+### Design Decision
+
+**Always dispatch LLM execution via `RunAgentChatJob`. Remove `ChatStreamController` entirely.** The client submits a prompt, Livewire creates a turn + dispatch + job, and returns the turn resume URL. The client connects to `TurnEventStreamController` to tail events. This is the architecture the todo doc already identified as the correct medium-term fix at 6K.
+
+Before: `prepareStreamingRun()` → `ChatStreamController` (holds worker for full LLM run, emits SSE inline)
+After: `prepareStreamingRun()` → `RunAgentChatJob` (queue worker) + `TurnEventStreamController` (lightweight SSE tailer)
+
+### Path reconciliation
+
+The inline path (`ChatStreamController`) and the background path (`RunAgentChatJob`) have drifted:
+
+1. **Execution policy:** Inline uses `ExecutionPolicy::interactive()` (180s); background uses `ExecutionPolicy::background()` (600s). Fix: store the intended policy in dispatch meta so the job respects it.
+2. **Prompt source:** Inline builds prompt from actual last message; background derives from `dispatch->task` (truncated to 500 chars). Fix: job must read messages from DB and build prompt the same way as inline.
+3. **Prompt metadata:** Inline passes `prompt_package` extra meta to materializer; background does not. Fix: job should compute and pass the same metadata.
+4. **Page context:** Inline resolves from a cache key; background resolves from `PageContextHolder`. Fix: resolve page context in Livewire (during the user's page request) and store directly in dispatch meta — the job already hydrates from dispatch meta.
+
+### Tasks
+
+#### 8A — Fix `max_execution_time` for SSE endpoints
+
+FrankenPHP resets `max_execution_time` to the PHP ini default (30s) per request, overriding Octane's config value. The `set_time_limit(0)` call in the worker bootstrap only runs once at boot and is reset per request by the SAPI. Fix: call `set_time_limit(0)` inside each SSE streaming closure.
+
+- [x] Add `set_time_limit(0)` at top of `TurnEventStreamController` StreamedResponse closure.
+- [x] Add `set_time_limit(0)` at top of `ChatStreamController` StreamedResponse closure (kept temporarily until 8C removes it).
+- [x] Remove `--restart-tries=3 --restart-after=1000` from `package.json` `dev:all` — this was a band-aid for the crash, not a fix.
+
+#### 8B — Unify dispatch into `prepareStreamingRun()`
+
+Merge the turn creation + job dispatch logic into `prepareStreamingRun()` so all interactive chats go through the background job path. The existing `dispatchBackgroundChat()` in `HandlesBackgroundChat` becomes dead code.
+
+- [x] Move turn creation + OperationDispatch creation + job dispatch into `prepareStreamingRun()`.
+- [x] Return the turn resume URL (`TurnEventStreamController`) instead of the stream URL (`ChatStreamController`).
+- [x] Store execution policy (`interactive`) in dispatch meta so the job uses the correct policy.
+- [x] Store resolved page context directly in dispatch meta (no cache key).
+- [x] Emit `agent-chat-background-started` from `prepareStreamingRun()` so the Alpine client connects to the resume endpoint.
+
+#### 8C — Remove `ChatStreamController`
+
+Once all chat goes through the dispatch-first path, the inline SSE controller is dead code.
+
+- [x] Delete `ChatStreamController`.
+- [x] Remove the `ai.chat.stream` route.
+- [x] Remove `ChatStreamController` import from routes file.
+
+#### 8D — Reconcile `RunAgentChatJob` with inline path semantics
+
+Make the job produce identical results to what the old inline path produced.
+
+- [x] Build system prompt from persisted messages (like inline), not from truncated `dispatch->task`.
+- [x] Support `execution_policy` in dispatch meta (default to `background` for backwards compat).
+- [x] Pass `prompt_package` metadata to `materializeFromTurn()` when available.
+- [x] Store `prompt_package` description in dispatch meta for observability.
+
+#### 8E — Remove dead code
+
+- [x] Remove `dispatchBackgroundChat()` from `HandlesBackgroundChat` (now handled by `prepareStreamingRun`).
+- [x] Remove `capturePageContextForBackground()` from `HandlesBackgroundChat`.
+- [x] Remove `cancelBackgroundChat()` from `HandlesBackgroundChat` if `cancelActiveTurn()` covers the same functionality.
+- [x] Clean up Alpine handler for `@agent-chat-background-started` — unified into `onSubmit` flow.
+- [x] Remove `cachePageContext()` from `HandlesStreaming` (replaced by direct dispatch meta).
+
+### Known limitations
+
+**Worker occupancy:** `TurnEventStreamController` still holds a FrankenPHP worker per open SSE connection (sleeping in `usleep` poll loop). This is acceptable at low concurrency (4 workers, typically 1-2 simultaneous chats) but will need to migrate to Reverb WebSocket or short-polling if concurrency grows.
+
+**500ms poll interval:** Events arrive in small batches instead of instantly. For tool/phase events this is fine. For streaming token deltas it's perceptibly bursty but acceptable for now.
 
 ## Non-Goals
 

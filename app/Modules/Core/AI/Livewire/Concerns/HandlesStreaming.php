@@ -5,6 +5,11 @@
 
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
+use App\Modules\Core\AI\Enums\OperationStatus;
+use App\Modules\Core\AI\Enums\OperationType;
+use App\Modules\Core\AI\Enums\TurnPhase;
+use App\Modules\Core\AI\Enums\TurnStatus;
+use App\Modules\Core\AI\Jobs\RunAgentChatJob;
 use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
@@ -13,21 +18,25 @@ use App\Modules\Core\AI\Services\PageContextResolver;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\AI\Services\TurnEventPublisher;
 use App\Modules\Core\Employee\Models\Employee;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
  * Handles streaming chat run preparation and finalization.
+ *
+ * Uses dispatch-first architecture: creates a ChatTurn and OperationDispatch
+ * upfront, then queues RunAgentChatJob. Page context is stored directly in
+ * dispatch meta instead of a short-lived cache key.
  */
 trait HandlesStreaming
 {
     /**
-     * Prepare a streaming run: persist user message, return SSE URL.
+     * Prepare a streaming run: persist user message, create turn + dispatch, queue job.
      *
-     * The client opens an EventSource to the returned URL. The SSE endpoint
-     * streams the response and persists the assistant message on completion.
+     * Creates a ChatTurn and OperationDispatch with `execution_mode => 'interactive'`
+     * so the job uses the interactive streaming policy. Page context is resolved
+     * here (on the real page request) and stored directly in dispatch meta.
      *
-     * @return array{url: string, session_id: string}|null Null when an orchestration shortcut handled the message or input was invalid
+     * @return array{resumeUrl: string, turnId: string, session_id: string}|null Null when an orchestration shortcut handled the message or input was invalid
      */
     public function prepareStreamingRun(): ?array
     {
@@ -90,33 +99,51 @@ trait HandlesStreaming
         $messageManager = app(MessageManager::class);
         $messageManager->appendUserMessage($this->employeeId, $this->selectedSessionId, $content, $userMeta);
 
-        $pageContextKey = $this->cachePageContext();
-
-        $url = route('ai.chat.stream', array_filter([
+        $turn = ChatTurn::query()->create([
             'employee_id' => $this->employeeId,
             'session_id' => $this->selectedSessionId,
-            'model' => $this->selectedModel,
-            'page_ctx' => $pageContextKey,
-        ]));
+            'acting_for_user_id' => auth()->id(),
+            'status' => TurnStatus::Queued,
+            'current_phase' => TurnPhase::WaitingForWorker,
+        ]);
+
+        $dispatch = OperationDispatch::query()->create([
+            'id' => OperationDispatch::ID_PREFIX.Str::random(20),
+            'operation_type' => OperationType::BackgroundChat,
+            'employee_id' => $this->employeeId,
+            'acting_for_user_id' => auth()->id(),
+            'task' => Str::limit($content, 500),
+            'status' => OperationStatus::Queued,
+            'meta' => [
+                'session_id' => $this->selectedSessionId,
+                'model_override' => $this->selectedModel,
+                'page_context' => $this->resolvePageContextForDispatch(),
+                'turn_id' => $turn->id,
+                'execution_mode' => 'interactive',
+            ],
+        ]);
+
+        RunAgentChatJob::dispatch($dispatch->id);
+
+        $this->backgroundDispatchId = $dispatch->id;
 
         return [
-            'url' => $url,
+            'resumeUrl' => route('ai.chat.turn.events', ['turnId' => $turn->id]),
+            'turnId' => $turn->id,
             'session_id' => $this->selectedSessionId,
         ];
     }
 
     /**
-     * Resolve page context on the current request and cache for the SSE endpoint.
+     * Resolve page context from the current request for storage in dispatch meta.
      *
-     * The SSE endpoint runs in a separate HTTP request whose route is
-     * `ai.chat.stream` — not the user's page. Resolving page context from that
-     * route would yield nothing useful. Instead, we resolve here (on the real
-     * page request), cache the result under a short-lived key, and pass the key
-     * to the SSE URL so the streaming controller can hydrate context cheaply.
+     * The job runs in a separate process whose route is not the user's page.
+     * We resolve here (on the real page request) and embed the result directly
+     * in the OperationDispatch meta so the job can hydrate context cheaply.
      *
-     * @return string|null Cache key, or null when consent is off or no context resolved
+     * @return array{consent: string, context: array<string, mixed>|null, snapshot: array<string, mixed>|null}|null
      */
-    private function cachePageContext(): ?string
+    private function resolvePageContextForDispatch(): ?array
     {
         $consentLevel = $this->pageAwareness ?? 'page';
 
@@ -142,10 +169,7 @@ trait HandlesStreaming
             $payload['snapshot'] = $snapshot?->toArray();
         }
 
-        $key = 'page_ctx:'.Str::random(20);
-        Cache::put($key, $payload, now()->addSeconds(30));
-
-        return $key;
+        return $payload;
     }
 
     /**
@@ -162,9 +186,10 @@ trait HandlesStreaming
      * Cancel the active turn for the current user and session.
      *
      * Called by the UI stop button. Marks the turn as cancelled so the
-     * background job (if any) sees the terminal state on its next
-     * cooperative cancellation check. Also cancels the OperationDispatch
-     * so the job detects it via `isCancelled()`.
+     * background job sees the terminal state on its next cooperative
+     * cancellation check. Looks up the OperationDispatch from the turn
+     * via dispatch meta (meta->turn_id) when $this->backgroundDispatchId
+     * is not set.
      */
     public function cancelActiveTurn(string $turnId): void
     {
@@ -182,17 +207,19 @@ trait HandlesStreaming
         $publisher = app(TurnEventPublisher::class);
         $publisher->turnCancelled($turn, 'User pressed stop');
 
-        // Also cancel the background dispatch if present
-        if ($this->backgroundDispatchId !== null) {
-            $dispatch = OperationDispatch::query()->find($this->backgroundDispatchId);
+        // Cancel the associated dispatch
+        $dispatch = $this->backgroundDispatchId !== null
+            ? OperationDispatch::query()->find($this->backgroundDispatchId)
+            : OperationDispatch::query()
+                ->where('meta->turn_id', $turnId)
+                ->whereIn('status', [OperationStatus::Queued, OperationStatus::Running])
+                ->first();
 
-            if ($dispatch !== null && ! $dispatch->isTerminal()) {
-                $dispatch->markCancelled();
-            }
-
-            $this->backgroundDispatchId = null;
+        if ($dispatch !== null && ! $dispatch->isTerminal()) {
+            $dispatch->markCancelled();
         }
 
+        $this->backgroundDispatchId = null;
         $this->isLoading = false;
     }
 }

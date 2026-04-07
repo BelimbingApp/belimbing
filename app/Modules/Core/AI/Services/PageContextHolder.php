@@ -11,7 +11,7 @@ use App\Modules\Core\AI\DTO\PageSnapshot;
 /**
  * Request-scoped holder for the resolved page context and snapshot.
  *
- * Written by the Chat component or ChatStreamController at the start of
+ * Written by RunAgentChatJob (hydrated from dispatch meta) at the start of
  * a request. Read by LaraPromptFactory (for system prompt injection) and
  * ActivePageSnapshotTool (for on-demand rich inspection).
  *

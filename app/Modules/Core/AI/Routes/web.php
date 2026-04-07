@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-use App\Modules\Core\AI\Http\Controllers\ChatStreamController;
 use App\Modules\Core\AI\Http\Controllers\MessagingWebhookController;
 use App\Modules\Core\AI\Http\Controllers\ProviderSetupController;
 use App\Modules\Core\AI\Http\Controllers\TurnEventStreamController;
@@ -23,10 +22,7 @@ Route::post('api/ai/messaging/webhook/{channel}/{accountId?}', MessagingWebhookC
     ->where('accountId', '[0-9]+');
 
 Route::middleware(['auth'])->group(function () {
-    // Agent chat streaming (SSE)
-    Route::get('api/ai/chat/stream', ChatStreamController::class)
-        ->name('ai.chat.stream');
-    // Turn event replay/follow (SSE resume)
+    // Turn event replay/follow (SSE — the only SSE endpoint for chat)
     Route::get('api/ai/chat/turns/{turnId}/events', TurnEventStreamController::class)
         ->name('ai.chat.turn.events');
     // Lara setup

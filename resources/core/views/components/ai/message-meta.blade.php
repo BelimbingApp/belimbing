@@ -45,7 +45,7 @@
     $hasRunMeta = $runIdLabel !== null && ($tokens !== null || $latencyMs !== null || $retryAttempts !== null || $fallbackAttempts !== null || $errorType !== null);
 
     $canAccessControlPlane = false;
-    if ($hasRunMeta && auth()->check()) {
+    if ($runIdLabel !== null && auth()->check()) {
         $actor = \App\Base\Authz\DTO\Actor::forUser(auth()->user());
         $canAccessControlPlane = app(\App\Base\Authz\Contracts\AuthorizationService::class)
             ->can($actor, 'admin.ai.control-plane')

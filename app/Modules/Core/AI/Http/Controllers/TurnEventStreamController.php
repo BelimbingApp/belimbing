@@ -48,6 +48,11 @@ class TurnEventStreamController
         $afterSeq = (int) $request->query('after_seq', '0');
 
         return new StreamedResponse(function () use ($turn, $afterSeq): void {
+            // FrankenPHP resets max_execution_time to php.ini default (30s) per
+            // request, ignoring Octane's config. SSE connections must stay alive
+            // for the full turn duration (up to MAX_IDLE_SECONDS).
+            set_time_limit(0);
+
             $lastSeq = $afterSeq;
             $idleStart = null;
 

@@ -389,15 +389,6 @@
                 })"
                 x-effect="window.dispatchEvent(new CustomEvent(isBusy ? 'agent-chat-busy' : 'agent-chat-idle'))"
                 x-on:agent-chat-response-ready.window="pendingMessage = null; streamEntries = []; resetTurnState()"
-                @agent-chat-background-started.window="
-                    if ($event.detail?.resumeUrl) {
-                        activeTurnId = $event.detail.turnId;
-                        turnPhase = 'waiting_for_worker';
-                        turnLabel = waitingForWorkerLabel;
-                        startElapsedTimer();
-                        connectToTurnStream($event.detail.resumeUrl + '?after_seq=0', $refs.agentScroll);
-                    }
-                "
             >
                 <div
                     class="flex-1 min-w-0 min-h-0 overflow-y-auto px-4 py-3 space-y-3 relative"
@@ -838,9 +829,12 @@
             try {
                 const result = await this.$wire.prepareStreamingRun();
 
-                if (result && result.url) {
-                    this.pendingMessage = null;
-                    this.connectToTurnStream(result.url, scrollContainer);
+                if (result && result.resumeUrl) {
+                    this.activeTurnId = result.turnId;
+                    this.turnPhase = 'waiting_for_worker';
+                    this.turnLabel = this.waitingForWorkerLabel;
+                    this.startElapsedTimer();
+                    this.connectToTurnStream(result.resumeUrl + '?after_seq=0', scrollContainer);
                     return;
                 }
 
