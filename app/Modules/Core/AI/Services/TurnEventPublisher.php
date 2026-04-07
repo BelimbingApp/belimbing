@@ -203,16 +203,6 @@ class TurnEventPublisher
         ]);
     }
 
-    /**
-     * Emit assistant.iteration_completed when one agentic loop iteration finishes.
-     */
-    public function iterationCompleted(ChatTurn $turn, int $iteration): ChatTurnEvent
-    {
-        return $this->publish($turn, TurnEventType::AssistantIterationCompleted, [
-            'iteration' => $iteration,
-        ]);
-    }
-
     // ── Tool execution ───────────────────────────────────────────────
 
     /**

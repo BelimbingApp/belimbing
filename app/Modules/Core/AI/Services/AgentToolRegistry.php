@@ -20,6 +20,8 @@ use App\Modules\Core\User\Models\User;
  */
 class AgentToolRegistry
 {
+    private const ERROR_EXECUTING_PREFIX = 'Error executing "';
+
     /** @var array<string, Tool> */
     private array $tools = [];
 
@@ -139,10 +141,7 @@ class AgentToolRegistry
             try {
                 $result = $tool->execute($arguments);
             } catch (\Throwable $e) {
-                $result = ToolResult::error(
-                    'Error executing "'.$toolName.'": '.$e->getMessage(),
-                    'unexpected_error',
-                );
+                $result = $this->toolExecutionFailed($toolName, $e);
             }
         }
 
@@ -187,20 +186,14 @@ class AgentToolRegistry
 
                 return $stream->getReturn();
             } catch (\Throwable $e) {
-                return ToolResult::error(
-                    'Error executing "'.$toolName.'": '.$e->getMessage(),
-                    'unexpected_error',
-                );
+                return $this->toolExecutionFailed($toolName, $e);
             }
         }
 
         try {
             return $tool->execute($arguments);
         } catch (\Throwable $e) {
-            return ToolResult::error(
-                'Error executing "'.$toolName.'": '.$e->getMessage(),
-                'unexpected_error',
-            );
+            return $this->toolExecutionFailed($toolName, $e);
         }
     }
 
@@ -224,5 +217,13 @@ class AgentToolRegistry
         $actor = Actor::forUser($user);
 
         return $this->authorizationService->can($actor, $capability)->allowed;
+    }
+
+    private function toolExecutionFailed(string $toolName, \Throwable $e): ToolResult
+    {
+        return ToolResult::error(
+            self::ERROR_EXECUTING_PREFIX.$toolName.'": '.$e->getMessage(),
+            'unexpected_error',
+        );
     }
 }

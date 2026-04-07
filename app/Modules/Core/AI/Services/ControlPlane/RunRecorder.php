@@ -27,37 +27,20 @@ class RunRecorder
      * Record the start of a new run.
      *
      * Insert-only — if the run_id already exists, this is a no-op.
-     *
-     * @param  string  $runId  Unique run identifier (e.g. "run_aBcDeFgHiJkL")
-     * @param  int  $employeeId  Agent employee ID
-     * @param  string  $source  Origin: 'chat', 'stream', 'delegate_task', 'orchestration', 'cron'
-     * @param  string  $executionMode  'interactive' or 'background'
-     * @param  string|null  $sessionId  Chat session ID (null for headless/cron runs)
-     * @param  int|null  $actingForUserId  User on whose behalf (null for system-initiated)
-     * @param  int|null  $timeoutSeconds  Configured timeout for this run
-     * @param  string|null  $turnId  Chat turn ULID that spawned this run
      */
-    public function start(
-        string $runId,
-        int $employeeId,
-        string $source,
-        string $executionMode = 'interactive',
-        ?string $sessionId = null,
-        ?int $actingForUserId = null,
-        ?int $timeoutSeconds = null,
-        ?string $turnId = null,
-    ): void {
+    public function start(RunRecorderStartInput $input): void
+    {
         AiRun::query()->firstOrCreate(
-            ['id' => $runId],
+            ['id' => $input->runId],
             [
-                'employee_id' => $employeeId,
-                'session_id' => $sessionId,
-                'acting_for_user_id' => $actingForUserId,
-                'turn_id' => $turnId,
-                'source' => $source,
-                'execution_mode' => $executionMode,
+                'employee_id' => $input->employeeId,
+                'session_id' => $input->sessionId,
+                'acting_for_user_id' => $input->actingForUserId,
+                'turn_id' => $input->turnId,
+                'source' => $input->source,
+                'execution_mode' => $input->executionMode,
                 'status' => AiRunStatus::Running,
-                'timeout_seconds' => $timeoutSeconds,
+                'timeout_seconds' => $input->timeoutSeconds,
                 'started_at' => now(),
             ],
         );

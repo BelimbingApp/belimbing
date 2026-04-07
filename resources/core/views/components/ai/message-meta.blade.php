@@ -97,21 +97,17 @@
                 >
                     {{ \Illuminate\Support\Str::limit($runIdLabel, 8, '…') }}
                 </button>
-                <div
+                <dialog
                     @if ($runDetailsId !== null)
                         id="{{ $runDetailsId }}"
                     @endif
-                    x-show="popoverOpen"
-                    x-cloak
+                    x-effect="popoverOpen ? $el.show() : $el.close()"
                     @click.outside="popoverOpen = false"
                     @keydown.escape.window="popoverOpen = false"
-                    x-transition.opacity.duration.100ms
-                    role="dialog"
-                    aria-modal="false"
                     @if ($runDetailsTitleId !== null)
                         aria-labelledby="{{ $runDetailsTitleId }}"
                     @endif
-                    class="absolute bottom-full left-0 z-30 mb-1 w-46 rounded-xl border border-border-default bg-surface-card shadow-lg p-2.5 text-[11px] text-ink"
+                    class="absolute bottom-full left-0 z-30 mb-1 w-46 rounded-xl border border-border-default bg-surface-card shadow-lg p-2.5 text-[11px] text-ink backdrop:bg-transparent open:flex open:flex-col"
                 >
                     <div
                         @if ($runDetailsTitleId !== null)
@@ -210,7 +206,7 @@
                             </div>
                         @endif
                     </div>
-                </div>
+                </dialog>
             </span>
         @endif
     </span>

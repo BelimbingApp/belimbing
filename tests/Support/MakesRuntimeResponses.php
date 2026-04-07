@@ -9,6 +9,7 @@ use App\Base\AI\Services\LlmClient;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Modules\Core\AI\DTO\Message;
+use App\Modules\Core\AI\Services\AgenticFinalResponseStreamer;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
@@ -139,15 +140,19 @@ trait MakesRuntimeResponses
         ?ConfigResolver $configResolver = null,
         ?AgentToolRegistry $toolRegistry = null,
     ): AgenticRuntime {
+        $runRecorder = \Mockery::mock(RunRecorder::class)->shouldIgnoreMissing();
+        $responseFactory = new RuntimeResponseFactory;
+
         return new AgenticRuntime(
             $configResolver ?? $this->mockResolvedConfigResolver([$this->makeConfig('test-provider', 'gpt-4', 'test-key')]),
             $llmClient,
             $toolRegistry ?? $this->makeToolRegistry(),
             $this->makePassthroughCredentialResolver(),
             new RuntimeMessageBuilder,
-            new RuntimeResponseFactory,
+            $responseFactory,
             new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
-            \Mockery::mock(RunRecorder::class)->shouldIgnoreMissing(),
+            $runRecorder,
+            new AgenticFinalResponseStreamer($llmClient, $runRecorder, $responseFactory),
         );
     }
 

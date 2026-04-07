@@ -1,10 +1,10 @@
 const driver = globalThis.__BLB_BROADCAST_DRIVER__
 const useReverb = driver === 'reverb' && import.meta.env.VITE_REVERB_APP_KEY
 const usePusher = driver === 'pusher' && import.meta.env.VITE_PUSHER_APP_KEY
-const notifyEchoReady = () => window.dispatchEvent(new CustomEvent('blb-echo-ready'))
+const notifyEchoReady = () => globalThis.dispatchEvent(new CustomEvent('blb-echo-ready'))
 const notifyEchoFailure = (error) => {
     console.error('Failed to initialize Echo.', error)
-    window.dispatchEvent(new CustomEvent('blb-echo-failed', {
+    globalThis.dispatchEvent(new CustomEvent('blb-echo-failed', {
         detail: { message: error instanceof Error ? error.message : String(error) },
     }))
 }

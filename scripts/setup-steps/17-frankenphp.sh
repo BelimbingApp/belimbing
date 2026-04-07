@@ -201,7 +201,7 @@ main() {
     installed_version=$(frankenphp version 2>/dev/null | head -1 || true)
 
     if [[ -z "$installed_version" ]]; then
-        echo -e "${RED}✗${NC} FrankenPHP verification failed (`frankenphp version` returned no output)" >&2
+        echo -e "${RED}✗${NC} FrankenPHP verification failed (frankenphp version returned no output)" >&2
         exit 1
     fi
 
