@@ -830,6 +830,7 @@
                 const result = await this.$wire.prepareStreamingRun();
 
                 if (result && result.turnId) {
+                    this.pendingMessage = null;
                     this.activeTurnId = result.turnId;
                     this.turnPhase = 'waiting_for_worker';
                     this.turnLabel = this.waitingForWorkerLabel;
