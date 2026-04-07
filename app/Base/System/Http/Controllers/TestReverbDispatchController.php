@@ -26,6 +26,7 @@ class TestReverbDispatchController
     {
         $userId = (int) $request->user()->getAuthIdentifier();
         $payloads = $this->simulator->makeTurnBurstPayloads(self::TURN_COUNT);
+        $burstIntervalMicroseconds = $this->burstIntervalMicroseconds();
 
         foreach ($payloads as $index => $payload) {
             ReverbTestMessageOccurred::dispatch($userId, [
@@ -35,8 +36,8 @@ class TestReverbDispatchController
                 'sent_at' => now()->toIso8601String(),
             ]);
 
-            if ($index < count($payloads) - 1) {
-                usleep(self::BURST_INTERVAL_MICROSECONDS);
+            if ($burstIntervalMicroseconds > 0 && $index < count($payloads) - 1) {
+                usleep($burstIntervalMicroseconds);
             }
         }
 
@@ -47,5 +48,14 @@ class TestReverbDispatchController
                 'turns' => self::TURN_COUNT,
             ]),
         ]);
+    }
+
+    private function burstIntervalMicroseconds(): int
+    {
+        if (app()->runningUnitTests()) {
+            return 0;
+        }
+
+        return self::BURST_INTERVAL_MICROSECONDS;
     }
 }
