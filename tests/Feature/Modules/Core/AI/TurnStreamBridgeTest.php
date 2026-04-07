@@ -11,6 +11,8 @@ use App\Modules\Core\AI\Models\ChatTurnEvent;
 use App\Modules\Core\AI\Services\TurnStreamBridge;
 use App\Modules\Core\Employee\Models\Employee;
 
+final class TurnStreamBridgeTestStreamFailure extends RuntimeException {}
+
 const BRIDGE_TEST_SESSION = 'sess_bridge_test';
 const BRIDGE_TEST_RUN_ID = 'run_bridge_test1';
 
@@ -146,7 +148,9 @@ describe('TurnStreamBridge', function () {
         expect($types)->toContain(TurnEventType::TurnPhaseChanged)
             ->and($types)->toContain(TurnEventType::AssistantThinkingStarted);
     });
+});
 
+describe('TurnStreamBridge tool and streaming events', function () {
     it('maps tool_started and tool_finished with phase transitions', function () {
         $turn = createBridgeTurn();
         $bridge = app(TurnStreamBridge::class);
@@ -393,11 +397,11 @@ describe('TurnStreamBridge error handling', function () {
 
         $throwingStream = (function () {
             yield ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]];
-            throw new RuntimeException('LLM connection lost');
+            throw new TurnStreamBridgeTestStreamFailure('LLM connection lost');
         })();
 
         expect(fn () => iterator_to_array($bridge->wrap($turn, $throwingStream)))
-            ->toThrow(RuntimeException::class, 'LLM connection lost');
+            ->toThrow(TurnStreamBridgeTestStreamFailure::class, 'LLM connection lost');
 
         $turn->refresh();
         expect($turn->status)->toBe(TurnStatus::Failed);

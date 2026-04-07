@@ -45,95 +45,215 @@ class ChatRunPersister
         array $extraMeta = [],
     ): void {
         $events = $turn->events()->orderBy('seq')->get();
-        $runId = null;
-        $thinkingPersisted = false;
-        $fullContent = '';
-        $hadError = false;
-        $usageMeta = [];
+        $state = new class
+        {
+            public ?string $runId = null;
+
+            public bool $thinkingPersisted = false;
+
+            public string $fullContent = '';
+
+            public bool $hadError = false;
+
+            /** @var array<string, mixed> */
+            public array $usageMeta = [];
+        };
 
         foreach ($events as $event) {
-            $type = $event->event_type;
             $payload = is_array($event->payload) ? $event->payload : [];
-
-            if ($type === TurnEventType::RunStarted) {
-                $runId = $payload['run_id'] ?? $runId;
-            }
-
-            if ($type === TurnEventType::AssistantThinkingStarted && ! $thinkingPersisted && $runId !== null) {
-                $mm->appendThinking($employeeId, $sessionId, $runId);
-                $thinkingPersisted = true;
-            }
-
-            if ($type === TurnEventType::ToolStarted && $runId !== null) {
-                $mm->appendToolCall(
-                    $employeeId,
-                    $sessionId,
-                    $runId,
-                    (string) ($payload['tool'] ?? ''),
-                    (string) ($payload['args_summary'] ?? '{}'),
-                    (int) ($payload['tool_call_index'] ?? 0),
-                );
-            }
-
-            if ($type === TurnEventType::ToolFinished && $runId !== null) {
-                $mm->appendToolResult(
-                    $employeeId,
-                    $sessionId,
-                    $runId,
-                    new ToolResultEntry(
-                        toolName: (string) ($payload['tool'] ?? ''),
-                        resultPreview: (string) ($payload['result_preview'] ?? ''),
-                        resultLength: (int) ($payload['result_length'] ?? 0),
-                        status: (string) ($payload['status'] ?? 'success'),
-                        durationMs: (int) ($payload['duration_ms'] ?? 0),
-                        errorPayload: is_array($payload['error_payload'] ?? null) ? $payload['error_payload'] : null,
-                    ),
-                );
-            }
-
-            if ($type === TurnEventType::ToolDenied && $runId !== null) {
-                $mm->appendHookAction(
-                    $employeeId,
-                    $sessionId,
-                    $runId,
-                    'pre_tool_use',
-                    'tool_denied',
-                    [
-                        'tool' => (string) ($payload['tool'] ?? ''),
-                        'reason' => (string) ($payload['reason'] ?? 'denied by policy'),
-                        'source' => (string) ($payload['source'] ?? 'hook'),
-                    ],
-                );
-            }
-
-            if ($type === TurnEventType::AssistantOutputBlockCommitted) {
-                $fullContent = (string) ($payload['content'] ?? '');
-            }
-
-            if ($type === TurnEventType::UsageUpdated) {
-                $usageMeta['tokens'] = $payload;
-            }
-
-            if ($type === TurnEventType::TurnFailed) {
-                $hadError = true;
-                $errorMessage = $payload['message'] ?? __('An unexpected error occurred. Please try again.');
-                $errorMeta = is_array($payload['meta'] ?? null)
-                    ? $payload['meta']
-                    : ['message_type' => 'error'];
-
-                $mm->appendAssistantMessage(
-                    $employeeId,
-                    $sessionId,
-                    __('⚠ :detail', ['detail' => $errorMessage]),
-                    $runId ?? $turn->current_run_id ?? 'run_unknown',
-                    $errorMeta,
-                );
-            }
+            $this->applyTurnEventToMaterialization($turn, $mm, $employeeId, $sessionId, $event->event_type, $payload, $state);
         }
 
-        if (! $hadError && $fullContent !== '' && $runId !== null) {
-            $meta = array_merge($usageMeta, $extraMeta);
-            $mm->appendAssistantMessage($employeeId, $sessionId, $fullContent, $runId, $meta);
+        if (! $state->hadError && $state->fullContent !== '' && $state->runId !== null) {
+            $meta = array_merge($state->usageMeta, $extraMeta);
+            $mm->appendAssistantMessage($employeeId, $sessionId, $state->fullContent, $state->runId, $meta);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{
+     *     runId: ?string,
+     *     thinkingPersisted: bool,
+     *     fullContent: string,
+     *     hadError: bool,
+     *     usageMeta: array<string, mixed>
+     * }  $state
+     */
+    private function applyTurnEventToMaterialization(
+        ChatTurn $turn,
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        TurnEventType $type,
+        array $payload,
+        object $state,
+    ): void {
+        match ($type) {
+            TurnEventType::RunStarted => $this->materializeRunStarted($payload, $state),
+            TurnEventType::AssistantThinkingStarted => $this->materializeThinkingStarted($mm, $employeeId, $sessionId, $state),
+            TurnEventType::ToolStarted => $this->materializeToolStarted($mm, $employeeId, $sessionId, $payload, $state),
+            TurnEventType::ToolFinished => $this->materializeToolFinished($mm, $employeeId, $sessionId, $payload, $state),
+            TurnEventType::ToolDenied => $this->materializeToolDenied($mm, $employeeId, $sessionId, $payload, $state),
+            TurnEventType::AssistantOutputBlockCommitted => $this->materializeOutputCommitted($payload, $state),
+            TurnEventType::UsageUpdated => $this->materializeUsageUpdated($payload, $state),
+            TurnEventType::TurnFailed => $this->materializeTurnFailed($turn, $mm, $employeeId, $sessionId, $payload, $state),
+            default => null,
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{runId: ?string}  $state
+     */
+    private function materializeRunStarted(array $payload, object $state): void
+    {
+        $state->runId = $payload['run_id'] ?? $state->runId;
+    }
+
+    /**
+     * @param  object{runId: ?string, thinkingPersisted: bool}  $state
+     */
+    private function materializeThinkingStarted(
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        object $state,
+    ): void {
+        if ($state->thinkingPersisted || $state->runId === null) {
+            return;
+        }
+
+        $mm->appendThinking($employeeId, $sessionId, $state->runId);
+        $state->thinkingPersisted = true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{runId: ?string}  $state
+     */
+    private function materializeToolStarted(
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        array $payload,
+        object $state,
+    ): void {
+        if ($state->runId === null) {
+            return;
+        }
+
+        $mm->appendToolCall(
+            $employeeId,
+            $sessionId,
+            $state->runId,
+            (string) ($payload['tool'] ?? ''),
+            (string) ($payload['args_summary'] ?? '{}'),
+            (int) ($payload['tool_call_index'] ?? 0),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{runId: ?string}  $state
+     */
+    private function materializeToolFinished(
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        array $payload,
+        object $state,
+    ): void {
+        if ($state->runId === null) {
+            return;
+        }
+
+        $mm->appendToolResult(
+            $employeeId,
+            $sessionId,
+            $state->runId,
+            new ToolResultEntry(
+                toolName: (string) ($payload['tool'] ?? ''),
+                resultPreview: (string) ($payload['result_preview'] ?? ''),
+                resultLength: (int) ($payload['result_length'] ?? 0),
+                status: (string) ($payload['status'] ?? 'success'),
+                durationMs: (int) ($payload['duration_ms'] ?? 0),
+                errorPayload: is_array($payload['error_payload'] ?? null) ? $payload['error_payload'] : null,
+            ),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{runId: ?string}  $state
+     */
+    private function materializeToolDenied(
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        array $payload,
+        object $state,
+    ): void {
+        if ($state->runId === null) {
+            return;
+        }
+
+        $mm->appendHookAction(
+            $employeeId,
+            $sessionId,
+            $state->runId,
+            'pre_tool_use',
+            'tool_denied',
+            [
+                'tool' => (string) ($payload['tool'] ?? ''),
+                'reason' => (string) ($payload['reason'] ?? 'denied by policy'),
+                'source' => (string) ($payload['source'] ?? 'hook'),
+            ],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{fullContent: string}  $state
+     */
+    private function materializeOutputCommitted(array $payload, object $state): void
+    {
+        $state->fullContent = (string) ($payload['content'] ?? '');
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{usageMeta: array<string, mixed>}  $state
+     */
+    private function materializeUsageUpdated(array $payload, object $state): void
+    {
+        $state->usageMeta['tokens'] = $payload;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{runId: ?string, hadError: bool}  $state
+     */
+    private function materializeTurnFailed(
+        ChatTurn $turn,
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        array $payload,
+        object $state,
+    ): void {
+        $state->hadError = true;
+        $errorMessage = $payload['message'] ?? __('An unexpected error occurred. Please try again.');
+        $errorMeta = is_array($payload['meta'] ?? null)
+            ? $payload['meta']
+            : ['message_type' => 'error'];
+
+        $mm->appendAssistantMessage(
+            $employeeId,
+            $sessionId,
+            __('⚠ :detail', ['detail' => $errorMessage]),
+            $state->runId ?? $turn->current_run_id ?? 'run_unknown',
+            $errorMeta,
+        );
     }
 }

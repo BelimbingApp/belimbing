@@ -12,6 +12,8 @@ use App\Modules\Core\Employee\Models\Employee;
 
 const SWEEP_STALE_SESSION = 'sess_stale_test';
 
+const SWEEP_EXPECT_ONE_STALE_LINE = '1 stale turn';
+
 function createSweepFixture(): void
 {
     Company::provisionLicensee('Test Company');
@@ -38,7 +40,7 @@ describe('SweepStaleTurnsCommand', function () {
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--queued-minutes' => 10])
             ->assertSuccessful()
-            ->expectsOutputToContain('1 stale turn');
+            ->expectsOutputToContain(SWEEP_EXPECT_ONE_STALE_LINE);
 
         $turn->refresh();
         expect($turn->status)->toBe(TurnStatus::Failed);
@@ -59,7 +61,7 @@ describe('SweepStaleTurnsCommand', function () {
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--queued-minutes' => 10])
             ->assertSuccessful()
-            ->expectsOutputToContain('1 stale turn');
+            ->expectsOutputToContain(SWEEP_EXPECT_ONE_STALE_LINE);
 
         $turn->refresh();
         expect($turn->status)->toBe(TurnStatus::Failed);
@@ -80,7 +82,7 @@ describe('SweepStaleTurnsCommand', function () {
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--running-minutes' => 30])
             ->assertSuccessful()
-            ->expectsOutputToContain('1 stale turn');
+            ->expectsOutputToContain(SWEEP_EXPECT_ONE_STALE_LINE);
 
         $turn->refresh();
         expect($turn->status)->toBe(TurnStatus::Failed);

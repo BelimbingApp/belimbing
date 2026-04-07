@@ -430,6 +430,10 @@ class LlmClient
                         'output' => $msg['content'] ?? '',
                     ];
                     break;
+
+                default:
+                    // Unknown roles are ignored — not part of the Responses input contract.
+                    break;
             }
         }
 

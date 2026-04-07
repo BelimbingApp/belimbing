@@ -142,7 +142,7 @@ class RunAgentChatJob implements ShouldQueue
                 ]);
             }
 
-            $this->executeStreamingRun(
+            $this->executeStreamingRun(new AgentChatStreamingRunRequest(
                 $runtime,
                 $messageManager,
                 $persister,
@@ -156,7 +156,7 @@ class RunAgentChatJob implements ShouldQueue
                 $systemPrompt,
                 $promptMeta,
                 $modelOverride,
-            );
+            ));
         } catch (\Throwable $e) {
             report($e);
 
@@ -202,41 +202,24 @@ class RunAgentChatJob implements ShouldQueue
      * Transcript materialization happens after the stream completes via
      * ChatRunPersister::materializeFromTurn, which reads the turn's durable
      * event stream and writes equivalent transcript entries.
-     *
-     * @param  list<mixed>  $messages
-     * @param  array<string, mixed>|null  $promptMeta  Prompt package metadata from resolvePromptPackage
      */
-    private function executeStreamingRun(
-        AgenticRuntime $runtime,
-        MessageManager $messageManager,
-        ChatRunPersister $persister,
-        TurnStreamBridge $bridge,
-        TurnEventPublisher $turnPublisher,
-        ChatTurn $turn,
-        OperationDispatch $dispatch,
-        int $employeeId,
-        string $sessionId,
-        array $messages,
-        ?string $systemPrompt,
-        ?array $promptMeta,
-        ?string $modelOverride,
-    ): void {
-        $policy = $this->resolveExecutionPolicy($dispatch);
+    private function executeStreamingRun(AgentChatStreamingRunRequest $req): void
+    {
+        $policy = $this->resolveExecutionPolicy($req->dispatch);
 
-        $runtimeStream = $runtime->runStream(
-            $messages, $employeeId, $systemPrompt, $modelOverride,
-            $policy, $sessionId, turnId: $turn->id,
+        $runtimeStream = $req->runtime->runStream(
+            $req->messages, $req->employeeId, $req->systemPrompt, $req->modelOverride,
+            $policy, $req->sessionId, turnId: $req->turn->id,
         );
 
         $cancelled = false;
 
-        foreach ($bridge->wrap($turn, $runtimeStream) as $event) {
-            // Cooperative cancellation check
-            if ($this->isCancelled($dispatch)) {
-                $turn->refresh();
+        foreach ($req->bridge->wrap($req->turn, $runtimeStream) as $_) {
+            if ($this->isCancelled($req->dispatch)) {
+                $req->turn->refresh();
 
-                if (! $turn->isTerminal()) {
-                    $turnPublisher->turnCancelled($turn, 'User cancelled');
+                if (! $req->turn->isTerminal()) {
+                    $req->turnPublisher->turnCancelled($req->turn, 'User cancelled');
                 }
 
                 $cancelled = true;
@@ -245,31 +228,24 @@ class RunAgentChatJob implements ShouldQueue
             }
         }
 
-        if ($cancelled) {
+        if ($cancelled || $this->isCancelled($req->dispatch)) {
             return;
         }
 
-        // Final cancellation check before materializing
-        if ($this->isCancelled($dispatch)) {
-            return;
-        }
+        $extraMeta = $req->promptMeta !== null ? ['prompt_package' => $req->promptMeta] : [];
+        $req->persister->materializeFromTurn($req->turn, $req->messageManager, $req->employeeId, $req->sessionId, $extraMeta);
 
-        // Materialize transcript from turn events
-        $extraMeta = $promptMeta !== null ? ['prompt_package' => $promptMeta] : [];
-        $persister->materializeFromTurn($turn, $messageManager, $employeeId, $sessionId, $extraMeta);
+        $req->turn->refresh();
 
-        // Mark dispatch based on turn outcome
-        $turn->refresh();
-
-        if ($turn->status === TurnStatus::Completed) {
-            $content = $this->extractContentFromTurn($turn);
-            $dispatch->markSucceeded(
-                $turn->current_run_id ?? 'unknown',
+        if ($req->turn->status === TurnStatus::Completed) {
+            $content = $this->extractContentFromTurn($req->turn);
+            $req->dispatch->markSucceeded(
+                $req->turn->current_run_id ?? 'unknown',
                 Str::limit($content, 200),
                 [],
             );
-        } elseif (! $dispatch->isTerminal()) {
-            $dispatch->markFailed($turn->status === TurnStatus::Failed
+        } elseif (! $req->dispatch->isTerminal()) {
+            $req->dispatch->markFailed($req->turn->status === TurnStatus::Failed
                 ? 'Turn failed'
                 : 'Run completed without producing a response');
         }

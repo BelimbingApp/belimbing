@@ -15,6 +15,7 @@ use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
+use App\Modules\Core\AI\Services\ControlPlane\RunRecorderStartInput;
 use Illuminate\Support\Str;
 
 /**
@@ -42,6 +43,7 @@ class AgenticRuntime
         private readonly RuntimeResponseFactory $responseFactory,
         private readonly RuntimeHookCoordinator $hookCoordinator,
         private readonly RunRecorder $runRecorder,
+        private readonly AgenticFinalResponseStreamer $finalResponseStreamer,
     ) {}
 
     /**
@@ -64,7 +66,7 @@ class AgenticRuntime
         $runId = 'run_'.Str::random(12);
         $policy ??= ExecutionPolicy::interactive();
 
-        $this->runRecorder->start(
+        $this->runRecorder->start(new RunRecorderStartInput(
             runId: $runId,
             employeeId: $employeeId,
             source: 'chat',
@@ -72,7 +74,7 @@ class AgenticRuntime
             sessionId: $sessionId,
             actingForUserId: auth()->id(),
             timeoutSeconds: $policy->timeoutSeconds,
-        );
+        ));
 
         $configs = $this->configResolver->resolveWithDefaultFallback($employeeId);
 
@@ -160,7 +162,7 @@ class AgenticRuntime
         $runId = 'run_'.Str::random(12);
         $policy ??= ExecutionPolicy::interactive();
 
-        $this->runRecorder->start(
+        $this->runRecorder->start(new RunRecorderStartInput(
             runId: $runId,
             employeeId: $employeeId,
             source: 'stream',
@@ -169,7 +171,7 @@ class AgenticRuntime
             actingForUserId: auth()->id(),
             timeoutSeconds: $policy->timeoutSeconds,
             turnId: $turnId,
-        );
+        ));
 
         $configs = $this->configResolver->resolveWithDefaultFallback($employeeId);
 
@@ -621,7 +623,15 @@ class AgenticRuntime
         $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt);
 
         yield ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => $runId, 'iteration' => 0, 'description' => 'Analyzing request']];
-        yield from $this->streamRemovedToolStatuses($runId, $toolLoopState['removedTools']);
+
+        if ($toolLoopState['removedTools'] !== []) {
+            yield ['event' => 'status', 'data' => [
+                'phase' => 'hook_action',
+                'stage' => 'pre_tool_registry',
+                'tools_removed' => $toolLoopState['removedTools'],
+                'run_id' => $runId,
+            ]];
+        }
 
         $iteration = 0;
         $toolIndex = 0;
@@ -674,7 +684,7 @@ class AgenticRuntime
                 // Hook: PostRun on success
                 $this->hookCoordinator->postRun($runId, $employeeId, true, $toolLoopState['hookMetadata']);
 
-                yield from $this->streamFinalResponse(
+                yield from $this->finalResponseStreamer->streamFinalResponse(
                     $runId,
                     $config,
                     $credentials,
@@ -697,203 +707,12 @@ class AgenticRuntime
                 $runId,
                 $employeeId,
                 $result['tool_calls'],
-                $toolLoopState['apiMessages'],
-                $toolLoopState['toolActions'],
-                $toolLoopState['clientActions'],
-                $toolLoopState['hookMetadata'],
+                $toolLoopState,
                 $toolIndex,
             );
 
             $iteration++;
         }
-    }
-
-    /**
-     * Stream the final text response from the LLM after all tool calls are resolved.
-     *
-     * @param  array<string, mixed>  $config
-     * @param  array{api_key: string, base_url: string}  $credentials
-     * @param  array{
-     *     api_messages: list<array<string, mixed>>,
-     *     tools: list<array<string, mixed>>,
-     *     tool_actions: list<array<string, mixed>>,
-     *     client_actions: list<string>,
-     *     retry_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
-     *     fallback_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
-     *     hooks: array<string, mixed>
-     * }  $streamState
-     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
-     */
-    private function streamFinalResponse(
-        string $runId,
-        array $config,
-        array $credentials,
-        array $streamState,
-    ): \Generator {
-        $fullContent = '';
-        $usage = null;
-        $latencyMs = 0;
-
-        $stream = $this->llmClient->chatStream(new ChatRequest(
-            baseUrl: $credentials['base_url'],
-            apiKey: $credentials['api_key'],
-            model: $config['model'],
-            messages: $streamState['api_messages'],
-            maxTokens: $config['max_tokens'],
-            temperature: $config['temperature'],
-            timeout: $config['timeout'],
-            providerName: $config['provider_name'],
-            tools: $streamState['tools'] !== [] ? $streamState['tools'] : null,
-            toolChoice: $streamState['tools'] !== [] ? 'auto' : null,
-            apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
-        ));
-
-        foreach ($stream as $event) {
-            if ($event['type'] === 'content_delta') {
-                $fullContent .= $event['text'];
-                yield ['event' => 'delta', 'data' => ['text' => $event['text']]];
-
-                continue;
-            }
-
-            if ($event['type'] === 'done') {
-                $usage = $event['usage'] ?? null;
-                $latencyMs = $event['latency_ms'] ?? 0;
-
-                continue;
-            }
-
-            if ($event['type'] === 'error') {
-                yield $this->streamFinalErrorEvent($runId, $config, $event, $streamState);
-
-                return;
-            }
-        }
-
-        $fullContent = $this->prependClientActions($fullContent, $streamState['client_actions']);
-
-        if (trim($fullContent) === '' && $streamState['client_actions'] === []) {
-            yield $this->streamEmptyContentError($runId, $config, $latencyMs, $streamState);
-
-            return;
-        }
-
-        $meta = [
-            'model' => $config['model'],
-            'provider_name' => $config['provider_name'],
-            'llm' => [
-                'provider' => (string) ($config['provider_name'] ?? 'unknown'),
-                'model' => $config['model'],
-            ],
-            'latency_ms' => $latencyMs,
-            'tokens' => [
-                'prompt' => $usage['prompt_tokens'] ?? null,
-                'completion' => $usage['completion_tokens'] ?? null,
-            ],
-            'fallback_attempts' => $streamState['fallback_attempts'],
-            'retry_attempts' => $streamState['retry_attempts'],
-        ];
-
-        if ($streamState['tool_actions'] !== []) {
-            $meta['tool_actions'] = $streamState['tool_actions'];
-        }
-
-        if (($streamState['hooks'] ?? []) !== []) {
-            $meta['hooks'] = $streamState['hooks'];
-        }
-
-        $this->runRecorder->complete($runId, $meta);
-
-        yield ['event' => 'done', 'data' => [
-            'run_id' => $runId,
-            'content' => $fullContent,
-            'meta' => $meta,
-        ]];
-    }
-
-    /**
-     * @param  list<string>  $clientActions
-     */
-    private function prependClientActions(string $fullContent, array $clientActions): string
-    {
-        if ($clientActions === []) {
-            return $fullContent;
-        }
-
-        return implode("\n", $clientActions)."\n".$fullContent;
-    }
-
-    /**
-     * @param  array<string, mixed>  $config
-     * @param  array<string, mixed>  $event
-     * @param  array{
-     *     retry_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
-     *     fallback_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>
-     * }  $streamState
-     * @return array{event: string, data: array<string, mixed>}
-     */
-    private function streamFinalErrorEvent(string $runId, array $config, array $event, array $streamState): array
-    {
-        $runtimeError = $event['runtime_error'] ?? null;
-        $message = $runtimeError instanceof AiRuntimeError
-            ? $runtimeError->userMessage
-            : ($event['message'] ?? __('An unexpected error occurred. Please try again.'));
-
-        if ($runtimeError instanceof AiRuntimeError) {
-            $this->runRecorder->fail($runId, $runtimeError);
-        }
-
-        return ['event' => 'error', 'data' => [
-            'message' => $message,
-            'run_id' => $runId,
-            'meta' => $runtimeError instanceof AiRuntimeError
-                ? array_merge(
-                    $this->responseFactory->errorMeta(
-                        $config['model'],
-                        (string) ($config['provider_name'] ?? 'unknown'),
-                        $runtimeError,
-                    ),
-                    [
-                        'retry_attempts' => $streamState['retry_attempts'],
-                        'fallback_attempts' => $streamState['fallback_attempts'],
-                    ],
-                )
-                : null,
-        ]];
-    }
-
-    /**
-     * @param  array<string, mixed>  $config
-     * @param  array{
-     *     retry_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
-     *     fallback_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>
-     * }  $streamState
-     * @return array{event: string, data: array<string, mixed>}
-     */
-    private function streamEmptyContentError(string $runId, array $config, int $latencyMs, array $streamState): array
-    {
-        $emptyError = AiRuntimeError::fromType(
-            AiErrorType::EmptyResponse,
-            'Streaming response completed with no content',
-            latencyMs: $latencyMs,
-        );
-        $this->runRecorder->fail($runId, $emptyError);
-
-        return ['event' => 'error', 'data' => [
-            'message' => $emptyError->userMessage,
-            'run_id' => $runId,
-            'meta' => array_merge(
-                $this->responseFactory->errorMeta(
-                    $config['model'],
-                    (string) ($config['provider_name'] ?? 'unknown'),
-                    $emptyError,
-                ),
-                [
-                    'retry_attempts' => $streamState['retry_attempts'],
-                    'fallback_attempts' => $streamState['fallback_attempts'],
-                ],
-            ),
-        ]];
     }
 
     /**
@@ -957,24 +776,6 @@ class AgenticRuntime
     }
 
     /**
-     * @param  list<string>  $removedTools
-     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
-     */
-    private function streamRemovedToolStatuses(string $runId, array $removedTools): \Generator
-    {
-        if ($removedTools === []) {
-            return;
-        }
-
-        yield ['event' => 'status', 'data' => [
-            'phase' => 'hook_action',
-            'stage' => 'pre_tool_registry',
-            'tools_removed' => $removedTools,
-            'run_id' => $runId,
-        ]];
-    }
-
-    /**
      * @param  array{
      *     retryAttempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
      *     hookMetadata: array<string, mixed>
@@ -1009,22 +810,26 @@ class AgenticRuntime
 
     /**
      * @param  list<array<string, mixed>>  $toolCalls
-     * @param  list<array<string, mixed>>  $apiMessages
-     * @param  list<array<string, mixed>>  $toolActions
-     * @param  list<string>  $clientActions
-     * @param  array<string, mixed>  $hookMetadata
+     * @param  array{
+     *     apiMessages: list<array<string, mixed>>,
+     *     tools: list<array<string, mixed>>,
+     *     toolActions: list<array<string, mixed>>,
+     *     clientActions: list<string>,
+     *     retryAttempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
+     *     hookMetadata: array<string, mixed>,
+     *     removedTools: list<string>
+     * }  $toolLoopState
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
     private function streamToolCalls(
         string $runId,
         int $employeeId,
         array $toolCalls,
-        array &$apiMessages,
-        array &$toolActions,
-        array &$clientActions,
-        array &$hookMetadata,
+        array &$toolLoopState,
         int &$toolIndex,
     ): \Generator {
+        $hookMetadata = &$toolLoopState['hookMetadata'];
+
         foreach ($toolCalls as $toolCall) {
             $functionName = (string) ($toolCall['function']['name'] ?? '');
             $arguments = $this->decodeToolArguments($toolCall);
@@ -1039,7 +844,7 @@ class AgenticRuntime
             if ($hookVerdict['denied']) {
                 $denialMessage = 'Tool call denied: '.($hookVerdict['reason'] ?? 'denied by policy');
 
-                $toolActions[] = [
+                $toolLoopState['toolActions'][] = [
                     'tool' => $functionName,
                     'arguments' => $arguments,
                     'result_preview' => $denialMessage,
@@ -1047,7 +852,7 @@ class AgenticRuntime
                     'denial_reason' => $hookVerdict['reason'],
                     'denial_source' => 'hook',
                 ];
-                $apiMessages[] = [
+                $toolLoopState['apiMessages'][] = [
                     'role' => 'tool',
                     'tool_call_id' => $toolCallId,
                     'content' => $denialMessage,
@@ -1093,9 +898,9 @@ class AgenticRuntime
             $durationMs = (int) ((hrtime(true) - $toolStartTime) / 1_000_000);
             $toolExecution = $this->buildToolExecution($functionName, $arguments, $toolCallId, $toolResult);
 
-            $toolActions[] = $toolExecution['action'];
-            array_push($clientActions, ...$toolExecution['client_actions']);
-            $apiMessages[] = $toolExecution['message'];
+            $toolLoopState['toolActions'][] = $toolExecution['action'];
+            array_push($toolLoopState['clientActions'], ...$toolExecution['client_actions']);
+            $toolLoopState['apiMessages'][] = $toolExecution['message'];
 
             $this->hookCoordinator->postToolResult($runId, $employeeId, $toolExecution['action'], $hookMetadata);
 

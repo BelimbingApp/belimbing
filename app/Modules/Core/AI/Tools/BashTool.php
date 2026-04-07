@@ -110,12 +110,31 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
     {
         $command = $this->requireString($arguments, 'command');
 
+        $opened = $this->openBashStreamingPipes($command);
+        if ($opened === null) {
+            return ToolResult::error('Failed to start bash process.', 'command_failed');
+        }
+
+        [$process, $pipes] = $opened;
+
+        yield from $this->yieldBashStreamUntilComplete(
+            $process,
+            $pipes,
+        );
+    }
+
+    /**
+     * @return array{0: resource, 1: array<int, resource>}|null
+     */
+    private function openBashStreamingPipes(string $command): ?array
+    {
         $descriptors = [
-            0 => ['pipe', 'r'],       // stdin
-            1 => ['pipe', 'w'],       // stdout
-            2 => ['pipe', 'w'],       // stderr
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
         ];
 
+        $pipes = null;
         $process = proc_open(
             ['bash', '-c', $command],
             $descriptors,
@@ -123,15 +142,23 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
             base_path(),
         );
 
-        if (! is_resource($process)) {
-            return ToolResult::error('Failed to start bash process.', 'command_failed');
+        if (! is_resource($process) || ! is_array($pipes)) {
+            return null;
         }
 
-        fclose($pipes[0]); // close stdin
-
+        fclose($pipes[0]);
         stream_set_blocking($pipes[1], false);
         stream_set_blocking($pipes[2], false);
 
+        return [$process, $pipes];
+    }
+
+    /**
+     * @param  array<int, resource>  $pipes
+     * @return \Generator<int, string, mixed, ToolResult>
+     */
+    private function yieldBashStreamUntilComplete(mixed $process, array $pipes): \Generator
+    {
         $stdout = '';
         $stderr = '';
         $eventCount = 0;
@@ -141,10 +168,8 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
         while (true) {
             $stdoutChunk = (string) stream_get_contents($pipes[1]);
             $stderrChunk = (string) stream_get_contents($pipes[2]);
-
             $stdout .= $stdoutChunk;
             $stderr .= $stderrChunk;
-
             $combined = $stdoutChunk.$stderrChunk;
 
             if ($combined !== '' && $eventCount < self::MAX_STDOUT_EVENTS) {
@@ -155,35 +180,62 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
             $status = proc_get_status($process);
 
             if (! $status['running']) {
-                // Drain remaining output
-                $finalStdout = (string) stream_get_contents($pipes[1]);
-                $finalStderr = (string) stream_get_contents($pipes[2]);
-                $stdout .= $finalStdout;
-                $stderr .= $finalStderr;
+                yield from $this->yieldFinalBashDrain($pipes, $stdout, $stderr, $eventCount);
 
-                if (($finalStdout.$finalStderr) !== '' && $eventCount < self::MAX_STDOUT_EVENTS) {
-                    yield $finalStdout.$finalStderr;
-                }
-
-                break;
+                return $this->finalizeBashProcessResult($process, $pipes, $status, $stdout, $stderr);
             }
 
             if ((hrtime(true) - $startTime) > $timeoutNs) {
-                proc_terminate($process, 9);
-                fclose($pipes[1]);
-                fclose($pipes[2]);
-                proc_close($process);
-
-                return ToolResult::error(
-                    'Command timed out after '.self::TIMEOUT_SECONDS.' seconds.'
-                    .($stdout !== '' ? "\nPartial output:\n".$stdout : ''),
-                    'command_timeout',
-                );
+                return $this->terminateBashForTimeout($process, $pipes, $stdout);
             }
 
             usleep(self::STREAM_POLL_INTERVAL_US);
         }
+    }
 
+    /**
+     * @param  array<int, resource>  $pipes
+     * @return \Generator<int, string>
+     */
+    private function yieldFinalBashDrain(array $pipes, string &$stdout, string &$stderr, int $eventCount): \Generator
+    {
+        $finalStdout = (string) stream_get_contents($pipes[1]);
+        $finalStderr = (string) stream_get_contents($pipes[2]);
+        $stdout .= $finalStdout;
+        $stderr .= $finalStderr;
+
+        if (($finalStdout.$finalStderr) !== '' && $eventCount < self::MAX_STDOUT_EVENTS) {
+            yield $finalStdout.$finalStderr;
+        }
+    }
+
+    /**
+     * @param  array<int, resource>  $pipes
+     */
+    private function terminateBashForTimeout(mixed $process, array $pipes, string $stdout): ToolResult
+    {
+        proc_terminate($process, 9);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+
+        return ToolResult::error(
+            'Command timed out after '.self::TIMEOUT_SECONDS.' seconds.'
+            .($stdout !== '' ? "\nPartial output:\n".$stdout : ''),
+            'command_timeout',
+        );
+    }
+
+    /**
+     * @param  array<int, resource>  $pipes
+     */
+    private function finalizeBashProcessResult(
+        mixed $process,
+        array $pipes,
+        array $status,
+        string $stdout,
+        string $stderr,
+    ): ToolResult {
         fclose($pipes[1]);
         fclose($pipes[2]);
 

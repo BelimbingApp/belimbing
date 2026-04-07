@@ -16,6 +16,12 @@ use Mockery\MockInterface;
 const MAT_TEST_SESSION = 'sess_materializer_test';
 const MAT_TEST_RUN_ID = 'run_mat_test_001';
 
+const MAT_PHASE_THINKING_LABEL = 'Thinking…';
+
+const MAT_ASSISTANT_OUTPUT = 'Hello world';
+
+const MAT_TOOL_DENIED_MESSAGE = 'Tool was denied';
+
 /**
  * Create a ChatTurn and advance it to a given state with events.
  */
@@ -40,19 +46,19 @@ function populateHappyPathEvents(ChatTurn $turn, TurnEventPublisher $pub): void
     $pub->turnStarted($turn);
     $pub->runStarted($turn, MAT_TEST_RUN_ID);
     $turn->transitionTo(TurnStatus::Running);
-    $pub->phaseChanged($turn, TurnPhase::Thinking, 'Thinking…');
+    $pub->phaseChanged($turn, TurnPhase::Thinking, MAT_PHASE_THINKING_LABEL);
     $pub->thinkingStarted($turn);
     $pub->phaseChanged($turn, TurnPhase::RunningTool, 'bash');
     $pub->toolStarted($turn, 'bash', '{"cmd":"ls"}', 0);
     $pub->toolFinished($turn, 'bash', 'success', '10 files', 150, 32);
-    $pub->phaseChanged($turn, TurnPhase::Thinking, 'Thinking…');
+    $pub->phaseChanged($turn, TurnPhase::Thinking, MAT_PHASE_THINKING_LABEL);
     $pub->heartbeat($turn, 500);
     $pub->phaseChanged($turn, TurnPhase::StreamingAnswer, 'Responding…');
     $pub->outputDelta($turn, 'Hello ');
     $pub->outputDelta($turn, 'world');
     $pub->phaseChanged($turn, TurnPhase::Finalizing, 'Finishing up…');
     $pub->usageUpdated($turn, ['prompt_tokens' => 100, 'completion_tokens' => 50]);
-    $pub->outputBlockCommitted($turn, 'markdown', 'Hello world');
+    $pub->outputBlockCommitted($turn, 'markdown', MAT_ASSISTANT_OUTPUT);
     $pub->turnCompleted($turn, ['run_id' => MAT_TEST_RUN_ID, 'elapsed_ms' => 1200]);
 }
 
@@ -83,6 +89,60 @@ function mockMessageManager(): MockInterface
     return $mm;
 }
 
+/**
+ * Mock expectations for {@see populateHappyPathEvents()} transcript materialization.
+ */
+function expectMaterializerHappyPathAppendMocks(MockInterface $mm, ChatTurn $turn): void
+{
+    $mm->shouldReceive('appendThinking')
+        ->once()
+        ->with(
+            $turn->employee_id,
+            MAT_TEST_SESSION,
+            MAT_TEST_RUN_ID,
+        );
+
+    $mm->shouldReceive('appendToolCall')
+        ->once()
+        ->with(
+            $turn->employee_id,
+            MAT_TEST_SESSION,
+            MAT_TEST_RUN_ID,
+            'bash',
+            '{"cmd":"ls"}',
+            0,
+        );
+
+    $mm->shouldReceive('appendToolResult')
+        ->once()
+        ->withArgs(function ($empId, $sessId, $runId, $entry) use ($turn) {
+            return $empId === $turn->employee_id
+                && $sessId === MAT_TEST_SESSION
+                && $runId === MAT_TEST_RUN_ID
+                && $entry->toolName === 'bash'
+                && $entry->status === 'success'
+                && $entry->resultPreview === '10 files'
+                && $entry->durationMs === 150
+                && $entry->resultLength === 32;
+        });
+
+    $mm->shouldReceive('appendAssistantMessage')
+        ->once()
+        ->with(
+            $turn->employee_id,
+            MAT_TEST_SESSION,
+            MAT_ASSISTANT_OUTPUT,
+            MAT_TEST_RUN_ID,
+            Mockery::on(fn ($meta) => ($meta['tokens']['prompt_tokens'] ?? null) === 100
+                && ($meta['tokens']['completion_tokens'] ?? null) === 50),
+        )
+        ->andReturn(new Message(
+            role: 'assistant',
+            content: MAT_ASSISTANT_OUTPUT,
+            timestamp: new DateTimeImmutable,
+        ));
+}
+
 // ------------------------------------------------------------------
 // ChatRunPersister::materializeFromTurn — happy path
 // ------------------------------------------------------------------
@@ -94,54 +154,7 @@ describe('ChatRunPersister materializeFromTurn', function () {
         populateHappyPathEvents($turn, $pub);
 
         $mm = mockMessageManager();
-
-        $mm->shouldReceive('appendThinking')
-            ->once()
-            ->with(
-                $turn->employee_id,
-                MAT_TEST_SESSION,
-                MAT_TEST_RUN_ID,
-            );
-
-        $mm->shouldReceive('appendToolCall')
-            ->once()
-            ->with(
-                $turn->employee_id,
-                MAT_TEST_SESSION,
-                MAT_TEST_RUN_ID,
-                'bash',
-                '{"cmd":"ls"}',
-                0,
-            );
-
-        $mm->shouldReceive('appendToolResult')
-            ->once()
-            ->withArgs(function ($empId, $sessId, $runId, $entry) use ($turn) {
-                return $empId === $turn->employee_id
-                    && $sessId === MAT_TEST_SESSION
-                    && $runId === MAT_TEST_RUN_ID
-                    && $entry->toolName === 'bash'
-                    && $entry->status === 'success'
-                    && $entry->resultPreview === '10 files'
-                    && $entry->durationMs === 150
-                    && $entry->resultLength === 32;
-            });
-
-        $mm->shouldReceive('appendAssistantMessage')
-            ->once()
-            ->with(
-                $turn->employee_id,
-                MAT_TEST_SESSION,
-                'Hello world',
-                MAT_TEST_RUN_ID,
-                Mockery::on(fn ($meta) => ($meta['tokens']['prompt_tokens'] ?? null) === 100
-                    && ($meta['tokens']['completion_tokens'] ?? null) === 50),
-            )
-            ->andReturn(new Message(
-                role: 'assistant',
-                content: 'Hello world',
-                timestamp: new DateTimeImmutable,
-            ));
+        expectMaterializerHappyPathAppendMocks($mm, $turn);
 
         $persister = new ChatRunPersister;
         $persister->materializeFromTurn($turn, $mm, $turn->employee_id, MAT_TEST_SESSION);
@@ -159,13 +172,13 @@ describe('ChatRunPersister materializeFromTurn', function () {
             ->with(
                 $turn->employee_id,
                 MAT_TEST_SESSION,
-                'Hello world',
+                MAT_ASSISTANT_OUTPUT,
                 MAT_TEST_RUN_ID,
                 Mockery::on(fn ($meta) => ($meta['prompt_package'] ?? null) === 'test_package'),
             )
             ->andReturn(new Message(
                 role: 'assistant',
-                content: 'Hello world',
+                content: MAT_ASSISTANT_OUTPUT,
                 timestamp: new DateTimeImmutable,
             ));
 
@@ -192,7 +205,7 @@ describe('ChatRunPersister materializeFromTurn', function () {
 
         $mm->shouldReceive('appendAssistantMessage')
             ->once()
-            ->withArgs(function ($empId, $sessId, $content, $runId, $meta) use ($turn) {
+            ->withArgs(function ($empId, $sessId, $content, $runId) use ($turn) {
                 return $empId === $turn->employee_id
                     && $sessId === MAT_TEST_SESSION
                     && str_contains($content, 'API rate limited')
@@ -215,7 +228,7 @@ describe('ChatRunPersister materializeFromTurn', function () {
         $pub->turnStarted($turn);
         $pub->runStarted($turn, MAT_TEST_RUN_ID);
         $turn->transitionTo(TurnStatus::Running);
-        $pub->phaseChanged($turn, TurnPhase::Thinking, 'Thinking…');
+        $pub->phaseChanged($turn, TurnPhase::Thinking, MAT_PHASE_THINKING_LABEL);
         $pub->thinkingStarted($turn);
         $pub->turnCompleted($turn);
 
@@ -235,7 +248,7 @@ describe('ChatRunPersister materializeFromTurn', function () {
         $pub->runStarted($turn, MAT_TEST_RUN_ID);
         $turn->transitionTo(TurnStatus::Running);
         $pub->toolDenied($turn, 'dangerous_tool', 'blocked by policy', 'hook');
-        $pub->outputBlockCommitted($turn, 'markdown', 'Tool was denied');
+        $pub->outputBlockCommitted($turn, 'markdown', MAT_TOOL_DENIED_MESSAGE);
         $pub->turnCompleted($turn);
 
         $mm = mockMessageManager();
@@ -257,13 +270,13 @@ describe('ChatRunPersister materializeFromTurn', function () {
             ->with(
                 $turn->employee_id,
                 MAT_TEST_SESSION,
-                'Tool was denied',
+                MAT_TOOL_DENIED_MESSAGE,
                 MAT_TEST_RUN_ID,
                 Mockery::any(),
             )
             ->andReturn(new Message(
                 role: 'assistant',
-                content: 'Tool was denied',
+                content: MAT_TOOL_DENIED_MESSAGE,
                 timestamp: new DateTimeImmutable,
             ));
 
@@ -291,11 +304,9 @@ describe('ChatRunPersister materializeFromTurn', function () {
         $mm->shouldReceive('appendToolCall')->once();
         $mm->shouldReceive('appendToolResult')
             ->once()
-            ->withArgs(function ($empId, $sessId, $runId, $entry) {
-                return $entry->status === 'error'
-                    && $entry->resultLength === 17
-                    && $entry->errorPayload['code'] === 'permission_denied';
-            });
+            ->withArgs(fn (...$args) => $args[3]->status === 'error'
+                && $args[3]->resultLength === 17
+                && $args[3]->errorPayload['code'] === 'permission_denied');
         $mm->shouldReceive('appendAssistantMessage')
             ->once()
             ->andReturn(new Message(
