@@ -10,7 +10,7 @@
 
 **Belimbing (BLB) is a FRAMEWORK, not an application.**
 
-- A customizable, extensible framework built on Laravel 12+
+- A customizable, extensible framework built on Laravel 13
 - Adopters build their own business systems on top of BLB
 - Think: WordPress for business processes, not a monolithic ERP
 - Open-source, self-hosted only, AI-native architecture

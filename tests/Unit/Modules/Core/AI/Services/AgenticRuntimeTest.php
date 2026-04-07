@@ -9,6 +9,8 @@ use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Tools\ToolResult;
+use App\Modules\Core\AI\DTO\ExecutionPolicy;
+use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use Illuminate\Foundation\Testing\TestCase;
@@ -147,10 +149,11 @@ function runAgenticConversation(
     ?AgentToolRegistry $toolRegistry = null,
     string $userMessage = 'Hello',
     string $systemPrompt = 'Prompt',
+    ?ExecutionPolicy $policy = null,
 ): array {
     return test()
         ->makeAgenticRuntime($llmClient, $configResolver ?? defaultAgenticConfigResolver(), $toolRegistry)
-        ->run([test()->makeMessage('user', $userMessage)], 1, $systemPrompt);
+        ->run([test()->makeMessage('user', $userMessage)], 1, $systemPrompt, null, $policy);
 }
 
 describe('AgenticRuntime', function () {
@@ -277,7 +280,10 @@ describe('AgenticRuntime', function () {
             $this->makeErrorResponse(AiErrorType::Timeout, 'Request timed out', 55000)
         );
 
-        $result = runAgenticConversation($llmClient);
+        $result = runAgenticConversation(
+            $llmClient,
+            policy: new ExecutionPolicy(ExecutionMode::Interactive, 60),
+        );
 
         expect($result['meta']['error_type'])->toBe('timeout');
         expect($result['meta']['retry_attempts'])->toBeEmpty();

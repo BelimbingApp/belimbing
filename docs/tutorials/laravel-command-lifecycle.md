@@ -219,4 +219,4 @@ $this->app->singleton(SomeCommand::class, function ($app) {
 
 ---
 
-**Note:** This tutorial is based on actual debugging of Laravel 12.x's command registration system. The lifecycle may vary in different Laravel versions.
+**Note:** This tutorial is based on actual debugging of Laravel 13.x's command registration system. The lifecycle may vary in different Laravel versions.

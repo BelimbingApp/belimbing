@@ -172,7 +172,7 @@ class WebSearchTool extends AbstractTool
             'test_examples' => [
                 [
                     'label' => 'Simple search',
-                    'input' => ['query' => 'Laravel 12 new features'],
+                    'input' => ['query' => 'latest Laravel release date and new features'],
                 ],
                 [
                     'label' => 'Get oil prices',

@@ -24,7 +24,7 @@ Workflow:
 8. When done, transition the ticket to "review" status.
 
 Code conventions:
-- PHP 8.5+, Laravel 12, Livewire 4, Tailwind CSS 4.
+- PHP 8.5+, Laravel 13, Livewire 4, Tailwind CSS 4.
 - Use single quotes for strings unless interpolation is needed.
 - Always add return type declarations to methods.
 - Use `query()` for Eloquent calls (no magic statics).

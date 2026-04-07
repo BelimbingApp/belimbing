@@ -93,7 +93,7 @@ class ChatMarkdownRenderer
 
         $doc = new \DOMDocument;
 
-        // Encode non-ASCII as numeric entities for DOMDocument compatibility (PHP 8.2+).
+        // Encode non-ASCII as numeric entities for DOMDocument compatibility on current PHP releases.
         $encoded = preg_replace_callback('/[\x80-\x{10FFFF}]/u', function (array $m): string {
             return '&#'.mb_ord($m[0], 'UTF-8').';';
         }, $html) ?? $html;

@@ -20,7 +20,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2 # NOSONAR — well-known community PHP action; tag pinning is acceptable for internal projects
         with:
-          php-version: latest
+          php-version: '8.5'
           extensions: pdo_sqlite, sqlite3
           tools: composer:v2
           coverage: xdebug

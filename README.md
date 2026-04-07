@@ -14,7 +14,7 @@ Meet **Lara** — the built-in system orchestrator. She manages your AI team, gu
 - **Bring your own model** — OpenAI, Anthropic, Google, Ollama, or any compatible endpoint. Mix providers across agents. Ordered fallback built in.
 - **Real tools, real guardrails** — Agents can run commands, query data, search the web, navigate the UI, and more. Every action gated by the same authorization system that governs human users.
 - **Convention-driven codebase** — Foundational modules (Company, Employee, User, AI, Workflow) and a structured architecture designed to be extended — by you, by your coding agent, or both.
-- **Built on Laravel** — PHP 8.5+, PostgreSQL. Battle-tested stack, massive ecosystem.
+- **Built on Laravel 13** — PHP 8.5+, PostgreSQL. Battle-tested stack, massive ecosystem.
 
 ## Status
 
