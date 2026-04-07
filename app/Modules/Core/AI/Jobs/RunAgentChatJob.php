@@ -59,6 +59,17 @@ class RunAgentChatJob implements ShouldQueue
     public int $timeout = 600;
 
     /**
+     * Fail fast — do not retry. A failed LLM turn should not be silently retried
+     * because the conversation state may have advanced.
+     */
+    public int $tries = 1;
+
+    /**
+     * No backoff needed with a single attempt.
+     */
+    public int $backoff = 0;
+
+    /**
      * @param  string  $dispatchId  The ai_operation_dispatches primary key
      */
     public function __construct(

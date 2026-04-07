@@ -11,13 +11,13 @@ use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 
-const RESUME_TEST_SESSION = 'sess_resume_test';
-const RESUME_TEST_RUN = 'run_resume_001';
+const REPLAY_TEST_SESSION = 'sess_replay_test';
+const REPLAY_TEST_RUN = 'run_replay_001';
 
 /**
  * @return array{user: User, employee: Employee}
  */
-function createResumeFixture(): array
+function createReplayFixture(): array
 {
     Company::provisionLicensee('Test Company');
     Employee::provisionLara();
@@ -37,11 +37,11 @@ function createResumeFixture(): array
     ];
 }
 
-function createTurnWithEvents(int $userId): ChatTurn
+function createTurnWithReplayEvents(int $userId): ChatTurn
 {
     $turn = ChatTurn::query()->create([
         'employee_id' => Employee::LARA_ID,
-        'session_id' => RESUME_TEST_SESSION,
+        'session_id' => REPLAY_TEST_SESSION,
         'acting_for_user_id' => $userId,
         'status' => TurnStatus::Queued,
         'current_phase' => TurnPhase::WaitingForWorker,
@@ -50,7 +50,7 @@ function createTurnWithEvents(int $userId): ChatTurn
     $pub = app(TurnEventPublisher::class);
 
     $pub->turnStarted($turn);
-    $pub->runStarted($turn, RESUME_TEST_RUN);
+    $pub->runStarted($turn, REPLAY_TEST_RUN);
     $turn->transitionTo(TurnStatus::Running);
     $pub->phaseChanged($turn, TurnPhase::Thinking, 'Thinking…');
     $pub->thinkingStarted($turn);
@@ -66,63 +66,64 @@ function createTurnWithEvents(int $userId): ChatTurn
 }
 
 describe('TurnEventStreamController', function () {
-    it('replays all events for a completed turn', function () {
-        $fixture = createResumeFixture();
+    it('returns all events for a completed turn as JSON', function () {
+        $fixture = createReplayFixture();
         $this->actingAs($fixture['user']);
 
-        $turn = createTurnWithEvents($fixture['user']->id);
+        $turn = createTurnWithReplayEvents($fixture['user']->id);
 
-        $response = $this->get(route('ai.chat.turn.events', [
+        $response = $this->getJson(route('ai.chat.turn.events', [
             'turnId' => $turn->id,
             'after_seq' => 0,
         ]));
 
         $response->assertOk();
-        $content = $response->streamedContent();
+        $json = $response->json();
 
-        // Should contain turn events as SSE
-        expect($content)
-            ->toContain('event: turn.started')
-            ->toContain('event: run.started')
-            ->toContain('event: turn.phase_changed')
-            ->toContain('event: assistant.thinking_started')
-            ->toContain('event: tool.started')
-            ->toContain('event: tool.finished')
-            ->toContain('event: assistant.output_delta')
-            ->toContain('event: assistant.output_block_committed')
-            ->toContain('event: turn.completed')
-            ->toContain('event: meta');  // stream_end meta event
+        expect($json)->toHaveKey('events');
+        expect($json)->toHaveKey('turn_id', $turn->id);
+        expect($json)->toHaveKey('status', 'completed');
+
+        $eventTypes = collect($json['events'])->pluck('event_type')->all();
+
+        expect($eventTypes)
+            ->toContain('turn.started')
+            ->toContain('run.started')
+            ->toContain('turn.phase_changed')
+            ->toContain('assistant.thinking_started')
+            ->toContain('tool.started')
+            ->toContain('tool.finished')
+            ->toContain('assistant.output_delta')
+            ->toContain('assistant.output_block_committed')
+            ->toContain('turn.completed');
     });
 
     it('resumes from after_seq skipping earlier events', function () {
-        $fixture = createResumeFixture();
+        $fixture = createReplayFixture();
         $this->actingAs($fixture['user']);
 
-        $turn = createTurnWithEvents($fixture['user']->id);
+        $turn = createTurnWithReplayEvents($fixture['user']->id);
 
-        // Skip first 5 events (turn.started, run.started, phase.changed, thinking_started, phase.changed)
-        $response = $this->get(route('ai.chat.turn.events', [
+        $response = $this->getJson(route('ai.chat.turn.events', [
             'turnId' => $turn->id,
             'after_seq' => 5,
         ]));
 
         $response->assertOk();
-        $content = $response->streamedContent();
+        $json = $response->json();
 
-        // Should NOT contain early events
-        expect($content)
-            ->not->toContain('event: turn.started')
-            ->not->toContain('event: run.started');
+        $eventTypes = collect($json['events'])->pluck('event_type')->all();
 
-        // Should contain later events
-        expect($content)
-            ->toContain('event: tool.started')
-            ->toContain('event: tool.finished')
-            ->toContain('event: turn.completed');
+        expect($eventTypes)
+            ->not->toContain('turn.started')
+            ->not->toContain('run.started')
+            ->toContain('tool.started')
+            ->toContain('tool.finished')
+            ->toContain('turn.completed');
     });
 
     it('returns 404 for non-existent turn', function () {
-        $fixture = createResumeFixture();
+        $fixture = createReplayFixture();
         $this->actingAs($fixture['user']);
 
         $response = $this->get(route('ai.chat.turn.events', [
@@ -133,17 +134,15 @@ describe('TurnEventStreamController', function () {
     });
 
     it('returns 403 for turn belonging to another user', function () {
-        $fixture = createResumeFixture();
+        $fixture = createReplayFixture();
 
-        // Create turn owned by a different user
         $otherUser = User::factory()->create([
             'company_id' => Company::LICENSEE_ID,
             'employee_id' => $fixture['employee']->id,
         ]);
 
-        $turn = createTurnWithEvents($otherUser->id);
+        $turn = createTurnWithReplayEvents($otherUser->id);
 
-        // Act as the fixture user (not the owner)
         $this->actingAs($fixture['user']);
 
         $response = $this->get(route('ai.chat.turn.events', [
@@ -153,60 +152,43 @@ describe('TurnEventStreamController', function () {
         $response->assertForbidden();
     });
 
-    it('includes seq and turn_id in every event payload', function () {
-        $fixture = createResumeFixture();
+    it('includes seq and turn_id in every event', function () {
+        $fixture = createReplayFixture();
         $this->actingAs($fixture['user']);
 
-        $turn = createTurnWithEvents($fixture['user']->id);
+        $turn = createTurnWithReplayEvents($fixture['user']->id);
 
-        $response = $this->get(route('ai.chat.turn.events', [
+        $response = $this->getJson(route('ai.chat.turn.events', [
             'turnId' => $turn->id,
         ]));
 
-        $content = $response->streamedContent();
-        $dataLines = array_filter(
-            explode("\n", $content),
-            fn ($line) => str_starts_with($line, 'data: '),
-        );
+        $json = $response->json();
+        $events = $json['events'];
 
-        $turnEventCount = 0;
+        expect(count($events))->toBeGreaterThanOrEqual(10);
 
-        foreach ($dataLines as $line) {
-            $data = json_decode(substr($line, 6), true);
-
-            if ($data === null) {
-                continue;
-            }
-
-            // Meta events have 'type' key, turn events have 'turn_id'
-            if (isset($data['turn_id'])) {
-                $turnEventCount++;
-                expect($data['turn_id'])->toBe($turn->id);
-                expect($data)->toHaveKey('seq');
-                expect($data)->toHaveKey('event_type');
-                expect($data)->toHaveKey('occurred_at');
-            }
+        foreach ($events as $event) {
+            expect($event['turn_id'])->toBe($turn->id);
+            expect($event)->toHaveKey('seq');
+            expect($event)->toHaveKey('event_type');
+            expect($event)->toHaveKey('occurred_at');
         }
-
-        // We created 12 events in createTurnWithEvents (including the terminal)
-        expect($turnEventCount)->toBeGreaterThanOrEqual(10);
     });
 
-    it('emits stream_end meta event for terminal turns', function () {
-        $fixture = createResumeFixture();
+    it('returns turn metadata in response envelope', function () {
+        $fixture = createReplayFixture();
         $this->actingAs($fixture['user']);
 
-        $turn = createTurnWithEvents($fixture['user']->id);
+        $turn = createTurnWithReplayEvents($fixture['user']->id);
 
-        $response = $this->get(route('ai.chat.turn.events', [
+        $response = $this->getJson(route('ai.chat.turn.events', [
             'turnId' => $turn->id,
         ]));
 
-        $content = $response->streamedContent();
+        $json = $response->json();
 
-        // Should end with a meta event
-        expect($content)->toContain('"type":"stream_end"');
-        expect($content)->toContain('"reason":"turn_terminal"');
-        expect($content)->toContain('"status":"completed"');
+        expect($json)->toHaveKey('turn_id', $turn->id);
+        expect($json)->toHaveKey('status', 'completed');
+        expect($json)->toHaveKey('started_at');
     });
 });

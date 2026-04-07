@@ -36,7 +36,7 @@ trait HandlesStreaming
      * so the job uses the interactive streaming policy. Page context is resolved
      * here (on the real page request) and stored directly in dispatch meta.
      *
-     * @return array{resumeUrl: string, turnId: string, session_id: string}|null Null when an orchestration shortcut handled the message or input was invalid
+     * @return array{turnId: string, session_id: string}|null Null when an orchestration shortcut handled the message or input was invalid
      */
     public function prepareStreamingRun(): ?array
     {
@@ -128,7 +128,6 @@ trait HandlesStreaming
         $this->backgroundDispatchId = $dispatch->id;
 
         return [
-            'resumeUrl' => route('ai.chat.turn.events', ['turnId' => $turn->id]),
             'turnId' => $turn->id,
             'session_id' => $this->selectedSessionId,
         ];

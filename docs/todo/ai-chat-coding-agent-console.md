@@ -612,13 +612,13 @@ Audited all static properties and mutable singletons across `app/Base/`.
 
 The process model changes in two ways:
 
-1. **`dev:all` pipeline:** `composer run dev` → `bun run dev:all` now launches `php artisan octane:start --server=frankenphp --watch`. FrankenPHP runs Caddy internally on the same `APP_PORT`, so the PHP serving process now also handles TLS, routing, and SSE without a separate proxy.
+1. **`dev:all` pipeline:** `composer run dev` → `bun run dev:all` now launches `php artisan octane:start --server=frankenphp` without `--watch` by default. FrankenPHP runs Caddy internally on the same `APP_PORT`, so the PHP serving process now also handles TLS and routing without a separate proxy. `bun run dev:all:watch` remains available as an explicit opt-in for file-watch restarts.
 
 2. **Separate Caddy process eliminated:** `start-app.sh` no longer starts a shared Caddy process. FrankenPHP IS Caddy — it reads the project `Caddyfile` directly via Octane.
 
 ##### Dev pipeline (`package.json` + `composer.json`)
 
-- [x] Replace `php artisan serve --port=${APP_PORT:-8000}` with `php artisan octane:start --server=frankenphp --port=${APP_PORT:-8000} --watch` in `package.json` `dev:all`.
+- [x] Replace `php artisan serve --port=${APP_PORT:-8000}` with `php artisan octane:start --server=frankenphp --port=${APP_PORT:-8000}` in `package.json` `dev:all`, and keep a separate `dev:all:watch` opt-in script for watched restarts.
 
 ##### `start-app.sh` / `stop-app.sh`
 

@@ -14,14 +14,14 @@ use App\Modules\Core\AI\Models\ChatTurnEvent;
  * Maps AgenticRuntime event streams to durable turn events.
  *
  * Wraps the runtime's Generator and publishes structured turn events via
- * TurnEventPublisher. Yields each persisted turn event as an SSE payload,
- * providing a single unified event format for both live streaming and
- * resume-after-disconnect.
+ * TurnEventPublisher. Yields each persisted turn event payload,
+ * providing a single unified event format for both live delivery
+ * (via Reverb broadcast) and replay-after-disconnect.
  *
  * The bridge:
  * 1. Transitions the turn Queued → Booting → Running as events arrive
  * 2. Maps each runtime event to one or more turn events
- * 3. Yields turn event SSE payloads for immediate client emission
+ * 3. Yields turn event payloads (also broadcast via Reverb for live delivery)
  * 4. Finalizes the turn on done/error
  *
  * Callers that abandon the generator early (e.g., cancellation) must
@@ -40,9 +40,8 @@ class TurnStreamBridge
     /**
      * Wrap a runtime event stream and publish turn events.
      *
-     * Yields turn event SSE payloads (same format as TurnEventStreamController)
-     * so the client receives a single unified event stream whether connecting
-     * to the initial run or resuming after disconnect.
+     * Yields turn event payloads (same format as TurnEventStreamController JSON
+     * response). Events are also broadcast live via Reverb by the publisher.
      *
      * @param  ChatTurn  $turn  A freshly created turn in Queued status
      * @param  \Generator<int, array{event: string, data: array<string, mixed>}>  $runtimeStream

@@ -22,7 +22,7 @@ Route::post('api/ai/messaging/webhook/{channel}/{accountId?}', MessagingWebhookC
     ->where('accountId', '[0-9]+');
 
 Route::middleware(['auth'])->group(function () {
-    // Turn event replay/follow (SSE — the only SSE endpoint for chat)
+    // Turn event replay (JSON — live delivery via Reverb WebSocket)
     Route::get('api/ai/chat/turns/{turnId}/events', TurnEventStreamController::class)
         ->name('ai.chat.turn.events');
     // Lara setup

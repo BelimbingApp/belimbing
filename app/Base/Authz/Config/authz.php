@@ -304,6 +304,7 @@ return [
                 'admin.system_info.view',
                 'admin.system_session.list',
                 'admin.system_cache.view',
+                'admin.system_transport_test.view',
             ],
         ],
     ],

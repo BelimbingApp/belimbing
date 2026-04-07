@@ -23,5 +23,23 @@ return [
             'parent' => 'system',
             'position' => 95,
         ],
+        [
+            'id' => 'system.test-sse',
+            'label' => 'TestSSE',
+            'icon' => 'heroicon-o-signal',
+            'route' => 'admin.system.test-sse.index',
+            'permission' => 'admin.system_transport_test.view',
+            'parent' => 'system',
+            'position' => 96,
+        ],
+        [
+            'id' => 'system.test-reverb',
+            'label' => 'TestReverb',
+            'icon' => 'heroicon-o-bolt',
+            'route' => 'admin.system.test-reverb.index',
+            'permission' => 'admin.system_transport_test.view',
+            'parent' => 'system',
+            'position' => 97,
+        ],
     ],
 ];

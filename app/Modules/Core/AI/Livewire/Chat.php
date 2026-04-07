@@ -191,9 +191,6 @@ class Chat extends Component
             'markdown' => $markdown,
             'quickActions' => $quickActions,
             'activeTurnId' => $activeTurn?->id,
-            'activeTurnResumeUrl' => $activeTurn
-                ? route('ai.chat.turn.events', ['turnId' => $activeTurn->id])
-                : null,
         ]);
     }
 

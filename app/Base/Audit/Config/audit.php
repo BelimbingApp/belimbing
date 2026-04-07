@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Core\AI\Models\OperationDispatch;
+
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
@@ -70,7 +72,9 @@ return [
     | skips these models entirely.
     |
     */
-    'exclude_models' => [],
+    'exclude_models' => [
+        OperationDispatch::class,
+    ],
 
     /*
     |--------------------------------------------------------------------------

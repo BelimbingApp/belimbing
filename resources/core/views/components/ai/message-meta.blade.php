@@ -36,6 +36,7 @@
     $runIdLabel = is_string($runId) && $runId !== '' ? $runId : null;
     $runDetailsId = $runIdLabel !== null ? 'run-details-'.$runIdLabel : null;
     $runDetailsTitleId = $runIdLabel !== null ? 'run-details-title-'.$runIdLabel : null;
+    $controlPlaneUrl = $runIdLabel !== null ? route('admin.ai.control-plane', ['inspectRunId' => $runIdLabel]) : null;
 
     $toneClasses = match ($tone) {
         'inverse' => 'text-accent-on/70 focus-visible:ring-accent-on/40',
@@ -119,13 +120,13 @@
                         class="mb-1.5 flex items-center justify-between gap-2"
                     >
                         <span class="font-medium text-muted whitespace-nowrap">{{ __('Run ID') }}</span>
-                        @if ($canAccessControlPlane)
-                            <a
-                                href="{{ route('admin.ai.control-plane', ['inspectRunId' => $runIdLabel]) }}"
-                                wire:navigate
+                        @if ($controlPlaneUrl !== null)
+                            <button
+                                type="button"
+                                @click.stop="popoverOpen = false; window.location.href = @js($controlPlaneUrl)"
                                 class="min-w-0 flex-1 truncate text-right font-mono text-accent hover:underline"
                                 title="{{ $runIdLabel }}"
-                            >{{ $runIdLabel }}</a>
+                            >{{ $runIdLabel }}</button>
                         @else
                             <span class="min-w-0 flex-1 truncate text-right font-mono" title="{{ $runIdLabel }}">{{ $runIdLabel }}</span>
                         @endif
@@ -197,15 +198,15 @@
                             </div>
                         @endif
 
-                        @if ($canAccessControlPlane)
+                        @if ($controlPlaneUrl !== null)
                             <div class="border-t border-border-default pt-1.5 mt-1.5">
-                                <a
-                                    href="{{ route('admin.ai.control-plane', ['inspectRunId' => $runIdLabel]) }}"
-                                    wire:navigate
+                                <button
+                                    type="button"
+                                    @click.stop="popoverOpen = false; window.location.href = @js($controlPlaneUrl)"
                                     class="text-[10px] text-accent hover:underline"
                                 >
                                     {{ __('View in Control Plane') }} →
-                                </a>
+                                </button>
                             </div>
                         @endif
                     </div>
