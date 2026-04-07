@@ -10,6 +10,7 @@ use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
+use App\Base\AI\Tools\ToolResult;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
@@ -474,6 +475,18 @@ class AgenticRuntime
         $arguments = $this->decodeToolArguments($toolCall);
         $toolCallId = (string) ($toolCall['id'] ?? '');
         $toolResult = $this->toolRegistry->execute($functionName, $arguments);
+
+        return $this->buildToolExecution($functionName, $arguments, $toolCallId, $toolResult);
+    }
+
+    /**
+     * Build execution result from a completed ToolResult.
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return array{action: array<string, mixed>, client_actions: list<string>, message: array<string, mixed>}
+     */
+    private function buildToolExecution(string $functionName, array $arguments, string $toolCallId, ToolResult $toolResult): array
+    {
         $resultString = (string) $toolResult;
 
         $action = [
@@ -483,23 +496,7 @@ class AgenticRuntime
         ];
 
         if ($toolResult->isError && $toolResult->errorPayload !== null) {
-            $errorData = [
-                'code' => $toolResult->errorPayload->code,
-                'message' => $toolResult->errorPayload->message,
-            ];
-
-            if ($toolResult->errorPayload->hint !== null) {
-                $errorData['hint'] = $toolResult->errorPayload->hint;
-            }
-
-            if ($toolResult->errorPayload->action !== null) {
-                $errorData['setup_action'] = [
-                    'label' => $toolResult->errorPayload->action->label,
-                    'suggested_prompt' => $toolResult->errorPayload->action->suggestedPrompt,
-                ];
-            }
-
-            $action['error_payload'] = $errorData;
+            $action['error_payload'] = $this->buildErrorPayload($toolResult);
         }
 
         return [
@@ -511,6 +508,30 @@ class AgenticRuntime
                 'content' => $resultString,
             ],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildErrorPayload(ToolResult $toolResult): array
+    {
+        $errorData = [
+            'code' => $toolResult->errorPayload->code,
+            'message' => $toolResult->errorPayload->message,
+        ];
+
+        if ($toolResult->errorPayload->hint !== null) {
+            $errorData['hint'] = $toolResult->errorPayload->hint;
+        }
+
+        if ($toolResult->errorPayload->action !== null) {
+            $errorData['setup_action'] = [
+                'label' => $toolResult->errorPayload->action->label,
+                'suggested_prompt' => $toolResult->errorPayload->action->suggestedPrompt,
+            ];
+        }
+
+        return $errorData;
     }
 
     /**
@@ -599,7 +620,7 @@ class AgenticRuntime
         $employeeId = (int) ($config['employee_id'] ?? 0);
         $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt);
 
-        yield ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => $runId]];
+        yield ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => $runId, 'iteration' => 0, 'description' => 'Analyzing request']];
         yield from $this->streamRemovedToolStatuses($runId, $toolLoopState['removedTools']);
 
         $iteration = 0;
@@ -1055,8 +1076,22 @@ class AgenticRuntime
             ]];
 
             $toolStartTime = hrtime(true);
-            $toolExecution = $this->executeToolCall($toolCall);
+
+            // Execute with streaming: yields stdout deltas, returns ToolResult
+            $toolStream = $this->toolRegistry->executeStreaming($functionName, $arguments);
+
+            foreach ($toolStream as $chunk) {
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'tool_stdout',
+                    'tool' => $functionName,
+                    'delta' => $chunk,
+                    'run_id' => $runId,
+                ]];
+            }
+
+            $toolResult = $toolStream->getReturn();
             $durationMs = (int) ((hrtime(true) - $toolStartTime) / 1_000_000);
+            $toolExecution = $this->buildToolExecution($functionName, $arguments, $toolCallId, $toolResult);
 
             $toolActions[] = $toolExecution['action'];
             array_push($clientActions, ...$toolExecution['client_actions']);

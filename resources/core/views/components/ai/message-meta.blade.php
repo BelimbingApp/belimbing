@@ -119,7 +119,16 @@
                         class="mb-1.5 flex items-center justify-between gap-2"
                     >
                         <span class="font-medium text-muted whitespace-nowrap">{{ __('Run ID') }}</span>
-                        <span class="min-w-0 flex-1 truncate text-right font-mono" title="{{ $runIdLabel }}">{{ $runIdLabel }}</span>
+                        @if ($canAccessControlPlane)
+                            <a
+                                href="{{ route('admin.ai.control-plane', ['inspectRunId' => $runIdLabel]) }}"
+                                wire:navigate
+                                class="min-w-0 flex-1 truncate text-right font-mono text-accent hover:underline"
+                                title="{{ $runIdLabel }}"
+                            >{{ $runIdLabel }}</a>
+                        @else
+                            <span class="min-w-0 flex-1 truncate text-right font-mono" title="{{ $runIdLabel }}">{{ $runIdLabel }}</span>
+                        @endif
                     </div>
                     <div class="space-y-1.5">
 

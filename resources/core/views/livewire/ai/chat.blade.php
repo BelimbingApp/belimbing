@@ -567,11 +567,16 @@
                                     <div class="shrink-0 mt-0.5">
                                         <x-icon name="heroicon-o-light-bulb" class="w-4 h-4 text-muted" />
                                     </div>
-                                    <div class="flex items-center gap-1.5 text-xs text-muted">
-                                        <template x-if="entry.active">
-                                            <span class="w-2 h-2 bg-accent rounded-full animate-pulse"></span>
+                                    <div class="flex flex-col gap-0.5">
+                                        <div class="flex items-center gap-1.5 text-xs text-muted">
+                                            <template x-if="entry.active">
+                                                <span class="w-2 h-2 bg-accent rounded-full animate-pulse"></span>
+                                            </template>
+                                            <span>{{ __('Thinking…') }}</span>
+                                        </div>
+                                        <template x-if="entry.description">
+                                            <div class="text-[11px] text-muted/70 italic" x-text="entry.description"></div>
                                         </template>
-                                        <span>{{ __('Thinking…') }}</span>
                                     </div>
                                 </div>
                             </template>
@@ -607,6 +612,12 @@
                                                     :class="entry.tool === 'bash' ? 'font-mono text-[11px]' : ''"
                                                     x-text="entry.argsSummary"
                                                 ></div>
+                                            </template>
+                                            {{-- Live stdout while tool is running --}}
+                                            <template x-if="entry.stdoutBuffer && entry.status === 'running'">
+                                                <div class="mt-1.5 max-h-40 overflow-y-auto rounded bg-surface-inset px-2 py-1.5 font-mono text-[11px] text-muted whitespace-pre-wrap break-all border border-border-subtle">
+                                                    <span x-text="entry.stdoutBuffer"></span>
+                                                </div>
                                             </template>
                                             <div class="mt-2 border-t border-border-default pt-2">
                                                 <template x-if="entry.errorPayload">
@@ -911,8 +922,11 @@
             this._deltaBuffer = '';
         },
 
-        startElapsedTimer() {
-            this.turnStartedAt = Date.now();
+        startElapsedTimer(serverStartedAt = null) {
+            this.turnStartedAt = serverStartedAt
+                ? new Date(serverStartedAt).getTime()
+                : Date.now();
+            this.elapsedSeconds = Math.max(0, Math.floor((Date.now() - this.turnStartedAt) / 1000));
             this._elapsedTimer = setInterval(() => {
                 this.elapsedSeconds = Math.floor((Date.now() - this.turnStartedAt) / 1000);
             }, 1000);
@@ -945,7 +959,7 @@
                 'run.started', 'run.failed',
                 'assistant.thinking_started', 'assistant.output_delta',
                 'assistant.output_block_committed',
-                'tool.started', 'tool.finished', 'tool.denied',
+                'tool.started', 'tool.stdout_delta', 'tool.finished', 'tool.denied',
                 'usage.updated', 'heartbeat', 'meta',
                 'recovery.attempted', 'recovery.succeeded', 'recovery.failed',
             ];
@@ -995,7 +1009,7 @@
 
             switch (eventType) {
                 case 'turn.started':
-                    this.onTurnStarted();
+                    this.onTurnStarted(data);
                     break;
 
                 case 'turn.phase_changed':
@@ -1006,7 +1020,7 @@
                     break;
 
                 case 'assistant.thinking_started':
-                    this.onThinkingStarted();
+                    this.onThinkingStarted(data);
                     break;
 
                 case 'tool.started':
@@ -1015,6 +1029,10 @@
 
                 case 'tool.finished':
                     this.onToolFinished(data);
+                    break;
+
+                case 'tool.stdout_delta':
+                    this.onToolStdoutDelta(data);
                     break;
 
                 case 'tool.denied':
@@ -1031,6 +1049,7 @@
 
                 case 'turn.completed':
                 case 'turn.ready_for_input':
+                    this.removeThinkingEntries();
                     this.finalizeTurnStream();
                     return;
 
@@ -1052,21 +1071,38 @@
             this.scrollToBottom(scrollContainer);
         },
 
-        onTurnStarted() {
-            if (!this.turnStartedAt) this.startElapsedTimer();
+        onTurnStarted(data) {
+            const payload = data?.payload || data || {};
+            const serverStartedAt = payload.started_at || null;
+            if (!this.turnStartedAt) this.startElapsedTimer(serverStartedAt);
             this.turnPhase = 'booting';
             this.turnLabel = this.startingLabel;
         },
 
         onPhaseChanged(data) {
-            this.turnPhase = data.payload?.phase || data.phase;
-            this.turnLabel = data.payload?.label || data.label || this.turnPhase;
+            const phase = data.payload?.phase || data.phase;
+            const label = data.payload?.label || data.label || phase;
+            this.turnPhase = phase;
+            this.turnLabel = label;
+
+            // Update thinking entry description when phase is thinking with a rich label
+            if (phase === 'thinking' && label && label !== 'Thinking…') {
+                const thinking = this.streamEntries.find((e) => e.type === 'thinking');
+                if (thinking) {
+                    thinking.description = label.replace(/^Thinking\s*—\s*/, '');
+                }
+            }
         },
 
-        onThinkingStarted() {
+        onThinkingStarted(data) {
+            const payload = data?.payload || data || {};
+            const description = payload.description || null;
             const existing = this.streamEntries.find((entry) => entry.type === 'thinking');
             if (!existing) {
-                this.streamEntries.push({ type: 'thinking', active: true });
+                this.streamEntries.push({ type: 'thinking', active: true, description });
+            } else {
+                existing.active = true;
+                if (description) existing.description = description;
             }
         },
 
@@ -1087,6 +1123,7 @@
                 tool: payload.tool || '',
                 argsSummary: payload.args_summary || '',
                 status: 'running',
+                stdoutBuffer: '',
                 collapsed: false,
             });
         },
@@ -1107,6 +1144,25 @@
             entry.resultLength = payload.result_length || 0;
             entry.errorPayload = payload.error_payload || null;
             this._completedToolCount++;
+        },
+
+        onToolStdoutDelta(data) {
+            const payload = data.payload || data;
+            const toolName = payload.tool || '';
+            const delta = payload.delta || '';
+            if (!delta) return;
+
+            // Find the last running tool_call entry matching this tool
+            for (let i = this.streamEntries.length - 1; i >= 0; i--) {
+                const entry = this.streamEntries[i];
+                if (entry.type === 'tool_call' && entry.tool === toolName && entry.status === 'running') {
+                    // Cap buffer at 10KB to prevent DOM bloat
+                    if ((entry.stdoutBuffer || '').length < 10240) {
+                        entry.stdoutBuffer = (entry.stdoutBuffer || '') + delta;
+                    }
+                    break;
+                }
+            }
         },
 
         onToolDenied(data) {
@@ -1151,7 +1207,8 @@
         },
 
         onMetaEvent(data) {
-            if (data.payload?.reason === 'terminal_state' || data.payload?.reason === 'idle_timeout') {
+            const reason = data.reason || data.payload?.reason;
+            if (reason === 'turn_terminal' || reason === 'terminal_state' || reason === 'idle_timeout') {
                 this.finalizeTurnStream();
 
                 return true;
@@ -1161,7 +1218,7 @@
                 const meta = data.type === 'current_phase' ? data : data.payload;
                 this.turnPhase = meta.phase || this.turnPhase;
                 this.turnLabel = meta.label || this.turnLabel;
-                if (!this.turnStartedAt) this.startElapsedTimer();
+                if (!this.turnStartedAt) this.startElapsedTimer(meta.started_at || null);
             }
 
             return false;
@@ -1170,6 +1227,10 @@
         deactivateThinking() {
             const thinking = this.streamEntries.find((entry) => entry.type === 'thinking');
             if (thinking) thinking.active = false;
+        },
+
+        removeThinkingEntries() {
+            this.streamEntries = this.streamEntries.filter((entry) => entry.type !== 'thinking');
         },
 
         stopStreaming() {

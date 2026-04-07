@@ -66,6 +66,7 @@ class TurnEventPublisher
         $event = $this->publish($turn, TurnEventType::TurnStarted, [
             'session_id' => $turn->session_id,
             'employee_id' => $turn->employee_id,
+            'started_at' => now()->toIso8601String(),
         ]);
 
         $turn->transitionTo(TurnStatus::Booting);
@@ -167,9 +168,12 @@ class TurnEventPublisher
     /**
      * Emit assistant.thinking_started when the agent enters reasoning mode.
      */
-    public function thinkingStarted(ChatTurn $turn): ChatTurnEvent
+    public function thinkingStarted(ChatTurn $turn, ?string $description = null): ChatTurnEvent
     {
-        return $this->publish($turn, TurnEventType::AssistantThinkingStarted);
+        return $this->publish($turn, TurnEventType::AssistantThinkingStarted, $description !== null
+            ? ['description' => $description]
+            : null,
+        );
     }
 
     /**

@@ -123,8 +123,9 @@ class TurnStreamBridge
     private function mapStatusEvent(ChatTurn $turn, array $data, int $turnStartedAt): array
     {
         return match ($data['phase'] ?? '') {
-            'thinking' => $this->onThinking($turn),
+            'thinking' => $this->onThinking($turn, $data),
             'tool_started' => $this->onToolStarted($turn, $data),
+            'tool_stdout' => $this->onToolStdout($turn, $data),
             'tool_finished' => $this->onToolFinished($turn, $data, $turnStartedAt),
             'tool_denied' => $this->onToolDenied($turn, $data),
             'recovery_attempted' => $this->onRecoveryAttempted($turn, $data),
@@ -134,13 +135,17 @@ class TurnStreamBridge
     }
 
     /**
+     * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function onThinking(ChatTurn $turn): array
+    private function onThinking(ChatTurn $turn, array $data): array
     {
+        $description = $data['description'] ?? null;
+        $label = $description ? "Thinking — {$description}" : 'Thinking…';
+
         return [
-            $this->publisher->phaseChanged($turn, TurnPhase::Thinking, 'Thinking…')->toSsePayload(),
-            $this->publisher->thinkingStarted($turn)->toSsePayload(),
+            $this->publisher->phaseChanged($turn, TurnPhase::Thinking, $label)->toSsePayload(),
+            $this->publisher->thinkingStarted($turn, $description)->toSsePayload(),
         ];
     }
 
@@ -167,21 +172,38 @@ class TurnStreamBridge
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
+    private function onToolStdout(ChatTurn $turn, array $data): array
+    {
+        return [
+            $this->publisher->toolStdoutDelta(
+                $turn,
+                (string) ($data['tool'] ?? ''),
+                (string) ($data['delta'] ?? ''),
+            )->toSsePayload(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, array<string, mixed>>
+     */
     private function onToolFinished(ChatTurn $turn, array $data, int $turnStartedAt): array
     {
         $elapsedMs = (int) ((hrtime(true) - $turnStartedAt) / 1_000_000);
+        $toolName = (string) ($data['tool'] ?? '');
+        $postToolLabel = $toolName !== '' ? "Analyzing {$toolName} result" : 'Thinking…';
 
         return [
             $this->publisher->toolFinished(
                 $turn,
-                (string) ($data['tool'] ?? ''),
+                $toolName,
                 (string) ($data['status'] ?? 'success'),
                 $data['result_preview'] ?? null,
                 isset($data['duration_ms']) ? (int) $data['duration_ms'] : null,
                 isset($data['result_length']) ? (int) $data['result_length'] : null,
                 is_array($data['error_payload'] ?? null) ? $data['error_payload'] : null,
             )->toSsePayload(),
-            $this->publisher->phaseChanged($turn, TurnPhase::Thinking, 'Thinking…')->toSsePayload(),
+            $this->publisher->phaseChanged($turn, TurnPhase::Thinking, $postToolLabel)->toSsePayload(),
             $this->publisher->heartbeat($turn, $elapsedMs)->toSsePayload(),
         ];
     }

@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\AI\Contracts\StreamableTool;
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\Tools\ToolResult;
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -146,6 +147,61 @@ class AgentToolRegistry
         }
 
         return $result;
+    }
+
+    /**
+     * Execute a tool with streaming support.
+     *
+     * For tools implementing StreamableTool, yields incremental output
+     * chunks during execution. The ToolResult is accessible via
+     * Generator::getReturn() after iteration completes.
+     *
+     * For non-streaming tools, yields nothing and returns the result
+     * from the synchronous execute() path.
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return \Generator<int, string, mixed, ToolResult>
+     */
+    public function executeStreaming(string $toolName, array $arguments): \Generator
+    {
+        $tool = $this->tools[$toolName] ?? null;
+
+        if ($tool === null) {
+            return ToolResult::error('Unknown tool "'.$toolName.'".', 'unknown_tool');
+        }
+
+        if (! $this->currentUserCanUse($tool)) {
+            return ToolResult::error(
+                'You do not have permission to use the "'.$toolName.'" tool.',
+                'permission_denied',
+            );
+        }
+
+        if ($tool instanceof StreamableTool) {
+            try {
+                $stream = $tool->executeStreaming($arguments);
+
+                foreach ($stream as $chunk) {
+                    yield $chunk;
+                }
+
+                return $stream->getReturn();
+            } catch (\Throwable $e) {
+                return ToolResult::error(
+                    'Error executing "'.$toolName.'": '.$e->getMessage(),
+                    'unexpected_error',
+                );
+            }
+        }
+
+        try {
+            return $tool->execute($arguments);
+        } catch (\Throwable $e) {
+            return ToolResult::error(
+                'Error executing "'.$toolName.'": '.$e->getMessage(),
+                'unexpected_error',
+            );
+        }
     }
 
     /**

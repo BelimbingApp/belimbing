@@ -678,6 +678,68 @@ Secondary issue: `queue:listen` has a built-in 60-second child timeout that kill
 
 **Known architectural debt (medium-term):** `ChatStreamController` holds a FrankenPHP worker for the entire LLM call duration (30–300s). This is fundamentally wasteful in worker mode. The medium-term fix is to always dispatch LLM execution via `RunAgentChatJob` (background) and use `TurnEventStreamController` (or Reverb WebSocket) for live tailing only. The background job path already exists and works.
 
+## Phase 7 — Real-Time Agent Activity UX
+
+**Goal:** Make the streaming UX truthful, transparent, and responsive — matching the real-time feedback of coding-agent CLIs (Claude Code, Cursor, Claw Code). The user should always know: what Lara is doing right now, how long she's been doing it, and what intermediate results look like.
+
+### Current gaps
+
+1. **Fake elapsed timer.** The "Thinking… 12s" counter starts from 0 on every page refresh / SSE reconnect because it's a pure client-side `setInterval(() => Date.now() - turnStartedAt)`. On reconnect, `TurnEventStreamController` replays events from seq 0, `onTurnStarted()` fires, and the timer re-anchors to `Date.now()` — not the turn's actual `started_at`. A turn running for 2 minutes shows "0s" after a Livewire navigate.
+
+2. **"Thinking…" is opaque.** `assistant.thinking_started` carries no content — just a phase label. Coding agents show the model's reasoning text, tool-selection rationale, or at minimum a descriptive phase label ("Analyzing codebase", "Selecting tools"). Currently it's a static "Thinking…" with a pulsing dot regardless of what the agent is actually doing.
+
+3. **Action boxes are hollow until completion.** Tool call cards show the tool name and args summary immediately on `tool.started`, but the result area is blank until `tool.finished` arrives with `resultPreview`. For long-running tools (bash builds, test suites, browser actions), the user sees an empty card for 10–60+ seconds. The runtime's `executeToolCall()` is synchronous — it blocks, gets the result, then yields. No incremental output is emitted. `ToolStdoutDelta` exists in the enum and `TurnEventPublisher.toolStdoutDelta()` exists, but neither the runtime nor the bridge emit it.
+
+### Tasks
+
+#### 7A — Truthful elapsed timer on reconnect ✅
+
+The turn's actual `started_at` timestamp must reach the client so the timer shows real elapsed time, not time-since-page-load.
+
+- [x] Include `started_at` (ISO 8601) in the `turn.started` event payload (from `TurnEventPublisher`).
+- [x] Include `started_at` in the `current_phase` meta event emitted by `TurnEventStreamController` on resume (line 69–75).
+- [x] In the client's `onTurnStarted()` and `onMetaEvent(current_phase)`, set `turnStartedAt` from the server-provided timestamp instead of `Date.now()`, falling back to `Date.now()` if absent.
+- [ ] Verify: start a turn, navigate away, navigate back — timer should show the real elapsed time, not restart from 0.
+
+#### 7B — Descriptive phase labels (thinking transparency) ✅
+
+Replace the static "Thinking…" label with context-aware descriptions of what the agent is doing in each phase.
+
+- [x] Extend the runtime's `phase: 'thinking'` event to include a `description` field when available (e.g., "Planning tool calls", "Analyzing results", iteration count).
+- [x] After each tool finishes, emit a phase label that names what happened: "Evaluating bash result" → "Selecting next action" rather than generic "Thinking…".
+- [x] In the client, render the description text alongside or below the "Thinking…" entry when `entry.description` is present.
+- [ ] For reasoning-capable models (extended thinking / reasoning tokens): investigate whether the API streams reasoning content that can be forwarded as `assistant.thinking_delta` events. If available, render as collapsible reasoning text below the thinking indicator.
+
+#### 7C — Incremental tool output (live action boxes) ✅
+
+Stream tool execution output in real-time so action boxes fill progressively instead of staying empty until completion.
+
+- [x] **Bash tool:** Refactor to implement `StreamableTool` interface with `proc_open` non-blocking stdout/stderr reads. Yields `tool_stdout` events at ~100ms poll intervals, capped at 50 events per invocation.
+- [x] **TurnStreamBridge:** Added `'tool_stdout'` case to `mapStatusEvent()` that calls `$this->publisher->toolStdoutDelta()`.
+- [x] **Runtime:** `streamToolCalls()` now calls `toolRegistry->executeStreaming()` inline, yielding `tool_stdout` status events during execution, then builds the execution result from the `ToolResult` after stream completes.
+- [x] **Client event listener:** Added `'tool.stdout_delta'` to the `eventTypes` array in `connectToTurnStream()`. Added handler `onToolStdoutDelta(data)` that appends `delta` text to the running tool's `stdoutBuffer` (capped at 10KB).
+- [x] **Client rendering:** Tool call template shows a live monospace output area when `entry.stdoutBuffer` is non-empty while `status === 'running'`.
+- [ ] **Non-bash tools:** For tools that return results atomically (memory_search, file_read), no change needed — they complete quickly. If a tool takes >2s, consider emitting a synthetic "working…" stdout delta so the card doesn't look dead.
+- [x] **Flow control:** Capped stdout delta events at 50 per tool invocation (`MAX_STDOUT_EVENTS`).
+
+#### 7D — Polish: collapse completed thinking entries ✅
+
+- [x] After thinking deactivates (tool starts or output begins), thinking entry stops pulsing (active=false).
+- [x] On turn completion, remove intermediate thinking entries from `streamEntries` since the materialized transcript replaces them.
+
+### Dependencies
+
+- 7A is independent and can be done first (smallest, highest impact).
+- 7B depends on understanding the LLM provider's reasoning output capabilities.
+- 7C is the largest task — requires runtime refactoring for async tool execution and careful event-rate management.
+- 7D is cosmetic polish, do last.
+
+### Non-goals for Phase 7
+
+- Do not add WebSocket transport (Reverb) in this phase — that's a separate architectural migration.
+- Do not stream tool *input* (args) incrementally — args are already available at `tool.started`.
+- Do not implement speculative UI (showing predicted tool output before execution).
+
 ## Non-Goals
 
 - Do not optimize for message-bubble chat minimalism.
