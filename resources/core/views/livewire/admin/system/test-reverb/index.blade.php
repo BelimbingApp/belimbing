@@ -7,7 +7,8 @@
         entryLabel: @js(__('entries')),
         connectionState: @js(__('Waiting for Echo...')),
         dispatching: false,
-        pusherChannel: null,
+        echoChannel: null,
+        connectionCleanup: null,
         subscribed: false,
         append(message, payload = null) {
             this.entries.unshift({
@@ -17,34 +18,68 @@
                 seenAt: new Date().toLocaleTimeString(),
             });
         },
-        subscribe() {
-            const pusher = window.Echo?.connector?.pusher;
-
-            if (!pusher || this.subscribed) {
+        bindConnectionState(pusher) {
+            if (this.connectionCleanup) {
                 return;
             }
 
+            const handleStateChange = (states) => {
+                const state = states?.current ?? pusher.connection.state ?? 'unknown';
+
+                this.connectionState = state === 'connected'
+                    ? @js(__('Connected to Reverb. Subscribing to the channel...'))
+                    : @js(__('Reverb socket state: :state', ['state' => ':state'])).replace(':state', state);
+            };
+
+            const handleError = (error) => {
+                const message = error?.error?.message ?? error?.message ?? null;
+
+                this.connectionState = message
+                    ? @js(__('Reverb connection failed:')).concat(' ', message)
+                    : @js(__('Reverb connection failed.'));
+
+                this.append(this.connectionState, error ?? null);
+            };
+
+            pusher.connection.bind('state_change', handleStateChange);
+            pusher.connection.bind('error', handleError);
+
+            handleStateChange({ current: pusher.connection.state });
+
+            this.connectionCleanup = () => {
+                pusher.connection.unbind('state_change', handleStateChange);
+                pusher.connection.unbind('error', handleError);
+                this.connectionCleanup = null;
+            };
+        },
+        subscribe() {
+            const echo = window.Echo;
+            const pusher = echo?.connector?.pusher;
+
+            if (!echo || !pusher || this.echoChannel) {
+                return;
+            }
+
+            this.bindConnectionState(pusher);
             this.connectionState = @js(__('Subscribing to the Reverb channel...'));
 
-            this.pusherChannel = pusher.subscribe(this.channelName);
-
-            this.pusherChannel.bind('pusher:subscription_succeeded', () => {
-                this.subscribed = true;
-                this.connectionState = @js(__('Listening on the Reverb channel.'));
-                this.append(@js(__('Reverb subscription is active.')));
-            });
-
-            this.pusherChannel.bind('pusher:subscription_error', (error) => {
-                this.subscribed = false;
-                this.connectionState = error?.message
-                    ? @js(__('Subscription failed:')).concat(' ', error.message)
-                    : @js(__('Subscription failed.'));
-                this.append(this.connectionState, error ?? null);
-            });
-
-            this.pusherChannel.bind(this.eventName, (payload) => {
-                this.append(payload.message ?? @js(__('Received a Reverb event.')), payload);
-            });
+            this.echoChannel = echo.channel(this.channelName)
+                .subscribed(() => {
+                    this.subscribed = true;
+                    this.connectionState = @js(__('Listening on the Reverb channel.'));
+                    this.append(@js(__('Reverb subscription is active.')));
+                })
+                .error((error) => {
+                    this.subscribed = false;
+                    this.echoChannel = null;
+                    this.connectionState = error?.message
+                        ? @js(__('Subscription failed:')).concat(' ', error.message)
+                        : @js(__('Subscription failed.'));
+                    this.append(this.connectionState, error ?? null);
+                })
+                .listen(`.${this.eventName}`, (payload) => {
+                    this.append(payload.message ?? @js(__('Received a Reverb event.')), payload);
+                });
         },
         async dispatchBurst() {
             if (this.dispatching) {
@@ -78,14 +113,11 @@
             }
         },
         unsubscribe() {
-            const pusher = window.Echo?.connector?.pusher;
+            const echo = window.Echo;
 
-            if (!pusher) {
-                return;
-            }
-
-            pusher.unsubscribe(this.channelName);
-            this.pusherChannel = null;
+            this.connectionCleanup?.();
+            echo?.leaveChannel(this.channelName);
+            this.echoChannel = null;
             this.subscribed = false;
             this.connectionState = @js(__('Unsubscribed.'));
         },

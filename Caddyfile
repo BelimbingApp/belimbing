@@ -25,12 +25,17 @@
 		format console
 	}
 
-	# Reverb WebSocket (Laravel Echo — separate Reverb process)
+	# Reverb WebSocket + broadcast API (Laravel Echo / broadcaster — separate Reverb process)
 	@reverb_ws {
 		path /app/*
 		expression `header({'Connection':'*Upgrade*','Upgrade':'websocket'}) || header({':protocol':'websocket'})`
 	}
 	handle @reverb_ws {
+		reverse_proxy 127.0.0.1:{$REVERB_SERVER_PORT:8080}
+	}
+
+	@reverb_api path /apps/*
+	handle @reverb_api {
 		reverse_proxy 127.0.0.1:{$REVERB_SERVER_PORT:8080}
 	}
 

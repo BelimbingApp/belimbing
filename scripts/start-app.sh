@@ -330,14 +330,19 @@ get_ports() {
         REVERB_SERVER_PORT=$(next_free_port 8080)
     fi
 
-    # Keep Laravel broadcasting and Vite aligned with the actual Reverb listener.
-    REVERB_PORT="$REVERB_SERVER_PORT"
-    VITE_REVERB_PORT="$REVERB_SERVER_PORT"
-
     # HTTPS_PORT: always 443 (shared Caddy handles all instances on :443 via host routing)
     HTTPS_PORT="443"
 
-    export APP_ENV APP_PORT VITE_PORT REVERB_PORT REVERB_SERVER_PORT VITE_REVERB_PORT HTTPS_PORT
+    # Reverb's public endpoint lives on the same frontend domain Caddy serves.
+    # Caddy proxies /app and /apps to the internal Reverb listener selected above.
+    REVERB_HOST="$FRONTEND_DOMAIN"
+    REVERB_PORT="$HTTPS_PORT"
+    REVERB_SCHEME="https"
+    VITE_REVERB_HOST="$FRONTEND_DOMAIN"
+    VITE_REVERB_PORT="$HTTPS_PORT"
+    VITE_REVERB_SCHEME="https"
+
+    export APP_ENV APP_PORT VITE_PORT REVERB_HOST REVERB_PORT REVERB_SCHEME REVERB_SERVER_PORT VITE_REVERB_HOST VITE_REVERB_PORT VITE_REVERB_SCHEME HTTPS_PORT
 
     # Write runtime ports so stop-app and cleanup know what to stop
     local runtime_dir="$PROJECT_ROOT/storage/app/.devops"
@@ -582,7 +587,8 @@ main() {
     echo -e "${CYAN}Services:${NC}"
     echo -e "  ${BULLET} FrankenPHP (Octane): https://${FRONTEND_DOMAIN} (:443)"
     echo -e "  ${BULLET} Vite:                http://127.0.0.1:$VITE_PORT"
-    echo -e "  ${BULLET} Reverb:              ws://127.0.0.1:$REVERB_SERVER_PORT"
+    echo -e "  ${BULLET} Reverb (public):     wss://${FRONTEND_DOMAIN}/app"
+    echo -e "  ${BULLET} Reverb (internal):   ws://127.0.0.1:$REVERB_SERVER_PORT"
     echo ""
     echo -e "${CYAN}Log file:${NC} ${LOG_FILE}"
     echo ""

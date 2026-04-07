@@ -13,21 +13,16 @@ if (useReverb) {
     try {
         const Echo = (await import('laravel-echo')).default
         const Pusher = (await import('pusher-js')).default
-        // Use app host (Caddy) when page is HTTPS so wss works; Caddy proxies to Reverb
-        const isSecure = typeof location !== 'undefined' && location.protocol === 'https:'
-        const wsHost = isSecure ? location.hostname : (import.meta.env.VITE_REVERB_HOST || 'localhost')
-        const wssPort = isSecure ? (Number.parseInt(location.port, 10) || 443) : (import.meta.env.VITE_REVERB_PORT ?? 443)
-        const useTLS = isSecure
 
         globalThis.Pusher = Pusher
         globalThis.Echo = new Echo({
             broadcaster: 'reverb',
             key: import.meta.env.VITE_REVERB_APP_KEY,
-            wsHost,
+            wsHost: import.meta.env.VITE_REVERB_HOST,
             wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
-            wssPort,
-            forceTLS: useTLS,
-            enabledTransports: useTLS ? ['wss'] : ['ws', 'wss'],
+            wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
+            forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
+            enabledTransports: ['ws', 'wss'],
         })
 
         notifyEchoReady()

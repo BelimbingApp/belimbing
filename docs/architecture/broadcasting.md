@@ -171,20 +171,22 @@ Broadcast::channel('user.{id}', function ($user, $id) {
 
 Add these to your `.env` file. The `VITE_REVERB_*` variables expose connection details to the frontend via Vite:
 
-- Local `./scripts/start-app.sh` runs do not need a pinned `REVERB_SERVER_PORT`; the script auto-selects a free listener port and exports matching `REVERB_PORT` / `VITE_REVERB_PORT` values at runtime.
+- Local `./scripts/start-app.sh` runs do not need a pinned `REVERB_SERVER_PORT`; the script auto-selects a free internal listener port, then exports the public Reverb endpoint on `FRONTEND_DOMAIN` so both Laravel and Echo talk to Caddy's proxied `https://` / `wss://` host.
 - Manual, staging, or production deployments should set the Reverb listener / public connection values explicitly for their process manager or container runtime.
 
 ```dotenv
 BROADCAST_CONNECTION=reverb
 
+FRONTEND_DOMAIN=local.blb.lara
+
 REVERB_APP_ID=my-app-id
 REVERB_APP_KEY=my-app-key
 REVERB_APP_SECRET=my-app-secret
-REVERB_HOST=localhost
-REVERB_PORT=8080
+REVERB_HOST="${FRONTEND_DOMAIN}"
+REVERB_PORT=443
 # Optional: Reverb server listener override when not using start-app auto-assignment
 # REVERB_SERVER_PORT=8080
-REVERB_SCHEME=http
+REVERB_SCHEME=https
 
 VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"
 VITE_REVERB_HOST="${REVERB_HOST}"
@@ -195,6 +197,8 @@ VITE_REVERB_SCHEME="${REVERB_SCHEME}"
 ---
 
 ## 6. Related Documentation
+
+When Reverb is reverse-proxied, the web server must forward both `/app` (WebSocket upgrades) and `/apps` (broadcast API requests) to the internal Reverb listener.
 
 -   `docs/architecture/database.md`: Database architecture and module conventions.
 -   `docs/architecture/file-structure.md`: Full project directory layout.
