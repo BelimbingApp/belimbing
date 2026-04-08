@@ -178,6 +178,16 @@ class TurnEventPublisher
     }
 
     /**
+     * Emit assistant.thinking_delta for incremental reasoning text.
+     */
+    public function thinkingDelta(ChatTurn $turn, string $delta): ChatTurnEvent
+    {
+        return $this->publish($turn, TurnEventType::AssistantThinkingDelta, [
+            'delta' => $delta,
+        ]);
+    }
+
+    /**
      * Emit assistant.output_delta for incremental response text.
      */
     public function outputDelta(ChatTurn $turn, string $delta): ChatTurnEvent

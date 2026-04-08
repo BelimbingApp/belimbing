@@ -355,7 +355,7 @@ class LlmClient
     {
         [$instructions, $input] = $this->convertToResponsesInputWithInstructions($request->messages);
 
-        return array_filter([
+        $payload = array_filter([
             'model' => $request->model,
             'instructions' => $instructions,
             'input' => $input,
@@ -365,6 +365,12 @@ class LlmClient
             'tools' => $request->tools !== null ? $this->convertToResponsesTools($request->tools) : null,
             'tool_choice' => $request->toolChoice,
         ], fn ($v) => $v !== null);
+
+        if ($request->reasoningSummary !== null) {
+            $payload['reasoning'] = ['summary' => $request->reasoningSummary];
+        }
+
+        return $payload;
     }
 
     /**

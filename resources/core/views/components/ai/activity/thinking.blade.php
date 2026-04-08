@@ -6,6 +6,7 @@
 @props([
     'timestamp',
     'active' => false,
+    'content' => '',
 ])
 
 <x-ai.activity.entry type="thinking" :timestamp="$timestamp">
@@ -16,4 +17,7 @@
         <span>{{ __('Thinking…') }}</span>
         <span class="tabular-nums"><x-ui.datetime :value="$timestamp" format="time" /></span>
     </div>
+    @if ($content !== '')
+        <div class="text-xs text-muted/80 whitespace-pre-wrap break-words max-h-64 overflow-y-auto border-l-2 border-accent/20 pl-2 mt-1">{{ $content }}</div>
+    @endif
 </x-ai.activity.entry>

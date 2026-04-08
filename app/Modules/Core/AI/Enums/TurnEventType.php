@@ -56,6 +56,9 @@ enum TurnEventType: string
     /** Agent entered thinking/reasoning phase. */
     case AssistantThinkingStarted = 'assistant.thinking_started';
 
+    /** Incremental thinking/reasoning text from the model. */
+    case AssistantThinkingDelta = 'assistant.thinking_delta';
+
     /** One agentic loop iteration completed (think → tools → draft). */
     case AssistantIterationCompleted = 'assistant.iteration_completed';
 
@@ -113,7 +116,7 @@ enum TurnEventType: string
     public function isDelta(): bool
     {
         return match ($this) {
-            self::AssistantOutputDelta, self::ToolStdoutDelta => true,
+            self::AssistantOutputDelta, self::ToolStdoutDelta, self::AssistantThinkingDelta => true,
             default => false,
         };
     }
@@ -145,6 +148,7 @@ enum TurnEventType: string
             self::RunStarted => 'Run Started',
             self::RunFailed => 'Run Failed',
             self::AssistantThinkingStarted => 'Thinking',
+            self::AssistantThinkingDelta => 'Thinking Delta',
             self::AssistantIterationCompleted => 'Iteration Completed',
             self::AssistantOutputDelta => 'Output Delta',
             self::AssistantOutputBlockCommitted => 'Block Committed',

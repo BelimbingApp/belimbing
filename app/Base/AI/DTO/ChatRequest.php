@@ -22,6 +22,7 @@ class ChatRequest
         public readonly ?array $tools = null,
         public readonly ?string $toolChoice = null,
         public readonly AiApiType $apiType = AiApiType::OpenAiChatCompletions,
+        public readonly ?string $reasoningSummary = null,
     ) {
         if ($this->baseUrl === '') {
             throw new InvalidArgumentException('baseUrl is required');

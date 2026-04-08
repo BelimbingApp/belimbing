@@ -433,7 +433,7 @@
                         @endphp
 
                         @if ($message->type === 'thinking')
-                            <x-ai.activity.thinking :timestamp="$message->timestamp" :active="false" />
+                            <x-ai.activity.thinking :timestamp="$message->timestamp" :active="false" :content="$message->content" />
                         @elseif ($message->type === 'tool_call')
                             <x-ai.activity.tool-call
                                 :tool="$message->meta['tool'] ?? ''"
@@ -558,7 +558,7 @@
                                     <div class="shrink-0 mt-0.5">
                                         <x-icon name="heroicon-o-light-bulb" class="w-4 h-4 text-muted" />
                                     </div>
-                                    <div class="flex flex-col gap-0.5">
+                                    <div class="flex flex-col gap-0.5 min-w-0 max-w-full">
                                         <div class="flex items-center gap-1.5 text-xs text-muted">
                                             <template x-if="entry.active">
                                                 <span class="w-2 h-2 bg-accent rounded-full animate-pulse"></span>
@@ -567,6 +567,9 @@
                                         </div>
                                         <template x-if="entry.description">
                                             <div class="text-[11px] text-muted/70 italic" x-text="entry.description"></div>
+                                        </template>
+                                        <template x-if="entry.thinkingContent">
+                                            <div class="text-xs text-muted/80 whitespace-pre-wrap break-words max-h-64 overflow-y-auto border-l-2 border-accent/20 pl-2 mt-1" x-text="entry.thinkingContent"></div>
                                         </template>
                                     </div>
                                 </div>
@@ -1198,6 +1201,10 @@
                     this.onThinkingStarted(data);
                     break;
 
+                case 'assistant.thinking_delta':
+                    this.onThinkingDelta(data);
+                    break;
+
                 case 'tool.started':
                     this.onToolStarted(data);
                     break;
@@ -1268,11 +1275,25 @@
             const description = payload.description || null;
             const existing = this.streamEntries.find((entry) => entry.type === 'thinking');
             if (!existing) {
-                this.streamEntries.push({ type: 'thinking', active: true, description });
+                this.streamEntries.push({ type: 'thinking', active: true, description, thinkingContent: '' });
             } else {
                 existing.active = true;
                 if (description) existing.description = description;
             }
+        },
+
+        onThinkingDelta(data) {
+            const payload = data?.payload || data || {};
+            const delta = payload.delta || '';
+            if (!delta) return;
+
+            let entry = this.streamEntries.find((e) => e.type === 'thinking');
+            if (!entry) {
+                entry = { type: 'thinking', active: true, description: null, thinkingContent: '' };
+                this.streamEntries.push(entry);
+            }
+            entry.active = true;
+            entry.thinkingContent = (entry.thinkingContent || '') + delta;
         },
 
         onToolStarted(data) {

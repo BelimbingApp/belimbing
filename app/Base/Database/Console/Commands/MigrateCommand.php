@@ -272,7 +272,7 @@ class MigrateCommand extends IlluminateMigrateCommand
     }
 
     /**
-    * Ensure framework primitives exist: Licensee company (id=1), admin user, and Lara (employee id=1).
+     * Ensure framework primitives exist: Licensee company (id=1), admin user, and Lara (employee id=1).
      *
      * All three are idempotent — safe to call on every migrate. Ordering matters:
      * Licensee must exist before admin user (user belongs to licensee company),

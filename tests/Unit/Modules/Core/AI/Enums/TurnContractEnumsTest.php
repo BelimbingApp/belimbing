@@ -127,8 +127,8 @@ describe('TurnPhase', function () {
 // ------------------------------------------------------------------
 
 describe('TurnEventType', function () {
-    it('has twenty-one cases', function () {
-        expect(TurnEventType::cases())->toHaveCount(21);
+    it('has twenty-two cases', function () {
+        expect(TurnEventType::cases())->toHaveCount(22);
     });
 
     it('uses dot-separated naming convention except for single-word events', function () {

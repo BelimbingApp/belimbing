@@ -123,6 +123,7 @@ class TurnStreamBridge
     {
         return match ($data['phase'] ?? '') {
             'thinking' => $this->onThinking($turn, $data),
+            'thinking_delta' => $this->onThinkingDelta($turn, $data),
             'tool_started' => $this->onToolStarted($turn, $data),
             'tool_stdout' => $this->onToolStdout($turn, $data),
             'tool_finished' => $this->onToolFinished($turn, $data, $turnStartedAt),
@@ -145,6 +146,17 @@ class TurnStreamBridge
         return [
             $this->publisher->phaseChanged($turn, TurnPhase::Thinking, $label)->toSsePayload(),
             $this->publisher->thinkingStarted($turn, $description)->toSsePayload(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, array<string, mixed>>
+     */
+    private function onThinkingDelta(ChatTurn $turn, array $data): array
+    {
+        return [
+            $this->publisher->thinkingDelta($turn, (string) ($data['delta'] ?? ''))->toSsePayload(),
         ];
     }
 

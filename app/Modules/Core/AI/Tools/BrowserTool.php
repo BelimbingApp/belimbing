@@ -19,6 +19,8 @@ use App\Modules\Core\AI\Services\Browser\BrowserArtifactStore;
 use App\Modules\Core\AI\Services\Browser\BrowserSessionException;
 use App\Modules\Core\AI\Services\Browser\BrowserSessionManager;
 use App\Modules\Core\AI\Services\Browser\BrowserSsrfGuard;
+use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Models\User;
 use RuntimeException;
 
 /**
@@ -229,15 +231,24 @@ class BrowserTool extends AbstractActionTool
         }
 
         // Resolve or create a browser session for this tool invocation.
-        // The execution context should eventually populate these synthetic fields.
         $headless = array_key_exists('headless', $arguments)
             ? (bool) $arguments['headless']
             : (bool) config('ai.tools.browser.headless', true);
 
+        $context = $this->resolveExecutionContext($arguments);
+
+        if ($context === null) {
+            return ToolResult::error(
+                'Browser automation requires a valid employee and company execution context. '
+                .'This run did not provide one, and no authenticated employee context could be resolved.',
+                'browser_context_error',
+            );
+        }
+
         try {
             $session = $this->sessionManager->open(
-                employeeId: $arguments['_employee_id'] ?? 0,
-                companyId: $arguments['_company_id'] ?? 0,
+                employeeId: $context['employee_id'],
+                companyId: $context['company_id'],
                 headless: $headless,
             );
             $this->activeSessionId = $session->id;
@@ -484,6 +495,57 @@ class BrowserTool extends AbstractActionTool
             'url' => $url,
             'timeout_ms' => $this->optionalInt($arguments, 'timeout_ms', 5000, 100),
         ]);
+    }
+
+    /**
+     * Resolve browser execution context from tool arguments or auth state.
+     *
+     * Priority order:
+     *  1. Synthetic tool context injected by the runtime (_employee_id/_company_id)
+     *  2. Authenticated user's linked employee + company
+     *  3. Lara system agent for authenticated users with a valid company scope
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return array{employee_id: int, company_id: int}|null
+     */
+    private function resolveExecutionContext(array $arguments): ?array
+    {
+        $employeeId = isset($arguments['_employee_id']) ? (int) $arguments['_employee_id'] : null;
+        $companyId = isset($arguments['_company_id']) ? (int) $arguments['_company_id'] : null;
+
+        if ($employeeId !== null && $employeeId > 0 && $companyId !== null && $companyId > 0) {
+            return [
+                'employee_id' => $employeeId,
+                'company_id' => $companyId,
+            ];
+        }
+
+        $user = auth()->user();
+
+        if ($user instanceof User) {
+            $linkedEmployeeId = $user->employee_id !== null ? (int) $user->employee_id : null;
+            $linkedCompanyId = $user->getCompanyId();
+
+            if ($linkedEmployeeId !== null && $linkedEmployeeId > 0 && $linkedCompanyId !== null && $linkedCompanyId > 0) {
+                return [
+                    'employee_id' => $linkedEmployeeId,
+                    'company_id' => $linkedCompanyId,
+                ];
+            }
+
+            if ($linkedCompanyId !== null && $linkedCompanyId > 0) {
+                $lara = Employee::query()->find(Employee::LARA_ID);
+
+                if ($lara !== null && (int) $lara->company_id === (int) $linkedCompanyId) {
+                    return [
+                        'employee_id' => (int) $lara->id,
+                        'company_id' => (int) $lara->company_id,
+                    ];
+                }
+            }
+        }
+
+        return null;
     }
 
     // ─── Runner integration ─────────────────────────────────────────

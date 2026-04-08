@@ -108,12 +108,13 @@ class MessageManager
      * @param  int  $employeeId  Agent employee ID
      * @param  string  $sessionId  Session UUID
      * @param  string  $runId  Runtime run ID
+     * @param  string  $content  Accumulated reasoning summary text
      */
-    public function appendThinking(int $employeeId, string $sessionId, string $runId): void
+    public function appendThinking(int $employeeId, string $sessionId, string $runId, string $content = ''): void
     {
         $this->append($employeeId, $sessionId, new Message(
             role: 'assistant',
-            content: '',
+            content: $content,
             timestamp: new DateTimeImmutable,
             runId: $runId,
             type: 'thinking',

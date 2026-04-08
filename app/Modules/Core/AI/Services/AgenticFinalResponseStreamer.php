@@ -50,6 +50,8 @@ final class AgenticFinalResponseStreamer
         $usage = null;
         $latencyMs = 0;
 
+        $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
+
         $stream = $this->llmClient->chatStream(new ChatRequest(
             baseUrl: $credentials['base_url'],
             apiKey: $credentials['api_key'],
@@ -61,10 +63,21 @@ final class AgenticFinalResponseStreamer
             providerName: $config['provider_name'],
             tools: $streamState['tools'] !== [] ? $streamState['tools'] : null,
             toolChoice: $streamState['tools'] !== [] ? 'auto' : null,
-            apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
+            apiType: $apiType,
+            reasoningSummary: $apiType === AiApiType::OpenAiResponses ? 'auto' : null,
         ));
 
         foreach ($stream as $event) {
+            if ($event['type'] === 'thinking_delta') {
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'thinking_delta',
+                    'delta' => $event['text'],
+                    'run_id' => $runId,
+                ]];
+
+                continue;
+            }
+
             if ($event['type'] === 'content_delta') {
                 $fullContent .= $event['text'];
                 yield ['event' => 'delta', 'data' => ['text' => $event['text']]];

@@ -100,6 +100,7 @@ function expectMaterializerHappyPathAppendMocks(MockInterface $mm, ChatTurn $tur
             $turn->employee_id,
             MAT_TEST_SESSION,
             MAT_TEST_RUN_ID,
+            '',
         );
 
     $mm->shouldReceive('appendToolCall')

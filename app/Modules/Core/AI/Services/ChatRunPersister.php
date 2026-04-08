@@ -49,7 +49,9 @@ class ChatRunPersister
         {
             public ?string $runId = null;
 
-            public bool $thinkingPersisted = false;
+            public bool $thinkingPending = false;
+
+            public string $thinkingContent = '';
 
             public string $fullContent = '';
 
@@ -64,6 +66,8 @@ class ChatRunPersister
             $this->applyTurnEventToMaterialization($turn, $mm, $employeeId, $sessionId, $event->event_type, $payload, $state);
         }
 
+        $this->flushPendingThinking($mm, $employeeId, $sessionId, $state);
+
         if (! $state->hadError && $state->fullContent !== '' && $state->runId !== null) {
             $meta = array_merge($state->usageMeta, $extraMeta);
             $mm->appendAssistantMessage($employeeId, $sessionId, $state->fullContent, $state->runId, $meta);
@@ -74,7 +78,8 @@ class ChatRunPersister
      * @param  array<string, mixed>  $payload
      * @param  object{
      *     runId: ?string,
-     *     thinkingPersisted: bool,
+     *     thinkingPending: bool,
+     *     thinkingContent: string,
      *     fullContent: string,
      *     hadError: bool,
      *     usageMeta: array<string, mixed>
@@ -92,6 +97,7 @@ class ChatRunPersister
         match ($type) {
             TurnEventType::RunStarted => $this->materializeRunStarted($payload, $state),
             TurnEventType::AssistantThinkingStarted => $this->materializeThinkingStarted($mm, $employeeId, $sessionId, $state),
+            TurnEventType::AssistantThinkingDelta => $this->materializeThinkingDelta($payload, $state),
             TurnEventType::ToolStarted => $this->materializeToolStarted($mm, $employeeId, $sessionId, $payload, $state),
             TurnEventType::ToolFinished => $this->materializeToolFinished($mm, $employeeId, $sessionId, $payload, $state),
             TurnEventType::ToolDenied => $this->materializeToolDenied($mm, $employeeId, $sessionId, $payload, $state),
@@ -112,7 +118,7 @@ class ChatRunPersister
     }
 
     /**
-     * @param  object{runId: ?string, thinkingPersisted: bool}  $state
+     * @param  object{thinkingPending: bool, thinkingContent: string}  $state
      */
     private function materializeThinkingStarted(
         MessageManager $mm,
@@ -120,12 +126,38 @@ class ChatRunPersister
         string $sessionId,
         object $state,
     ): void {
-        if ($state->thinkingPersisted || $state->runId === null) {
+        $this->flushPendingThinking($mm, $employeeId, $sessionId, $state);
+
+        $state->thinkingPending = true;
+        $state->thinkingContent = '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{thinkingContent: string}  $state
+     */
+    private function materializeThinkingDelta(array $payload, object $state): void
+    {
+        $state->thinkingContent .= $payload['delta'] ?? '';
+    }
+
+    /**
+     * Persist the accumulated thinking entry if pending.
+     *
+     * @param  object{runId: ?string, thinkingPending: bool, thinkingContent: string}  $state
+     */
+    private function flushPendingThinking(
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        object $state,
+    ): void {
+        if (! $state->thinkingPending || $state->runId === null) {
             return;
         }
 
-        $mm->appendThinking($employeeId, $sessionId, $state->runId);
-        $state->thinkingPersisted = true;
+        $mm->appendThinking($employeeId, $sessionId, $state->runId, $state->thinkingContent);
+        $state->thinkingPending = false;
     }
 
     /**

@@ -111,6 +111,19 @@ final class LlmResponsesDecoder
 
                 return;
 
+            case 'response.reasoning_summary_text.delta':
+                $delta = $data['delta'] ?? '';
+                if ($delta !== '') {
+                    yield ['type' => 'thinking_delta', 'text' => $delta];
+                }
+
+                return;
+
+            case 'response.reasoning_summary_text.done':
+            case 'response.reasoning_summary_part.added':
+            case 'response.reasoning_summary_part.done':
+                return;
+
             case 'response.output_text.annotation.added':
                 $annotation = $data['annotation'] ?? $data;
                 yield [
