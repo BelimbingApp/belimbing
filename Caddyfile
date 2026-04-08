@@ -6,6 +6,10 @@
 # default stub. The frankenphp worker block and admin endpoint mirror what
 # the stub provides; the site blocks add TLS, Vite, and Reverb proxying.
 {
+	servers {
+		protocols h1 h2 h3
+	}
+
 	frankenphp {
 		worker {
 			file {$APP_PUBLIC_PATH}/frankenphp-worker.php

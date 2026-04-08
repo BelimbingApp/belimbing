@@ -1,12 +1,8 @@
-# Lara Real-Time Console
+# Lara Real-Time Console [WIP]
 
 ## Problem Essence
 
-Lara's chat UI should feel like a coding-agent CLI — the user sees what Lara is doing in real time: thinking, tool calls, streaming output. FrankenPHP crashes (Go-level SIGSEGV after ~63s) when SSE connections hold workers in `while(true) { usleep(); }` poll loops, starving the 4-worker pool.
-
-## Status
-
-In Progress — the Reverb transport path is now working end-to-end for Lara's live feed. Phase 3 uncovered two transport issues that are now fixed: (1) a Reverb/Pusher payload ceiling for large `tool.stdout_delta`, `tool.finished.result_preview`, and `assistant.output_block_committed` events; and (2) a browser attach race / transport miss where the page can replay persisted events before Echo/Reverb is ready, leaving the UI without live updates. The fix keeps the full event durable in `ai_chat_turn_events`, downgrades oversized WebSocket broadcasts to a tiny `replay_required` marker, and keeps a short replay poll running until live delivery is attached. The separate `ERR_CONNECTION_REFUSED` reports traced back to watched-dev-stack crashes (`octane:start --watch` exiting with `std::bad_alloc` / `zend_mm_heap corrupted` during file-change reloads), so the default dev pipeline now avoids `--watch` and keeps watched restarts as an explicit opt-in.
+Lara's chat UI should feel like a coding-agent CLI — the user sees what Lara is doing in real time: thinking, tool calls, streaming output; including errors and crashes (e.g. Go-level SIGSEGV after ~63s, runtime error, etc.).
 
 ## Goal
 
@@ -14,57 +10,64 @@ In Progress — the Reverb transport path is now working end-to-end for Lara's l
 2. **Thinking rendered in-place:** Reasoning/thinking content appears at the moment it occurs in the tool-calling loop.
 3. **Multi-user concurrency:** Multiple browsers/users can chat with Lara simultaneously without blocking each other or crashing the server.
 
-## What Already Works
+## Top-Level Requirement
 
-The hard infrastructure is built (Phases 1–5 of `ai-chat-coding-agent-console.md`):
+The real-time transport must remain decoupled from Lara runtime and UI event semantics so the active transport can be swapped in the future without redesigning the core chat behavior.
 
-- **Turn event model:** `ai_chat_turns` + `ai_chat_turn_events` — append-only, per-turn, seq-ordered, durable.
-- **TurnEventPublisher:** 21 event types (turn lifecycle, tool activity, assistant deltas, recovery, heartbeat). Now broadcasts each event via Reverb after DB write.
-- **TurnStreamBridge:** Maps `AgenticRuntime` generator events → durable turn events. 18 tests passing.
-- **RunAgentChatJob:** Background job that runs the agentic loop, publishes turn events via bridge. Cooperative cancellation, transcript materialization. Now has `$tries = 1` / `$backoff = 0` to fail fast.
-- **Dispatch-first path:** `prepareStreamingRun()` creates a turn + dispatch + job upfront, returns `turnId` for Echo subscription.
-- **Alpine state machine:** `agentChatStream` handles all 20+ event types via Echo private channel, with HTTP replay for page-load resume.
-- **Serving stack:** FrankenPHP + Octane with 4 workers, HTTP/2, TLS via mkcert. Reverb handles WebSocket transport out-of-process.
+## Decision To Make
 
-## Design Decision — SSE → Reverb
+Choose the primary real-time transport model for Lara chat: brokered WebSocket pub/sub (Reverb), long-lived HTTP streaming (SSE / persistent fetch with chunked transfer), Livewire's streaming, or build our own transport model.
 
-**Diagnosis (Phase 1 — complete):** FrankenPHP crashes at the Go level (~63s) when an SSE connection holds a worker in a `usleep()` poll loop. `set_time_limit(0)` does not prevent the crash — the Go runtime itself fails (not a PHP timeout). Worker starvation compounds the problem: 4 workers total, one consumed by SSE, leaves 3 for all other traffic.
+### Connection Model
 
-**Decision:** Replace SSE with Reverb (WebSocket). Broadcasting via `TurnEventOccurred` is fire-and-forget from the queue worker — no long-lived PHP responses, no worker starvation. Reverb runs as a separate process, so WebSocket connections consume zero FrankenPHP workers.
+Decision point: should live updates use socket sessions or long-lived HTTP responses?
 
-## Phases
+- **Reverb (WebSocket):** Stateful channel connection managed out-of-process by Reverb.
+- **SSE / Persistent fetch:** Long-lived HTTP response per client stream.
+- **Livewire `wire:stream`:** Component/request-scoped streaming response.
+- **Custom transport:** Team defines and owns connection protocol and lifecycle.
 
-### Phase 1 — Diagnose the actual crash ✅
+### Delivery Semantics
 
-The crash is a Go-level instability in FrankenPHP when workers hold long-lived streamed responses. Evidence: `ERR_CONNECTION_REFUSED` after ~63s, no PHP `Maximum execution time` errors, `set_time_limit(0)` already in place. Additionally, `MaxAttemptsExceededException` on stale jobs from crashed worker sessions.
+Decision point: do we standardize on push + replay, or stream-only delivery?
 
-### Phase 2 — Replace SSE with Reverb ✅
+- **Reverb (WebSocket):** Push on private channel, replay via sequence cursor (`after_seq`) from durable event log.
+- **SSE / Persistent fetch:** Ordered stream bytes; replay and idempotency must be explicitly implemented.
+- **Livewire `wire:stream`:** Streamed HTML/content updates in a component lifecycle, not a generalized event bus.
+- **Custom transport:** Can support any semantic model, but protocol correctness is fully in-house.
 
-- [x] Create `TurnEventOccurred` broadcast event (`ShouldBroadcastNow`), channel `PrivateChannel("turn.{turnId}")` — `app/Modules/Core/AI/Events/TurnEventOccurred.php`
-- [x] Add channel authorization in `routes/channels.php` — user can listen only to turns where `acting_for_user_id` matches
-- [x] Broadcast from `TurnEventPublisher::publish()` after DB write — fire-and-forget dispatch
-- [x] Replace Alpine EventSource with `Echo.private('turn.' + turnId).listen('.turn-event', handler)` — reuses existing `handleTurnEvent()`
-- [x] Page-load replay: HTTP fetch of persisted events via `TurnEventStreamController` (converted from SSE to JSON), then subscribe to Echo channel if turn is still active
-- [x] Convert `TurnEventStreamController` from SSE `StreamedResponse` to JSON endpoint — returns `{events, turn_id, status, current_phase, current_label, started_at}`
-- [x] Remove SSE-only artifacts: `onMetaEvent()`, `_eventSource`, `closeTurnStream()`, `reconnectToTurnStream()`, `stream_end` meta events
-- [x] Fix `RunAgentChatJob`: add `$tries = 1` and `$backoff = 0` to prevent `MaxAttemptsExceededException`
-- [x] Remove `resumeUrl` from `prepareStreamingRun()` return — client subscribes to Echo channel using `turnId` only
-- [x] Update `ChatTurnEvent` docblocks to reflect WebSocket transport
-- [x] All 43 turn-related tests passing (19 publisher + 18 bridge + 6 controller)
+### Scalability Pattern
 
-### Phase 3 — End-to-end verification
+Decision point: what concurrency shape must the transport support by default?
 
-- [x] Diagnose `Pusher error: Payload too large` — live Reverb transport cannot carry arbitrarily large turn-event payloads in one frame.
-- [x] Add bounded live payload fallback: oversize broadcasts emit `replay_required`, browser gap-fills via HTTP replay using `after_seq`.
-- [x] Add transport backstop: browser keeps replay tailing on a short interval while Echo/Reverb initializes or misses attachment, instead of going dark.
-- [x] Send a prompt, see live tool cards and streaming output via Reverb.
-- [ ] Thinking phases render in the timeline at the moment they occur.
-- [ ] Navigate away and back during an active turn — timer resumes from real elapsed time, events replay via HTTP then Echo picks up.
-- [ ] Cancel a turn via the stop button — turn terminates, UI returns to ready state.
-- [ ] 3+ concurrent users chatting simultaneously — all receive live events, page loads stay responsive, no FrankenPHP crashes.
+- **Reverb (WebSocket):** Better fan-out for many simultaneous listeners across active turns.
+- **SSE / Persistent fetch:** Scales with one long-lived request per client.
+- **Livewire `wire:stream`:** Best suited to narrow component streams, not high fan-out chat event distribution.
+- **Custom transport:** Potentially optimal, but capacity behavior is unknown until built and load-tested.
 
-## Non-Goals
+### Reliability Model
 
-- Do not change the turn event model (Phases 1–5 infrastructure) — it works.
-- Do not change `RunAgentChatJob` or `TurnStreamBridge` internal logic — they work.
-- Do not change the serving stack (FrankenPHP stays; Reverb handles WebSocket out-of-process).
+Decision point: where do ordering, gap-fill, and reconnect guarantees live?
+
+- **Reverb (WebSocket):** Durable turn-event log + live channel + replay cursor gives deterministic recovery.
+- **SSE / Persistent fetch:** Recovery quality depends on keepalive, buffering behavior, and replay cursor discipline.
+- **Livewire `wire:stream`:** Reliability is tied to request lifecycle; reconnect/gap-fill must be layered separately for chat-grade guarantees.
+- **Custom transport:** Full control over guarantees, full responsibility for correctness.
+
+### Operational Risk Profile
+
+Decision point: prefer fewer moving parts or lower app-worker residency risk?
+
+- **Reverb (WebSocket):** More components (broker, channel auth, payload limits), but fewer long-lived app-worker streams.
+- **SSE / Persistent fetch:** Fewer components, but long-lived HTTP streams stay coupled to app worker capacity and proxy behavior.
+- **Livewire `wire:stream`:** Simpler developer ergonomics for UI streaming, still HTTP-stream residency at runtime.
+- **Custom transport:** Highest design/maintenance burden and largest unknown-failure surface.
+
+### UX
+
+Decision point: which model best preserves "coding-agent console" feel under real-world failures?
+
+- **Reverb (WebSocket):** Strong live feel with low-latency updates plus replay backfill during attach races/reconnects.
+- **SSE / Persistent fetch:** Good live output for single-stream flows; resilience under reconnect churn depends on custom recovery.
+- **Livewire `wire:stream`:** Smooth for component-local progressive rendering, weaker fit for cross-session event timelines.
+- **Custom transport:** Could be tailored precisely, but UX quality depends entirely on implementation maturity.

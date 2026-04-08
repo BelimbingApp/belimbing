@@ -130,6 +130,12 @@ php artisan migrate:fresh --seed --dev
 
 The admin UI at `admin/system/database-tables` (local env only) also lets you toggle stability per-table.
 
+## Agent Guardrails
+
+- **NEVER use `migrate:fresh --seed --dev --force-wipe`.** This flag bypasses table stability and destroys protected data. Only the human operator may decide to use it.
+- **NEVER run `migrate:fresh` without first marking the affected tables unstable** via `blb:table:unstable`. Follow the schema change workflow below.
+- **Prefer editing the source migration** over creating additive migrations during the initialization phase (no production data to preserve).
+
 ## Local Development — Command Decision Guide
 
 **`migrate:fresh --seed --dev` is the primary local tool.** Use it for almost everything.
@@ -139,12 +145,11 @@ The admin UI at `admin/system/database-tables` (local env only) also lets you to
 | New migration or schema change (after marking unstable) | `migrate:fresh --seed --dev` |
 | Apply pending migrations without wiping | `migrate --seed --dev` |
 | Run a specific dev seeder | `migrate --seed --seeder=Company/Dev/DevCompanyAddressSeeder` |
-| Nuclear reset — wipe everything including stable tables | `migrate:fresh --seed --dev --force-wipe` |
 | Production / staging deploy | `migrate` — never `migrate:fresh` |
 
 `--dev` implies `--seed`, creates the licensee company (id=1) if absent, then runs all dev seeders in dependency order. `APP_ENV=local` only.
 
-`migrate:refresh` and `migrate:reset` are **blocked** in Belimbing — they bypass table stability. Pass `--force-wipe` to override intentionally.
+`migrate:refresh` and `migrate:reset` are **blocked** in Belimbing — they bypass table stability.
 
 ## Refactoring Dependencies
 
