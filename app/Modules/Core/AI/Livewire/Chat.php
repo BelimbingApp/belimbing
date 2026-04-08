@@ -9,7 +9,6 @@ use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
-use App\Modules\Core\AI\Livewire\Concerns\HandlesBackgroundChat;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesStreaming;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesChatSessions;
 use App\Modules\Core\AI\Models\ChatTurn;
@@ -28,7 +27,6 @@ use Livewire\WithFileUploads;
 class Chat extends Component
 {
     use HandlesAttachments;
-    use HandlesBackgroundChat;
     use HandlesStreaming;
     use ManagesChatSessions;
     use ResolvesAvailableModels;

@@ -11,8 +11,8 @@ use App\Modules\Core\AI\DTO\PageSnapshot;
 /**
  * Request-scoped holder for the resolved page context and snapshot.
  *
- * Written by RunAgentChatJob (hydrated from dispatch meta) at the start of
- * a request. Read by LaraPromptFactory (for system prompt injection) and
+ * Written by ChatTurnRunner (hydrated from turn runtime_meta) at the start
+ * of a request. Read by LaraPromptFactory (for system prompt injection) and
  * ActivePageSnapshotTool (for on-demand rich inspection).
  *
  * Registered as a scoped singleton to guarantee isolation between requests.

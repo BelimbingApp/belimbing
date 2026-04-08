@@ -829,13 +829,13 @@
             try {
                 const result = await this.$wire.prepareStreamingRun();
 
-                if (result && result.turnId) {
+                if (result && result.turnId && result.streamUrl) {
                     this.pendingMessage = null;
                     this.activeTurnId = result.turnId;
                     this.turnPhase = 'waiting_for_worker';
                     this.turnLabel = this.waitingForWorkerLabel;
                     this.startElapsedTimer();
-                    this.subscribeToTurnChannel(result.turnId, scrollContainer);
+                    this.startPersistentFetch(result.turnId, result.streamUrl, scrollContainer);
                     return;
                 }
 
@@ -854,7 +854,6 @@
     Alpine.data('agentChatStream', (config = {}) => ({
         pendingMessage: null,
         streamEntries: [],
-        _echoChannel: null,
         followTail: true,
 
         activeTurnId: null,
@@ -871,9 +870,10 @@
         _deltaFlushTimer: null,
         _scrollContainer: null,
         _replayPollTimer: null,
-        _echoRetryTimer: null,
         _replayPromise: null,
         _pendingReplayAfterSeq: null,
+        _abortController: null,
+        _fetchReader: null,
 
         startingLabel: config.startingLabel ?? 'Starting…',
         waitingForWorkerLabel: config.waitingForWorkerLabel ?? 'Waiting for worker…',
@@ -886,7 +886,7 @@
         },
 
         resetTurnState() {
-            this.leaveTurnChannel();
+            this.abortPersistentFetch();
             this.activeTurnId = null;
             this.turnPhase = null;
             this.turnLabel = null;
@@ -898,10 +898,6 @@
             this.toolsCollapsed = false;
             this._scrollContainer = null;
             this.stopReplayPolling();
-            if (this._echoRetryTimer) {
-                clearTimeout(this._echoRetryTimer);
-                this._echoRetryTimer = null;
-            }
             this._replayPromise = null;
             this._pendingReplayAfterSeq = null;
             this.flushDeltaBuffer();
@@ -941,13 +937,6 @@
             }, 1000);
         },
 
-        leaveTurnChannel() {
-            if (this._echoChannel) {
-                window.Echo?.leave('turn.' + this._echoChannel);
-                this._echoChannel = null;
-            }
-        },
-
         stopReplayPolling() {
             if (this._replayPollTimer) {
                 clearInterval(this._replayPollTimer);
@@ -978,79 +967,106 @@
             poll();
         },
 
-        async waitForEchoReady(timeoutMs = 1500) {
-            if (window.Echo) {
-                return true;
-            }
-
-            return await new Promise((resolve) => {
-                const cleanup = () => {
-                    window.removeEventListener('blb-echo-ready', onReady);
-                    window.removeEventListener('blb-echo-failed', onFailure);
-                    clearTimeout(timeoutId);
-                };
-                const onReady = () => {
-                    cleanup();
-                    resolve(true);
-                };
-                const onFailure = () => {
-                    cleanup();
-                    resolve(false);
-                };
-                const timeoutId = setTimeout(() => {
-                    cleanup();
-                    resolve(!!window.Echo);
-                }, timeoutMs);
-
-                window.addEventListener('blb-echo-ready', onReady, { once: true });
-                window.addEventListener('blb-echo-failed', onFailure, { once: true });
-            });
-        },
-
-        scheduleEchoRetry(turnId, scrollContainer) {
-            if (this._echoRetryTimer || this._echoChannel || !this.activeTurnId) {
-                return;
-            }
-
-            this._echoRetryTimer = setTimeout(() => {
-                this._echoRetryTimer = null;
-
-                if (this.activeTurnId === turnId && !this._echoChannel) {
-                    this.subscribeToTurnChannel(turnId, scrollContainer);
-                }
-            }, 2000);
-        },
-
         finalizeTurnStream() {
             this.resetTurnState();
             this.$wire.finalizeStreamingRun();
         },
 
-        async subscribeToTurnChannel(turnId, scrollContainer) {
-            this.leaveTurnChannel();
-            this.followTail = true;
-            this._toolMap = {};
+        abortPersistentFetch() {
+            if (this._abortController) {
+                this._abortController.abort();
+                this._abortController = null;
+            }
+
+            this._fetchReader = null;
+        },
+
+        async startPersistentFetch(turnId, streamUrl, scrollContainer) {
+            this.abortPersistentFetch();
             this._scrollContainer = scrollContainer;
-            this.startReplayPolling(scrollContainer);
+            this._abortController = new AbortController();
 
-            const echoReady = await this.waitForEchoReady();
-
-            if (this.activeTurnId !== turnId) {
-                return;
-            }
-
-            if (!echoReady || !window.Echo) {
-                this.scheduleEchoRetry(turnId, scrollContainer);
-
-                return;
-            }
-
-            this._echoChannel = turnId;
-
-            window.Echo.private('turn.' + turnId)
-                .listen('.turn-event', (data) => {
-                    this.handleTurnEvent(data.event_type, data, this._scrollContainer);
+            try {
+                const response = await fetch(streamUrl, {
+                    signal: this._abortController.signal,
+                    credentials: 'same-origin',
                 });
+
+                if (!response.ok || !response.body) {
+                    let errorMessage = this.connectionLostMessage;
+
+                    try {
+                        const errorBody = await response.text();
+                        const errorData = JSON.parse(errorBody);
+
+                        if (errorData.error) errorMessage = errorData.error;
+                    } catch {
+                        // Fall back to generic message
+                    }
+
+                    this.streamEntries.push({ type: 'error', message: errorMessage });
+                    this.finalizeTurnStream();
+
+                    return;
+                }
+
+                this._fetchReader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await this._fetchReader.read();
+
+                    if (done) break;
+
+                    if (this.activeTurnId !== turnId) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+
+                        try {
+                            const data = JSON.parse(line);
+
+                            if (data._stream_complete) {
+                                if (!this.activeTurnId) return;
+
+                                this.removeThinkingEntries();
+                                this.finalizeTurnStream();
+
+                                return;
+                            }
+
+                            if (data.error && !data.event_type) {
+                                this.streamEntries.push({ type: 'error', message: data.error });
+                                this.finalizeTurnStream();
+
+                                return;
+                            }
+
+                            this.handleTurnEvent(data.event_type, data, scrollContainer);
+                        } catch {
+                            // Skip malformed lines
+                        }
+                    }
+                }
+
+                // Stream ended without _stream_complete — treat as normal completion
+                if (this.activeTurnId === turnId) {
+                    this.removeThinkingEntries();
+                    this.finalizeTurnStream();
+                }
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+
+                if (this.activeTurnId === turnId) {
+                    this.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
+                    this.finalizeTurnStream();
+                }
+            }
         },
 
         async resumeTurnStream(turnId, scrollContainer) {
@@ -1065,7 +1081,6 @@
                 const isTerminal = ['completed', 'failed', 'cancelled'].includes(json.status);
                 if (!isTerminal) {
                     this.startReplayPolling(scrollContainer);
-                    this.subscribeToTurnChannel(turnId, scrollContainer);
                 }
             } catch {
                 this.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
@@ -1146,7 +1161,7 @@
                 this.activeTurnId = data.turn_id;
             }
 
-            if ((seq && seq > this._lastSeq + 1) || data.replay_required) {
+            if (seq && seq > this._lastSeq + 1) {
                 try {
                     await this.requestReplay(this._lastSeq, scrollContainer);
                 } catch {
