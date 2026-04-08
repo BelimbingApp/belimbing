@@ -8,7 +8,6 @@ use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Livewire\Livewire;
-use Mockery;
 
 const AI_PROVIDERS_SAVED_KEY = 'sk-test-1234567890abcd';
 const AI_GITHUB_DEVICE_FLOW_USER_CODE = 'ABCD-1234';
@@ -63,7 +62,7 @@ test('github copilot setup starts device flow for a company-scoped user without 
 
     Livewire::test(GithubCopilotSetup::class, ['providerKey' => 'github-copilot'])
         ->assertSet('deviceFlow.status', 'pending')
-        ->assertSee('ABCD1234')
+        ->assertSee(AI_GITHUB_DEVICE_FLOW_USER_CODE)
         ->assertSee('Copy');
 });
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Modules\Core\AI\Models\ScheduleDefinition;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionService;
@@ -36,7 +37,7 @@ function makeInactiveScheduleContext(): AgentExecutionContext
  */
 function actAsScheduleUser(int $companyId = 10): void
 {
-    $user = new class($companyId) implements Authenticatable
+    $user = new class($companyId) implements Authenticatable, CompanyScoped
     {
         public function __construct(
             private readonly int $companyId,
