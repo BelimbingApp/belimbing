@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Services\ModelCatalogService;
+use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
@@ -124,11 +125,7 @@ class ConfigResolver
     {
         $dir = config('ai.workspace_path').'/'.$employeeId;
 
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-
-        file_put_contents(
+        BlbFile::put(
             $dir.'/config.json',
             json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         );

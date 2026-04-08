@@ -14,6 +14,8 @@
 #
 # Framework primitives (licensee company, admin user, Lara) are created by
 # MigrateCommand::ensureFrameworkPrimitives() in all environments.
+# The licensee company is upserted onto id=1 so row 1 remains the canonical
+# licensee across repeated setup runs.
 # Values are NOT persisted to .env — the users table is stable (is_stable=true)
 # so the admin row survives migrate:fresh runs.
 #

@@ -5,38 +5,32 @@
 
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
-use App\Modules\Core\AI\Enums\OperationStatus;
-use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Enums\TurnStatus;
-use App\Modules\Core\AI\Jobs\RunAgentChatJob;
 use App\Modules\Core\AI\Models\ChatTurn;
-use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\PageContextResolver;
 use App\Modules\Core\AI\Services\SessionManager;
-use App\Modules\Core\AI\Services\TurnEventPublisher;
 use App\Modules\Core\Employee\Models\Employee;
-use Illuminate\Support\Str;
 
 /**
  * Handles streaming chat run preparation and finalization.
  *
- * Uses dispatch-first architecture: creates a ChatTurn and OperationDispatch
- * upfront, then queues RunAgentChatJob. Page context is stored directly in
- * dispatch meta instead of a short-lived cache key.
+ * Uses direct-streaming architecture: creates a ChatTurn with runtime_meta,
+ * returns a stream URL so Alpine can open a persistent fetch connection.
+ * The streaming controller runs the agentic runtime inline.
  */
 trait HandlesStreaming
 {
     /**
-     * Prepare a streaming run: persist user message, create turn + dispatch, queue job.
+     * Prepare a streaming run: persist user message, create turn, return stream URL.
      *
-     * Creates a ChatTurn and OperationDispatch with `execution_mode => 'interactive'`
-     * so the job uses the interactive streaming policy. Page context is resolved
-     * here (on the real page request) and stored directly in dispatch meta.
+     * Creates a ChatTurn with runtime_meta containing model override, page
+     * context, and execution mode. Returns the turn ID and stream URL so
+     * Alpine can open a persistent fetch connection to the streaming controller.
      *
-     * @return array{turnId: string, session_id: string}|null Null when an orchestration shortcut handled the message or input was invalid
+     * @return array{turnId: string, streamUrl: string, session_id: string}|null Null when an orchestration shortcut handled the message or input was invalid
      */
     public function prepareStreamingRun(): ?array
     {
@@ -49,6 +43,10 @@ trait HandlesStreaming
 
         $sessionManager = app(SessionManager::class);
         if ($this->selectedSessionId === null) {
+            $session = $sessionManager->create($this->employeeId);
+            $this->selectedSessionId = $session->id;
+        } elseif ($sessionManager->get($this->employeeId, $this->selectedSessionId) === null) {
+            // Recover gracefully when client-side storage points to a stale session ID.
             $session = $sessionManager->create($this->employeeId);
             $this->selectedSessionId = $session->id;
         }
@@ -105,40 +103,26 @@ trait HandlesStreaming
             'acting_for_user_id' => auth()->id(),
             'status' => TurnStatus::Queued,
             'current_phase' => TurnPhase::WaitingForWorker,
-        ]);
-
-        $dispatch = OperationDispatch::query()->create([
-            'id' => OperationDispatch::ID_PREFIX.Str::random(20),
-            'operation_type' => OperationType::BackgroundChat,
-            'employee_id' => $this->employeeId,
-            'acting_for_user_id' => auth()->id(),
-            'task' => Str::limit($content, 500),
-            'status' => OperationStatus::Queued,
-            'meta' => [
-                'session_id' => $this->selectedSessionId,
+            'runtime_meta' => [
                 'model_override' => $this->selectedModel,
                 'page_context' => $this->resolvePageContextForDispatch(),
-                'turn_id' => $turn->id,
                 'execution_mode' => 'interactive',
             ],
         ]);
 
-        RunAgentChatJob::dispatch($dispatch->id);
-
-        $this->backgroundDispatchId = $dispatch->id;
-
         return [
             'turnId' => $turn->id,
+            'streamUrl' => route('ai.chat.turn.stream', ['turnId' => $turn->id]),
             'session_id' => $this->selectedSessionId,
         ];
     }
 
     /**
-     * Resolve page context from the current request for storage in dispatch meta.
+     * Resolve page context from the current request for storage in turn runtime_meta.
      *
-     * The job runs in a separate process whose route is not the user's page.
-     * We resolve here (on the real page request) and embed the result directly
-     * in the OperationDispatch meta so the job can hydrate context cheaply.
+     * The streaming controller runs in a separate HTTP request whose route is
+     * not the user's page. We resolve here (on the real page request) and embed
+     * the result in the turn's runtime_meta so the runner can hydrate context.
      *
      * @return array{consent: string, context: array<string, mixed>|null, snapshot: array<string, mixed>|null}|null
      */
@@ -184,11 +168,9 @@ trait HandlesStreaming
     /**
      * Cancel the active turn for the current user and session.
      *
-     * Called by the UI stop button. Marks the turn as cancelled so the
-     * background job sees the terminal state on its next cooperative
-     * cancellation check. Looks up the OperationDispatch from the turn
-     * via dispatch meta (meta->turn_id) when $this->backgroundDispatchId
-     * is not set.
+     * Called by the UI stop button. Sets cancel_requested_at on the turn
+     * so the streaming controller's runner detects it cooperatively on
+     * the next event iteration.
      */
     public function cancelActiveTurn(string $turnId): void
     {
@@ -198,27 +180,12 @@ trait HandlesStreaming
             return;
         }
 
-        // Ownership guard: only the acting user can cancel
         if ((int) $turn->acting_for_user_id !== (int) auth()->id()) {
             return;
         }
 
-        $publisher = app(TurnEventPublisher::class);
-        $publisher->turnCancelled($turn, 'User pressed stop');
+        $turn->requestCancel('User pressed stop');
 
-        // Cancel the associated dispatch
-        $dispatch = $this->backgroundDispatchId !== null
-            ? OperationDispatch::query()->find($this->backgroundDispatchId)
-            : OperationDispatch::query()
-                ->where('meta->turn_id', $turnId)
-                ->whereIn('status', [OperationStatus::Queued, OperationStatus::Running])
-                ->first();
-
-        if ($dispatch !== null && ! $dispatch->isTerminal()) {
-            $dispatch->markCancelled();
-        }
-
-        $this->backgroundDispatchId = null;
         $this->isLoading = false;
     }
 }

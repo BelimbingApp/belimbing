@@ -1,13 +1,18 @@
 <?php
 
+use App\Modules\Core\AI\Livewire\Providers\GithubCopilotSetup;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Services\ProviderAuthFlowService;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Livewire\Livewire;
+use Mockery;
 
 const AI_PROVIDERS_SAVED_KEY = 'sk-test-1234567890abcd';
+const AI_GITHUB_DEVICE_FLOW_USER_CODE = 'ABCD-1234';
+const AI_GITHUB_DEVICE_FLOW_VERIFICATION_URI = 'https://github.com/login/device';
 
 test('edit provider modal shows the current masked api key in the label', function (): void {
     $user = createAiProvidersTestUser();
@@ -31,6 +36,35 @@ test('edit provider modal shows current key not set when no api key is saved', f
         ->call('openEditProvider', $provider->id)
         ->assertSee('Current key:')
         ->assertSee('not set');
+});
+
+test('github copilot setup starts device flow for a company-scoped user without employee link', function (): void {
+    $company = Company::factory()->create();
+    $user = User::factory()->create([
+        'company_id' => $company->id,
+        'employee_id' => null,
+    ]);
+
+    $this->actingAs($user);
+
+    $flowService = Mockery::mock(ProviderAuthFlowService::class);
+    $flowService
+        ->shouldReceive('startFlow')
+        ->once()
+        ->with('github-copilot', $company->id, 0)
+        ->andReturn([
+            'status' => 'pending',
+            'user_code' => AI_GITHUB_DEVICE_FLOW_USER_CODE,
+            'verification_uri' => AI_GITHUB_DEVICE_FLOW_VERIFICATION_URI,
+            'error' => null,
+        ]);
+
+    app()->instance(ProviderAuthFlowService::class, $flowService);
+
+    Livewire::test(GithubCopilotSetup::class, ['providerKey' => 'github-copilot'])
+        ->assertSet('deviceFlow.status', 'pending')
+        ->assertSee('ABCD1234')
+        ->assertSee('Copy');
 });
 
 function createAiProvidersTestUser(): User

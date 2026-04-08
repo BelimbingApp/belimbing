@@ -78,6 +78,36 @@ test('migrate command provisions licensee with preferred company code from env',
         ->toBe(BLB_MIGRATE_COMMAND_TEST_COMPANY_CODE);
 });
 
+test('migrate command upserts the existing licensee row onto company id 1', function (): void {
+    Company::query()->whereKey(Company::LICENSEE_ID)->update([
+        'name' => 'Old Licensee',
+        'code' => 'old_licensee',
+        'status' => 'archived',
+    ]);
+
+    putenv('LICENSEE_COMPANY_NAME='.BLB_MIGRATE_COMMAND_TEST_COMPANY_NAME);
+    putenv('LICENSEE_COMPANY_CODE='.BLB_MIGRATE_COMMAND_TEST_COMPANY_CODE);
+
+    $_ENV['LICENSEE_COMPANY_NAME'] = BLB_MIGRATE_COMMAND_TEST_COMPANY_NAME;
+    $_ENV['LICENSEE_COMPANY_CODE'] = BLB_MIGRATE_COMMAND_TEST_COMPANY_CODE;
+    $_SERVER['LICENSEE_COMPANY_NAME'] = BLB_MIGRATE_COMMAND_TEST_COMPANY_NAME;
+    $_SERVER['LICENSEE_COMPANY_CODE'] = BLB_MIGRATE_COMMAND_TEST_COMPANY_CODE;
+
+    $command = app(MigrateCommand::class);
+    $command->setLaravel(app());
+    $command->setOutput(new OutputStyle(new ArrayInput([]), new BufferedOutput));
+
+    $method = new ReflectionMethod($command, 'ensureFrameworkPrimitives');
+    $method->invoke($command);
+
+    $company = Company::query()->findOrFail(Company::LICENSEE_ID);
+
+    expect($company->name)
+        ->toBe(BLB_MIGRATE_COMMAND_TEST_COMPANY_NAME)
+        ->and($company->code)->toBe(BLB_MIGRATE_COMMAND_TEST_COMPANY_CODE)
+        ->and($company->status)->toBe('active');
+});
+
 test('migrate command assigns core admin role when creating the fresh install admin user', function (): void {
     setupAuthzRoles();
     Company::provisionLicensee();

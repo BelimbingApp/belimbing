@@ -24,6 +24,7 @@ use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
 class Providers extends Component implements ProvidesLaraPageContext
@@ -192,8 +193,10 @@ class Providers extends Component implements ProvidesLaraPageContext
 
     private function getCompanyId(): ?int
     {
-        $user = auth()->user();
+        $user = Auth::user();
 
-        return $user?->employee?->company_id ? (int) $user->employee->company_id : null;
+        return $user !== null && method_exists($user, 'getCompanyId')
+            ? $user->getCompanyId()
+            : null;
     }
 }

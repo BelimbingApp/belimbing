@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\Session;
 use App\Modules\Core\Employee\Models\Employee;
@@ -43,13 +44,10 @@ class SessionManager
         );
 
         $dir = $this->sessionsPath($employeeId);
-
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
+        BlbFile::ensureDirectory($dir);
 
         // Write meta file
-        file_put_contents(
+        BlbFile::put(
             $this->metaPath($employeeId, $id),
             json_encode($session->toMeta(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         );

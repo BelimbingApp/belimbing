@@ -16,6 +16,7 @@ use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
 
@@ -164,8 +165,7 @@ class Playground extends Component
 
         if ($models === []) {
             // Seed from company's default provider + model
-            $user = auth()->user();
-            $companyId = $user?->employee?->company_id ? (int) $user->employee->company_id : null;
+            $companyId = $this->currentCompanyId();
             $default = $companyId ? $configResolver->resolveDefault($companyId) : null;
 
             $this->llmModels = [[
@@ -319,9 +319,7 @@ class Playground extends Component
 
     private function currentCompanyId(): ?int
     {
-        $user = auth()->user();
-
-        return $user?->employee?->company_id ? (int) $user->employee->company_id : null;
+        return $this->currentUser()->getCompanyId();
     }
 
     private function resolveDefaultProviderModelId(int $providerId): ?string
@@ -351,36 +349,36 @@ class Playground extends Component
         $availableProviders = collect();
         $providerModelsMap = [];
 
-        $user = auth()->user();
+        $user = $this->currentUser();
 
-        if ($user) {
-            // Get agents supervised by the current user's employee record.
-            $userEmployee = $user->employee;
+        // Get agents supervised by the current user's employee record.
+        $userEmployee = $user->employee;
 
-            if ($userEmployee) {
-                $agents = Employee::query()
-                    ->agent()
-                    ->where('supervisor_id', $userEmployee->id)
+        if ($userEmployee) {
+            $agents = Employee::query()
+                ->agent()
+                ->where('supervisor_id', $userEmployee->id)
+                ->active()
+                ->get();
+        }
+
+        $companyId = $this->currentCompanyId();
+
+        if ($companyId !== null) {
+            $availableProviders = AiProvider::query()
+                ->forCompany($companyId)
+                ->active()
+                ->get(['id', 'name', 'display_name']);
+
+            // Build provider → models map for the LLM config modal
+            $providerModelsMap = [];
+            foreach ($availableProviders as $p) {
+                $providerModelsMap[$p->name] = AiProviderModel::query()
+                    ->where('ai_provider_id', $p->id)
                     ->active()
-                    ->get();
-            }
-
-            if ($user->employee && $user->employee->company_id) {
-                $availableProviders = AiProvider::query()
-                    ->forCompany((int) $user->employee->company_id)
-                    ->active()
-                    ->get(['id', 'name', 'display_name']);
-
-                // Build provider → models map for the LLM config modal
-                $providerModelsMap = [];
-                foreach ($availableProviders as $p) {
-                    $providerModelsMap[$p->name] = AiProviderModel::query()
-                        ->where('ai_provider_id', $p->id)
-                        ->active()
-                        ->orderBy('model_id')
-                        ->pluck('model_id')
-                        ->all();
-                }
+                    ->orderBy('model_id')
+                    ->pluck('model_id')
+                    ->all();
             }
         }
 
@@ -410,9 +408,9 @@ class Playground extends Component
      */
     private function getDefaultAgent(): ?Employee
     {
-        $user = auth()->user();
+        $user = $this->currentUser();
 
-        if (! $user || ! $user->employee) {
+        if (! $user->employee) {
             return null;
         }
 
@@ -421,5 +419,19 @@ class Playground extends Component
             ->where('supervisor_id', $user->employee->id)
             ->active()
             ->first();
+    }
+
+    /**
+     * Resolve the authenticated user for this page.
+     */
+    private function currentUser(): User
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            abort(401);
+        }
+
+        return $user;
     }
 }

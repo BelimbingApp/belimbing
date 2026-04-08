@@ -10,6 +10,7 @@
 namespace App\Modules\Core\AI\Livewire\Providers;
 
 use App\Base\AI\Services\ModelCatalogService;
+use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\Livewire\Concerns\FormatsDisplayValues;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesModels;
@@ -23,6 +24,7 @@ use App\Modules\Core\AI\Services\ProviderAuthFlowService;
 use App\Modules\Core\AI\Services\ProviderDefinitionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
@@ -335,7 +337,7 @@ class ProviderSetup extends Component
             'name' => $this->providerKey,
             'display_name' => $this->displayName,
             'is_active' => true,
-            'created_by' => auth()->user()->employee?->id,
+            'created_by' => Auth::user()?->employee?->id,
         ]));
 
         $provider->assignNextPriority();
@@ -346,9 +348,11 @@ class ProviderSetup extends Component
 
     private function getCompanyId(): ?int
     {
-        $user = auth()->user();
+        $user = Auth::user();
 
-        return $user?->employee?->company_id ? (int) $user->employee->company_id : null;
+        return $user instanceof CompanyScoped
+            ? $user->getCompanyId()
+            : null;
     }
 
     /**

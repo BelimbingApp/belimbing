@@ -72,10 +72,17 @@ class User extends Authenticatable implements CompanyScoped
 
     /**
      * Get the company ID the user belongs to.
+     *
+     * Prefer the direct user scope and fall back to the linked employee's
+     * company when the user record does not persist company_id.
      */
     public function getCompanyId(): ?int
     {
-        return $this->company_id !== null ? (int) $this->company_id : null;
+        if ($this->company_id !== null) {
+            return (int) $this->company_id;
+        }
+
+        return $this->employee?->company_id !== null ? (int) $this->employee->company_id : null;
     }
 
     /**

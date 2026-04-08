@@ -41,6 +41,37 @@ test('provision licensee normalizes preferred company code', function (): void {
     expect($licensee->code)->toBe('preferred_code_2026');
 });
 
+test('provision licensee updates the existing id 1 company in place', function (): void {
+    Company::query()->whereKey(Company::LICENSEE_ID)->update([
+        'name' => 'Old Licensee',
+        'code' => 'old_licensee',
+        'status' => 'archived',
+    ]);
+
+    $wasCreated = Company::provisionLicensee('New Licensee', 'new licensee');
+
+    $licensee = Company::query()->findOrFail(Company::LICENSEE_ID);
+
+    expect($wasCreated)->toBeFalse()
+        ->and($licensee->name)->toBe('New Licensee')
+        ->and($licensee->code)->toBe('new_licensee')
+        ->and($licensee->status)->toBe('active');
+});
+
+test('provision licensee preserves existing code when no preferred code is provided', function (): void {
+    Company::query()->whereKey(Company::LICENSEE_ID)->update([
+        'name' => 'Old Licensee',
+        'code' => 'stable_licensee',
+    ]);
+
+    Company::provisionLicensee('Renamed Licensee');
+
+    $licensee = Company::query()->findOrFail(Company::LICENSEE_ID);
+
+    expect($licensee->name)->toBe('Renamed Licensee')
+        ->and($licensee->code)->toBe('stable_licensee');
+});
+
 test('company can have parent company', function (): void {
     $parent = Company::factory()->create(['name' => 'Parent Corp']);
     $child = Company::factory()->create([

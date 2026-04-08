@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Support\File as BlbFile;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Str;
@@ -53,10 +54,7 @@ trait HandlesAttachments
         $sessionManager = app(SessionManager::class);
         $basePath = $sessionManager->sessionsPath($this->employeeId);
         $attachDir = $basePath.'/attachments/'.$sessionId;
-
-        if (! is_dir($attachDir)) {
-            mkdir($attachDir, 0755, true);
-        }
+        BlbFile::ensureDirectory($attachDir);
 
         $processed = [];
 
@@ -124,7 +122,7 @@ trait HandlesAttachments
         }
 
         $sidecarPath = $attachDir.'/'.$id.'.extracted.txt';
-        file_put_contents($sidecarPath, $text);
+        BlbFile::put($sidecarPath, $text);
 
         return $sidecarPath;
     }

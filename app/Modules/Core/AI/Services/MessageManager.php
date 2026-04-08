@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
 use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\DTO\Message;
@@ -33,7 +34,7 @@ class MessageManager
     {
         $path = $this->sessionManager->transcriptPath($employeeId, $sessionId);
 
-        file_put_contents(
+        BlbFile::put(
             $path,
             $message->toJsonLine()."\n",
             FILE_APPEND | LOCK_EX,

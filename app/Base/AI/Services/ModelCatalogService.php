@@ -8,6 +8,7 @@ namespace App\Base\AI\Services;
 use App\Base\AI\DTO\CatalogSyncResult;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Exceptions\ModelCatalogSyncException;
+use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
 use DateTimeImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -111,8 +112,7 @@ class ModelCatalogService
 
         $etag = $response->header('ETag') ?? '';
 
-        $this->ensureDirectory();
-        file_put_contents($catalogPath, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        BlbFile::put($catalogPath, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         $this->writeMeta($etag, now()->toIso8601String());
 
         $this->catalogCache = null;
@@ -313,9 +313,7 @@ class ModelCatalogService
      */
     private function writeMeta(string $etag, string $lastSynced): void
     {
-        $this->ensureDirectory();
-
-        file_put_contents($this->metaPath(), json_encode([
+        BlbFile::put($this->metaPath(), json_encode([
             'etag' => $etag,
             'last_synced' => $lastSynced,
         ], JSON_UNESCAPED_SLASHES));
@@ -341,15 +339,6 @@ class ModelCatalogService
         }
 
         return ['providers' => count($data), 'models' => $models];
-    }
-
-    private function ensureDirectory(): void
-    {
-        $dir = storage_path(self::CATALOG_DIR);
-
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
     }
 
     private function catalogPath(): string

@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services\Browser;
 
+use App\Base\Support\File as BlbFile;
 use App\Modules\Core\AI\DTO\BrowserArtifactMeta;
 use App\Modules\Core\AI\Enums\BrowserArtifactType;
 use App\Modules\Core\AI\Models\BrowserArtifact;
@@ -42,14 +43,7 @@ class BrowserArtifactStore
         $relativePath = self::ARTIFACT_DIR."/{$sessionId}/{$artifactId}.{$extension}";
         $absolutePath = storage_path("app/{$relativePath}");
 
-        // Ensure directory exists.
-        $dir = dirname($absolutePath);
-
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-
-        file_put_contents($absolutePath, $content);
+        BlbFile::put($absolutePath, $content);
 
         $artifact = BrowserArtifact::query()->create([
             'id' => $artifactId,

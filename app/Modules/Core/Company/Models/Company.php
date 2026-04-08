@@ -307,44 +307,48 @@ class Company extends Model
     }
 
     /**
-     * Ensure the licensee company (id=1) exists.
+     * Upsert the licensee company at id=1.
      *
      * Idempotent — safe to call from migrations, setup scripts, and UI.
-     * Resets the PostgreSQL sequence after explicit-ID insert to avoid
-     * auto-increment collisions.
+     * When the row already exists, its name/code/status are updated in place so
+     * id=1 remains the canonical licensee company. Resets the PostgreSQL
+     * sequence after explicit-ID insert to avoid auto-increment collisions.
      *
      * @param  string  $name  Display name for the licensee company
      * @param  string|null  $code  Preferred company code (normalized to snake_case)
-     * @return bool Whether the licensee was created (false if already existed).
+     * @return bool Whether the licensee row was created (false if it already existed and was updated).
      */
     public static function provisionLicensee(string $name = 'My Company', ?string $code = null): bool
     {
-        if (static::query()->where('id', self::LICENSEE_ID)->exists()) {
-            return false;
-        }
-
         $normalizedCode = null;
         if (is_string($code) && trim($code) !== '') {
             $normalizedCode = BlbStr::code($code);
         }
 
-        static::unguarded(fn () => static::query()->create([
-            'id' => self::LICENSEE_ID,
+        $attributes = [
             'name' => $name,
-            'code' => $normalizedCode,
             'status' => 'active',
-        ]));
+        ];
+
+        if ($normalizedCode !== null) {
+            $attributes['code'] = $normalizedCode;
+        }
+
+        $licensee = static::unguarded(fn () => static::query()->updateOrCreate(
+            ['id' => self::LICENSEE_ID],
+            $attributes,
+        ));
 
         // PostgreSQL sequences don't advance on explicit-ID inserts — reset to
         // avoid unique-constraint violations when subsequent inserts auto-increment.
         $connection = static::resolveConnection();
-        if ($connection->getDriverName() === 'pgsql') {
+        if ($licensee->wasRecentlyCreated && $connection->getDriverName() === 'pgsql') {
             $connection->statement(
                 "SELECT setval(pg_get_serial_sequence('companies', 'id'), (SELECT COALESCE(MAX(id), 0) FROM companies))"
             );
         }
 
-        return true;
+        return $licensee->wasRecentlyCreated;
     }
 
     /**

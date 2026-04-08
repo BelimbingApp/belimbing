@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
+use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Base\AI\Tools\AbstractActionTool;
 use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
@@ -414,11 +415,9 @@ class ScheduleTaskTool extends AbstractActionTool
 
         $user = Auth::user();
 
-        if ($user !== null && method_exists($user, 'getCompanyId')) {
-            return $user->getCompanyId();
-        }
-
-        return null;
+        return $user instanceof CompanyScoped
+            ? $user->getCompanyId()
+            : null;
     }
 
     /**
