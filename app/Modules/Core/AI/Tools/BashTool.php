@@ -117,7 +117,7 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
 
         [$process, $pipes] = $opened;
 
-        yield from $this->yieldBashStreamUntilComplete(
+        return yield from $this->yieldBashStreamUntilComplete(
             $process,
             $pipes,
         );
