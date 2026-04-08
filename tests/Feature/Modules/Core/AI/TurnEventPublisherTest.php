@@ -6,16 +6,14 @@
 use App\Modules\Core\AI\Enums\TurnEventType;
 use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Enums\TurnStatus;
-use App\Modules\Core\AI\Events\TurnEventOccurred;
 use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\ChatTurnEvent;
 use App\Modules\Core\AI\Services\TurnEventPublisher;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Database\UniqueConstraintViolationException;
-use Illuminate\Support\Facades\Event;
 
 const TURN_TEST_SESSION_ID = 'sess_turn_publisher_test';
-const TURN_BROADCAST_OVERSIZE_BYTES = 8_000;
+const TURN_LARGE_PAYLOAD_BYTES = 8_000;
 
 /**
  * Create a ChatTurn in queued state for testing.
@@ -136,7 +134,7 @@ describe('ChatTurnEvent model', function () {
             ->and($sse['event_type'])->toBe('heartbeat');
     });
 
-    it('keeps small broadcast payloads inline', function () {
+    it('keeps small payloads inline', function () {
         $turn = createTestTurn();
         $event = ChatTurnEvent::query()->create([
             'turn_id' => $turn->id,
@@ -145,28 +143,26 @@ describe('ChatTurnEvent model', function () {
             'payload' => ['delta' => 'Hello, world'],
         ]);
 
-        $broadcast = $event->toBroadcastPayload();
+        $payload = $event->toSsePayload();
 
-        expect($broadcast)->toHaveKey('payload')
-            ->and($broadcast)->not->toHaveKey('replay_required')
-            ->and($broadcast['payload']['delta'])->toBe('Hello, world');
+        expect($payload)->toHaveKey('payload')
+            ->and($payload['payload']['delta'])->toBe('Hello, world');
     });
 
-    it('falls back to replay markers for oversized broadcast payloads', function () {
+    it('preserves oversized payloads in the canonical event envelope', function () {
         $turn = createTestTurn();
         $event = ChatTurnEvent::query()->create([
             'turn_id' => $turn->id,
             'seq' => 1,
             'event_type' => TurnEventType::AssistantOutputDelta->value,
-            'payload' => ['delta' => str_repeat('A', TURN_BROADCAST_OVERSIZE_BYTES)],
+            'payload' => ['delta' => str_repeat('A', TURN_LARGE_PAYLOAD_BYTES)],
         ]);
 
-        $broadcast = $event->toBroadcastPayload();
+        $payload = $event->toSsePayload();
 
-        expect($broadcast)->toHaveKey('replay_required', true)
-            ->and($broadcast)->not->toHaveKey('payload')
-            ->and($broadcast['seq'])->toBe(1)
-            ->and($broadcast['event_type'])->toBe('assistant.output_delta');
+        expect($payload['seq'])->toBe(1)
+            ->and($payload['event_type'])->toBe('assistant.output_delta')
+            ->and($payload['payload']['delta'])->toHaveLength(TURN_LARGE_PAYLOAD_BYTES);
     });
 
     it('enforces unique turn_id + seq constraint', function () {
@@ -338,20 +334,15 @@ describe('TurnEventPublisher', function () {
             ->and($afterSeq2->last()->seq)->toBe(4);
     });
 
-    it('broadcasts replay markers instead of oversized live payloads', function () {
-        Event::fake([TurnEventOccurred::class]);
-
+    it('persists oversized live payloads without transport-specific fallback', function () {
         $publisher = app(TurnEventPublisher::class);
         $turn = createTestTurn();
         $turn->transitionTo(TurnStatus::Booting);
         $turn->transitionTo(TurnStatus::Running);
 
-        $publisher->outputDelta($turn, str_repeat('A', TURN_BROADCAST_OVERSIZE_BYTES));
+        $event = $publisher->outputDelta($turn, str_repeat('A', TURN_LARGE_PAYLOAD_BYTES));
 
-        Event::assertDispatched(TurnEventOccurred::class, function (TurnEventOccurred $event): bool {
-            return $event->eventPayload['replay_required'] === true
-                && ! array_key_exists('payload', $event->eventPayload)
-                && $event->eventPayload['event_type'] === 'assistant.output_delta';
-        });
+        expect($event->payload['delta'])->toHaveLength(TURN_LARGE_PAYLOAD_BYTES)
+            ->and($turn->fresh()->last_event_seq)->toBe(1);
     });
 });

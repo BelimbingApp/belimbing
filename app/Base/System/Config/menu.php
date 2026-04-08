@@ -41,5 +41,14 @@ return [
             'parent' => 'system',
             'position' => 97,
         ],
+        [
+            'id' => 'system.test-transport',
+            'label' => 'TestTransport',
+            'icon' => 'heroicon-o-play',
+            'route' => 'admin.system.test-transport.index',
+            'permission' => 'admin.system_transport_test.view',
+            'parent' => 'system',
+            'position' => 98,
+        ],
     ],
 ];

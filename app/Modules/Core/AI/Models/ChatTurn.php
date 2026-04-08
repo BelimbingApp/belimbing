@@ -36,6 +36,8 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed>|null $meta Arbitrary metadata
  * @property Carbon|null $started_at When execution began
  * @property Carbon|null $finished_at When the turn reached a terminal state
+ * @property Carbon|null $cancel_requested_at When cancellation was requested
+ * @property array<string, mixed>|null $runtime_meta Ephemeral execution context (e.g. cancel reason)
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Employee $employee
@@ -67,6 +69,8 @@ class ChatTurn extends Model
         'meta',
         'started_at',
         'finished_at',
+        'cancel_requested_at',
+        'runtime_meta',
     ];
 
     /**
@@ -81,6 +85,8 @@ class ChatTurn extends Model
             'meta' => 'json',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
+            'cancel_requested_at' => 'datetime',
+            'runtime_meta' => 'json',
         ];
     }
 
@@ -138,6 +144,30 @@ class ChatTurn extends Model
     public function isTerminal(): bool
     {
         return $this->status->isTerminal();
+    }
+
+    /**
+     * Whether cancellation has been requested for this turn.
+     */
+    public function isCancelRequested(): bool
+    {
+        return $this->cancel_requested_at !== null;
+    }
+
+    /**
+     * Request cancellation of this turn.
+     *
+     * Sets the cancel timestamp and stores the reason in runtime_meta.
+     *
+     * @param  string  $reason  Human-readable cancellation reason
+     */
+    public function requestCancel(string $reason = 'User pressed stop'): void
+    {
+        $this->cancel_requested_at = now();
+        $this->runtime_meta = array_merge($this->runtime_meta ?? [], [
+            'cancel_reason' => $reason,
+        ]);
+        $this->save();
     }
 
     /**

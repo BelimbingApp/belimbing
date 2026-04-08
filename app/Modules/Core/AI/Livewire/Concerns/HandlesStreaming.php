@@ -42,10 +42,10 @@ trait HandlesStreaming
         }
 
         $sessionManager = app(SessionManager::class);
-        if ($this->selectedSessionId === null) {
-            $session = $sessionManager->create($this->employeeId);
-            $this->selectedSessionId = $session->id;
-        } elseif ($sessionManager->get($this->employeeId, $this->selectedSessionId) === null) {
+        if (
+            $this->selectedSessionId === null
+            || $sessionManager->get($this->employeeId, $this->selectedSessionId) === null
+        ) {
             // Recover gracefully when client-side storage points to a stale session ID.
             $session = $sessionManager->create($this->employeeId);
             $this->selectedSessionId = $session->id;

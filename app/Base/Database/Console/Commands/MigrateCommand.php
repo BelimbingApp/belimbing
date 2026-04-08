@@ -272,7 +272,7 @@ class MigrateCommand extends IlluminateMigrateCommand
     }
 
     /**
-     * Ensure framework primitives exist: Licensee company (id=1), admin user, and Lara (employee id=1).
+    * Ensure framework primitives exist: Licensee company (id=1), admin user, and Lara (employee id=1).
      *
      * All three are idempotent — safe to call on every migrate. Ordering matters:
      * Licensee must exist before admin user (user belongs to licensee company),
@@ -281,7 +281,9 @@ class MigrateCommand extends IlluminateMigrateCommand
      * Values are read from env vars (passed transiently by the setup script).
      * Defaults allow day-to-day `migrate:fresh --seed --dev` to work without
      * env vars since `is_stable` preserves the users table across fresh runs.
-     * Reads LICENSEE_COMPANY_NAME and optional LICENSEE_COMPANY_CODE.
+     * Reads LICENSEE_COMPANY_NAME and optional LICENSEE_COMPANY_CODE. The
+     * licensee company row is upserted onto id=1 so the canonical licensee ID
+     * remains stable across repeated setup runs.
      */
     private function ensureFrameworkPrimitives(): void
     {
@@ -290,6 +292,8 @@ class MigrateCommand extends IlluminateMigrateCommand
 
         if (Company::provisionLicensee($companyName, $companyCode)) {
             $this->line("  Created licensee company: {$companyName}");
+        } else {
+            $this->line("  Updated licensee company: {$companyName}");
         }
 
         $this->ensureAdminUser();

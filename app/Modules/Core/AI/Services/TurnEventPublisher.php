@@ -8,7 +8,6 @@ namespace App\Modules\Core\AI\Services;
 use App\Modules\Core\AI\Enums\TurnEventType;
 use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Enums\TurnStatus;
-use App\Modules\Core\AI\Events\TurnEventOccurred;
 use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\ChatTurnEvent;
 use Illuminate\Support\Facades\DB;
@@ -24,9 +23,9 @@ use Illuminate\Support\Facades\DB;
  * turn events after a turn completes — it no longer defines the live UX.
  *
  * Each published event is assigned a strictly increasing seq within the
- * turn, persisted atomically, and broadcast via Reverb WebSocket for
- * live delivery. Persisted events are also available for HTTP replay
- * via the `after_seq` resume contract.
+ * turn and persisted atomically. Fresh turns stream those events directly
+ * over the NDJSON response, while persisted events remain available for
+ * HTTP replay via the `after_seq` resume contract.
  *
  * Cross-reference: Claw Code's SessionTracer in
  * `rust/crates/telemetry/src/lib.rs` — record_turn_started(),
@@ -46,7 +45,7 @@ class TurnEventPublisher
      */
     public function publish(ChatTurn $turn, TurnEventType $eventType, ?array $payload = null): ChatTurnEvent
     {
-        $event = DB::transaction(function () use ($turn, $eventType, $payload): ChatTurnEvent {
+        return DB::transaction(function () use ($turn, $eventType, $payload): ChatTurnEvent {
             $seq = $turn->nextSeq();
 
             return ChatTurnEvent::query()->create([
@@ -56,10 +55,6 @@ class TurnEventPublisher
                 'payload' => $payload,
             ]);
         });
-
-        TurnEventOccurred::dispatch($turn->id, $event->toBroadcastPayload());
-
-        return $event;
     }
 
     // ── Turn lifecycle ───────────────────────────────────────────────

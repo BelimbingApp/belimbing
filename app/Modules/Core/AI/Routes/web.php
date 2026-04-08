@@ -5,6 +5,7 @@
 
 use App\Modules\Core\AI\Http\Controllers\MessagingWebhookController;
 use App\Modules\Core\AI\Http\Controllers\ProviderSetupController;
+use App\Modules\Core\AI\Http\Controllers\ChatTurnStreamController;
 use App\Modules\Core\AI\Http\Controllers\TurnEventStreamController;
 use App\Modules\Core\AI\Livewire\ControlPlane;
 use App\Modules\Core\AI\Livewire\Playground;
@@ -22,9 +23,12 @@ Route::post('api/ai/messaging/webhook/{channel}/{accountId?}', MessagingWebhookC
     ->where('accountId', '[0-9]+');
 
 Route::middleware(['auth'])->group(function () {
-    // Turn event replay (JSON — live delivery via Reverb WebSocket)
+    // Turn event replay (JSON for resume and gap-fill)
     Route::get('api/ai/chat/turns/{turnId}/events', TurnEventStreamController::class)
         ->name('ai.chat.turn.events');
+    // Direct streaming for interactive chat turns (NDJSON)
+    Route::get('api/ai/chat/turns/{turnId}/stream', ChatTurnStreamController::class)
+        ->name('ai.chat.turn.stream');
     // Lara setup
     Route::get('admin/setup/lara', Lara::class)
         ->name('admin.setup.lara');

@@ -9,18 +9,18 @@ use App\Modules\Core\AI\Models\ChatTurn;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * HTTP endpoint for replaying a turn's persisted event stream.
  *
- * Returns all events after `after_seq` as a JSON array. Live delivery
- * is handled by the Reverb WebSocket channel (`turn.{turnId}`), so
- * this endpoint is used only for:
+ * Returns all events after `after_seq` as a JSON array. The direct
+ * streaming endpoint handles fresh turns; this endpoint covers replay
+ * and gap-fill for already-persisted events:
  *
- * 1. **Page-load replay** — client fetches missed events, then subscribes
- *    to the Echo channel for live updates.
- * 2. **Reconnection gap-fill** — client provides `after_seq` to fetch
- *    events missed during a brief disconnect.
+ * 1. **Page-load replay** — client fetches missed events for an active turn.
+ * 2. **Reconnect gap-fill** — client provides `after_seq` to fetch
+ *    events missed during a brief disconnect before polling resumes.
  */
 class TurnEventStreamController
 {
@@ -35,7 +35,7 @@ class TurnEventStreamController
             return response('Turn not found', 404);
         }
 
-        if ((int) $turn->acting_for_user_id !== (int) auth()->id()) {
+        if ((int) $turn->acting_for_user_id !== (int) Auth::id()) {
             return response('Forbidden', 403);
         }
 

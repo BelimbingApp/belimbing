@@ -31,6 +31,8 @@ return new class extends Migration
             $table->json('meta')->nullable();
             $table->timestamp('started_at')->nullable();
             $table->timestamp('finished_at')->nullable();
+            $table->timestamp('cancel_requested_at')->nullable();
+            $table->json('runtime_meta')->nullable();
             $table->timestamps();
 
             $table->index('session_id');
