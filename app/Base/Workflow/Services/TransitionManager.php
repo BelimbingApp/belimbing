@@ -55,12 +55,22 @@ class TransitionManager
     {
         $cacheKey = self::CACHE_PREFIX.$flow;
 
-        return $this->cache->remember($cacheKey, self::CACHE_TTL, function () use ($flow): Collection {
-            return StatusTransition::query()
-                ->forFlow($flow)
-                ->orderBy('position')
-                ->get();
-        });
+        $cached = $this->cache->get($cacheKey);
+        if ($cached instanceof Collection) {
+            return $cached;
+        }
+
+        // Discard stale or unserializable cache payloads (e.g. __PHP_Incomplete_Class).
+        $this->cache->forget($cacheKey);
+
+        $transitions = StatusTransition::query()
+            ->forFlow($flow)
+            ->orderBy('position')
+            ->get();
+
+        $this->cache->put($cacheKey, $transitions, self::CACHE_TTL);
+
+        return $transitions;
     }
 
     /**
