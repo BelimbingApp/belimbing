@@ -487,7 +487,7 @@ This is fully backward-compatible: existing callers that don't pass tools/toolCh
 1. **Multi-step workflows** — Employee creation, file upload, guided data entry
 2. **GitHub integration** — Create issues for missing features via API
 3. **Command scaffolding** — Build missing `blb:` commands in dev environment
-4. **Streaming** — Intermediate step display in chat (tool call progress)
+4. **Transport hardening** — Refine disconnect recovery, cancellation, and concurrency behavior on top of the delivered direct-streaming chat path
 5. **Production guardrails** — Read-only command restriction for production environments
 6. **QueryDataTool** — Direct SQL query execution for data questions
 
@@ -502,3 +502,4 @@ This is fully backward-compatible: existing callers that don't pass tools/toolCh
 | 0.3 | 2026-03-06 | AI + Kiat | Finalized prompt extension contract and Lara UI identity policy; narrowed remaining open question to rate limiting |
 | 0.4 | 2026-03-06 | AI + Kiat | Added Lara command affordances (`/go`, `/guide`, `/models`, `/delegate`) and documented navigation/query behavior |
 | 0.5 | 2026-03-07 | AI + Kiat | Added §13 Tool Calling & Agentic Runtime — AgentTool contract, AgentToolRegistry, AgenticRuntime, ArtisanTool, BashTool, NavigateTool, authz capabilities |
+| 0.6 | 2026-04-09 | AI + Kiat | Updated Lara transport notes to reflect delivered direct streaming for fresh turns with persisted replay and polling-based recovery |

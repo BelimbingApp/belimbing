@@ -954,7 +954,7 @@ Lara should be able to help admins configure tool settings conversationally. Ins
 ## 11. Open Questions
 
 1. **Tool timeout per-provider** — Some LLM providers have longer function-calling response times. Should tool timeout awareness extend to the LLM client layer?
-2. **Streaming tool progress** — OpenClaw uses SSE/WebSocket for real-time tool execution feedback. BLB's Livewire chat uses broadcasting. Should tool progress events broadcast via Echo?
+2. **Streaming transport hardening** — BLB's Livewire chat now uses direct NDJSON streaming for fresh turns and persisted replay for recovery. Should resumed active turns stay on replay polling, or should BLB add a different tailing transport only if concurrency pressure justifies it?
 3. **Tool versioning** — When tool schemas change, how to handle in-flight conversations that reference old schemas?
 4. **Per-company tool enablement** — Should tool availability be configurable per company (beyond authz), similar to OpenClaw's `tools.allow/deny`? Or is authz sufficient?
 5. **Rate limiting per tool** — OpenClaw defers this. BLB should decide: per-user, per-company, or global rate limits on expensive tools (web search, document analysis)?
@@ -973,6 +973,7 @@ Lara should be able to help admins configure tool settings conversationally. Ins
 | 0.6 | 2026-03-08 | AI + Kiat | Phase 5 complete, Phase 6 (Messaging) complete. MessageTool with 8 action-based dispatch (send/reply/react/edit/delete/poll/list_conversations/search), ChannelAdapter contract, ChannelAdapterRegistry, 4 stub adapters (WhatsApp, Telegram, Slack, Email), ChannelCapabilities/ChannelAccount/SendResult/InboundMessage DTOs. 19 messaging authz capabilities + 4 role bundles (messaging_reader/responder/operator/admin). 8 new authz verbs (manage, grant, revoke, send, react, edit, media, poll, search). 51 new tests (392 total). All in `lara-tools` worktree. |
 | 0.7 | 2026-03-08 | AI + Kiat | Phase 7 (Media & Documents) complete, Phase 8 (Enhanced Runtime) complete. DocumentAnalysisTool (PDF analysis stub with page filter validation), ImageAnalysisTool (vision model stub with format validation + URL support), WriteJsTool (client-side JS via agent-action blocks, 7 blocked patterns for security), ArtisanTool v2 (background execution via dispatch_id, configurable timeout 1–300s clamped). 2 new authz capabilities (ai.tool_document_analysis.execute, ai.tool_image_analysis.execute) added to agent_operator and agent_power_user roles. 108 new tests (500 total, 994 assertions). All phases complete. All in `lara-tools` worktree. |
 | 0.8 | 2026-03-09 | AI + Kiat | Tool abstraction layer: Extracted `Tool` interface, `AbstractTool`, `AbstractActionTool`, `ToolSchemaBuilder`, `ToolResult`, `ToolArgumentException`, `ToolCategory`/`ToolRiskClass` enums into `Base/AI`. All 20 tools migrated: 17 extend `AbstractTool`, 3 extend `AbstractActionTool`. Replaced `AgentTool` contract. Updated §3.1 infrastructure table. See `docs/Base/AI/tool-framework.md`. |
+| 0.9 | 2026-04-09 | AI + Kiat | Updated runtime transport notes to reflect delivered direct streaming for fresh turns with persisted replay and polling-based recovery, replacing the older Echo/broadcasting assumption. |
 
 ---
 

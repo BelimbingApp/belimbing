@@ -3,8 +3,8 @@
 **Document Type:** Implementation Reference
 **Status:** Active
 **Purpose:** Source of truth for BLB AI features implemented in code
-**Coverage:** OpenClaw parity Phases 1-6, Claw Code runtime parity (hook transcript entries + approval visibility), and AI Run Ledger Phases 0-3
-**Last Updated:** 2026-04-05
+**Coverage:** OpenClaw parity Phases 1-6, Claw Code runtime parity (hook transcript entries + approval visibility), AI Run Ledger Phases 0-3, and Lara direct-stream transport delivery
+**Last Updated:** 2026-04-09
 **Related:** [agent-model.md](agent-model.md), [lara.md](lara.md), [capability-map.md](capability-map.md), `docs/Base/AI/tool-framework.md`
 
 ---
@@ -33,7 +33,7 @@ It covers the completed OpenClaw parity work through Phase 6, the delivered Claw
 5. Orchestration and extension kernel
 6. Operator control plane and policy depth
 7. Claw Code runtime parity gaps around hook visibility, transcript fidelity, and usage reconstruction
-8. Run ledger, activity stream, execution policy, and background chat UX
+8. Run ledger, activity stream, execution policy, and Lara direct-stream chat UX
 
 ---
 
@@ -57,6 +57,13 @@ The unauthenticated integration endpoint currently exposed is:
 | URL | Route Name | Purpose |
 |-----|------------|---------|
 | `/api/ai/messaging/webhook/{channel}/{accountId?}` | `ai.messaging.webhook` | Inbound messaging webhook entry |
+
+The authenticated chat transport endpoints currently exposed are:
+
+| URL | Route Name | Purpose |
+|-----|------------|---------|
+| `/api/ai/chat/turns/{turnId}/stream` | `ai.chat.turn.stream` | Direct NDJSON stream for fresh interactive turns |
+| `/api/ai/chat/turns/{turnId}/events` | `ai.chat.turn.events` | Persisted turn-event replay and gap-fill via `after_seq` |
 
 ---
 
@@ -255,7 +262,7 @@ Added commands:
 - `blb:ai:lifecycle:preview`
 - `blb:ai:lifecycle:execute`
 
-### 5.7 AI Run Ledger, Activity Stream, and Execution Policy
+### 5.7 AI Run Ledger, Activity Stream, Execution Policy, and Direct Chat Streaming
 
 Implemented outcome:
 
@@ -265,17 +272,21 @@ Implemented outcome:
 - runtime execution now uses explicit execution policies for interactive, heavy foreground, and background workloads
 - hook outcomes (tool removal, tool denial) are persisted as canonical `hook_action` transcript entries with source attribution (authz vs hook)
 - approval visibility: denied or prevented actions appear as first-class timeline events in chat, run detail, and transcript replay
-- chat timeouts can offload work to the background queue while keeping progress visible in the chat surface
+- fresh Lara turns now stream directly from the HTTP response while the same events are persisted for replay and recovery
+- resumed active turns rebuild from persisted events and continue through short-interval replay polling rather than a brokered socket channel
 
 Implemented services and runtime pieces:
 
 - `AiRun` ledger-backed runtime persistence
 - `ExecutionPolicy` and `ExecutionMode`
-- `RunAgentChatJob` for background chat execution
+- `ChatTurnRunner` for shared turn execution
+- `ChatTurnStreamController` for direct NDJSON transport
+- `TurnStreamBridge` and `TurnEventPublisher` for canonical persisted turn events
+- `TurnEventStreamController` for replay and `after_seq` gap-fill
 - `RuntimeHookCoordinator::preToolUse()`
 - `MessageManager::sessionUsage()` and `appendHookAction()`
 - standalone `RunDetail` Livewire page
-- `HandlesBackgroundChat` Livewire concern
+- `HandlesStreaming` Livewire concern
 
 User-visible features:
 
@@ -283,7 +294,8 @@ User-visible features:
 - hook actions show stage, affected tools, denial reason, and source (authz vs hook) in the activity stream
 - run metadata and retry/fallback details are visible in run inspection
 - `/admin/ai/runs/{runId}` provides a standalone, deep-linkable run-inspection surface for the owning user
-- timed-out interactive chat requests automatically move to background execution with queued/running/completed visibility
+- fresh interactive turns render phase changes, tool progress, and assistant deltas immediately in chat during the streaming response
+- page reloads and disconnects recover through persisted turn-event replay plus polling from the last seen sequence
 - the chat composer shows cumulative session token usage derived from `ai_runs`, with transcript fallback for older sessions
 
 Implementation notes:
@@ -292,6 +304,8 @@ Implementation notes:
 - `ExecutionPolicy::forMode()` resolves timeout tiers for `interactive`, `heavy_foreground`, and `background`
 - timeout retry logic skips same-budget retries once a call has already consumed a material portion of the budget
 - denied tools surface in both the transcript and streaming events, rather than disappearing into internal hook logic
+- the live transport for Lara chat is direct HTTP streaming, not Reverb/Echo
+- `ai_chat_turn_events` is the durable source of truth for replay, resume, and ordered recovery
 
 ---
 
@@ -395,7 +409,7 @@ Use the companion docs for that:
 
 ## 10. Status Summary
 
-As of 2026-04-03, BLB's AI system includes:
+As of 2026-04-09, BLB's AI system includes:
 
 1. provider and model management
 2. workspace-driven prompt assembly
@@ -408,7 +422,7 @@ As of 2026-04-03, BLB's AI system includes:
 9. canonical AI run ledger persistence
 10. transparent transcript activity stream and standalone run detail views
 11. explicit execution policies for interactive, heavy, and background runs
-12. background chat offload with in-chat progress visibility
+12. direct Lara turn streaming with persisted event replay and gap-fill recovery
 13. session token usage reconstruction from `ai_runs` with transcript fallback
 14. per-agent backup model configuration (max 2 entries in `llm.models[]`) with UI-configurable backup provider+model, inline fallback notices, and thread-level fallback banners
 
