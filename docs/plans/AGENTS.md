@@ -2,11 +2,11 @@
 
 ## Purpose
 
-`docs/plans/` holds active design-and-build plans for agents and humans. The file is the **status surface**—no parallel observability doc unless operationally necessary.
+Treat a plan like the **whiteboard** in a live discussion: as the conversation moves, important points are easy to lose—capture them here so everyone (and future you) can see what was agreed and why. Early on the doc holds framing and intent; as the **how** firms up, the same file naturally **becomes the task list** (**Phases** checklists) without starting over elsewhere.
 
-Plans are **prose only** (no implementation code, patches, or full-file dumps—describe contracts and behavior in words). They support discussion, top-down design, and progress tracking without extra reporting.
+`docs/plans/` is that shared surface for agents and humans. It is also the **status surface**—no parallel observability doc unless operationally necessary. **Prose only** for design (no implementation code, patches, or full-file dumps—describe contracts and behavior in words).
 
-Norms: plan lives **in-repo** as the single source of truth; **recommendation-driven** copy; stable section names (`Problem Essence`, `Phases`, …); **preamble** for quick orientation.
+Norms: **in-repo** single source of truth; **recommendation-driven** copy; stable section names (`Problem Essence`, `Phases`, …); **preamble** for quick orientation.
 
 ## Workflow and visibility
 
