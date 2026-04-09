@@ -26,4 +26,4 @@
 
 - **Project vision & principles:** [docs/brief.md](../brief.md)
 - **Database CLI (migrate, seed, --module):** [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md)
-- **Planning & TODO:** [docs/todo/](../todo/)
+- **Planning:** [docs/plans/](../plans/) (active), [docs/todo/](../todo/) (legacy, migrating)

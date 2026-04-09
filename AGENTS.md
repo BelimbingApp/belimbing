@@ -40,14 +40,8 @@ Think of Laravel as the Level 0 foundation and BLB as a Level 1 framework built 
 2. **Consider framework perspective** — How does this help adopters?
 3. **Document the divergence** — Why BLB does it differently
 
-## 4. Planning Through Todo Docs
-When work needs a real plan, create or update a document in `docs/todo/` and use that document as the visible implementation plan.
-
-- **Use the todo doc as the source of truth.** Do not keep the only actionable plan in hidden session state, tool-managed plans, or private scratch notes.
-- **Plan in the repository.** The user should be able to open the todo doc and see the design, current phase, and implementation progress.
-- **Follow the todo-doc guide.** `docs/todo/AGENTS.md` defines how planning documents in that directory should be structured and maintained.
-- **Keep the plan live.** As the design changes or implementation advances, update the todo doc so it remains the current truth.
-- **Use judgment on scope.** Not every tiny task needs a todo doc, but any task that benefits from explicit planning, phased execution, or user review should have one.
+## 4. Planning Through Plan Docs
+When work needs a real plan, keep the **visible** plan in `docs/plans/` per `docs/plans/AGENTS.md`—that file is the sole actionable source of truth (not hidden session or tool-only state), update it and its preamble as design or implementation moves, use judgment so only substantive work gets a plan doc, and treat legacy `docs/todo/` files under `docs/todo/AGENTS.md` until migrated.
 
 ## 5. PHP Coding Conventions
 

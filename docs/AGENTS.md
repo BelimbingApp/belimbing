@@ -22,7 +22,8 @@
 | Module documentation (Company, User, Employee, Geonames, Quality) | `docs/modules/` |
 | Tutorials (Caddy, Vite, Livewire, logging) | `docs/tutorials/` |
 | Reference (package evaluation) | `docs/reference/` |
-| Planning & TODO | `docs/todo/` |
+| Planning (active) | `docs/plans/` (`docs/plans/AGENTS.md`) |
+| Planning (legacy, migrating) | `docs/todo/` (`docs/todo/AGENTS.md`) |
 
 ## Directory Structure
 
@@ -35,7 +36,8 @@ docs/
 ├── modules/               # Per-module documentation (overviews, APIs, design decisions)
 ├── tutorials/             # Learning-oriented tutorials (Caddy, Vite, Livewire, logging)
 ├── reference/             # Lookup tables, evaluations
-├── todo/                  # Active planning documents
+├── plans/                 # Active planning documents (preferred)
+├── todo/                  # Legacy planning documents (migrating to plans/)
 ├── scratch/               # Temporary agent workspace (discard after task)
 └── brief.md               # Project vision & principles
 ```

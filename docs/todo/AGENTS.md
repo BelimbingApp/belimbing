@@ -1,8 +1,10 @@
 # TODO Docs Guide
 
+**Migration:** New design-and-build plans should live under `docs/plans/` and follow `docs/plans/AGENTS.md`. This guide remains authoritative for **existing** files in `docs/todo/` until they are moved.
+
 ## Purpose
 
-`docs/todo/` holds active design-and-build documents.
+`docs/todo/` holds design-and-build documents that have not yet been migrated to `docs/plans/`.
 
 These documents are not passive notes. They are working artifacts for:
 
@@ -92,7 +94,9 @@ State the core problem in one or two sentences. If this cannot be stated cleanly
 
 **Status**
 
-Use simple states such as `Proposed`, `In Progress`, `Blocked`, `Complete`, or a phase-oriented equivalent.
+Use simple states such as `Identified`, `Proposed`, `In Progress`, `Blocked`, `Complete`, or a phase-oriented equivalent.
+
+- `Identified` means the problem is confirmed and worth tracking, but the recommended implementation approach is not yet defined.
 
 **Desired Outcome**
 
