@@ -26,9 +26,10 @@ jobs:
           coverage: xdebug
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
+        uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
         with:
           bun-version: '1.3.10'
+          no-cache: true
 
       - name: Install JS Dependencies
         run: bun install --frozen-lockfile
