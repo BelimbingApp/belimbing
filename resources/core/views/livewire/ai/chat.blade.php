@@ -1261,11 +1261,13 @@
             this.turnPhase = phase;
             this.turnLabel = label;
 
-            // Update thinking entry description when phase is thinking with a rich label
+            // Update the most recent thinking entry description when phase is thinking with a rich label
             if (phase === 'thinking' && label && label !== 'Thinking…') {
-                const thinking = this.streamEntries.find((e) => e.type === 'thinking');
-                if (thinking) {
-                    thinking.description = label.replace(/^Thinking\s*—\s*/, '');
+                for (let i = this.streamEntries.length - 1; i >= 0; i--) {
+                    if (this.streamEntries[i].type === 'thinking') {
+                        this.streamEntries[i].description = label.replace(/^Thinking\s*—\s*/, '');
+                        break;
+                    }
                 }
             }
         },
@@ -1273,13 +1275,7 @@
         onThinkingStarted(data) {
             const payload = data?.payload || data || {};
             const description = payload.description || null;
-            const existing = this.streamEntries.find((entry) => entry.type === 'thinking');
-            if (!existing) {
-                this.streamEntries.push({ type: 'thinking', active: true, description, thinkingContent: '' });
-            } else {
-                existing.active = true;
-                if (description) existing.description = description;
-            }
+            this.streamEntries.push({ type: 'thinking', active: true, description, thinkingContent: '' });
         },
 
         onThinkingDelta(data) {
@@ -1287,7 +1283,15 @@
             const delta = payload.delta || '';
             if (!delta) return;
 
-            let entry = this.streamEntries.find((e) => e.type === 'thinking');
+            // Append to the last thinking entry
+            let entry = null;
+            for (let i = this.streamEntries.length - 1; i >= 0; i--) {
+                if (this.streamEntries[i].type === 'thinking') {
+                    entry = this.streamEntries[i];
+                    break;
+                }
+            }
+
             if (!entry) {
                 entry = { type: 'thinking', active: true, description: null, thinkingContent: '' };
                 this.streamEntries.push(entry);
@@ -1397,12 +1401,18 @@
         },
 
         deactivateThinking() {
-            const thinking = this.streamEntries.find((entry) => entry.type === 'thinking');
-            if (thinking) thinking.active = false;
+            for (let i = this.streamEntries.length - 1; i >= 0; i--) {
+                if (this.streamEntries[i].type === 'thinking') {
+                    this.streamEntries[i].active = false;
+                    break;
+                }
+            }
         },
 
         removeThinkingEntries() {
-            this.streamEntries = this.streamEntries.filter((entry) => entry.type !== 'thinking');
+            this.streamEntries = this.streamEntries.filter(
+                (entry) => entry.type !== 'thinking' || (entry.thinkingContent && entry.thinkingContent.trim()),
+            );
         },
 
         stopStreaming() {

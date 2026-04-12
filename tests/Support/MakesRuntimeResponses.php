@@ -9,7 +9,6 @@ use App\Base\AI\Services\LlmClient;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Modules\Core\AI\DTO\Message;
-use App\Modules\Core\AI\Services\AgenticFinalResponseStreamer;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
@@ -152,7 +151,6 @@ trait MakesRuntimeResponses
             $responseFactory,
             new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
             $runRecorder,
-            new AgenticFinalResponseStreamer($llmClient, $runRecorder, $responseFactory),
         );
     }
 

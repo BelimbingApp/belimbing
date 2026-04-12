@@ -43,7 +43,6 @@ class AgenticRuntime
         private readonly RuntimeResponseFactory $responseFactory,
         private readonly RuntimeHookCoordinator $hookCoordinator,
         private readonly RunRecorder $runRecorder,
-        private readonly AgenticFinalResponseStreamer $finalResponseStreamer,
     ) {}
 
     /**
@@ -445,16 +444,26 @@ class AgenticRuntime
     /**
      * Append the assistant tool-call payload into the running conversation.
      *
+     * When $phase is provided (e.g., 'commentary'), it is preserved on the
+     * message so convertToResponsesInputWithInstructions() can pass it through.
+     *
      * @param  list<array<string, mixed>>  $apiMessages
      * @param  array<string, mixed>  $result
+     * @param  string|null  $phase  Responses API phase ('commentary' or 'final_answer')
      */
-    private function appendAssistantToolCallMessage(array &$apiMessages, array $result): void
+    private function appendAssistantToolCallMessage(array &$apiMessages, array $result, ?string $phase = null): void
     {
-        $apiMessages[] = [
+        $message = [
             'role' => 'assistant',
             'content' => $result['content'] ?? null,
             'tool_calls' => $result['tool_calls'],
         ];
+
+        if ($phase !== null) {
+            $message['phase'] = $phase;
+        }
+
+        $apiMessages[] = $message;
     }
 
     /**
@@ -600,10 +609,12 @@ class AgenticRuntime
     }
 
     /**
-     * Execute the tool-calling loop with streaming on the final response.
+     * Execute the tool-calling loop with streaming at every iteration.
      *
-     * Intermediate tool-call iterations use synchronous chat with retry.
-     * The final text response iteration uses the streaming client.
+     * Every LLM call streams its response. Reasoning summary and preamble
+     * text yield to the UI in real time. Tool calls are accumulated from
+     * the same stream and executed as before. The final iteration completes
+     * inline — no second LLM call.
      *
      * @param  array<string, mixed>  $config
      * @param  array{api_key: string, base_url: string}  $credentials
@@ -622,8 +633,6 @@ class AgenticRuntime
         $employeeId = (int) ($config['employee_id'] ?? 0);
         $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt);
 
-        yield ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => $runId, 'iteration' => 0, 'description' => 'Analyzing request']];
-
         if ($toolLoopState['removedTools'] !== []) {
             yield ['event' => 'status', 'data' => [
                 'phase' => 'hook_action',
@@ -635,84 +644,261 @@ class AgenticRuntime
 
         $iteration = 0;
         $toolIndex = 0;
+        $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
 
         while (true) {
-            // Hook: PreLlmCall
+            // Emit thinking status at the start of every iteration
+            yield ['event' => 'status', 'data' => [
+                'phase' => 'thinking',
+                'run_id' => $runId,
+                'iteration' => $iteration,
+                'description' => $iteration === 0 ? 'Analyzing request' : 'Analyzing result',
+            ]];
+
             $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $toolLoopState['hookMetadata']);
 
-            $prevRetryCount = count($toolLoopState['retryAttempts']);
-
-            $result = $this->chatWithRetry(
-                $credentials,
+            $iterResult = yield from $this->streamIteration(
+                $runId,
                 $config,
-                $toolLoopState['apiMessages'],
-                $toolLoopState['tools'],
-                $toolLoopState['retryAttempts'],
+                $credentials,
+                $toolLoopState,
+                $apiType,
             );
 
-            // Emit recovery events when a retry was attempted
-            $newRetryCount = count($toolLoopState['retryAttempts']);
-
-            if ($newRetryCount > $prevRetryCount) {
-                $lastRetry = $toolLoopState['retryAttempts'][$newRetryCount - 1];
-
-                yield ['event' => 'status', 'data' => [
-                    'phase' => 'recovery_attempted',
-                    'attempt' => $newRetryCount,
-                    'reason' => 'retry: '.$lastRetry['error'],
-                    'run_id' => $runId,
-                ]];
-
-                if (! isset($result['runtime_error'])) {
-                    yield ['event' => 'status', 'data' => [
-                        'phase' => 'recovery_succeeded',
-                        'attempt' => $newRetryCount,
-                        'reason' => 'retry',
-                        'run_id' => $runId,
-                    ]];
-                }
-            }
-
-            if (isset($result['runtime_error'])) {
+            if (isset($iterResult['runtime_error'])) {
                 $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
-                yield $this->streamRuntimeErrorEvent($runId, $config, $result['runtime_error'], $toolLoopState, $fallbackAttempts);
+                yield $this->streamRuntimeErrorEvent($runId, $config, $iterResult['runtime_error'], $toolLoopState, $fallbackAttempts);
 
                 return;
             }
 
-            if (($result['tool_calls'] ?? []) === []) {
-                // Hook: PostRun on success
+            if (($iterResult['tool_calls'] ?? []) === []) {
                 $this->hookCoordinator->postRun($runId, $employeeId, true, $toolLoopState['hookMetadata']);
 
-                yield from $this->finalResponseStreamer->streamFinalResponse(
+                yield from $this->emitFinalResponse(
                     $runId,
                     $config,
-                    $credentials,
-                    [
-                        'api_messages' => $toolLoopState['apiMessages'],
-                        'tools' => $toolLoopState['tools'],
-                        'tool_actions' => $toolLoopState['toolActions'],
-                        'client_actions' => $toolLoopState['clientActions'],
-                        'retry_attempts' => $toolLoopState['retryAttempts'],
-                        'fallback_attempts' => $fallbackAttempts,
-                        'hooks' => $toolLoopState['hookMetadata'],
-                    ],
+                    $iterResult,
+                    $toolLoopState,
+                    $fallbackAttempts,
                 );
 
                 return;
             }
 
-            $this->appendAssistantToolCallMessage($toolLoopState['apiMessages'], $result);
+            // Determine phase for context continuity: only commentary content is preserved
+            $phase = ($iterResult['commentary'] ?? '') !== '' ? 'commentary' : null;
+            $this->appendAssistantToolCallMessage($toolLoopState['apiMessages'], $iterResult, $phase);
+
             yield from $this->streamToolCalls(
                 $runId,
                 $employeeId,
-                $result['tool_calls'],
+                $iterResult['tool_calls'],
                 $toolLoopState,
                 $toolIndex,
             );
 
             $iteration++;
         }
+    }
+
+    /**
+     * Stream a single LLM iteration, yielding thinking deltas and accumulating results.
+     *
+     * Consumes chatStream(), yields thinking_delta events to the outer generator,
+     * accumulates tool_call_delta and content_delta events internally.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $credentials
+     * @param  array<string, mixed>  $toolLoopState
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}, mixed, array<string, mixed>>
+     */
+    private function streamIteration(
+        string $runId,
+        array $config,
+        array $credentials,
+        array &$toolLoopState,
+        AiApiType $apiType,
+    ): \Generator {
+        $stream = $this->llmClient->chatStream(new ChatRequest(
+            baseUrl: $credentials['base_url'],
+            apiKey: $credentials['api_key'],
+            model: $config['model'],
+            messages: $toolLoopState['apiMessages'],
+            maxTokens: $config['max_tokens'],
+            temperature: $config['temperature'],
+            timeout: $config['timeout'],
+            providerName: $config['provider_name'],
+            tools: $toolLoopState['tools'] !== [] ? $toolLoopState['tools'] : null,
+            toolChoice: $toolLoopState['tools'] !== [] ? 'auto' : null,
+            apiType: $apiType,
+            reasoningSummary: $apiType === AiApiType::OpenAiResponses ? 'auto' : null,
+        ));
+
+        $content = '';
+        $commentary = '';
+        $toolCalls = [];
+        $toolCallArgs = [];
+        $usage = null;
+        $latencyMs = 0;
+
+        foreach ($stream as $event) {
+            switch ($event['type']) {
+                case 'thinking_delta':
+                    yield ['event' => 'status', 'data' => [
+                        'phase' => 'thinking_delta',
+                        'delta' => $event['text'],
+                        'run_id' => $runId,
+                    ]];
+
+                    if (($event['source'] ?? '') === 'commentary') {
+                        $commentary .= $event['text'];
+                    }
+
+                    break;
+
+                case 'content_delta':
+                    $content .= $event['text'];
+                    break;
+
+                case 'tool_call_delta':
+                    $index = $event['index'] ?? 0;
+
+                    if ($event['id'] !== null) {
+                        $toolCalls[$index] = [
+                            'id' => $event['id'],
+                            'type' => 'function',
+                            'function' => [
+                                'name' => $event['name'] ?? '',
+                                'arguments' => '',
+                            ],
+                        ];
+                        $toolCallArgs[$index] = '';
+                    }
+
+                    if (($event['arguments_delta'] ?? '') !== '') {
+                        $toolCallArgs[$index] = ($toolCallArgs[$index] ?? '').$event['arguments_delta'];
+                    }
+
+                    break;
+
+                case 'done':
+                    $usage = $event['usage'] ?? null;
+                    $latencyMs = $event['latency_ms'] ?? 0;
+                    break;
+
+                case 'error':
+                    return [
+                        'runtime_error' => $event['runtime_error'] ?? AiRuntimeError::fromType(
+                            AiErrorType::ServerError,
+                            $event['message'] ?? 'Streaming iteration failed',
+                            latencyMs: $event['latency_ms'] ?? 0,
+                        ),
+                    ];
+            }
+        }
+
+        // Finalize tool call arguments
+        foreach ($toolCalls as $index => &$tc) {
+            $tc['function']['arguments'] = $toolCallArgs[$index] ?? '{}';
+        }
+        unset($tc);
+
+        return [
+            'content' => $commentary !== '' ? $commentary : $content,
+            'tool_calls' => array_values($toolCalls),
+            'commentary' => $commentary,
+            'final_content' => $content,
+            'usage' => $usage,
+            'latency_ms' => $latencyMs,
+        ];
+    }
+
+    /**
+     * Emit the final response events when the streaming loop completes without tool calls.
+     *
+     * Replaces AgenticFinalResponseStreamer for the streaming path.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $iterResult
+     * @param  array<string, mixed>  $toolLoopState
+     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function emitFinalResponse(
+        string $runId,
+        array $config,
+        array $iterResult,
+        array $toolLoopState,
+        array $fallbackAttempts,
+    ): \Generator {
+        $fullContent = $iterResult['final_content'] ?? $iterResult['content'] ?? '';
+
+        if ($toolLoopState['clientActions'] !== []) {
+            $fullContent = implode("\n", $toolLoopState['clientActions'])."\n".$fullContent;
+        }
+
+        if (trim($fullContent) === '' && $toolLoopState['clientActions'] === []) {
+            $emptyError = AiRuntimeError::fromType(
+                AiErrorType::EmptyResponse,
+                'Streaming response completed with no content',
+                latencyMs: (int) ($iterResult['latency_ms'] ?? 0),
+            );
+            $this->runRecorder->fail($runId, $emptyError);
+
+            yield ['event' => 'error', 'data' => [
+                'message' => $emptyError->userMessage,
+                'run_id' => $runId,
+                'meta' => array_merge(
+                    $this->responseFactory->errorMeta(
+                        $config['model'],
+                        (string) ($config['provider_name'] ?? 'unknown'),
+                        $emptyError,
+                    ),
+                    [
+                        'retry_attempts' => $toolLoopState['retryAttempts'],
+                        'fallback_attempts' => $fallbackAttempts,
+                    ],
+                ),
+            ]];
+
+            return;
+        }
+
+        // Stream the final content as a single delta
+        yield ['event' => 'delta', 'data' => ['text' => $fullContent]];
+
+        $meta = [
+            'model' => $config['model'],
+            'provider_name' => $config['provider_name'],
+            'llm' => [
+                'provider' => (string) ($config['provider_name'] ?? 'unknown'),
+                'model' => $config['model'],
+            ],
+            'latency_ms' => (int) ($iterResult['latency_ms'] ?? 0),
+            'tokens' => $iterResult['usage'] ?? [
+                'prompt' => null,
+                'completion' => null,
+            ],
+            'fallback_attempts' => $fallbackAttempts,
+            'retry_attempts' => $toolLoopState['retryAttempts'],
+        ];
+
+        if ($toolLoopState['toolActions'] !== []) {
+            $meta['tool_actions'] = $toolLoopState['toolActions'];
+        }
+
+        if (($toolLoopState['hookMetadata'] ?? []) !== []) {
+            $meta['hooks'] = $toolLoopState['hookMetadata'];
+        }
+
+        $this->runRecorder->complete($runId, $meta);
+
+        yield ['event' => 'done', 'data' => [
+            'run_id' => $runId,
+            'content' => $fullContent,
+            'meta' => $meta,
+        ]];
     }
 
     /**

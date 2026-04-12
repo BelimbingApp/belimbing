@@ -54,6 +54,7 @@ final class LlmResponsesDecoder
         int &$toolCallIndex,
         ?string &$currentToolCallId,
         ?string &$currentToolCallName,
+        ?string &$currentMessagePhase = null,
     ): Generator {
         $data = BlbJson::decodeArray(substr($line, 6));
 
@@ -73,6 +74,7 @@ final class LlmResponsesDecoder
             $toolCallIndex,
             $currentToolCallId,
             $currentToolCallName,
+            $currentMessagePhase,
         );
 
         if (in_array($event, ['response.completed', 'response.failed', 'error'], true)) {
@@ -91,6 +93,7 @@ final class LlmResponsesDecoder
         int &$toolCallIndex,
         ?string &$currentToolCallId,
         ?string &$currentToolCallName,
+        ?string &$currentMessagePhase = null,
     ): Generator {
         switch ($event) {
             case 'response.created':
@@ -103,7 +106,7 @@ final class LlmResponsesDecoder
                 return;
 
             case 'response.output_text.delta':
-                $deltaEvent = self::responseTextDeltaEvent($data);
+                $deltaEvent = self::responseTextDeltaEvent($data, $currentMessagePhase);
 
                 if ($deltaEvent !== null) {
                     yield $deltaEvent;
@@ -114,7 +117,7 @@ final class LlmResponsesDecoder
             case 'response.reasoning_summary_text.delta':
                 $delta = $data['delta'] ?? '';
                 if ($delta !== '') {
-                    yield ['type' => 'thinking_delta', 'text' => $delta];
+                    yield ['type' => 'thinking_delta', 'text' => $delta, 'source' => 'reasoning_summary'];
                 }
 
                 return;
@@ -149,6 +152,8 @@ final class LlmResponsesDecoder
                 return;
 
             case 'response.output_item.added':
+                self::captureMessagePhase($data, $currentMessagePhase);
+
                 $toolCallAddedEvent = self::responseOutputItemAddedEvent(
                     data: $data,
                     toolCallIndex: $toolCallIndex,
@@ -168,7 +173,7 @@ final class LlmResponsesDecoder
                 return;
 
             case 'response.output_item.done':
-                self::completeResponseOutputItem($data, $toolCallIndex, $currentToolCallId, $currentToolCallName);
+                self::completeResponseOutputItem($data, $toolCallIndex, $currentToolCallId, $currentToolCallName, $currentMessagePhase);
 
                 return;
 
@@ -188,10 +193,12 @@ final class LlmResponsesDecoder
     }
 
     /**
+     * Yield a text delta event, routing to thinking_delta for commentary messages.
+     *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>|null
      */
-    private static function responseTextDeltaEvent(array $data): ?array
+    private static function responseTextDeltaEvent(array $data, ?string $currentMessagePhase): ?array
     {
         $delta = $data['delta'] ?? '';
 
@@ -199,7 +206,25 @@ final class LlmResponsesDecoder
             return null;
         }
 
+        if ($currentMessagePhase === 'commentary') {
+            return ['type' => 'thinking_delta', 'text' => $delta, 'source' => 'commentary'];
+        }
+
         return ['type' => 'content_delta', 'text' => $delta];
+    }
+
+    /**
+     * Capture the phase field when a message output item is added.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function captureMessagePhase(array $data, ?string &$currentMessagePhase): void
+    {
+        $item = $data['item'] ?? [];
+
+        if (($item['type'] ?? '') === 'message') {
+            $currentMessagePhase = $item['phase'] ?? null;
+        }
     }
 
     /**
@@ -253,10 +278,18 @@ final class LlmResponsesDecoder
         int &$toolCallIndex,
         ?string &$currentToolCallId,
         ?string &$currentToolCallName,
+        ?string &$currentMessagePhase = null,
     ): void {
         $item = $data['item'] ?? [];
+        $type = $item['type'] ?? '';
 
-        if (($item['type'] ?? '') !== 'function_call') {
+        if ($type === 'message') {
+            $currentMessagePhase = null;
+
+            return;
+        }
+
+        if ($type !== 'function_call') {
             return;
         }
 

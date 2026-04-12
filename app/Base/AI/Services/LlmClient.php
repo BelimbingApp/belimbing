@@ -410,12 +410,18 @@ class LlmClient
                 case 'assistant':
                     $content = $msg['content'] ?? '';
                     if ($content !== '' && $content !== null) {
-                        $input[] = [
+                        $assistantItem = [
                             'type' => 'message',
                             'role' => 'assistant',
                             'content' => [['type' => 'output_text', 'text' => $content]],
                             'status' => 'completed',
                         ];
+
+                        if (isset($msg['phase'])) {
+                            $assistantItem['phase'] = $msg['phase'];
+                        }
+
+                        $input[] = $assistantItem;
                     }
 
                     $toolCalls = $msg['tool_calls'] ?? [];
@@ -570,6 +576,7 @@ class LlmClient
         $toolCallIndex = 0;
         $currentToolCallId = null;
         $currentToolCallName = null;
+        $currentMessagePhase = null;
 
         while (! $stream->eof()) {
             $chunk = $stream->read(8192);
@@ -602,6 +609,7 @@ class LlmClient
                         $toolCallIndex,
                         $currentToolCallId,
                         $currentToolCallName,
+                        $currentMessagePhase,
                     );
 
                     if ($pendingEventType === '__done__') {
