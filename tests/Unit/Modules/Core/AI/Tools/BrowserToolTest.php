@@ -9,10 +9,9 @@ use App\Modules\Core\AI\Services\Browser\BrowserSessionException;
 use App\Modules\Core\AI\Services\Browser\BrowserSessionManager;
 use App\Modules\Core\AI\Services\Browser\BrowserSsrfGuard;
 use App\Modules\Core\AI\Tools\BrowserTool;
-use Tests\Support\AssertsToolBehavior;
-use Tests\TestCase;
+use Tests\Support\BrowserToolTestCase;
 
-uses(TestCase::class, AssertsToolBehavior::class);
+uses(BrowserToolTestCase::class);
 
 const BROWSER_EXAMPLE_URL = 'https://example.com';
 const BROWSER_EXAMPLE_DOMAIN_TITLE = 'Example Domain';
@@ -99,7 +98,7 @@ describe('input validation', function () {
     it('returns error when session manager unavailable', function () {
         $this->sessionManager->shouldReceive('isAvailable')->andReturn(false);
 
-        $result = $this->tool->execute(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL]);
+        $result = $this->executeBrowserTool(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL]);
 
         expect((string) $result)->toContain('not available');
     });
@@ -115,7 +114,7 @@ describe('navigate action', function () {
             ->with('https://evil.internal')
             ->andReturn('Blocked: private');
 
-        $result = $this->tool->execute(['action' => 'navigate', 'url' => 'https://evil.internal']);
+        $result = $this->executeBrowserTool(['action' => 'navigate', 'url' => 'https://evil.internal']);
 
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('Blocked');
@@ -142,7 +141,7 @@ describe('navigate action', function () {
         $this->sessionManager->shouldReceive('executeAction')
             ->andThrow(new RuntimeException('Browser process timed out'));
 
-        $result = $this->tool->execute(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL]);
+        $result = $this->executeBrowserTool(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL]);
 
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('Browser action failed');
@@ -217,7 +216,7 @@ describe('act action', function () {
     });
 
     it('rejects invalid kind', function () {
-        $result = $this->tool->execute(['action' => 'act', 'kind' => 'bogus']);
+        $result = $this->executeBrowserTool(['action' => 'act', 'kind' => 'bogus']);
         expect((string) $result)->toContain('Error');
     });
 
@@ -286,7 +285,7 @@ describe('evaluate action', function () {
     it('rejects when evaluate disabled', function () {
         config()->set('ai.tools.browser.evaluate_enabled', false);
 
-        $result = $this->tool->execute(['action' => 'evaluate', 'script' => 'alert(1)']);
+        $result = $this->executeBrowserTool(['action' => 'evaluate', 'script' => 'alert(1)']);
 
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('disabled');
@@ -295,7 +294,7 @@ describe('evaluate action', function () {
     it('rejects missing script when enabled', function () {
         config()->set('ai.tools.browser.evaluate_enabled', true);
 
-        $result = $this->tool->execute(['action' => 'evaluate']);
+        $result = $this->executeBrowserTool(['action' => 'evaluate']);
 
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('script');
@@ -338,13 +337,13 @@ describe('pdf action', function () {
 
 describe('cookies action', function () {
     it('rejects missing cookie_action', function () {
-        $result = $this->tool->execute(['action' => 'cookies']);
+        $result = $this->executeBrowserTool(['action' => 'cookies']);
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('cookie_action');
     });
 
     it('rejects invalid cookie_action', function () {
-        $result = $this->tool->execute(['action' => 'cookies', 'cookie_action' => 'bogus']);
+        $result = $this->executeBrowserTool(['action' => 'cookies', 'cookie_action' => 'bogus']);
         expect((string) $result)->toContain('Error');
     });
 
@@ -364,7 +363,7 @@ describe('cookies action', function () {
     });
 
     it('rejects set without name', function () {
-        $result = $this->tool->execute(['action' => 'cookies', 'cookie_action' => 'set']);
+        $result = $this->executeBrowserTool(['action' => 'cookies', 'cookie_action' => 'set']);
         expect((string) $result)->toContain('Error');
     });
 
@@ -407,7 +406,7 @@ describe('cookies action', function () {
 
 describe('wait action', function () {
     it('rejects when no condition specified', function () {
-        $result = $this->tool->execute(['action' => 'wait']);
+        $result = $this->executeBrowserTool(['action' => 'wait']);
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('At least one');
     });
@@ -480,7 +479,7 @@ describe('error handling', function () {
         $this->sessionManager->shouldReceive('executeAction')
             ->andThrow(new RuntimeException('Process timed out after 30 seconds'));
 
-        $result = $this->tool->execute(['action' => 'snapshot']);
+        $result = $this->executeBrowserTool(['action' => 'snapshot']);
 
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('Browser action failed')
@@ -491,7 +490,7 @@ describe('error handling', function () {
         $this->sessionManager->shouldReceive('executeAction')
             ->andReturn(runnerError('navigate', 'net::ERR_NAME_NOT_RESOLVED', 'action_failed'));
 
-        $result = $this->tool->execute(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL]);
+        $result = $this->executeBrowserTool(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL]);
 
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('net::ERR_NAME_NOT_RESOLVED');
@@ -501,7 +500,7 @@ describe('error handling', function () {
         $this->sessionManager->shouldReceive('executeAction')
             ->andThrow(new BrowserSessionException('Session expired'));
 
-        $result = $this->tool->execute(['action' => 'snapshot']);
+        $result = $this->executeBrowserTool(['action' => 'snapshot']);
 
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('Session expired');
@@ -511,7 +510,7 @@ describe('error handling', function () {
         $this->sessionManager->shouldReceive('open')
             ->andThrow(new BrowserSessionException('Concurrency limit reached'));
 
-        $result = $this->tool->execute(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL]);
+        $result = $this->executeBrowserTool(['action' => 'navigate', 'url' => BROWSER_EXAMPLE_URL]);
 
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain('Concurrency limit');
@@ -523,7 +522,7 @@ describe('headless mode', function () {
         config()->set('ai.tools.browser.headless', true);
 
         $this->sessionManager->shouldReceive('open')
-            ->with(0, 0, true)
+            ->with(BrowserToolTestCase::BROWSER_TOOL_TEST_EMPLOYEE_ID, BrowserToolTestCase::BROWSER_TOOL_TEST_COMPANY_ID, true)
             ->andReturn(fakeBrowserSession());
 
         $this->sessionManager->shouldReceive('executeAction')
@@ -536,7 +535,7 @@ describe('headless mode', function () {
 
     it('opens session with headless=false when explicitly provided', function () {
         $this->sessionManager->shouldReceive('open')
-            ->with(0, 0, false)
+            ->with(BrowserToolTestCase::BROWSER_TOOL_TEST_EMPLOYEE_ID, BrowserToolTestCase::BROWSER_TOOL_TEST_COMPANY_ID, false)
             ->andReturn(fakeBrowserSession(['headless' => false]));
 
         $this->sessionManager->shouldReceive('executeAction')

@@ -18,6 +18,16 @@ Norms: **in-repo** single source of truth; **recommendation-driven** copy; stabl
 
 Hidden session/tool-only plans are fine as scratch **only** if the same execution truth is **mirrored** into this file. Anyone opening the plan should see design, current phase, done vs. open work (via **Phases** checklists), and what changed.
 
+## Keeping plans current during implementation
+
+Work that implements or fixes something described in a plan must **update that plan** so the file stays accurate—**not** only the code.
+
+- **Tick or adjust checklists** — Mark **Phases** items done (`- [x]`) when finished; add or split rows if scope shifted; remove tasks that were dropped so unchecked lines stay honest.
+- **Refresh narrative when reality diverges** — If the shipped fix differs from **Design Decisions** or **Desired Outcome** (tradeoff, bug revealed a better approach, partial delivery), edit those sections in **prose** so the next reader sees what actually shipped and why. Do not paste patches or full-file code; describe contracts and behavior in words.
+- **Update the preamble** — Bump **Last Updated** when the story or status meaningfully changes; set **Status** (e.g. In Progress → Complete) when the plan is fully delivered or superseded.
+
+Skipping plan updates creates a false source of truth: the checklist and design text should match the repo.
+
 ## Document shape
 
 **Title:** the **filename** (and path under `docs/plans/`). Optional lone `#` matching the filename if your renderer needs it—no filler “Plan” / “Notes” sections.

@@ -7,6 +7,17 @@ use App\Base\AI\Tools\ToolResult;
 
 trait AssertsToolBehavior
 {
+    /**
+     * Merge synthetic arguments before tool execution (e.g. browser tool execution context).
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    protected function mergeToolExecutionArguments(array $arguments): array
+    {
+        return $arguments;
+    }
+
     protected function assertToolMetadata(
         Tool $tool,
         string $expectedName,
@@ -33,7 +44,7 @@ trait AssertsToolBehavior
 
     protected function assertToolError(array $arguments, string ...$expectedFragments): string
     {
-        $result = (string) $this->tool->execute($arguments);
+        $result = (string) $this->tool->execute($this->mergeToolExecutionArguments($arguments));
 
         expect($result)->toContain('Error');
 
@@ -55,7 +66,7 @@ trait AssertsToolBehavior
 
     protected function decodeToolExecution(array $arguments): array
     {
-        return $this->decodeToolResult((string) $this->tool->execute($arguments));
+        return $this->decodeToolResult((string) $this->tool->execute($this->mergeToolExecutionArguments($arguments)));
     }
 
     protected function assertToolExecutionStatus(array $arguments, string $expectedStatus): array
