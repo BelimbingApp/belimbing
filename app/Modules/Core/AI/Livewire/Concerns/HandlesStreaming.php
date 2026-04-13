@@ -89,15 +89,6 @@ trait HandlesStreaming
     }
 
     /**
-     * Resolve page context from the current request for storage in turn runtime_meta.
-     *
-     * The streaming controller runs in a separate HTTP request whose route is
-     * not the user's page. We resolve here (on the real page request) and embed
-     * the result in the turn's runtime_meta so the runner can hydrate context.
-     *
-     * @return array{consent: string, context: array<string, mixed>|null, snapshot: array<string, mixed>|null}|null
-     */
-    /**
      * Lara-only sync orchestration paths that bypass streaming.
      *
      * @param  array<string, mixed>  $userMeta
@@ -141,6 +132,15 @@ trait HandlesStreaming
         return true;
     }
 
+    /**
+     * Resolve page context from the current request for storage in turn runtime_meta.
+     *
+     * The streaming controller runs in a separate HTTP request whose route is
+     * not the user's page. We resolve here (on the real page request) and embed
+     * the result in the turn's runtime_meta so the runner can hydrate context.
+     *
+     * @return array{consent: string, context: array<string, mixed>|null, snapshot: array<string, mixed>|null}|null
+     */
     private function resolvePageContextForDispatch(): ?array
     {
         $consentLevel = $this->pageAwareness ?? 'page';

@@ -64,9 +64,9 @@ final class AgenticFinalResponseStreamer
         ));
 
         $accumulator = [
-            'full_content' => $fullContent,
-            'usage' => $usage,
-            'latency_ms' => $latencyMs,
+            'full_content' => '',
+            'usage' => null,
+            'latency_ms' => 0,
         ];
 
         yield from $this->yieldFinalResponseStreamEvents($runId, $stream, $accumulator, $config, $streamState);

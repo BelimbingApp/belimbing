@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Modules\Core\AI\DTO\ChatTurnRuntimeContext;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\DTO\PageSnapshot;
@@ -55,36 +56,41 @@ class ChatTurnRunner
         $messages = $this->messageManager->read($employeeId, $sessionId);
         [$systemPrompt, $promptMeta] = $this->resolvePromptPackage($employeeId, $messages);
 
-        $policy = $this->resolveExecutionPolicy($turn);
+        $runtimeContext = new ChatTurnRuntimeContext(
+            employeeId: $employeeId,
+            sessionId: $sessionId,
+            messages: $messages,
+            systemPrompt: $systemPrompt,
+            modelOverride: $modelOverride,
+            policy: $this->resolveExecutionPolicy($turn),
+            promptMeta: $promptMeta,
+        );
 
         try {
-            $this->executeRuntimeStream($turn, $messages, $employeeId, $sessionId, $systemPrompt, $modelOverride, $policy, $onEvent, $promptMeta);
+            $this->executeRuntimeStream($turn, $runtimeContext, $onEvent);
         } catch (\Throwable $e) {
-            $this->handleRuntimeFailure($turn, $e, $employeeId, $sessionId, $promptMeta);
+            $this->handleRuntimeFailure($turn, $e, $runtimeContext);
 
             throw $e;
         }
     }
 
     /**
-     * @param  list<mixed>  $messages
      * @param  callable(array<string, mixed>): void|null  $onEvent
-     * @param  array<string, mixed>|null  $promptMeta
      */
     private function executeRuntimeStream(
         ChatTurn $turn,
-        array $messages,
-        int $employeeId,
-        string $sessionId,
-        ?string $systemPrompt,
-        ?string $modelOverride,
-        ExecutionPolicy $policy,
+        ChatTurnRuntimeContext $runtimeContext,
         ?callable $onEvent,
-        ?array $promptMeta,
     ): void {
         $runtimeStream = $this->runtime->runStream(
-            $messages, $employeeId, $systemPrompt, $modelOverride,
-            $policy, $sessionId, turnId: $turn->id,
+            $runtimeContext->messages,
+            $runtimeContext->employeeId,
+            $runtimeContext->systemPrompt,
+            $runtimeContext->modelOverride,
+            $runtimeContext->policy,
+            $runtimeContext->sessionId,
+            turnId: $turn->id,
         );
 
         $cancelled = false;
@@ -111,19 +117,19 @@ class ChatTurnRunner
             return;
         }
 
-        $extraMeta = $promptMeta !== null ? ['prompt_package' => $promptMeta] : [];
-        $this->persister->materializeFromTurn($turn->refresh(), $this->messageManager, $employeeId, $sessionId, $extraMeta);
+        $this->persister->materializeFromTurn(
+            $turn->refresh(),
+            $this->messageManager,
+            $runtimeContext->employeeId,
+            $runtimeContext->sessionId,
+            $this->promptPackageMeta($runtimeContext),
+        );
     }
 
-    /**
-     * @param  array<string, mixed>|null  $promptMeta
-     */
     private function handleRuntimeFailure(
         ChatTurn $turn,
         \Throwable $e,
-        int $employeeId,
-        string $sessionId,
-        ?array $promptMeta,
+        ChatTurnRuntimeContext $runtimeContext,
     ): void {
         report($e);
 
@@ -133,13 +139,27 @@ class ChatTurnRunner
             $this->turnPublisher->turnFailed($turn, 'runtime_exception', $e->getMessage());
         }
 
-        $extraMeta = $promptMeta !== null ? ['prompt_package' => $promptMeta] : [];
-
         try {
-            $this->persister->materializeFromTurn($turn->refresh(), $this->messageManager, $employeeId, $sessionId, $extraMeta);
+            $this->persister->materializeFromTurn(
+                $turn->refresh(),
+                $this->messageManager,
+                $runtimeContext->employeeId,
+                $runtimeContext->sessionId,
+                $this->promptPackageMeta($runtimeContext),
+            );
         } catch (\Throwable) {
             // Best-effort materialization failed — swallow to preserve original exception
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function promptPackageMeta(ChatTurnRuntimeContext $runtimeContext): array
+    {
+        return $runtimeContext->promptMeta !== null
+            ? ['prompt_package' => $runtimeContext->promptMeta]
+            : [];
     }
 
     /**
