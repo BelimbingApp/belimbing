@@ -2,7 +2,8 @@
     @php
         $localeContext = app(\App\Base\Locale\Contracts\LocaleContext::class);
         $dateTimes = app(\App\Base\DateTime\Contracts\DateTimeDisplayService::class);
-        $localTimezone = $dateTimes->currentCompanyTimezone();
+        $currentTzMode = $dateTimes->currentMode();
+        $companyTimezone = $dateTimes->currentCompanyTimezone();
     @endphp
 
     <div class="mb-2 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -27,14 +28,18 @@
             <x-ui.button
                 variant="ghost"
                 size="sm"
-                @click="localTime = !localTime"
-                ::class="localTime ? 'ring-2 ring-accent' : ''"
-                x-bind:aria-pressed="localTime.toString()"
-                title="{{ __('Toggle timestamp display between UTC and Local Time.') }}"
-                aria-label="{{ __('Toggle timestamp display between UTC and Local Time.') }}"
+                @click="
+                    const modes = ['utc', 'company', 'local'];
+                    const idx = modes.indexOf(tableTzMode);
+                    tableTzMode = modes[(idx + 1) % modes.length];
+                "
+                ::class="tableTzMode !== 'utc' ? 'ring-2 ring-accent' : ''"
+                x-bind:aria-pressed="(tableTzMode !== 'utc').toString()"
+                title="{{ __('Cycle timestamp display: UTC → Company → Local.') }}"
+                aria-label="{{ __('Cycle timestamp display mode.') }}"
             >
                 <x-icon name="heroicon-o-clock" class="w-4 h-4" />
-                <span x-text="localTime ? '{{ __('Local Time') }}' : '{{ __('UTC') }}'"></span>
+                <span x-text="tableTzMode === 'utc' ? '{{ __('UTC') }}' : (tableTzMode === 'company' ? '{{ __('Company') }}' : '{{ __('Local') }}')"></span>
             </x-ui.button>
             <x-ui.button
                 variant="ghost"
@@ -112,19 +117,21 @@
                                 @if($isTimestamp)
                                     x-data
                                     x-effect="
-                                        if (localTime) {
+                                        if (tableTzMode !== 'utc') {
                                             const el = $el;
                                             const text = el.getAttribute('data-raw') || el.textContent;
                                             if (!el.getAttribute('data-raw')) el.setAttribute('data-raw', text);
                                             const locale = {{ \Illuminate\Support\Js::from($localeContext->forIntl()) }};
-                                            const tz = {{ \Illuminate\Support\Js::from($localTimezone) }};
+                                            const tz = tableTzMode === 'company'
+                                                ? ({{ \Illuminate\Support\Js::from($companyTimezone) }} || 'UTC')
+                                                : undefined;
                                             const formatter = new Intl.DateTimeFormat(locale || undefined, {
                                                 year: 'numeric',
                                                 month: '2-digit',
                                                 day: '2-digit',
                                                 hour: '2-digit',
                                                 minute: '2-digit',
-                                                timeZone: tz || 'UTC',
+                                                timeZone: tz,
                                             });
                                             try {
                                                 const raw = text.trim();

@@ -10,7 +10,7 @@ use App\Base\Database\Livewire\DatabaseTables\Show;
 
 <div
     x-data="{
-        localTime: false,
+        tableTzMode: @js(app(\App\Base\DateTime\Contracts\DateTimeDisplayService::class)->currentMode()->value),
         navFilter: '',
         navOpen: @js($this->navigatorOpen),
         navWidth: parseInt(localStorage.getItem('tableNavWidth')) || 208,

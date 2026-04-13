@@ -5,14 +5,14 @@
 /** @var \App\Base\Log\Livewire\Logs\Show $this */
 ?>
 
-<div x-data="{ localTime: false }">
+<div x-data="{ logTzMode: @js(app(\App\Base\DateTime\Contracts\DateTimeDisplayService::class)->currentMode()->value) }">
     <x-slot name="title">{{ $this->filename }}</x-slot>
 
     @php
         $numbers = app(\App\Base\Locale\Contracts\NumberDisplayService::class);
         $localeContext = app(\App\Base\Locale\Contracts\LocaleContext::class);
         $dateTimes = app(\App\Base\DateTime\Contracts\DateTimeDisplayService::class);
-        $localTimezone = $dateTimes->currentCompanyTimezone();
+        $companyTimezone = $dateTimes->currentCompanyTimezone();
         $deleteLinesCount = $this->deleteLines > 0 ? $this->deleteLines : 10;
         $windowLabelStart = $windowEnd > 0 ? $windowStart + 1 : 0;
         $nextLabel = $this->mode === 'top' ? __('Next') : __('Older');
@@ -84,14 +84,18 @@
                 <x-ui.button
                     variant="ghost"
                     size="sm"
-                    @click="localTime = !localTime"
-                    ::class="localTime ? 'ring-2 ring-accent' : ''"
-                    x-bind:aria-pressed="localTime.toString()"
-                    title="{{ __('Toggle timestamp display between UTC and Local Time.') }}"
-                    aria-label="{{ __('Toggle timestamp display between UTC and Local Time.') }}"
+                    @click="
+                        const modes = ['utc', 'company', 'local'];
+                        const idx = modes.indexOf(logTzMode);
+                        logTzMode = modes[(idx + 1) % modes.length];
+                    "
+                    ::class="logTzMode !== 'utc' ? 'ring-2 ring-accent' : ''"
+                    x-bind:aria-pressed="(logTzMode !== 'utc').toString()"
+                    title="{{ __('Cycle timestamp display: UTC → Company → Local.') }}"
+                    aria-label="{{ __('Cycle timestamp display mode.') }}"
                 >
                     <x-icon name="heroicon-o-clock" class="w-4 h-4" />
-                    <span x-text="localTime ? '{{ __('Local Time') }}' : '{{ __('UTC') }}'"></span>
+                    <span x-text="logTzMode === 'utc' ? '{{ __('UTC') }}' : (logTzMode === 'company' ? '{{ __('Company') }}' : '{{ __('Local') }}')"></span>
                 </x-ui.button>
 
                 {{-- Refresh --}}
@@ -190,12 +194,14 @@
                                         class="px-3 py-0.5 text-ink whitespace-pre-wrap break-all"
                                         x-data
                                         x-effect="
-                                            if (localTime) {
+                                            if (logTzMode !== 'utc') {
                                                 const el = $el;
                                                 const text = el.getAttribute('data-raw') || el.textContent;
                                                 if (!el.getAttribute('data-raw')) el.setAttribute('data-raw', text);
                                                 const locale = {{ \Illuminate\Support\Js::from($localeContext->forIntl()) }};
-                                                const tz = {{ \Illuminate\Support\Js::from($localTimezone) }};
+                                                const tz = logTzMode === 'company'
+                                                    ? ({{ \Illuminate\Support\Js::from($companyTimezone) }} || 'UTC')
+                                                    : undefined;
                                                 const formatter = new Intl.DateTimeFormat(locale || undefined, {
                                                     year: 'numeric',
                                                     month: '2-digit',
@@ -203,7 +209,7 @@
                                                     hour: '2-digit',
                                                     minute: '2-digit',
                                                     second: '2-digit',
-                                                    timeZone: tz || 'UTC',
+                                                    timeZone: tz,
                                                 });
                                                 el.textContent = text.replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?/g, (m) => {
                                                     try {

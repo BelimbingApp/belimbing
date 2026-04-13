@@ -11,6 +11,7 @@ use App\Base\Locale\Contracts\LocaleContext;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use Carbon\Carbon;
+use IntlDateFormatter;
 
 class DateTimeDisplayService implements DateTimeDisplayServiceContract
 {
@@ -114,6 +115,23 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
     }
 
     /**
+     * {@inheritdoc}
+     */
+    public function isCompanyTimezoneExplicit(): bool
+    {
+        $user = auth()->user();
+
+        if (! $user || ! $user->company_id) {
+            return false;
+        }
+
+        return $this->settings->has(
+            'ui.timezone.default',
+            Scope::company($user->company_id),
+        );
+    }
+
+    /**
      * Resolve the company-level default timezone.
      *
      * Reads 'ui.timezone.default' from the company scope of the
@@ -137,7 +155,7 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
     /**
      * Shared formatting logic for all three format methods.
      *
-     * Company mode uses locale-aware formatting via Carbon isoFormat (CLDR).
+     * Company mode uses ICU IntlDateFormatter for locale-aware output.
      * UTC/Stored mode uses a fixed ISO-like pattern (Y-m-d H:i:s) — raw database representation.
      * Local mode emits a UTC ISO-8601 string for browser-side formatting.
      *
@@ -160,9 +178,54 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
 
         $carbon = $carbon->setTimezone($this->currentTimezone());
 
-        return $this->currentMode() === TimezoneMode::UTC
-            ? $carbon->format($this->storedFormat($type))
-            : $carbon->locale($this->localeContext->forCarbon())->isoFormat($this->localeFormat($type));
+        if ($this->currentMode() === TimezoneMode::UTC) {
+            return $carbon->format($this->storedFormat($type));
+        }
+
+        return $this->formatWithIntl($carbon, $type);
+    }
+
+    /**
+     * Format a Carbon instance using ICU IntlDateFormatter.
+     *
+     * Uses the locale from LocaleContext::forIntl() and the resolved
+     * timezone for accurate regional formatting.
+     */
+    private function formatWithIntl(Carbon $carbon, string $type): string
+    {
+        $locale = $this->localeContext->forIntl();
+        $timezone = $this->currentTimezone();
+        [$dateType, $timeType] = $this->intlFormatTypes($type);
+
+        $formatter = new IntlDateFormatter(
+            $locale,
+            $dateType,
+            $timeType,
+            $timezone,
+        );
+
+        $result = $formatter->format($carbon->getTimestamp());
+
+        if ($result === false) {
+            return $carbon->locale($this->localeContext->forCarbon())
+                ->isoFormat($this->carbonFallbackFormat($type));
+        }
+
+        return $result;
+    }
+
+    /**
+     * Map format type to IntlDateFormatter date/time type constants.
+     *
+     * @return array{int, int}
+     */
+    private function intlFormatTypes(string $type): array
+    {
+        return match ($type) {
+            self::FORMAT_DATE => [IntlDateFormatter::SHORT, IntlDateFormatter::NONE],
+            self::FORMAT_TIME => [IntlDateFormatter::NONE, IntlDateFormatter::SHORT],
+            default => [IntlDateFormatter::SHORT, IntlDateFormatter::SHORT],
+        };
     }
 
     /**
@@ -178,12 +241,9 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
     }
 
     /**
-     * CLDR isoFormat tokens for locale-aware rendering.
-     *
-     * L = locale short date (e.g. 15/06/2026 for ms, 06/15/2026 for en).
-     * LT = locale short time (e.g. 08.00 for ms, 8:00 AM for en).
+     * Carbon isoFormat tokens as fallback when IntlDateFormatter is unavailable.
      */
-    private function localeFormat(string $type): string
+    private function carbonFallbackFormat(string $type): string
     {
         return match ($type) {
             self::FORMAT_DATE => 'L',

@@ -4,12 +4,9 @@
 
     $tzService = app(\App\Base\DateTime\Contracts\DateTimeDisplayService::class);
     $tzMode = $tzService->currentMode();
-    $tzLabel = match ($tzMode) {
-        \App\Base\DateTime\Enums\TimezoneMode::COMPANY => __('Company'),
-        \App\Base\DateTime\Enums\TimezoneMode::LOCAL => __('Local'),
-        \App\Base\DateTime\Enums\TimezoneMode::UTC => __('Stored'),
-    };
+    $tzLabel = $tzMode->label();
     $companyTz = $tzService->currentCompanyTimezone();
+    $companyTzExplicit = $tzService->isCompanyTimezoneExplicit();
 @endphp
 
 <div class="h-7 bg-surface-bar border-b border-border-default flex items-center justify-between px-2 shrink-0 z-10">
@@ -36,6 +33,7 @@
         tzMode: @js($tzMode->value),
         tzLabel: @js($tzLabel),
         companyTz: @js($companyTz),
+        companyTzExplicit: @js($companyTzExplicit),
         browserTz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         tzSaving: false,
         init() {
@@ -48,7 +46,7 @@
         tzDisplay(mode) {
             if (mode === 'local') return this.browserTz;
             if (mode === 'utc') return 'UTC · Y-m-d H:i:s';
-            return this.companyTz;
+            return this.companyTzExplicit ? this.companyTz : '{{ __('(not set)') }}';
         },
         setTz(mode) {
             if (this.tzSaving || mode === this.tzMode) { this.tzOpen = false; return; }
@@ -63,6 +61,7 @@
                 this.tzMode = data.mode;
                 this.tzLabel = data.label;
                 if (data.company_timezone) this.companyTz = data.company_timezone;
+                this.companyTzExplicit = data.company_timezone_explicit ?? this.companyTzExplicit;
                 this.tzOpen = false;
                 window.location.reload();
             })
@@ -76,8 +75,11 @@
                     type="button"
                     @click="tzOpen = !tzOpen"
                     :disabled="tzSaving"
-                    class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded hover:bg-surface-subtle text-muted hover:text-ink transition-colors"
-                    :class="tzSaving && 'opacity-50 cursor-wait'"
+                    class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded hover:bg-surface-subtle transition-colors"
+                    :class="[
+                        tzSaving && 'opacity-50 cursor-wait',
+                        (tzMode === 'company' && !companyTzExplicit) ? 'text-status-warning' : 'text-muted hover:text-ink',
+                    ]"
                     aria-haspopup="true"
                     :aria-expanded="tzOpen"
                     aria-label="{{ __('Select timezone display mode') }}"
@@ -113,11 +115,7 @@
                                 x-bind:class="tzMode === '{{ $mode->value }}' ? 'opacity-100' : 'opacity-0'"
                             />
                             <span class="flex flex-col leading-tight">
-                                <span>{{ match ($mode) {
-                                    \App\Base\DateTime\Enums\TimezoneMode::COMPANY => __('Company'),
-                                    \App\Base\DateTime\Enums\TimezoneMode::LOCAL => __('Local (browser)'),
-                                    \App\Base\DateTime\Enums\TimezoneMode::UTC => __('Stored (raw)'),
-                                } }}</span>
+                                <span>{{ $mode->description() }}</span>
                                 <span class="text-muted text-[10px]" x-text="tzDisplay('{{ $mode->value }}')"></span>
                             </span>
                         </button>

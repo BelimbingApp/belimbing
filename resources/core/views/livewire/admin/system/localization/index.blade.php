@@ -23,7 +23,7 @@
             </x-ui.alert>
         @endif
 
-        <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <x-ui.card>
                 <h3 class="mb-3 text-sm font-medium text-ink">{{ __('Current State') }}</h3>
                 <dl class="space-y-2 text-sm">
@@ -87,6 +87,33 @@
                             <div>{{ $preview['currency'] }}</div>
                             <div class="text-xs text-muted">{{ __('Sample currency: :code', ['code' => $preview['currency_code']]) }}</div>
                         </dd>
+                    </div>
+                </dl>
+            </x-ui.card>
+
+            <x-ui.card>
+                <h3 class="mb-3 text-sm font-medium text-ink">{{ __('Regional Context') }}</h3>
+                <p class="mb-3 text-xs text-muted">
+                    {{ __('Read-only settings configured elsewhere.') }}
+                </p>
+                <dl class="space-y-2 text-sm">
+                    <div class="flex items-center justify-between gap-4">
+                        <dt class="text-muted">{{ __('Company timezone') }}</dt>
+                        <dd class="tabular-nums text-ink">
+                            @if ($context['company_timezone_explicit'])
+                                {{ $context['company_timezone'] }}
+                            @else
+                                <span class="text-status-warning">{{ __('Not set') }}</span>
+                            @endif
+                        </dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-4">
+                        <dt class="text-muted">{{ __('Currency') }}</dt>
+                        <dd class="tabular-nums text-ink">{{ strtoupper($context['currency_code']) }}</dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-4">
+                        <dt class="text-muted">{{ __('Language') }}</dt>
+                        <dd class="tabular-nums text-ink">{{ $context['language'] }}</dd>
                     </div>
                 </dl>
             </x-ui.card>

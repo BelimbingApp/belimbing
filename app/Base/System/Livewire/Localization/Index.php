@@ -5,14 +5,16 @@
 
 namespace App\Base\System\Livewire\Localization;
 
+use App\Base\DateTime\Contracts\DateTimeDisplayService;
 use App\Base\Locale\Contracts\LicenseeLocaleBootstrapSource;
 use App\Base\Locale\Contracts\LocaleContext;
 use App\Base\Locale\Enums\LocaleSource;
 use App\Base\Locale\Services\LocaleCatalog;
 use App\Base\Settings\Contracts\SettingsService;
-use Carbon\Carbon;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Number;
 use Illuminate\Validation\Rule;
+use IntlDateFormatter;
 use Livewire\Component;
 
 class Index extends Component
@@ -24,6 +26,8 @@ class Index extends Component
     private const SETTINGS_KEY_CONFIRMED_AT = 'ui.locale_confirmed_at';
 
     private const SETTINGS_KEY_INFERRED_COUNTRY = 'ui.locale_inferred_country';
+
+    private const SETTINGS_KEY_CURRENCY = 'ui.locale_currency';
 
     public string $selectedLocale = '';
 
@@ -46,9 +50,15 @@ class Index extends Component
 
     /**
      * Persist the selected locale as the confirmed application locale.
+     *
+     * Also derives and persists the currency code from the licensee's
+     * Geonames country record when available.
      */
-    public function save(SettingsService $settings, LocaleCatalog $catalog): void
-    {
+    public function save(
+        SettingsService $settings,
+        LocaleCatalog $catalog,
+        LicenseeLocaleBootstrapSource $bootstrapSource,
+    ): void {
         $this->validate([
             'selectedLocale' => ['required', 'string', Rule::in(array_keys($catalog->options()))],
         ]);
@@ -66,6 +76,12 @@ class Index extends Component
         $settings->set(self::SETTINGS_KEY_CONFIRMED_AT, now()->toIso8601String());
         $settings->forget(self::SETTINGS_KEY_INFERRED_COUNTRY);
 
+        $bootstrap = $bootstrapSource->resolve();
+
+        if ($bootstrap?->currencyCode) {
+            $settings->set(self::SETTINGS_KEY_CURRENCY, strtoupper($bootstrap->currencyCode));
+        }
+
         session()->flash('locale-status', __('Localization saved.'));
 
         $this->redirectRoute('admin.system.localization.index', navigate: true);
@@ -75,13 +91,20 @@ class Index extends Component
         LocaleCatalog $catalog,
         LocaleContext $localeContext,
         LicenseeLocaleBootstrapSource $bootstrapSource,
-    ): \Illuminate\Contracts\View\View {
+        DateTimeDisplayService $dateTimeDisplay,
+        SettingsService $settings,
+    ): View {
         $state = $localeContext->state();
         $previewLocale = $catalog->normalize($this->selectedLocale) ?? $state->locale;
-        $sample = Carbon::create(2026, 3, 31, 20, 15, 0, 'Asia/Kuala_Lumpur')
-            ->locale(str_replace('-', '_', $previewLocale));
+        $intlLocale = $previewLocale;
+        $numberLocale = str_replace('-', '_', $previewLocale);
+        $sampleTimestamp = now()->getTimestamp();
         $bootstrap = $bootstrapSource->resolve();
-        $currencyCode = $bootstrap?->currencyCode ?: config('locale.sample_currency', 'USD');
+        $persistedCurrency = $settings->get(self::SETTINGS_KEY_CURRENCY);
+        $currencyCode = $persistedCurrency
+            ?: ($bootstrap?->currencyCode ?: config('locale.sample_currency', 'USD'));
+        $companyTimezone = $dateTimeDisplay->currentCompanyTimezone();
+        $companyTimezoneExplicit = $dateTimeDisplay->isCompanyTimezoneExplicit();
 
         return view('livewire.admin.system.localization.index', [
             'current' => [
@@ -96,12 +119,18 @@ class Index extends Component
             'preview' => [
                 'locale' => $previewLocale,
                 'label' => $catalog->label($previewLocale),
-                'date' => $sample->isoFormat('L'),
-                'time' => $sample->isoFormat('LT'),
-                'datetime' => $sample->isoFormat('L LT'),
-                'number' => (string) Number::format(1234567.89, precision: 2, locale: str_replace('-', '_', $previewLocale)),
-                'currency' => (string) Number::currency(1234.56, strtoupper($currencyCode), locale: str_replace('-', '_', $previewLocale)),
+                'date' => $this->intlFormat($intlLocale, IntlDateFormatter::SHORT, IntlDateFormatter::NONE, $sampleTimestamp),
+                'time' => $this->intlFormat($intlLocale, IntlDateFormatter::NONE, IntlDateFormatter::SHORT, $sampleTimestamp),
+                'datetime' => $this->intlFormat($intlLocale, IntlDateFormatter::SHORT, IntlDateFormatter::SHORT, $sampleTimestamp),
+                'number' => (string) Number::format(1234567.89, precision: 2, locale: $numberLocale),
+                'currency' => (string) Number::currency(1234.56, strtoupper($currencyCode), locale: $numberLocale),
                 'currency_code' => $currencyCode,
+            ],
+            'context' => [
+                'company_timezone' => $companyTimezone,
+                'company_timezone_explicit' => $companyTimezoneExplicit,
+                'currency_code' => $currencyCode,
+                'language' => $state->language,
             ],
             'bootstrap' => [
                 'country_iso' => $bootstrap?->countryIso,
@@ -109,6 +138,17 @@ class Index extends Component
                 'suggested_locale' => $bootstrap ? $catalog->inferFromBootstrap($bootstrap) : null,
             ],
         ]);
+    }
+
+    /**
+     * Format a timestamp using ICU IntlDateFormatter.
+     */
+    private function intlFormat(string $locale, int $dateType, int $timeType, int $timestamp): string
+    {
+        $formatter = new IntlDateFormatter($locale, $dateType, $timeType);
+        $result = $formatter->format($timestamp);
+
+        return $result !== false ? $result : '—';
     }
 
     private function sourceLabel(LocaleSource $source): string

@@ -46,11 +46,14 @@ class TimezoneController
 
         $this->settings->set(self::SETTINGS_KEY, $mode->value, $scope);
 
+        $companyTimezone = $this->dateTimeDisplay->currentCompanyTimezone();
+
         return response()->json([
             'mode' => $mode->value,
-            'label' => $this->label($mode),
-            'timezone' => $this->resolveTimezoneForMode($mode, $user),
-            'company_timezone' => $this->dateTimeDisplay->currentCompanyTimezone(),
+            'label' => $mode->label(),
+            'timezone' => $this->resolveTimezoneForMode($mode, $companyTimezone),
+            'company_timezone' => $companyTimezone,
+            'company_timezone_explicit' => $this->dateTimeDisplay->isCompanyTimezoneExplicit(),
         ]);
     }
 
@@ -71,44 +74,17 @@ class TimezoneController
     }
 
     /**
-     * Human-readable label for a timezone mode.
-     */
-    private function label(TimezoneMode $mode): string
-    {
-        return match ($mode) {
-            TimezoneMode::COMPANY => __('Company'),
-            TimezoneMode::LOCAL => __('Local'),
-            TimezoneMode::UTC => __('Stored'),
-        };
-    }
-
-    /**
      * Resolve the IANA timezone identifier for a given mode.
      *
      * LOCAL mode returns null — the browser provides the actual timezone.
+     * Delegates company timezone resolution to DateTimeDisplayService.
      */
-    private function resolveTimezoneForMode(TimezoneMode $mode, mixed $user): ?string
+    private function resolveTimezoneForMode(TimezoneMode $mode, string $companyTimezone): ?string
     {
         return match ($mode) {
-            TimezoneMode::COMPANY => $this->resolveCompanyTimezone($user),
+            TimezoneMode::COMPANY => $companyTimezone,
             TimezoneMode::UTC => 'UTC',
             TimezoneMode::LOCAL => null,
         };
-    }
-
-    /**
-     * Resolve the company-level default timezone from settings.
-     */
-    private function resolveCompanyTimezone(mixed $user): string
-    {
-        if (! $user->company_id) {
-            return 'UTC';
-        }
-
-        return $this->settings->get(
-            'ui.timezone.default',
-            'UTC',
-            Scope::company($user->company_id),
-        );
     }
 }

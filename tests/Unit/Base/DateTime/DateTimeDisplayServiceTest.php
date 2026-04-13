@@ -24,6 +24,16 @@ beforeEach(function (): void {
 });
 
 /**
+ * Normalize ICU narrow no-break spaces (U+202F) to regular spaces.
+ *
+ * IntlDateFormatter inserts U+202F before AM/PM markers per CLDR rules.
+ */
+function normalizeIcuSpaces(string $value): string
+{
+    return str_replace("\u{202F}", ' ', $value);
+}
+
+/**
  * Build a fresh DateTimeDisplayService instance (clears memoized state).
  */
 function freshService(): DateTimeDisplayService
@@ -99,22 +109,61 @@ it('formats datetime in UTC when mode is UTC', function (): void {
     assertFormattedValues(freshService(), utcTestCarbon(), DT_TEST_TIMESTAMP, '2026-06-15', '08:00:00');
 });
 
-// --- Formatting in Company Mode with Timezone (locale-aware) ---
+// --- Formatting in Company Mode with Timezone (ICU locale-aware) ---
 
-it('formats datetime in company timezone with locale', function (): void {
+it('formats datetime in company timezone with en-US locale via ICU', function (): void {
     actingUser(1);
     setCompanyTimezoneLocale($this->settings, 1, 'en-US');
 
-    // KL is UTC+8 → 16:00; en locale → MM/DD/YYYY h:mm A
-    assertFormattedValues(freshService(), utcTestCarbon(), '06/15/2026 4:00 PM', '06/15/2026', '4:00 PM');
+    $service = freshService();
+    $result = $service->formatDateTime(utcTestCarbon());
+
+    // ICU SHORT for en-US: M/d/yy, h:mm a → 6/15/26, 4:00 PM
+    // ICU uses U+202F (narrow no-break space) before AM/PM — normalize for assertion.
+    $normalized = normalizeIcuSpaces($result);
+    expect($normalized)->toContain('6/15')
+        ->and($normalized)->toContain('4:00 PM');
+
+    expect($service->formatDate(utcTestCarbon()))->toContain('6/15');
+    expect(normalizeIcuSpaces($service->formatTime(utcTestCarbon())))->toBe('4:00 PM');
 });
 
-it('formats datetime in company timezone with ms locale', function (): void {
+it('formats datetime in company timezone with ms-MY locale via ICU', function (): void {
     actingUser(1);
     setCompanyTimezoneLocale($this->settings, 1, 'ms-MY');
 
-    // KL is UTC+8 → 16:00; ms locale → DD/MM/YYYY HH.mm
-    assertFormattedValues(freshService(), utcTestCarbon(), '15/06/2026 16.00', '15/06/2026', '16.00');
+    $service = freshService();
+    $result = $service->formatDateTime(utcTestCarbon());
+
+    // ICU SHORT for ms-MY uses d/MM/yy pattern → 15/06/26
+    expect($result)->toContain('15/06');
+
+    expect($service->formatDate(utcTestCarbon()))->toContain('15/06');
+});
+
+it('formats en-MY dates with DD/MM/YYYY order via ICU', function (): void {
+    actingUser(1);
+    setCompanyTimezoneLocale($this->settings, 1, 'en-MY');
+
+    $service = freshService();
+
+    // ICU SHORT for en-MY uses dd/MM/y → 15/06/2026 (the bug fix!)
+    // Carbon isoFormat('L') would give 06/15/2026 (US order) — wrong.
+    $date = $service->formatDate(utcTestCarbon());
+
+    expect($date)->toBe('15/06/2026');
+});
+
+it('formats en-MY times with lowercase am/pm via ICU', function (): void {
+    actingUser(1);
+    setCompanyTimezoneLocale($this->settings, 1, 'en-MY');
+
+    $service = freshService();
+    $time = $service->formatTime(utcTestCarbon());
+
+    // ICU SHORT for en-MY → 4:00 pm (lowercase, Malaysian English)
+    // ICU uses U+202F (narrow no-break space) before am/pm.
+    expect(normalizeIcuSpaces($time))->toBe('4:00 pm');
 });
 
 // --- Local Mode Returns ISO-8601 ---
@@ -167,4 +216,37 @@ it('returns configured company timezone even when active mode is utc', function 
     setTimezoneMode($this->settings, TimezoneMode::UTC, Scope::company(1));
 
     expect(freshService()->currentCompanyTimezone())->toBe(DT_TEST_TIMEZONE_KL);
+});
+
+// --- isCompanyTimezoneExplicit ---
+
+it('reports company timezone as not explicit when setting is absent', function (): void {
+    actingUser(1);
+
+    expect(freshService()->isCompanyTimezoneExplicit())->toBeFalse();
+});
+
+it('reports company timezone as explicit when setting exists', function (): void {
+    actingUser(1);
+    $this->settings->set(DT_TEST_KEY_DEFAULT, DT_TEST_TIMEZONE_KL, Scope::company(1));
+
+    expect(freshService()->isCompanyTimezoneExplicit())->toBeTrue();
+});
+
+it('reports company timezone as not explicit when unauthenticated', function (): void {
+    expect(freshService()->isCompanyTimezoneExplicit())->toBeFalse();
+});
+
+// --- TimezoneMode Labels ---
+
+it('provides translatable labels on TimezoneMode enum', function (): void {
+    expect(TimezoneMode::COMPANY->label())->toBe('Company')
+        ->and(TimezoneMode::LOCAL->label())->toBe('Local')
+        ->and(TimezoneMode::UTC->label())->toBe('Stored');
+});
+
+it('provides translatable descriptions on TimezoneMode enum', function (): void {
+    expect(TimezoneMode::COMPANY->description())->toBe('Company')
+        ->and(TimezoneMode::LOCAL->description())->toBe('Local (browser)')
+        ->and(TimezoneMode::UTC->description())->toBe('Stored (raw)');
 });

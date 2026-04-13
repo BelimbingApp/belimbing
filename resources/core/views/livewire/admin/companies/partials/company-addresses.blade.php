@@ -130,6 +130,12 @@
             <p class="text-xs text-muted mb-3">{{ __('Default timezone for this company. Used when displaying dates and times in Company mode.') }}</p>
 
             <div class="max-w-md space-y-3">
+                @if(! $companyTimezone && ! $timezoneWasAutoApplied && ! $suggestedTimezone)
+                    <x-ui.alert variant="info">
+                        {{ __('No timezone is configured for this company. Dates and times will display in UTC until a timezone is set.') }}
+                    </x-ui.alert>
+                @endif
+
                 <x-ui.combobox
                     id="company-timezone"
                     wire:model.live="companyTimezone"
