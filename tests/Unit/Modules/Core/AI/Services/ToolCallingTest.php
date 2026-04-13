@@ -18,6 +18,7 @@ use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\BackgroundCommandService;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
+use App\Modules\Core\AI\Services\LaraTaskProfileSelector;
 use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
 use App\Modules\Core\AI\Tools\ArtisanTool;
 use App\Modules\Core\AI\Tools\BashTool;
@@ -382,11 +383,13 @@ describe('BashTool', function () {
 function makeToolCallingDelegateTool(
     ?LaraTaskDispatcher $dispatcher = null,
     ?TaskRoutingService $router = null,
+    ?LaraTaskProfileSelector $taskProfileSelector = null,
 ): DelegateTaskTool {
     return new DelegateTaskTool(
         $dispatcher ?? Mockery::mock(LaraTaskDispatcher::class),
         $router ?? Mockery::mock(TaskRoutingService::class),
         new AgentExecutionContext,
+        $taskProfileSelector ?? Mockery::mock(LaraTaskProfileSelector::class),
     );
 }
 
@@ -409,13 +412,15 @@ describe('DelegateTaskTool', function () {
     it('returns error when no agent is available', function () {
         $router = Mockery::mock(TaskRoutingService::class);
         $router->shouldReceive('route')->andReturn(RoutingDecision::local(['No agent matched.']));
+        $selector = Mockery::mock(LaraTaskProfileSelector::class);
+        $selector->shouldReceive('select')->andReturnNull();
 
-        $tool = makeToolCallingDelegateTool(router: $router);
+        $tool = makeToolCallingDelegateTool(router: $router, taskProfileSelector: $selector);
 
         $result = $tool->execute(['task' => 'Generate a report', 'task_type' => 'general']);
 
         expect((string) $result)->toContain('Error');
-        expect((string) $result)->toContain('No suitable Agent');
+        expect((string) $result)->toContain('No suitable Agent or Lara task profile');
     });
 
     it('dispatches task to best matching agent when no agent_id is given', function () {

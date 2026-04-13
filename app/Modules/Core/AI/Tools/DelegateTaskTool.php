@@ -18,6 +18,7 @@ use App\Modules\Core\AI\Enums\RoutingTarget;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
+use App\Modules\Core\AI\Services\LaraTaskProfileSelector;
 use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -48,6 +49,7 @@ class DelegateTaskTool extends AbstractTool
         private readonly LaraTaskDispatcher $dispatcher,
         private readonly TaskRoutingService $router,
         private readonly AgentExecutionContext $executionContext,
+        private readonly LaraTaskProfileSelector $taskProfileSelector,
     ) {}
 
     public function name(): string
@@ -57,10 +59,11 @@ class DelegateTaskTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Dispatch a task to a Agent for execution. '
+        return 'Dispatch a task to an Agent for execution. '
             .'Provide a task description and optionally a specific agent_id '
             .'(from agent_list). If no agent_id is given, the best available '
-            .'agent is auto-selected based on the task description. '
+            .'agent is auto-selected based on the task description. When no '
+            .'delegated agent matches, Lara may use a built-in task profile instead. '
             .'Returns a dispatch_id for tracking status via delegation_status.';
     }
 
@@ -104,12 +107,12 @@ class DelegateTaskTool extends AbstractTool
     {
         return [
             'display_name' => 'Delegate Task',
-            'summary' => 'Dispatch work to another Agent.',
-            'explanation' => 'Queues a task for execution by another Agent. Returns a dispatch ID '
-                .'immediately. The dispatched agent runs asynchronously via Laravel queues. '
-                .'This tool can only delegate to agents the current user supervises.',
+            'summary' => 'Dispatch work to another Agent or Lara task profile.',
+            'explanation' => 'Queues a task for asynchronous execution. Returns a dispatch ID '
+                .'immediately. The work may go to another Agent the current user supervises, '
+                .'or to one of Lara\'s built-in task profiles when no delegated Agent matches.',
             'setup_requirements' => [
-                'At least one other Agent configured',
+                'At least one delegated Agent configured or a Lara task profile available',
                 'Laravel queue worker running',
             ],
             'test_examples' => [
@@ -152,12 +155,7 @@ class DelegateTaskTool extends AbstractTool
         $decision = $this->routeTask($arguments, $task, $taskType);
 
         if ($decision->target !== RoutingTarget::Agent || $decision->agentEmployeeId === null) {
-            return ToolResult::error(
-                'No suitable Agent found for this task. '
-                    .'Use agent_list to see available agents, then specify an agent_id explicitly.'
-                    .($decision->reasons !== [] ? "\n\nRouting: ".implode(' ', $decision->reasons) : ''),
-                'no_agent_match',
-            );
+            return $this->dispatchTaskProfileFallback($task, $taskType, $decision->reasons);
         }
 
         try {
@@ -207,7 +205,9 @@ class DelegateTaskTool extends AbstractTool
      */
     private function formatDispatchResult(OperationDispatch $dispatch): string
     {
-        $employeeName = data_get($dispatch->meta, 'employee_name') ?? 'Agent #'.$dispatch->employee_id;
+        $employeeName = data_get($dispatch->meta, 'task_profile_label')
+            ? 'Lara '.data_get($dispatch->meta, 'task_profile_label')
+            : (data_get($dispatch->meta, 'employee_name') ?? 'Agent #'.$dispatch->employee_id);
 
         return 'Task dispatched successfully.'
             ."\n\n".'**Dispatch ID:** '.$dispatch->id
@@ -216,5 +216,37 @@ class DelegateTaskTool extends AbstractTool
             ."\n".'**Task:** '.$dispatch->task
             ."\n".'**Created:** '.$dispatch->created_at?->toIso8601String()
             ."\n\n".'Use delegation_status with this dispatch_id to check progress.';
+    }
+
+    /**
+     * @param  list<string>  $routingReasons
+     */
+    private function dispatchTaskProfileFallback(string $task, string $taskType, array $routingReasons): ToolResult
+    {
+        $selection = $this->taskProfileSelector->select($task, $taskType);
+
+        if ($selection === null) {
+            return ToolResult::error(
+                'No suitable Agent or Lara task profile found for this task. '
+                    .'Use agent_list to see available agents, then specify an agent_id explicitly.'
+                    .($routingReasons !== [] ? "\n\nRouting: ".implode(' ', $routingReasons) : ''),
+                'no_agent_match',
+            );
+        }
+
+        try {
+            $dispatch = $this->dispatcher->dispatchTaskProfileForCurrentUser($selection['definition']->key, $task);
+            $message = $this->formatDispatchResult($dispatch);
+        } catch (AuthorizationException $e) {
+            return ToolResult::error($e->getMessage(), 'authorization_error');
+        } catch (\Throwable $e) {
+            return ToolResult::error('Dispatching task failed: '.$e->getMessage(), 'dispatch_error');
+        }
+
+        if ($selection['reasons'] === []) {
+            return ToolResult::success($message);
+        }
+
+        return ToolResult::success($message."\n\nRouting: ".implode(' ', [...$routingReasons, ...$selection['reasons']]));
     }
 }

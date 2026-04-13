@@ -22,6 +22,7 @@ class LaraOrchestrationService
         private readonly KnowledgeNavigator $knowledgeNavigator,
         private readonly TaskRoutingService $router,
         private readonly LaraTaskDispatcher $taskDispatcher,
+        private readonly LaraTaskProfileSelector $taskProfileSelector,
         private readonly LaraNavigationRouter $navigationRouter,
     ) {}
 
@@ -109,7 +110,7 @@ class LaraOrchestrationService
         $decision = $this->router->route($request);
 
         if ($decision->target !== RoutingTarget::Agent || $decision->agentEmployeeId === null) {
-            return $this->dispatchCodingTaskProfile($task, $decision->reasons);
+            return $this->dispatchTaskProfile($task, 'general', $decision->reasons);
         }
 
         $dispatch = $this->taskDispatcher->dispatchForCurrentUser(
@@ -135,25 +136,40 @@ class LaraOrchestrationService
      * @param  list<string>  $routingReasons
      * @return array{assistant_content: string, run_id: string, meta: array<string, mixed>}
      */
-    private function dispatchCodingTaskProfile(string $task, array $routingReasons): array
+    private function dispatchTaskProfile(string $task, ?string $taskType, array $routingReasons): array
     {
+        $selection = $this->taskProfileSelector->select($task, $taskType);
+
+        if ($selection === null) {
+            return $this->response(
+                __('No Lara task profile is available to handle this delegation right now.'),
+                [
+                    'status' => 'no_task_profile_available',
+                    'routing_reasons' => $routingReasons,
+                ],
+            );
+        }
+
+        $definition = $selection['definition'];
         $dispatch = $this->taskDispatcher->dispatchTaskProfileForCurrentUser(
-            'coding',
+            $definition->key,
             $task,
             ['source' => 'slash_delegate'],
         );
 
         return $this->response(
-            __('Delegation queued to Lara Coding (dispatch: :dispatch_id).', [
+            __('Delegation queued to Lara :task (dispatch: :dispatch_id).', [
+                'task' => $definition->label,
                 'dispatch_id' => $dispatch->id,
             ]),
             [
                 'status' => 'queued',
                 'selected_task_profile' => [
-                    'task_key' => 'coding',
-                    'label' => 'Coding',
+                    'task_key' => $definition->key,
+                    'label' => $definition->label,
+                    'confidence' => $selection['confidence'],
                 ],
-                'routing_reasons' => $routingReasons,
+                'routing_reasons' => [...$routingReasons, ...$selection['reasons']],
                 'dispatch_id' => $dispatch->id,
             ],
         );

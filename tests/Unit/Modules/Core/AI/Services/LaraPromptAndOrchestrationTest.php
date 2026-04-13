@@ -197,3 +197,16 @@ it('falls back to Lara coding task profile when no delegated agents are availabl
         ->and($result['meta']['orchestration']['selected_task_profile']['task_key'])->toBe('coding')
         ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('op_');
 });
+
+it('routes research-oriented delegation to Lara research task profile when no delegated agents are available', function (): void {
+    $fixture = $this->createLaraFixture();
+    $this->actingAs($fixture['user']);
+
+    $service = app(LaraOrchestrationService::class);
+    $result = $service->dispatchFromMessage('/delegate investigate the latest OpenAI documentation updates');
+
+    expect($result)->not->toBeNull()
+        ->and($result['meta']['orchestration']['status'])->toBe('queued')
+        ->and($result['meta']['orchestration']['selected_task_profile']['task_key'])->toBe('research')
+        ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('op_');
+});

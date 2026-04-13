@@ -186,7 +186,8 @@ it('resolves all expanded targets', function (): void {
         'addresses' => '/admin/addresses',
         'providers' => AI_PROVIDERS_URL,
         'models' => AI_PROVIDERS_URL,
-        'playground' => '/admin/ai/playground',
+        'playground' => '/admin/ai/task-models',
+        'task-models' => '/admin/ai/task-models',
         'setup-lara' => '/admin/setup/lara',
     ];
 

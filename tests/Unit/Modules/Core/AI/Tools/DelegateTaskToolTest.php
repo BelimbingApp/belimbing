@@ -1,11 +1,14 @@
 <?php
 
+use App\Modules\Core\AI\DTO\LaraTaskDefinition;
 use App\Modules\Core\AI\DTO\Orchestration\RoutingDecision;
+use App\Modules\Core\AI\Enums\LaraTaskType;
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
+use App\Modules\Core\AI\Services\LaraTaskProfileSelector;
 use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
 use App\Modules\Core\AI\Tools\DelegateTaskTool;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -48,7 +51,8 @@ beforeEach(function () {
     $this->dispatcher = Mockery::mock(LaraTaskDispatcher::class);
     $this->router = Mockery::mock(TaskRoutingService::class);
     $this->executionContext = new AgentExecutionContext;
-    $this->tool = new DelegateTaskTool($this->dispatcher, $this->router, $this->executionContext);
+    $this->taskProfileSelector = Mockery::mock(LaraTaskProfileSelector::class);
+    $this->tool = new DelegateTaskTool($this->dispatcher, $this->router, $this->executionContext, $this->taskProfileSelector);
 });
 
 describe('tool metadata', function () {
@@ -187,22 +191,78 @@ describe('dispatch with auto-matching', function () {
         $this->router->shouldReceive('route')
             ->once()
             ->andReturn(RoutingDecision::local(['No agent matched.']));
+        $this->taskProfileSelector->shouldReceive('select')
+            ->once()
+            ->with('Something obscure', 'general')
+            ->andReturnNull();
 
         $result = $this->tool->execute(['task' => 'Something obscure', 'task_type' => 'general']);
 
         expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('No suitable Agent');
+            ->and((string) $result)->toContain('No suitable Agent or Lara task profile');
     });
 
     it('includes routing reasons in error message', function () {
         $this->router->shouldReceive('route')
             ->once()
             ->andReturn(RoutingDecision::local(['No delegable agents available for the current user.']));
+        $this->taskProfileSelector->shouldReceive('select')
+            ->once()
+            ->with('Impossible task', 'general')
+            ->andReturnNull();
 
         $result = $this->tool->execute(['task' => 'Impossible task', 'task_type' => 'general']);
 
-        expect((string) $result)->toContain('No suitable Agent')
+        expect((string) $result)->toContain('No suitable Agent or Lara task profile')
             ->and((string) $result)->toContain('No delegable agents');
+    });
+
+    it('falls back to a Lara research task profile when no agent matches', function () {
+        $researchTask = new LaraTaskDefinition(
+            key: 'research',
+            label: 'Research',
+            type: LaraTaskType::Agentic,
+            description: 'Research tasks',
+            workloadDescription: 'Research workload',
+            runtimeReady: true,
+        );
+
+        $this->router->shouldReceive('route')
+            ->once()
+            ->andReturn(RoutingDecision::local(['No delegable agents available for the current user.']));
+        $this->taskProfileSelector->shouldReceive('select')
+            ->once()
+            ->with('Investigate the latest OpenAI docs changes', 'research')
+            ->andReturn([
+                'definition' => $researchTask,
+                'reasons' => ['Explicit task type matched Research.'],
+                'confidence' => 120,
+            ]);
+
+        $dispatch = makeOperationDispatch([
+            'employee_id' => 1,
+            'task' => 'Investigate the latest OpenAI docs changes',
+            'meta' => [
+                'employee_name' => 'Lara',
+                'task_type' => 'research',
+                'task_profile' => 'research',
+                'task_profile_label' => 'Research',
+            ],
+        ]);
+
+        $this->dispatcher->shouldReceive('dispatchTaskProfileForCurrentUser')
+            ->once()
+            ->with('research', 'Investigate the latest OpenAI docs changes')
+            ->andReturn($dispatch);
+
+        $result = $this->tool->execute([
+            'task' => 'Investigate the latest OpenAI docs changes',
+            'task_type' => 'research',
+        ]);
+
+        expect((string) $result)->toContain(DELEGATE_DISPATCH_SUCCESS)
+            ->and((string) $result)->toContain('Lara Research')
+            ->and((string) $result)->toContain('Explicit task type matched Research.');
     });
 });
 

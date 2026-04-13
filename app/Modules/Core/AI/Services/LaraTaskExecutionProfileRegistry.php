@@ -17,6 +17,23 @@ class LaraTaskExecutionProfileRegistry
     {
         return [
             new LaraTaskExecutionProfile(
+                taskKey: 'research',
+                label: 'Research',
+                systemPromptPath: app_path('Modules/Core/AI/Resources/tasks/research/system_prompt.md'),
+                allowedToolNames: [
+                    'active_page_snapshot',
+                    'guide',
+                    'memory_get',
+                    'memory_search',
+                    'memory_status',
+                    'query_data',
+                    'system_info',
+                    'web_fetch',
+                    'web_search',
+                ],
+                executionMode: ExecutionMode::Background,
+            ),
+            new LaraTaskExecutionProfile(
                 taskKey: 'coding',
                 label: 'Coding',
                 systemPromptPath: app_path('Modules/Core/AI/Resources/tasks/coding/system_prompt.md'),
