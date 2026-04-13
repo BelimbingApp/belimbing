@@ -149,10 +149,17 @@ globalThis.blbFormatDateTimeMatches = (text, config = {}) => {
         includeSeconds: config.includeSeconds ?? false,
     })
 
-    return source.replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?/g, (match) => {
+    return source.replaceAll(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(?:Z|[+-]\d{2}:\d{2})?/g, (match) => {
         try {
-            const hasTimezone = /Z|[+-]\d{2}:\d{2}$/.test(match)
-            const iso = hasTimezone ? match : (match.includes('T') ? `${match}Z` : `${match.replace(' ', 'T')}Z`)
+            const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(match)
+            let iso = match
+            if (!hasTimezone) {
+                if (match.includes('T')) {
+                    iso = `${match}Z`
+                } else {
+                    iso = `${match.replace(' ', 'T')}Z`
+                }
+            }
             const date = new Date(iso)
 
             if (Number.isNaN(date.getTime())) {

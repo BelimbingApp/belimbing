@@ -510,6 +510,21 @@ class BrowserTool extends AbstractActionTool
      */
     private function resolveExecutionContext(array $arguments): ?array
     {
+        $synthetic = $this->resolveSyntheticExecutionContext($arguments);
+
+        if ($synthetic !== null) {
+            return $synthetic;
+        }
+
+        return $this->resolveExecutionContextFromAuthenticatedUser();
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @return array{employee_id: int, company_id: int}|null
+     */
+    private function resolveSyntheticExecutionContext(array $arguments): ?array
+    {
         $employeeId = isset($arguments['_employee_id']) ? (int) $arguments['_employee_id'] : null;
         $companyId = isset($arguments['_company_id']) ? (int) $arguments['_company_id'] : null;
 
@@ -520,32 +535,44 @@ class BrowserTool extends AbstractActionTool
             ];
         }
 
+        return null;
+    }
+
+    /**
+     * @return array{employee_id: int, company_id: int}|null
+     */
+    private function resolveExecutionContextFromAuthenticatedUser(): ?array
+    {
         $user = auth()->user();
 
-        if ($user instanceof User) {
-            $linkedEmployeeId = $user->employee_id !== null ? (int) $user->employee_id : null;
-            $linkedCompanyId = $user->getCompanyId();
-
-            if ($linkedEmployeeId !== null && $linkedEmployeeId > 0 && $linkedCompanyId !== null && $linkedCompanyId > 0) {
-                return [
-                    'employee_id' => $linkedEmployeeId,
-                    'company_id' => $linkedCompanyId,
-                ];
-            }
-
-            if ($linkedCompanyId !== null && $linkedCompanyId > 0) {
-                $lara = Employee::query()->find(Employee::LARA_ID);
-
-                if ($lara !== null && (int) $lara->company_id === (int) $linkedCompanyId) {
-                    return [
-                        'employee_id' => (int) $lara->id,
-                        'company_id' => (int) $lara->company_id,
-                    ];
-                }
-            }
+        if (! $user instanceof User) {
+            return null;
         }
 
-        return null;
+        $linkedEmployeeId = $user->employee_id !== null ? (int) $user->employee_id : null;
+        $linkedCompanyId = $user->getCompanyId();
+
+        if ($linkedEmployeeId !== null && $linkedEmployeeId > 0 && $linkedCompanyId !== null && $linkedCompanyId > 0) {
+            return [
+                'employee_id' => $linkedEmployeeId,
+                'company_id' => $linkedCompanyId,
+            ];
+        }
+
+        if ($linkedCompanyId === null || $linkedCompanyId <= 0) {
+            return null;
+        }
+
+        $lara = Employee::query()->find(Employee::LARA_ID);
+
+        if ($lara === null || (int) $lara->company_id !== (int) $linkedCompanyId) {
+            return null;
+        }
+
+        return [
+            'employee_id' => (int) $lara->id,
+            'company_id' => (int) $lara->company_id,
+        ];
     }
 
     // ─── Runner integration ─────────────────────────────────────────

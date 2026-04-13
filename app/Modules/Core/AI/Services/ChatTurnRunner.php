@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Modules\Core\AI\DTO\ChatTurnRuntimeContext;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\DTO\PageSnapshot;
@@ -55,59 +56,110 @@ class ChatTurnRunner
         $messages = $this->messageManager->read($employeeId, $sessionId);
         [$systemPrompt, $promptMeta] = $this->resolvePromptPackage($employeeId, $messages);
 
-        $policy = $this->resolveExecutionPolicy($turn);
+        $runtimeContext = new ChatTurnRuntimeContext(
+            employeeId: $employeeId,
+            sessionId: $sessionId,
+            messages: $messages,
+            systemPrompt: $systemPrompt,
+            modelOverride: $modelOverride,
+            policy: $this->resolveExecutionPolicy($turn),
+            promptMeta: $promptMeta,
+        );
 
         try {
-            $runtimeStream = $this->runtime->runStream(
-                $messages, $employeeId, $systemPrompt, $modelOverride,
-                $policy, $sessionId, turnId: $turn->id,
-            );
-
-            $cancelled = false;
-
-            foreach ($this->bridge->wrap($turn, $runtimeStream) as $payload) {
-                if ($onEvent !== null) {
-                    $onEvent($payload);
-                }
-
-                $turn->refresh();
-
-                if ($turn->isCancelRequested()) {
-                    if (! $turn->isTerminal()) {
-                        $this->turnPublisher->turnCancelled($turn, 'User cancelled');
-                    }
-
-                    $cancelled = true;
-
-                    break;
-                }
-            }
-
-            if ($cancelled) {
-                return;
-            }
-
-            $extraMeta = $promptMeta !== null ? ['prompt_package' => $promptMeta] : [];
-            $this->persister->materializeFromTurn($turn->refresh(), $this->messageManager, $employeeId, $sessionId, $extraMeta);
+            $this->executeRuntimeStream($turn, $runtimeContext, $onEvent);
         } catch (\Throwable $e) {
-            report($e);
-
-            $turn->refresh();
-
-            if (! $turn->isTerminal()) {
-                $this->turnPublisher->turnFailed($turn, 'runtime_exception', $e->getMessage());
-            }
-
-            $extraMeta = $promptMeta !== null ? ['prompt_package' => $promptMeta] : [];
-
-            try {
-                $this->persister->materializeFromTurn($turn->refresh(), $this->messageManager, $employeeId, $sessionId, $extraMeta);
-            } catch (\Throwable) {
-                // Best-effort materialization failed — swallow to preserve original exception
-            }
+            $this->handleRuntimeFailure($turn, $e, $runtimeContext);
 
             throw $e;
         }
+    }
+
+    /**
+     * @param  callable(array<string, mixed>): void|null  $onEvent
+     */
+    private function executeRuntimeStream(
+        ChatTurn $turn,
+        ChatTurnRuntimeContext $runtimeContext,
+        ?callable $onEvent,
+    ): void {
+        $runtimeStream = $this->runtime->runStream(
+            $runtimeContext->messages,
+            $runtimeContext->employeeId,
+            $runtimeContext->systemPrompt,
+            $runtimeContext->modelOverride,
+            $runtimeContext->policy,
+            $runtimeContext->sessionId,
+            turnId: $turn->id,
+        );
+
+        $cancelled = false;
+
+        foreach ($this->bridge->wrap($turn, $runtimeStream) as $payload) {
+            if ($onEvent !== null) {
+                $onEvent($payload);
+            }
+
+            $turn->refresh();
+
+            if ($turn->isCancelRequested()) {
+                if (! $turn->isTerminal()) {
+                    $this->turnPublisher->turnCancelled($turn, 'User cancelled');
+                }
+
+                $cancelled = true;
+
+                break;
+            }
+        }
+
+        if ($cancelled) {
+            return;
+        }
+
+        $this->persister->materializeFromTurn(
+            $turn->refresh(),
+            $this->messageManager,
+            $runtimeContext->employeeId,
+            $runtimeContext->sessionId,
+            $this->promptPackageMeta($runtimeContext),
+        );
+    }
+
+    private function handleRuntimeFailure(
+        ChatTurn $turn,
+        \Throwable $e,
+        ChatTurnRuntimeContext $runtimeContext,
+    ): void {
+        report($e);
+
+        $turn->refresh();
+
+        if (! $turn->isTerminal()) {
+            $this->turnPublisher->turnFailed($turn, 'runtime_exception', $e->getMessage());
+        }
+
+        try {
+            $this->persister->materializeFromTurn(
+                $turn->refresh(),
+                $this->messageManager,
+                $runtimeContext->employeeId,
+                $runtimeContext->sessionId,
+                $this->promptPackageMeta($runtimeContext),
+            );
+        } catch (\Throwable) {
+            // Best-effort materialization failed — swallow to preserve original exception
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function promptPackageMeta(ChatTurnRuntimeContext $runtimeContext): array
+    {
+        return $runtimeContext->promptMeta !== null
+            ? ['prompt_package' => $runtimeContext->promptMeta]
+            : [];
     }
 
     /**

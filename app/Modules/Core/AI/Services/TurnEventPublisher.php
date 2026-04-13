@@ -315,15 +315,4 @@ class TurnEventPublisher
             'attempt' => $attempt,
         ]);
     }
-
-    /**
-     * Emit recovery.failed when all recovery attempts are exhausted.
-     */
-    public function recoveryFailed(ChatTurn $turn, int $attempt, string $reason): ChatTurnEvent
-    {
-        return $this->publish($turn, TurnEventType::RecoveryFailed, [
-            'attempt' => $attempt,
-            'reason' => $reason,
-        ]);
-    }
 }

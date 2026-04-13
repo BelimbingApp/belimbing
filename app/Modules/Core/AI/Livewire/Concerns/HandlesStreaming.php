@@ -61,37 +61,8 @@ trait HandlesStreaming
 
         $userMeta = $attachmentMeta !== [] ? ['attachments' => $attachmentMeta] : [];
 
-        // Check for orchestration shortcuts (sync-only, no streaming)
-        if ($this->employeeId === Employee::LARA_ID && ! $hasAttachments) {
-            $orchestration = app(LaraOrchestrationService::class)->dispatchFromMessage($content);
-            if ($orchestration !== null) {
-                // Fall through to sync path — return null to signal caller
-                $messageManager = app(MessageManager::class);
-                $messageManager->appendUserMessage($this->employeeId, $this->selectedSessionId, $content, $userMeta);
-
-                $messageManager->appendAssistantMessage(
-                    $this->employeeId,
-                    $this->selectedSessionId,
-                    $orchestration['assistant_content'],
-                    $orchestration['run_id'],
-                    $orchestration['meta'],
-                );
-
-                $this->lastRunMeta = [
-                    'run_id' => $orchestration['run_id'],
-                    ...$orchestration['meta'],
-                ];
-
-                $this->dispatch('agent-chat-response-ready');
-                $this->dispatch('agent-chat-focus-composer');
-
-                $navigationUrl = $orchestration['meta']['orchestration']['navigation']['url'] ?? null;
-                if (is_string($navigationUrl) && str_starts_with($navigationUrl, '/')) {
-                    $this->dispatch('agent-chat-execute-js', js: "Livewire.navigate('".$navigationUrl."')");
-                }
-
-                return null;
-            }
+        if ($this->tryLaraOrchestrationShortcut($content, $userMeta, $hasAttachments)) {
+            return null;
         }
 
         $messageManager = app(MessageManager::class);
@@ -115,6 +86,50 @@ trait HandlesStreaming
             'streamUrl' => route('ai.chat.turn.stream', ['turnId' => $turn->id]),
             'session_id' => $this->selectedSessionId,
         ];
+    }
+
+    /**
+     * Lara-only sync orchestration paths that bypass streaming.
+     *
+     * @param  array<string, mixed>  $userMeta
+     * @return bool True when the shortcut handled the message (caller returns null)
+     */
+    private function tryLaraOrchestrationShortcut(string $content, array $userMeta, bool $hasAttachments): bool
+    {
+        if ($this->employeeId !== Employee::LARA_ID || $hasAttachments) {
+            return false;
+        }
+
+        $orchestration = app(LaraOrchestrationService::class)->dispatchFromMessage($content);
+        if ($orchestration === null) {
+            return false;
+        }
+
+        $messageManager = app(MessageManager::class);
+        $messageManager->appendUserMessage($this->employeeId, $this->selectedSessionId, $content, $userMeta);
+
+        $messageManager->appendAssistantMessage(
+            $this->employeeId,
+            $this->selectedSessionId,
+            $orchestration['assistant_content'],
+            $orchestration['run_id'],
+            $orchestration['meta'],
+        );
+
+        $this->lastRunMeta = [
+            'run_id' => $orchestration['run_id'],
+            ...$orchestration['meta'],
+        ];
+
+        $this->dispatch('agent-chat-response-ready');
+        $this->dispatch('agent-chat-focus-composer');
+
+        $navigationUrl = $orchestration['meta']['orchestration']['navigation']['url'] ?? null;
+        if (is_string($navigationUrl) && str_starts_with($navigationUrl, '/')) {
+            $this->dispatch('agent-chat-execute-js', js: "Livewire.navigate('".$navigationUrl."')");
+        }
+
+        return true;
     }
 
     /**
