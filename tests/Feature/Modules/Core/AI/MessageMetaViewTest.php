@@ -2,18 +2,29 @@
 
 use Illuminate\Support\Facades\Blade;
 
-it('guards run detail dialog state transitions before toggling the popup', function (): void {
+it('renders the run detail popup as an alpine popover instead of a native dialog', function (): void {
     $html = html_entity_decode(Blade::render(
         '<x-ai.message-meta :timestamp="$timestamp" provider="openai" model="gpt-5" run-id="run-12345678" />',
         ['timestamp' => now()]
     ));
 
     expect($html)
-        ->toContain('if (popoverOpen) {')
-        ->toContain('if (! $el.open) {')
-        ->toContain('$el.show();')
-        ->toContain('if ($el.open) {')
-        ->toContain('$el.close();')
-        ->toContain('@close="popoverOpen = false"')
-        ->not->toContain('x-effect="popoverOpen ? $el.show() : $el.close()"');
+        ->toContain('x-show="popoverOpen"')
+        ->toContain('@click.outside="popoverOpen = false"')
+        ->toContain('role="dialog"')
+        ->not->toContain('<dialog')
+        ->not->toContain('$el.show();')
+        ->not->toContain('$el.close();')
+        ->not->toContain('open:flex');
+});
+
+it('renders the run duration between the timestamp and provider label', function (): void {
+    $html = html_entity_decode(Blade::render(
+        '<x-ai.message-meta :timestamp="$timestamp" provider="openai" model="gpt-5" :latency-ms="90000" run-id="run-12345678" />',
+        ['timestamp' => now()]
+    ));
+
+    expect($html)
+        ->toContain('1 min 30 sec')
+        ->toContain('openai/gpt-5');
 });

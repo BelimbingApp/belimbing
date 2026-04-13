@@ -16,6 +16,7 @@
     'retryAttempts' => null,
     'fallbackAttempts' => null,
     'runStatus' => null,
+    'stopNote' => null,
 ])
 
 <div class="flex justify-start">
@@ -32,7 +33,15 @@
                 <span>{{ $failedError }} {{ __('Switched to :provider/:model.', ['provider' => $provider, 'model' => $model]) }}</span>
             </div>
         @endif
-        <div class="agent-prose max-w-full overflow-x-auto">{!! $markdown->render($content) !!}</div>
+        @if (is_string($stopNote) && $stopNote !== '')
+            <div class="mb-2 flex items-start gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400">
+                <x-icon name="heroicon-o-stop" class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{{ $stopNote }}</span>
+            </div>
+        @endif
+        @if ($content !== '')
+            <div class="agent-prose max-w-full overflow-x-auto">{!! $markdown->render($content) !!}</div>
+        @endif
         <x-ai.message-meta
             :timestamp="$timestamp"
             :provider="$provider"

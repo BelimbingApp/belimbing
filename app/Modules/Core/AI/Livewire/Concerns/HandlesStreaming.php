@@ -5,13 +5,17 @@
 
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
+use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Enums\TurnStatus;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\AI\Services\ChatRunPersister;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\PageContextResolver;
 use App\Modules\Core\AI\Services\SessionManager;
+use App\Modules\Core\AI\Services\TurnEventPublisher;
 use App\Modules\Core\Employee\Models\Employee;
 
 /**
@@ -23,6 +27,10 @@ use App\Modules\Core\Employee\Models\Employee;
  */
 trait HandlesStreaming
 {
+    private const STALE_QUEUED_STOP_MINUTES = 10;
+
+    private const STALE_RUNNING_STOP_MINUTES = 30;
+
     /**
      * Prepare a streaming run: persist user message, create turn, return stream URL.
      *
@@ -201,6 +209,63 @@ trait HandlesStreaming
 
         $turn->requestCancel('User pressed stop');
 
+        if ($this->shouldForceStopImmediately($turn)) {
+            $this->forceStopTurn($turn->refresh());
+        }
+
         $this->isLoading = false;
+    }
+
+    private function shouldForceStopImmediately(ChatTurn $turn): bool
+    {
+        return match ($turn->status) {
+            TurnStatus::Queued, TurnStatus::Booting => $turn->created_at?->lte(now()->subMinutes(self::STALE_QUEUED_STOP_MINUTES)) ?? false,
+            TurnStatus::Running => $turn->started_at?->lte(now()->subMinutes(self::STALE_RUNNING_STOP_MINUTES))
+                ?? $turn->created_at?->lte(now()->subMinutes(self::STALE_RUNNING_STOP_MINUTES))
+                ?? false,
+            default => false,
+        };
+    }
+
+    private function forceStopTurn(ChatTurn $turn): void
+    {
+        if ($turn->isTerminal()) {
+            return;
+        }
+
+        app(TurnEventPublisher::class)->turnCancelled($turn, 'User cancelled stale turn');
+        $this->markCurrentRunCancelled($turn->current_run_id);
+
+        app(ChatRunPersister::class)->materializeFromTurn(
+            $turn->refresh(),
+            app(MessageManager::class),
+            (int) $turn->employee_id,
+            (string) $turn->session_id,
+        );
+
+        $this->dispatch('agent-chat-response-ready');
+        $this->dispatch('agent-chat-focus-composer');
+    }
+
+    private function markCurrentRunCancelled(?string $runId): void
+    {
+        if (! is_string($runId) || $runId === '') {
+            return;
+        }
+
+        $run = AiRun::query()->find($runId);
+
+        if ($run === null || $run->status !== AiRunStatus::Running) {
+            return;
+        }
+
+        $run->status = AiRunStatus::Cancelled;
+        $run->finished_at = now();
+
+        if ($run->started_at !== null && $run->latency_ms === null) {
+            $run->latency_ms = max(0, $run->started_at->diffInMilliseconds($run->finished_at));
+        }
+
+        $run->save();
     }
 }

@@ -534,11 +534,17 @@ class MessageManager
     private function extractTranscriptMeta(array $meta): array
     {
         $tokens = $meta['tokens'] ?? null;
+        $stopNote = $meta['stop_note'] ?? null;
+        $persisted = [];
 
-        if (! is_array($tokens)) {
-            return [];
+        if (is_array($tokens)) {
+            $persisted['tokens'] = $tokens;
         }
 
-        return ['tokens' => $tokens];
+        if (is_string($stopNote) && $stopNote !== '') {
+            $persisted['stop_note'] = $stopNote;
+        }
+
+        return $persisted;
     }
 }

@@ -319,4 +319,36 @@ describe('ChatRunPersister materializeFromTurn', function () {
         $persister = new ChatRunPersister;
         $persister->materializeFromTurn($turn, $mm, $turn->employee_id, MAT_TEST_SESSION);
     });
+
+    it('falls back to streamed output deltas when cancellation happens before a committed block', function () {
+        $turn = createMaterializerTurn();
+        $pub = app(TurnEventPublisher::class);
+
+        $pub->turnStarted($turn);
+        $pub->runStarted($turn, MAT_TEST_RUN_ID);
+        $turn->transitionTo(TurnStatus::Running);
+        $pub->outputDelta($turn, 'Hello ');
+        $pub->outputDelta($turn, 'world');
+        $pub->turnCancelled($turn, 'User cancelled');
+
+        $mm = mockMessageManager();
+
+        $mm->shouldReceive('appendAssistantMessage')
+            ->once()
+            ->with(
+                $turn->employee_id,
+                MAT_TEST_SESSION,
+                MAT_ASSISTANT_OUTPUT,
+                MAT_TEST_RUN_ID,
+                Mockery::on(fn ($meta) => ($meta['stop_note'] ?? null) === 'You stopped this run before it finished.'),
+            )
+            ->andReturn(new Message(
+                role: 'assistant',
+                content: MAT_ASSISTANT_OUTPUT,
+                timestamp: new DateTimeImmutable,
+            ));
+
+        $persister = new ChatRunPersister;
+        $persister->materializeFromTurn($turn, $mm, $turn->employee_id, MAT_TEST_SESSION);
+    });
 });

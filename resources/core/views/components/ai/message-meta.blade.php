@@ -55,6 +55,28 @@
 
     $promptTokens = $tokens['prompt'] ?? null;
     $completionTokens = $tokens['completion'] ?? null;
+    $durationLabel = null;
+
+    if (is_numeric($latencyMs) && $latencyMs >= 0) {
+        $latencySeconds = $latencyMs / 1000;
+
+        if ($latencySeconds >= 60) {
+            $minutes = intdiv((int) floor($latencySeconds), 60);
+            $seconds = (int) floor($latencySeconds % 60);
+
+            $durationLabel = $minutes.' '.__('min');
+
+            if ($seconds > 0) {
+                $durationLabel .= ' '.$seconds.' '.__('sec');
+            }
+        } elseif ($latencySeconds >= 10) {
+            $durationLabel = number_format($latencySeconds, 0).' '.__('sec');
+        } elseif ($latencySeconds >= 1) {
+            $durationLabel = number_format($latencySeconds, 1).' '.__('sec');
+        } else {
+            $durationLabel = __('lt 1 sec');
+        }
+    }
 @endphp
 
 <div x-data="{ tooltipOpen: false }" class="relative mt-1 inline-flex max-w-full text-[10px]">
@@ -72,6 +94,13 @@
         >
             <x-ui.datetime :value="$timestamp" format="time" />
         </button>
+
+        @if ($durationLabel !== null)
+            <span aria-hidden="true" class="shrink-0">·</span>
+            <span class="shrink-0">
+                {{ $durationLabel }}
+            </span>
+        @endif
 
         @if ($llmLabel !== null)
             <span aria-hidden="true" class="shrink-0">·</span>
@@ -97,30 +126,21 @@
                 >
                     {{ \Illuminate\Support\Str::limit($runIdLabel, 8, '…') }}
                 </button>
-                <dialog
+                <div
                     @if ($runDetailsId !== null)
                         id="{{ $runDetailsId }}"
                     @endif
-                    x-effect="
-                        if (popoverOpen) {
-                            if (! $el.open) {
-                                $el.show();
-                            }
-
-                            return;
-                        }
-
-                        if ($el.open) {
-                            $el.close();
-                        }
-                    "
+                    x-show="popoverOpen"
+                    x-cloak
+                    x-transition.opacity.duration.100ms
                     @click.outside="popoverOpen = false"
-                    @close="popoverOpen = false"
                     @keydown.escape.window="popoverOpen = false"
+                    role="dialog"
+                    tabindex="-1"
                     @if ($runDetailsTitleId !== null)
                         aria-labelledby="{{ $runDetailsTitleId }}"
                     @endif
-                    class="absolute bottom-full left-0 z-30 mb-1 w-46 rounded-xl border border-border-default bg-surface-card shadow-lg p-2.5 text-[11px] text-ink backdrop:bg-transparent open:flex open:flex-col"
+                    class="absolute bottom-full left-0 z-30 mb-1 flex w-46 flex-col rounded-xl border border-border-default bg-surface-card p-2.5 text-[11px] text-ink shadow-lg"
                 >
                     <div
                         @if ($runDetailsTitleId !== null)
@@ -219,7 +239,7 @@
                             </div>
                         @endif
                     </div>
-                </dialog>
+                </div>
             </span>
         @endif
     </span>

@@ -382,6 +382,7 @@
             <section class="flex-1 min-w-0 min-h-0 flex flex-col"
                 x-data="agentChatStream({
                     startingLabel: @js(__('Starting…')),
+                    stoppingLabel: @js(__('Stopping…')),
                     waitingForWorkerLabel: @js(__('Waiting for worker…')),
                     turnFailedMessage: @js(__('Turn failed')),
                     connectionLostMessage: @js(__('Connection lost. Please try again.')),
@@ -430,6 +431,7 @@
                             $messageErrorType = $message->meta['error_type'] ?? null;
                             $messageErrorMessage = $message->meta['error'] ?? null;
                             $messageRunStatus = $message->meta['status'] ?? null;
+                            $messageStopNote = $message->meta['stop_note'] ?? null;
                         @endphp
 
                         @if ($message->type === 'thinking')
@@ -511,6 +513,7 @@
                                 :retry-attempts="$messageRetryAttempts"
                                 :fallback-attempts="$messageFallbackAttempts"
                                 :run-status="$messageRunStatus"
+                                :stop-note="$messageStopNote"
                             />
                         @endif
                     @empty
@@ -879,6 +882,7 @@
         _fetchReader: null,
 
         startingLabel: config.startingLabel ?? 'Starting…',
+        stoppingLabel: config.stoppingLabel ?? 'Stopping…',
         waitingForWorkerLabel: config.waitingForWorkerLabel ?? 'Waiting for worker…',
         turnFailedMessage: config.turnFailedMessage ?? 'Turn failed',
         connectionLostMessage: config.connectionLostMessage ?? 'Connection lost. Please try again.',
@@ -1416,12 +1420,14 @@
         },
 
         stopStreaming() {
-            if (this.activeTurnId) {
-                this.$wire.cancelActiveTurn(this.activeTurnId);
-            }
-            this.finalizeTurnStream();
             this.pendingMessage = null;
-            this.streamEntries = [];
+
+            if (!this.activeTurnId) {
+                return;
+            }
+
+            this.turnLabel = this.stoppingLabel;
+            this.$wire.cancelActiveTurn(this.activeTurnId);
         },
 
         scrollToBottom(container) {

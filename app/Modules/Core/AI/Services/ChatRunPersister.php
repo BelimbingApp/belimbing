@@ -53,9 +53,13 @@ class ChatRunPersister
 
             public string $thinkingContent = '';
 
+            public string $streamedContent = '';
+
             public string $fullContent = '';
 
             public bool $hadError = false;
+
+            public ?string $stopNote = null;
 
             /** @var array<string, mixed> */
             public array $usageMeta = [];
@@ -67,10 +71,16 @@ class ChatRunPersister
         }
 
         $this->flushPendingThinking($mm, $employeeId, $sessionId, $state);
+        $assistantContent = $this->resolvedAssistantContent($state);
 
-        if (! $state->hadError && $state->fullContent !== '' && $state->runId !== null) {
+        if (! $state->hadError && ($assistantContent !== '' || $state->stopNote !== null) && $state->runId !== null) {
             $meta = array_merge($state->usageMeta, $extraMeta);
-            $mm->appendAssistantMessage($employeeId, $sessionId, $state->fullContent, $state->runId, $meta);
+
+            if ($state->stopNote !== null) {
+                $meta['stop_note'] = $state->stopNote;
+            }
+
+            $mm->appendAssistantMessage($employeeId, $sessionId, $assistantContent, $state->runId, $meta);
         }
     }
 
@@ -82,6 +92,7 @@ class ChatRunPersister
      *     thinkingContent: string,
      *     fullContent: string,
      *     hadError: bool,
+     *     stopNote: ?string,
      *     usageMeta: array<string, mixed>
      * }  $state
      */
@@ -101,8 +112,10 @@ class ChatRunPersister
             TurnEventType::ToolStarted => $this->materializeToolStarted($mm, $employeeId, $sessionId, $payload, $state),
             TurnEventType::ToolFinished => $this->materializeToolFinished($mm, $employeeId, $sessionId, $payload, $state),
             TurnEventType::ToolDenied => $this->materializeToolDenied($mm, $employeeId, $sessionId, $payload, $state),
+            TurnEventType::AssistantOutputDelta => $this->materializeOutputDelta($payload, $state),
             TurnEventType::AssistantOutputBlockCommitted => $this->materializeOutputCommitted($payload, $state),
             TurnEventType::UsageUpdated => $this->materializeUsageUpdated($payload, $state),
+            TurnEventType::TurnCancelled => $this->materializeTurnCancelled($payload, $state),
             TurnEventType::TurnFailed => $this->materializeTurnFailed($turn, $mm, $employeeId, $sessionId, $payload, $state),
             default => null,
         };
@@ -246,6 +259,15 @@ class ChatRunPersister
 
     /**
      * @param  array<string, mixed>  $payload
+     * @param  object{streamedContent: string}  $state
+     */
+    private function materializeOutputDelta(array $payload, object $state): void
+    {
+        $state->streamedContent .= (string) ($payload['delta'] ?? '');
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
      * @param  object{fullContent: string}  $state
      */
     private function materializeOutputCommitted(array $payload, object $state): void
@@ -260,6 +282,19 @@ class ChatRunPersister
     private function materializeUsageUpdated(array $payload, object $state): void
     {
         $state->usageMeta['tokens'] = $payload;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{stopNote: ?string}  $state
+     */
+    private function materializeTurnCancelled(array $payload, object $state): void
+    {
+        $reason = (string) ($payload['reason'] ?? '');
+
+        if (str_starts_with($reason, 'User cancelled')) {
+            $state->stopNote = __('You stopped this run before it finished.');
+        }
     }
 
     /**
@@ -287,5 +322,23 @@ class ChatRunPersister
             $state->runId ?? $turn->current_run_id ?? 'run_unknown',
             $errorMeta,
         );
+    }
+
+    /**
+     * Resolve the best assistant content captured during the turn.
+     *
+     * Uses the committed block when present; otherwise falls back to the
+     * accumulated output deltas so cancelled turns still preserve partial
+     * responses already shown to the user.
+     *
+     * @param  object{fullContent: string, streamedContent: string}  $state
+     */
+    private function resolvedAssistantContent(object $state): string
+    {
+        if ($state->fullContent !== '') {
+            return $state->fullContent;
+        }
+
+        return $state->streamedContent;
     }
 }
