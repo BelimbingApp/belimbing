@@ -99,55 +99,19 @@
             </thead>
             <tbody class="bg-surface-card divide-y divide-border-default">
                 @forelse($rows as $row)
-                    <tr wire:key="row-{{ $loop->index }}" class="hover:bg-surface-subtle/50 transition-colors">
+                    <tr wire:key="{{ $this->rowKey($row, $loop->index) }}" class="hover:bg-surface-subtle/50 transition-colors">
                         @foreach($columns as $col)
                             @php
                                 $value = data_get((array) $row, $col['name']);
                                 $formatted = $this->formatCell($value, $col['type_name']);
                                 $isLong = $value !== null && mb_strlen((string) $value) > 120;
                                 $outgoingFk = collect($foreignKeys['outgoing'])->firstWhere('column', $col['name']);
-                                $isTimestamp = $value !== null && (
-                                    str_contains(strtolower($col['type_name']), 'timestamp')
-                                    || str_contains(strtolower($col['type_name']), 'datetime')
-                                );
+                                $isTimestamp = $value !== null && $this->isTimestampType($col['type_name']);
+                                $timestampIso = $isTimestamp ? $this->timestampIso($value) : null;
                             @endphp
                             <td
                                 class="px-table-cell-x py-table-cell-y text-sm font-mono whitespace-nowrap {{ $value === null ? 'text-muted' : 'text-ink' }}"
                                 @if($isLong) title="{{ Str::limit((string) $value, 500) }}" @endif
-                                @if($isTimestamp)
-                                    x-data
-                                    x-effect="
-                                        if (tableTzMode !== 'utc') {
-                                            const el = $el;
-                                            const text = el.getAttribute('data-raw') || el.textContent;
-                                            if (!el.getAttribute('data-raw')) el.setAttribute('data-raw', text);
-                                            const locale = {{ \Illuminate\Support\Js::from($localeContext->forIntl()) }};
-                                            const tz = tableTzMode === 'company'
-                                                ? ({{ \Illuminate\Support\Js::from($companyTimezone) }} || 'UTC')
-                                                : undefined;
-                                            const formatter = new Intl.DateTimeFormat(locale || undefined, {
-                                                year: 'numeric',
-                                                month: '2-digit',
-                                                day: '2-digit',
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                                timeZone: tz,
-                                            });
-                                            try {
-                                                const raw = text.trim();
-                                                const hasTz = /Z|[+-]\d{2}:\d{2}$/.test(raw);
-                                                const iso = hasTz ? raw : (raw.includes('T') ? `${raw}Z` : `${raw.replace(' ', 'T')}Z`);
-                                                const d = new Date(iso);
-                                                if (!Number.isNaN(d.getTime())) {
-                                                    el.textContent = formatter.format(d);
-                                                }
-                                            } catch (e) {}
-                                        } else {
-                                            const raw = $el.getAttribute('data-raw');
-                                            if (raw) $el.textContent = raw;
-                                        }
-                                    "
-                                @endif
                             >
                                 @if($outgoingFk && $value !== null)
                                     <a
@@ -155,9 +119,59 @@
                                         wire:navigate
                                         class="text-link hover:underline"
                                         title="{{ __('View in :table', ['table' => $outgoingFk['foreign_table']]) }}"
-                                    >{{ $formatted }}</a>
+                                    >
+                                        @if($isTimestamp && $timestampIso !== null)
+                                            <time
+                                                datetime="{{ $timestampIso }}"
+                                                data-format="datetime"
+                                                data-locale="{{ $localeContext->forIntl() }}"
+                                                data-company-timezone="{{ $companyTimezone }}"
+                                                data-raw-text="{{ (string) $value }}"
+                                                x-data
+                                                x-init="
+                                                    const apply = () => {
+                                                        if (window.blbMountDateTimeElement) {
+                                                            window.blbMountDateTimeElement($el, () => ({ mode: tableTzMode }));
+                                                            return;
+                                                        }
+
+                                                        requestAnimationFrame(apply);
+                                                    };
+
+                                                    apply();
+                                                "
+                                                x-effect="window.blbFormatDateTimeElement?.($el, { mode: tableTzMode })"
+                                            >{{ $formatted }}</time>
+                                        @else
+                                            {{ $formatted }}
+                                        @endif
+                                    </a>
                                 @else
-                                    {{ $formatted }}
+                                    @if($isTimestamp && $timestampIso !== null)
+                                        <time
+                                            datetime="{{ $timestampIso }}"
+                                            data-format="datetime"
+                                            data-locale="{{ $localeContext->forIntl() }}"
+                                            data-company-timezone="{{ $companyTimezone }}"
+                                            data-raw-text="{{ (string) $value }}"
+                                            x-data
+                                            x-init="
+                                                const apply = () => {
+                                                    if (window.blbMountDateTimeElement) {
+                                                        window.blbMountDateTimeElement($el, () => ({ mode: tableTzMode }));
+                                                        return;
+                                                    }
+
+                                                    requestAnimationFrame(apply);
+                                                };
+
+                                                apply();
+                                            "
+                                            x-effect="window.blbFormatDateTimeElement?.($el, { mode: tableTzMode })"
+                                        >{{ $formatted }}</time>
+                                    @else
+                                        {{ $formatted }}
+                                    @endif
                                 @endif
                             </td>
                         @endforeach

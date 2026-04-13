@@ -9,6 +9,7 @@ use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\TableInspector;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Support\Str as BlbStr;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
@@ -173,6 +174,48 @@ class Show extends Component
         $stringValue = (string) $value;
 
         return BlbStr::preview($stringValue, self::MAX_CELL_LENGTH);
+    }
+
+    /**
+     * Check whether the column type should be treated as a timezone-aware datetime.
+     */
+    public function isTimestampType(string $typeName): bool
+    {
+        $normalized = strtolower($typeName);
+
+        return str_contains($normalized, 'timestamp') || str_contains($normalized, 'datetime');
+    }
+
+    /**
+     * Normalize a raw database timestamp/datetime value to a UTC ISO string.
+     */
+    public function timestampIso(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return CarbonImmutable::parse((string) $value, 'UTC')
+            ->utc()
+            ->toIso8601String();
+    }
+
+    /**
+     * Build a stable row key from the row payload instead of loop position.
+     *
+     * Sorting can reorder rows while keeping the same loop indexes. Keying by
+     * index lets Livewire reuse DOM nodes for different records, which breaks
+     * client-side datetime formatting hooks that depend on the row payload.
+     */
+    public function rowKey(mixed $row, int $index): string
+    {
+        $encoded = json_encode((array) $row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if ($encoded === false) {
+            return 'row-'.$index;
+        }
+
+        return 'row-'.md5($encoded);
     }
 
     /**

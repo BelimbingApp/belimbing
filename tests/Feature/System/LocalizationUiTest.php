@@ -3,10 +3,12 @@
 use App\Base\Locale\Contracts\LocaleContext;
 use App\Base\Locale\Enums\LocaleSource;
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\DTO\Scope;
 use App\Base\System\Livewire\Localization\Index as LocalizationIndex;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Geonames\Models\Country;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 
@@ -16,11 +18,15 @@ const FEATURE_LOCALE_SETTINGS_KEY = 'ui.locale';
 const FEATURE_LOCALE_SOURCE_SETTINGS_KEY = 'ui.locale_source';
 const FEATURE_LOCALE_CONFIRMED_AT_SETTINGS_KEY = 'ui.locale_confirmed_at';
 const FEATURE_LOCALE_INFERRED_COUNTRY_SETTINGS_KEY = 'ui.locale_inferred_country';
+const FEATURE_TIMEZONE_DEFAULT_SETTINGS_KEY = 'ui.timezone.default';
+const FEATURE_TIMEZONE_MODE_SETTINGS_KEY = 'ui.timezone.mode';
+const FEATURE_TIMEZONE_KUALA_LUMPUR = 'Asia/Kuala_Lumpur';
 
 beforeEach(function (): void {
     config(['settings.cache_ttl' => 0]);
     setupAuthzRoles();
-    $this->actingAs(createAdminUser());
+    $this->user = createAdminUser();
+    $this->actingAs($this->user);
     $this->settings = app(SettingsService::class);
 });
 
@@ -118,4 +124,51 @@ it('clears the status-bar warning after the locale is confirmed', function (): v
     $response->assertOk()
         ->assertDontSee('Locale inferred: en-MY')
         ->assertDontSee('Locale not confirmed');
+});
+
+it('renders the preview using the resolved company timezone', function (): void {
+    $sample = CarbonImmutable::parse('2026-04-13 20:15:00', 'UTC');
+    $this->travelTo($sample);
+
+    $this->settings->set(
+        FEATURE_TIMEZONE_DEFAULT_SETTINGS_KEY,
+        FEATURE_TIMEZONE_KUALA_LUMPUR,
+        Scope::company($this->user->company_id),
+    );
+
+    $expectedDateTime = (new IntlDateFormatter(
+        'en-MY',
+        IntlDateFormatter::SHORT,
+        IntlDateFormatter::SHORT,
+        FEATURE_TIMEZONE_KUALA_LUMPUR,
+    ))->format($sample->getTimestamp());
+
+    $html = Livewire::test(LocalizationIndex::class)
+        ->set('selectedLocale', 'en-MY')
+        ->html();
+
+    expect($html)->toContain((string) $expectedDateTime);
+
+    $this->travelBack();
+});
+
+it('renders browser-side preview hooks when timezone mode is local', function (): void {
+    $sample = CarbonImmutable::parse('2026-04-13 20:15:00', 'UTC');
+    $this->travelTo($sample);
+
+    $this->settings->set(FEATURE_TIMEZONE_MODE_SETTINGS_KEY, 'local');
+
+    $html = Livewire::test(LocalizationIndex::class)
+        ->set('selectedLocale', 'en-MY')
+        ->html();
+
+    expect($html)
+        ->toContain('data-format="date"')
+        ->toContain('data-format="time"')
+        ->toContain('data-format="datetime"')
+        ->toContain('data-locale="en-MY"')
+        ->toContain('datetime="')
+        ->toContain('window.blbFormatDateTimeElement?.($el)');
+
+    $this->travelBack();
 });

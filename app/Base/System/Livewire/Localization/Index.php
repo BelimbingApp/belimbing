@@ -6,11 +6,13 @@
 namespace App\Base\System\Livewire\Localization;
 
 use App\Base\DateTime\Contracts\DateTimeDisplayService;
+use App\Base\DateTime\Enums\TimezoneMode;
 use App\Base\Locale\Contracts\LicenseeLocaleBootstrapSource;
 use App\Base\Locale\Contracts\LocaleContext;
 use App\Base\Locale\Enums\LocaleSource;
 use App\Base\Locale\Services\LocaleCatalog;
 use App\Base\Settings\Contracts\SettingsService;
+use Carbon\CarbonInterface;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Number;
 use Illuminate\Validation\Rule;
@@ -98,13 +100,16 @@ class Index extends Component
         $previewLocale = $catalog->normalize($this->selectedLocale) ?? $state->locale;
         $intlLocale = $previewLocale;
         $numberLocale = str_replace('-', '_', $previewLocale);
-        $sampleTimestamp = now()->getTimestamp();
+        $sample = now();
         $bootstrap = $bootstrapSource->resolve();
         $persistedCurrency = $settings->get(self::SETTINGS_KEY_CURRENCY);
         $currencyCode = $persistedCurrency
             ?: ($bootstrap?->currencyCode ?: config('locale.sample_currency', 'USD'));
         $companyTimezone = $dateTimeDisplay->currentCompanyTimezone();
         $companyTimezoneExplicit = $dateTimeDisplay->isCompanyTimezoneExplicit();
+        $previewMode = $dateTimeDisplay->currentMode();
+        $previewTimezone = $dateTimeDisplay->currentTimezone();
+        $localPreview = $previewMode === TimezoneMode::LOCAL;
 
         return view('livewire.admin.system.localization.index', [
             'current' => [
@@ -119,12 +124,15 @@ class Index extends Component
             'preview' => [
                 'locale' => $previewLocale,
                 'label' => $catalog->label($previewLocale),
-                'date' => $this->intlFormat($intlLocale, IntlDateFormatter::SHORT, IntlDateFormatter::NONE, $sampleTimestamp),
-                'time' => $this->intlFormat($intlLocale, IntlDateFormatter::NONE, IntlDateFormatter::SHORT, $sampleTimestamp),
-                'datetime' => $this->intlFormat($intlLocale, IntlDateFormatter::SHORT, IntlDateFormatter::SHORT, $sampleTimestamp),
+                'date' => $this->intlFormat($intlLocale, IntlDateFormatter::SHORT, IntlDateFormatter::NONE, $sample, $previewTimezone),
+                'time' => $this->intlFormat($intlLocale, IntlDateFormatter::NONE, IntlDateFormatter::SHORT, $sample, $previewTimezone),
+                'datetime' => $this->intlFormat($intlLocale, IntlDateFormatter::SHORT, IntlDateFormatter::SHORT, $sample, $previewTimezone),
                 'number' => (string) Number::format(1234567.89, precision: 2, locale: $numberLocale),
                 'currency' => (string) Number::currency(1234.56, strtoupper($currencyCode), locale: $numberLocale),
                 'currency_code' => $currencyCode,
+                'sample_iso' => $sample->utc()->toIso8601String(),
+                'timezone_mode' => $previewMode->value,
+                'local_mode' => $localPreview,
             ],
             'context' => [
                 'company_timezone' => $companyTimezone,
@@ -143,10 +151,15 @@ class Index extends Component
     /**
      * Format a timestamp using ICU IntlDateFormatter.
      */
-    private function intlFormat(string $locale, int $dateType, int $timeType, int $timestamp): string
-    {
-        $formatter = new IntlDateFormatter($locale, $dateType, $timeType);
-        $result = $formatter->format($timestamp);
+    private function intlFormat(
+        string $locale,
+        int $dateType,
+        int $timeType,
+        CarbonInterface $sample,
+        string $timezone,
+    ): string {
+        $formatter = new IntlDateFormatter($locale, $dateType, $timeType, $timezone);
+        $result = $formatter->format($sample->getTimestamp());
 
         return $result !== false ? $result : '—';
     }

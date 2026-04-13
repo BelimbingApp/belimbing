@@ -67,15 +67,87 @@
                 <dl class="space-y-2 text-sm">
                     <div class="flex items-center justify-between gap-4">
                         <dt class="text-muted">{{ __('Date') }}</dt>
-                        <dd class="tabular-nums text-ink">{{ $preview['date'] }}</dd>
+                        <dd class="tabular-nums text-ink">
+                            @if ($preview['local_mode'])
+                                <time
+                                    datetime="{{ $preview['sample_iso'] }}"
+                                    data-format="date"
+                                    data-locale="{{ $preview['locale'] }}"
+                                    x-data
+                                    x-init="
+                                        const apply = () => {
+                                            if (window.blbMountDateTimeElement) {
+                                                window.blbMountDateTimeElement($el, () => ({}));
+                                                return;
+                                            }
+
+                                            requestAnimationFrame(apply);
+                                        };
+
+                                        apply();
+                                    "
+                                    x-effect="window.blbFormatDateTimeElement?.($el)"
+                                >{{ $preview['date'] }}</time>
+                            @else
+                                {{ $preview['date'] }}
+                            @endif
+                        </dd>
                     </div>
                     <div class="flex items-center justify-between gap-4">
                         <dt class="text-muted">{{ __('Time') }}</dt>
-                        <dd class="tabular-nums text-ink">{{ $preview['time'] }}</dd>
+                        <dd class="tabular-nums text-ink">
+                            @if ($preview['local_mode'])
+                                <time
+                                    datetime="{{ $preview['sample_iso'] }}"
+                                    data-format="time"
+                                    data-locale="{{ $preview['locale'] }}"
+                                    x-data
+                                    x-init="
+                                        const apply = () => {
+                                            if (window.blbMountDateTimeElement) {
+                                                window.blbMountDateTimeElement($el, () => ({}));
+                                                return;
+                                            }
+
+                                            requestAnimationFrame(apply);
+                                        };
+
+                                        apply();
+                                    "
+                                    x-effect="window.blbFormatDateTimeElement?.($el)"
+                                >{{ $preview['time'] }}</time>
+                            @else
+                                {{ $preview['time'] }}
+                            @endif
+                        </dd>
                     </div>
                     <div class="flex items-center justify-between gap-4">
                         <dt class="text-muted">{{ __('Datetime') }}</dt>
-                        <dd class="tabular-nums text-ink">{{ $preview['datetime'] }}</dd>
+                        <dd class="tabular-nums text-ink">
+                            @if ($preview['local_mode'])
+                                <time
+                                    datetime="{{ $preview['sample_iso'] }}"
+                                    data-format="datetime"
+                                    data-locale="{{ $preview['locale'] }}"
+                                    x-data
+                                    x-init="
+                                        const apply = () => {
+                                            if (window.blbMountDateTimeElement) {
+                                                window.blbMountDateTimeElement($el, () => ({}));
+                                                return;
+                                            }
+
+                                            requestAnimationFrame(apply);
+                                        };
+
+                                        apply();
+                                    "
+                                    x-effect="window.blbFormatDateTimeElement?.($el)"
+                                >{{ $preview['datetime'] }}</time>
+                            @else
+                                {{ $preview['datetime'] }}
+                            @endif
+                        </dd>
                     </div>
                     <div class="flex items-center justify-between gap-4">
                         <dt class="text-muted">{{ __('Number') }}</dt>

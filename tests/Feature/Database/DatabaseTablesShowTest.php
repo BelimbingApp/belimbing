@@ -40,3 +40,12 @@ test('database table show page renders outgoing and incoming relationships', fun
         ->assertSee('user_pins')
         ->assertSee('user_database_queries');
 });
+
+test('database table show page marks timestamp columns with shared timezone-aware rendering hooks', function (): void {
+    $response = $this->get(route('admin.system.database-tables.show', USERS_TABLE_NAME));
+
+    $response->assertOk()
+        ->assertSee('data-company-timezone=', false)
+        ->assertSee('data-raw-text=', false)
+        ->assertSee('window.blbFormatDateTimeElement?.($el, { mode: tableTzMode })', false);
+});

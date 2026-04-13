@@ -1,9 +1,9 @@
 # Timezone Display Architecture
 
 **Document Type:** Architecture Specification
-**Status:** Proposed
-**Last Updated:** 2026-03-29
-**Related:** `docs/architecture/settings.md`, `docs/architecture/user-employee-company.md`, `docs/modules/geonames/cities-integration-review.md`
+**Status:** Implemented
+**Last Updated:** 2026-04-13
+**Related:** `docs/architecture/settings.md`, `docs/architecture/user-employee-company.md`, `docs/modules/geonames/cities-integration-review.md`, `docs/plans/locale-timezone-consolidation.md`
 
 ---
 
@@ -131,19 +131,68 @@ That layer should support:
 - time-only rendering
 - timezone badge or label rendering where useful
 
-### 7.1 Local Mode Implementation
+### 7.1 Implemented Contract
 
-For `Company` and `UTC` modes, the PHP `DateTimeDisplayService` renders the formatted string server-side — it knows the company timezone from the stored setting.
+BLB now treats timezone-aware datetime rendering as a two-part contract:
 
-For `Local` mode, the server cannot know the browser's IANA timezone. Instead:
+- **Policy owner:** `DateTimeDisplayService`
+- **Rendering primitive:** `<x-ui.datetime>` for ordinary field rendering
 
-- The PHP service emits a UTC ISO-8601 value in a `datetime` attribute on a Blade component (e.g., `<x-ui.datetime>`).
-- A thin Alpine.js `x-effect` on that component formats the value using the browser's `Intl.DateTimeFormat`.
-- The PHP service still owns the **policy** (which mode is active); only `Local` delegates the **formatting** to the browser.
+`DateTimeDisplayService` owns:
 
-This avoids cookie/header gymnastics, stays within the TALL stack, and keeps the PHP service as the single policy owner. No mixed model — every datetime goes through the same Blade component regardless of mode.
+- active timezone mode resolution (`company|local|utc`)
+- company timezone resolution
+- locale-aware server formatting for `Company`
+- stable raw formatting for `UTC`
 
-### 7.2 Surfaces Covered
+`<x-ui.datetime>` owns:
+
+- emitting canonical markup for timezone-aware values
+- delegating browser-local rendering to the shared client formatter when `Local` mode is active
+
+This keeps timezone resolution centralized while giving the browser responsibility only where it has unique knowledge.
+
+### 7.2 Canonical Markup Contract
+
+Timezone-aware datetime elements should carry canonical UTC source values in markup:
+
+- `datetime="<utc-iso>"`
+- `data-format="date|time|datetime"`
+- `data-locale="<bcp47-locale>"`
+
+Optional metadata may be added only when a specialized surface genuinely needs it, for example a company timezone hint for a client-side company/local toggle.
+
+This distinction matters:
+
+- **timezone-aware business datetimes** opt into the contract above
+- **raw stored values or plain text** do not implicitly become timezone-aware just because they resemble a timestamp
+
+### 7.3 Client-Side Rendering Scope
+
+Client-side rendering is not the universal path.
+
+- `Company` mode: server-rendered through `DateTimeDisplayService`
+- `UTC` mode: server-rendered through `DateTimeDisplayService`
+- `Local` mode: browser-rendered from canonical UTC markup via `Intl.DateTimeFormat`
+
+That boundary is intentional:
+
+- browser knowledge is only required for `Local`
+- search/filter/export and other stable-text surfaces should not depend on unnecessary client formatting
+- the system avoids a mixed policy model where each caller decides timezone behavior independently
+
+### 7.4 Shared Browser Formatter
+
+When browser formatting is required, pages should reuse the shared formatter in `resources/core/js/app.js` rather than embedding ad hoc `Intl.DateTimeFormat` snippets.
+
+Implemented shared helpers:
+
+- `window.blbFormatDateTimeElement(...)` for timezone-aware elements carrying canonical UTC markup
+- `window.blbFormatDateTimeMatches(...)` for specialized text surfaces that need timestamp replacement inside larger strings
+
+Specialized surfaces may still present datetimes differently, but they should reuse these shared helpers rather than reimplement timezone logic inline.
+
+### 7.5 Surfaces Covered
 
 The selected timezone mode should apply consistently across:
 
@@ -154,7 +203,7 @@ The selected timezone mode should apply consistently across:
 - piecemeal date and time fragments
 - reusable UI components
 
-### 7.3 Surfaces to Avoid
+### 7.6 Intentional Exceptions
 
 Avoid a mixed model where:
 
@@ -163,6 +212,8 @@ Avoid a mixed model where:
 - some components silently use company timezone
 
 That inconsistency would create a confusing user experience and make support harder.
+
+One current intentional exception is relative-time workflow/status history, where the primary UX contract is `diffForHumans()` rather than absolute timezone-aware field rendering. Those surfaces should be documented explicitly when they diverge.
 
 ---
 
@@ -221,9 +272,9 @@ The actual key names can be finalized during implementation, but the conceptual 
 
 ## 10. Public Interface Direction
 
-The implementation should converge on a simple formatting interface that hides timezone resolution.
+The public interface should stay simple and keep timezone resolution hidden from callers.
 
-Possible shape:
+Current shape:
 
 ```php
 interface DateTimeDisplayService
@@ -237,13 +288,16 @@ interface DateTimeDisplayService
     public function currentMode(): string;
 
     public function currentTimezone(): string;
+
+    public function currentCompanyTimezone(): string;
 }
 ```
 
-The exact interface can vary, but the important part is architectural:
+The important part is architectural:
 
 - callers should ask for formatted output
 - callers should not each resolve timezone rules independently
+- callers should not hand-roll browser-local formatting unless they are implementing a documented specialized surface on top of the shared client formatter
 
 ---
 
@@ -257,7 +311,16 @@ The exact interface can vary, but the important part is architectural:
 
 ---
 
-## 12. Implementation Sequence
+## 12. Implementation Notes
+
+Implemented convergence points:
+
+- most ordinary field rendering now flows through `<x-ui.datetime>`
+- Localization preview reuses the shared browser formatter for `Local` mode while still previewing a synthetic sample value
+- DB Tables uses canonical UTC markup plus the shared browser formatter for timezone-aware columns, while preserving raw values for non-timezone-aware cells
+- Log Viewer uses the shared text formatter for inline timestamp replacement inside log lines
+
+The plan doc remains the source for delivery history and incremental follow-up work, but this architecture document is the durable SSOT for the rendering contract.
 
 Recommended order:
 

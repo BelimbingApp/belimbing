@@ -32,15 +32,19 @@
     <time
         {{ $attributes->merge(['datetime' => $iso, 'data-format' => $format, 'data-locale' => $localeContext->forIntl()]) }}
         x-data
-        x-effect="
-            const d = new Date($el.getAttribute('datetime'));
-            const opts = {
-                datetime: { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' },
-                date: { year: 'numeric', month: '2-digit', day: '2-digit' },
-                time: { hour: '2-digit', minute: '2-digit' },
-            }[$el.dataset.format] || { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
-            $el.textContent = new Intl.DateTimeFormat($el.dataset.locale || undefined, opts).format(d);
+        x-init="
+            const apply = () => {
+                if (window.blbMountDateTimeElement) {
+                    window.blbMountDateTimeElement($el, () => ({}));
+                    return;
+                }
+
+                requestAnimationFrame(apply);
+            };
+
+            apply();
         "
+        x-effect="window.blbFormatDateTimeElement?.($el)"
     >{{ $formatted }}</time>
 @else
     <time {{ $attributes->merge(['datetime' => $iso]) }}>{{ $formatted }}</time>

@@ -193,37 +193,35 @@
                                     <td
                                         class="px-3 py-0.5 text-ink whitespace-pre-wrap break-all"
                                         x-data
+                                        x-init="
+                                            const apply = () => {
+                                                const text = $el.getAttribute('data-raw') || $el.textContent;
+                                                if (!$el.getAttribute('data-raw')) $el.setAttribute('data-raw', text);
+
+                                                if (window.blbFormatDateTimeMatches) {
+                                                    $el.textContent = window.blbFormatDateTimeMatches(text, {
+                                                        locale: {{ \Illuminate\Support\Js::from($localeContext->forIntl()) }},
+                                                        mode: logTzMode,
+                                                        companyTimezone: {{ \Illuminate\Support\Js::from($companyTimezone) }},
+                                                        includeSeconds: true,
+                                                    });
+                                                    return;
+                                                }
+
+                                                requestAnimationFrame(apply);
+                                            };
+
+                                            apply();
+                                        "
                                         x-effect="
-                                            if (logTzMode !== 'utc') {
-                                                const el = $el;
-                                                const text = el.getAttribute('data-raw') || el.textContent;
-                                                if (!el.getAttribute('data-raw')) el.setAttribute('data-raw', text);
-                                                const locale = {{ \Illuminate\Support\Js::from($localeContext->forIntl()) }};
-                                                const tz = logTzMode === 'company'
-                                                    ? ({{ \Illuminate\Support\Js::from($companyTimezone) }} || 'UTC')
-                                                    : undefined;
-                                                const formatter = new Intl.DateTimeFormat(locale || undefined, {
-                                                    year: 'numeric',
-                                                    month: '2-digit',
-                                                    day: '2-digit',
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                    second: '2-digit',
-                                                    timeZone: tz,
-                                                });
-                                                el.textContent = text.replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?/g, (m) => {
-                                                    try {
-                                                        const hasTz = /Z|[+-]\d{2}:\d{2}$/.test(m);
-                                                        const iso = hasTz ? m : (m.includes('T') ? `${m}Z` : `${m.replace(' ', 'T')}Z`);
-                                                        const d = new Date(iso);
-                                                        if (Number.isNaN(d.getTime())) return m;
-                                                        return formatter.format(d);
-                                                    } catch (e) { return m; }
-                                                });
-                                            } else {
-                                                const raw = $el.getAttribute('data-raw');
-                                                if (raw) $el.textContent = raw;
-                                            }
+                                            const text = $el.getAttribute('data-raw') || $el.textContent;
+                                            if (!$el.getAttribute('data-raw')) $el.setAttribute('data-raw', text);
+                                            $el.textContent = window.blbFormatDateTimeMatches?.(text, {
+                                                locale: {{ \Illuminate\Support\Js::from($localeContext->forIntl()) }},
+                                                mode: logTzMode,
+                                                companyTimezone: {{ \Illuminate\Support\Js::from($companyTimezone) }},
+                                                includeSeconds: true,
+                                            }) ?? text;
                                         "
                                     >{{ $line['content'] }}</td>
                                 </tr>
