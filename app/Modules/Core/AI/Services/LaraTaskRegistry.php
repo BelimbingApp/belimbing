@@ -38,7 +38,7 @@ class LaraTaskRegistry
                 type: LaraTaskType::Agentic,
                 description: 'Handle code-focused work such as debugging, editing, and terminal-driven implementation.',
                 workloadDescription: 'Multi-step code and CLI work with tool use, careful instruction-following, and robust editing/debugging behavior. Prefer models suited to coding agents.',
-                runtimeReady: false,
+                runtimeReady: true,
             ),
         ];
     }

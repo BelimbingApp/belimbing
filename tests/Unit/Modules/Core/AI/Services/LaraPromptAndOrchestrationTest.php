@@ -185,7 +185,7 @@ it('queues delegation to the best matched agent', function (): void {
         ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('op_');
 });
 
-it('returns no_agents status when no delegated agents are available', function (): void {
+it('falls back to Lara coding task profile when no delegated agents are available', function (): void {
     $fixture = $this->createLaraFixture();
     $this->actingAs($fixture['user']);
 
@@ -193,5 +193,7 @@ it('returns no_agents status when no delegated agents are available', function (
     $result = $service->dispatchFromMessage('/delegate create dashboard page');
 
     expect($result)->not->toBeNull()
-        ->and($result['meta']['orchestration']['status'])->toBe('no_agents');
+        ->and($result['meta']['orchestration']['status'])->toBe('queued')
+        ->and($result['meta']['orchestration']['selected_task_profile']['task_key'])->toBe('coding')
+        ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('op_');
 });

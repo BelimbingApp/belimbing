@@ -34,7 +34,7 @@ Both patterns share the same config shape (mode + provider/model per task) and t
 - Recommendation never creates or persists an unknown provider/model pair. BLB only accepts a recommendation that resolves to an active connected model for the licensee company.
 - Recommendation is on-demand, not re-evaluated automatically at task runtime. Once saved, the task keeps using the stored choice until the user refreshes or changes it.
 - Task config is persisted in Lara's workspace `config.json` alongside `llm.models[]`. Each task entry carries `mode` (`primary`, `recommended`, or `manual`), and for `recommended`/`manual` modes a stable saved `provider`/`model` pair plus an optional `reason` string for UI display.
-- The initial shipped UI exposes `Titling`, `Research`, and `Coding` together on the dedicated Task Models page. `titling` is fully wired (simple task). `Research` and `Coding` are configurable but their agentic execution profiles are not yet implemented; the UI should communicate this clearly (e.g., "Model configured — sub-agent runtime pending").
+- The initial shipped UI exposes `Titling`, `Research`, and `Coding` together on the dedicated Task Models page. `titling` is fully wired (simple task). `coding` is now wired as the first Lara agentic execution profile for delegated background work. `research` remains configurable but its agentic execution profile is still follow-up work; the UI should communicate that clearly.
 - Agentic task execution profiles (system prompt template, tool set, iteration limits) are framework-defined and versioned with BLB, not user-configurable. They live in the codebase (e.g., `app/Modules/Core/AI/Resources/tasks/`), not in workspace config. Users only configure model selection per task.
 
 ## Top-Level Components
@@ -105,7 +105,7 @@ Primary/Backup and activation stay on the Lara page. Task-specific model configu
 
 ### D5: Ship all three minimum tasks together, wire titling first
 
-There is no product reason to defer `research` and `coding` if the information architecture, resolver, and recommendation flow already need to support named task profiles. The first implementation should ship `Titling`, `Research`, and `Coding` together so the user sees the real task-model concept immediately rather than a partial placeholder. However, only `titling` (a simple task) is fully wired in the initial delivery. `coding` and `research` (agentic tasks) are configurable — model selection works, recommendation works — but their sub-agent execution profiles and runtime delegation are follow-up work. The UI communicates this distinction honestly.
+There is no product reason to defer `research` and `coding` if the information architecture, resolver, and recommendation flow already need to support named task profiles. The first implementation should ship `Titling`, `Research`, and `Coding` together so the user sees the real task-model concept immediately rather than a partial placeholder. `titling` (a simple task) is fully wired, and `coding` is the first wired agentic task. `research` remains configurable — model selection works and recommendation works — but its sub-agent execution profile and runtime delegation are still follow-up work. The UI communicates this distinction honestly.
 
 ### D6: Recommendation should degrade safely
 
@@ -169,7 +169,7 @@ Sub-agents spawned for agentic tasks do not have employee records, separate pers
 - [x] Keep the Lara setup page focused on activation, Primary Model, and Backup Model
 - [x] Add a separate `Task Models` page and route with Lara activation guard semantics (menu-gated; direct visits show an activation-required notice)
 - [x] Add a new menu entry for `Task Models`, gated on Lara activation
-- [x] Expose task rows/cards for the minimum planned set: `Titling` (simple, fully wired), `Research` and `Coding` (agentic, model configured — sub-agent runtime pending)
+- [x] Expose task rows/cards for the minimum planned set: `Titling` (simple, fully wired), `Research` (agentic, runtime pending), and `Coding` (agentic, runtime wired)
 - [x] Build dedicated task-model state/persistence handling for `llm.tasks.*` with mode, provider, model, and reason
 - [x] Reuse the existing provider/model picker Blade partial for manual mode instead of inventing a new picker surface
 - [x] Show a compact task-model summary on the Lara page with a link to the dedicated page
@@ -184,12 +184,14 @@ Sub-agents spawned for agentic tasks do not have employee records, separate pers
 
 ### Phase 7 — Wire agentic task runtimes (follow-up)
 
-- [ ] Implement sub-agent execution profiles for `coding` and `research` (prompt templates, tool sets, constraints)
-- [ ] Add delegation flow: Lara recognizes a task-appropriate request, spawns a sub-agent via `AgenticRuntime` with the task's execution profile and configured model, and surfaces results in conversation
+- [x] Implement the first sub-agent execution profile for `coding` (prompt template, tool allowlist, background execution policy)
+- [x] Add the first delegation flow: when `/delegate` cannot route to a supervised agent, Lara falls back to the `coding` task profile via `AgenticRuntime` with the configured `llm.tasks.coding` model
+- [ ] Implement the `research` execution profile (prompt template, tool set, constraints)
+- [ ] Extend delegation flow so Lara can choose among multiple task profiles instead of falling back only to `coding`
 - [ ] Reroute current Kodi-targeting runtime call sites and ticket/delegation flows to Lara task/profile execution, then remove `Employee::KODI_ID` and any remaining Kodi-owned workspace/runtime assumptions
 - [ ] Define how sub-agent tool results and multi-step output are presented in Lara's chat thread
 - [ ] Add tests for sub-agent delegation, authorization scoping, and result surfacing
-- [ ] Update Task Models UI to reflect fully wired status for `coding` and `research`
+- [ ] Update Task Models UI to reflect fully wired status for `research`
 
 ### Future considerations
 

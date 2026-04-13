@@ -59,9 +59,20 @@ class AgenticRuntime
      * @param  string|null  $modelOverride  Optional model ID to override the resolved config
      * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
      * @param  string|null  $sessionId  Chat session ID for run ledger correlation
+     * @param  array<string, mixed>|null  $configOverride  Optional fully resolved config override
+     * @param  list<string>|null  $allowedToolNames  Optional task-profile tool allowlist
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
-    public function run(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null, ?ExecutionPolicy $policy = null, ?string $sessionId = null): array
+    public function run(
+        array $messages,
+        int $employeeId,
+        ?string $systemPrompt = null,
+        ?string $modelOverride = null,
+        ?ExecutionPolicy $policy = null,
+        ?string $sessionId = null,
+        ?array $configOverride = null,
+        ?array $allowedToolNames = null,
+    ): array
     {
         $runId = 'run_'.Str::random(12);
         $policy ??= ExecutionPolicy::interactive();
@@ -76,7 +87,9 @@ class AgenticRuntime
             timeoutSeconds: $policy->timeoutSeconds,
         ));
 
-        $configs = $this->configResolver->resolveWithDefaultFallback($employeeId);
+        $configs = $configOverride !== null
+            ? [$configOverride]
+            : $this->configResolver->resolveWithDefaultFallback($employeeId);
 
         if ($configs === []) {
             $configError = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
@@ -114,7 +127,15 @@ class AgenticRuntime
 
             $config['timeout'] = $policy->timeoutSeconds;
 
-            $result = $this->runToolCallingLoop($runId, $config, $credentials, $messages, $systemPrompt, $fallbackAttempts);
+            $result = $this->runToolCallingLoop(
+                $runId,
+                $config,
+                $credentials,
+                $messages,
+                $systemPrompt,
+                $fallbackAttempts,
+                $allowedToolNames,
+            );
             $result['meta']['fallback_attempts'] = $fallbackAttempts;
 
             $this->runRecorder->complete($runId, $result['meta']);
@@ -155,9 +176,21 @@ class AgenticRuntime
      * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
      * @param  string|null  $sessionId  Chat session ID for run ledger correlation
      * @param  string|null  $turnId  Chat turn ULID for linking the run to a turn
+     * @param  array<string, mixed>|null  $configOverride  Optional fully resolved config override
+     * @param  list<string>|null  $allowedToolNames  Optional task-profile tool allowlist
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
-    public function runStream(array $messages, int $employeeId, ?string $systemPrompt = null, ?string $modelOverride = null, ?ExecutionPolicy $policy = null, ?string $sessionId = null, ?string $turnId = null): \Generator
+    public function runStream(
+        array $messages,
+        int $employeeId,
+        ?string $systemPrompt = null,
+        ?string $modelOverride = null,
+        ?ExecutionPolicy $policy = null,
+        ?string $sessionId = null,
+        ?string $turnId = null,
+        ?array $configOverride = null,
+        ?array $allowedToolNames = null,
+    ): \Generator
     {
         $runId = 'run_'.Str::random(12);
         $policy ??= ExecutionPolicy::interactive();
@@ -173,7 +206,9 @@ class AgenticRuntime
             turnId: $turnId,
         ));
 
-        $configs = $this->configResolver->resolveWithDefaultFallback($employeeId);
+        $configs = $configOverride !== null
+            ? [$configOverride]
+            : $this->configResolver->resolveWithDefaultFallback($employeeId);
 
         if ($configs === []) {
             $error = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
@@ -218,7 +253,15 @@ class AgenticRuntime
 
             $config['timeout'] = $policy->timeoutSeconds;
 
-            yield from $this->runStreamingToolLoop($runId, $config, $credentials, $messages, $systemPrompt, $fallbackAttempts);
+            yield from $this->runStreamingToolLoop(
+                $runId,
+                $config,
+                $credentials,
+                $messages,
+                $systemPrompt,
+                $fallbackAttempts,
+                $allowedToolNames,
+            );
 
             return;
         }
@@ -280,6 +323,7 @@ class AgenticRuntime
      * @param  array{api_key: string, base_url: string}  $credentials
      * @param  list<Message>  $messages
      * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
+     * @param  list<string>|null  $allowedToolNames
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
     private function runToolCallingLoop(
@@ -289,6 +333,7 @@ class AgenticRuntime
         array $messages,
         ?string $systemPrompt,
         array &$fallbackAttempts,
+        ?array $allowedToolNames = null,
     ): array {
         $employeeId = (int) ($config['employee_id'] ?? 0);
 
@@ -296,7 +341,7 @@ class AgenticRuntime
         $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
 
         $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
-        $tools = $this->toolRegistry->toolDefinitionsForCurrentUser();
+        $tools = $this->toolRegistry->toolDefinitionsForCurrentUser($allowedToolNames);
 
         // Hook: PreToolRegistry — add/remove tools before the LLM sees them
         $originalToolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
@@ -360,7 +405,16 @@ class AgenticRuntime
             }
 
             $this->appendAssistantToolCallMessage($apiMessages, $result);
-            $this->executeToolCallsWithHooks($runId, $employeeId, $result['tool_calls'], $apiMessages, $toolActions, $clientActions, $hookMetadata);
+            $this->executeToolCallsWithHooks(
+                $runId,
+                $employeeId,
+                $result['tool_calls'],
+                $apiMessages,
+                $toolActions,
+                $clientActions,
+                $hookMetadata,
+                $allowedToolNames,
+            );
 
             $iteration++;
         }
@@ -475,18 +529,19 @@ class AgenticRuntime
      * metadata for downstream UI consumption.
      *
      * @param  array<string, mixed>  $toolCall
+     * @param  list<string>|null  $allowedToolNames
      * @return array{
      *     action: array{tool: string, arguments: array<string, mixed>, result_preview: string, error_payload?: array<string, mixed>},
      *     client_actions: list<string>,
      *     message: array{role: string, tool_call_id: string, content: string}
      * }
      */
-    private function executeToolCall(array $toolCall): array
+    private function executeToolCall(array $toolCall, ?array $allowedToolNames = null): array
     {
         $functionName = (string) ($toolCall['function']['name'] ?? '');
         $arguments = $this->decodeToolArguments($toolCall);
         $toolCallId = (string) ($toolCall['id'] ?? '');
-        $toolResult = $this->toolRegistry->execute($functionName, $arguments);
+        $toolResult = $this->toolRegistry->execute($functionName, $arguments, $allowedToolNames);
 
         return $this->buildToolExecution($functionName, $arguments, $toolCallId, $toolResult);
     }
@@ -612,6 +667,7 @@ class AgenticRuntime
      * @param  array{api_key: string, base_url: string}  $credentials
      * @param  list<Message>  $messages
      * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
+     * @param  list<string>|null  $allowedToolNames
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
     private function runStreamingToolLoop(
@@ -621,9 +677,10 @@ class AgenticRuntime
         array $messages,
         ?string $systemPrompt,
         array $fallbackAttempts,
+        ?array $allowedToolNames = null,
     ): \Generator {
         $employeeId = (int) ($config['employee_id'] ?? 0);
-        $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt);
+        $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt, $allowedToolNames);
 
         if ($toolLoopState['removedTools'] !== []) {
             yield ['event' => 'status', 'data' => [
@@ -688,6 +745,7 @@ class AgenticRuntime
                 $iterResult['tool_calls'],
                 $toolLoopState,
                 $toolIndex,
+                $allowedToolNames,
             );
 
             $iteration++;
@@ -810,14 +868,21 @@ class AgenticRuntime
      *     clientActions: list<string>,
      *     retryAttempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
      *     hookMetadata: array<string, mixed>,
-     *     removedTools: list<string>
+     *     removedTools: list<string>,
+     *     allowedToolNames: list<string>|null
      * }
      */
-    private function initializeToolLoopState(string $runId, int $employeeId, array $messages, ?string $systemPrompt): array
+    private function initializeToolLoopState(
+        string $runId,
+        int $employeeId,
+        array $messages,
+        ?string $systemPrompt,
+        ?array $allowedToolNames = null,
+    ): array
     {
         $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
         $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
-        $tools = $this->toolRegistry->toolDefinitionsForCurrentUser();
+        $tools = $this->toolRegistry->toolDefinitionsForCurrentUser($allowedToolNames);
 
         $originalToolNames = array_map(fn (array $tool): string => $tool['function']['name'] ?? '', $tools);
         $tools = $this->hookCoordinator->preToolRegistry($runId, $employeeId, $tools);
@@ -838,6 +903,7 @@ class AgenticRuntime
             'retryAttempts' => [],
             'hookMetadata' => $hookMetadata,
             'removedTools' => $removedTools,
+            'allowedToolNames' => $allowedToolNames,
         ];
     }
 
@@ -883,8 +949,10 @@ class AgenticRuntime
      *     clientActions: list<string>,
      *     retryAttempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
      *     hookMetadata: array<string, mixed>,
-     *     removedTools: list<string>
+     *     removedTools: list<string>,
+     *     allowedToolNames: list<string>|null
      * }  $toolLoopState
+     * @param  list<string>|null  $allowedToolNames
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
     private function streamToolCalls(
@@ -893,6 +961,7 @@ class AgenticRuntime
         array $toolCalls,
         array &$toolLoopState,
         int &$toolIndex,
+        ?array $allowedToolNames = null,
     ): \Generator {
         $hookMetadata = &$toolLoopState['hookMetadata'];
 
@@ -949,7 +1018,7 @@ class AgenticRuntime
             $toolStartTime = hrtime(true);
 
             // Execute with streaming: yields stdout deltas, returns ToolResult
-            $toolStream = $this->toolRegistry->executeStreaming($functionName, $arguments);
+            $toolStream = $this->toolRegistry->executeStreaming($functionName, $arguments, $allowedToolNames);
 
             foreach ($toolStream as $chunk) {
                 yield ['event' => 'status', 'data' => [
@@ -1008,6 +1077,7 @@ class AgenticRuntime
      * @param  list<array<string, mixed>>  $toolActions
      * @param  list<string>  $clientActions
      * @param  array<string, array<string, mixed>>  $hookMetadata
+     * @param  list<string>|null  $allowedToolNames
      */
     private function executeToolCallsWithHooks(
         string $runId,
@@ -1017,6 +1087,7 @@ class AgenticRuntime
         array &$toolActions,
         array &$clientActions,
         array &$hookMetadata,
+        ?array $allowedToolNames = null,
     ): void {
         foreach ($toolCalls as $toolCall) {
             $functionName = (string) ($toolCall['function']['name'] ?? '');
@@ -1044,7 +1115,7 @@ class AgenticRuntime
                 continue;
             }
 
-            $toolExecution = $this->executeToolCall($toolCall);
+            $toolExecution = $this->executeToolCall($toolCall, $allowedToolNames);
 
             $toolActions[] = $toolExecution['action'];
             array_push($clientActions, ...$toolExecution['client_actions']);

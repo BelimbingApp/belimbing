@@ -8,9 +8,12 @@ namespace App\Modules\Core\AI\Services;
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Jobs\RunAgentTaskJob;
+use App\Modules\Core\AI\Jobs\RunLaraTaskProfileJob;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\Orchestration\AgentCapabilityCatalog;
+use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Auth\Access\AuthorizationException;
+use InvalidArgumentException;
 use Illuminate\Support\Str;
 
 /**
@@ -25,6 +28,7 @@ class LaraTaskDispatcher
 {
     public function __construct(
         private readonly AgentCapabilityCatalog $catalog,
+        private readonly LaraTaskExecutionProfileRegistry $profileRegistry,
     ) {}
 
     /**
@@ -68,6 +72,52 @@ class LaraTaskDispatcher
         ]);
 
         RunAgentTaskJob::dispatch($dispatch->id);
+
+        return $dispatch;
+    }
+
+    /**
+     * Dispatch a Lara task profile for asynchronous execution.
+     *
+     * @param  string  $taskKey  Registered Lara task profile key
+     * @param  string  $task  Task description for the profile worker
+     * @param  array{entity_type?: string, entity_id?: int, source?: string}  $options
+     *
+     * @throws AuthorizationException When there is no authenticated user context
+     * @throws InvalidArgumentException When the task profile is unknown
+     */
+    public function dispatchTaskProfileForCurrentUser(string $taskKey, string $task, array $options = []): OperationDispatch
+    {
+        $profile = $this->profileRegistry->find($taskKey);
+        $actingForUserId = auth()->id();
+
+        if ($profile === null) {
+            throw new InvalidArgumentException('Unknown Lara task profile: '.$taskKey);
+        }
+
+        if (! is_int($actingForUserId)) {
+            throw new AuthorizationException(__('Unauthenticated Lara task dispatch.'));
+        }
+
+        $dispatch = OperationDispatch::query()->create([
+            'id' => OperationDispatch::ID_PREFIX.Str::random(12),
+            'operation_type' => OperationType::AgentTask,
+            'employee_id' => Employee::LARA_ID,
+            'acting_for_user_id' => $actingForUserId,
+            'task' => trim($task),
+            'status' => OperationStatus::Queued,
+            'meta' => [
+                'task_type' => $taskKey,
+                'task_profile' => $taskKey,
+                'source' => $options['source'] ?? 'lara_task_profile',
+                'employee_name' => 'Lara',
+                'task_profile_label' => $profile->label,
+            ],
+            'entity_type' => $options['entity_type'] ?? null,
+            'entity_id' => $options['entity_id'] ?? null,
+        ]);
+
+        RunLaraTaskProfileJob::dispatch($dispatch->id);
 
         return $dispatch;
     }

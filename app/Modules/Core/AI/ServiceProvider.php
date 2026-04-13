@@ -45,6 +45,7 @@ use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\LaraTaskRegistry;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
+use App\Modules\Core\AI\Services\LaraTaskExecutionProfileRegistry;
 use App\Modules\Core\AI\Services\Memory\MemoryChunker;
 use App\Modules\Core\AI\Services\Memory\MemoryCompactor;
 use App\Modules\Core\AI\Services\Memory\MemoryHealthService;
@@ -135,6 +136,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(SessionManager::class);
         $this->app->singleton(MessageManager::class);
         $this->app->singleton(LaraTaskRegistry::class);
+        $this->app->singleton(LaraTaskExecutionProfileRegistry::class);
         $this->app->singleton(TaskModelRecommendationService::class);
         $this->app->singleton(AgentRuntime::class);
         $this->app->singleton(ProviderAuthFlowService::class);

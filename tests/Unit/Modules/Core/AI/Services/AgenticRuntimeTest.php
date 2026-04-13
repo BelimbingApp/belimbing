@@ -150,10 +150,11 @@ function runAgenticConversation(
     string $userMessage = 'Hello',
     string $systemPrompt = 'Prompt',
     ?ExecutionPolicy $policy = null,
+    ?array $allowedToolNames = null,
 ): array {
     return test()
         ->makeAgenticRuntime($llmClient, $configResolver ?? defaultAgenticConfigResolver(), $toolRegistry)
-        ->run([test()->makeMessage('user', $userMessage)], 1, $systemPrompt, null, $policy);
+        ->run([test()->makeMessage('user', $userMessage)], 1, $systemPrompt, null, $policy, null, null, $allowedToolNames);
 }
 
 describe('AgenticRuntime', function () {
@@ -172,6 +173,28 @@ describe('AgenticRuntime', function () {
         expect($result['meta']['model'])->toBe('gpt-4');
         expect($result['meta']['provider_name'])->toBe('test-provider');
         expect($result['meta'])->not->toHaveKey('tool_actions');
+    });
+
+    it('omits disallowed tools from the LLM request', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')
+            ->once()
+            ->withArgs(function ($request): bool {
+                return $request->tools === null;
+            })
+            ->andReturn([
+                'content' => 'Coding profile response',
+                'latency_ms' => 120,
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 8],
+            ]);
+
+        $result = runAgenticConversation(
+            $llmClient,
+            toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+            allowedToolNames: [],
+        );
+
+        expect($result['content'])->toBe('Coding profile response');
     });
 
     it('executes tool calls and feeds results back to LLM', function () {

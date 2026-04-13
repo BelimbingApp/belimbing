@@ -109,10 +109,7 @@ class LaraOrchestrationService
         $decision = $this->router->route($request);
 
         if ($decision->target !== RoutingTarget::Agent || $decision->agentEmployeeId === null) {
-            return $this->response(
-                __('No delegated Agent is available for this request.'),
-                ['status' => 'no_agents', 'routing_reasons' => $decision->reasons],
-            );
+            return $this->dispatchCodingTaskProfile($task, $decision->reasons);
         }
 
         $dispatch = $this->taskDispatcher->dispatchForCurrentUser(
@@ -129,6 +126,34 @@ class LaraOrchestrationService
             [
                 'status' => 'queued',
                 'selected_agent' => $decision->toArray(),
+                'dispatch_id' => $dispatch->id,
+            ],
+        );
+    }
+
+    /**
+     * @param  list<string>  $routingReasons
+     * @return array{assistant_content: string, run_id: string, meta: array<string, mixed>}
+     */
+    private function dispatchCodingTaskProfile(string $task, array $routingReasons): array
+    {
+        $dispatch = $this->taskDispatcher->dispatchTaskProfileForCurrentUser(
+            'coding',
+            $task,
+            ['source' => 'slash_delegate'],
+        );
+
+        return $this->response(
+            __('Delegation queued to Lara Coding (dispatch: :dispatch_id).', [
+                'dispatch_id' => $dispatch->id,
+            ]),
+            [
+                'status' => 'queued',
+                'selected_task_profile' => [
+                    'task_key' => 'coding',
+                    'label' => 'Coding',
+                ],
+                'routing_reasons' => $routingReasons,
                 'dispatch_id' => $dispatch->id,
             ],
         );

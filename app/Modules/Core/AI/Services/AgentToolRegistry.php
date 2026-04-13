@@ -92,13 +92,18 @@ class AgentToolRegistry
     /**
      * Get OpenAI-format tool definitions for tools the current user can access.
      *
+     * @param  list<string>|null  $allowedToolNames
      * @return list<array{type: string, function: array{name: string, description: string, parameters: array<string, mixed>}}>
      */
-    public function toolDefinitionsForCurrentUser(): array
+    public function toolDefinitionsForCurrentUser(?array $allowedToolNames = null): array
     {
         $definitions = [];
 
-        foreach ($this->tools as $tool) {
+        foreach ($this->tools as $toolName => $tool) {
+            if (! $this->isAllowedByProfile($toolName, $allowedToolNames)) {
+                continue;
+            }
+
             if (! $this->currentUserCanUse($tool)) {
                 continue;
             }
@@ -125,13 +130,18 @@ class AgentToolRegistry
      *
      * @param  array<string, mixed>  $arguments
      */
-    public function execute(string $toolName, array $arguments): ToolResult
+    public function execute(string $toolName, array $arguments, ?array $allowedToolNames = null): ToolResult
     {
         $tool = $this->tools[$toolName] ?? null;
         $result = null;
 
         if ($tool === null) {
             $result = ToolResult::error('Unknown tool "'.$toolName.'".', 'unknown_tool');
+        } elseif (! $this->isAllowedByProfile($toolName, $allowedToolNames)) {
+            $result = ToolResult::error(
+                'The "'.$toolName.'" tool is not available for this task.',
+                'tool_not_available',
+            );
         } elseif (! $this->currentUserCanUse($tool)) {
             $result = ToolResult::error(
                 'You do not have permission to use the "'.$toolName.'" tool.',
@@ -159,14 +169,22 @@ class AgentToolRegistry
      * from the synchronous execute() path.
      *
      * @param  array<string, mixed>  $arguments
+     * @param  list<string>|null  $allowedToolNames
      * @return \Generator<int, string, mixed, ToolResult>
      */
-    public function executeStreaming(string $toolName, array $arguments): \Generator
+    public function executeStreaming(string $toolName, array $arguments, ?array $allowedToolNames = null): \Generator
     {
         $tool = $this->tools[$toolName] ?? null;
 
         if ($tool === null) {
             return ToolResult::error('Unknown tool "'.$toolName.'".', 'unknown_tool');
+        }
+
+        if (! $this->isAllowedByProfile($toolName, $allowedToolNames)) {
+            return ToolResult::error(
+                'The "'.$toolName.'" tool is not available for this task.',
+                'tool_not_available',
+            );
         }
 
         if (! $this->currentUserCanUse($tool)) {
@@ -217,6 +235,14 @@ class AgentToolRegistry
         $actor = Actor::forUser($user);
 
         return $this->authorizationService->can($actor, $capability)->allowed;
+    }
+
+    /**
+     * @param  list<string>|null  $allowedToolNames
+     */
+    private function isAllowedByProfile(string $toolName, ?array $allowedToolNames): bool
+    {
+        return $allowedToolNames === null || in_array($toolName, $allowedToolNames, true);
     }
 
     private function toolExecutionFailed(string $toolName, \Throwable $e): ToolResult
