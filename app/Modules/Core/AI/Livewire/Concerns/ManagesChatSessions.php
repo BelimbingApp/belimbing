@@ -137,7 +137,7 @@ trait ManagesChatSessions
             return;
         }
 
-        $config = app(ConfigResolver::class)->resolvePrimaryWithDefaultFallback($this->employeeId);
+        $config = app(ConfigResolver::class)->resolveTaskWithPrimaryFallback($this->employeeId, 'titling');
         if ($config === null) {
             return;
         }

@@ -3,7 +3,9 @@
 use App\Modules\Core\AI\Livewire\Setup\Lara;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -74,4 +76,41 @@ test('lara provider change selects the new provider default model', function ():
         ->assertSet('selectedModelId', 'shared-model')
         ->set('selectedProviderId', $secondaryProvider->id)
         ->assertSet('selectedModelId', 'provider-two-default');
+});
+
+test('lara activation works with no task config present', function (): void {
+    Company::query()->find(Company::LICENSEE_ID)
+        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+
+    Employee::provisionLara();
+
+    $provider = AiProvider::query()->create([
+        'company_id' => Company::LICENSEE_ID,
+        'name' => 'openai',
+        'display_name' => 'OpenAI',
+        'base_url' => 'https://openai.example.test',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'openai-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 1,
+    ]);
+
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $provider->id,
+        'model_id' => 'gpt-primary',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    Livewire::test(Lara::class)
+        ->set('selectedProviderId', $provider->id)
+        ->call('activateLara');
+
+    $workspaceConfig = app(ConfigResolver::class)->readWorkspaceConfig(Employee::LARA_ID);
+
+    expect($workspaceConfig)->not->toBeNull()
+        ->and($workspaceConfig['llm']['models'][0]['provider'] ?? null)->toBe('openai')
+        ->and($workspaceConfig['llm']['models'][0]['model'] ?? null)->toBe('gpt-primary')
+        ->and($workspaceConfig['llm']['tasks'] ?? null)->toBeNull();
 });

@@ -9,6 +9,7 @@ use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Services\ModelCatalogService;
 use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
+use App\Modules\Core\AI\Enums\TaskModelSelectionMode;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\Employee\Models\Employee;
@@ -94,6 +95,107 @@ class ConfigResolver
     public function resolvePrimaryWithDefaultFallback(int $employeeId): ?array
     {
         return $this->resolveWithDefaultFallback($employeeId)[0] ?? null;
+    }
+
+    /**
+     * Read Lara task model configuration from workspace config.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public function readTaskConfigs(int $employeeId): array
+    {
+        $workspaceConfig = $this->readWorkspaceConfig($employeeId);
+        $tasks = $workspaceConfig['llm']['tasks'] ?? [];
+
+        return is_array($tasks) ? $tasks : [];
+    }
+
+    /**
+     * Read a single Lara task model configuration entry.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function readTaskConfig(int $employeeId, string $taskKey): ?array
+    {
+        $tasks = $this->readTaskConfigs($employeeId);
+        $task = $tasks[$taskKey] ?? null;
+
+        return is_array($task) ? $task : null;
+    }
+
+    /**
+     * Persist one Lara task model configuration while preserving chat model config.
+     *
+     * @param  array<string, mixed>  $taskConfig
+     */
+    public function writeTaskConfig(int $employeeId, string $taskKey, array $taskConfig): void
+    {
+        $workspaceConfig = $this->readWorkspaceConfig($employeeId) ?? [];
+        $llm = is_array($workspaceConfig['llm'] ?? null) ? $workspaceConfig['llm'] : [];
+        $tasks = is_array($llm['tasks'] ?? null) ? $llm['tasks'] : [];
+        $tasks[$taskKey] = $taskConfig;
+        $llm['tasks'] = $tasks;
+        $workspaceConfig['llm'] = $llm;
+
+        $this->writeWorkspaceConfig($employeeId, $workspaceConfig);
+    }
+
+    /**
+     * Resolve the configured model for a Lara task, falling back to Lara's primary model.
+     *
+     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null, api_type: AiApiType}|null
+     */
+    public function resolveTaskWithPrimaryFallback(int $employeeId, string $taskKey): ?array
+    {
+        $taskConfig = $this->readTaskConfig($employeeId, $taskKey);
+
+        if (! is_array($taskConfig)) {
+            return $this->resolvePrimaryWithDefaultFallback($employeeId);
+        }
+
+        $mode = $taskConfig['mode'] ?? TaskModelSelectionMode::Recommended->value;
+
+        if ($mode === TaskModelSelectionMode::Primary->value) {
+            return $this->resolvePrimaryWithDefaultFallback($employeeId);
+        }
+
+        $providerName = is_string($taskConfig['provider'] ?? null) ? $taskConfig['provider'] : null;
+        $modelId = is_string($taskConfig['model'] ?? null) ? $taskConfig['model'] : null;
+
+        if ($providerName === null || $modelId === null) {
+            return $this->resolvePrimaryWithDefaultFallback($employeeId);
+        }
+
+        $companyId = $this->findCompanyIdForFallback($employeeId);
+
+        if ($companyId === null) {
+            return $this->resolvePrimaryWithDefaultFallback($employeeId);
+        }
+
+        $provider = AiProvider::query()
+            ->forCompany($companyId)
+            ->active()
+            ->where('name', $providerName)
+            ->first();
+
+        if ($provider === null) {
+            return $this->resolvePrimaryWithDefaultFallback($employeeId);
+        }
+
+        $modelExists = AiProviderModel::query()
+            ->where('ai_provider_id', $provider->id)
+            ->where('model_id', $modelId)
+            ->active()
+            ->exists();
+
+        if (! $modelExists) {
+            return $this->resolvePrimaryWithDefaultFallback($employeeId);
+        }
+
+        return $this->resolveModelConfig([
+            'provider' => $providerName,
+            'model' => $modelId,
+        ], $companyId, $this->runtimeDefaults());
     }
 
     /**

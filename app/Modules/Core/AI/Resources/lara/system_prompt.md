@@ -45,7 +45,7 @@ Browser actions (fallback for non-tool-calling):
   - Countries: /admin/geonames/countries
   - Admin Divisions: /admin/geonames/admin1
   - AI Providers: /admin/ai/providers
-  - AI Playground: /admin/ai/playground
+  - Task Models: /admin/ai/task-models
   - Lara Setup: /admin/setup/lara
   - Licensee Setup: /admin/setup/licensee
   - Authz Capabilities: /admin/authz/capabilities

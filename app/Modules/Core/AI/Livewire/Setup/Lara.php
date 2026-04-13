@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Livewire\Setup;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesProviderDiagnostics;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesAgentModelSelection;
 use App\Modules\Core\AI\Services\ConfigResolver;
+use App\Modules\Core\AI\Services\LaraTaskRegistry;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Contracts\View\View;
@@ -144,6 +145,7 @@ class Lara extends Component
         $providers = collect();
         $models = collect();
         $backupModels = collect();
+        $taskSummaries = [];
         $activeSelection = [
             'isUsingDefault' => false,
             'activeProviderName' => null,
@@ -165,7 +167,27 @@ class Lara extends Component
         }
 
         if ($laraActivated) {
-            $activeSelection = $this->resolveActiveSelection(app(ConfigResolver::class), Employee::LARA_ID);
+            $resolver = app(ConfigResolver::class);
+            $activeSelection = $this->resolveActiveSelection($resolver, Employee::LARA_ID);
+            $taskSummaries = collect(app(LaraTaskRegistry::class)->all())
+                ->map(function ($task) use ($resolver): array {
+                    $config = $resolver->readTaskConfig(Employee::LARA_ID, $task->key) ?? [];
+                    $mode = $config['mode'] ?? 'recommended';
+                    $provider = $config['provider'] ?? null;
+                    $model = $config['model'] ?? null;
+
+                    $summary = match (true) {
+                        $mode === 'primary' => __('Uses Lara primary'),
+                        is_string($provider) && is_string($model) => $provider.'/'.$model,
+                        default => __('No saved selection'),
+                    };
+
+                    return [
+                        'label' => $task->label,
+                        'summary' => $summary,
+                    ];
+                })
+                ->all();
         }
 
         return view('livewire.admin.setup.lara', [
@@ -180,6 +202,7 @@ class Lara extends Component
             'activeModelId' => $activeSelection['activeModelId'],
             'activeBackupProviderName' => $activeSelection['activeBackupProviderName'],
             'activeBackupModelId' => $activeSelection['activeBackupModelId'],
+            'taskSummaries' => $taskSummaries,
         ]);
     }
 }

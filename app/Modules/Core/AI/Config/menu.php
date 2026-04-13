@@ -10,6 +10,7 @@ $item = static function (
     string $parent,
     int $position,
     ?string $route = null,
+    ?string $condition = null,
 ): array {
     return array_filter([
         'id' => $id,
@@ -18,6 +19,7 @@ $item = static function (
         'route' => $route,
         'parent' => $parent,
         'position' => $position,
+        'condition' => $condition,
     ], static fn (mixed $value): bool => $value !== null);
 };
 
@@ -25,8 +27,7 @@ return [
     'items' => [
         $item('ai', 'AI', 'heroicon-o-cpu-chip', 'admin', 200),
         $item('ai.lara', 'Lara', 'heroicon-o-sparkles', 'ai', 10, 'admin.setup.lara'),
-        $item('ai.kodi', 'Kodi', 'heroicon-o-code-bracket', 'ai', 15, 'admin.setup.kodi'),
-        $item('ai.playground', 'Agent Playground', 'heroicon-o-chat-bubble-left-right', 'ai', 20, 'admin.ai.playground'),
+        $item('ai.task-models', 'Task Models', 'heroicon-o-adjustments-vertical', 'ai', 20, 'admin.ai.task-models', 'ai.lara_activated'),
         $item('ai.providers', 'AI Providers', 'heroicon-o-server-stack', 'ai', 30, 'admin.ai.providers'),
         $item('ai.tools', 'Tools', 'heroicon-o-wrench-screwdriver', 'ai', 40, 'admin.ai.tools'),
         $item('ai.control-plane', 'Control Plane', 'heroicon-o-adjustments-horizontal', 'ai', 50, 'admin.ai.control-plane'),

@@ -16,6 +16,7 @@ readonly class MenuItem
         public ?string $parent = null,
         public int $position = 1000,
         public ?string $permission = null,
+        public ?string $condition = null,
     ) {}
 
     /**
@@ -34,6 +35,7 @@ readonly class MenuItem
             parent: $data['parent'] ?? null,
             position: $data['position'] ?? 1000,
             permission: $data['permission'] ?? null,
+            condition: $data['condition'] ?? null,
         );
     }
 

@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI;
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\Services\WebSearchService;
 use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Menu\Services\MenuConditionRegistry;
 use App\Modules\Core\AI\Console\Commands\BrowserStatusCommand;
 use App\Modules\Core\AI\Console\Commands\BrowserSweepCommand;
 use App\Modules\Core\AI\Console\Commands\HealthSnapshotCommand;
@@ -42,6 +43,7 @@ use App\Modules\Core\AI\Services\LaraContextProvider;
 use App\Modules\Core\AI\Services\LaraNavigationRouter;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
+use App\Modules\Core\AI\Services\LaraTaskRegistry;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use App\Modules\Core\AI\Services\Memory\MemoryChunker;
 use App\Modules\Core\AI\Services\Memory\MemoryCompactor;
@@ -75,6 +77,7 @@ use App\Modules\Core\AI\Services\ProviderAuthFlowService;
 use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionService;
 use App\Modules\Core\AI\Services\Scheduling\SchedulePlanner;
 use App\Modules\Core\AI\Services\SessionManager;
+use App\Modules\Core\AI\Services\TaskModelRecommendationService;
 use App\Modules\Core\AI\Services\ToolMetadataRegistry;
 use App\Modules\Core\AI\Services\ToolReadinessService;
 use App\Modules\Core\AI\Services\Workspace\PromptPackageFactory;
@@ -106,6 +109,7 @@ use App\Modules\Core\AI\Tools\TicketUpdateTool;
 use App\Modules\Core\AI\Tools\WebFetchTool;
 use App\Modules\Core\AI\Tools\WebSearchTool;
 use App\Modules\Core\AI\Tools\WriteJsTool;
+use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
@@ -130,6 +134,8 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(ModelDiscoveryService::class);
         $this->app->singleton(SessionManager::class);
         $this->app->singleton(MessageManager::class);
+        $this->app->singleton(LaraTaskRegistry::class);
+        $this->app->singleton(TaskModelRecommendationService::class);
         $this->app->singleton(AgentRuntime::class);
         $this->app->singleton(ProviderAuthFlowService::class);
         $this->app->singleton(LaraContextProvider::class);
@@ -209,6 +215,10 @@ class ServiceProvider extends BaseServiceProvider
 
         $this->app->singleton(AgenticRuntime::class);
         $this->app->singleton(ToolReadinessService::class);
+
+        $this->app->afterResolving(MenuConditionRegistry::class, function (MenuConditionRegistry $registry): void {
+            $registry->register('ai.lara_activated', static fn (mixed $user): bool => Employee::laraActivationState() === true);
+        });
     }
 
     /**

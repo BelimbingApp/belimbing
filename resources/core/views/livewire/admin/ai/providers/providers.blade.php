@@ -29,7 +29,7 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
 
                     @include('livewire.admin.ai.providers.partials.model-help')
 
-                    <p>{!! __('Once providers and models are set up here, assign them to Agents from the :link.', ['link' => '<a href="' . route('admin.ai.playground') . '" class="text-accent hover:underline">' . e(__('AI Playground')) . '</a>']) !!}</p>
+                    <p>{!! __('Once providers and models are set up here, configure Lara and her task models from the :link.', ['link' => '<a href="' . route('admin.setup.lara') . '" class="text-accent hover:underline">' . e(__('Lara setup')) . '</a>']) !!}</p>
                 </div>
             </x-slot>
             <x-slot name="actions">

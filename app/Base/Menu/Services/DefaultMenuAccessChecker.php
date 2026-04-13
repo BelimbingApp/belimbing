@@ -11,6 +11,10 @@ use Illuminate\Contracts\Auth\Authenticatable;
 
 class DefaultMenuAccessChecker implements MenuAccessChecker
 {
+    public function __construct(
+        private readonly MenuConditionRegistry $conditionRegistry,
+    ) {}
+
     /**
      * Determine visibility when no authorization adapter is installed.
      *
@@ -22,6 +26,10 @@ class DefaultMenuAccessChecker implements MenuAccessChecker
      */
     public function canView(MenuItem $item, Authenticatable $user): bool
     {
+        if (! $this->conditionRegistry->allows($item->condition, $user)) {
+            return false;
+        }
+
         if ($item->permission === null) {
             return true;
         }

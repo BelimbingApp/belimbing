@@ -8,11 +8,10 @@ use App\Modules\Core\AI\Http\Controllers\ProviderSetupController;
 use App\Modules\Core\AI\Http\Controllers\ChatTurnStreamController;
 use App\Modules\Core\AI\Http\Controllers\TurnEventStreamController;
 use App\Modules\Core\AI\Livewire\ControlPlane;
-use App\Modules\Core\AI\Livewire\Playground;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
 use App\Modules\Core\AI\Livewire\RunDetail;
-use App\Modules\Core\AI\Livewire\Setup\Kodi;
 use App\Modules\Core\AI\Livewire\Setup\Lara;
+use App\Modules\Core\AI\Livewire\TaskModels;
 use App\Modules\Core\AI\Livewire\Tools;
 use Illuminate\Support\Facades\Route;
 
@@ -32,11 +31,14 @@ Route::middleware(['auth'])->group(function () {
     // Lara setup
     Route::get('admin/setup/lara', Lara::class)
         ->name('admin.setup.lara');
-    // Kodi setup (available once Lara is activated)
-    Route::get('admin/setup/kodi', Kodi::class)
+
+    Route::redirect('admin/setup/kodi', '/admin/setup/lara')
         ->name('admin.setup.kodi');
 
-    Route::get('admin/ai/playground', Playground::class)
+    Route::get('admin/ai/task-models', TaskModels::class)
+        ->name('admin.ai.task-models');
+
+    Route::redirect('admin/ai/playground', '/admin/ai/task-models')
         ->name('admin.ai.playground');
 
     // Unified AI Providers page (management + catalog)

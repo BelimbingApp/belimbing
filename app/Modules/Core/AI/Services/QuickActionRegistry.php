@@ -127,8 +127,8 @@ class QuickActionRegistry
                 ['label' => __('Add provider'), 'prompt' => 'Help me set up a new AI provider', 'icon' => 'heroicon-o-plus'],
                 ['label' => __('Compare providers'), 'prompt' => 'Compare my configured AI providers', 'icon' => 'heroicon-o-scale'],
             ],
-            'admin.ai.playground' => [
-                ['label' => __('Test model'), 'prompt' => 'Help me test the current model configuration', 'icon' => 'heroicon-o-beaker'],
+            'admin.ai.task-models' => [
+                ['label' => __('Recommend models'), 'prompt' => 'Recommend models for Lara\'s tasks', 'icon' => 'heroicon-o-sparkles'],
                 ['label' => __('Model info'), 'prompt' => '/models', 'icon' => 'heroicon-o-cpu-chip'],
             ],
             'admin.ai.tools' => [

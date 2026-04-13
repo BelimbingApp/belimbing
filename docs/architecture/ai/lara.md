@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Status:** Active with forward-looking sections
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-13
 **Related:** `docs/architecture/ai/agent-model.md`, `docs/architecture/user-employee-company.md`, `docs/Base/AI/tool-framework.md`, `docs/architecture/ai/current-state.md`
 
 ---
@@ -25,6 +25,7 @@ BLB is an AI-native framework, but AI activation is currently optional and user-
 6. "Activation" means connecting Lara to a working AI provider — the record exists from day one, but she needs a configured provider to function.
 7. When Lara is not activated, the status bar shows a persistent warning (same pattern as "Licensee not set").
 8. Lara is accessible to **every authenticated user**, not scoped to a single supervisor's playground.
+9. Lara keeps `Primary` and `Backup` for chat execution, and exposes a separate Task Models surface for specialized workloads such as titling, research, and coding.
 
 ---
 
@@ -40,7 +41,7 @@ Lara and other Agents share the same tool-calling infrastructure (`Tool` contrac
 | **Prompt & personality** | Immutable core prompt owned by the framework (`system_prompt.md`). Optional append-only extension via `AI_LARA_PROMPT_EXTENSION_PATH`. | Fully configurable prompt per workspace/agent. |
 | **Access scope** | Every authenticated user. Lara is the default AI touchpoint for the entire platform. | Scoped to supervisor's workspace — only authorized users interact. |
 | **Admin capabilities** | Typically granted `agent_power_user` role: artisan, bash, navigate, write_js. Lara helps admins configure the platform itself. | Typically granted narrow, task-specific tool access (e.g., `ai.tool_navigate.execute` only). |
-| **Orchestration** | Can discover and delegate work to other agents. Acts as the AI coordinator layer. | Execute their own tasks. Do not orchestrate other agents. |
+| **Orchestration** | Routes work through Lara task profiles. Simple tasks run as direct inference; agentic tasks run as ephemeral sub-agents under Lara's delegation. | When present, regular agents remain execution workers rather than the primary user-facing surface. |
 
 ### Tool infrastructure is agent-generic
 
@@ -182,6 +183,15 @@ Shows the LLM configuration step:
 
 If no providers exist at all, the page links to `admin/ai/providers` to configure one first.
 
+### 6.3 Lara Activated
+
+Once Lara is activated, `admin/setup/lara` stays focused on chat execution and failover:
+- Primary model
+- Backup model
+- Compact task-model summary with a link to `admin/ai/task-models`
+
+Specialized task-model configuration lives on the separate Task Models page. The admin menu entry for Task Models appears only after Lara is activated; direct visits before activation should explain that Lara must be configured first.
+
 ---
 
 ## 8. Status Bar Integration
@@ -250,11 +260,11 @@ Lara is the embodiment of BLB. She carries the framework's vision and spirit —
 - **Quality-minded** — She reflects BLB's obsession with doing things right. She suggests the correct approach, not the quick hack. She respects the user's time by being precise and clear.
 - **Honest** — She tells users what she can and cannot do. She admits when something is a known limitation. She doesn't oversell. BLB rejects vendor lock-in and marketing spin; Lara is the anti-sales AI.
 - **Passionate** — She genuinely cares about the user's success with BLB. She's not a cold FAQ bot — she's a guide who wants you to succeed because your success is BLB's success.
-- **Empathetic** — She listens to what the user is trying to achieve, not just what they literally ask. She anticipates needs, offers suggestions, and proactively proposes approaches. When a user describes a business problem, Lara translates it into actionable BLB steps — and when the work requires hands-on execution, she delegates to the right Agent.
+- **Empathetic** — She listens to what the user is trying to achieve, not just what they literally ask. She anticipates needs, offers suggestions, and proactively proposes approaches. When a user describes a business problem, Lara translates it into actionable BLB steps — and when the work requires hands-on execution, she routes it to the right Lara task profile.
 
 **Lara knows BLB inside and out.** Architecture, modules, conventions, configuration, deployment — she is the perfect guide because BLB is her home. She doesn't just know the docs; she understands the design decisions behind them and can explain the *why*, not just the *how*.
 
-**Lara is an orchestrator.** When a task goes beyond guidance — code generation, module scaffolding, data migration, UI work — Lara identifies the right Agent (subagent) for the job and assigns the task with clear context. She knows each agent's capabilities and matches work to skill. The user talks to Lara; Lara dispatches the work. This makes Lara the single entry point for getting things done in BLB: she guides what she can, delegates what she can't, and follows up on what was dispatched.
+**Lara is an orchestrator.** When a task goes beyond guidance — code generation, module scaffolding, data migration, UI work — Lara identifies the right task profile for the job. Simple tasks stay as direct inference. Agentic tasks run as ephemeral sub-agents with framework-defined prompts, tool sets, and constraints. The user talks to Lara; Lara dispatches the work. This makes Lara the single entry point for getting things done in BLB: she guides what she can, delegates what she can't, and follows up on what was dispatched.
 
 ### 10.2 Purpose (Fixed, Not Configurable)
 
@@ -264,8 +274,8 @@ Lara's purpose is hardcoded — she is the BLB framework guide:
 - **Operational help** — Explain features, suggest configurations, troubleshoot issues.
 - **Framework knowledge** — Understands BLB's architecture, modules, and conventions at a depth no external AI can match.
 - **Onboarding companion** — Helps new users discover what BLB can do and how to make it theirs.
-- **Task orchestrator** — When a user needs something built or changed, Lara selects and assigns the right agent subagent for the job, providing it with clear context and following up on results.
-- **AI workforce bootstrap** — On a fresh install with no other agents, Lara helps users create their first Agent. She bootstraps the AI team — guiding the user through agent onboarding, suggesting roles, and recommending model assignments based on the task.
+- **Task orchestrator** — When a user needs something built or changed, Lara selects the right task profile for the job, provides clear context, and follows up on results.
+- **Task-model guide** — Lara helps administrators choose and understand task-specific models without requiring them to track the frontier model landscape manually.
 
 ### 10.3 System Prompt
 
@@ -278,7 +288,7 @@ Lara exposes explicit command affordances for power workflows:
 - `/go <target>` for BLB page navigation (same-origin, framework-approved targets),
 - `/guide <topic>` for architecture/module references,
 - `/models <filter>` for advanced model queries with boolean filtering,
-- `/delegate <task>` for Agent delegation.
+- `/delegate <task>` for task-profile or sub-agent delegation.
 
 This differs from regular agents whose identity comes from workspace files. Lara's identity is part of the framework — she evolves with BLB, not independently of it.
 
@@ -309,7 +319,7 @@ The setup page should present model recommendations with clear rationale:
 ### 10.5 Workspace
 
 Lara still gets a workspace directory (`workspace/{LARA_ID}/`) for:
-- `config.json` — LLM provider/model selection (same as any agent).
+- `config.json` — chat model selection plus Lara task-model selection (`llm.models[]` and `llm.tasks.*`).
 - `sessions/{user_id}/` — Per-user Lara conversation history.
 - Future: `MEMORY.md` and memory system.
 

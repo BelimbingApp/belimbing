@@ -297,11 +297,13 @@ trait ManagesAgentModelSelection
             ];
         }
 
-        app(ConfigResolver::class)->writeWorkspaceConfig($employeeId, [
-            'llm' => [
-                'models' => $models,
-            ],
-        ]);
+        $resolver = app(ConfigResolver::class);
+        $workspaceConfig = $resolver->readWorkspaceConfig($employeeId) ?? [];
+        $llm = is_array($workspaceConfig['llm'] ?? null) ? $workspaceConfig['llm'] : [];
+        $llm['models'] = $models;
+        $workspaceConfig['llm'] = $llm;
+
+        $resolver->writeWorkspaceConfig($employeeId, $workspaceConfig);
     }
 
     private function providerIdForName(?string $providerName): ?int

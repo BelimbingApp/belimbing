@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Status:** Active foundational specification
-**Last Updated:** 2026-04-05
+**Last Updated:** 2026-04-13
 **Related:** `docs/architecture/user-employee-company.md`, `docs/architecture/authorization.md`, `docs/architecture/database.md`, `docs/architecture/ai/current-state.md`, `docs/architecture/ai/lara.md`
 
 ---
@@ -24,8 +24,8 @@ BLB needs Agents to be managed as first-class employees under the same organizat
 5. Cost/token accounting is deferred to a future HR module.
 6. Agent permissions are constrained by delegation and cannot exceed supervisor effective permissions.
 7. **Agent context for execution:** OpenClaw-style workspaces (IDENTITY, SOUL, AGENTS, etc.) define “who” and “how”; BLB keeps a single `job_description` field as a short role label for now; full workspace-based context is the target when integrating an OpenClaw-like runtime.
-8. **Per-agent LLM model selection:** Each Agent can use a different LLM provider and model, configured via workspace `config.json` with company-level provider credentials. This enables cost-optimized model assignment by job type (see §15).
-9. **Two system primitives:** Lara (`Employee::LARA_ID = 1`) is the system orchestrator — guides setup, delegates tasks, manages the AI workforce. Kodi (`Employee::KODI_ID = 2`) is the system developer — builds modules, writes code, works through IT tickets. Both are provisioned at install time and cannot be deleted.
+8. **Per-agent and per-task LLM model selection:** Agent workspace `config.json` keeps `llm.models[]` for chat execution and failover. Lara's workspace can additionally define `llm.tasks.*` so specialized workloads such as titling, research, and coding can use different models (see §15).
+9. **One visible system primitive:** Lara (`Employee::LARA_ID = 1`) is the only user-facing system agent and the only user-facing AI chat/configuration surface. Kodi (`Employee::KODI_ID = 2`) is deprecated as a named product surface and remains only as a legacy runtime concern until Lara task profiles fully absorb current Kodi-owned flows.
 
 ---
 
@@ -177,7 +177,7 @@ The final capability vocabulary is owned by the AuthZ module.
 
 ## 8. Implementation Dependencies
 
-Stage 0 (Agent Playground) requires authorization PRD Stage B (Policy Engine + RBAC) and Stage D (Agent Delegation) from `docs/todo/authorization/00-prd.md`. Stage D is partially complete: `PrincipalType::AGENT` actor and same RBAC as human are operational. Assignment-time validation and cascade revocation (Stage D remaining items) are not blockers for Stage 0, which is a read-only playground with no sensitive write tools.
+The current Lara-first surface depends on authorization PRD Stage B (Policy Engine + RBAC) and the already-landed portions of Stage D (Agent Delegation) from `docs/todo/authorization/00-prd.md`. `PrincipalType::AGENT` and the same RBAC substrate as human actors are operational. Remaining Stage D hardening work still matters for future agentic Lara task runtimes, but it is no longer framed as a standalone Playground prerequisite.
 
 ---
 
@@ -483,7 +483,7 @@ API keys are sensitive and should not be stored in workspace files (plaintext on
 
 ### 15.2 Per-agent Model Selection (Workspace Config)
 
-Each Agent's workspace contains a `config.json` that specifies which provider and model to use. This file is part of the workspace, not the database.
+Each Agent's workspace contains a `config.json` that specifies which provider and model to use. For Lara, the same file can additionally hold task-specific model selections. This file is part of the workspace, not the database.
 
 **Workspace layout (updated):**
 
@@ -498,7 +498,7 @@ workspace/{employee_id}/
 └── memory.db                  # (future)
 ```
 
-**`config.json` structure (multi-model with ordered fallback):**
+**`config.json` structure (chat models plus optional Lara task models):**
 
 ```json
 {
@@ -516,13 +516,30 @@ workspace/{employee_id}/
                 "max_tokens": 2048,
                 "temperature": 0.7
             }
-        ]
+        ],
+        "tasks": {
+            "titling": {
+                "mode": "recommended",
+                "provider": "openai",
+                "model": "gpt-5-nano",
+                "reason": "Fast and sufficient for short titles."
+            },
+            "research": {
+                "mode": "manual",
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-20250514"
+            },
+            "coding": {
+                "mode": "primary"
+            }
+        }
     }
 }
 ```
 
-- `models`: ordered list of model configurations (maximum two entries). First entry is primary; the optional second entry is a backup tried on transient failures (timeout, connection error, rate limit, server error, empty response).
-- The backup model is configured through the Lara/Kodi setup UI ("Backup Model" card) and can use a different provider than the primary.
+- `models`: ordered list of chat model configurations (maximum two entries). First entry is primary; the optional second entry is a backup tried on transient failures (timeout, connection error, rate limit, server error, empty response).
+- Lara's backup model is configured through the Lara setup UI ("Backup Model" card) and can use a different provider than the primary.
+- `tasks`: optional Lara-only task-model configuration. Each task entry stores a mode (`primary`, `recommended`, or `manual`) and, for `recommended`/`manual`, a stable saved provider/model pair plus optional UI reason text. Recommendation is on-demand and persists a stable choice; it is not recomputed automatically on every run.
 - `provider`: references `ai_providers.name` within the agent's company.
 - `model`: the specific model within that provider.
 - `max_tokens`, `temperature`: optional per-agent overrides; fall back to global `config('ai.llm.*')` defaults.
@@ -531,13 +548,14 @@ workspace/{employee_id}/
 
 The runtime resolves LLM configuration with a cascade:
 
-1. **agent workspace `config.json`** — per-agent overrides (provider, model, temperature, max_tokens)
+1. **agent workspace `config.json`** — per-agent overrides (`llm.models[]` for chat, and for Lara optionally `llm.tasks.*` for specialized task routing)
 2. **Company provider credentials** — `ai_providers` row matching the provider name + company_id (supplies `base_url` and `api_key`)
 3. **Global defaults** — `config('ai.llm.*')` from `app/Base/AI/Config/ai.php` / `.env` (fallback runtime parameters like `max_tokens`, `temperature`, `timeout`)
 
 **Resolution rules:**
 - If `config.json` specifies a provider → look up `ai_providers` by `(company_id, name)` → use that row's `base_url` and `api_key`, merged with per-agent model/params.
 - If workspace config is missing (or `llm.models[]` is empty) → resolve company default provider+model (`ConfigResolver::resolveDefault()`), then apply runtime defaults for parameters.
+- If a Lara task config is missing, incomplete, or points to an inactive provider/model → fall back to Lara's primary chat model.
 - If a configured provider cannot be resolved (inactive/not found) or has missing credentials → runtime returns `config_error` for that model (non-transient), and fallback stops at that point.
 
 ### 15.4 Authorization for Provider Management
@@ -571,7 +589,7 @@ Inspired by OpenClaw's `FallbackAttempt` type (`openclaw/src/agents/model-fallba
 - On success (first or fallback model), `meta.fallback_attempts` is an empty array (no failures to report) or contains entries for each prior failed model.
 - On total failure (all models exhausted), `meta.fallback_attempts` contains entries for every attempted model, and the final result carries the last model's error.
 - Non-transient errors (`auth_error`, `config_error`, `bad_request`, etc.) halt the fallback chain immediately; the attempts array will be empty since no fallback was tried.
-- The playground debug panel shows a collapsible "Fallback Attempts" section when `fallback_attempts` is non-empty, displaying provider, model, error, error_type, and latency for each attempt.
+- Operator and run-detail surfaces show a collapsible "Fallback Attempts" section when `fallback_attempts` is non-empty, displaying provider, model, error, error_type, and latency for each attempt.
 - **Chat thread visibility:** When a fallback was used, an inline amber notice appears above the assistant response (`"⚠ {error}. Switched to {provider}/{model}."`). A dismissible thread-level banner above the composer suggests the user may want to switch models.
 
 **Fallback-worthy error types:** `timeout`, `connection_error`, `rate_limit`, `server_error`, `empty_response`
@@ -590,7 +608,7 @@ Setting up a Agent is a multi-step process that spans the employee module and AI
 1. **Identity** — Create employee with `employee_type = 'agent'`. Set name, job description, supervisor (defaults to current user). Employee module handles this.
 2. **LLM Configuration** — Select provider from the company's available providers, pick model, optionally override temperature/max_tokens. Writes `config.json` to the agent workspace.
 3. **Authorization** — Assign roles and capabilities. Scoped by what the supervisor has (existing AuthZ Stage D constraint: supervisor can only assign what they have).
-4. **Review & Activate** — Summary of the agent setup. Set status to active. agent appears in supervisor's playground.
+4. **Review & Activate** — Summary of the agent setup. Set status to active. The agent becomes available to delegated/runtime workflows.
 
 ### 16.2 Authorization for Onboarding
 

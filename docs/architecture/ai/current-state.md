@@ -4,7 +4,7 @@
 **Status:** Active
 **Purpose:** Source of truth for BLB AI features implemented in code
 **Coverage:** OpenClaw parity Phases 1-6, Claw Code runtime parity (hook transcript entries + approval visibility), AI Run Ledger Phases 0-3, and Lara direct-stream transport delivery
-**Last Updated:** 2026-04-09
+**Last Updated:** 2026-04-13
 **Related:** [agent-model.md](agent-model.md), [lara.md](lara.md), [capability-map.md](capability-map.md), `docs/Base/AI/tool-framework.md`
 
 ---
@@ -44,13 +44,19 @@ These are the authenticated browser-visible AI surfaces in the product today.
 | URL | Route Name | Purpose |
 |-----|------------|---------|
 | `/admin/setup/lara` | `admin.setup.lara` | Lara provisioning and activation |
-| `/admin/setup/kodi` | `admin.setup.kodi` | Kodi provisioning and activation |
-| `/admin/ai/playground` | `admin.ai.playground` | Main agent chat surface |
+| `/admin/ai/task-models` | `admin.ai.task-models` | Lara task-model configuration |
 | `/admin/ai/providers` | `admin.ai.providers` | Company-scoped provider and model management |
 | `/admin/ai/providers/setup/{providerKey}` | `admin.ai.providers.setup` | Provider-specific setup flow |
 | `/admin/ai/tools/{toolName?}` | `admin.ai.tools` | Tool catalog and per-tool workspace |
 | `/admin/ai/control-plane` | `admin.ai.control-plane` | Operator control plane |
 | `/admin/ai/runs/{runId}` | `admin.ai.runs.show` | Standalone run detail page |
+
+Legacy compatibility redirects still exist for removed product surfaces:
+
+| URL | Route Name | Current Behavior |
+|-----|------------|------------------|
+| `/admin/setup/kodi` | `admin.setup.kodi` | Redirects to Lara setup |
+| `/admin/ai/playground` | `admin.ai.playground` | Redirects to Task Models |
 
 The unauthenticated integration endpoint currently exposed is:
 
@@ -73,11 +79,10 @@ AI appears in the admin menu with these entries:
 
 1. `AI`
 2. `Lara`
-3. `Kodi`
-4. `Agent Playground`
-5. `AI Providers`
-6. `Tools`
-7. `Control Plane`
+3. `Task Models`
+4. `AI Providers`
+5. `Tools`
+6. `Control Plane`
 
 ---
 
@@ -93,12 +98,12 @@ Implemented outcome:
   - `WorkspaceValidator`
   - `PromptPackageFactory`
   - `PromptRenderer`
-- Lara and Kodi are thin callers over the same workspace-driven prompt substrate
+- Lara and legacy Kodi runtime callers are thin callers over the same workspace-driven prompt substrate
 - run metadata includes prompt-package diagnostics for operator visibility
 
 Primary user-visible effect:
 
-- the Playground and setup flows run on a consistent workspace contract
+- the Lara setup flow and legacy runtime callers run on a consistent workspace contract
 - workspace validation failures fail clearly instead of silently degrading
 
 ### 5.2 Phase 2 - Memory & Recall

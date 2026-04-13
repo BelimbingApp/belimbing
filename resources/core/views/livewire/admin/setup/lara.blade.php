@@ -35,6 +35,28 @@
                 @if ($isUsingDefault)
                     <p class="text-xs text-muted mt-3">{{ __('Lara is using the company\'s default provider and model. Set a specific model below to override.') }}</p>
                 @endif
+
+                <div class="mt-4 border-t border-border-default pt-4">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div class="space-y-2">
+                            <h4 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Task Models') }}</h4>
+                            @if ($taskSummaries === [])
+                                <p class="text-xs text-muted">{{ __('No task models have been configured yet.') }}</p>
+                            @else
+                                @foreach ($taskSummaries as $taskSummary)
+                                    <div class="flex items-baseline gap-3">
+                                        <span class="text-sm text-muted">{{ __($taskSummary['label']) }}</span>
+                                        <span class="text-sm font-medium text-ink">{{ $taskSummary['summary'] }}</span>
+                                    </div>
+                                @endforeach
+                            @endif
+                        </div>
+
+                        <x-ui.button variant="ghost" href="{{ route('admin.ai.task-models') }}" wire:navigate>
+                            {{ __('Manage Task Models') }}
+                        </x-ui.button>
+                    </div>
+                </div>
             </x-ui.card>
 
             <x-ui.card>

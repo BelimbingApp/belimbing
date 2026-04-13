@@ -7,6 +7,7 @@ namespace App\Base\Menu;
 
 use App\Base\Menu\Contracts\MenuAccessChecker;
 use App\Base\Menu\Services\DefaultMenuAccessChecker;
+use App\Base\Menu\Services\MenuConditionRegistry;
 use App\Base\Menu\Services\MenuDiscoveryService;
 use App\Base\Menu\Services\PagePinResolver;
 use App\Base\Menu\Services\PinMetadataNormalizer;
@@ -24,6 +25,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(MenuDiscoveryService::class);
         $this->app->singleton(MenuRegistry::class);
         $this->app->singleton(MenuBuilder::class);
+        $this->app->singleton(MenuConditionRegistry::class);
         $this->app->singleton(PagePinResolver::class);
         $this->app->singleton(PinMetadataNormalizer::class);
         $this->app->bindIf(

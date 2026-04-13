@@ -208,8 +208,13 @@ class LaraNavigationRouter
                 'capability' => null,
             ],
             'playground' => [
-                'route' => 'admin.ai.playground',
-                'label' => __('AI Playground'),
+                'route' => 'admin.ai.task-models',
+                'label' => __('Task Models'),
+                'capability' => null,
+            ],
+            'task-models' => [
+                'route' => 'admin.ai.task-models',
+                'label' => __('Task Models'),
                 'capability' => null,
             ],
             'setup-lara' => [
