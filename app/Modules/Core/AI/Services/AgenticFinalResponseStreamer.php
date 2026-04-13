@@ -46,10 +46,6 @@ final class AgenticFinalResponseStreamer
         array $credentials,
         array $streamState,
     ): \Generator {
-        $fullContent = '';
-        $usage = null;
-        $latencyMs = 0;
-
         $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
 
         $stream = $this->llmClient->chatStream(new ChatRequest(
@@ -67,39 +63,17 @@ final class AgenticFinalResponseStreamer
             reasoningSummary: $apiType === AiApiType::OpenAiResponses ? 'auto' : null,
         ));
 
-        foreach ($stream as $event) {
-            if ($event['type'] === 'thinking_delta') {
-                yield ['event' => 'status', 'data' => [
-                    'phase' => 'thinking_delta',
-                    'delta' => $event['text'],
-                    'run_id' => $runId,
-                ]];
+        $accumulator = [
+            'full_content' => $fullContent,
+            'usage' => $usage,
+            'latency_ms' => $latencyMs,
+        ];
 
-                continue;
-            }
+        yield from $this->yieldFinalResponseStreamEvents($runId, $stream, $accumulator, $config, $streamState);
 
-            if ($event['type'] === 'content_delta') {
-                $fullContent .= $event['text'];
-                yield ['event' => 'delta', 'data' => ['text' => $event['text']]];
-
-                continue;
-            }
-
-            if ($event['type'] === 'done') {
-                $usage = $event['usage'] ?? null;
-                $latencyMs = $event['latency_ms'] ?? 0;
-
-                continue;
-            }
-
-            if ($event['type'] === 'error') {
-                yield $this->streamFinalErrorEvent($runId, $config, $event, $streamState);
-
-                return;
-            }
-        }
-
-        $fullContent = $this->prependClientActions($fullContent, $streamState['client_actions']);
+        $fullContent = $this->prependClientActions($accumulator['full_content'], $streamState['client_actions']);
+        $usage = $accumulator['usage'];
+        $latencyMs = $accumulator['latency_ms'];
 
         if (trim($fullContent) === '' && $streamState['client_actions'] === []) {
             yield $this->streamEmptyContentError($runId, $config, $latencyMs, $streamState);
@@ -138,6 +112,57 @@ final class AgenticFinalResponseStreamer
             'content' => $fullContent,
             'meta' => $meta,
         ]];
+    }
+
+    /**
+     * @param  array{full_content: string, usage: mixed, latency_ms: int}  $accumulator
+     * @param  array{
+     *     retry_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
+     *     fallback_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
+     *     client_actions: list<string>,
+     *     tool_actions: list<array<string, mixed>>,
+     *     hooks: array<string, mixed>,
+     *     tools: list<array<string, mixed>>,
+     *     api_messages: list<array<string, mixed>>
+     * }  $streamState
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function yieldFinalResponseStreamEvents(
+        string $runId,
+        iterable $stream,
+        array &$accumulator,
+        array $config,
+        array $streamState,
+    ): \Generator {
+        foreach ($stream as $event) {
+            switch ($event['type']) {
+                case 'thinking_delta':
+                    yield ['event' => 'status', 'data' => [
+                        'phase' => 'thinking_delta',
+                        'delta' => $event['text'],
+                        'run_id' => $runId,
+                    ]];
+                    break;
+
+                case 'content_delta':
+                    $accumulator['full_content'] .= $event['text'];
+                    yield ['event' => 'delta', 'data' => ['text' => $event['text']]];
+                    break;
+
+                case 'done':
+                    $accumulator['usage'] = $event['usage'] ?? null;
+                    $accumulator['latency_ms'] = $event['latency_ms'] ?? 0;
+                    break;
+
+                case 'error':
+                    yield $this->streamFinalErrorEvent($runId, $config, $event, $streamState);
+
+                    return;
+
+                default:
+                    break;
+            }
+        }
     }
 
     /**

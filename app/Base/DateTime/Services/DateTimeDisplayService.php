@@ -178,11 +178,9 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
 
         $carbon = $carbon->setTimezone($this->currentTimezone());
 
-        if ($this->currentMode() === TimezoneMode::UTC) {
-            return $carbon->format($this->storedFormat($type));
-        }
-
-        return $this->formatWithIntl($carbon, $type);
+        return $this->currentMode() === TimezoneMode::UTC
+            ? $carbon->format($this->storedFormat($type))
+            : $this->formatWithIntl($carbon, $type);
     }
 
     /**

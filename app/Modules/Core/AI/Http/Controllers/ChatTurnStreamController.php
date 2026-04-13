@@ -30,48 +30,53 @@ class ChatTurnStreamController
         }
 
         return response()->stream(function () use ($turn): void {
-            set_time_limit(0);
+            $this->writeTurnStream($turn);
+        }, 200, $this->streamHeaders());
+    }
 
-            $runner = app(ChatTurnRunner::class);
-            $disconnected = false;
+    private function writeTurnStream(ChatTurn $turn): void
+    {
+        set_time_limit(0);
 
-            try {
-                $runner->run($turn, function (array $payload) use ($turn, &$disconnected): void {
-                    if ($disconnected || connection_aborted()) {
-                        if (! $disconnected) {
-                            $turn->requestCancel('Client disconnected');
-                            $disconnected = true;
-                        }
+        $runner = app(ChatTurnRunner::class);
+        $disconnected = false;
 
-                        return;
+        try {
+            $runner->run($turn, function (array $payload) use ($turn, &$disconnected): void {
+                if ($disconnected || connection_aborted()) {
+                    if (! $disconnected) {
+                        $turn->requestCancel('Client disconnected');
+                        $disconnected = true;
                     }
 
-                    echo json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . "\n";
-                    $this->flushOutput();
-                });
-            } catch (\Throwable $e) {
-                if (!$disconnected && !connection_aborted()) {
-                    echo json_encode([
-                        'error' => $e->getMessage(),
-                        '_stream_complete' => true,
-                    ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . "\n";
-                    $this->flushOutput();
+                    return;
                 }
 
-                return;
-            }
-
-            if (!$disconnected && !connection_aborted()) {
-                echo json_encode(['_stream_complete' => true], JSON_THROW_ON_ERROR) . "\n";
+                echo json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n";
+                $this->flushOutput();
+            });
+        } catch (\Throwable $e) {
+            if (! $disconnected && ! connection_aborted()) {
+                echo json_encode([
+                    'error' => $e->getMessage(),
+                    '_stream_complete' => true,
+                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n";
                 $this->flushOutput();
             }
-        }, 200, $this->streamHeaders());
+
+            return;
+        }
+
+        if (! $disconnected && ! connection_aborted()) {
+            echo json_encode(['_stream_complete' => true], JSON_THROW_ON_ERROR)."\n";
+            $this->flushOutput();
+        }
     }
 
     private function errorStream(int $status, string $message): StreamedResponse
     {
         return response()->stream(function () use ($message): void {
-            echo json_encode(['error' => $message], JSON_THROW_ON_ERROR) . "\n";
+            echo json_encode(['error' => $message], JSON_THROW_ON_ERROR)."\n";
             $this->flushOutput();
         }, $status, $this->streamHeaders());
     }

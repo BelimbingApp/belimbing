@@ -408,31 +408,7 @@ class LlmClient
                     break;
 
                 case 'assistant':
-                    $content = $msg['content'] ?? '';
-                    if ($content !== '' && $content !== null) {
-                        $assistantItem = [
-                            'type' => 'message',
-                            'role' => 'assistant',
-                            'content' => [['type' => 'output_text', 'text' => $content]],
-                            'status' => 'completed',
-                        ];
-
-                        if (isset($msg['phase'])) {
-                            $assistantItem['phase'] = $msg['phase'];
-                        }
-
-                        $input[] = $assistantItem;
-                    }
-
-                    $toolCalls = $msg['tool_calls'] ?? [];
-                    foreach ($toolCalls as $tc) {
-                        $input[] = [
-                            'type' => 'function_call',
-                            'call_id' => $tc['id'] ?? '',
-                            'name' => $tc['function']['name'] ?? '',
-                            'arguments' => $tc['function']['arguments'] ?? '{}',
-                        ];
-                    }
+                    $this->appendAssistantMessageToResponsesInput($msg, $input);
                     break;
 
                 case 'tool':
@@ -452,6 +428,39 @@ class LlmClient
         $instructionText = implode("\n\n", array_filter($instructions));
 
         return [$instructionText !== '' ? $instructionText : null, $input];
+    }
+
+    /**
+     * @param  array<string, mixed>  $msg
+     * @param  list<array<string, mixed>>  $input
+     */
+    private function appendAssistantMessageToResponsesInput(array $msg, array &$input): void
+    {
+        $content = $msg['content'] ?? '';
+        if ($content !== '' && $content !== null) {
+            $assistantItem = [
+                'type' => 'message',
+                'role' => 'assistant',
+                'content' => [['type' => 'output_text', 'text' => $content]],
+                'status' => 'completed',
+            ];
+
+            if (isset($msg['phase'])) {
+                $assistantItem['phase'] = $msg['phase'];
+            }
+
+            $input[] = $assistantItem;
+        }
+
+        $toolCalls = $msg['tool_calls'] ?? [];
+        foreach ($toolCalls as $tc) {
+            $input[] = [
+                'type' => 'function_call',
+                'call_id' => $tc['id'] ?? '',
+                'name' => $tc['function']['name'] ?? '',
+                'arguments' => $tc['function']['arguments'] ?? '{}',
+            ];
+        }
     }
 
     /**
