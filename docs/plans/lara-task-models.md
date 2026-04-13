@@ -131,6 +131,7 @@ Sub-agents spawned for agentic tasks do not have employee records, separate pers
 ### Phase 1 — Collapse UI to Lara only
 
 - [x] Remove Kodi setup and Agent Playground from the user-visible menu and route surface
+- [x] Remove the dead Kodi setup Livewire component and Blade view now that the public route already redirects to Lara setup
 - [ ] Audit UI copy, help text, and docs that still describe Kodi or the Playground as current product surfaces
 - [ ] Deprecate Kodi as a product surface immediately: remove setup Livewire component, route, Blade view, menu entry, and seeder provisioning. Mark `Employee::KODI_ID` as deprecated in code.
 - [ ] Inventory every runtime call site that still targets Kodi directly and plan its reroute to Lara task/profile execution before removing the underlying employee record
@@ -188,6 +189,7 @@ Sub-agents spawned for agentic tasks do not have employee records, separate pers
 - [x] Add the first delegation flow: when `/delegate` cannot route to a supervised agent, Lara falls back to the `coding` task profile via `AgenticRuntime` with the configured `llm.tasks.coding` model
 - [x] Implement the `research` execution profile (prompt template, tool set, constraints)
 - [x] Extend delegation flow so Lara can choose among multiple task profiles instead of falling back only to `coding`
+- [x] Reroute ticket-update actor fallback from Kodi to Lara so coding/research task profiles no longer attribute ticket work to `Employee::KODI_ID`
 - [ ] Reroute current Kodi-targeting runtime call sites and ticket/delegation flows to Lara task/profile execution, then remove `Employee::KODI_ID` and any remaining Kodi-owned workspace/runtime assumptions
 - [ ] Define how sub-agent tool results and multi-step output are presented in Lara's chat thread
 - [ ] Add tests for sub-agent delegation, authorization scoping, and result surfacing

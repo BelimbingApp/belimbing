@@ -234,7 +234,7 @@ class TicketUpdateTool extends AbstractTool
      *
      * Prefers the AgentExecutionContext (set during queued job execution),
      * then the authenticated user's linked employee, before falling back
-     * to Kodi's provisioned employee record.
+     * to Lara's provisioned employee record.
      */
     private function resolveAgentActor(Ticket $ticket): Actor
     {
@@ -260,11 +260,11 @@ class TicketUpdateTool extends AbstractTool
             );
         }
 
-        $kodi = Employee::query()->find(Employee::KODI_ID);
+        $lara = Employee::query()->find(Employee::LARA_ID);
 
         return $this->makeAgentActor(
-            employeeId: $kodi?->id ?? Employee::KODI_ID,
-            companyId: $kodi?->company_id ?? $ticket->company_id,
+            employeeId: $lara?->id ?? Employee::LARA_ID,
+            companyId: $lara?->company_id ?? $ticket->company_id,
             actingForUserId: $user !== null ? (int) $user->getAuthIdentifier() : null,
         );
     }

@@ -38,7 +38,7 @@ it('attributes ticket comments to the agent employee instead of the authenticate
     $result = $this->tool->execute([
         'ticket_id' => $ticket->id,
         'action' => 'post_comment',
-        'comment' => 'Kodi is working on it.',
+        'comment' => 'Lara is working on it.',
         'comment_tag' => 'agent_progress',
     ]);
 
@@ -47,5 +47,39 @@ it('attributes ticket comments to the agent employee instead of the authenticate
     expect((string) $result)->toContain("Comment posted to ticket #{$ticket->id}.")
         ->and($entry)->not->toBeNull()
         ->and($entry->actor_id)->toBe($employee->id)
+        ->and($entry->actor_id)->not->toBe($user->id);
+});
+
+it('falls back to Lara attribution when no employee context is available', function () {
+    $company = Company::factory()->create();
+    Employee::provisionLara();
+
+    $user = User::factory()->create([
+        'company_id' => $company->id,
+        'employee_id' => null,
+    ]);
+
+    $ticket = Ticket::query()->create([
+        'company_id' => $company->id,
+        'reporter_id' => Employee::LARA_ID,
+        'status' => 'open',
+        'priority' => 'medium',
+        'title' => 'Investigate Lara fallback attribution',
+    ]);
+
+    $this->actingAs($user);
+
+    $result = $this->tool->execute([
+        'ticket_id' => $ticket->id,
+        'action' => 'post_comment',
+        'comment' => 'Research findings collected.',
+        'comment_tag' => 'agent_progress',
+    ]);
+
+    $entry = StatusHistory::latest('it_ticket', $ticket->id);
+
+    expect((string) $result)->toContain("Comment posted to ticket #{$ticket->id}.")
+        ->and($entry)->not->toBeNull()
+        ->and($entry->actor_id)->toBe(Employee::LARA_ID)
         ->and($entry->actor_id)->not->toBe($user->id);
 });
