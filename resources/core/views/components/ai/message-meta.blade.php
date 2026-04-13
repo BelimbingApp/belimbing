@@ -101,8 +101,21 @@
                     @if ($runDetailsId !== null)
                         id="{{ $runDetailsId }}"
                     @endif
-                    x-effect="popoverOpen ? $el.show() : $el.close()"
+                    x-effect="
+                        if (popoverOpen) {
+                            if (! $el.open) {
+                                $el.show();
+                            }
+
+                            return;
+                        }
+
+                        if ($el.open) {
+                            $el.close();
+                        }
+                    "
                     @click.outside="popoverOpen = false"
+                    @close="popoverOpen = false"
                     @keydown.escape.window="popoverOpen = false"
                     @if ($runDetailsTitleId !== null)
                         aria-labelledby="{{ $runDetailsTitleId }}"
