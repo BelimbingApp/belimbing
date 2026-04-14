@@ -1,6 +1,6 @@
 # Remote Phone Browser Access
 
-**Status:** LAN Direction Chosen
+**Status:** LAN Proposal Draft
 **Last Updated:** 2026-04-14
 **Sources:** User request (2026-04-13), `docs/brief.md`
 
@@ -158,13 +158,42 @@ Local and staging should continue to be treated as `core-admin` environments. VP
 
 The target solution should prioritize open-source and self-hostable components so the licensee cost stays low and the deployment story remains aligned with Belimbing's framework philosophy.
 
-### D11: The chosen shape is still judged by setup ease, dependency burden, and security
+### D11: The shape is still judged by setup ease, dependency burden, and security
 
 Even with VPN as the WAN direction, the final shape should be evaluated by three drivers:
 
 - how easy it feels for a non-technical licensee
 - how many dependencies and setup steps it introduces
 - how strong the resulting security posture is
+
+## Proposal — Preferred LAN Direction
+
+The current LAN proposal is to standardize Belimbing around **real domains, a dedicated `blb` subdomain, split-horizon DNS, and publicly trusted HTTPS**.
+
+For a licensee with domain `example.com`, the proposed environment URLs are:
+
+- `prod.blb.example.com`
+- `staging.blb.example.com`
+- `local.blb.example.com`
+
+The proposed LAN setup is:
+
+- **HTTPS edge:** FrankenPHP with Caddy
+- **Certificates:** publicly trusted certificate for `*.blb.example.com` (or equivalent SAN coverage), obtained and renewed through DNS-01
+- **LAN resolution:** router or local DNS override so each Belimbing hostname resolves to the correct private IP on the local network
+- **Single-machine setup:** all environment hostnames may resolve to the same private IP, with Caddy routing by hostname to the correct instance
+- **Multi-host setup:** each hostname resolves to the appropriate private host or the published load-balancer or service VIP address
+- **Bootstrap fallback:** raw IP may be shown for first-run troubleshooting only, not as the normal phone-browser URL
+
+This is the current leading proposal because it best satisfies the stated goals:
+
+- **easy phone UX** — users open a normal HTTPS URL
+- **trusted HTTPS** — camera and other secure-origin features work without manual certificate installation on phones
+- **low cost** — the main unavoidable paid component is the domain name; the runtime stack stays open-source
+- **scalable naming** — the same pattern works from one machine to larger topologies
+- **clear environment boundaries** — each environment is a distinct origin and bookmarkable destination
+
+This section is intentionally a proposal, not a frozen decision. We still need to validate whether router or local DNS override is simple enough for non-technical licensees, and whether Belimbing should package additional guidance or automation around that step.
 
 ## Phases
 
@@ -175,10 +204,11 @@ Even with VPN as the WAN direction, the final shape should be evaluated by three
 - [x] Compare LAN address strategies at a high level: raw IP, local hostname discovery, and local DNS/gateway naming
 - [x] Decide whether raw IP is only a bootstrap fallback or an acceptable primary UX
 - [x] Define the mandatory HTTPS and certificate-trust story for LAN phone access
-- [ ] Define the recommended domain and hostname pattern for environments on LAN
-- [ ] Decide whether the simplest default should publish private LAN IPs in public DNS or rely on router/local DNS overrides
+- [x] Draft the proposed domain and hostname pattern for environments on LAN
+- [x] Draft the preferred DNS resolution model for LAN and note why public-DNS-to-private-IP is not the default
 - [x] Confirm each environment instance has its own LAN URL (distinct origin); treat bookmarks and browser history as sufficient disambiguation—no separate mobile-only “which environment” UX requirement
 - [x] Confirm that Belimbing login and environment role rules remain the only application-level gate on LAN
+- [ ] Validate the proposal against real-world router, phone, and DNS edge cases before treating it as the default
 
 ### Phase 2 — Turn LAN into an adoptable Belimbing story
 
@@ -186,7 +216,7 @@ Even with VPN as the WAN direction, the final shape should be evaluated by three
 - [ ] Describe how the deployment pattern applies for use case 2 (two computers: dev + staging on one, production on another)
 - [ ] Describe how the deployment pattern applies for use case 3 (three+ computers: e.g. dedicated DB, load-balanced app tier; operators use the published HTTPS entry URL)
 - [ ] Identify which parts of the LAN story belong to Belimbing itself and which parts belong to surrounding infrastructure guidance
-- [ ] Identify the minimum dependency set we expect Belimbing to install or orchestrate for LAN access: Caddy/FrankenPHP, a real domain, certificate automation, and either public-DNS-to-private-IP or local DNS override support
+- [ ] Identify the minimum dependency set we expect Belimbing to install or orchestrate for LAN access: Caddy/FrankenPHP, a real domain, certificate automation, and local DNS override support
 - [ ] Identify where LAN setup automation belongs: base setup script, companion scripts, Lara-guided steps, or a deliberate combination
 - [ ] Decide whether Belimbing should provide phone-friendly discovery aids such as surfaced URLs or QR-based handoff
 
