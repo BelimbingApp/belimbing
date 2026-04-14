@@ -38,7 +38,18 @@ trait HandlesStreaming
      * context, and execution mode. Returns the turn ID and stream URL so
      * Alpine can open a persistent fetch connection to the streaming controller.
      *
-     * @return array{turnId: string, streamUrl: string, session_id: string}|null Null when an orchestration shortcut handled the message or input was invalid
+     * @return array{
+     *     status: 'started'|'session_busy',
+     *     turnId: string,
+     *     session_id: string,
+     *     streamUrl?: string,
+     *     replayUrl: string,
+     *     phase: string|null,
+     *     label: string|null,
+     *     started_at: string|null,
+     *     created_at: string|null,
+     *     timer_anchor_at: string|null
+     * }|null Null when an orchestration shortcut handled the message or input was invalid
      */
     public function prepareStreamingRun(): ?array
     {
@@ -57,6 +68,14 @@ trait HandlesStreaming
             // Recover gracefully when client-side storage points to a stale session ID.
             $session = $sessionManager->create($this->employeeId);
             $this->selectedSessionId = $session->id;
+        }
+
+        $activeTurn = $this->findActiveTurnForSession($this->selectedSessionId);
+        if ($activeTurn !== null) {
+            return [
+                'status' => 'session_busy',
+                ...$this->formatActiveTurnPayload($activeTurn),
+            ];
         }
 
         $content = trim($this->messageInput);
@@ -90,9 +109,140 @@ trait HandlesStreaming
         ]);
 
         return [
+            'status' => 'started',
             'turnId' => $turn->id,
             'streamUrl' => route('ai.chat.turn.stream', ['turnId' => $turn->id]),
+            'replayUrl' => route('ai.chat.turn.events', ['turnId' => $turn->id]),
             'session_id' => $this->selectedSessionId,
+            'phase' => TurnPhase::WaitingForWorker->value,
+            'label' => TurnPhase::WaitingForWorker->label(),
+            'started_at' => $turn->started_at?->toIso8601String(),
+            'created_at' => $turn->created_at?->toIso8601String(),
+            'timer_anchor_at' => $turn->created_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @return array<string, array{
+     *     turnId: string,
+     *     session_id: string,
+     *     replayUrl: string,
+     *     phase: string|null,
+     *     label: string|null,
+     *     started_at: string|null,
+     *     created_at: string|null,
+     *     timer_anchor_at: string|null,
+     *     status: string
+     * }>
+     */
+    private function activeTurnsBySessionForCurrentUser(): array
+    {
+        $userId = auth()->id();
+
+        if (! is_numeric($userId)) {
+            return [];
+        }
+
+        $actingForUserId = (int) $userId;
+
+        $activeTurns = ChatTurn::query()
+            ->where('employee_id', $this->employeeId)
+            ->where('acting_for_user_id', $actingForUserId)
+            ->whereIn('status', $this->activeTurnStatusValues())
+            ->orderByDesc('created_at')
+            ->get([
+                'id',
+                'session_id',
+                'status',
+                'current_phase',
+                'current_label',
+                'started_at',
+                'created_at',
+            ]);
+
+        $bySession = [];
+
+        foreach ($activeTurns as $turn) {
+            if (isset($bySession[$turn->session_id])) {
+                continue;
+            }
+
+            $bySession[$turn->session_id] = [
+                ...$this->formatActiveTurnPayload($turn),
+                'status' => $turn->status->value,
+            ];
+        }
+
+        return $bySession;
+    }
+
+    private function findActiveTurnForSession(string $sessionId): ?ChatTurn
+    {
+        $userId = auth()->id();
+
+        if (! is_numeric($userId)) {
+            return null;
+        }
+
+        $actingForUserId = (int) $userId;
+
+        return ChatTurn::query()
+            ->where('employee_id', $this->employeeId)
+            ->where('session_id', $sessionId)
+            ->where('acting_for_user_id', $actingForUserId)
+            ->whereIn('status', $this->activeTurnStatusValues())
+            ->orderByDesc('created_at')
+            ->first([
+                'id',
+                'session_id',
+                'status',
+                'current_phase',
+                'current_label',
+                'started_at',
+                'created_at',
+            ]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function activeTurnStatusValues(): array
+    {
+        return [
+            TurnStatus::Queued->value,
+            TurnStatus::Booting->value,
+            TurnStatus::Running->value,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     turnId: string,
+     *     session_id: string,
+     *     replayUrl: string,
+     *     phase: string|null,
+     *     label: string|null,
+     *     started_at: string|null,
+     *     created_at: string|null,
+     *     timer_anchor_at: string|null
+     * }
+     */
+    private function formatActiveTurnPayload(ChatTurn $turn): array
+    {
+        $phase = $turn->current_phase?->value;
+        $label = $turn->current_label ?? $turn->current_phase?->label();
+        $startedAt = $turn->started_at?->toIso8601String();
+        $createdAt = $turn->created_at?->toIso8601String();
+
+        return [
+            'turnId' => $turn->id,
+            'session_id' => $turn->session_id,
+            'replayUrl' => route('ai.chat.turn.events', ['turnId' => $turn->id]),
+            'phase' => $phase,
+            'label' => $label,
+            'started_at' => $startedAt,
+            'created_at' => $createdAt,
+            'timer_anchor_at' => $startedAt ?? $createdAt,
         ];
     }
 

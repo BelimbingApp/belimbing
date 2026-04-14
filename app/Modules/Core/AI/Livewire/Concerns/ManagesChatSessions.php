@@ -46,6 +46,17 @@ trait ManagesChatSessions
         $session = app(SessionManager::class)->get($this->employeeId, $sessionId);
         $this->selectedModel = $session?->llm['model_override'] ?? null;
 
+        $activeTurn = $this->findActiveTurnForSession($sessionId);
+        $this->dispatch(
+            'agent-chat-session-selected',
+            sessionId: $sessionId,
+            activeTurnId: $activeTurn?->id,
+            activeTurnPhase: $activeTurn?->current_phase?->value,
+            activeTurnLabel: $activeTurn?->current_label ?? $activeTurn?->current_phase?->label(),
+            activeTurnStartedAt: $activeTurn?->started_at?->toIso8601String(),
+            activeTurnCreatedAt: $activeTurn?->created_at?->toIso8601String(),
+        );
+
         $this->dispatch('agent-chat-focus-composer');
     }
 

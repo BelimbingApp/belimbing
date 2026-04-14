@@ -36,6 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withSchedule(function (Schedule $schedule) {
         $schedule->command('blb:ai:runs:reap-orphans')->everyFiveMinutes();
+        $schedule->command('blb:ai:turns:sweep-stale')->everyFiveMinutes();
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->report(function (BlbException $exception): void {

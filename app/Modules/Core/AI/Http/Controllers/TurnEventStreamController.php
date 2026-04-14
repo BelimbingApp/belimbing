@@ -53,6 +53,7 @@ class TurnEventStreamController
             'current_phase' => $turn->current_phase?->value,
             'current_label' => $turn->current_label,
             'started_at' => $turn->started_at?->toIso8601String(),
+            'created_at' => $turn->created_at?->toIso8601String(),
         ]);
     }
 }

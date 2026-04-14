@@ -11,11 +11,10 @@ use App\Base\Authz\DTO\Actor;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesStreaming;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesChatSessions;
-use App\Modules\Core\AI\Models\ChatTurn;
-use App\Modules\Core\AI\Services\OperationsDispatchService;
 use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\MessageManager;
+use App\Modules\Core\AI\Services\OperationsDispatchService;
 use App\Modules\Core\AI\Services\QuickActionRegistry;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Employee\Models\Employee;
@@ -144,9 +143,11 @@ class Chat extends Component
         $messages = [];
         $sessionUsage = null;
         $hasPendingDelegations = false;
+        $activeTurnsBySession = [];
 
         if ($agentActivated) {
             $sessions = app(SessionManager::class)->list($this->employeeId);
+            $activeTurnsBySession = $this->activeTurnsBySessionForCurrentUser();
         }
 
         if ($agentActivated && $this->selectedSessionId !== null) {
@@ -169,17 +170,10 @@ class Chat extends Component
             : [];
 
         $settingsUrl = $this->settingsUrl();
-
-        // Detect any active (non-terminal) turn for resume-on-load
-        $activeTurn = null;
-        if ($agentActivated && $this->selectedSessionId !== null) {
-            $activeTurn = ChatTurn::query()
-                ->where('session_id', $this->selectedSessionId)
-                ->where('acting_for_user_id', auth()->id())
-                ->whereNotIn('status', ['completed', 'failed', 'cancelled'])
-                ->latest()
-                ->first(['id', 'status', 'current_phase', 'current_label']);
-        }
+        $selectedSessionActiveTurn = $this->selectedSessionId !== null
+            ? ($activeTurnsBySession[$this->selectedSessionId] ?? null)
+            : null;
+        $activeTurnCount = count($activeTurnsBySession);
 
         return view('livewire.ai.chat', [
             'agentExists' => $agentExists,
@@ -196,7 +190,10 @@ class Chat extends Component
             'hasPendingDelegations' => $hasPendingDelegations,
             'markdown' => $markdown,
             'quickActions' => $quickActions,
-            'activeTurnId' => $activeTurn?->id,
+            'activeTurnsBySession' => $activeTurnsBySession,
+            'selectedSessionActiveTurn' => $selectedSessionActiveTurn,
+            'activeTurnCount' => $activeTurnCount,
+            'hasActiveTurns' => $activeTurnCount > 0,
         ]);
     }
 

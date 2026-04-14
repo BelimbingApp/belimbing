@@ -6,7 +6,7 @@
 ?>
 <div
     class="h-full flex flex-col"
-    @if ($hasPendingDelegations)
+    @if ($hasPendingDelegations || $hasActiveTurns)
         wire:poll.2s
     @endif
     x-data="{
@@ -17,6 +17,25 @@
         _sessionDragging: false,
         SESSION_MIN: 160,
         SESSION_MAX: 320,
+
+        formatElapsedFrom(isoTimestamp) {
+            if (!isoTimestamp) {
+                return '0s';
+            }
+
+            const startedAt = new Date(isoTimestamp).getTime();
+            if (Number.isNaN(startedAt)) {
+                return '0s';
+            }
+
+            const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+
+            if (elapsedSeconds < 60) {
+                return elapsedSeconds + 's';
+            }
+
+            return Math.floor(elapsedSeconds / 60) + 'm ' + (elapsedSeconds % 60) + 's';
+        },
 
         cyclePageAwareness() {
             const levels = ['off', 'page', 'full'];
@@ -102,6 +121,16 @@
             >
                 <x-icon name="heroicon-o-chat-bubble-left-right" class="w-4 h-4" />
             </button>
+            @if ($activeTurnCount > 0)
+                <span
+                    x-show="!sessionsOpen"
+                    x-cloak
+                    class="inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-accent/15 px-1 text-[10px] tabular-nums text-accent"
+                    title="{{ trans_choice(':count active session|:count active sessions', $activeTurnCount, ['count' => $activeTurnCount]) }}"
+                >
+                    {{ $activeTurnCount }}
+                </span>
+            @endif
             @if ($settingsUrl !== null)
                 <a
                     href="{{ $settingsUrl }}"
@@ -305,6 +334,9 @@
                 @else
                     {{-- Session list --}}
                     @forelse($sessions as $session)
+                        @php
+                            $sessionActiveTurn = $activeTurnsBySession[$session->id] ?? null;
+                        @endphp
                         <div class="group" wire:key="agent-session-{{ $session->id }}">
                             @if ($editingSessionId === $session->id)
                                 <div class="flex-1 px-2 py-1.5 space-y-1">
@@ -350,16 +382,38 @@
                                             {{ $session->title ?? __('Untitled') }}<span class="sr-only">, {{ __('edit title') }}</span>
                                         </button>
                                         <div class="text-xs text-muted tabular-nums">{{ $session->lastActivityAt->format('M j, H:i') }}</div>
+                                        @if ($sessionActiveTurn !== null)
+                                            <div class="mt-0.5 flex items-center gap-1.5 min-w-0 text-[10px] text-accent">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0"></span>
+                                                <span class="truncate">{{ $sessionActiveTurn['label'] ?? __('Active') }}</span>
+                                                <span
+                                                    class="tabular-nums text-muted/80 shrink-0"
+                                                    x-text="formatElapsedFrom('{{ $sessionActiveTurn['timer_anchor_at'] }}')"
+                                                ></span>
+                                            </div>
+                                        @endif
                                     </div>
-                                    <button
-                                        type="button"
-                                        wire:click.stop="deleteSession('{{ $session->id }}')"
-                                        class="text-muted hover:text-ink p-1 shrink-0"
-                                        title="{{ __('Delete session') }}"
-                                        aria-label="{{ __('Delete session') }}"
-                                    >
-                                        <x-icon name="heroicon-o-trash" class="w-3.5 h-3.5" />
-                                    </button>
+                                    @if ($sessionActiveTurn !== null)
+                                        <button
+                                            type="button"
+                                            wire:click.stop="cancelActiveTurn('{{ $sessionActiveTurn['turnId'] }}')"
+                                            class="text-muted hover:text-ink p-1 shrink-0"
+                                            title="{{ __('Stop active turn') }}"
+                                            aria-label="{{ __('Stop active turn') }}"
+                                        >
+                                            <x-icon name="heroicon-o-stop" class="w-3.5 h-3.5" />
+                                        </button>
+                                    @else
+                                        <button
+                                            type="button"
+                                            wire:click.stop="deleteSession('{{ $session->id }}')"
+                                            class="text-muted hover:text-ink p-1 shrink-0"
+                                            title="{{ __('Delete session') }}"
+                                            aria-label="{{ __('Delete session') }}"
+                                        >
+                                            <x-icon name="heroicon-o-trash" class="w-3.5 h-3.5" />
+                                        </button>
+                                    @endif
                                 </div>
                             @endif
                         </div>
@@ -393,15 +447,16 @@
                 })"
                 x-effect="window.dispatchEvent(new CustomEvent(isBusy ? 'agent-chat-busy' : 'agent-chat-idle'))"
                 x-on:agent-chat-response-ready.window="pendingMessage = null; streamEntries = []; resetTurnState()"
+                x-on:agent-chat-session-selected.window="onSessionSelected($event.detail || {}, $refs.agentScroll)"
             >
                 <div
                     class="flex-1 min-w-0 min-h-0 overflow-y-auto px-4 py-3 space-y-3 relative"
                     x-ref="agentScroll"
                     x-init="
                         $nextTick(() => $el.scrollTop = $el.scrollHeight);
-                        const resumeTurnId = @js($activeTurnId);
-                        if (resumeTurnId) {
-                            $nextTick(() => resumeTurnStream(resumeTurnId, $el));
+                        const selectedTurn = @js($selectedSessionActiveTurn);
+                        if (selectedTurn?.turnId) {
+                            $nextTick(() => resumeKnownTurn(selectedTurn, $el));
                         }
                     "
                     @scroll.throttle.100ms="
@@ -852,11 +907,6 @@
             if (!value && !hasAttachments) return;
 
             this.pendingMessage = value || '📎';
-            this.streamEntries = [];
-            this.resetTurnState();
-            textarea.value = '';
-            textarea.style.height = 'auto';
-            localStorage.removeItem(this._draftKey);
             this.$nextTick(() => {
                 if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
             });
@@ -866,17 +916,38 @@
             try {
                 const result = await this.$wire.prepareStreamingRun();
 
+                if (result?.status === 'session_busy' && result.turnId) {
+                    this.pendingMessage = null;
+                    await this.resumeKnownTurn({
+                        turnId: result.turnId,
+                        phase: result.phase,
+                        label: result.label,
+                        started_at: result.started_at,
+                        created_at: result.created_at,
+                    }, scrollContainer);
+                    this.$nextTick(() => textarea?.focus());
+                    return;
+                }
+
                 if (result && result.turnId && result.streamUrl) {
+                    this.streamEntries = [];
+                    this.resetTurnState();
                     this.pendingMessage = null;
                     this.activeTurnId = result.turnId;
-                    this.turnPhase = 'waiting_for_worker';
-                    this.turnLabel = this.waitingForWorkerLabel;
-                    this.startElapsedTimer();
+                    this.turnPhase = result.phase || 'waiting_for_worker';
+                    this.turnLabel = result.label || this.waitingForWorkerLabel;
+                    this.startElapsedTimer(result.started_at || result.created_at || null);
                     this.startPersistentFetch(result.turnId, result.streamUrl, scrollContainer);
+                    textarea.value = '';
+                    textarea.style.height = 'auto';
+                    localStorage.removeItem(this._draftKey);
                     return;
                 }
 
                 this.pendingMessage = null;
+                textarea.value = '';
+                textarea.style.height = 'auto';
+                localStorage.removeItem(this._draftKey);
             } catch (e) {
                 this.streamEntries.push({
                     type: 'error',
@@ -966,6 +1037,11 @@
         },
 
         startElapsedTimer(serverStartedAt = null) {
+            if (this._elapsedTimer) {
+                clearInterval(this._elapsedTimer);
+                this._elapsedTimer = null;
+            }
+
             this.turnStartedAt = serverStartedAt
                 ? new Date(serverStartedAt).getTime()
                 : Date.now();
@@ -973,6 +1049,54 @@
             this._elapsedTimer = setInterval(() => {
                 this.elapsedSeconds = Math.floor((Date.now() - this.turnStartedAt) / 1000);
             }, 1000);
+        },
+
+        async resumeKnownTurn(activeTurn, scrollContainer) {
+            if (!activeTurn?.turnId) {
+                return;
+            }
+
+            const turnId = activeTurn.turnId;
+            const timerAnchor = activeTurn.started_at || activeTurn.created_at || null;
+            const phase = activeTurn.phase || null;
+            const label = activeTurn.label || phase || this.waitingForWorkerLabel;
+
+            if (this.activeTurnId !== turnId) {
+                this.streamEntries = [];
+                this.resetTurnState();
+            }
+
+            this.turnPhase = phase;
+            this.turnLabel = label;
+
+            if (timerAnchor) {
+                this.startElapsedTimer(timerAnchor);
+            }
+
+            if (this.activeTurnId === turnId && (this._abortController || this._replayPollTimer)) {
+                return;
+            }
+
+            await this.resumeTurnStream(turnId, scrollContainer);
+        },
+
+        async onSessionSelected(detail, scrollContainer) {
+            const selectedTurn = {
+                turnId: detail?.activeTurnId || null,
+                phase: detail?.activeTurnPhase || null,
+                label: detail?.activeTurnLabel || null,
+                started_at: detail?.activeTurnStartedAt || null,
+                created_at: detail?.activeTurnCreatedAt || null,
+            };
+
+            if (!selectedTurn.turnId) {
+                this.pendingMessage = null;
+                this.streamEntries = [];
+                this.resetTurnState();
+                return;
+            }
+
+            await this.resumeKnownTurn(selectedTurn, scrollContainer);
         },
 
         stopReplayPolling() {
@@ -1167,8 +1291,8 @@
                 return null;
             }
 
-            if (json.started_at && !this.turnStartedAt) {
-                this.startElapsedTimer(json.started_at);
+            if (!this.turnStartedAt && (json.started_at || json.created_at)) {
+                this.startElapsedTimer(json.started_at || json.created_at);
             }
             if (json.current_phase) {
                 this.turnPhase = json.current_phase;
@@ -1285,7 +1409,11 @@
         onTurnStarted(data) {
             const payload = data?.payload || data || {};
             const serverStartedAt = payload.started_at || null;
-            if (!this.turnStartedAt) this.startElapsedTimer(serverStartedAt);
+            if (serverStartedAt) {
+                this.startElapsedTimer(serverStartedAt);
+            } else if (!this.turnStartedAt) {
+                this.startElapsedTimer();
+            }
             this.turnPhase = 'booting';
             this.turnLabel = this.startingLabel;
         },

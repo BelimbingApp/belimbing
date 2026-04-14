@@ -1,6 +1,6 @@
 # Lara Concurrent Runs
 
-**Status:** Identified
+**Status:** In Progress
 **Last Updated:** 2026-04-14
 **Sources:** `run_qLd8OtMmZbtY`, `docs/todo/ai/ai-chat-coding-agent-console.md`, `docs/todo/ai/lara-realtime-console.md`, `resources/core/views/livewire/ai/chat.blade.php`, `app/Modules/Core/AI/Livewire/Chat.php`, `app/Modules/Core/AI/Livewire/Concerns/HandlesStreaming.php`
 
@@ -66,11 +66,11 @@ Lara should support concurrent work without losing observability or control. A u
 
 Goal: define the supported concurrency model and make the backend reject unsupported cases explicitly.
 
-- [ ] Add a plan-backed policy note to the Lara chat contract: many active sessions per user, one active turn per session.
-- [ ] Update `prepareStreamingRun()` to detect an existing non-terminal turn for the current user and selected session before creating a new turn.
-- [ ] Return a structured "session already busy" payload that includes the existing `turn_id`, `session_id`, phase, label, and resume route instead of creating a duplicate turn.
-- [ ] Add backend tests for duplicate submit in the same session, including ownership boundaries.
-- [ ] Audit message/title/session-usage assumptions and document that they remain session-sequential by design.
+- [x] Add a plan-backed policy note to the Lara chat contract: many active sessions per user, one active turn per session.
+- [x] Update `prepareStreamingRun()` to detect an existing non-terminal turn for the current user and selected session before creating a new turn.
+- [x] Return a structured "session already busy" payload that includes the existing `turn_id`, `session_id`, phase, label, and resume route instead of creating a duplicate turn.
+- [x] Add backend tests for duplicate submit in the same session, including ownership boundaries.
+- [x] Audit message/title/session-usage assumptions and document that they remain session-sequential by design.
 
 ### Phase 2 — Replace the singleton live-turn frontend model
 
@@ -88,14 +88,14 @@ Goal: make the client capable of tracking multiple active turns safely.
 
 Goal: make concurrent work understandable and resumable for humans.
 
-- [ ] Extend the session panel so each session row can show active-turn state: phase label, elapsed time, and a clear busy indicator.
-- [ ] Add row-level actions for active sessions: open session and stop turn.
-- [ ] Add a compact fallback indicator for collapsed/mobile states that reopens the session panel and summarizes busy-session count.
-- [ ] On page load, fetch all active turns for the current user, not only the latest turn in the selected session.
-- [ ] Resume the selected session's active turn into the detailed rail.
-- [ ] Resume non-selected active turns into session-panel summaries with phase and timer updates driven by replay/polling.
-- [ ] When the user switches sessions, bind the detailed rail to that session's active turn if present; otherwise show the persisted transcript only.
-- [ ] When a session-busy submit is rejected, shift focus back to the existing live turn instead of failing silently.
+- [x] Extend the session panel so each session row can show active-turn state: phase label, elapsed time, and a clear busy indicator.
+- [x] Add row-level actions for active sessions: open session and stop turn.
+- [x] Add a compact fallback indicator for collapsed/mobile states that reopens the session panel and summarizes busy-session count.
+- [x] On page load, fetch all active turns for the current user, not only the latest turn in the selected session.
+- [x] Resume the selected session's active turn into the detailed rail.
+- [x] Resume non-selected active turns into session-panel summaries with phase and timer updates driven by replay/polling.
+- [x] When the user switches sessions, bind the detailed rail to that session's active turn if present; otherwise show the persisted transcript only.
+- [x] When a session-busy submit is rejected, shift focus back to the existing live turn instead of failing silently.
 
 ### Phase 4 — Align terminal-state cleanup and operational repair
 
@@ -103,8 +103,8 @@ Goal: ensure concurrency does not leave stranded UI or server state behind.
 
 - [ ] Make terminal handling remove only the affected turn entry from the client registry.
 - [ ] Refresh only the transcript/session usage for the session whose turn just terminated.
-- [ ] Schedule `blb:ai:turns:sweep-stale` alongside orphan-run reaping in the app scheduler.
-- [ ] Ensure stale-turn sweeping converges through the same terminal event path the UI already reads. The sweep must emit the durable terminal event itself, or write the terminal state into the same turn/event store the client consumes, so there is no separate "sweep-only" UI pathway.
+- [x] Schedule `blb:ai:turns:sweep-stale` alongside orphan-run reaping in the app scheduler.
+- [x] Ensure stale-turn sweeping converges through the same terminal event path the UI already reads. The sweep must emit the durable terminal event itself, or write the terminal state into the same turn/event store the client consumes, so there is no separate "sweep-only" UI pathway.
 - [ ] Verify stale-turn and forced-cancel paths emit the same per-turn terminal signals the concurrent UI expects.
 - [ ] Add a repair rule for abandoned selected-session state so switching away from a wedged session does not strand the UI.
 

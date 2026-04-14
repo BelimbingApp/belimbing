@@ -190,5 +190,6 @@ describe('TurnEventStreamController', function () {
         expect($json)->toHaveKey('turn_id', $turn->id);
         expect($json)->toHaveKey('status', 'completed');
         expect($json)->toHaveKey('started_at');
+        expect($json)->toHaveKey('created_at');
     });
 });
