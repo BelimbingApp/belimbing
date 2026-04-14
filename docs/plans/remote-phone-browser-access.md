@@ -166,7 +166,7 @@ Even with VPN as the WAN direction, the final shape should be evaluated by three
 - how many dependencies and setup steps it introduces
 - how strong the resulting security posture is
 
-## Proposal — Preferred LAN Direction
+## Proposal 1 — Preferred LAN Direction
 
 The current LAN proposal is to standardize Belimbing around **real domains, a dedicated `blb` subdomain, split-horizon DNS, and publicly trusted HTTPS**.
 
@@ -194,6 +194,83 @@ This is the current leading proposal because it best satisfies the stated goals:
 - **clear environment boundaries** — each environment is a distinct origin and bookmarkable destination
 
 This section is intentionally a proposal, not a frozen decision. We still need to validate whether router or local DNS override is simple enough for non-technical licensees, and whether Belimbing should package additional guidance or automation around that step.
+
+## Proposal 2 — Alternative for Licensees Without a Registered Domain
+
+For licensees who do **not** have a registered domain and do not want to buy one yet, Belimbing should also document a **private-network HTTPS path built on Tailscale**. This is especially relevant for small self-hosted deployments on a single machine where the main goal is reliable phone-browser access for known operators rather than public internet reachability.
+
+Under this proposal:
+
+- **Tailscale provides the private network and device identity layer**
+- **Tailscale HTTPS / Serve provides the trusted remote browser entry point**
+- **Belimbing remains behind the private network rather than being exposed directly to the public internet**
+- **Belimbing login and environment role rules still handle application access after the network path is established**
+
+This alternative exists because the registered-domain proposal solves certificate trust elegantly, but it introduces a domain purchase and DNS setup step that some very small licensees may see as unnecessary friction. Tailscale offers a lower-friction path for private phone access without asking each phone user to install and trust a private CA manually, and without requiring the licensee to register a domain first.
+
+### When this alternative fits best
+
+This direction is most suitable when:
+
+- the deployment is private to one owner or a small internal team
+- the users who need phone access are known in advance
+- the goal is browser access from outside the Wi-Fi network without exposing Belimbing directly to the public internet
+- the licensee wants to avoid the operational burden of domain registration and DNS setup in the first iteration
+
+### Proposed shape
+
+For the no-domain path, the deployment pattern is:
+
+- **Belimbing app runtime:** FrankenPHP with Caddy
+- **Network reachability:** Tailscale
+- **Remote browser path:** Tailscale Serve over HTTPS
+- **Trust model:** only approved devices and users on the private tailnet may reach the Belimbing entry URL
+
+For example, a single-computer deployment could run multiple Belimbing instances on separate local ports:
+
+- dev → local port A
+- staging → local port B
+- production → local port C
+
+Tailscale Serve (or an equivalent Tailscale HTTPS publishing layer) can then present those instances to approved phones over a trusted private HTTPS address space without a separately registered domain. Each environment still keeps its own distinct URL.
+
+### WSL2-specific note
+
+If Belimbing runs inside **WSL2 on Windows**, the safer default is to install **Tailscale on the Windows host**, not inside WSL2, and treat WSL2 as the application runtime behind Windows networking. This avoids the extra complexity of running Tailscale simultaneously on both Windows and WSL2 and fits the fact that external traffic reaches the Windows side first before being forwarded to the Belimbing services inside WSL2.
+
+In that shape:
+
+- **Windows host:** Tailscale node and remote-access edge
+- **WSL2:** FrankenPHP/Caddy and the Belimbing instances
+- **Windows-to-WSL routing:** host reachability to the published WSL2 ports
+
+This should be documented explicitly because many Belimbing developers and some licensees may run the product on Windows with WSL2 during early deployments.
+
+### Strengths of the no-domain Tailscale path
+
+- **no domain purchase required**
+- **trusted HTTPS for approved devices** without private CA hand-installation on each phone
+- **works away from the local network** as long as the operator is on the private Tailscale network
+- **keeps Belimbing off the open internet by default**
+- **fits the WAN-through-private-network direction** already preferred in this draft
+
+### Tradeoffs and limits
+
+This path is strong for private operator access, but it is not the same as a normal public web deployment. The main tradeoffs are:
+
+- every operator device needs Tailscale installed and authenticated
+- this is better for private staff access than for customer-facing public access
+- it introduces an extra infrastructure dependency outside the core web stack
+- the URL shape and identity model are tied to the private network solution rather than to the licensee's own public domain
+
+### Position in the overall decision model
+
+The draft should therefore treat the access story as having **two viable reference patterns** for small deployments:
+
+1. **Registered-domain pattern** — preferred default when the licensee has or is willing to buy a domain and wants the most web-native long-term setup
+2. **No-domain private-network pattern** — recommended fallback when the deployment is private, operator-only, and the licensee wants remote phone-browser access without domain registration
+
+This framing keeps the current preferred direction intact while acknowledging that a Tailscale-based approach may be the most adoptable first step for some licensees, especially solo operators and very small teams.
 
 ## Phases
 
