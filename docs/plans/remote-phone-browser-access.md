@@ -1,7 +1,7 @@
 # Remote Phone Browser Access
 
-**Status:** LAN Focus  
-**Last Updated:** 2026-04-14  
+**Status:** LAN Direction Chosen
+**Last Updated:** 2026-04-14
 **Sources:** User request (2026-04-13), `docs/brief.md`
 
 ## Problem Essence
@@ -48,15 +48,19 @@ This gives Belimbing a simple contract:
 - **Application access** is handled by Belimbing login and normal environment role rules.
 - **Environment restrictions** still apply after login; local and staging remain `core-admin` only.
 
-## High-Level Access Scenarios
+## Deployment tiers
 
-These scenarios describe the product expectation, not the implementation:
+### 1. Single computer — development and production instances
 
-- **Solo operator, single computer:** one person runs Belimbing on a single machine and needs to open it from a phone browser both near that machine and while away from it.
-- **Small company, LAN-first production:** a production instance is available to staff inside the office network, while remote access from outside the office happens through VPN.
-- **Multi-environment on one machine:** local/development and production may coexist on one computer as separate instances, each reached by its own URL (bookmarks and browser history disambiguate like any multi-site workflow).
-- **Split environments across machines:** local/staging may run on one computer and production on another; each instance stays an ordinary web destination at a distinct URL from the phone browser.
-- **Growth without UX reset:** a company should be able to start with the simplest setup and later adopt more infrastructure without Belimbing needing a fundamentally different user-access story.
+Suitable for solo operators and tiny teams.
+
+### 2. Two computers — development and staging on one computer, production on another
+
+Suitable for small companies.
+
+### 3. Three or more computers — dedicated database, load-balanced application tier
+
+Suitable for medium to large companies. Not covered in this plan.
 
 ## Top-Level Components
 
@@ -70,27 +74,27 @@ When a user is on the same trusted local network, Belimbing should behave like a
 
 ### HTTPS and certificate trust
 
-HTTPS is not optional for Belimbing's phone-browser UX. Features such as camera access require a secure origin, so the LAN solution must include a workable certificate-trust story for phone browsers rather than treating TLS as a later enhancement.
+HTTPS is not optional for Belimbing's phone-browser UX. Features such as camera access require a secure origin, so the LAN solution must include a certificate-trust story that works on phones without asking each user to install and trust a private CA manually.
 
 ### LAN naming and discovery
 
-LAN access needs a discoverable, understandable address story for phones. Users should not have to guess IPs or remember fragile port numbers; Belimbing should eventually guide them toward a stable local address and an easy way to open it from a phone.
+LAN access needs a discoverable, understandable address story for phones. Users should not have to guess IPs or remember fragile port numbers; Belimbing should guide them toward a stable local HTTPS address per environment and an easy way to open it from a phone.
+
+### Domain and DNS layer
+
+The easiest low-cost LAN story is likely to use real domain names for each environment and resolve those names to private LAN IPs. This avoids the trust problems of self-signed certificates and made-up internal-only TLDs while keeping the browser URL stable and recognizable.
 
 ### VPN-based WAN access path
 
 When a user is outside the local network, they should first enter the trusted network through VPN. Once connected, Belimbing should feel like the same browser application, ideally reusing the same internal address story rather than presenting a completely different remote-access surface.
 
-### Environment authentication and authorization
-
-Belimbing continues to decide who may use an environment after login. Production can support broader staff access, while local and staging remain `core-admin` only.
-
 ### Distinct URLs per environment
 
 Each environment is an independent Belimbing instance with its own URL. There is no separate product requirement for extra mobile-only labeling to distinguish environments: the address bar and normal browsing habits (bookmarks, history) provide the disambiguation.
 
-### Deployment recipes
+### Deployment pattern
 
-Belimbing should eventually package a small number of understandable deployment patterns rather than leaving every licensee to invent their own LAN and VPN setup from scratch.
+Belimbing should converge on one reference deployment pattern—same LAN HTTPS and VPN-backed WAN story, documented and packaged—rather than maintaining multiple competing recipes or leaving every licensee to invent network wiring from scratch.
 
 ### Setup and automation path
 
@@ -118,11 +122,26 @@ The LAN solution should be designed around how a phone actually opens Belimbing 
 
 Belimbing should not treat HTTPS as optional or production-only. The browser capabilities we want on phones require secure origins, so the chosen LAN story must provide trusted HTTPS from the beginning.
 
-### D5: WAN should later be handled through VPN
+### D5: The default LAN solution should use real domains plus publicly trusted certificates
+
+The easiest and most cost-effective default LAN direction is to use a real domain owned by the licensee, assign stable environment hostnames under it, and serve them with publicly trusted HTTPS certificates. In practice that means names like `prod.<company-domain>` or `local.<company-domain>` rather than private-only names such as `.local` or `.lara`.
+
+This is the best combined tradeoff because:
+
+- the only unavoidable cash cost is a domain name, which is small compared to support friction
+- phones already trust public certificate authorities, so camera and other secure-origin features work without manual certificate installation
+- the same hostname pattern can scale from one-machine setups to multi-host setups
+- the browser UX stays simple: join Wi-Fi, open a normal HTTPS URL, log in
+
+### D6: Raw IP should be bootstrap-only, not the primary LAN UX
+
+Raw IP access may remain useful for first-run troubleshooting, but it should not be Belimbing's primary LAN story because it is weak on memorability, environment clarity, and trusted HTTPS.
+
+### D7: WAN should later be handled through VPN
 
 For access from outside the local network, the leading direction is still to use VPN rather than exposing Belimbing directly to the public internet. VPN becomes the network-level answer to who may reach the environment from afar once the LAN story is solid.
 
-### D6: Belimbing auth handles application access; VPN handles remote network access
+### D8: Belimbing auth handles application access; VPN handles remote network access
 
 The cleaner split of responsibilities is:
 
@@ -131,15 +150,15 @@ The cleaner split of responsibilities is:
 
 This avoids overcomplicating Belimbing with a separate WAN permission matrix inside the application.
 
-### D7: Local and staging remain core-admin surfaces
+### D9: Local and staging remain core-admin surfaces
 
 Local and staging should continue to be treated as `core-admin` environments. VPN does not change that; it only changes whether the user can reach the network from outside.
 
-### D8: Prefer open-source, low-cost infrastructure building blocks
+### D10: Prefer open-source, low-cost infrastructure building blocks
 
 The target solution should prioritize open-source and self-hostable components so the licensee cost stays low and the deployment story remains aligned with Belimbing's framework philosophy.
 
-### D9: The chosen shape is still judged by setup ease, dependency burden, and security
+### D11: The chosen shape is still judged by setup ease, dependency burden, and security
 
 Even with VPN as the WAN direction, the final shape should be evaluated by three drivers:
 
@@ -151,21 +170,23 @@ Even with VPN as the WAN direction, the final shape should be evaluated by three
 
 ### Phase 1 — Define the LAN access model
 
-- [ ] Define the LAN access contract in product terms
-- [ ] Decide what the ideal LAN phone experience is: join the same Wi-Fi, open a stable local browser address, then log in
-- [ ] Compare LAN address strategies at a high level: raw IP, local hostname discovery, and local DNS/gateway naming
-- [ ] Decide whether raw IP is only a bootstrap fallback or an acceptable primary UX
-- [ ] Define the mandatory HTTPS and certificate-trust story for LAN phone access
-- [ ] Confirm each environment instance has its own LAN URL (distinct origin); treat bookmarks and browser history as sufficient disambiguation—no separate mobile-only “which environment” UX requirement
-- [ ] Confirm that Belimbing login and environment role rules remain the only application-level gate on LAN
+- [x] Define the LAN access contract in product terms
+- [x] Decide what the ideal LAN phone experience is: join the same Wi-Fi, open a stable local browser address, then log in
+- [x] Compare LAN address strategies at a high level: raw IP, local hostname discovery, and local DNS/gateway naming
+- [x] Decide whether raw IP is only a bootstrap fallback or an acceptable primary UX
+- [x] Define the mandatory HTTPS and certificate-trust story for LAN phone access
+- [ ] Define the recommended domain and hostname pattern for environments on LAN
+- [ ] Decide whether the simplest default should publish private LAN IPs in public DNS or rely on router/local DNS overrides
+- [x] Confirm each environment instance has its own LAN URL (distinct origin); treat bookmarks and browser history as sufficient disambiguation—no separate mobile-only “which environment” UX requirement
+- [x] Confirm that Belimbing login and environment role rules remain the only application-level gate on LAN
 
 ### Phase 2 — Turn LAN into an adoptable Belimbing story
 
-- [ ] Describe the target LAN deployment recipe for a single-machine setup
-- [ ] Describe the target LAN deployment recipe for a small company with LAN-first production
-- [ ] Describe the target LAN deployment recipe for split local/staging/production hosts
+- [ ] Describe how the deployment pattern applies for use case 1 (single computer: dev + production instances)
+- [ ] Describe how the deployment pattern applies for use case 2 (two computers: dev + staging on one, production on another)
+- [ ] Describe how the deployment pattern applies for use case 3 (three+ computers: e.g. dedicated DB, load-balanced app tier; operators use the published HTTPS entry URL)
 - [ ] Identify which parts of the LAN story belong to Belimbing itself and which parts belong to surrounding infrastructure guidance
-- [ ] Identify the minimum dependency set we expect Belimbing to install or orchestrate for LAN access
+- [ ] Identify the minimum dependency set we expect Belimbing to install or orchestrate for LAN access: Caddy/FrankenPHP, a real domain, certificate automation, and either public-DNS-to-private-IP or local DNS override support
 - [ ] Identify where LAN setup automation belongs: base setup script, companion scripts, Lara-guided steps, or a deliberate combination
 - [ ] Decide whether Belimbing should provide phone-friendly discovery aids such as surfaced URLs or QR-based handoff
 
