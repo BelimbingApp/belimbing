@@ -27,7 +27,7 @@ return new class extends Migration
             $table->unsignedBigInteger('seq');
             $table->string('event_type', 60);
             $table->json('payload')->nullable();
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('created_at');
 
             $table->unique(['turn_id', 'seq']);
             $table->index('event_type');

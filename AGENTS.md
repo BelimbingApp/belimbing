@@ -114,6 +114,9 @@ public function __construct(
 - **Do not force abstractions for tiny duplication.** Extract only when it meaningfully reduces repetition.
 - **Prefer `require` over `require_once`** for PHP config files that return arrays.
 
+### Database / Schema
+- **Never use `useCurrent()` on `timestamp` columns.** It emits `DEFAULT CURRENT_TIMESTAMP` at the DB level, which captures the database session timezone — not UTC. On a non-UTC session this silently stores offset-naive non-UTC values. Always pass `'created_at' => now()` explicitly from the application layer. If the column must be `NOT NULL`, ensure every insert path sets it.
+
 ### Sonar Prevention Guard
 - **Review touched files for common Sonar traps before finishing**: duplicate literals, unused imports/locals/fields, empty blocks, generic exceptions, overly nested conditionals, and accessibility mismatches.
 - **Prefer structural fixes over cosmetic suppression**:

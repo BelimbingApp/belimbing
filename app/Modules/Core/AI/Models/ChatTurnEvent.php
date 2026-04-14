@@ -47,6 +47,7 @@ class ChatTurnEvent extends Model
         'seq',
         'event_type',
         'payload',
+        'created_at',
     ];
 
     /**

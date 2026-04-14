@@ -53,6 +53,7 @@ class TurnEventPublisher
                 'seq' => $seq,
                 'event_type' => $eventType->value,
                 'payload' => $payload,
+                'created_at' => now(),
             ]);
         });
     }
