@@ -334,10 +334,14 @@ trait HandlesStreaming
     /**
      * Finalize a completed streaming run by refreshing component state.
      */
-    public function finalizeStreamingRun(): void
+    public function finalizeStreamingRun(?string $turnId = null): void
     {
         $this->isLoading = false;
-        $this->dispatch('agent-chat-response-ready');
+        if (is_string($turnId) && $turnId !== '') {
+            $this->dispatch('agent-chat-response-ready', turnId: $turnId);
+        } else {
+            $this->dispatch('agent-chat-response-ready');
+        }
         $this->dispatch('agent-chat-focus-composer');
     }
 
@@ -396,7 +400,7 @@ trait HandlesStreaming
             (string) $turn->session_id,
         );
 
-        $this->dispatch('agent-chat-response-ready');
+        $this->dispatch('agent-chat-response-ready', turnId: $turn->id);
         $this->dispatch('agent-chat-focus-composer');
     }
 

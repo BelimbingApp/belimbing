@@ -1,8 +1,8 @@
 <?php
 
-use App\Modules\Core\AI\Livewire\Chat;
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
+use App\Modules\Core\AI\Livewire\Chat;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Models\OperationDispatch;
@@ -73,7 +73,9 @@ it('renders the streaming console as a named alpine controller', function (): vo
     expect($html)
         ->toContain('x-data="agentChatStream({')
         ->toContain('Alpine.data(&#039;agentChatStream&#039;')
-        ->toContain('const text = payload.delta || payload.text ||');
+        ->toContain('const text = payload.delta || payload.text ||')
+        ->toContain('onServerTurnReady($event.detail || {})')
+        ->toContain('this.$wire.finalizeStreamingRun(finalizedTurnId)');
 });
 
 it('polls the chat view while the selected Lara session has pending delegated work', function (): void {

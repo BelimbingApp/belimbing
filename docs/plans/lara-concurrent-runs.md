@@ -101,7 +101,7 @@ Goal: make concurrent work understandable and resumable for humans.
 
 Goal: ensure concurrency does not leave stranded UI or server state behind.
 
-- [ ] Make terminal handling remove only the affected turn entry from the client registry.
+- [x] Make terminal handling remove only the affected turn entry from the client registry.
 - [ ] Refresh only the transcript/session usage for the session whose turn just terminated.
 - [x] Schedule `blb:ai:turns:sweep-stale` alongside orphan-run reaping in the app scheduler.
 - [x] Ensure stale-turn sweeping converges through the same terminal event path the UI already reads. The sweep must emit the durable terminal event itself, or write the terminal state into the same turn/event store the client consumes, so there is no separate "sweep-only" UI pathway.

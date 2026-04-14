@@ -446,7 +446,7 @@
                     replayUrlTemplate: @js(route('ai.chat.turn.events', ['turnId' => '__TURN__'])),
                 })"
                 x-effect="window.dispatchEvent(new CustomEvent(isBusy ? 'agent-chat-busy' : 'agent-chat-idle'))"
-                x-on:agent-chat-response-ready.window="pendingMessage = null; streamEntries = []; resetTurnState()"
+                x-on:agent-chat-response-ready.window="onServerTurnReady($event.detail || {})"
                 x-on:agent-chat-session-selected.window="onSessionSelected($event.detail || {}, $refs.agentScroll)"
             >
                 <div
@@ -1130,8 +1130,27 @@
         },
 
         finalizeTurnStream() {
+            const finalizedTurnId = this.activeTurnId;
             this.resetTurnState();
-            this.$wire.finalizeStreamingRun();
+            this.$wire.finalizeStreamingRun(finalizedTurnId);
+        },
+
+        onServerTurnReady(detail) {
+            this.pendingMessage = null;
+
+            const serverTurnId = detail?.turnId || null;
+            if (!serverTurnId) {
+                return;
+            }
+
+            if (this.activeTurnId && this.activeTurnId !== serverTurnId) {
+                return;
+            }
+
+            if (this.activeTurnId === serverTurnId) {
+                this.streamEntries = [];
+                this.resetTurnState();
+            }
         },
 
         abortPersistentFetch() {
