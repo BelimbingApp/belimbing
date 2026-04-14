@@ -20,6 +20,7 @@ use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use App\Modules\Core\AI\Services\LaraTaskProfileSelector;
 use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
+use App\Modules\Core\AI\Services\RuntimeSessionContext;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Auth\Access\AuthorizationException;
 
@@ -50,6 +51,7 @@ class DelegateTaskTool extends AbstractTool
         private readonly TaskRoutingService $router,
         private readonly AgentExecutionContext $executionContext,
         private readonly LaraTaskProfileSelector $taskProfileSelector,
+        private readonly RuntimeSessionContext $sessionContext,
     ) {}
 
     public function name(): string
@@ -163,6 +165,7 @@ class DelegateTaskTool extends AbstractTool
                 $decision->agentEmployeeId,
                 $taskType,
                 $task,
+                $this->dispatchOptions(),
             );
 
             return ToolResult::success($this->formatDispatchResult($dispatchResult));
@@ -235,7 +238,11 @@ class DelegateTaskTool extends AbstractTool
         }
 
         try {
-            $dispatch = $this->dispatcher->dispatchTaskProfileForCurrentUser($selection['definition']->key, $task);
+            $dispatch = $this->dispatcher->dispatchTaskProfileForCurrentUser(
+                $selection['definition']->key,
+                $task,
+                $this->dispatchOptions(),
+            );
             $message = $this->formatDispatchResult($dispatch);
         } catch (AuthorizationException $e) {
             return ToolResult::error($e->getMessage(), 'authorization_error');
@@ -248,5 +255,17 @@ class DelegateTaskTool extends AbstractTool
         }
 
         return ToolResult::success($message."\n\nRouting: ".implode(' ', [...$routingReasons, ...$selection['reasons']]));
+    }
+
+    /**
+     * @return array{session_id?: string}
+     */
+    private function dispatchOptions(): array
+    {
+        $sessionId = $this->sessionContext->sessionId();
+
+        return $sessionId !== null
+            ? ['session_id' => $sessionId]
+            : [];
     }
 }
