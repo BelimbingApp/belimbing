@@ -13,6 +13,7 @@ use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
+use App\Modules\Core\AI\Services\RuntimeSessionContext;
 use Illuminate\Foundation\Testing\TestCase;
 use Tests\Support\MakesRuntimeResponses;
 
@@ -136,6 +137,82 @@ function buildNavigateActionTool(): Tool
     );
 }
 
+function buildSessionEchoTool(): Tool
+{
+    return new class implements Tool
+    {
+        public function name(): string
+        {
+            return 'session_echo_tool';
+        }
+
+        public function description(): string
+        {
+            return 'Returns the active runtime session ID.';
+        }
+
+        public function parametersSchema(): array
+        {
+            return ['type' => 'object', 'properties' => []];
+        }
+
+        public function requiredCapability(): ?string
+        {
+            return null;
+        }
+
+        public function category(): ToolCategory
+        {
+            return ToolCategory::SYSTEM;
+        }
+
+        public function riskClass(): ToolRiskClass
+        {
+            return ToolRiskClass::READ_ONLY;
+        }
+
+        public function displayName(): string
+        {
+            return 'session_echo_tool';
+        }
+
+        public function summary(): string
+        {
+            return 'Echo runtime session';
+        }
+
+        public function explanation(): string
+        {
+            return '';
+        }
+
+        public function setupRequirements(): array
+        {
+            return [];
+        }
+
+        public function testExamples(): array
+        {
+            return [];
+        }
+
+        public function healthChecks(): array
+        {
+            return [];
+        }
+
+        public function limits(): array
+        {
+            return [];
+        }
+
+        public function execute(array $arguments): ToolResult
+        {
+            return ToolResult::success(app(RuntimeSessionContext::class)->sessionId() ?? 'no-session');
+        }
+    };
+}
+
 function defaultAgenticConfigResolver(): ConfigResolver
 {
     return test()->mockResolvedConfigResolver([
@@ -221,6 +298,33 @@ describe('AgenticRuntime', function () {
         expect($result['meta']['tool_actions'])->toHaveCount(1);
         expect($result['meta']['tool_actions'][0]['tool'])->toBe('echo_tool');
         expect($result['meta']['tool_actions'][0]['arguments'])->toBe(['input' => 'world']);
+    });
+
+    it('exposes the active chat session to tool execution and clears it afterwards', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeToolCallResponse('call_001', 'session_echo_tool', '{}')
+        );
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeFinalResponse('Session: sess_tool_123')
+        );
+
+        $runtime = $this->makeAgenticRuntime(
+            $llmClient,
+            toolRegistry: $this->makeToolRegistry(buildSessionEchoTool()),
+        );
+
+        $result = $runtime->run(
+            [test()->makeMessage('user', 'Delegate this task')],
+            1,
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            null,
+            null,
+            'sess_tool_123',
+        );
+
+        expect($result['content'])->toContain('sess_tool_123')
+            ->and(app(RuntimeSessionContext::class)->sessionId())->toBeNull();
     });
 
     it('prepends client actions collected from tool results to final content', function () {

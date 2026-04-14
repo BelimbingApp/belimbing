@@ -44,6 +44,7 @@ class AgenticRuntime
         private readonly RuntimeHookCoordinator $hookCoordinator,
         private readonly RunRecorder $runRecorder,
         private readonly AgenticToolLoopStreamReader $toolLoopStreamReader,
+        private readonly RuntimeSessionContext $sessionContext,
     ) {}
 
     /**
@@ -74,90 +75,96 @@ class AgenticRuntime
         ?array $allowedToolNames = null,
     ): array
     {
-        $runId = 'run_'.Str::random(12);
-        $policy ??= ExecutionPolicy::interactive();
+        $this->sessionContext->set($sessionId);
 
-        $this->runRecorder->start(new RunRecorderStartInput(
-            runId: $runId,
-            employeeId: $employeeId,
-            source: 'chat',
-            executionMode: $policy->mode->value,
-            sessionId: $sessionId,
-            actingForUserId: auth()->id(),
-            timeoutSeconds: $policy->timeoutSeconds,
-        ));
+        try {
+            $runId = 'run_'.Str::random(12);
+            $policy ??= ExecutionPolicy::interactive();
 
-        $configs = $configOverride !== null
-            ? [$configOverride]
-            : $this->configResolver->resolveWithDefaultFallback($employeeId);
+            $this->runRecorder->start(new RunRecorderStartInput(
+                runId: $runId,
+                employeeId: $employeeId,
+                source: 'chat',
+                executionMode: $policy->mode->value,
+                sessionId: $sessionId,
+                actingForUserId: auth()->id(),
+                timeoutSeconds: $policy->timeoutSeconds,
+            ));
 
-        if ($configs === []) {
-            $configError = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
-            $this->runRecorder->fail($runId, $configError);
+            $configs = $configOverride !== null
+                ? [$configOverride]
+                : $this->configResolver->resolveWithDefaultFallback($employeeId);
 
-            return $this->responseFactory->error(
-                $runId,
-                'unknown',
-                'unknown',
-                $configError,
-            );
-        }
+            if ($configs === []) {
+                $configError = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
+                $this->runRecorder->fail($runId, $configError);
 
-        $fallbackAttempts = [];
-        $lastErrorResult = null;
-
-        foreach ($configs as $config) {
-            if ($modelOverride !== null) {
-                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
-            }
-
-            $credentials = $this->credentialResolver->resolve($config);
-
-            if (isset($credentials['runtime_error'])) {
-                $fallbackAttempts[] = $this->buildFallbackAttempt($config, $credentials['runtime_error']);
-                $lastErrorResult = $this->responseFactory->error(
+                return $this->responseFactory->error(
                     $runId,
-                    $config['model'],
-                    (string) ($config['provider_name'] ?? 'unknown'),
-                    $credentials['runtime_error'],
+                    'unknown',
+                    'unknown',
+                    $configError,
                 );
-
-                continue;
             }
 
-            $config['timeout'] = $policy->timeoutSeconds;
+            $fallbackAttempts = [];
+            $lastErrorResult = null;
 
-            $result = $this->runToolCallingLoop(
+            foreach ($configs as $config) {
+                if ($modelOverride !== null) {
+                    $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
+                }
+
+                $credentials = $this->credentialResolver->resolve($config);
+
+                if (isset($credentials['runtime_error'])) {
+                    $fallbackAttempts[] = $this->buildFallbackAttempt($config, $credentials['runtime_error']);
+                    $lastErrorResult = $this->responseFactory->error(
+                        $runId,
+                        $config['model'],
+                        (string) ($config['provider_name'] ?? 'unknown'),
+                        $credentials['runtime_error'],
+                    );
+
+                    continue;
+                }
+
+                $config['timeout'] = $policy->timeoutSeconds;
+
+                $result = $this->runToolCallingLoop(
+                    $runId,
+                    $config,
+                    $credentials,
+                    $messages,
+                    $systemPrompt,
+                    $fallbackAttempts,
+                    $allowedToolNames,
+                );
+                $result['meta']['fallback_attempts'] = $fallbackAttempts;
+
+                $this->runRecorder->complete($runId, $result['meta']);
+
+                return $result;
+            }
+
+            $result = $lastErrorResult ?? $this->responseFactory->error(
                 $runId,
-                $config,
-                $credentials,
-                $messages,
-                $systemPrompt,
-                $fallbackAttempts,
-                $allowedToolNames,
+                'unknown',
+                'unknown',
+                AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED),
             );
             $result['meta']['fallback_attempts'] = $fallbackAttempts;
 
-            $this->runRecorder->complete($runId, $result['meta']);
+            $this->runRecorder->fail(
+                $runId,
+                AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED),
+                $result['meta'],
+            );
 
             return $result;
+        } finally {
+            $this->sessionContext->clear();
         }
-
-        $result = $lastErrorResult ?? $this->responseFactory->error(
-            $runId,
-            'unknown',
-            'unknown',
-            AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED),
-        );
-        $result['meta']['fallback_attempts'] = $fallbackAttempts;
-
-        $this->runRecorder->fail(
-            $runId,
-            AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED),
-            $result['meta'],
-        );
-
-        return $result;
     }
 
     /**
@@ -192,98 +199,104 @@ class AgenticRuntime
         ?array $allowedToolNames = null,
     ): \Generator
     {
-        $runId = 'run_'.Str::random(12);
-        $policy ??= ExecutionPolicy::interactive();
+        $this->sessionContext->set($sessionId);
 
-        $this->runRecorder->start(new RunRecorderStartInput(
-            runId: $runId,
-            employeeId: $employeeId,
-            source: 'stream',
-            executionMode: $policy->mode->value,
-            sessionId: $sessionId,
-            actingForUserId: auth()->id(),
-            timeoutSeconds: $policy->timeoutSeconds,
-            turnId: $turnId,
-        ));
+        try {
+            $runId = 'run_'.Str::random(12);
+            $policy ??= ExecutionPolicy::interactive();
 
-        $configs = $configOverride !== null
-            ? [$configOverride]
-            : $this->configResolver->resolveWithDefaultFallback($employeeId);
+            $this->runRecorder->start(new RunRecorderStartInput(
+                runId: $runId,
+                employeeId: $employeeId,
+                source: 'stream',
+                executionMode: $policy->mode->value,
+                sessionId: $sessionId,
+                actingForUserId: auth()->id(),
+                timeoutSeconds: $policy->timeoutSeconds,
+                turnId: $turnId,
+            ));
 
-        if ($configs === []) {
-            $error = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
-            $this->runRecorder->fail($runId, $error);
+            $configs = $configOverride !== null
+                ? [$configOverride]
+                : $this->configResolver->resolveWithDefaultFallback($employeeId);
+
+            if ($configs === []) {
+                $error = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
+                $this->runRecorder->fail($runId, $error);
+                yield ['event' => 'error', 'data' => [
+                    'message' => $error->userMessage,
+                    'run_id' => $runId,
+                    'meta' => $this->responseFactory->errorMeta('unknown', 'unknown', $error),
+                ]];
+
+                return;
+            }
+
+            $fallbackAttempts = [];
+            $lastError = null;
+            $lastConfig = null;
+            $fallbackAttemptIndex = 0;
+
+            foreach ($configs as $config) {
+                if ($modelOverride !== null) {
+                    $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
+                }
+
+                $credentials = $this->credentialResolver->resolve($config);
+
+                if (isset($credentials['runtime_error'])) {
+                    $error = $credentials['runtime_error'];
+                    $fallbackAttempts[] = $this->buildFallbackAttempt($config, $error);
+                    $lastError = $error;
+                    $lastConfig = $config;
+                    $fallbackAttemptIndex++;
+
+                    yield ['event' => 'status', 'data' => [
+                        'phase' => 'recovery_attempted',
+                        'attempt' => $fallbackAttemptIndex,
+                        'reason' => 'provider_fallback: '.$error->userMessage,
+                        'run_id' => $runId,
+                    ]];
+
+                    continue;
+                }
+
+                $config['timeout'] = $policy->timeoutSeconds;
+
+                yield from $this->runStreamingToolLoop(
+                    $runId,
+                    $config,
+                    $credentials,
+                    $messages,
+                    $systemPrompt,
+                    $fallbackAttempts,
+                    $allowedToolNames,
+                );
+
+                return;
+            }
+
+            $error = $lastError ?? AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED);
+            $this->runRecorder->fail($runId, $error, [
+                'fallback_attempts' => $fallbackAttempts,
+            ]);
+
+            $errorConfig = $lastConfig ?? $configs[0];
             yield ['event' => 'error', 'data' => [
                 'message' => $error->userMessage,
                 'run_id' => $runId,
-                'meta' => $this->responseFactory->errorMeta('unknown', 'unknown', $error),
-            ]];
-
-            return;
-        }
-
-        $fallbackAttempts = [];
-        $lastError = null;
-        $lastConfig = null;
-        $fallbackAttemptIndex = 0;
-
-        foreach ($configs as $config) {
-            if ($modelOverride !== null) {
-                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
-            }
-
-            $credentials = $this->credentialResolver->resolve($config);
-
-            if (isset($credentials['runtime_error'])) {
-                $error = $credentials['runtime_error'];
-                $fallbackAttempts[] = $this->buildFallbackAttempt($config, $error);
-                $lastError = $error;
-                $lastConfig = $config;
-                $fallbackAttemptIndex++;
-
-                yield ['event' => 'status', 'data' => [
-                    'phase' => 'recovery_attempted',
-                    'attempt' => $fallbackAttemptIndex,
-                    'reason' => 'provider_fallback: '.$error->userMessage,
-                    'run_id' => $runId,
-                ]];
-
-                continue;
-            }
-
-            $config['timeout'] = $policy->timeoutSeconds;
-
-            yield from $this->runStreamingToolLoop(
-                $runId,
-                $config,
-                $credentials,
-                $messages,
-                $systemPrompt,
-                $fallbackAttempts,
-                $allowedToolNames,
-            );
-
-            return;
-        }
-
-        $error = $lastError ?? AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED);
-        $this->runRecorder->fail($runId, $error, [
-            'fallback_attempts' => $fallbackAttempts,
-        ]);
-
-        $errorConfig = $lastConfig ?? $configs[0];
-        yield ['event' => 'error', 'data' => [
-            'message' => $error->userMessage,
-            'run_id' => $runId,
-            'meta' => array_merge(
-                $this->responseFactory->errorMeta(
-                    $errorConfig['model'] ?? 'unknown',
-                    (string) ($errorConfig['provider_name'] ?? 'unknown'),
-                    $error,
+                'meta' => array_merge(
+                    $this->responseFactory->errorMeta(
+                        $errorConfig['model'] ?? 'unknown',
+                        (string) ($errorConfig['provider_name'] ?? 'unknown'),
+                        $error,
+                    ),
+                    ['fallback_attempts' => $fallbackAttempts],
                 ),
-                ['fallback_attempts' => $fallbackAttempts],
-            ),
-        ]];
+            ]];
+        } finally {
+            $this->sessionContext->clear();
+        }
     }
 
     /**

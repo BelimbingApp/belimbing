@@ -4,7 +4,7 @@
 **Status:** Active
 **Purpose:** Source of truth for BLB AI features implemented in code
 **Coverage:** OpenClaw parity Phases 1-6, Claw Code runtime parity (hook transcript entries + approval visibility), AI Run Ledger Phases 0-3, and Lara direct-stream transport delivery
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-04-14
 **Related:** [agent-model.md](agent-model.md), [lara.md](lara.md), [capability-map.md](capability-map.md), `docs/Base/AI/tool-framework.md`
 
 ---
@@ -55,7 +55,6 @@ Legacy compatibility redirects still exist for removed product surfaces:
 
 | URL | Route Name | Current Behavior |
 |-----|------------|------------------|
-| `/admin/setup/kodi` | `admin.setup.kodi` | Redirects to Lara setup |
 | `/admin/ai/playground` | `admin.ai.playground` | Redirects to Task Models |
 
 The unauthenticated integration endpoint currently exposed is:
@@ -98,12 +97,12 @@ Implemented outcome:
   - `WorkspaceValidator`
   - `PromptPackageFactory`
   - `PromptRenderer`
-- Lara and legacy Kodi runtime callers are thin callers over the same workspace-driven prompt substrate
+- Lara and delegated agent-task runtimes are thin callers over the same workspace-driven prompt substrate
 - run metadata includes prompt-package diagnostics for operator visibility
 
 Primary user-visible effect:
 
-- the Lara setup flow and legacy runtime callers run on a consistent workspace contract
+- the Lara setup flow and delegated agent-task runtimes run on a consistent workspace contract
 - workspace validation failures fail clearly instead of silently degrading
 
 ### 5.2 Phase 2 - Memory & Recall
@@ -221,6 +220,8 @@ User-visible features:
 
 - Lara can discover agents with structured capability descriptors
 - `/delegate` and tool-backed delegation operate on the shared routing kernel
+- Lara chat delegation stores its queued receipt in the current session transcript and appends a second assistant follow-up when the queued delegated task succeeds or fails
+- Lara chat polls only while the selected session has pending delegated work, so those async follow-up messages appear without a manual refresh
 - runtime context can be extended by skill packs and runtime hooks
 
 Added commands:

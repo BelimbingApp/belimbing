@@ -41,7 +41,7 @@ class LaraTaskDispatcher
      * @param  int  $employeeId  Target agent's employee ID
      * @param  string  $taskType  Task type discriminator (e.g., 'resolve_ticket')
      * @param  string  $task  Task description for the agent
-     * @param  array{entity_type?: string, entity_id?: int, model_override?: string, source?: string}  $options  Optional dispatch options
+     * @param  array{entity_type?: string, entity_id?: int, model_override?: string, session_id?: string, source?: string}  $options  Optional dispatch options
      *
      * @throws AuthorizationException When the target agent is not accessible
      */
@@ -64,6 +64,7 @@ class LaraTaskDispatcher
             'meta' => [
                 'task_type' => $taskType,
                 'model_override' => $options['model_override'] ?? null,
+                'session_id' => $options['session_id'] ?? null,
                 'source' => $options['source'] ?? 'delegate_task',
                 'employee_name' => $descriptor->name,
             ],
@@ -81,7 +82,7 @@ class LaraTaskDispatcher
      *
      * @param  string  $taskKey  Registered Lara task profile key
      * @param  string  $task  Task description for the profile worker
-     * @param  array{entity_type?: string, entity_id?: int, source?: string}  $options
+     * @param  array{entity_type?: string, entity_id?: int, session_id?: string, source?: string}  $options
      *
      * @throws AuthorizationException When there is no authenticated user context
      * @throws InvalidArgumentException When the task profile is unknown
@@ -109,6 +110,7 @@ class LaraTaskDispatcher
             'meta' => [
                 'task_type' => $taskKey,
                 'task_profile' => $taskKey,
+                'session_id' => $options['session_id'] ?? null,
                 'source' => $options['source'] ?? 'lara_task_profile',
                 'employee_name' => 'Lara',
                 'task_profile_label' => $profile->label,

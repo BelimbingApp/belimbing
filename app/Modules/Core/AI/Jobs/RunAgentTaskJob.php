@@ -8,9 +8,10 @@ namespace App\Modules\Core\AI\Jobs;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\OperationDispatch;
+use App\Modules\Core\AI\Services\AgentTaskPromptFactory;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
-use App\Modules\Core\AI\Services\KodiPromptFactory;
+use App\Modules\Core\AI\Services\DispatchTranscriptBridge;
 use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use DateTimeImmutable;
 use Illuminate\Bus\Queueable;
@@ -66,7 +67,8 @@ class RunAgentTaskJob implements ShouldQueue
      */
     public function handle(
         AgenticRuntime $runtime,
-        KodiPromptFactory $promptFactory,
+        AgentTaskPromptFactory $promptFactory,
+        DispatchTranscriptBridge $transcriptBridge,
         PromptRenderer $renderer,
         AgentExecutionContext $context,
     ): void {
@@ -112,14 +114,15 @@ class RunAgentTaskJob implements ShouldQueue
                 systemPrompt: $systemPrompt,
                 modelOverride: data_get($dispatch->meta, 'model_override'),
                 policy: ExecutionPolicy::background(),
+                sessionId: data_get($dispatch->meta, 'session_id'),
             );
 
-            $this->recordResult($dispatch, $result, $promptMeta);
+            $this->recordResult($dispatch, $result, $promptMeta, $transcriptBridge);
         } catch (\Throwable $e) {
             report($e);
 
             if ($dispatch !== null && ! $dispatch->isTerminal()) {
-                $dispatch->markFailed($e->getMessage());
+                $this->markFailed($dispatch, $e->getMessage(), $transcriptBridge);
             }
 
             throw $e;
@@ -135,12 +138,20 @@ class RunAgentTaskJob implements ShouldQueue
      * @param  array{content: string, run_id: string, meta: array<string, mixed>}  $result
      * @param  array<string, mixed>|null  $promptMeta  Prompt package diagnostics
      */
-    private function recordResult(OperationDispatch $dispatch, array $result, ?array $promptMeta): void
-    {
+    private function recordResult(
+        OperationDispatch $dispatch,
+        array $result,
+        ?array $promptMeta,
+        DispatchTranscriptBridge $transcriptBridge,
+    ): void {
         $hasError = isset($result['meta']['error_type']);
 
         if ($hasError) {
-            $dispatch->markFailed((string) ($result['meta']['error'] ?? 'Unknown runtime error'));
+            $this->markFailed(
+                $dispatch,
+                (string) ($result['meta']['error'] ?? 'Unknown runtime error'),
+                $transcriptBridge,
+            );
 
             return;
         }
@@ -156,5 +167,16 @@ class RunAgentTaskJob implements ShouldQueue
             $result['content'] ?? '',
             $meta,
         );
+
+        $transcriptBridge->appendSucceeded($dispatch);
+    }
+
+    private function markFailed(
+        OperationDispatch $dispatch,
+        string $errorMessage,
+        DispatchTranscriptBridge $transcriptBridge,
+    ): void {
+        $dispatch->markFailed($errorMessage);
+        $transcriptBridge->appendFailed($dispatch, $errorMessage);
     }
 }

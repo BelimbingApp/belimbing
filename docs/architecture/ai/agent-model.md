@@ -25,7 +25,7 @@ BLB needs Agents to be managed as first-class employees under the same organizat
 6. Agent permissions are constrained by delegation and cannot exceed supervisor effective permissions.
 7. **Agent context for execution:** OpenClaw-style workspaces (IDENTITY, SOUL, AGENTS, etc.) define “who” and “how”; BLB keeps a single `job_description` field as a short role label for now; full workspace-based context is the target when integrating an OpenClaw-like runtime.
 8. **Per-agent and per-task LLM model selection:** Agent workspace `config.json` keeps `llm.models[]` for chat execution and failover. Lara's workspace can additionally define `llm.tasks.*` so specialized workloads such as titling, research, and coding can use different models (see §15).
-9. **One visible system primitive:** Lara (`Employee::LARA_ID = 1`) is the only user-facing system agent and the only user-facing AI chat/configuration surface. Kodi (`Employee::KODI_ID = 2`) is deprecated as a named product surface and remains only as a legacy runtime concern until Lara task profiles fully absorb current Kodi-owned flows.
+9. **One visible system primitive:** Lara (`Employee::LARA_ID = 1`) is the only system agent provisioned by the framework and the only user-facing AI chat/configuration surface. Specialized work happens through Lara task profiles (`llm.tasks.*`) and ephemeral sub-agents, not through additional named system employees.
 
 ---
 

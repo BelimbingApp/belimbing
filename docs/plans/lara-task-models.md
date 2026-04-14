@@ -1,8 +1,8 @@
 # Lara Task Models
 
-**Status:** In Progress  
-**Last Updated:** 2026-04-13  
-**Sources:** `app/Modules/Core/AI/Livewire/Concerns/ManagesChatSessions.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Livewire/Concerns/ManagesAgentModelSelection.php`, `app/Modules/Core/AI/Livewire/Setup/Lara.php`, `app/Modules/Core/AI/Livewire/Setup/Kodi.php`, `app/Modules/Core/AI/Livewire/Playground.php`, `app/Modules/Core/AI/Config/menu.php`, `app/Modules/Core/AI/Routes/web.php`, `resources/core/views/livewire/admin/setup/lara.blade.php`, `docs/architecture/ai/agent-model.md` (§2.9 two system primitives, §15.2 config.json shape), `docs/architecture/ai/lara.md`
+**Status:** Complete
+**Last Updated:** 2026-04-14
+**Sources:** `app/Modules/Core/AI/Livewire/Concerns/ManagesChatSessions.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Livewire/Concerns/ManagesAgentModelSelection.php`, `app/Modules/Core/AI/Livewire/Setup/Lara.php`, `app/Modules/Core/AI/Livewire/Playground.php`, `app/Modules/Core/AI/Config/menu.php`, `app/Modules/Core/AI/Routes/web.php`, `resources/core/views/livewire/admin/setup/lara.blade.php`, `docs/architecture/ai/agent-model.md` (§2.9 one visible system primitive, §15.2 config.json shape), `docs/architecture/ai/lara.md`
 
 ## Problem Essence
 
@@ -24,7 +24,7 @@ Both patterns share the same config shape (mode + provider/model per task) and t
 - The initial shipped Lara task profiles are `titling`, `research`, and `coding`.
 - **Lara Tasks** is the umbrella product concept; **Task Models** is the specific configuration UI for choosing which model handles each Lara task.
 - Lara is the only user-facing agent and only user-facing AI chat surface.
-- Kodi setup and Agent Playground are removed. Kodi as a named employee is deprecated and ultimately removed once current runtime call sites are rerouted to Lara task profiles. The `coding` sub-agent profile replaces Kodi's functional role. Sub-agents are ephemeral workers defined by their task profile, not pre-provisioned employee records.
+- Kodi setup and Agent Playground are removed. Kodi as a named employee and framework workspace has been removed from the runtime; the `coding` sub-agent profile replaces Kodi's functional role. Sub-agents are ephemeral workers defined by their task profile, not pre-provisioned employee records.
 - Task Models is a separate user-facing page. Its menu entry is available only when Lara is activated; direct visits before activation show an activation-required notice.
 - Each task is classified as either **simple** (single inference, no tools) or **agentic** (sub-agent delegation with own prompt and tools). The classification is framework-defined, not user-configurable. Both types share the same config shape and UI.
 - All tasks support a small, explicit mode set:
@@ -79,13 +79,13 @@ Session-title generation switches from `resolvePrimaryWithDefaultFallback()` to 
 
 ### Surface consolidation
 
-Menu entries, routes, docs, and setup flows stop presenting Kodi and Agent Playground as product surfaces. Kodi's employee record and workspace are deprecated — the `coding` sub-agent profile replaces its functional role. A new Task Models menu entry appears only after Lara activation.
+Menu entries, routes, docs, and setup flows stop presenting Kodi and Agent Playground as product surfaces. Kodi's employee record and framework workspace are removed from the runtime, and the `coding` sub-agent profile replaces its functional role. A new Task Models menu entry appears only after Lara activation.
 
 ## Design Decisions
 
 ### D0: Collapse the visible AI product surface to Lara only
 
-Kodi and Agent Playground were exploratory surfaces and are not part of the chosen product direction. Rather than carrying multiple visible agents and per-agent setup flows, BLB should present one visible agent, Lara, and express specialization through task profiles under Lara. Kodi's functional role (code generation, IT tickets) is absorbed by the `coding` agentic task profile — a nameless sub-agent that Lara delegates to, rather than a named system primitive the user configures separately. `Employee::KODI_ID` and its seeder are deprecated, but the record should not be physically removed until current Kodi-targeting runtime call sites have been rerouted to Lara task/profile execution.
+Kodi and Agent Playground were exploratory surfaces and are not part of the chosen product direction. Rather than carrying multiple visible agents and per-agent setup flows, BLB should present one visible agent, Lara, and express specialization through task profiles under Lara. Kodi's functional role (code generation, IT tickets) is absorbed by the `coding` agentic task profile — a nameless sub-agent that Lara delegates to, rather than a named system primitive the user configures separately. The remaining work is to finish rerouting any leftover generic delegation and result-surfacing behavior so the architecture is Lara-only end to end.
 
 ### D1: `titling` is the first concrete task profile
 
@@ -124,7 +124,7 @@ The recommendation result should include a short reason such as low-latency suit
 
 ### D9: Sub-agents are ephemeral, not provisioned
 
-Sub-agents spawned for agentic tasks do not have employee records, separate persistent workspaces, or persistent identity. They are instantiated from a framework-defined execution profile, run under Lara's delegation with the current user's authorization scope, reuse Lara's workspace context plus per-run scratch/artifact storage, and discard state when done. This avoids the overhead of pre-provisioning named agents (Kodi pattern) and keeps the authorization model simple — sub-agent permissions are bounded by the delegating user's capabilities, exactly as Lara's own access works (`lara.md` §9.3). If a future use case needs persistent sub-agent state (e.g., memory across coding sessions), it can be introduced as an extension to the execution profile, not as a return to named employee agents.
+Sub-agents spawned for agentic tasks do not have employee records, separate persistent workspaces, or persistent identity. They are instantiated from a framework-defined execution profile, run under Lara's delegation with the current user's authorization scope, reuse Lara's workspace context plus per-run scratch/artifact storage, and discard state when done. This avoids the overhead of pre-provisioning named agents and keeps the authorization model simple — sub-agent permissions are bounded by the delegating user's capabilities, exactly as Lara's own access works (`lara.md` §9.3). If a future use case needs persistent sub-agent state (e.g., memory across coding sessions), it can be introduced as an extension to the execution profile, not as a return to named employee agents.
 
 ## Phases
 
@@ -132,9 +132,9 @@ Sub-agents spawned for agentic tasks do not have employee records, separate pers
 
 - [x] Remove Kodi setup and Agent Playground from the user-visible menu and route surface
 - [x] Remove the dead Kodi setup Livewire component and Blade view now that the public route already redirects to Lara setup
-- [ ] Audit UI copy, help text, and docs that still describe Kodi or the Playground as current product surfaces
-- [ ] Deprecate Kodi as a product surface immediately: remove setup Livewire component, route, Blade view, menu entry, and seeder provisioning. Mark `Employee::KODI_ID` as deprecated in code.
-- [ ] Inventory every runtime call site that still targets Kodi directly and plan its reroute to Lara task/profile execution before removing the underlying employee record
+- [x] Audit UI copy, help text, and docs that still describe Kodi or the Playground as current product surfaces
+- [x] Remove Kodi as a product surface and runtime primitive: setup Livewire component, Blade view, menu entry, seeder provisioning, `Employee::KODI_ID`, and framework workspace fallback
+- [x] Inventory and reroute the known Kodi-targeting runtime call sites to Lara task/profile execution before removing the underlying employee record
 - [x] Consolidate architecture doc updates: update `agent-model.md` (§2.9 deprecate Kodi as system primitive, §15.2 `config.json` shape to show `llm.tasks.*`), `lara.md` (Lara as only visible agent, add sub-agent delegation concept), and `current-state.md` (remove Kodi/Playground surface references)
 - [x] Add the target information architecture to docs: `AI > Lara` for activation/chat config, `AI > Task Models` for task-specific model selection after Lara activation
 
@@ -145,7 +145,7 @@ Sub-agents spawned for agentic tasks do not have employee records, separate pers
 - [x] Extend workspace config semantics to document `llm.tasks.titling`, `llm.tasks.research`, and `llm.tasks.coding`
 - [x] Define the shared persisted shape for `primary`, `recommended`, and `manual` modes — identical across simple and agentic tasks (mode + optional provider/model/reason)
 - [x] Add task-resolution methods to `ConfigResolver` without changing the existing primary/backup chat path
-- [ ] Define the sub-agent execution profile contract for agentic tasks: prompt template path, tool capability list, max iterations, optional parameter overrides. Profiles are framework-defined, not user-configurable.
+- [x] Define the sub-agent execution profile contract for agentic tasks: prompt template path, tool capability list, max iterations, optional parameter overrides. Profiles are framework-defined, not user-configurable.
 - [x] Update architecture documentation so Primary/Backup remain the chat-only contract and Lara Tasks (simple + agentic) are the specialization mechanism
 
 ### Phase 3 — Implement recommendation flow
@@ -190,9 +190,10 @@ Sub-agents spawned for agentic tasks do not have employee records, separate pers
 - [x] Implement the `research` execution profile (prompt template, tool set, constraints)
 - [x] Extend delegation flow so Lara can choose among multiple task profiles instead of falling back only to `coding`
 - [x] Reroute ticket-update actor fallback from Kodi to Lara so coding/research task profiles no longer attribute ticket work to `Employee::KODI_ID`
-- [ ] Reroute current Kodi-targeting runtime call sites and ticket/delegation flows to Lara task/profile execution, then remove `Employee::KODI_ID` and any remaining Kodi-owned workspace/runtime assumptions
-- [ ] Define how sub-agent tool results and multi-step output are presented in Lara's chat thread
-- [ ] Add tests for sub-agent delegation, authorization scoping, and result surfacing
+- [x] Replace the Kodi-specific queued-agent prompt builder with a generic agent-task prompt factory so `RunAgentTaskJob` no longer depends on `KodiPromptFactory`
+- [x] Reroute current Kodi-targeting runtime call sites and ticket/delegation flows to Lara task/profile execution, then remove `Employee::KODI_ID` and any remaining Kodi-owned workspace/runtime assumptions
+- [x] Define how sub-agent tool results and multi-step output are presented in Lara's chat thread
+- [x] Add tests for sub-agent delegation, authorization scoping, and result surfacing
 - [x] Update Task Models UI to reflect fully wired status for `research`
 
 ### Future considerations

@@ -12,6 +12,7 @@ use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesStreaming;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesChatSessions;
 use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\AI\Services\OperationsDispatchService;
 use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\MessageManager;
@@ -142,6 +143,7 @@ class Chat extends Component
         $sessions = [];
         $messages = [];
         $sessionUsage = null;
+        $hasPendingDelegations = false;
 
         if ($agentActivated) {
             $sessions = app(SessionManager::class)->list($this->employeeId);
@@ -151,6 +153,11 @@ class Chat extends Component
             $messageManager = app(MessageManager::class);
             $messages = $messageManager->read($this->employeeId, $this->selectedSessionId);
             $sessionUsage = $messageManager->sessionUsage($this->employeeId, $this->selectedSessionId);
+
+            if ($this->employeeId === Employee::LARA_ID && is_int(auth()->id())) {
+                $hasPendingDelegations = app(OperationsDispatchService::class)
+                    ->hasPendingAgentTaskForSession(auth()->id(), $this->selectedSessionId);
+            }
         }
 
         $markdown = app(ChatMarkdownRenderer::class);
@@ -186,6 +193,7 @@ class Chat extends Component
             'availableModels' => $this->canSelectModel() ? $this->availableModels() : [],
             'currentModel' => $this->resolveCurrentModelLabel(),
             'sessionUsage' => $sessionUsage,
+            'hasPendingDelegations' => $hasPendingDelegations,
             'markdown' => $markdown,
             'quickActions' => $quickActions,
             'activeTurnId' => $activeTurn?->id,

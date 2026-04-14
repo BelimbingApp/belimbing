@@ -32,9 +32,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('admin/setup/lara', Lara::class)
         ->name('admin.setup.lara');
 
-    Route::redirect('admin/setup/kodi', '/admin/setup/lara')
-        ->name('admin.setup.kodi');
-
     Route::get('admin/ai/task-models', TaskModels::class)
         ->name('admin.ai.task-models');
 

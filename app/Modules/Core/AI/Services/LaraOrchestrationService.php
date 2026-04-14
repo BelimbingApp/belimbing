@@ -39,9 +39,10 @@ class LaraOrchestrationService
      *   /guide <topic>
      *   /delegate <task description>
      *
+     * @param  string|null  $sessionId  Active Lara session that should receive queued-task follow-up messages
      * @return array{assistant_content: string, run_id: string, meta: array<string, mixed>}|null
      */
-    public function dispatchFromMessage(string $message): ?array
+    public function dispatchFromMessage(string $message, ?string $sessionId = null): ?array
     {
         $response = $this->dispatchNavigationCommand($message)
             ?? $this->dispatchModelsCommand($message)
@@ -56,7 +57,7 @@ class LaraOrchestrationService
                     ['status' => 'invalid_command'],
                 );
             } elseif ($task !== null) {
-                $response = $this->routeAndDispatchDelegation($task);
+                $response = $this->routeAndDispatchDelegation($task, $sessionId);
             }
         }
 
@@ -97,7 +98,7 @@ class LaraOrchestrationService
      *
      * @return array{assistant_content: string, run_id: string, meta: array<string, mixed>}
      */
-    private function routeAndDispatchDelegation(string $task): array
+    private function routeAndDispatchDelegation(string $task, ?string $sessionId): array
     {
         $request = new RoutingRequest(
             task: $task,
@@ -110,13 +111,17 @@ class LaraOrchestrationService
         $decision = $this->router->route($request);
 
         if ($decision->target !== RoutingTarget::Agent || $decision->agentEmployeeId === null) {
-            return $this->dispatchTaskProfile($task, 'general', $decision->reasons);
+            return $this->dispatchTaskProfile($task, 'general', $decision->reasons, $sessionId);
         }
 
         $dispatch = $this->taskDispatcher->dispatchForCurrentUser(
             $decision->agentEmployeeId,
             'general',
             $task,
+            [
+                'source' => 'slash_delegate',
+                'session_id' => $sessionId,
+            ],
         );
 
         return $this->response(
@@ -136,7 +141,7 @@ class LaraOrchestrationService
      * @param  list<string>  $routingReasons
      * @return array{assistant_content: string, run_id: string, meta: array<string, mixed>}
      */
-    private function dispatchTaskProfile(string $task, ?string $taskType, array $routingReasons): array
+    private function dispatchTaskProfile(string $task, ?string $taskType, array $routingReasons, ?string $sessionId): array
     {
         $selection = $this->taskProfileSelector->select($task, $taskType);
 
@@ -154,7 +159,10 @@ class LaraOrchestrationService
         $dispatch = $this->taskDispatcher->dispatchTaskProfileForCurrentUser(
             $definition->key,
             $task,
-            ['source' => 'slash_delegate'],
+            [
+                'source' => 'slash_delegate',
+                'session_id' => $sessionId,
+            ],
         );
 
         return $this->response(

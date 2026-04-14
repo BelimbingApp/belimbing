@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\Employee\Models\Employee;
@@ -177,12 +178,14 @@ it('queues delegation to the best matched agent', function (): void {
     $this->actingAs($fixture['user']);
 
     $service = app(LaraOrchestrationService::class);
-    $result = $service->dispatchFromMessage('/delegate build a PHP module with tests');
+    $result = $service->dispatchFromMessage('/delegate build a PHP module with tests', '20260413-010101');
+    $dispatch = OperationDispatch::query()->find($result['meta']['orchestration']['dispatch_id']);
 
     expect($result)->not->toBeNull()
         ->and($result['meta']['orchestration']['status'])->toBe('queued')
         ->and($result['meta']['orchestration']['selected_agent']['agent_name'])->toBe(CODE_WORKER)
-        ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('op_');
+        ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('op_')
+        ->and(data_get($dispatch?->meta, 'session_id'))->toBe('20260413-010101');
 });
 
 it('falls back to Lara coding task profile when no delegated agents are available', function (): void {
@@ -190,12 +193,14 @@ it('falls back to Lara coding task profile when no delegated agents are availabl
     $this->actingAs($fixture['user']);
 
     $service = app(LaraOrchestrationService::class);
-    $result = $service->dispatchFromMessage('/delegate create dashboard page');
+    $result = $service->dispatchFromMessage('/delegate create dashboard page', '20260413-020202');
+    $dispatch = OperationDispatch::query()->find($result['meta']['orchestration']['dispatch_id']);
 
     expect($result)->not->toBeNull()
         ->and($result['meta']['orchestration']['status'])->toBe('queued')
         ->and($result['meta']['orchestration']['selected_task_profile']['task_key'])->toBe('coding')
-        ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('op_');
+        ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('op_')
+        ->and(data_get($dispatch?->meta, 'session_id'))->toBe('20260413-020202');
 });
 
 it('routes research-oriented delegation to Lara research task profile when no delegated agents are available', function (): void {

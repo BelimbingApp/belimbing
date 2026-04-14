@@ -6,6 +6,9 @@
 ?>
 <div
     class="h-full flex flex-col"
+    @if ($hasPendingDelegations)
+        wire:poll.2s
+    @endif
     x-data="{
         sessionsOpen: false,
         sessionWidth: parseInt(localStorage.getItem('agent-chat-session-width')) || 224,

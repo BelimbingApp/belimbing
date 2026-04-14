@@ -9,6 +9,7 @@ use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\ConfigResolver;
+use App\Modules\Core\AI\Services\DispatchTranscriptBridge;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\LaraTaskExecutionProfileRegistry;
 use App\Modules\Core\Employee\Models\Employee;
@@ -112,7 +113,14 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
         ]);
 
     $job = new RunLaraTaskProfileJob($dispatch->id);
-    $job->handle($runtime, $context, $configResolver, $promptFactory, $profileRegistry);
+    $job->handle(
+        $runtime,
+        $context,
+        $configResolver,
+        app(DispatchTranscriptBridge::class),
+        $promptFactory,
+        $profileRegistry,
+    );
 
     $dispatch->refresh();
 
@@ -206,7 +214,14 @@ it('runs the Lara research task profile with the resolved research model', funct
         ]);
 
     $job = new RunLaraTaskProfileJob($dispatch->id);
-    $job->handle($runtime, app(AgentExecutionContext::class), $configResolver, $promptFactory, $profileRegistry);
+    $job->handle(
+        $runtime,
+        app(AgentExecutionContext::class),
+        $configResolver,
+        app(DispatchTranscriptBridge::class),
+        $promptFactory,
+        $profileRegistry,
+    );
 
     $dispatch->refresh();
 

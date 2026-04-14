@@ -155,4 +155,17 @@ class OperationsDispatchService
             ->where('created_at', '>=', $since)
             ->count();
     }
+
+    /**
+     * Whether a Lara chat session still has running delegated work.
+     */
+    public function hasPendingAgentTaskForSession(int $actingForUserId, string $sessionId): bool
+    {
+        return OperationDispatch::query()
+            ->where('operation_type', OperationType::AgentTask)
+            ->where('acting_for_user_id', $actingForUserId)
+            ->whereIn('status', [OperationStatus::Queued, OperationStatus::Running])
+            ->where('meta->session_id', $sessionId)
+            ->exists();
+    }
 }

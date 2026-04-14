@@ -10,6 +10,7 @@ use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use App\Modules\Core\AI\Services\LaraTaskProfileSelector;
 use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
+use App\Modules\Core\AI\Services\RuntimeSessionContext;
 use App\Modules\Core\AI\Tools\DelegateTaskTool;
 use Illuminate\Auth\Access\AuthorizationException;
 use Tests\Support\AssertsToolBehavior;
@@ -52,7 +53,14 @@ beforeEach(function () {
     $this->router = Mockery::mock(TaskRoutingService::class);
     $this->executionContext = new AgentExecutionContext;
     $this->taskProfileSelector = Mockery::mock(LaraTaskProfileSelector::class);
-    $this->tool = new DelegateTaskTool($this->dispatcher, $this->router, $this->executionContext, $this->taskProfileSelector);
+    $this->sessionContext = new RuntimeSessionContext;
+    $this->tool = new DelegateTaskTool(
+        $this->dispatcher,
+        $this->router,
+        $this->executionContext,
+        $this->taskProfileSelector,
+        $this->sessionContext,
+    );
 });
 
 describe('tool metadata', function () {
@@ -129,7 +137,7 @@ describe('dispatch with explicit agent_id', function () {
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
-            ->with(42, 'general', DELEGATE_ANALYZE_SALES_DATA)
+            ->with(42, 'general', DELEGATE_ANALYZE_SALES_DATA, [])
             ->andReturn($dispatch);
 
         $result = $this->tool->execute(['task' => DELEGATE_ANALYZE_SALES_DATA, 'task_type' => 'general', 'agent_id' => 42]);
@@ -178,7 +186,7 @@ describe('dispatch with auto-matching', function () {
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
-            ->with(7, 'generate_report', DELEGATE_GENERATE_MONTHLY_REPORT)
+            ->with(7, 'generate_report', DELEGATE_GENERATE_MONTHLY_REPORT, [])
             ->andReturn($dispatch);
 
         $result = $this->tool->execute(['task' => DELEGATE_GENERATE_MONTHLY_REPORT, 'task_type' => 'generate_report']);
@@ -252,7 +260,7 @@ describe('dispatch with auto-matching', function () {
 
         $this->dispatcher->shouldReceive('dispatchTaskProfileForCurrentUser')
             ->once()
-            ->with('research', 'Investigate the latest OpenAI docs changes')
+            ->with('research', 'Investigate the latest OpenAI docs changes', [])
             ->andReturn($dispatch);
 
         $result = $this->tool->execute([
@@ -303,6 +311,27 @@ describe('execution context', function () {
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
             ->andReturn(makeOperationDispatch());
+
+        $this->tool->execute(['task' => 'From chat', 'task_type' => 'general']);
+    });
+
+    it('passes the active runtime session to delegated work', function () {
+        $this->sessionContext->set('sess_lara_123');
+
+        $this->router->shouldReceive('route')
+            ->once()
+            ->andReturn(makeDelegateAgentDecision(7, 'Target Agent'));
+
+        $this->dispatcher->shouldReceive('dispatchForCurrentUser')
+            ->once()
+            ->with(7, 'general', 'From chat', ['session_id' => 'sess_lara_123'])
+            ->andReturn(makeOperationDispatch([
+                'meta' => [
+                    'employee_name' => 'Target Agent',
+                    'task_type' => 'general',
+                    'session_id' => 'sess_lara_123',
+                ],
+            ]));
 
         $this->tool->execute(['task' => 'From chat', 'task_type' => 'general']);
     });

@@ -302,9 +302,6 @@ class MigrateCommand extends IlluminateMigrateCommand
             $this->line('  Created Lara (system Agent — orchestrator)');
         }
 
-        if (Employee::provisionKodi()) {
-            $this->line('  Created Kodi (system Agent — developer)');
-        }
     }
 
     /**

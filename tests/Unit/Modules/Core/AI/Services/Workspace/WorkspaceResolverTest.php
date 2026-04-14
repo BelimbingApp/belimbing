@@ -31,18 +31,6 @@ it('resolves framework fallback for system agents when workspace directory is ab
         ->and($systemPrompt->source)->toBe('framework');
 });
 
-it('resolves Kodi framework fallback with system_prompt present', function (): void {
-    $resolver = new WorkspaceResolver;
-    $manifest = $resolver->resolve(Employee::KODI_ID);
-
-    expect($manifest->isSystemAgent)->toBeTrue();
-
-    $systemPrompt = $manifest->entry(WorkspaceFileSlot::SystemPrompt);
-    expect($systemPrompt)->not->toBeNull()
-        ->and($systemPrompt->exists)->toBeTrue()
-        ->and($systemPrompt->source)->toBe('framework');
-});
-
 it('prefers workspace files over framework resources', function (): void {
     $agentDir = $this->workspacePath.'/'.Employee::LARA_ID;
     File::ensureDirectoryExists($agentDir);

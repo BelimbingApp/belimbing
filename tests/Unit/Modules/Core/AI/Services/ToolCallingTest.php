@@ -20,6 +20,7 @@ use App\Modules\Core\AI\Services\BackgroundCommandService;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use App\Modules\Core\AI\Services\LaraTaskProfileSelector;
 use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
+use App\Modules\Core\AI\Services\RuntimeSessionContext;
 use App\Modules\Core\AI\Tools\ArtisanTool;
 use App\Modules\Core\AI\Tools\BashTool;
 use App\Modules\Core\AI\Tools\DelegateTaskTool;
@@ -390,6 +391,7 @@ function makeToolCallingDelegateTool(
         $router ?? Mockery::mock(TaskRoutingService::class),
         new AgentExecutionContext,
         $taskProfileSelector ?? Mockery::mock(LaraTaskProfileSelector::class),
+        new RuntimeSessionContext,
     );
 }
 
@@ -440,7 +442,9 @@ describe('DelegateTaskTool', function () {
         ]);
 
         $dispatcher = Mockery::mock(LaraTaskDispatcher::class);
-        $dispatcher->shouldReceive('dispatchForCurrentUser')->with(42, 'general', GENERATE_Q1_REPORT)->andReturn($dispatch);
+        $dispatcher->shouldReceive('dispatchForCurrentUser')
+            ->with(42, 'general', GENERATE_Q1_REPORT, [])
+            ->andReturn($dispatch);
 
         $tool = makeToolCallingDelegateTool($dispatcher, $router);
 

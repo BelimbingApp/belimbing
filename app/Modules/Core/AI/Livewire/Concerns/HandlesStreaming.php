@@ -108,7 +108,10 @@ trait HandlesStreaming
             return false;
         }
 
-        $orchestration = app(LaraOrchestrationService::class)->dispatchFromMessage($content);
+        $orchestration = app(LaraOrchestrationService::class)->dispatchFromMessage(
+            $content,
+            $this->selectedSessionId,
+        );
         if ($orchestration === null) {
             return false;
         }

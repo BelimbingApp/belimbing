@@ -26,7 +26,6 @@ class WorkspaceResolver
      */
     private const SYSTEM_AGENT_RESOURCES = [
         Employee::LARA_ID => 'Modules/Core/AI/Resources/lara',
-        Employee::KODI_ID => 'Modules/Core/AI/Resources/kodi',
     ];
 
     /**

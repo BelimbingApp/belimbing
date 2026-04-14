@@ -9,7 +9,7 @@ use App\Base\Foundation\Enums\BlbErrorCode;
 use App\Base\Foundation\Exceptions\BlbInvariantViolationException;
 
 /**
- * Thrown when an attempt is made to delete a system Agent (Lara, Kodi).
+ * Thrown when an attempt is made to delete a system Agent.
  */
 final class SystemEmployeeDeletionException extends BlbInvariantViolationException
 {

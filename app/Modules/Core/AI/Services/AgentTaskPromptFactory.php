@@ -11,26 +11,28 @@ use App\Base\Workflow\Models\StatusHistory;
 use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\AI\DTO\PromptPackage;
 use App\Modules\Core\AI\DTO\PromptSection;
+use App\Modules\Core\AI\DTO\WorkspaceManifest;
+use App\Modules\Core\AI\DTO\WorkspaceValidationResult;
 use App\Modules\Core\AI\Enums\PromptSectionType;
+use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\Workspace\PromptPackageFactory;
-use App\Modules\Core\AI\Services\Workspace\PromptRenderer;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceResolver;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceValidator;
-use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * System prompt factory for Kodi, BLB's developer agent.
+ * Prompt package factory for queued delegated agent tasks.
  *
- * Builds a context-rich system prompt through the workspace-driven
- * prompt pipeline. Kodi-specific context (ticket, dispatch metadata)
- * is contributed as operational sections.
+ * Builds workspace-driven prompt packages for the dispatched employee
+ * and appends dispatch/entity operational context needed by the task.
  */
-class KodiPromptFactory
+class AgentTaskPromptFactory
 {
+    private const GENERIC_SYSTEM_PROMPT_RELATIVE_PATH = 'Modules/Core/AI/Resources/agent-task/system_prompt.md';
+
     /**
-     * Maximum number of recent timeline entries to include in context.
+     * Maximum number of recent timeline entries to include in ticket context.
      */
     private const MAX_TIMELINE_ENTRIES = 10;
 
@@ -38,35 +40,28 @@ class KodiPromptFactory
         private readonly WorkspaceResolver $workspaceResolver,
         private readonly WorkspaceValidator $workspaceValidator,
         private readonly PromptPackageFactory $packageFactory,
-        private readonly PromptRenderer $renderer,
     ) {}
 
     /**
-     * Build the system prompt for a dispatched agent task.
+     * Build the full prompt package for a dispatched agent task.
      *
      * @param  OperationDispatch  $dispatch  The dispatch record
-     * @param  Model|null  $entity  Associated domain entity (ticket, QAC case, etc.)
-     */
-    public function buildForDispatch(OperationDispatch $dispatch, ?Model $entity = null): string
-    {
-        $package = $this->buildPackage($dispatch, $entity);
-
-        return $this->renderer->render($package);
-    }
-
-    /**
-     * Build the full prompt package for diagnostics or metadata attachment.
+     * @param  Model|null  $entity  Associated domain entity (ticket, case, etc.)
      */
     public function buildPackage(OperationDispatch $dispatch, ?Model $entity = null): PromptPackage
     {
-        $manifest = $this->workspaceResolver->resolve(Employee::KODI_ID);
+        $manifest = $this->workspaceResolver->resolve($dispatch->employee_id);
         $validation = $this->workspaceValidator->validate($manifest);
 
         if (! $validation->valid) {
+            if ($this->shouldUseGenericFallback($manifest, $validation)) {
+                return $this->fallbackPackage($dispatch, $entity, $manifest, $validation);
+            }
+
             throw new BlbConfigurationException(
-                'Kodi workspace validation failed: '.implode('; ', $validation->errors),
+                'Agent task workspace validation failed: '.implode('; ', $validation->errors),
                 BlbErrorCode::WORKSPACE_VALIDATION_FAILED,
-                ['errors' => $validation->errors],
+                ['errors' => $validation->errors, 'employee_id' => $dispatch->employee_id],
             );
         }
 
@@ -77,9 +72,58 @@ class KodiPromptFactory
         );
     }
 
+    private function shouldUseGenericFallback(WorkspaceManifest $manifest, WorkspaceValidationResult $validation): bool
+    {
+        $systemPromptEntry = $manifest->entry(WorkspaceFileSlot::SystemPrompt);
+
+        return ! $manifest->isSystemAgent
+            && ($systemPromptEntry === null || ! $systemPromptEntry->exists)
+            && count($validation->errors) === 1
+            && str_contains($validation->errors[0], WorkspaceFileSlot::SystemPrompt->filename());
+    }
+
+    private function fallbackPackage(
+        OperationDispatch $dispatch,
+        ?Model $entity,
+        WorkspaceManifest $manifest,
+        WorkspaceValidationResult $validation,
+    ): PromptPackage {
+        $sections = [
+            new PromptSection(
+                label: WorkspaceFileSlot::SystemPrompt->value,
+                content: $this->loadGenericSystemPrompt(),
+                type: PromptSectionType::Behavioral,
+                order: 0,
+                source: 'framework:'.app_path(self::GENERIC_SYSTEM_PROMPT_RELATIVE_PATH),
+            ),
+        ];
+
+        foreach ($this->operationalSections($dispatch, $entity) as $index => $section) {
+            $sections[] = new PromptSection(
+                label: $section->label,
+                content: $section->content,
+                type: $section->type,
+                order: $index + 1,
+                source: $section->source,
+            );
+        }
+
+        return new PromptPackage(
+            sections: $sections,
+            manifest: $manifest,
+            validation: new WorkspaceValidationResult(
+                valid: true,
+                errors: [],
+                warnings: [
+                    ...$validation->warnings,
+                    'Used the framework generic delegated-agent prompt because the agent workspace is missing system_prompt.md.',
+                ],
+                loadOrder: [WorkspaceFileSlot::SystemPrompt],
+            ),
+        );
+    }
+
     /**
-     * Build Kodi-specific operational context sections.
-     *
      * @return list<PromptSection>
      */
     private function operationalSections(OperationDispatch $dispatch, ?Model $entity): array
@@ -95,9 +139,6 @@ class KodiPromptFactory
         return $sections;
     }
 
-    /**
-     * Build the ticket context section with recent timeline.
-     */
     private function ticketSection(Ticket $ticket): PromptSection
     {
         $context = [
@@ -124,13 +165,10 @@ class KodiPromptFactory
             content: "Ticket context (JSON):\n".$encoded,
             type: PromptSectionType::Operational,
             order: 0,
-            source: 'kodi_ticket_context',
+            source: 'agent_task_ticket_context',
         );
     }
 
-    /**
-     * Build the dispatch metadata section.
-     */
     private function dispatchSection(OperationDispatch $dispatch): PromptSection
     {
         $context = [
@@ -147,13 +185,23 @@ class KodiPromptFactory
             content: "Dispatch context (JSON):\n".$encoded,
             type: PromptSectionType::Operational,
             order: 1,
-            source: 'kodi_dispatch_context',
+            source: 'agent_task_dispatch_context',
         );
     }
 
+    private function loadGenericSystemPrompt(): string
+    {
+        $path = app_path(self::GENERIC_SYSTEM_PROMPT_RELATIVE_PATH);
+        $content = is_file($path) ? file_get_contents($path) : false;
+
+        if (! is_string($content) || trim($content) === '') {
+            return 'You are executing a delegated BLB agent task. Stay focused on the assigned work, use the provided context, and keep the result production-grade.';
+        }
+
+        return trim($content);
+    }
+
     /**
-     * Fetch recent timeline entries for the ticket.
-     *
      * @return list<array{status: string, comment: string|null, comment_tag: string|null, actor_id: int, transitioned_at: string}>
      */
     private function recentTimeline(Ticket $ticket): array

@@ -23,6 +23,7 @@ use App\Modules\Core\AI\Console\Commands\ReapOrphanRunsCommand;
 use App\Modules\Core\AI\Console\Commands\SchedulesTickCommand;
 use App\Modules\Core\AI\Console\Commands\SweepStaleTurnsCommand;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
+use App\Modules\Core\AI\Services\AgentTaskPromptFactory;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
@@ -37,7 +38,6 @@ use App\Modules\Core\AI\Services\ControlPlane\LifecycleControlService;
 use App\Modules\Core\AI\Services\ControlPlane\OperationalTelemetryService;
 use App\Modules\Core\AI\Services\ControlPlane\PolicyEvaluationService;
 use App\Modules\Core\AI\Services\ControlPlane\RunInspectionService;
-use App\Modules\Core\AI\Services\KodiPromptFactory;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraContextProvider;
 use App\Modules\Core\AI\Services\LaraNavigationRouter;
@@ -76,6 +76,7 @@ use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
 use App\Modules\Core\AI\Services\PageContextHolder;
 use App\Modules\Core\AI\Services\PageContextResolver;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
+use App\Modules\Core\AI\Services\RuntimeSessionContext;
 use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionService;
 use App\Modules\Core\AI\Services\Scheduling\SchedulePlanner;
 use App\Modules\Core\AI\Services\SessionManager;
@@ -158,8 +159,9 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(MemoryCompactor::class);
         $this->app->singleton(MemoryHealthService::class);
         $this->app->singleton(LaraPromptFactory::class);
-        $this->app->singleton(KodiPromptFactory::class);
+        $this->app->singleton(AgentTaskPromptFactory::class);
         $this->app->singleton(AgentExecutionContext::class);
+        $this->app->scoped(RuntimeSessionContext::class);
 
         // Page context (request-scoped for isolation between requests)
         $this->app->scoped(PageContextHolder::class);

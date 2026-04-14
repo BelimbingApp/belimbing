@@ -19,21 +19,13 @@ trait ManagesSystemAgents
     }
 
     /**
-     * Whether this employee is Kodi, BLB's system developer Agent.
-     */
-    public function isKodi(): bool
-    {
-        return $this->id === self::KODI_ID;
-    }
-
-    /**
-     * Whether this employee is a system Agent (Lara or Kodi).
+     * Whether this employee is a system Agent.
      *
-     * System agents are provisioned at install time and cannot be deleted.
+     * Lara is provisioned at install time and cannot be deleted.
      */
     public function isSystemAgent(): bool
     {
-        return $this->isLara() || $this->isKodi();
+        return $this->isLara();
     }
 
     /**
@@ -88,44 +80,6 @@ trait ManagesSystemAgents
             'short_name' => 'Lara',
             'designation' => 'System Assistant',
             'job_description' => 'BLB\'s system Agent. Guides users through setup and onboarding, explains framework architecture and conventions, orchestrates tasks by delegating to specialised Agents, and bootstraps the AI workforce on fresh installs.',
-            'status' => 'active',
-            'employment_start' => now()->toDateString(),
-        ]));
-
-        static::resetSequenceAfterExplicitIdInsert();
-
-        return true;
-    }
-
-    /**
-     * Ensure Kodi (the system developer Agent) exists.
-     *
-     * Idempotent — safe to call from migrations, setup scripts, and UI.
-     * Requires the Licensee company to exist first. Resets the PostgreSQL
-     * sequence after explicit-ID insert to avoid auto-increment collisions.
-     *
-     * @return bool Whether Kodi was created (false if already existed or Licensee missing).
-     */
-    public static function provisionKodi(): bool
-    {
-        if (static::query()->where('id', self::KODI_ID)->exists()) {
-            return false;
-        }
-
-        if (! Company::query()->where('id', Company::LICENSEE_ID)->exists()) {
-            return false;
-        }
-
-        static::unguarded(fn () => static::query()->create([
-            'id' => self::KODI_ID,
-            'company_id' => Company::LICENSEE_ID,
-            'supervisor_id' => self::LARA_ID,
-            'employee_type' => 'agent',
-            'employee_number' => 'SYS-002',
-            'full_name' => 'Kodi Belimbing',
-            'short_name' => 'Kodi',
-            'designation' => 'System Developer',
-            'job_description' => 'BLB\'s system developer Agent. Builds modules, writes migrations, models, tests, and Livewire components following framework conventions. Works through IT tickets assigned by supervisors.',
             'status' => 'active',
             'employment_start' => now()->toDateString(),
         ]));

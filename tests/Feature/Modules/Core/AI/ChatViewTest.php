@@ -1,8 +1,12 @@
 <?php
 
 use App\Modules\Core\AI\Livewire\Chat;
+use App\Modules\Core\AI\Enums\OperationStatus;
+use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Modules\Core\AI\Models\OperationDispatch;
+use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
@@ -70,4 +74,31 @@ it('renders the streaming console as a named alpine controller', function (): vo
         ->toContain('x-data="agentChatStream({')
         ->toContain('Alpine.data(&#039;agentChatStream&#039;')
         ->toContain('const text = payload.delta || payload.text ||');
+});
+
+it('polls the chat view while the selected Lara session has pending delegated work', function (): void {
+    $user = createChatViewFixture();
+    test()->actingAs($user);
+
+    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+
+    OperationDispatch::unguarded(fn () => OperationDispatch::query()->create([
+        'id' => 'op_chat_pending_delegate',
+        'operation_type' => OperationType::AgentTask,
+        'employee_id' => Employee::LARA_ID,
+        'acting_for_user_id' => $user->id,
+        'task' => 'Investigate the latest provider updates',
+        'status' => OperationStatus::Queued,
+        'meta' => [
+            'session_id' => $session->id,
+            'task_profile' => 'research',
+            'task_profile_label' => 'Research',
+        ],
+    ]));
+
+    $html = Livewire::test(Chat::class)
+        ->set('selectedSessionId', $session->id)
+        ->html();
+
+    expect($html)->toContain('wire:poll.2s');
 });

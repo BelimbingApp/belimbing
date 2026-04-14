@@ -18,7 +18,7 @@ final readonly class WorkspaceManifest
     /**
      * @param  int  $employeeId  Agent employee ID
      * @param  string  $workspacePath  Absolute path to the agent's workspace directory
-     * @param  bool  $isSystemAgent  Whether this agent is framework-owned (Lara, Kodi)
+     * @param  bool  $isSystemAgent  Whether this agent is framework-owned (for example Lara)
      * @param  string|null  $frameworkResourcePath  Path to framework-provided resources (system agents only)
      * @param  list<WorkspaceFileEntry>  $files  All resolved file entries in canonical order
      */

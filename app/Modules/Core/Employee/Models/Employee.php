@@ -34,13 +34,6 @@ class Employee extends Model
     public const LARA_ID = 1;
 
     /**
-     * The well-known ID for Kodi, BLB's system developer Agent.
-     *
-     * Kodi is provisioned at install time and cannot be deleted.
-     */
-    public const KODI_ID = 2;
-
-    /**
      * Create a new factory instance for the model.
      */
     protected static function newFactory(): EmployeeFactory
@@ -51,7 +44,7 @@ class Employee extends Model
     /**
      * Boot the model.
      *
-     * Prevents deletion of system Agents (Lara, Kodi).
+     * Prevents deletion of system Agents.
      */
     protected static function boot(): void
     {

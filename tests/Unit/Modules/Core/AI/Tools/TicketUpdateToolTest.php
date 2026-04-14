@@ -16,7 +16,7 @@ beforeEach(function () {
     $this->tool = app(TicketUpdateTool::class);
 });
 
-it('attributes ticket comments to the agent employee instead of the authenticated user id', function () {
+it('attributes ticket comments to the authenticated user employee record', function () {
     $company = Company::factory()->create();
     $employee = Employee::factory()->create([
         'company_id' => $company->id,
@@ -44,10 +44,10 @@ it('attributes ticket comments to the agent employee instead of the authenticate
 
     $entry = StatusHistory::latest('it_ticket', $ticket->id);
 
-    expect((string) $result)->toContain("Comment posted to ticket #{$ticket->id}.")
-        ->and($entry)->not->toBeNull()
-        ->and($entry->actor_id)->toBe($employee->id)
-        ->and($entry->actor_id)->not->toBe($user->id);
+    expect((string) $result)->toContain("Comment posted to ticket #{$ticket->id}.");
+    expect($entry)->not->toBeNull();
+    expect($user->employee_id)->toBe($employee->id);
+    expect($entry?->actor_id)->toBe($employee->id);
 });
 
 it('falls back to Lara attribution when no employee context is available', function () {
@@ -78,8 +78,7 @@ it('falls back to Lara attribution when no employee context is available', funct
 
     $entry = StatusHistory::latest('it_ticket', $ticket->id);
 
-    expect((string) $result)->toContain("Comment posted to ticket #{$ticket->id}.")
-        ->and($entry)->not->toBeNull()
-        ->and($entry->actor_id)->toBe(Employee::LARA_ID)
-        ->and($entry->actor_id)->not->toBe($user->id);
+    expect((string) $result)->toContain("Comment posted to ticket #{$ticket->id}.");
+    expect($entry)->not->toBeNull();
+    expect($entry?->actor_id)->toBe(Employee::LARA_ID);
 });

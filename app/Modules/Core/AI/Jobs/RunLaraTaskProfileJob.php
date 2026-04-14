@@ -11,6 +11,7 @@ use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\ConfigResolver;
+use App\Modules\Core\AI\Services\DispatchTranscriptBridge;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\LaraTaskExecutionProfileRegistry;
 use App\Modules\Core\Employee\Models\Employee;
@@ -45,6 +46,7 @@ class RunLaraTaskProfileJob implements ShouldQueue
         AgenticRuntime $runtime,
         AgentExecutionContext $context,
         ConfigResolver $configResolver,
+        DispatchTranscriptBridge $transcriptBridge,
         LaraPromptFactory $promptFactory,
         LaraTaskExecutionProfileRegistry $profileRegistry,
     ): void {
@@ -74,7 +76,7 @@ class RunLaraTaskProfileJob implements ShouldQueue
             $taskProfileKey = data_get($dispatch->meta, 'task_profile');
 
             if (! is_string($taskProfileKey) || $taskProfileKey === '') {
-                $dispatch->markFailed('No Lara task profile was specified.');
+                $this->markFailed($dispatch, 'No Lara task profile was specified.', $transcriptBridge);
 
                 return;
             }
@@ -82,7 +84,7 @@ class RunLaraTaskProfileJob implements ShouldQueue
             $profile = $profileRegistry->find($taskProfileKey);
 
             if ($profile === null) {
-                $dispatch->markFailed('Unknown Lara task profile: '.$taskProfileKey);
+                $this->markFailed($dispatch, 'Unknown Lara task profile: '.$taskProfileKey, $transcriptBridge);
 
                 return;
             }
@@ -90,7 +92,11 @@ class RunLaraTaskProfileJob implements ShouldQueue
             $resolvedConfig = $configResolver->resolveTaskWithPrimaryFallback(Employee::LARA_ID, $taskProfileKey);
 
             if ($resolvedConfig === null) {
-                $dispatch->markFailed('No LLM configuration resolved for Lara task profile: '.$taskProfileKey);
+                $this->markFailed(
+                    $dispatch,
+                    'No LLM configuration resolved for Lara task profile: '.$taskProfileKey,
+                    $transcriptBridge,
+                );
 
                 return;
             }
@@ -109,16 +115,17 @@ class RunLaraTaskProfileJob implements ShouldQueue
                 employeeId: Employee::LARA_ID,
                 systemPrompt: $systemPrompt,
                 policy: ExecutionPolicy::forMode($profile->executionMode),
+                sessionId: data_get($dispatch->meta, 'session_id'),
                 configOverride: $resolvedConfig,
                 allowedToolNames: $profile->allowedToolNames,
             );
 
-            $this->recordResult($dispatch, $result, $profile->taskKey);
+            $this->recordResult($dispatch, $result, $profile->taskKey, $transcriptBridge);
         } catch (\Throwable $e) {
             report($e);
 
             if ($dispatch !== null && ! $dispatch->isTerminal()) {
-                $dispatch->markFailed($e->getMessage());
+                $this->markFailed($dispatch, $e->getMessage(), $transcriptBridge);
             }
 
             throw $e;
@@ -131,12 +138,20 @@ class RunLaraTaskProfileJob implements ShouldQueue
     /**
      * @param  array{content: string, run_id: string, meta: array<string, mixed>}  $result
      */
-    private function recordResult(OperationDispatch $dispatch, array $result, string $taskProfileKey): void
-    {
+    private function recordResult(
+        OperationDispatch $dispatch,
+        array $result,
+        string $taskProfileKey,
+        DispatchTranscriptBridge $transcriptBridge,
+    ): void {
         $hasError = isset($result['meta']['error_type']);
 
         if ($hasError) {
-            $dispatch->markFailed((string) ($result['meta']['error'] ?? 'Unknown runtime error'));
+            $this->markFailed(
+                $dispatch,
+                (string) ($result['meta']['error'] ?? 'Unknown runtime error'),
+                $transcriptBridge,
+            );
 
             return;
         }
@@ -149,5 +164,16 @@ class RunLaraTaskProfileJob implements ShouldQueue
                 'task_profile' => $taskProfileKey,
             ],
         );
+
+        $transcriptBridge->appendSucceeded($dispatch);
+    }
+
+    private function markFailed(
+        OperationDispatch $dispatch,
+        string $errorMessage,
+        DispatchTranscriptBridge $transcriptBridge,
+    ): void {
+        $dispatch->markFailed($errorMessage);
+        $transcriptBridge->appendFailed($dispatch, $errorMessage);
     }
 }
