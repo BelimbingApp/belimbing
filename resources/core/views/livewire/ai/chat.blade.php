@@ -414,7 +414,7 @@
                         $sessionHadFallback = false;
                         $lastFallbackAttempt = null;
                         foreach ($messages as $msg) {
-                            $fa = $msg->meta['fallback_attempts'] ?? [];
+                            $fa = $msg->getMetaArray('fallback_attempts');
                             if (is_array($fa) && count($fa) > 0) {
                                 $sessionHadFallback = true;
                                 $lastFallbackAttempt = end($fa);
@@ -422,52 +422,80 @@
                         }
                     @endphp
 
-                    @forelse($messages as $message)
+                    @forelse($messages as $index => $message)
                         @php
-                            $messageProvider = $message->meta['provider_name'] ?? $message->meta['llm']['provider'] ?? null;
-                            $messageModel = $message->meta['model'] ?? $message->meta['llm']['model'] ?? null;
-                            $messageTokens = $message->meta['tokens'] ?? null;
-                            $messageLatencyMs = $message->meta['latency_ms'] ?? null;
-                            $messageTimeoutSeconds = $message->meta['timeout_seconds'] ?? null;
-                            $messageRetryAttempts = $message->meta['retry_attempts'] ?? null;
-                            $messageFallbackAttempts = $message->meta['fallback_attempts'] ?? null;
-                            $messageErrorType = $message->meta['error_type'] ?? null;
-                            $messageErrorMessage = $message->meta['error'] ?? null;
-                            $messageRunStatus = $message->meta['status'] ?? null;
-                            $messageStopNote = $message->meta['stop_note'] ?? null;
+                            $nextMessage = $messages[$index + 1] ?? null;
+                            $previousMessage = $messages[$index - 1] ?? null;
+                            $isToolCallWithImmediateResult = $message->type === 'tool_call'
+                                && $nextMessage !== null
+                                && $nextMessage->type === 'tool_result';
+                            $isToolResultFollowingImmediateCall = $message->type === 'tool_result'
+                                && $previousMessage !== null
+                                && $previousMessage->type === 'tool_call';
+
+                            $messageProvider = $message->getMetaString('provider_name') ?? $message->getMetaString('llm.provider');
+                            $messageModel = $message->getMetaString('model') ?? $message->getMetaString('llm.model');
+                            $messageTokens = $message->getMetaInt('tokens');
+                            $messageLatencyMs = $message->getMetaInt('latency_ms');
+                            $messageTimeoutSeconds = $message->getMetaInt('timeout_seconds');
+                            $messageRetryAttempts = $message->getMetaInt('retry_attempts');
+                            $messageFallbackAttempts = $message->getMetaArray('fallback_attempts');
+                            $messageErrorType = $message->getMetaString('error_type');
+                            $messageErrorMessage = $message->getMetaString('error');
+                            $messageRunStatus = $message->getMetaString('status');
+                            $messageStopNote = $message->getMetaString('stop_note');
+                            $messageTool = $message->getMetaString('tool', '');
+                            $messageArgsSummary = $message->getMetaString('args_summary', '{}');
+                            $messageStatus = $message->getMetaString('status', 'success');
+                            $messageDurationMs = $message->getMetaInt('duration_ms');
+                            $messageResultPreview = $message->getMetaString('result_preview', '');
+                            $messageResultLength = $message->getMetaInt('result_length', 0);
+                            $messageErrorPayload = $message->getMeta('error_payload');
+                            $messageStage = $message->getMetaString('stage', 'unknown');
+                            $messageAction = $message->getMetaString('action', 'unknown');
+                            $messageToolsRemoved = $message->getMetaArray('tools_removed');
+                            $messageReason = $message->getMetaString('reason');
+                            $messageSource = $message->getMetaString('source');
+                            $messageType = $message->getMetaString('message_type');
+                            $messageOrchestrationStatus = $message->getMeta('orchestration.status');
+
+                            $previousMessageTool = $previousMessage?->getMetaString('tool', '') ?? '';
+                            $previousMessageArgsSummary = $previousMessage?->getMetaString('args_summary', '{}') ?? '{}';
                         @endphp
 
                         @if ($message->type === 'thinking')
                             <x-ai.activity.thinking :timestamp="$message->timestamp" :active="false" :content="$message->content" />
                         @elseif ($message->type === 'tool_call')
-                            <x-ai.activity.tool-call
-                                :tool="$message->meta['tool'] ?? ''"
-                                :args-summary="$message->meta['args_summary'] ?? '{}'"
-                                status="success"
-                            />
+                            @if (! $isToolCallWithImmediateResult)
+                                <x-ai.activity.tool-call
+                                    :tool="$messageTool"
+                                    :args-summary="$messageArgsSummary"
+                                    status="success"
+                                />
+                            @endif
                         @elseif ($message->type === 'tool_result')
                             <x-ai.activity.tool-call
-                                :tool="$message->meta['tool'] ?? ''"
-                                :args-summary="''"
-                                :status="$message->meta['status'] ?? 'success'"
-                                :duration-ms="$message->meta['duration_ms'] ?? null"
-                                :result-preview="$message->meta['result_preview'] ?? ''"
-                                :result-length="$message->meta['result_length'] ?? 0"
-                                :error-payload="$message->meta['error_payload'] ?? null"
+                                :tool="$messageTool !== '' ? $messageTool : ($isToolResultFollowingImmediateCall ? $previousMessageTool : '')"
+                                :args-summary="$isToolResultFollowingImmediateCall ? $previousMessageArgsSummary : ''"
+                                :status="$messageStatus"
+                                :duration-ms="$messageDurationMs"
+                                :result-preview="$messageResultPreview"
+                                :result-length="$messageResultLength"
+                                :error-payload="$messageErrorPayload"
                             />
                         @elseif ($message->type === 'hook_action')
                             <x-ai.activity.hook-action
-                                :stage="$message->meta['stage'] ?? 'unknown'"
-                                :action="$message->meta['action'] ?? 'unknown'"
-                                :tool="$message->meta['tool'] ?? null"
-                                :tools-removed="$message->meta['tools_removed'] ?? []"
-                                :reason="$message->meta['reason'] ?? null"
-                                :source="$message->meta['source'] ?? null"
+                                :stage="$messageStage"
+                                :action="$messageAction"
+                                :tool="$messageTool !== '' ? $messageTool : null"
+                                :tools-removed="$messageToolsRemoved"
+                                :reason="$messageReason"
+                                :source="$messageSource"
                                 :timestamp="$message->timestamp"
                             />
                         @elseif ($message->role === 'user')
                             <x-ai.activity.user-message :content="$message->content" :timestamp="$message->timestamp" />
-                        @elseif ($message->role === 'assistant' && ($message->meta['message_type'] ?? null) === 'error')
+                        @elseif ($message->role === 'assistant' && $messageType === 'error')
                             <x-ai.activity.error
                                 :message="$message->content"
                                 :error-type="$messageErrorType"
@@ -477,7 +505,7 @@
                                 :model="$messageModel"
                                 :markdown="$markdown"
                             />
-                        @elseif ($message->role === 'assistant' && ($message->meta['orchestration']['status'] ?? null) !== null)
+                        @elseif ($message->role === 'assistant' && $messageOrchestrationStatus !== null)
                             {{-- Action message (navigation, guide, models, etc.) --}}
                             <div class="flex justify-start">
                                 <div class="max-w-[80%] rounded-2xl px-3 py-2 text-sm bg-accent/10 text-ink border border-accent/20">

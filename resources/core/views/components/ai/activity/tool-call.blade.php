@@ -42,30 +42,27 @@
 
             @if ($argsSummary !== '')
                 <div @class([
-                    'mt-1 text-muted whitespace-pre-wrap break-all',
-                    'font-mono text-[11px]' => $tool === 'bash',
+                    'mt-1 text-muted whitespace-pre-wrap break-all font-mono text-[11px]',
                 ])>{{ $argsSummary }}</div>
             @endif
         </div>
 
         @if ($hasDetail)
-            <div class="border-t border-border-default px-2.5 py-2 text-xs">
+            <div class="border-t border-border-default px-2.5 py-2 text-xs space-y-1">
                 @if ($errorPayload !== null)
-                    <div class="space-y-1 text-red-500">
+                    <div class="flex items-center gap-2 text-red-500">
                         @if (isset($errorPayload['code']))
-                            <div><span class="font-medium">{{ __('Code') }}:</span> {{ $errorPayload['code'] }}</div>
-                        @endif
-                        @if (isset($errorPayload['message']))
-                            <div>{{ $errorPayload['message'] }}</div>
+                            <span class="font-medium">{{ $errorPayload['code'] }}</span>
                         @endif
                         @if (isset($errorPayload['hint']))
-                            <div class="text-muted">{{ __('Hint') }}: {{ $errorPayload['hint'] }}</div>
+                            <span class="text-muted">{{ $errorPayload['hint'] }}</span>
                         @endif
                     </div>
-                @elseif ($resultPreview !== '')
+                @endif
+                @if ($resultPreview !== '')
                     <div class="text-muted whitespace-pre-wrap break-words">{{ $resultPreview }}</div>
                     @if ($resultLength > 200)
-                        <div class="mt-1 text-muted/70 tabular-nums">{{ number_format($resultLength) }} {{ __('chars total') }}</div>
+                        <div class="text-muted/70 tabular-nums">{{ number_format($resultLength) }} {{ __('chars total') }}</div>
                     @endif
                 @endif
             </div>

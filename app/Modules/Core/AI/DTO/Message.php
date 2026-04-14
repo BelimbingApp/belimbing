@@ -6,6 +6,7 @@
 namespace App\Modules\Core\AI\DTO;
 
 use DateTimeImmutable;
+use Illuminate\Support\Arr;
 
 final readonly class Message
 {
@@ -66,5 +67,45 @@ final readonly class Message
         }
 
         return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Read a metadata value using dot notation.
+     */
+    public function getMeta(string $key, mixed $default = null): mixed
+    {
+        return Arr::get($this->meta, $key, $default);
+    }
+
+    /**
+     * Read a metadata string value.
+     */
+    public function getMetaString(string $key, ?string $default = null): ?string
+    {
+        $value = $this->getMeta($key, $default);
+
+        return is_string($value) ? $value : $default;
+    }
+
+    /**
+     * Read a metadata integer value.
+     */
+    public function getMetaInt(string $key, ?int $default = null): ?int
+    {
+        $value = $this->getMeta($key, $default);
+
+        return is_int($value) ? $value : $default;
+    }
+
+    /**
+     * Read a metadata array value.
+     *
+     * @return array<mixed>
+     */
+    public function getMetaArray(string $key, array $default = []): array
+    {
+        $value = $this->getMeta($key, $default);
+
+        return is_array($value) ? $value : $default;
     }
 }
