@@ -274,37 +274,14 @@ This framing keeps the current preferred direction intact while acknowledging th
 
 ## Phases
 
-### Phase 1 — Define the LAN access model
+### Phase 1 — Make Proposal 2 implementable as the first supported private-access path
 
-- [x] Define the LAN access contract in product terms
-- [x] Decide what the ideal LAN phone experience is: join the same Wi-Fi, open a stable local browser address, then log in
-- [x] Compare LAN address strategies at a high level: raw IP, local hostname discovery, and local DNS/gateway naming
-- [x] Decide whether raw IP is only a bootstrap fallback or an acceptable primary UX
-- [x] Define the mandatory HTTPS and certificate-trust story for LAN phone access
-- [x] Draft the proposed domain and hostname pattern for environments on LAN
-- [x] Draft the preferred DNS resolution model for LAN and note why public-DNS-to-private-IP is not the default
-- [x] Confirm each environment instance has its own LAN URL (distinct origin); treat bookmarks and browser history as sufficient disambiguation—no separate mobile-only “which environment” UX requirement
-- [x] Confirm that Belimbing login and environment role rules remain the only application-level gate on LAN
-- [ ] Validate the proposal against real-world router, phone, and DNS edge cases before treating it as the default
+- [ ] Make per-environment canonical URLs explicit and trustworthy behind a private-network HTTPS edge so redirects, asset URLs, cookies, Livewire requests, and generated links all honor the published Tailscale URL for each instance
+- [ ] Define the Belimbing-side reverse-proxy contract for Proposal 2: trusted proxy handling, HTTPS detection, forwarded host handling, and any required Caddy headers when traffic comes from Tailscale Serve
+- [ ] Add a setup-oriented path for the first supported topology: single computer with multiple Belimbing instances, each exposed at its own private HTTPS URL
+- [ ] Add host/runtime guidance artifacts for the Windows + WSL2 shape described in Proposal 2, with Tailscale on Windows and Belimbing running inside WSL2 behind host networking
+- [ ] Provide an operator-facing way to surface the private HTTPS URLs for each environment, ideally in a copyable phone-friendly form and optionally as QR handoff
+- [ ] Add focused verification for Proposal 2 so we know Belimbing behaves correctly behind the private HTTPS edge: secure-origin browser behavior assumptions, correct URL generation, correct cookie/session behavior, and correct environment separation by host
+- [ ] Keep the implementation scoped to Proposal 2 first; domain-based split-horizon DNS remains a documented alternative until the private-network path is validated in practice
 
-### Phase 2 — Turn LAN into an adoptable Belimbing story
-
-- [ ] Describe how the deployment pattern applies for use case 1 (single computer: dev + production instances)
-- [ ] Describe how the deployment pattern applies for use case 2 (two computers: dev + staging on one, production on another)
-- [ ] Describe how the deployment pattern applies for use case 3 (three+ computers: e.g. dedicated DB, load-balanced app tier; operators use the published HTTPS entry URL)
-- [ ] Identify which parts of the LAN story belong to Belimbing itself and which parts belong to surrounding infrastructure guidance
-- [ ] Identify the minimum dependency set we expect Belimbing to install or orchestrate for LAN access: Caddy/FrankenPHP, a real domain, certificate automation, and local DNS override support
-- [ ] Identify where LAN setup automation belongs: base setup script, companion scripts, Lara-guided steps, or a deliberate combination
-- [ ] Decide whether Belimbing should provide phone-friendly discovery aids such as surfaced URLs or QR-based handoff
-
-### Phase 3 — Extend the LAN story to WAN through VPN
-
-- [ ] Define the WAN access contract in product terms
-- [ ] Confirm the responsibility split between VPN reachability and Belimbing login/roles
-- [ ] Identify the open-source VPN solution family that best fits Belimbing's goals
-- [ ] Evaluate the VPN direction explicitly on setup simplicity for non-technical licensees
-- [ ] Evaluate the VPN direction explicitly on dependency burden and automation path (`scripts/setup.sh`, companion scripts, Lara assistance, or a combination)
-- [ ] Evaluate the VPN direction explicitly on security
-- [ ] Decide the default story for solo operators and small LAN-first companies with remote access needs
-
-This draft now has a clearer sequence: first make LAN browser access solid and understandable, then extend that same Belimbing experience to WAN through VPN before the normal login flow.
+This plan is now intentionally narrowed to the coding-adjacent work needed to make Proposal 2 real as the first supported access path. Broader deployment variants can return later once this simpler private-network route is proven.
