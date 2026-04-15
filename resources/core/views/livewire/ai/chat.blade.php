@@ -15,6 +15,10 @@
         pageAwareness: localStorage.getItem('blb-lara-page-awareness') || 'page',
         _draftKey: 'blb-lara-draft-{{ auth()->id() }}',
         _sessionDragging: false,
+        activeTurnSummaries: @js($activeTurnsBySession),
+        replayUrlTemplate: @js(route('ai.chat.turn.events', ['turnId' => '__TURN__'])),
+        terminalTurnStatuses: ['completed', 'failed', 'cancelled'],
+        _summaryPollTimer: null,
         SESSION_MIN: 160,
         SESSION_MAX: 320,
 
@@ -35,6 +39,101 @@
             }
 
             return Math.floor(elapsedSeconds / 60) + 'm ' + (elapsedSeconds % 60) + 's';
+        },
+
+        replayUrlFor(turnId, afterSeq = 0) {
+            return this.replayUrlTemplate.replace('__TURN__', turnId) + '?after_seq=' + afterSeq;
+        },
+
+        syncSummary(sessionId, patch) {
+            const current = this.activeTurnSummaries[sessionId] || {};
+            this.activeTurnSummaries = {
+                ...this.activeTurnSummaries,
+                [sessionId]: {
+                    ...current,
+                    ...patch,
+                },
+            };
+        },
+
+        clearSummary(sessionId, turnId = null) {
+            const current = this.activeTurnSummaries[sessionId] || null;
+            if (!current) {
+                return;
+            }
+
+            if (turnId && current.turnId && current.turnId !== turnId) {
+                return;
+            }
+
+            const next = { ...this.activeTurnSummaries };
+            delete next[sessionId];
+            this.activeTurnSummaries = next;
+
+            if (Object.keys(this.activeTurnSummaries).length === 0) {
+                this.stopSummaryPolling();
+            }
+        },
+
+        stopSummaryPolling() {
+            if (this._summaryPollTimer) {
+                clearInterval(this._summaryPollTimer);
+                this._summaryPollTimer = null;
+            }
+        },
+
+        async refreshSummary(sessionId, summary) {
+            if (!summary?.turnId) {
+                this.clearSummary(sessionId);
+                return;
+            }
+
+            const afterSeq = summary.lastSeq || 0;
+            const response = await fetch(this.replayUrlFor(summary.turnId, afterSeq), {
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                this.clearSummary(sessionId, summary.turnId);
+                return;
+            }
+
+            const payload = await response.json();
+            const latestSeq = (payload.events || []).reduce((max, event) => Math.max(max, Number.parseInt(event?.seq ?? 0, 10) || 0), afterSeq);
+
+            if (this.terminalTurnStatuses.includes(payload.status)) {
+                this.clearSummary(sessionId, summary.turnId);
+                return;
+            }
+
+            this.syncSummary(sessionId, {
+                turnId: summary.turnId,
+                session_id: sessionId,
+                status: payload.status,
+                phase: payload.current_phase || summary.phase || null,
+                label: payload.current_label || payload.current_phase || summary.label || null,
+                started_at: payload.started_at || summary.started_at || null,
+                created_at: payload.created_at || summary.created_at || null,
+                timer_anchor_at: payload.started_at || payload.created_at || summary.timer_anchor_at || null,
+                lastSeq: latestSeq,
+            });
+        },
+
+        startSummaryPolling() {
+            if (this._summaryPollTimer || Object.keys(this.activeTurnSummaries).length === 0) {
+                return;
+            }
+
+            const poll = () => {
+                Object.entries(this.activeTurnSummaries).forEach(([sessionId, summary]) => {
+                    this.refreshSummary(sessionId, summary).catch(() => {
+                        this.clearSummary(sessionId, summary?.turnId || null);
+                    });
+                });
+            };
+
+            this._summaryPollTimer = setInterval(poll, 2000);
+            poll();
         },
 
         cyclePageAwareness() {
@@ -103,8 +202,12 @@
                 localStorage.removeItem(this._draftKey);
             }
         });
+        if (Object.keys(this.activeTurnSummaries).length > 0) {
+            this.startSummaryPolling();
+        }
     "
     @navigate.window="$wire.set('pageUrl', window.location.href)"
+    @agent-chat-response-ready.window="if ($event.detail?.sessionId) clearSummary($event.detail.sessionId, $event.detail?.turnId || null)"
     @agent-chat-focus-composer.window="$nextTick(() => $refs.agentComposer?.focus())"
     @agent-chat-opened.window="if ($event.detail?.prompt) { $wire.set('messageInput', $event.detail.prompt); $nextTick(() => $refs.agentComposer?.focus()); }"
 >
@@ -334,9 +437,6 @@
                 @else
                     {{-- Session list --}}
                     @forelse($sessions as $session)
-                        @php
-                            $sessionActiveTurn = $activeTurnsBySession[$session->id] ?? null;
-                        @endphp
                         <div class="group" wire:key="agent-session-{{ $session->id }}">
                             @if ($editingSessionId === $session->id)
                                 <div class="flex-1 px-2 py-1.5 space-y-1">
@@ -382,38 +482,44 @@
                                             {{ $session->title ?? __('Untitled') }}<span class="sr-only">, {{ __('edit title') }}</span>
                                         </button>
                                         <div class="text-xs text-muted tabular-nums">{{ $session->lastActivityAt->format('M j, H:i') }}</div>
-                                        @if ($sessionActiveTurn !== null)
-                                            <div class="mt-0.5 flex items-center gap-1.5 min-w-0 text-[10px] text-accent">
-                                                <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0"></span>
-                                                <span class="truncate">{{ $sessionActiveTurn['label'] ?? __('Active') }}</span>
-                                                <span
-                                                    class="tabular-nums text-muted/80 shrink-0"
-                                                    x-text="formatElapsedFrom('{{ $sessionActiveTurn['timer_anchor_at'] }}')"
-                                                ></span>
-                                            </div>
-                                        @endif
+                                        <div
+                                            x-show="activeTurnSummaries['{{ $session->id }}']"
+                                            x-cloak
+                                            class="mt-0.5 flex items-center gap-1.5 min-w-0 text-[10px] text-accent"
+                                        >
+                                            <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0"></span>
+                                            <span
+                                                class="truncate"
+                                                x-text="activeTurnSummaries['{{ $session->id }}']?.label || '{{ __('Active') }}'"
+                                            ></span>
+                                            <span
+                                                class="tabular-nums text-muted/80 shrink-0"
+                                                x-text="formatElapsedFrom(activeTurnSummaries['{{ $session->id }}']?.timer_anchor_at || null)"
+                                            ></span>
+                                        </div>
                                     </div>
-                                    @if ($sessionActiveTurn !== null)
-                                        <button
-                                            type="button"
-                                            wire:click.stop="cancelActiveTurn('{{ $sessionActiveTurn['turnId'] }}')"
-                                            class="text-muted hover:text-ink p-1 shrink-0"
-                                            title="{{ __('Stop active turn') }}"
-                                            aria-label="{{ __('Stop active turn') }}"
-                                        >
-                                            <x-icon name="heroicon-o-stop" class="w-3.5 h-3.5" />
-                                        </button>
-                                    @else
-                                        <button
-                                            type="button"
-                                            wire:click.stop="deleteSession('{{ $session->id }}')"
-                                            class="text-muted hover:text-ink p-1 shrink-0"
-                                            title="{{ __('Delete session') }}"
-                                            aria-label="{{ __('Delete session') }}"
-                                        >
-                                            <x-icon name="heroicon-o-trash" class="w-3.5 h-3.5" />
-                                        </button>
-                                    @endif
+                                    <button
+                                        type="button"
+                                        x-show="activeTurnSummaries['{{ $session->id }}']"
+                                        x-cloak
+                                        x-on:click.stop="$wire.cancelActiveTurn(activeTurnSummaries['{{ $session->id }}']?.turnId)"
+                                        class="text-muted hover:text-ink p-1 shrink-0"
+                                        title="{{ __('Stop active turn') }}"
+                                        aria-label="{{ __('Stop active turn') }}"
+                                    >
+                                        <x-icon name="heroicon-o-stop" class="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        x-show="!activeTurnSummaries['{{ $session->id }}']"
+                                        x-cloak
+                                        wire:click.stop="deleteSession('{{ $session->id }}')"
+                                        class="text-muted hover:text-ink p-1 shrink-0"
+                                        title="{{ __('Delete session') }}"
+                                        aria-label="{{ __('Delete session') }}"
+                                    >
+                                        <x-icon name="heroicon-o-trash" class="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
                             @endif
                         </div>
@@ -930,13 +1036,17 @@
                 }
 
                 if (result && result.turnId && result.streamUrl) {
-                    this.streamEntries = [];
                     this.resetTurnState();
                     this.pendingMessage = null;
-                    this.activeTurnId = result.turnId;
-                    this.turnPhase = result.phase || 'waiting_for_worker';
-                    this.turnLabel = result.label || this.waitingForWorkerLabel;
-                    this.startElapsedTimer(result.started_at || result.created_at || null);
+                    this.restoreTurnState(result.turnId) || this.ensureTurnState(result.turnId);
+                    this.selectedTurnId = result.turnId;
+                    this.ensureTurnState(result.turnId, {
+                        streamEntries: [],
+                        turnPhase: result.phase || 'waiting_for_worker',
+                        turnLabel: result.label || this.waitingForWorkerLabel,
+                        scrollContainer,
+                    });
+                    this.startElapsedTimer(result.turnId, result.started_at || result.created_at || null);
                     this.startPersistentFetch(result.turnId, result.streamUrl, scrollContainer);
                     textarea.value = '';
                     textarea.style.height = 'auto';
@@ -949,7 +1059,7 @@
                 textarea.style.height = 'auto';
                 localStorage.removeItem(this._draftKey);
             } catch (e) {
-                this.streamEntries.push({
+                this.ensureTurnState(this.selectedTurnId)?.streamEntries.push({
                     type: 'error',
                     message: e?.message || 'Failed to start streaming run',
                 });
@@ -961,27 +1071,9 @@
 
     Alpine.data('agentChatStream', (config = {}) => ({
         pendingMessage: null,
-        streamEntries: [],
         followTail: true,
-
-        activeTurnId: null,
-        turnPhase: null,
-        turnLabel: null,
-        turnStartedAt: null,
-        elapsedSeconds: 0,
-        _elapsedTimer: null,
-        _lastSeq: 0,
-        _toolMap: {},
-        _completedToolCount: 0,
-        toolsCollapsed: false,
-        _deltaBuffer: '',
-        _deltaFlushTimer: null,
-        _scrollContainer: null,
-        _replayPollTimer: null,
-        _replayPromise: null,
-        _pendingReplayAfterSeq: null,
-        _abortController: null,
-        _fetchReader: null,
+        selectedTurnId: null,
+        turnRegistry: {},
 
         startingLabel: config.startingLabel ?? 'Starting…',
         stoppingLabel: config.stoppingLabel ?? 'Stopping…',
@@ -991,63 +1083,198 @@
         replayUrlTemplate: config.replayUrlTemplate ?? '',
 
         get isBusy() {
-            return !!this.pendingMessage || !!this.activeTurnId;
+            return !!this.pendingMessage || !!this.selectedTurnId;
         },
 
-        resetTurnState() {
-            this.abortPersistentFetch();
-            this.activeTurnId = null;
-            this.turnPhase = null;
-            this.turnLabel = null;
-            this.turnStartedAt = null;
-            this.elapsedSeconds = 0;
-            this._lastSeq = 0;
-            this._toolMap = {};
-            this._completedToolCount = 0;
-            this.toolsCollapsed = false;
-            this._scrollContainer = null;
-            this.stopReplayPolling();
-            this._replayPromise = null;
-            this._pendingReplayAfterSeq = null;
-            this.flushDeltaBuffer();
-            this._deltaBuffer = '';
-            if (this._elapsedTimer) {
-                clearInterval(this._elapsedTimer);
-                this._elapsedTimer = null;
+        get selectedTurnState() {
+            if (!this.selectedTurnId) {
+                return null;
             }
+
+            return this.turnRegistry[this.selectedTurnId] || null;
         },
 
-        flushDeltaBuffer() {
-            if (this._deltaFlushTimer) {
-                clearTimeout(this._deltaFlushTimer);
-                this._deltaFlushTimer = null;
-            }
-            if (!this._deltaBuffer) return;
+        get streamEntries() {
+            return this.selectedTurnState?.streamEntries || [];
+        },
 
-            const last = this.streamEntries[this.streamEntries.length - 1];
-            if (last && last.type === 'assistant_streaming') {
-                last.content += this._deltaBuffer;
+        get turnPhase() {
+            return this.selectedTurnState?.turnPhase || null;
+        },
+
+        get turnLabel() {
+            return this.selectedTurnState?.turnLabel || null;
+        },
+
+        get elapsedSeconds() {
+            return this.selectedTurnState?.elapsedSeconds || 0;
+        },
+
+        get toolsCollapsed() {
+            return this.selectedTurnState?.toolsCollapsed || false;
+        },
+
+        createTurnState() {
+            return {
+                streamEntries: [],
+                turnPhase: null,
+                turnLabel: null,
+                turnStartedAt: null,
+                elapsedSeconds: 0,
+                lastSeq: 0,
+                toolMap: {},
+                completedToolCount: 0,
+                toolsCollapsed: false,
+                deltaBuffer: '',
+                deltaFlushTimer: null,
+                scrollContainer: null,
+                replayPollTimer: null,
+                replayPromise: null,
+                pendingReplayAfterSeq: null,
+                abortController: null,
+                fetchReader: null,
+                elapsedTimer: null,
+            };
+        },
+
+        ensureTurnState(turnId, patch = {}) {
+            if (!turnId) {
+                return null;
+            }
+
+            const state = this.turnRegistry[turnId] || this.createTurnState();
+            Object.assign(state, patch);
+
+            if (!this.turnRegistry[turnId]) {
+                this.turnRegistry = {
+                    ...this.turnRegistry,
+                    [turnId]: state,
+                };
+            }
+
+            return state;
+        },
+
+        snapshotActiveTurnState() {
+            if (!this.selectedTurnId || !this.selectedTurnState) {
+                return;
+            }
+
+            this.turnRegistry = {
+                ...this.turnRegistry,
+                [this.selectedTurnId]: this.selectedTurnState,
+            };
+        },
+
+        restoreTurnState(turnId) {
+            if (!this.turnRegistry[turnId]) {
+                return false;
+            }
+
+            this.selectedTurnId = turnId;
+
+            return true;
+        },
+
+        forgetTurnState(turnId) {
+            if (!turnId || !this.turnRegistry[turnId]) {
+                return;
+            }
+
+            this.teardownTurnState(turnId);
+
+            const nextRegistry = { ...this.turnRegistry };
+            delete nextRegistry[turnId];
+            this.turnRegistry = nextRegistry;
+        },
+
+        resetTurnState(dropCurrentRegistry = false) {
+            const currentTurnId = this.selectedTurnId;
+
+            if (!currentTurnId) {
+                return;
+            }
+
+            if (dropCurrentRegistry) {
+                this.forgetTurnState(currentTurnId);
             } else {
-                this.streamEntries.push({
+                this.snapshotActiveTurnState();
+                this.teardownTurnState(currentTurnId);
+            }
+
+            this.selectedTurnId = null;
+        },
+
+        teardownTurnState(turnId) {
+            const state = this.turnRegistry[turnId] || null;
+            if (!state) {
+                return;
+            }
+
+            this.abortPersistentFetch(turnId);
+            this.stopReplayPolling(turnId);
+            this.flushDeltaBuffer(turnId);
+            state.deltaBuffer = '';
+            state.scrollContainer = null;
+            state.replayPromise = null;
+            state.pendingReplayAfterSeq = null;
+
+            if (state.elapsedTimer) {
+                clearInterval(state.elapsedTimer);
+                state.elapsedTimer = null;
+            }
+        },
+
+        flushDeltaBuffer(turnId = null) {
+            const state = this.ensureTurnState(turnId || this.selectedTurnId);
+            if (!state) {
+                return;
+            }
+
+            if (state.deltaFlushTimer) {
+                clearTimeout(state.deltaFlushTimer);
+                state.deltaFlushTimer = null;
+            }
+
+            if (!state.deltaBuffer) {
+                return;
+            }
+
+            const last = state.streamEntries[state.streamEntries.length - 1];
+            if (last && last.type === 'assistant_streaming') {
+                last.content += state.deltaBuffer;
+            } else {
+                state.streamEntries.push({
                     type: 'assistant_streaming',
-                    content: this._deltaBuffer,
+                    content: state.deltaBuffer,
                 });
             }
-            this._deltaBuffer = '';
+            state.deltaBuffer = '';
         },
 
-        startElapsedTimer(serverStartedAt = null) {
-            if (this._elapsedTimer) {
-                clearInterval(this._elapsedTimer);
-                this._elapsedTimer = null;
+        startElapsedTimer(turnId, serverStartedAt = null) {
+            const state = this.ensureTurnState(turnId);
+            if (!state) {
+                return;
             }
 
-            this.turnStartedAt = serverStartedAt
+            if (state.elapsedTimer) {
+                clearInterval(state.elapsedTimer);
+                state.elapsedTimer = null;
+            }
+
+            state.turnStartedAt = serverStartedAt
                 ? new Date(serverStartedAt).getTime()
                 : Date.now();
-            this.elapsedSeconds = Math.max(0, Math.floor((Date.now() - this.turnStartedAt) / 1000));
-            this._elapsedTimer = setInterval(() => {
-                this.elapsedSeconds = Math.floor((Date.now() - this.turnStartedAt) / 1000);
+
+            state.elapsedSeconds = Math.max(0, Math.floor((Date.now() - state.turnStartedAt) / 1000));
+            state.elapsedTimer = setInterval(() => {
+                const liveState = this.turnRegistry[turnId];
+                if (!liveState || !liveState.turnStartedAt) {
+                    return;
+                }
+
+                liveState.elapsedSeconds = Math.max(0, Math.floor((Date.now() - liveState.turnStartedAt) / 1000));
             }, 1000);
         },
 
@@ -1061,19 +1288,23 @@
             const phase = activeTurn.phase || null;
             const label = activeTurn.label || phase || this.waitingForWorkerLabel;
 
-            if (this.activeTurnId !== turnId) {
-                this.streamEntries = [];
+            if (this.selectedTurnId !== turnId) {
                 this.resetTurnState();
+                this.ensureTurnState(turnId);
+                this.restoreTurnState(turnId);
             }
 
-            this.turnPhase = phase;
-            this.turnLabel = label;
+            const state = this.ensureTurnState(turnId, {
+                turnPhase: phase,
+                turnLabel: label,
+                scrollContainer,
+            });
 
             if (timerAnchor) {
-                this.startElapsedTimer(timerAnchor);
+                this.startElapsedTimer(turnId, timerAnchor);
             }
 
-            if (this.activeTurnId === turnId && (this._abortController || this._replayPollTimer)) {
+            if (state && (state.abortController || state.replayPollTimer)) {
                 return;
             }
 
@@ -1091,7 +1322,6 @@
 
             if (!selectedTurn.turnId) {
                 this.pendingMessage = null;
-                this.streamEntries = [];
                 this.resetTurnState();
                 return;
             }
@@ -1099,40 +1329,50 @@
             await this.resumeKnownTurn(selectedTurn, scrollContainer);
         },
 
-        stopReplayPolling() {
-            if (this._replayPollTimer) {
-                clearInterval(this._replayPollTimer);
-                this._replayPollTimer = null;
+        stopReplayPolling(turnId = null) {
+            const state = this.ensureTurnState(turnId || this.selectedTurnId);
+            if (!state?.replayPollTimer) {
+                return;
             }
+
+            clearInterval(state.replayPollTimer);
+            state.replayPollTimer = null;
         },
 
-        startReplayPolling(scrollContainer) {
-            if (this._replayPollTimer || !this.activeTurnId) {
+        startReplayPolling(turnId, scrollContainer) {
+            const state = this.ensureTurnState(turnId);
+            if (!turnId || !state || state.replayPollTimer) {
                 return;
             }
 
             const poll = () => {
-                if (!this.activeTurnId) {
-                    this.stopReplayPolling();
+                if (this.selectedTurnId !== turnId || !this.turnRegistry[turnId]) {
+                    this.stopReplayPolling(turnId);
 
                     return;
                 }
 
-                this.requestReplay(this._lastSeq, scrollContainer).catch(() => {
-                    this.stopReplayPolling();
-                    this.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
-                    this.finalizeTurnStream();
+                this.requestReplay(state.lastSeq, scrollContainer, turnId).catch(() => {
+                    this.stopReplayPolling(turnId);
+                    state.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
+                    this.finalizeTurnStream(turnId);
                 });
             };
 
-            this._replayPollTimer = setInterval(poll, 1000);
+            state.replayPollTimer = setInterval(poll, 1000);
             poll();
         },
 
-        finalizeTurnStream() {
-            const finalizedTurnId = this.activeTurnId;
+        finalizeTurnStream(turnId = null) {
+            const finalizedTurnId = turnId || this.selectedTurnId;
             const finalizedSessionId = this.$wire.selectedSessionId || null;
-            this.resetTurnState();
+
+            if (finalizedTurnId && this.selectedTurnId === finalizedTurnId) {
+                this.resetTurnState(true);
+            } else if (finalizedTurnId) {
+                this.forgetTurnState(finalizedTurnId);
+            }
+
             this.$wire.finalizeStreamingRun(finalizedTurnId, finalizedSessionId);
         },
 
@@ -1151,43 +1391,47 @@
                 return;
             }
 
-            if (this.activeTurnId && this.activeTurnId !== serverTurnId) {
+            if (this.selectedTurnId && this.selectedTurnId !== serverTurnId) {
                 return;
             }
 
-            if (this.activeTurnId === serverTurnId) {
-                this.streamEntries = [];
-                this.resetTurnState();
+            if (this.selectedTurnId === serverTurnId) {
+                this.resetTurnState(true);
             }
         },
 
         repairAbandonedSelectedSession(turnId) {
-            if (!turnId || this.activeTurnId !== turnId) {
+            if (!turnId || this.selectedTurnId !== turnId) {
                 return;
             }
 
             this.pendingMessage = null;
-            this.streamEntries = [];
-            this.resetTurnState();
+            this.resetTurnState(true);
         },
 
-        abortPersistentFetch() {
-            if (this._abortController) {
-                this._abortController.abort();
-                this._abortController = null;
+        abortPersistentFetch(turnId = null) {
+            const state = this.ensureTurnState(turnId || this.selectedTurnId);
+            if (!state?.abortController) {
+                return;
             }
 
-            this._fetchReader = null;
+            state.abortController.abort();
+            state.abortController = null;
+            state.fetchReader = null;
         },
 
         async startPersistentFetch(turnId, streamUrl, scrollContainer) {
-            this.abortPersistentFetch();
-            this._scrollContainer = scrollContainer;
-            this._abortController = new AbortController();
+            const state = this.ensureTurnState(turnId, { scrollContainer });
+            if (!state) {
+                return;
+            }
+
+            this.abortPersistentFetch(turnId);
+            state.abortController = new AbortController();
 
             try {
                 const response = await fetch(streamUrl, {
-                    signal: this._abortController.signal,
+                    signal: state.abortController.signal,
                     credentials: 'same-origin',
                 });
 
@@ -1203,22 +1447,22 @@
                         // Fall back to generic message
                     }
 
-                    this.streamEntries.push({ type: 'error', message: errorMessage });
-                    this.finalizeTurnStream();
+                    state.streamEntries.push({ type: 'error', message: errorMessage });
+                    this.finalizeTurnStream(turnId);
 
                     return;
                 }
 
-                this._fetchReader = response.body.getReader();
+                state.fetchReader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let buffer = '';
 
                 while (true) {
-                    const { done, value } = await this._fetchReader.read();
+                    const { done, value } = await state.fetchReader.read();
 
                     if (done) break;
 
-                    if (this.activeTurnId !== turnId) break;
+                    if (this.selectedTurnId !== turnId) break;
 
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split('\n');
@@ -1231,22 +1475,22 @@
                             const data = JSON.parse(line);
 
                             if (data._stream_complete) {
-                                if (!this.activeTurnId) return;
+                                if (this.selectedTurnId !== turnId) return;
 
-                                this.removeThinkingEntries();
-                                this.finalizeTurnStream();
+                                this.removeThinkingEntries(turnId);
+                                this.finalizeTurnStream(turnId);
 
                                 return;
                             }
 
                             if (data.error && !data.event_type) {
-                                this.streamEntries.push({ type: 'error', message: data.error });
-                                this.finalizeTurnStream();
+                                state.streamEntries.push({ type: 'error', message: data.error });
+                                this.finalizeTurnStream(turnId);
 
                                 return;
                             }
 
-                            this.handleTurnEvent(data.event_type, data, scrollContainer);
+                            await this.handleTurnEvent(data.event_type, data, scrollContainer, turnId);
                         } catch {
                             // Skip malformed lines
                         }
@@ -1254,106 +1498,119 @@
                 }
 
                 // Stream ended without _stream_complete — treat as normal completion
-                if (this.activeTurnId === turnId) {
-                    this.removeThinkingEntries();
-                    this.finalizeTurnStream();
+                if (this.selectedTurnId === turnId) {
+                    this.removeThinkingEntries(turnId);
+                    this.finalizeTurnStream(turnId);
                 }
             } catch (e) {
                 if (e.name === 'AbortError') return;
 
-                if (this.activeTurnId === turnId) {
-                    this.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
-                    this.finalizeTurnStream();
+                if (this.selectedTurnId === turnId) {
+                    state.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
+                    this.finalizeTurnStream(turnId);
                 }
             }
         },
 
         async resumeTurnStream(turnId, scrollContainer) {
-            this.activeTurnId = turnId;
-            this._scrollContainer = scrollContainer;
+            this.selectedTurnId = turnId;
             this.followTail = true;
+            this.ensureTurnState(turnId, { scrollContainer });
 
             try {
-                const json = await this.replayTurnEvents(0, scrollContainer);
+                const json = await this.replayTurnEvents(0, scrollContainer, turnId);
                 if (!json) {
                     this.repairAbandonedSelectedSession(turnId);
                     return;
                 }
 
                 const isTerminal = ['completed', 'failed', 'cancelled'].includes(json.status);
-                if (isTerminal && this.activeTurnId === turnId) {
+                if (isTerminal && this.selectedTurnId === turnId) {
                     this.repairAbandonedSelectedSession(turnId);
                     return;
                 }
 
                 if (!isTerminal) {
-                    this.startReplayPolling(scrollContainer);
+                    this.startReplayPolling(turnId, scrollContainer);
                 }
             } catch {
-                this.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
-                this.finalizeTurnStream();
+                const state = this.ensureTurnState(turnId);
+                state?.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
+                this.finalizeTurnStream(turnId);
             }
         },
 
-        async requestReplay(afterSeq, scrollContainer) {
+        async requestReplay(afterSeq, scrollContainer, turnId = null) {
             const normalizedAfterSeq = Math.max(0, Number.parseInt(afterSeq ?? 0, 10) || 0);
-
-            if (this._replayPromise) {
-                this._pendingReplayAfterSeq = this._pendingReplayAfterSeq === null
-                    ? normalizedAfterSeq
-                    : Math.min(this._pendingReplayAfterSeq, normalizedAfterSeq);
-
-                return this._replayPromise;
+            const activeTurnId = turnId || this.selectedTurnId;
+            const state = this.ensureTurnState(activeTurnId);
+            if (!activeTurnId || !state) {
+                return null;
             }
 
-            this._replayPromise = (async () => {
+            if (state.replayPromise) {
+                state.pendingReplayAfterSeq = state.pendingReplayAfterSeq === null
+                    ? normalizedAfterSeq
+                    : Math.min(state.pendingReplayAfterSeq, normalizedAfterSeq);
+
+                return state.replayPromise;
+            }
+
+            state.replayPromise = (async () => {
                 let nextAfterSeq = normalizedAfterSeq;
 
                 do {
-                    this._pendingReplayAfterSeq = null;
-                    await this.replayTurnEvents(nextAfterSeq, scrollContainer);
-                    nextAfterSeq = this._pendingReplayAfterSeq;
-                } while (nextAfterSeq !== null && this.activeTurnId);
+                    state.pendingReplayAfterSeq = null;
+                    await this.replayTurnEvents(nextAfterSeq, scrollContainer, activeTurnId);
+                    nextAfterSeq = state.pendingReplayAfterSeq;
+                } while (nextAfterSeq !== null && this.selectedTurnId === activeTurnId);
             })();
 
-            return this._replayPromise.finally(() => {
-                this._replayPromise = null;
-                this._pendingReplayAfterSeq = null;
+            return state.replayPromise.finally(() => {
+                if (this.turnRegistry[activeTurnId]) {
+                    this.turnRegistry[activeTurnId].replayPromise = null;
+                    this.turnRegistry[activeTurnId].pendingReplayAfterSeq = null;
+                }
             });
         },
 
-        async replayTurnEvents(afterSeq, scrollContainer) {
-            const turnId = this.activeTurnId;
-            if (!turnId) return null;
+        async replayTurnEvents(afterSeq, scrollContainer, turnId = null) {
+            const replayTurnId = turnId || this.selectedTurnId;
+            if (!replayTurnId) return null;
 
-            const replayUrl = this.replayUrlTemplate.replace('__TURN__', turnId) + '?after_seq=' + afterSeq;
+            const replayUrl = this.replayUrlTemplate.replace('__TURN__', replayTurnId) + '?after_seq=' + afterSeq;
             const resp = await fetch(replayUrl);
             if (!resp.ok) return null;
 
             const json = await resp.json();
 
-            if (this.activeTurnId !== turnId) {
+            if (this.selectedTurnId !== replayTurnId) {
                 return null;
             }
 
-            if (!this.turnStartedAt && (json.started_at || json.created_at)) {
-                this.startElapsedTimer(json.started_at || json.created_at);
+            const state = this.ensureTurnState(replayTurnId);
+            if (!state) {
+                return null;
+            }
+
+            if (!state.turnStartedAt && (json.started_at || json.created_at)) {
+                this.startElapsedTimer(replayTurnId, json.started_at || json.created_at);
             }
             if (json.current_phase) {
-                this.turnPhase = json.current_phase;
-                this.turnLabel = json.current_label || json.current_phase;
+                state.turnPhase = json.current_phase;
+                state.turnLabel = json.current_label || json.current_phase;
             }
 
             for (const event of (json.events || [])) {
                 const eventSeq = Number.parseInt(event?.seq ?? 0, 10) || 0;
 
-                if (eventSeq && eventSeq <= this._lastSeq) {
+                if (eventSeq && eventSeq <= state.lastSeq) {
                     continue;
                 }
 
-                this.processTurnEvent(event.event_type, event, scrollContainer);
+                this.processTurnEvent(event.event_type, event, scrollContainer, replayTurnId);
 
-                if (!this.activeTurnId) {
+                if (this.selectedTurnId !== replayTurnId) {
                     break;
                 }
             }
@@ -1361,166 +1618,194 @@
             return json;
         },
 
-        async handleTurnEvent(eventType, data, scrollContainer) {
+        async handleTurnEvent(eventType, data, scrollContainer, turnId = null) {
             const seq = Number.parseInt(data?.seq ?? 0, 10) || 0;
-
-            if (data.turn_id && !this.activeTurnId) {
-                this.activeTurnId = data.turn_id;
+            const activeTurnId = turnId || data.turn_id || this.selectedTurnId;
+            const state = this.ensureTurnState(activeTurnId);
+            if (!activeTurnId || !state) {
+                return;
             }
 
-            if (seq && seq > this._lastSeq + 1) {
+            this.selectedTurnId = activeTurnId;
+
+            if (seq && seq > state.lastSeq + 1) {
                 try {
-                    await this.requestReplay(this._lastSeq, scrollContainer);
+                    await this.requestReplay(state.lastSeq, scrollContainer, activeTurnId);
                 } catch {
-                    this.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
-                    this.finalizeTurnStream();
+                    state.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
+                    this.finalizeTurnStream(activeTurnId);
                 }
 
                 return;
             }
 
-            if (seq && seq <= this._lastSeq) {
+            if (seq && seq <= state.lastSeq) {
                 return;
             }
 
-            this.processTurnEvent(eventType, data, scrollContainer);
+            this.processTurnEvent(eventType, data, scrollContainer, activeTurnId);
         },
 
-        processTurnEvent(eventType, data, scrollContainer) {
-            if (data.seq) this._lastSeq = data.seq;
+        processTurnEvent(eventType, data, scrollContainer, turnId = null) {
+            const activeTurnId = turnId || data.turn_id || this.selectedTurnId;
+            const state = this.ensureTurnState(activeTurnId);
+            if (!activeTurnId || !state) {
+                return;
+            }
+
+            if (data.seq) state.lastSeq = data.seq;
 
             switch (eventType) {
                 case 'turn.started':
-                    this.onTurnStarted(data);
+                    this.onTurnStarted(data, activeTurnId);
                     break;
 
                 case 'turn.phase_changed':
-                    this.onPhaseChanged(data);
+                    this.onPhaseChanged(data, activeTurnId);
                     break;
 
                 case 'run.started':
                     break;
 
                 case 'assistant.thinking_started':
-                    this.onThinkingStarted(data);
+                    this.onThinkingStarted(data, activeTurnId);
                     break;
 
                 case 'assistant.thinking_delta':
-                    this.onThinkingDelta(data);
+                    this.onThinkingDelta(data, activeTurnId);
                     break;
 
                 case 'tool.started':
-                    this.onToolStarted(data);
+                    this.onToolStarted(data, activeTurnId);
                     break;
 
                 case 'tool.finished':
-                    this.onToolFinished(data);
+                    this.onToolFinished(data, activeTurnId);
                     break;
 
                 case 'tool.stdout_delta':
-                    this.onToolStdoutDelta(data);
+                    this.onToolStdoutDelta(data, activeTurnId);
                     break;
 
                 case 'tool.denied':
-                    this.onToolDenied(data);
+                    this.onToolDenied(data, activeTurnId);
                     break;
 
                 case 'assistant.output_delta':
-                    this.onOutputDelta(data);
+                    this.onOutputDelta(data, activeTurnId);
                     break;
 
                 case 'assistant.output_block_committed':
-                    this.flushDeltaBuffer();
+                    this.flushDeltaBuffer(activeTurnId);
                     break;
 
                 case 'turn.completed':
                 case 'turn.ready_for_input':
-                    this.removeThinkingEntries();
-                    this.finalizeTurnStream();
+                    this.removeThinkingEntries(activeTurnId);
+                    this.finalizeTurnStream(activeTurnId);
                     return;
 
                 case 'turn.failed':
-                    this.onTurnFailed(data);
+                    this.onTurnFailed(data, activeTurnId);
                     return;
 
                 case 'turn.cancelled':
-                    this.finalizeTurnStream();
+                    this.finalizeTurnStream(activeTurnId);
                     return;
             }
 
             this.scrollToBottom(scrollContainer);
         },
 
-        onTurnStarted(data) {
+        onTurnStarted(data, turnId) {
             const payload = data?.payload || data || {};
             const serverStartedAt = payload.started_at || null;
-            if (serverStartedAt) {
-                this.startElapsedTimer(serverStartedAt);
-            } else if (!this.turnStartedAt) {
-                this.startElapsedTimer();
+            const state = this.ensureTurnState(turnId);
+            if (!state) {
+                return;
             }
-            this.turnPhase = 'booting';
-            this.turnLabel = this.startingLabel;
+
+            if (serverStartedAt) {
+                this.startElapsedTimer(turnId, serverStartedAt);
+            } else if (!state.turnStartedAt) {
+                this.startElapsedTimer(turnId);
+            }
+            state.turnPhase = 'booting';
+            state.turnLabel = this.startingLabel;
         },
 
-        onPhaseChanged(data) {
+        onPhaseChanged(data, turnId) {
             const phase = data.payload?.phase || data.phase;
             const label = data.payload?.label || data.label || phase;
-            this.turnPhase = phase;
-            this.turnLabel = label;
+            const state = this.ensureTurnState(turnId);
+            if (!state) {
+                return;
+            }
+
+            state.turnPhase = phase;
+            state.turnLabel = label;
 
             // Update the most recent thinking entry description when phase is thinking with a rich label
             if (phase === 'thinking' && label && label !== 'Thinking…') {
-                for (let i = this.streamEntries.length - 1; i >= 0; i--) {
-                    if (this.streamEntries[i].type === 'thinking') {
-                        this.streamEntries[i].description = label.replace(/^Thinking\s*—\s*/, '');
+                for (let i = state.streamEntries.length - 1; i >= 0; i--) {
+                    if (state.streamEntries[i].type === 'thinking') {
+                        state.streamEntries[i].description = label.replace(/^Thinking\s*—\s*/, '');
                         break;
                     }
                 }
             }
         },
 
-        onThinkingStarted(data) {
+        onThinkingStarted(data, turnId) {
             const payload = data?.payload || data || {};
             const description = payload.description || null;
-            this.streamEntries.push({ type: 'thinking', active: true, description, thinkingContent: '' });
+            this.ensureTurnState(turnId)?.streamEntries.push({ type: 'thinking', active: true, description, thinkingContent: '' });
         },
 
-        onThinkingDelta(data) {
+        onThinkingDelta(data, turnId) {
             const payload = data?.payload || data || {};
             const delta = payload.delta || '';
             if (!delta) return;
+            const state = this.ensureTurnState(turnId);
+            if (!state) {
+                return;
+            }
 
             // Append to the last thinking entry
             let entry = null;
-            for (let i = this.streamEntries.length - 1; i >= 0; i--) {
-                if (this.streamEntries[i].type === 'thinking') {
-                    entry = this.streamEntries[i];
+            for (let i = state.streamEntries.length - 1; i >= 0; i--) {
+                if (state.streamEntries[i].type === 'thinking') {
+                    entry = state.streamEntries[i];
                     break;
                 }
             }
 
             if (!entry) {
                 entry = { type: 'thinking', active: true, description: null, thinkingContent: '' };
-                this.streamEntries.push(entry);
+                state.streamEntries.push(entry);
             }
             entry.active = true;
             entry.thinkingContent = (entry.thinkingContent || '') + delta;
         },
 
-        onToolStarted(data) {
-            this.deactivateThinking();
+        onToolStarted(data, turnId) {
+            const state = this.ensureTurnState(turnId);
+            if (!state) {
+                return;
+            }
 
-            if (this._completedToolCount > 0 && !this.toolsCollapsed) {
-                this.toolsCollapsed = true;
+            this.deactivateThinking(turnId);
+
+            if (state.completedToolCount > 0 && !state.toolsCollapsed) {
+                state.toolsCollapsed = true;
             }
 
             const payload = data.payload || data;
-            const idx = this.streamEntries.length;
+            const idx = state.streamEntries.length;
             const toolKey = payload.tool_call_index ?? idx;
-            this._toolMap[toolKey] = idx;
+            state.toolMap[toolKey] = idx;
 
-            this.streamEntries.push({
+            state.streamEntries.push({
                 type: 'tool_call',
                 tool: payload.tool || '',
                 argsSummary: payload.args_summary || '',
@@ -1530,33 +1815,42 @@
             });
         },
 
-        onToolFinished(data) {
+        onToolFinished(data, turnId) {
             const payload = data.payload || data;
             const toolKey = payload.tool_call_index ?? -1;
-            const callIdx = this._toolMap[toolKey];
-
-            if (callIdx === undefined || !this.streamEntries[callIdx]) {
+            const state = this.ensureTurnState(turnId);
+            if (!state) {
                 return;
             }
 
-            const entry = this.streamEntries[callIdx];
+            const callIdx = state.toolMap[toolKey];
+
+            if (callIdx === undefined || !state.streamEntries[callIdx]) {
+                return;
+            }
+
+            const entry = state.streamEntries[callIdx];
             entry.status = payload.status || 'success';
             entry.durationMs = payload.duration_ms;
             entry.resultPreview = payload.result_preview || '';
             entry.resultLength = payload.result_length || 0;
             entry.errorPayload = payload.error_payload || null;
-            this._completedToolCount++;
+            state.completedToolCount++;
         },
 
-        onToolStdoutDelta(data) {
+        onToolStdoutDelta(data, turnId) {
             const payload = data.payload || data;
             const toolName = payload.tool || '';
             const delta = payload.delta || '';
             if (!delta) return;
+            const state = this.ensureTurnState(turnId);
+            if (!state) {
+                return;
+            }
 
             // Find the last running tool_call entry matching this tool
-            for (let i = this.streamEntries.length - 1; i >= 0; i--) {
-                const entry = this.streamEntries[i];
+            for (let i = state.streamEntries.length - 1; i >= 0; i--) {
+                const entry = state.streamEntries[i];
                 if (entry.type === 'tool_call' && entry.tool === toolName && entry.status === 'running') {
                     // Cap buffer at 10KB to prevent DOM bloat
                     if ((entry.stdoutBuffer || '').length < 10240) {
@@ -1567,9 +1861,9 @@
             }
         },
 
-        onToolDenied(data) {
+        onToolDenied(data, turnId) {
             const payload = data.payload || data;
-            this.streamEntries.push({
+            this.ensureTurnState(turnId)?.streamEntries.push({
                 type: 'hook_action',
                 stage: 'pre_tool_use',
                 action: 'tool_denied',
@@ -1579,46 +1873,61 @@
             });
         },
 
-        onOutputDelta(data) {
-            this.deactivateThinking();
+        onOutputDelta(data, turnId) {
+            const state = this.ensureTurnState(turnId);
+            if (!state) {
+                return;
+            }
+
+            this.deactivateThinking(turnId);
 
             const payload = data.payload || data;
             const text = payload.delta || payload.text || '';
             if (!text) return;
 
-            this._deltaBuffer += text;
+            state.deltaBuffer += text;
 
             const hasBoundary = /\n/.test(text);
             if (hasBoundary) {
-                this.flushDeltaBuffer();
+                this.flushDeltaBuffer(turnId);
 
                 return;
             }
 
-            if (this._deltaFlushTimer) clearTimeout(this._deltaFlushTimer);
-            this._deltaFlushTimer = setTimeout(() => this.flushDeltaBuffer(), 80);
+            if (state.deltaFlushTimer) clearTimeout(state.deltaFlushTimer);
+            state.deltaFlushTimer = setTimeout(() => this.flushDeltaBuffer(turnId), 80);
         },
 
-        onTurnFailed(data) {
+        onTurnFailed(data, turnId) {
             const payload = data.payload || data;
-            this.streamEntries.push({
+            this.ensureTurnState(turnId)?.streamEntries.push({
                 type: 'error',
                 message: payload.message || this.turnFailedMessage,
             });
-            this.finalizeTurnStream();
+            this.finalizeTurnStream(turnId);
         },
 
-        deactivateThinking() {
-            for (let i = this.streamEntries.length - 1; i >= 0; i--) {
-                if (this.streamEntries[i].type === 'thinking') {
-                    this.streamEntries[i].active = false;
+        deactivateThinking(turnId = null) {
+            const state = this.ensureTurnState(turnId || this.selectedTurnId);
+            if (!state) {
+                return;
+            }
+
+            for (let i = state.streamEntries.length - 1; i >= 0; i--) {
+                if (state.streamEntries[i].type === 'thinking') {
+                    state.streamEntries[i].active = false;
                     break;
                 }
             }
         },
 
-        removeThinkingEntries() {
-            this.streamEntries = this.streamEntries.filter(
+        removeThinkingEntries(turnId = null) {
+            const state = this.ensureTurnState(turnId || this.selectedTurnId);
+            if (!state) {
+                return;
+            }
+
+            state.streamEntries = state.streamEntries.filter(
                 (entry) => entry.type !== 'thinking' || (entry.thinkingContent && entry.thinkingContent.trim()),
             );
         },
@@ -1626,12 +1935,17 @@
         stopStreaming() {
             this.pendingMessage = null;
 
-            if (!this.activeTurnId) {
+            if (!this.selectedTurnId) {
                 return;
             }
 
-            this.turnLabel = this.stoppingLabel;
-            this.$wire.cancelActiveTurn(this.activeTurnId);
+            const state = this.ensureTurnState(this.selectedTurnId);
+            if (!state) {
+                return;
+            }
+
+            state.turnLabel = this.stoppingLabel;
+            this.$wire.cancelActiveTurn(this.selectedTurnId);
         },
 
         scrollToBottom(container) {

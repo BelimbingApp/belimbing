@@ -1,7 +1,7 @@
 # Lara Concurrent Runs
 
 **Status:** In Progress
-**Last Updated:** 2026-04-14
+**Last Updated:** 2026-04-15
 **Sources:** `run_qLd8OtMmZbtY`, `docs/todo/ai/ai-chat-coding-agent-console.md`, `docs/todo/ai/lara-realtime-console.md`, `resources/core/views/livewire/ai/chat.blade.php`, `app/Modules/Core/AI/Livewire/Chat.php`, `app/Modules/Core/AI/Livewire/Concerns/HandlesStreaming.php`
 
 ## Problem Essence
@@ -76,13 +76,15 @@ Goal: define the supported concurrency model and make the backend reject unsuppo
 
 Goal: make the client capable of tracking multiple active turns safely.
 
-- [ ] Replace singleton Alpine fields (`activeTurnId`, `streamEntries`, `_lastSeq`, `_abortController`, single timer) with a per-turn registry keyed by `turn_id`.
-- [ ] Split shared UI state into:
+- [x] Add a per-turn client-side cache keyed by `turn_id` so switching sessions preserves the detailed rail state instead of replaying from scratch every time.
+- [x] Add background summary polling for active session rows so non-selected sessions keep current phase/terminal state without relying only on coarse Livewire rerenders.
+- [x] Replace singleton Alpine fields (`activeTurnId`, `streamEntries`, `_lastSeq`, `_abortController`, single timer) with a per-turn registry keyed by `turn_id`.
+- [x] Split shared UI state into:
   - selected session detailed turn state
   - global active-turn summaries for all other sessions
-- [ ] Make stop actions target an explicit `turn_id` from the registry, not a global current turn.
-- [ ] Remove global reset behavior that clears every live stream when one turn finishes.
-- [ ] Keep transcript rendering scoped to the selected session only; non-selected sessions stay compact.
+- [x] Make stop actions target an explicit `turn_id` from the registry, not a global current turn.
+- [x] Remove global reset behavior that clears every live stream when one turn finishes.
+- [x] Keep transcript rendering scoped to the selected session only; non-selected sessions stay compact.
 
 ### Phase 3 — Add active-turn navigation and recovery UX
 

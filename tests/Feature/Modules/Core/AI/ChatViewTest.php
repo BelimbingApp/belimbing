@@ -76,7 +76,16 @@ it('renders the streaming console as a named alpine controller', function (): vo
         ->toContain('const text = payload.delta || payload.text ||')
         ->toContain('onServerTurnReady($event.detail || {})')
         ->toContain('this.$wire.finalizeStreamingRun(finalizedTurnId, finalizedSessionId)')
-        ->toContain('repairAbandonedSelectedSession(turnId)');
+        ->toContain('repairAbandonedSelectedSession(turnId)')
+        ->toContain('selectedTurnId: null')
+        ->toContain('turnRegistry: {}')
+        ->toContain('ensureTurnState(turnId, patch = {})')
+        ->toContain('teardownTurnState(turnId)')
+        ->toContain('snapshotActiveTurnState()')
+        ->toContain('restoreTurnState(turnId)')
+        ->toContain('activeTurnSummaries:')
+        ->toContain('startSummaryPolling()')
+        ->toContain('clearSummary($event.detail.sessionId, $event.detail?.turnId || null)');
 });
 
 it('polls the chat view while the selected Lara session has pending delegated work', function (): void {
