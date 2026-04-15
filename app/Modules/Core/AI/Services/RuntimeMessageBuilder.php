@@ -34,6 +34,10 @@ class RuntimeMessageBuilder
             if ($message->role === 'user') {
                 $apiMessages[] = $this->buildUserMessage($message);
             } elseif ($message->role === 'assistant') {
+                // Skip empty assistant messages — some providers (e.g., Moonshot) reject them
+                if ($message->content === '' || $message->content === null) {
+                    continue;
+                }
                 $apiMessages[] = [
                     'role' => 'assistant',
                     'content' => $message->content,

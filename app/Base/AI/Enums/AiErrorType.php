@@ -5,6 +5,8 @@
 
 namespace App\Base\AI\Enums;
 
+use App\Base\AI\DTO\AiRuntimeError;
+
 /**
  * Classification of AI runtime errors.
  *
@@ -44,23 +46,26 @@ enum AiErrorType: string
      * Return a short, translatable label for end users.
      *
      * This is the first sentence only — the full user-facing message is
-     * composed by {@see \App\Base\AI\DTO\AiRuntimeError} which appends
+     * composed by {@see AiRuntimeError} which appends
      * the provider diagnostic when available.
+     *
+     * GUIDANCE: Keep messages concise, factual, and transparent.
+     * No inaccurate messaging.
      */
     public function userMessage(): string
     {
         return match ($this) {
-            self::Timeout,
-            self::ConnectionError => __('The AI provider did not respond in time.'),
-            self::RateLimit => __('The AI provider is busy right now.'),
-            self::ServerError => __('The AI provider encountered a server error.'),
-            self::AuthError => __('AI provider authentication failed.'),
-            self::NotFound => __('The configured AI model or endpoint could not be found.'),
-            self::BadRequest => __('The AI provider rejected the request.'),
-            self::HtmlResponse,
-            self::UnsupportedResponseShape => __('The AI provider returned an invalid response.'),
-            self::EmptyResponse => __('The AI model returned an empty reply.'),
-            self::ConfigError => __('AI chat is not fully configured.'),
+            self::Timeout => __('Request timed out.'),
+            self::ConnectionError => __('Connection failed.'),
+            self::RateLimit => __('Rate limit exceeded.'),
+            self::ServerError => __('Server error.'),
+            self::AuthError => __('Authentication failed.'),
+            self::NotFound => __('Model or endpoint not found.'),
+            self::BadRequest => __('Invalid request.'),
+            self::HtmlResponse => __('HTML response received.'),
+            self::UnsupportedResponseShape => __('Unexpected response format.'),
+            self::EmptyResponse => __('Empty response.'),
+            self::ConfigError => __('Configuration error.'),
             self::UnexpectedError => __('An unexpected error occurred.'),
         };
     }

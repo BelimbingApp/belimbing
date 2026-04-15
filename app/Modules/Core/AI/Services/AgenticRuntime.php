@@ -73,8 +73,7 @@ class AgenticRuntime
         ?string $sessionId = null,
         ?array $configOverride = null,
         ?array $allowedToolNames = null,
-    ): array
-    {
+    ): array {
         $this->sessionContext->set($sessionId);
 
         try {
@@ -140,8 +139,19 @@ class AgenticRuntime
                     $fallbackAttempts,
                     $allowedToolNames,
                 );
-                $result['meta']['fallback_attempts'] = $fallbackAttempts;
 
+                // Check if we should fallback on runtime error
+                if (isset($result['meta']['error_type'])) {
+                    $errorTypeValue = $result['meta']['error_type'];
+                    if ($this->shouldFallbackFromErrorType($errorTypeValue)) {
+                        // runToolCallingLoop already added to $fallbackAttempts
+                        $lastErrorResult = $result;
+
+                        continue;
+                    }
+                }
+
+                $result['meta']['fallback_attempts'] = $fallbackAttempts;
                 $this->runRecorder->complete($runId, $result['meta']);
 
                 return $result;
@@ -197,8 +207,7 @@ class AgenticRuntime
         ?string $turnId = null,
         ?array $configOverride = null,
         ?array $allowedToolNames = null,
-    ): \Generator
-    {
+    ): \Generator {
         $this->sessionContext->set($sessionId);
 
         try {
@@ -263,7 +272,7 @@ class AgenticRuntime
 
                 $config['timeout'] = $policy->timeoutSeconds;
 
-                yield from $this->runStreamingToolLoop(
+                $stream = $this->runStreamingToolLoop(
                     $runId,
                     $config,
                     $credentials,
@@ -272,6 +281,49 @@ class AgenticRuntime
                     $fallbackAttempts,
                     $allowedToolNames,
                 );
+
+                $streamFailed = false;
+                $streamError = null;
+                $bufferedEvents = [];
+                foreach ($stream as $event) {
+                    // Buffer events until we know if this config succeeds or fails
+                    if ($event['event'] === 'error') {
+                        $streamFailed = true;
+                        $streamError = $event['data']['meta']['error_type'] ?? null;
+                    }
+                    $bufferedEvents[] = $event;
+                }
+
+                if (! $streamFailed) {
+                    // Success — yield all buffered events and return
+                    foreach ($bufferedEvents as $event) {
+                        yield $event;
+                    }
+
+                    return;
+                }
+
+                // Stream failed — check if we should fallback to next config
+                if ($this->shouldFallbackFromErrorType($streamError)) {
+                    $fallbackAttempts[] = $this->buildFallbackAttemptFromStreamError($config, $streamError);
+                    $lastConfig = $config;
+                    $fallbackAttemptIndex++;
+
+                    // Emit recovery status but NOT the error events (we're falling back)
+                    yield ['event' => 'status', 'data' => [
+                        'phase' => 'recovery_attempted',
+                        'attempt' => $fallbackAttemptIndex,
+                        'reason' => 'provider_fallback: '.$this->errorTypeToUserMessage($streamError),
+                        'run_id' => $runId,
+                    ]];
+
+                    continue;
+                }
+
+                // Non-retryable error — yield all buffered events (including errors) and return
+                foreach ($bufferedEvents as $event) {
+                    yield $event;
+                }
 
                 return;
             }
@@ -381,7 +433,8 @@ class AgenticRuntime
 
             if (isset($result['runtime_error'])) {
                 // On first iteration, this is a pre-commit failure — record for fallback
-                if ($iteration === 0) {
+                // Only record if error is retryable (we might actually fallback)
+                if ($iteration === 0 && $result['runtime_error']->retryable) {
                     $fallbackAttempts[] = $this->buildFallbackAttempt($config, $result['runtime_error']);
                 }
 
@@ -871,6 +924,51 @@ class AgenticRuntime
     }
 
     /**
+     * Determine whether the runtime should fall back to the next model
+     * based on the error type string.
+     */
+    private function shouldFallbackFromErrorType(?string $errorTypeValue): bool
+    {
+        if ($errorTypeValue === null) {
+            return false;
+        }
+
+        $errorType = AiErrorType::tryFrom($errorTypeValue);
+
+        return $errorType?->retryable() === true;
+    }
+
+    /**
+     * Build a fallback attempt entry from a stream error type string.
+     *
+     * @param  array<string, mixed>  $config
+     * @return array{provider: string, model: string, error: string, error_type: string, latency_ms: int, diagnostic: string|null}
+     */
+    private function buildFallbackAttemptFromStreamError(array $config, ?string $errorTypeValue): array
+    {
+        $errorType = AiErrorType::tryFrom($errorTypeValue ?? 'unexpected_error') ?? AiErrorType::UnexpectedError;
+
+        return [
+            'provider' => $config['provider_name'] ?? 'unknown',
+            'model' => $config['model'] ?? 'unknown',
+            'error' => $errorType->userMessage(),
+            'error_type' => $errorType->value,
+            'latency_ms' => 0,
+            'diagnostic' => null,
+        ];
+    }
+
+    /**
+     * Convert an error type string to a user-facing message.
+     */
+    private function errorTypeToUserMessage(?string $errorTypeValue): string
+    {
+        $errorType = AiErrorType::tryFrom($errorTypeValue ?? 'unexpected_error') ?? AiErrorType::UnexpectedError;
+
+        return $errorType->userMessage();
+    }
+
+    /**
      * Prepare the shared state for a tool-calling loop.
      *
      * @param  list<Message>  $messages
@@ -891,8 +989,7 @@ class AgenticRuntime
         array $messages,
         ?string $systemPrompt,
         ?array $allowedToolNames = null,
-    ): array
-    {
+    ): array {
         $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
         $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
         $tools = $this->toolRegistry->toolDefinitionsForCurrentUser($allowedToolNames);

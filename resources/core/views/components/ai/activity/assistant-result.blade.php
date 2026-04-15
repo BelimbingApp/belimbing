@@ -30,7 +30,13 @@
             @endphp
             <div class="mb-2 flex items-start gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400">
                 <x-icon name="heroicon-o-arrow-path" class="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>{{ $failedError }} {{ __('Switched to :provider/:model.', ['provider' => $provider, 'model' => $model]) }}</span>
+                <span>
+                    @if ($provider !== null && $provider !== '' && $provider !== 'unknown')
+                        {{ $failedError }} {{ __('Switched to :provider/:model.', ['provider' => $provider, 'model' => $model]) }}
+                    @else
+                        {{ $failedError }} {{ __('Backup provider failed.') }}
+                    @endif
+                </span>
             </div>
         @endif
         @if (is_string($stopNote) && $stopNote !== '')

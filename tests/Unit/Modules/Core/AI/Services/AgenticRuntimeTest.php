@@ -4,6 +4,7 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Base\AI\Contracts\Tool;
+use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
@@ -414,5 +415,97 @@ describe('AgenticRuntime', function () {
 
         expect($result['meta']['error_type'])->toBe('timeout');
         expect($result['meta']['retry_attempts'])->toBeEmpty();
+    });
+
+    it('falls back to backup model on retryable runtime error in sync mode', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        // Primary fails with rate limit on BOTH attempts (initial + retry)
+        $llmClient->shouldReceive('chat')->twice()->andReturn(
+            $this->makeErrorResponse(AiErrorType::RateLimit, 'HTTP 429: Too Many Requests', 50)
+        );
+        // Backup succeeds
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeFinalResponse('Success from backup model!')
+        );
+
+        $configResolver = $this->mockResolvedConfigResolver([
+            $this->makeConfig('primary-provider', 'gpt-4-primary'),
+            $this->makeConfig('backup-provider', 'gpt-4-backup'),
+        ]);
+
+        $result = runAgenticConversation($llmClient, $configResolver);
+
+        expect($result['content'])->toBe('Success from backup model!')
+            ->and($result['meta']['model'])->toBe('gpt-4-backup')
+            ->and($result['meta']['fallback_attempts'])->toHaveCount(1)
+            ->and($result['meta']['fallback_attempts'][0]['provider'])->toBe('primary-provider')
+            ->and($result['meta']['fallback_attempts'][0]['error_type'])->toBe('rate_limit');
+    });
+
+    it('falls back to backup model on retryable runtime error in stream mode', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        // Primary fails with rate limit - streaming error
+        $llmClient->shouldReceive('chatStream')->once()->andReturnUsing(function () {
+            yield ['type' => 'error', 'runtime_error' => AiRuntimeError::fromType(
+                AiErrorType::RateLimit,
+                'HTTP 429: Too Many Requests',
+                latencyMs: 50
+            ), 'latency_ms' => 50];
+        });
+        // Backup succeeds
+        $llmClient->shouldReceive('chatStream')->once()->andReturnUsing(function () {
+            yield ['type' => 'content_delta', 'text' => 'Success from backup!'];
+            yield ['type' => 'done', 'finish_reason' => 'stop', 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5], 'latency_ms' => 200];
+        });
+
+        $configResolver = $this->mockResolvedConfigResolver([
+            $this->makeConfig('primary-provider', 'gpt-4-primary'),
+            $this->makeConfig('backup-provider', 'gpt-4-backup'),
+        ]);
+
+        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
+        $events = iterator_to_array($runtime->runStream(
+            [test()->makeMessage('user', 'Hello')],
+            1,
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        ));
+
+        // Find the final done event
+        $doneEvent = null;
+        $errorEvents = [];
+        foreach ($events as $event) {
+            if ($event['event'] === 'done') {
+                $doneEvent = $event;
+            }
+            if ($event['event'] === 'error') {
+                $errorEvents[] = $event;
+            }
+        }
+
+        expect($doneEvent)->not->toBeNull()
+            ->and($doneEvent['data']['content'] ?? '')->toBe('Success from backup!')
+            ->and($doneEvent['data']['meta']['model'] ?? '')->toBe('gpt-4-backup')
+            ->and($doneEvent['data']['meta']['fallback_attempts'] ?? [])->toHaveCount(1)
+            ->and($doneEvent['data']['meta']['fallback_attempts'][0]['provider'] ?? '')->toBe('primary-provider')
+            ->and($doneEvent['data']['meta']['fallback_attempts'][0]['error_type'] ?? '')->toBe('rate_limit');
+    });
+
+    it('does not fall back on non-retryable runtime error in sync mode', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        // Primary fails with auth error (non-retryable)
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeErrorResponse(AiErrorType::AuthError, 'Invalid API key', 50)
+        );
+        // Backup should NOT be called
+
+        $configResolver = $this->mockResolvedConfigResolver([
+            $this->makeConfig('primary-provider', 'gpt-4-primary'),
+            $this->makeConfig('backup-provider', 'gpt-4-backup'),
+        ]);
+
+        $result = runAgenticConversation($llmClient, $configResolver);
+
+        expect($result['meta']['error_type'])->toBe('auth_error')
+            ->and($result['meta']['fallback_attempts'])->toBeEmpty();
     });
 });
