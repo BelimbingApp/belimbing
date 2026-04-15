@@ -1,56 +1,55 @@
 # UI Layout Architecture
 
-> **Status:** Draft for discussion
-> **Layout file:** `resources/core/views/components/layouts/app.blade.php`
+**Layout file:** `resources/core/views/components/layouts/app.blade.php`
 
 ## Layout Zones
 
-The authenticated app shell is a vertical flex column (`h-screen overflow-hidden`) with a sidebar inset. Five zones:
+The authenticated app shell is a vertical flex column (`h-screen overflow-hidden`). Below the top bar, a horizontal flex row holds the **sidebar**, **main content**, and (when Lara is open in docked desktop mode) an optional **right dock column**. Lara can also render as a **floating overlay** or **fullscreen layer** over the main column—see [Lara chat](#d-lara-chat). Five zones:
 
 ```
-+------------------------------------------------------------------+
-| A. Top Bar  (h-11)                                               |
-|  [≡ Toggle] [Belimbing]              [Theme Toggle] [Lara]       |
-+----------+-------------------------------------------------------+
-| B.       | C. Main Content                                       |
-| Sidebar  |    (flex-1, overflow-y-auto, p-3 sm:p-4)              |
-| drag-    |                                                       |
-| resizable|    +------+------+------+                              |
-| with     |    | Tab1 | Tab2 | Tab3 |  <-- page-level tabs        |
-| icon-rail|    +------+------+------+------                        |
-| snap     |    | Tab content                |                      |
-|          |    |                             |                      |
-| [Pinned] |    +----------------------------+                      |
-| [-------]|                          +-------------------------+   |
-| [A-Z     |                          | D. Lara Chat Panel      |   |
-|  menu    |                          |    (floating overlay     |   |
-|  tree]   |                          |     / mobile fullscreen) |   |
-|       |--|                          +-------------------------+   |
-|  drag |  |                                                        |
-| handle|  |                                                        |
-+-------+--+-------------------------------------------------------+
-| E. Status Bar  (h-6)                                             |
-|  [env] [debug] [impersonation] [warnings]   [Lara] [version]    |
-+------------------------------------------------------------------+
++---------------------------------------------------------------------+
+| A. Top Bar  (h-7)                                                   |
+|  [≡ Toggle]  Belimbing             [Timezone @auth]  [Theme]        |
++----------+-------------------------------------------+--------------+
+| B.       | C. Main Content                           | D. Lara      |
+| Sidebar  |   (flex-1, overflow-y-auto)               |   (docked    |
+| drag-    |                                           |    desktop   |
+| resizable|   Page / Livewire slot; optional in-main  |    only:     |
+| icon-rail|   fullscreen Lara layer (see below)       |    resizable |
+|          |                                           |    side      |
+| [Pinned] |                                           |    panel)    |
+| [-------]|                                           |              |
+| [A-Z     |                                           |              |
+|  menu    |                                           |              |
+|  tree]   |                                           |              |
++----------+-------------------------------------------+--------------+
+| E. Status Bar  (h-6)   [env] [debug] [warnings]   [Lara] [version]  |
++---------------------------------------------------------------------+
+
+  Lara (D) placement depends on mode — not all at once:
+  • Docked: column D (flex sibling of main), drag-resize from left edge
+  • Overlay (desktop): fixed bottom-right card above status bar (outside the row)
+  • Fullscreen (desktop sm+): covers zone C only (absolute inside <main>)
+  • Mobile: fixed strip top-11 … bottom-6 (below A, above E)
 ```
 
 ### Shell Persistence
 
-Zones A, B, D, and E are **persistent** -- they maintain their state when Main Content (zone C) changes. Only zone C swaps content. This is achieved by:
+The app **layout shell** (zones A, B, E, plus Lara chrome when open) stays mounted; only the **main slot** (zone C) is replaced when navigating. This is achieved by:
 
-- **Livewire navigation (`wire:navigate`).** When a navigation event occurs, Livewire fetches the new page and morphs the DOM, replacing Main Content while preserving Alpine state in the shell.
+- **Livewire navigation (`wire:navigate`).** Livewire fetches the new page and morphs the DOM under `<main>` while Alpine state on `<body>` and the sidebar survives.
 - **URL update via `history.pushState`.** The browser URL reflects the current page without a full page load.
-- **Client-side menu state.** Sidebar active item and pinned section update client-side on navigation. The server is only consulted for the Main Content payload.
+- **Client-side menu state.** Sidebar active item and pinned URLs update on navigation; the server supplies the next page’s Livewire HTML for the main column.
 
-This means the sidebar width/rail state, pinned items, Lara Chat conversation, Status Bar indicators, and any ephemeral Alpine state in the shell survive navigation.
+**Lara:** A single `<livewire:ai.chat />` instance lives in the layout. Alpine moves its root element between **teleport targets** (overlay, docked aside, mobile strip, or fullscreen container inside `<main>`) so conversation state survives navigation and mode switches without remounting the component.
 
 ### A. Top Bar
 
 - **Component:** `<x-layouts.top-bar />`
-- **Height:** `h-11`, fixed, `shrink-0`
+- **Height:** `h-7`, fixed, `shrink-0`
 - **Surface:** `bg-surface-bar`, bottom border
 - **Left:** Sidebar toggle button (dispatches `toggle-sidebar`), app title "Belimbing"
-- **Right:** Dark/light theme toggle (persisted to `localStorage`), Lara chat trigger
+- **Right (authenticated):** Timezone display mode control (persists via server + reload). **Right (all):** Dark/light theme toggle (persisted to `localStorage` on `theme`). Lara is **not** on the top bar; it is launched from the [Status Bar](#e-status-bar) (or keyboard shortcuts).
 
 ### B. Sidebar
 
@@ -58,7 +57,7 @@ This means the sidebar width/rail state, pinned items, Lara Chat conversation, S
 - **Surface:** `bg-surface-sidebar`, right border
 - **Content:**
   - **Pinned section:** User-curated quick-access items (see Sidebar Menu below)
-  - **Main menu:** Alphabetically ordered hierarchical menu tree, scrollable (`overflow-y-auto`)
+  - **Main menu:** Label-sorted hierarchical menu tree (see Sidebar Menu), scrollable (`overflow-y-auto`)
   - **Footer:** User avatar (initials on `bg-accent` circle), name, email, logout button; separated by `border-t`
 
 #### Desktop: Drag-Resizable with Icon Rail Snap
@@ -66,8 +65,8 @@ This means the sidebar width/rail state, pinned items, Lara Chat conversation, S
 The sidebar width is **continuously draggable** via a drag handle on its right edge:
 
 - **Drag handle:** Invisible until hovered. Cursor changes to `col-resize`, subtle highlight on hover.
-- **Width range:** Minimum `w-14` (icon rail) to maximum `w-72` (or configurable).
-- **Icon rail snap:** When dragged below a collapse threshold (~48px), the sidebar snaps to the **icon rail** -- a narrow strip showing only menu icons, no labels. In rail mode, pinned items show as icons and the main menu collapses to icons only.
+- **Width range:** `56px` (icon rail, `RAIL_WIDTH`) to `288px` (`MAX_WIDTH`), enforced while dragging.
+- **Icon rail snap:** When dragged at or below the collapse threshold (`80px`, `COLLAPSE_THRESHOLD`), the sidebar snaps to the **icon rail** (`56px`) — icons only, no labels. In rail mode, pinned items show as icons and the main menu collapses to icons only.
 - **Expand from rail:** Dragging the handle wider from the icon rail transitions to the full sidebar with labels once the threshold is crossed.
 - **Toggle button:** The Top Bar toggle button still works -- it snaps between the icon rail and the last-used expanded width.
 - **Persistence:** The sidebar width (or rail state) is saved to `localStorage` and restored on reload.
@@ -84,24 +83,25 @@ The sidebar width is **continuously draggable** via a drag handle on its right e
 The menu has two sections:
 
 **Pinned section** (top of sidebar, above the divider):
-- User-curated list of frequently used items from any depth of the menu tree.
+- User-curated list of frequently used **pages**, keyed by **normalized URL** (not menu-item IDs). Pins can target any navigable route the user chooses to pin.
 - **Drag-reorderable** within the pinned section (HTML5 drag-and-drop, Alpine handlers). Visual feedback: dragged item dims, accent-colored insertion line at drop target.
-- **Pin action:** Pin icon button on any navigable menu item (visible on hover) to add/remove from pinned section.
-- **Storage:** Ordered list of menu item IDs per user, stored server-side in `user_pinned_menu_items` table. Server-provided on page load; mutations via JSON API (`POST /api/pinned-menu-items/toggle`, `POST /api/pinned-menu-items/reorder`).
+- **Pin action:** Pin control on navigable menu items (and page-level pin events) adds/removes by URL.
+- **Storage:** Per-user rows in `user_pins` (`UserPin`), with `url_hash` for uniqueness. Mutations: `POST` routes named `pins.toggle` and `pins.reorder` (see `app/Modules/Core/User/Routes/web.php` — `api/pins/toggle`, `api/pins/reorder` under the authenticated group).
 - **Optimistic UI:** Alpine state updates immediately on pin/unpin/reorder; fetch fires in background. Server response reconciles state. On failure, state rolls back (toggle) or keeps optimistic order (reorder).
-- Items in the pinned section also remain in their normal position in the main menu.
+- Pinned URLs also appear in their normal place in the main menu tree when that route exists there.
 - Drag-reorder only available in expanded sidebar mode; rail mode shows pinned items as icons without reorder.
 
 **Main menu** (below the divider):
-- **Alphabetically ordered** -- no manual position assignments.
-- **Not reorderable** -- new items appear in their natural alphabetical position.
+- **Ordered by label** — `MenuBuilder` sorts items at each tree level with `mb_strtolower($label)` (see `app/Base/Menu/MenuBuilder.php`). Config `position` values are retained for compatibility but are **not** the primary sort key.
+- **Not user-reorderable** — order follows the builder’s sort rules.
 - Hierarchical tree with expand/collapse for child items.
 - Active item highlighted based on current route.
 
 ### C. Main Content
 
-- **CSS:** `flex-1 overflow-y-auto bg-surface-page p-3 sm:p-4`
-- **Content:** Livewire-navigated page content. Only this zone changes on navigation.
+- **CSS:** `relative flex-1 overflow-y-auto bg-surface-page px-1 py-2 sm:px-4 sm:py-1`
+- **Content:** Livewire-navigated page content (`{{ $slot }}`). Only this column’s primary page body swaps on navigation.
+- **Lara fullscreen:** When Lara is open in fullscreen mode on desktop (`sm+`), an absolutely positioned layer (`inset-0 z-50`) sits **inside** `<main>` and receives the chat teleport target—main chrome remains, but the page content is covered until the user exits fullscreen.
 - **URL sync:** `history.pushState` updates the URL to match the loaded page.
 - **Typical page structure:** Pages use `<x-ui.page-header>` for title, description, actions, and help slot.
 
@@ -128,35 +128,50 @@ Complex models use tabs to group related attributes within a page:
 </x-ui.tabs>
 ```
 
-### D. Lara Chat Panel
+### D. Lara chat
 
-- **Component:** `<livewire:ai.lara-chat-overlay />`
-- **Trigger:** Top Bar Lara button or `Ctrl+K` / `Cmd+K`
-- **Auth:** Only available to authenticated users
-- **Persistent:** Maintains conversation state across Main Content navigation.
+- **Component:** `<livewire:ai.chat />` (single instance; Alpine moves it between targets — see Shell Persistence).
+- **Trigger:** Status Bar Lara control when Lara is activated (`$dispatch('open-agent-chat')`), or `Ctrl+K` / `Cmd+K` to toggle. If Lara is not activated, the status bar links to setup instead.
+- **Auth:** Targets and shortcuts apply to authenticated users only (`@auth` in layout).
+- **Persistent:** Conversation state is kept in the Livewire component while the shell layout stays mounted.
 
-#### Desktop: Floating Overlay
+#### Display modes (desktop, `sm` and up)
 
-- **Position:** `fixed right-3 sm:right-4 bottom-8 z-50` (above Status Bar)
-- **Size:** `w-[min(56rem,calc(100vw-2rem))] h-[min(80vh,46rem)]`
-- **Surface:** `bg-surface-card`, rounded-2xl, shadow-lg
+Modes are mutually exclusive (stored in Alpine + `localStorage`):
 
-#### Mobile: Full-Screen Takeover
+| Mode | Behavior |
+|------|----------|
+| **Overlay** (default) | `fixed right-3 sm:right-4 bottom-8 z-50` card above the status bar. Size `w-[min(56rem,calc(100vw-2rem))] h-[min(80vh,46rem)]`, `bg-surface-card`, rounded-2xl, shadow. |
+| **Docked** | Flex column **right of main**: `border-l`, `bg-surface-card`, width from `laraDockWidth` (drag the **left** edge to resize). Min `320px` (`DOCK_MIN`); max bounded by `DOCK_MAX` (`Math.floor(window.innerWidth * 0.6)` at layout init). |
+| **Fullscreen** | Covers only the **main** region (`absolute inset-0` inside `<main>`, desktop `hidden sm:block`), not the sidebar or status bar. |
 
-- **Behavior:** Takes over the entire viewport below the Top Bar.
-- **Dismissal:** Close button or back gesture.
-- **Rationale:** A floating panel is unusable on small screens. Full-screen gives the chat adequate space for input and conversation history.
+- **Toggle overlay ↔ docked:** `Ctrl+Shift+K` / `Cmd+Shift+K` (`toggle-agent-chat-mode`); exiting fullscreen first if needed.
+- **Toggle fullscreen:** `Ctrl+Shift+F` / `Cmd+Shift+F` (`toggle-agent-chat-fullscreen`).
+
+#### Mobile (viewport below `sm` / 640px)
+
+- **Behavior:** Fixed strip `inset-x-0 top-11 bottom-6 z-50` — between top bar and status bar, full width.
+- **Dismissal:** Close control or `Escape` (layout listens for `close-agent-chat` / escape). A floating card would be too cramped; this mode maximizes readable chat height.
+
+#### `localStorage` keys (Lara)
+
+| Key | Purpose |
+|-----|---------|
+| `agent-chat-1-open` | `1` / `0` — panel open |
+| `agent-chat-1-mode` | `overlay` or `docked` |
+| `agent-chat-1-fullscreen` | `1` / `0` — fullscreen within main |
+| `agent-chat-1-dock-width` | Docked column width (px) |
 
 ### E. Status Bar
 
 - **Component:** `<x-layouts.status-bar />`
 - **Height:** `h-6`, fixed, `shrink-0`
 - **Surface:** `bg-surface-bar`, top border
-- **Left:** Environment name, debug mode indicator, system warnings:
-  - **Impersonation** (`text-status-danger`): Active impersonation session with "end impersonation" action. Higher severity than other warnings.
-  - **Licensee not set** (`text-status-warning`): Configuration reminder.
-  - **Lara not configured / not activated** (`text-status-warning`): Setup reminder.
-- **Right:** Lara chat launcher, version string
+- **Left:** Environment name, debug mode indicator (when `APP_DEBUG`), then contextual warnings (examples):
+  - **Impersonation** (`text-status-danger`): Active impersonation with stop action.
+  - **Licensee not set** (`text-status-danger`): Link to licensee setup when missing.
+  - **Locale** (`text-status-warning`, when authorized): Unconfirmed or inferred locale — link to localization admin.
+- **Right:** Lara entry point — if Lara is activated, a button opens chat (`open-agent-chat`) and shows busy pulse when `laraBusy`; otherwise an **Activate Lara** link to setup. App version string.
 
 ## Alpine.js Application State
 
@@ -165,32 +180,39 @@ State lives on the `<body>` element via `x-data`:
 | Variable | Type | Persisted | Purpose |
 |----------|------|-----------|---------|
 | `sidebarOpen` | `boolean` | No | Mobile sidebar drawer visibility |
-| `sidebarWidth` | `number` | `localStorage` | Desktop sidebar width in pixels |
-| `sidebarRail` | `boolean` | `localStorage` | Whether sidebar is in icon-rail mode |
-| `laraChatOpen` | `boolean` | `localStorage` | Lara chat overlay visibility |
-| `laraChatMode` | `string` | `localStorage` | Chat display mode (`overlay` or `docked`) |
-| `laraChatFullscreen` | `boolean` | `localStorage` | Whether chat is in fullscreen mode |
-| `laraDockWidth` | `number` | `localStorage` | Docked panel width in pixels |
+| `sidebarWidth` | `number` | `localStorage` key `sidebarWidth` | Desktop expanded width; rail uses `RAIL_WIDTH` (56) |
+| `sidebarRail` | `boolean` | `localStorage` key `sidebarRail` (`1`/`0`) | Icon-rail vs expanded |
+| `_lastExpandedWidth` | `number` | No (mirrors persisted width) | Restores width when leaving rail |
+| `laraChatOpen` | `boolean` | `agent-chat-1-open` | Lara panel open |
+| `laraChatMode` | `string` | `agent-chat-1-mode` | `overlay` or `docked` |
+| `laraChatFullscreen` | `boolean` | `agent-chat-1-fullscreen` | Fullscreen within `<main>` (desktop) |
+| `laraPrefillPrompt` | `string\|null` | No | Optional prompt when opening from `open-agent-chat` |
+| `laraBusy` | `boolean` | No | Driven by `agent-chat-busy` / `agent-chat-idle` |
+| `laraDockWidth` | `number` | `agent-chat-1-dock-width` | Docked column width (default 448px) |
+| `_laraDockDragging` | `boolean` | No | True while resizing dock |
 
 State lives on the sidebar `<aside>` element via `x-data`:
 
 | Variable | Type | Persisted | Purpose |
 |----------|------|-----------|---------|
-| `pinnedIds` | `string[]` | Server (DB) | Ordered list of pinned menu item IDs |
-| `_pinBusy` | `boolean` | No | Prevents concurrent pin/unpin requests |
+| `pins` | `array` | Server (`user_pins`, hydrated on load) | Ordered pinned entries `{ id, label, url, icon }` |
+| `window.__pinBusy` | `boolean` | No | Prevents concurrent pin API calls (toggle/reorder) |
 | `_dragIdx` | `number\|null` | No | Index of pinned item being dragged |
 | `_dropIdx` | `number\|null` | No | Index of current drop target |
-| `menuItemsFlat` | `object` | No | Flat map of navigable menu items (from server) |
+| `menuItemsFlat` | `object` | No | Flat map of navigable menu items by id (for pin-by-menu-id) |
 
 ### Custom Events
 
 | Event | Source | Effect |
 |-------|--------|--------|
 | `toggle-sidebar` | Top Bar button | Snap between icon rail and last expanded width (desktop) or open/close drawer (mobile) |
-| `open-agent-chat` | Top Bar Lara button | Opens chat overlay (desktop) or full-screen chat (mobile) |
-| `close-agent-chat` | Escape key / close button | Closes chat overlay |
-| `agent-chat-opened` | After chat opens | Signals overlay for focus management |
-| `agent-chat-execute-js` | Agent chat | Executes AI-injected JavaScript |
+| `open-agent-chat` | Status Bar / callers | Opens Lara; optional `detail.prompt` prefill via `openLaraChat` |
+| `close-agent-chat` | Escape / close control | Sets `laraChatOpen` false |
+| `toggle-agent-chat-mode` | `Ctrl+Shift+K` / `Cmd+Shift+K` | Switches `overlay` ↔ `docked` (clears fullscreen first) |
+| `toggle-agent-chat-fullscreen` | `Ctrl+Shift+F` / `Cmd+Shift+F` | Toggles fullscreen-within-main |
+| `agent-chat-opened` | After open | Dispatched with optional `detail.prompt` for focus / consumers |
+| `agent-chat-busy` / `agent-chat-idle` | Chat Livewire | Sets `laraBusy` for status bar pulse |
+| `agent-chat-execute-js` | Agent chat | Executes AI-injected JavaScript (`executeLaraJs`) |
 
 ## Auth Layouts
 
@@ -208,7 +230,7 @@ Three variants for unauthenticated pages:
 
 - **Component:** `<x-settings.layout>`
 - **Structure:** Sub-sidebar nav (Profile, Password, Appearance) + content area
-- **Nests inside:** Main Content area (zone D)
+- **Nests inside:** Main Content area (zone C)
 
 ## Semantic Surface Tokens
 
@@ -216,10 +238,10 @@ All zones use a shared design-token vocabulary defined in `resources/core/css/to
 
 | Token | Applied To |
 |-------|-----------|
-| `bg-surface-page` | Main content background (zone D) |
-| `bg-surface-bar` | Top Bar (B) and Status Bar (F) |
-| `bg-surface-sidebar` | Sidebar (C) |
-| `bg-surface-card` | Cards, modals, Lara Chat panel (E) |
+| `bg-surface-page` | Main content background (zone C) |
+| `bg-surface-bar` | Top Bar (A) and Status Bar (E) |
+| `bg-surface-sidebar` | Sidebar (B) |
+| `bg-surface-card` | Cards, modals, Lara surfaces (overlay / dock / fullscreen / mobile) |
 | `bg-surface-subtle` | Hover states, secondary backgrounds |
 | `border-border-default` | All structural dividers |
 | `text-ink` | Primary text |
