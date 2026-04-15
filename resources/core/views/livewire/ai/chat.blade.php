@@ -1131,11 +1131,19 @@
 
         finalizeTurnStream() {
             const finalizedTurnId = this.activeTurnId;
+            const finalizedSessionId = this.$wire.selectedSessionId || null;
             this.resetTurnState();
-            this.$wire.finalizeStreamingRun(finalizedTurnId);
+            this.$wire.finalizeStreamingRun(finalizedTurnId, finalizedSessionId);
         },
 
         onServerTurnReady(detail) {
+            const serverSessionId = detail?.sessionId || null;
+            const selectedSessionId = this.$wire.selectedSessionId || null;
+
+            if (serverSessionId && selectedSessionId && serverSessionId !== selectedSessionId) {
+                return;
+            }
+
             this.pendingMessage = null;
 
             const serverTurnId = detail?.turnId || null;

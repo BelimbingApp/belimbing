@@ -334,15 +334,27 @@ trait HandlesStreaming
     /**
      * Finalize a completed streaming run by refreshing component state.
      */
-    public function finalizeStreamingRun(?string $turnId = null): void
+    public function finalizeStreamingRun(?string $turnId = null, ?string $sessionId = null): void
     {
         $this->isLoading = false;
-        if (is_string($turnId) && $turnId !== '') {
+
+        if (($sessionId === null || $sessionId === '') && is_string($turnId) && $turnId !== '') {
+            $sessionId = ChatTurn::query()->whereKey($turnId)->value('session_id');
+        }
+
+        if (is_string($turnId) && $turnId !== '' && is_string($sessionId) && $sessionId !== '') {
+            $this->dispatch('agent-chat-response-ready', turnId: $turnId, sessionId: $sessionId);
+        } elseif (is_string($turnId) && $turnId !== '') {
             $this->dispatch('agent-chat-response-ready', turnId: $turnId);
+        } elseif (is_string($sessionId) && $sessionId !== '') {
+            $this->dispatch('agent-chat-response-ready', sessionId: $sessionId);
         } else {
             $this->dispatch('agent-chat-response-ready');
         }
-        $this->dispatch('agent-chat-focus-composer');
+
+        if ($this->selectedSessionId !== null && $this->selectedSessionId === $sessionId) {
+            $this->dispatch('agent-chat-focus-composer');
+        }
     }
 
     /**
@@ -400,8 +412,11 @@ trait HandlesStreaming
             (string) $turn->session_id,
         );
 
-        $this->dispatch('agent-chat-response-ready', turnId: $turn->id);
-        $this->dispatch('agent-chat-focus-composer');
+        $this->dispatch('agent-chat-response-ready', turnId: $turn->id, sessionId: $turn->session_id);
+
+        if ($this->selectedSessionId !== null && $this->selectedSessionId === $turn->session_id) {
+            $this->dispatch('agent-chat-focus-composer');
+        }
     }
 
     private function markCurrentRunCancelled(?string $runId): void
