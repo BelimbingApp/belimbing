@@ -106,7 +106,7 @@ Goal: ensure concurrency does not leave stranded UI or server state behind.
 - [x] Schedule `blb:ai:turns:sweep-stale` alongside orphan-run reaping in the app scheduler.
 - [x] Ensure stale-turn sweeping converges through the same terminal event path the UI already reads. The sweep must emit the durable terminal event itself, or write the terminal state into the same turn/event store the client consumes, so there is no separate "sweep-only" UI pathway.
 - [x] Verify stale-turn and forced-cancel paths emit the same per-turn terminal signals the concurrent UI expects.
-- [ ] Add a repair rule for abandoned selected-session state so switching away from a wedged session does not strand the UI.
+- [x] Add a repair rule for abandoned selected-session state so switching away from a wedged session does not strand the UI.
 
 ### Phase 5 — Verification
 

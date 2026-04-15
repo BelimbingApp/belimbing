@@ -1161,6 +1161,16 @@
             }
         },
 
+        repairAbandonedSelectedSession(turnId) {
+            if (!turnId || this.activeTurnId !== turnId) {
+                return;
+            }
+
+            this.pendingMessage = null;
+            this.streamEntries = [];
+            this.resetTurnState();
+        },
+
         abortPersistentFetch() {
             if (this._abortController) {
                 this._abortController.abort();
@@ -1265,9 +1275,17 @@
 
             try {
                 const json = await this.replayTurnEvents(0, scrollContainer);
-                if (!json) return;
+                if (!json) {
+                    this.repairAbandonedSelectedSession(turnId);
+                    return;
+                }
 
                 const isTerminal = ['completed', 'failed', 'cancelled'].includes(json.status);
+                if (isTerminal && this.activeTurnId === turnId) {
+                    this.repairAbandonedSelectedSession(turnId);
+                    return;
+                }
+
                 if (!isTerminal) {
                     this.startReplayPolling(scrollContainer);
                 }

@@ -75,7 +75,8 @@ it('renders the streaming console as a named alpine controller', function (): vo
         ->toContain('Alpine.data(&#039;agentChatStream&#039;')
         ->toContain('const text = payload.delta || payload.text ||')
         ->toContain('onServerTurnReady($event.detail || {})')
-        ->toContain('this.$wire.finalizeStreamingRun(finalizedTurnId, finalizedSessionId)');
+        ->toContain('this.$wire.finalizeStreamingRun(finalizedTurnId, finalizedSessionId)')
+        ->toContain('repairAbandonedSelectedSession(turnId)');
 });
 
 it('polls the chat view while the selected Lara session has pending delegated work', function (): void {
