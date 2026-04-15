@@ -86,7 +86,7 @@ class LlmClient
                 'messages' => $request->messages,
                 'max_tokens' => $request->maxTokens,
                 'temperature' => $request->temperature,
-                'tools' => $request->tools,
+                'tools' => $this->normalizeToolsForProvider($request->tools, $request->providerName),
                 'tool_choice' => $request->toolChoice,
             ], fn ($v) => $v !== null));
         } catch (ConnectionException $e) {
@@ -112,7 +112,7 @@ class LlmClient
                 'max_tokens' => $request->maxTokens,
                 'temperature' => $request->temperature,
                 'stream' => true,
-                'tools' => $request->tools,
+                'tools' => $this->normalizeToolsForProvider($request->tools, $request->providerName),
                 'tool_choice' => $request->toolChoice,
             ], fn ($v) => $v !== null));
         } catch (ConnectionException $e) {
@@ -513,6 +513,24 @@ class LlmClient
                 'parameters' => $fn['parameters'] ?? $tool['parameters'] ?? null,
             ], fn ($v) => $v !== null);
         }, $tools);
+    }
+
+    /**
+     * Normalize tool schemas for provider-specific requirements.
+     *
+     * Delegates to ToolSchemaNormalizer which routes to the appropriate
+     * provider-specific normalizer (MoonshotNormalizer, DefaultNormalizer, etc.)
+     *
+     * @param  list<array<string, mixed>>|null  $tools
+     * @return list<array<string, mixed>>|null
+     */
+    private function normalizeToolsForProvider(?array $tools, ?string $providerName): ?array
+    {
+        if ($tools === null) {
+            return null;
+        }
+
+        return ToolSchemaNormalizer::forProvider($providerName)->normalizeTools($tools);
     }
 
     /**
