@@ -11,6 +11,9 @@
     'provider' => null,
     'model' => null,
     'markdown',
+    'fallbackAttempts' => null,
+    'errorMessage' => null,
+    'latencyMs' => null,
 ])
 
 <div class="flex justify-start">
@@ -28,6 +31,10 @@
             :provider="$provider"
             :model="$model"
             :run-id="$runId"
+            :latency-ms="$latencyMs"
+            :fallback-attempts="$fallbackAttempts"
+            :error-type="$errorType"
+            :error-message="$errorMessage"
         />
     </div>
 </div>

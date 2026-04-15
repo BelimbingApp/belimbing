@@ -68,8 +68,13 @@ class RuntimeResponseFactory
         string $providerName,
         AiRuntimeError $error,
     ): array {
+        $providerTag = ($providerName !== '' && $providerName !== 'unknown')
+            ? $providerName.'/'.$model
+            : $model;
+
         return [
-            'content' => __('⚠ :detail', ['detail' => $error->userMessage]),
+            'content' => __('⚠ :detail', ['detail' => $error->userMessage])
+                .($providerTag !== 'unknown' ? ' ('.$providerTag.')' : ''),
             'run_id' => $runId,
             'meta' => $this->errorMeta($model, $providerName, $error),
         ];

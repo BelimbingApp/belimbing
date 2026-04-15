@@ -83,6 +83,10 @@ class AgentRuntime
             if ($result === null) {
                 $result = $lastResult ?? $this->noLlmConfigResult($runId);
                 $result['meta']['fallback_attempts'] = $fallbackAttempts;
+
+                if (count($fallbackAttempts) > 1 && $lastResult !== null) {
+                    $result['content'] .= ' '.__('All :count configured models failed.', ['count' => count($fallbackAttempts)]);
+                }
             }
         }
 

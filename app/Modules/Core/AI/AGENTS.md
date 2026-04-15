@@ -45,7 +45,7 @@ Core AI reads catalog data from `app/Base/AI/Services/ModelCatalogService`. It d
 ## UI Pages
 
 - `resources/core/views/livewire/ai/providers.blade.php` — Provider catalog wizard + CRUD management
-- `resources/core/views/livewire/ai/playground.blade.php` — Agent chat playground + LLM config assignment
+- `resources/core/views/livewire/admin/ai/task-models.blade.php` — Task Models configuration page
 
 ## Sonar / Browser Tool Guardrails
 

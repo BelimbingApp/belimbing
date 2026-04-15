@@ -91,7 +91,9 @@ it('includes fallback attempts when all models fail', function (): void {
 
     // Last failure is returned as the result — user sees safe message, not raw diagnostic
     expect($result['meta']['error_type'])->toBe('connection_error')
-        ->and($result['meta']['fallback_attempts'])->toHaveCount(2);
+        ->and($result['meta']['fallback_attempts'])->toHaveCount(2)
+        ->and($result['content'])->toContain('prov-b/model-b')
+        ->and($result['content'])->toContain('All 2 configured models failed');
 
     // Both attempts recorded
     expect($result['meta']['fallback_attempts'][0]['provider'])->toBe('prov-a')
@@ -108,8 +110,9 @@ it('does not fall back on client errors and still records empty attempts', funct
         $this->makeErrorResponse(AiErrorType::AuthError, 'HTTP 401: Unauthorized', 30)
     ));
 
-    // Should stop at first model, no fallback — user sees safe message
+    // Should stop at first model, no fallback — user sees safe message with provider/model
     expect($result['meta']['error_type'])->toBe('auth_error')
+        ->and($result['content'])->toContain('openai/gpt-4o')
         ->and($result['meta']['fallback_attempts'])->toBeEmpty();
 });
 

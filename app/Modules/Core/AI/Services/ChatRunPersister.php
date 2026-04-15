@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Modules\Core\AI\DTO\ToolResultEntry;
 use App\Modules\Core\AI\Enums\TurnEventType;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\ChatTurn;
 
 /**
@@ -74,7 +75,11 @@ class ChatRunPersister
         $assistantContent = $this->resolvedAssistantContent($state);
 
         if (! $state->hadError && ($assistantContent !== '' || $state->stopNote !== null) && $state->runId !== null) {
-            $meta = array_merge($state->usageMeta, $extraMeta);
+            $meta = array_merge(
+                $this->runMetaFromRecord($state->runId),
+                $state->usageMeta,
+                $extraMeta,
+            );
 
             if ($state->stopNote !== null) {
                 $meta['stop_note'] = $state->stopNote;
@@ -155,7 +160,14 @@ class ChatRunPersister
     }
 
     /**
-     * Persist the accumulated thinking entry if pending.
+     * Persist the accumulated thinking entry if pending and non-empty.
+     *
+     * The runtime emits a `thinking` phase status at the start of every
+     * tool-loop iteration as a live UI progress indicator. This does NOT
+     * mean the model produced reasoning content — actual content only
+     * arrives via `thinking_delta` events. Only persist when the model
+     * genuinely produced reasoning text; discard empty thinking blocks
+     * so the transcript does not contain ghost "Thinking…" entries.
      *
      * @param  object{runId: ?string, thinkingPending: bool, thinkingContent: string}  $state
      */
@@ -169,7 +181,10 @@ class ChatRunPersister
             return;
         }
 
-        $mm->appendThinking($employeeId, $sessionId, $state->runId, $state->thinkingContent);
+        if ($state->thinkingContent !== '') {
+            $mm->appendThinking($employeeId, $sessionId, $state->runId, $state->thinkingContent);
+        }
+
         $state->thinkingPending = false;
     }
 
@@ -295,6 +310,12 @@ class ChatRunPersister
         if (str_starts_with($reason, 'User cancelled')) {
             $state->stopNote = __('You stopped this run before it finished.');
         }
+
+        // Discard any pending empty thinking block — the model was
+        // interrupted before producing reasoning content.
+        if ($state->thinkingPending && $state->thinkingContent === '') {
+            $state->thinkingPending = false;
+        }
     }
 
     /**
@@ -309,16 +330,33 @@ class ChatRunPersister
         array $payload,
         object $state,
     ): void {
+        // Discard any pending thinking block — the model never actually
+        // produced reasoning content when the turn fails immediately.
+        $state->thinkingPending = false;
+        $state->thinkingContent = '';
+
         $state->hadError = true;
         $errorMessage = $payload['message'] ?? __('An unexpected error occurred. Please try again.');
         $errorMeta = is_array($payload['meta'] ?? null)
             ? $payload['meta']
-            : ['message_type' => 'error'];
+            : [];
+
+        $providerName = (string) ($errorMeta['provider_name'] ?? '');
+        $model = (string) ($errorMeta['model'] ?? '');
+        $providerTag = ($providerName !== '' && $providerName !== 'unknown')
+            ? $providerName.'/'.$model
+            : ($model !== '' && $model !== 'unknown' ? $model : '');
+
+        $content = __('⚠ :detail', ['detail' => $errorMessage]);
+
+        if ($providerTag !== '') {
+            $content .= ' ('.$providerTag.')';
+        }
 
         $mm->appendAssistantMessage(
             $employeeId,
             $sessionId,
-            __('⚠ :detail', ['detail' => $errorMessage]),
+            $content,
             $state->runId ?? $turn->current_run_id ?? 'run_unknown',
             $errorMeta,
         );
@@ -340,5 +378,41 @@ class ChatRunPersister
         }
 
         return $state->streamedContent;
+    }
+
+    /**
+     * Extract LLM identity metadata from the AiRun record for transcript persistence.
+     *
+     * @return array<string, mixed>
+     */
+    private function runMetaFromRecord(string $runId): array
+    {
+        $run = AiRun::query()->find($runId);
+
+        if ($run === null) {
+            return [];
+        }
+
+        $meta = [];
+
+        if (is_string($run->provider_name) && $run->provider_name !== '') {
+            $meta['provider_name'] = $run->provider_name;
+            $meta['llm']['provider'] = $run->provider_name;
+        }
+
+        if (is_string($run->model) && $run->model !== '') {
+            $meta['model'] = $run->model;
+            $meta['llm']['model'] = $run->model;
+        }
+
+        if (is_int($run->latency_ms)) {
+            $meta['latency_ms'] = $run->latency_ms;
+        }
+
+        if (is_array($run->fallback_attempts) && $run->fallback_attempts !== []) {
+            $meta['fallback_attempts'] = $run->fallback_attempts;
+        }
+
+        return $meta;
     }
 }

@@ -94,14 +94,7 @@ function mockMessageManager(): MockInterface
  */
 function expectMaterializerHappyPathAppendMocks(MockInterface $mm, ChatTurn $turn): void
 {
-    $mm->shouldReceive('appendThinking')
-        ->once()
-        ->with(
-            $turn->employee_id,
-            MAT_TEST_SESSION,
-            MAT_TEST_RUN_ID,
-            '',
-        );
+    $mm->shouldNotReceive('appendThinking');
 
     $mm->shouldReceive('appendToolCall')
         ->once()
@@ -234,7 +227,7 @@ describe('ChatRunPersister materializeFromTurn', function () {
         $pub->turnCompleted($turn);
 
         $mm = mockMessageManager();
-        $mm->shouldReceive('appendThinking')->once();
+        $mm->shouldNotReceive('appendThinking');
         $mm->shouldNotReceive('appendAssistantMessage');
 
         $persister = new ChatRunPersister;

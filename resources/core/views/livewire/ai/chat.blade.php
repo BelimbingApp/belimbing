@@ -660,11 +660,14 @@
                             <x-ai.activity.error
                                 :message="$message->content"
                                 :error-type="$messageErrorType"
+                                :error-message="$messageErrorMessage"
                                 :timestamp="$message->timestamp"
                                 :run-id="$message->runId"
                                 :provider="$messageProvider"
                                 :model="$messageModel"
                                 :markdown="$markdown"
+                                :latency-ms="$messageLatencyMs"
+                                :fallback-attempts="$messageFallbackAttempts"
                             />
                         @elseif ($message->role === 'assistant' && $messageOrchestrationStatus !== null)
                             {{-- Action message (navigation, guide, models, etc.) --}}

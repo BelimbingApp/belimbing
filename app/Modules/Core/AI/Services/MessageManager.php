@@ -533,16 +533,30 @@ class MessageManager
      */
     private function extractTranscriptMeta(array $meta): array
     {
-        $tokens = $meta['tokens'] ?? null;
-        $stopNote = $meta['stop_note'] ?? null;
         $persisted = [];
 
-        if (is_array($tokens)) {
-            $persisted['tokens'] = $tokens;
+        foreach (['provider_name', 'model', 'error_type', 'error', 'status', 'stop_note'] as $key) {
+            $value = $meta[$key] ?? null;
+
+            if (is_string($value) && $value !== '') {
+                $persisted[$key] = $value;
+            }
         }
 
-        if (is_string($stopNote) && $stopNote !== '') {
-            $persisted['stop_note'] = $stopNote;
+        if (is_array($meta['llm'] ?? null)) {
+            $persisted['llm'] = $meta['llm'];
+        }
+
+        if (is_array($meta['tokens'] ?? null)) {
+            $persisted['tokens'] = $meta['tokens'];
+        }
+
+        if (is_int($meta['latency_ms'] ?? null)) {
+            $persisted['latency_ms'] = $meta['latency_ms'];
+        }
+
+        if (is_array($meta['fallback_attempts'] ?? null) && $meta['fallback_attempts'] !== []) {
+            $persisted['fallback_attempts'] = $meta['fallback_attempts'];
         }
 
         return $persisted;
