@@ -76,6 +76,12 @@ Within the BLB instance, the repository `Caddyfile` remains the single source of
 
 In shared-ingress mode, that local routing surface serves plain HTTP on the internal listener because public TLS is already handled by the system Caddy layer.
 
+### HTTP 103 Early Hints
+
+FrankenPHP can emit HTTP `103 Early Hints`, but BLB does not enable `103` framework-wide.
+
+Use `103` only as a narrow, case-by-case optimization for specific HTML navigations that show measured benefit. Prefer route- or page-level opt-in over global middleware or framework-default behavior.
+
 ## Environment Parity
 
 This topology is not only for development. It is the intended native architecture across development, staging, and production.
