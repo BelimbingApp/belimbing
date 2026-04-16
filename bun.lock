@@ -9,7 +9,7 @@
         "autoprefixer": "^10.5.0",
         "axios": "^1.14.0",
         "concurrently": "^9.2.1",
-        "laravel-echo": "^2.3.3",
+        "laravel-echo": "^2.3.4",
         "laravel-vite-plugin": "^3.0.1",
         "playwright": "^1.59.1",
         "pusher-js": "^8.5.0",
@@ -211,7 +211,7 @@
 
     "jiti": ["jiti@2.6.1", "", { "bin": "lib/jiti-cli.mjs" }, ""],
 
-    "laravel-echo": ["laravel-echo@2.3.3", "", { "peerDependencies": { "pusher-js": "*", "socket.io-client": "*" } }, "sha512-Var2noA9is+ZF3wjfwxWNSRW2kQUDePjJbZGxR4baGfa//a+WtcVm1s8/yRqjvpw3SyAF1tPzFuki+838tq9mA=="],
+    "laravel-echo": ["laravel-echo@2.3.4", "", { "peerDependencies": { "pusher-js": "*", "socket.io-client": "*" } }, "sha512-rpALCIK1uw2SrttcK9P5JzItt5I85RcfXQKUNnkcorzhtKeXi5GS0PVFFBH8ppNo8wnbdBKuD1EtIHgTbXo9FQ=="],
 
     "laravel-vite-plugin": ["laravel-vite-plugin@3.0.1", "", { "dependencies": { "picocolors": "^1.0.0", "tinyglobby": "^0.2.12", "vite-plugin-full-reload": "^1.1.0" }, "peerDependencies": { "vite": "^8.0.0" }, "bin": { "clean-orphaned-assets": "bin/clean.js" } }, "sha512-Bx8sVcLIaZT1d0eisABcmjQ1GZdJpaXcV66A8RhXGp9JgR3iL8jDnvakVDXuH87Tn5S9KNx3VOhmJZW1CSexOg=="],
 
