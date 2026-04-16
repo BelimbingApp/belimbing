@@ -21,8 +21,8 @@
 	admin {$CADDY_SERVER_ADMIN_HOST:localhost}:{$CADDY_SERVER_ADMIN_PORT:2019}
 }
 
-{$APP_DOMAIN:local.blb.lara} {
-	{$TLS_DIRECTIVE:tls internal}
+{$CADDY_SCHEME:http}://{$APP_DOMAIN:local.blb.lara}:{$HTTPS_PORT:443} {
+	{$TLS_DIRECTIVE}
 
 	log {
 		output file {$CADDY_LOG_DIR:.caddy/logs}/access.log
@@ -65,8 +65,8 @@
 	}
 }
 
-{$BACKEND_DOMAIN:local.api.blb.lara} {
-	{$TLS_DIRECTIVE:tls internal}
+{$CADDY_SCHEME:http}://{$BACKEND_DOMAIN:local.api.blb.lara}:{$HTTPS_PORT:443} {
+	{$TLS_DIRECTIVE}
 
 	log {
 		output file {$CADDY_LOG_DIR:.caddy/logs}/access.log

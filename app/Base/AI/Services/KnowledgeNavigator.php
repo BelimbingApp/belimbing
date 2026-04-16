@@ -17,9 +17,9 @@ class KnowledgeNavigator
         return [
             [
                 'title' => 'BLB architecture overview',
-                'path' => 'docs/architecture/overview.md',
-                'summary' => 'High-level architecture, module layering, and framework boundaries.',
-                'keywords' => ['architecture', 'overview', 'layers', 'framework'],
+                'path' => 'docs/brief.md',
+                'summary' => 'BLB principles, framework boundaries, and strategic direction.',
+                'keywords' => ['architecture', 'overview', 'framework', 'principles'],
             ],
             [
                 'title' => 'Lara system Agent',

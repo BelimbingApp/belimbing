@@ -1,4 +1,4 @@
-# Caddy-Based Development Architecture
+# Caddy and FrankenPHP Development Guide
 
 **Document Type:** Architecture Specification
 **Purpose:** Define a simplified development setup using Caddy for custom domain-based local development
@@ -9,7 +9,7 @@
 
 ## Overview
 
-This architecture enables developers to use friendly domain names (`local.blb.lara`, `stage.blb.lara`) instead of IP addresses and ports, with automatic SSL certificates and hot reloading. The setup requires minimal technical knowledge - developers only need to ensure Caddy is running, and all services (Laravel, Vite, queue, logs) start automatically.
+This architecture enables developers to use friendly domain names (`local.blb.lara`, `stage.blb.lara`) instead of IP addresses and ports, with automatic SSL certificates and hot reloading. Native setup now defaults to `shared` ingress, where setup provisions or reuses a system Caddy daemon that owns `:80` and `:443` and proxies to BLB's local FrankenPHP listener. `direct` mode remains available as a single-instance fallback when a system ingress daemon is not desired.
 
 ## Configuration Philosophy: Environment Parity
 

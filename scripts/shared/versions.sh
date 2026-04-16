@@ -44,6 +44,10 @@ LATEST_GIT_VERSION="2.53.0"
 # Bun: Latest stable version (without 'v' prefix for consistency)
 LATEST_BUN_VERSION="1.3.11"
 
+# FrankenPHP: minimum supported version and pinned fallback
+FRANKENPHP_MINIMUM_VERSION="1.12.1"
+FRANKENPHP_FALLBACK_VERSION="1.12.1"
+
 # === Service Versions ===
 # Versions for services that are installed
 
@@ -135,6 +139,49 @@ get_latest_bun_version() {
     return 0
 }
 
+# Get minimum supported FrankenPHP version
+# Usage: version=$(get_frankenphp_minimum_version)
+get_frankenphp_minimum_version() {
+    echo "$FRANKENPHP_MINIMUM_VERSION"
+    return 0
+}
+
+# Get FrankenPHP fallback tag (with v prefix)
+# Usage: tag=$(get_frankenphp_fallback_tag)
+get_frankenphp_fallback_tag() {
+    echo "v${FRANKENPHP_FALLBACK_VERSION}"
+    return 0
+}
+
+# Resolve latest FrankenPHP version from the GitHub releases API.
+# Falls back to the pinned FRANKENPHP_FALLBACK_VERSION if the API is unreachable.
+# Usage: version=$(resolve_latest_frankenphp_version)
+resolve_latest_frankenphp_version() {
+    local fallback
+    fallback="$FRANKENPHP_FALLBACK_VERSION"
+
+    local latest
+    latest=$(fetch_github_api_response 'https://api.github.com/repos/dunglas/frankenphp/releases/latest' \
+        | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' \
+        | head -1
+    )
+
+    if [[ -n "$latest" ]]; then
+        echo "$latest"
+    else
+        echo "$fallback"
+    fi
+
+    return 0
+}
+
+# Resolve latest FrankenPHP tag from the GitHub releases API.
+# Usage: tag=$(resolve_latest_frankenphp_tag)
+resolve_latest_frankenphp_tag() {
+    echo "v$(resolve_latest_frankenphp_version)"
+    return 0
+}
+
 # Get Bun version with 'v' prefix for display
 # Usage: display_version=$(get_latest_bun_version_with_prefix)
 get_latest_bun_version_with_prefix() {
@@ -211,6 +258,13 @@ compare_version() {
     done
 
     return 0  # v1 == v2
+}
+
+# Check if version A is lower than version B.
+# Usage: if version_is_less_than "1.2.3" "1.2.4"; then ...; fi
+version_is_less_than() {
+    compare_version "$1" "$2"
+    [[ $? -eq 2 ]]
 }
 
 # Check if a version string meets minimum requirement

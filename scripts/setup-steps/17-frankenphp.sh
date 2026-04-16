@@ -34,22 +34,31 @@ source "$SCRIPTS_DIR/shared/interactive.sh" 2>/dev/null || true
 # Environment (default to local if not provided, using Laravel standard)
 APP_ENV="${1:-local}"
 
+extract_frankenphp_version() {
+    local version_output=$1
+    local extracted
+    extracted=$(printf '%s\n' "$version_output" | grep -oE '[0-9]+(\.[0-9]+){1,2}' | head -1 || true)
+    printf '%s\n' "$extracted"
+    return 0
+}
+
 resolve_frankenphp_tag() {
-    local fallback='v1.9.0'
+    resolve_latest_frankenphp_tag
+    return 0
+}
 
-    local latest
-    latest=$(fetch_github_api_response 'https://api.github.com/repos/dunglas/frankenphp/releases/latest' \
-        | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' \
-        | head -1
-    )
+prompt_for_latest_upgrade() {
+    local installed_version=$1
+    local latest_version=$2
 
-    if [[ -n "$latest" ]]; then
-        echo "$latest"
-    else
-        echo "$fallback"
+    if [[ ! -t 0 ]]; then
+        return 1
     fi
 
-    return 0
+    echo -e "${CYAN}A newer FrankenPHP release is available.${NC}"
+    echo -e "  Installed: ${CYAN}${installed_version}${NC}"
+    echo -e "  Latest:    ${CYAN}${latest_version}${NC}"
+    ask_yes_no "Upgrade FrankenPHP now?" "n"
 }
 
 linux_binary_arch() {
@@ -164,15 +173,70 @@ main() {
     # Load existing configuration
     load_setup_state
 
+    local upgrade_requested=false
+    if [[ "${2:-}" = '--upgrade' ]] || [[ "${BLB_UPDATE_DEPENDENCIES:-false}" = 'true' ]]; then
+        upgrade_requested=true
+    fi
+
     if command_exists frankenphp; then
         local existing_version
         existing_version=$(frankenphp version 2>/dev/null | head -1 || echo 'unknown')
-        echo -e "${GREEN}✓${NC} FrankenPHP already installed: ${existing_version}"
+        local existing_semver
+        existing_semver=$(extract_frankenphp_version "$existing_version")
 
-        save_to_setup_state 'FRANKENPHP_VERSION' "$existing_version"
-        echo ""
-        echo -e "${GREEN}✓ FrankenPHP setup complete!${NC}"
-        return 0
+        if [[ -z "$existing_semver" ]]; then
+            echo -e "${YELLOW}⚠${NC} FrankenPHP is installed, but its version could not be parsed: ${existing_version}"
+            echo -e "  Re-run with ${CYAN}--upgrade${NC} if you want BLB to reinstall it."
+            save_to_setup_state 'FRANKENPHP_VERSION' "$existing_version"
+            echo ""
+            echo -e "${GREEN}✓ FrankenPHP setup complete!${NC}"
+            return 0
+        fi
+
+        local minimum_supported_version
+        minimum_supported_version=$(get_frankenphp_minimum_version)
+
+        if version_is_less_than "$existing_semver" "$minimum_supported_version"; then
+            echo -e "${YELLOW}⚠${NC} FrankenPHP is installed but below BLB's supported minimum."
+            echo -e "  Installed: ${CYAN}${existing_semver}${NC}"
+            echo -e "  Required:  ${CYAN}${minimum_supported_version}${NC}"
+            echo -e "  Upgrading now..."
+            upgrade_requested=true
+        elif [[ "$upgrade_requested" = false ]]; then
+            local latest_tag latest_semver
+            latest_tag=$(resolve_frankenphp_tag)
+            latest_semver=$(extract_frankenphp_version "$latest_tag")
+
+            if [[ -n "$latest_semver" ]] && version_is_less_than "$existing_semver" "$latest_semver"; then
+                if prompt_for_latest_upgrade "$existing_semver" "$latest_semver"; then
+                    echo -e "${CYAN}Upgrading FrankenPHP from ${existing_semver} to ${latest_semver}...${NC}"
+                    upgrade_requested=true
+                else
+                    echo -e "${GREEN}✓${NC} FrankenPHP already installed: ${existing_version}"
+                    echo -e "  Minimum supported by BLB: ${CYAN}${minimum_supported_version}${NC}"
+                    echo -e "  Newer release available:  ${CYAN}${latest_semver}${NC}"
+
+                    save_to_setup_state 'FRANKENPHP_VERSION' "$existing_version"
+                    echo ""
+                    echo -e "${GREEN}✓ FrankenPHP setup complete!${NC}"
+                    return 0
+                fi
+            fi
+        fi
+
+        if [[ "$upgrade_requested" = false ]]; then
+            echo -e "${GREEN}✓${NC} FrankenPHP already installed: ${existing_version}"
+            echo -e "  Minimum supported by BLB: ${CYAN}${minimum_supported_version}${NC}"
+
+            save_to_setup_state 'FRANKENPHP_VERSION' "$existing_version"
+            echo ""
+            echo -e "${GREEN}✓ FrankenPHP setup complete!${NC}"
+            return 0
+        else
+            echo -e "${CYAN}Upgrading FrankenPHP from ${existing_semver}...${NC}"
+        fi
+
+        upgrade_requested=true
     fi
 
     local os_type

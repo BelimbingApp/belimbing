@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 #
-# SSL/TLS trust utilities for FrankenPHP's embedded Caddy.
-# The shared multi-instance Caddy model was removed when BLB switched to
-# FrankenPHP + Octane (FrankenPHP IS Caddy; runs in-process via Octane).
-# Only SSL trust setup/ensure functions remain.
+# Shared Caddy / FrankenPHP helpers.
+#
+# Responsibilities:
+# - BLB runtime helpers for ingress detection and system Caddy snippets
+# - SSL/TLS trust utilities for FrankenPHP's embedded Caddy
 
 # Source colors if not already loaded
 CADDY_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,6 +19,95 @@ fi
 if ! command -v command_exists &> /dev/null; then
     source "$CADDY_SCRIPT_DIR/validation.sh"
 fi
+
+# ── Runtime Topology Helpers ────────────────────────────────────────────────
+
+caddy_system_is_running() {
+    if systemctl is-active --quiet caddy 2>/dev/null || pgrep -x caddy >/dev/null 2>&1; then
+        return 0
+    fi
+
+    return 1
+}
+
+caddy_normalize_ingress_mode() {
+    local ingress_mode="${1:-direct}"
+
+    case "$ingress_mode" in
+        direct|shared)
+            printf '%s\n' "$ingress_mode"
+            ;;
+        *)
+            printf '%s\n' 'direct'
+            ;;
+    esac
+
+    return 0
+}
+
+caddy_render_tls_directive() {
+    local project_root=$1
+    local frontend_domain=$2
+    local app_env=$3
+    local cert_file="$project_root/certs/${frontend_domain}.pem"
+    local key_file="$project_root/certs/${frontend_domain}-key.pem"
+
+    if [[ -f "$cert_file" ]] && [[ -f "$key_file" ]]; then
+        printf '    tls %s %s\n' "$cert_file" "$key_file"
+        return 0
+    fi
+
+    case "$app_env" in
+        local|testing)
+            printf '    tls internal\n'
+            ;;
+        *)
+            ;;
+    esac
+
+    return 0
+}
+
+caddy_render_system_site_snippet() {
+    local project_root=$1
+    local frontend_domain=$2
+    local backend_domain=$3
+    local app_port=$4
+    local app_env=$5
+    local tls_directive
+    tls_directive=$(caddy_render_tls_directive "$project_root" "$frontend_domain" "$app_env")
+
+    cat <<EOF
+${frontend_domain} {
+${tls_directive}
+    reverse_proxy 127.0.0.1:${app_port}
+}
+
+${backend_domain} {
+${tls_directive}
+    reverse_proxy 127.0.0.1:${app_port}
+}
+EOF
+    return 0
+}
+
+caddy_resolve_app_bind_host() {
+    local use_non_privileged_port=$1
+    local configured_bind_host="${2:-}"
+
+    if [[ "$use_non_privileged_port" = "1" ]]; then
+        printf '%s\n' '127.0.0.1'
+        return 0
+    fi
+
+    if [[ -n "$configured_bind_host" ]]; then
+        printf '%s\n' "$configured_bind_host"
+        return 0
+    fi
+
+    printf '%s\n' '0.0.0.0'
+    return 0
+}
 
 # ── SSL/TLS Trust ─────────────────────────────────────────────────────────
 

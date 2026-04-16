@@ -17,6 +17,8 @@ source "$SCRIPT_DIR/shared/config.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/shared/validation.sh" 2>/dev/null || true
 # shellcheck source=shared/runtime.sh
 source "$SCRIPT_DIR/shared/runtime.sh" 2>/dev/null || true
+# shellcheck source=shared/caddy.sh
+source "$SCRIPT_DIR/shared/caddy.sh" 2>/dev/null || true
 
 if ! command -v stop_dev_services >/dev/null 2>&1; then
     echo -e "${RED}✗${NC} stop_dev_services is not available (failed to load shared/runtime.sh)" >&2
@@ -33,6 +35,11 @@ VITE_PORT=""
 FRONTEND_DOMAIN=""
 BACKEND_DOMAIN=""
 HTTPS_PORT=""
+APP_BIND_HOST=""
+BLB_INGRESS_MODE=""
+USE_NON_PRIVILEGED_PORT=0
+PUBLIC_APP_URL=""
+PUBLIC_BACKEND_URL=""
 
 # Logging function
 log() {
@@ -155,6 +162,7 @@ read_app_env() {
     # Read domains from .env or use defaults
     FRONTEND_DOMAIN=$(get_env_var "FRONTEND_DOMAIN" "")
     BACKEND_DOMAIN=$(get_env_var "BACKEND_DOMAIN" "")
+    BLB_INGRESS_MODE=$(caddy_normalize_ingress_mode "$(get_env_var "BLB_INGRESS_MODE" "direct")")
 
     # Use defaults if not set
     if [[ -z "$FRONTEND_DOMAIN" ]]; then
@@ -173,7 +181,7 @@ read_app_env() {
     fi
 
     # Log environment info (important for troubleshooting)
-    log "Environment: $APP_ENV, Frontend: $FRONTEND_DOMAIN, Backend: $BACKEND_DOMAIN"
+    log "Environment: $APP_ENV, Frontend: $FRONTEND_DOMAIN, Backend: $BACKEND_DOMAIN, Ingress: $BLB_INGRESS_MODE"
 
     echo -e "${GREEN}Using environment: ${APP_ENV}${NC}"
     return 0
@@ -207,8 +215,8 @@ check_hosts_entries() {
         echo -e "${CYAN}To add them, run:${NC}"
         echo -e "  ${YELLOW}sudo sh -c 'echo \"127.0.0.1 ${missing_hosts[*]}\" >> /etc/hosts'${NC}"
         echo ""
-        echo -e "${CYAN}Or run the Caddy setup to add them automatically:${NC}"
-        echo -e "  ${YELLOW}./scripts/setup-steps/70-caddy.sh $APP_ENV${NC}"
+        echo -e "${CYAN}Or re-run native setup to add them automatically:${NC}"
+        echo -e "  ${YELLOW}./scripts/setup.sh $APP_ENV${NC}"
         echo ""
         log "WARNING: Missing hosts entries: ${missing_hosts[*]}"
         result=1
@@ -330,19 +338,7 @@ get_ports() {
         REVERB_SERVER_PORT=$(next_free_port 8080)
     fi
 
-    # HTTPS_PORT: always 443 (shared Caddy handles all instances on :443 via host routing)
-    HTTPS_PORT="443"
-
-    # Reverb's public endpoint lives on the same frontend domain Caddy serves.
-    # Caddy proxies /app and /apps to the internal Reverb listener selected above.
-    REVERB_HOST="$FRONTEND_DOMAIN"
-    REVERB_PORT="$HTTPS_PORT"
-    REVERB_SCHEME="https"
-    VITE_REVERB_HOST="$FRONTEND_DOMAIN"
-    VITE_REVERB_PORT="$HTTPS_PORT"
-    VITE_REVERB_SCHEME="https"
-
-    export APP_ENV APP_PORT VITE_PORT REVERB_HOST REVERB_PORT REVERB_SCHEME REVERB_SERVER_PORT VITE_REVERB_HOST VITE_REVERB_PORT VITE_REVERB_SCHEME HTTPS_PORT
+    export APP_ENV APP_PORT VITE_PORT REVERB_SERVER_PORT
 
     # Write runtime ports so stop-app and cleanup know what to stop
     local runtime_dir="$PROJECT_ROOT/storage/app/.devops"
@@ -444,6 +440,12 @@ wait_for_service() {
 # Export environment variables that FrankenPHP's embedded Caddy reads from the Caddyfile.
 # The project Caddyfile uses {$VAR:default} syntax, resolved by Caddy at startup.
 export_caddy_env() {
+    local system_caddy_running=false
+
+    if caddy_system_is_running; then
+        system_caddy_running=true
+    fi
+
     export APP_DOMAIN="$FRONTEND_DOMAIN"
     export BACKEND_DOMAIN="$BACKEND_DOMAIN"
     export APP_PORT="$APP_PORT"
@@ -477,7 +479,50 @@ export_caddy_env() {
     export CADDY_LOG_DIR="$PROJECT_ROOT/.caddy/logs"
     mkdir -p "$CADDY_LOG_DIR"
 
-    log "Caddy env exported (TLS_DIRECTIVE=$TLS_DIRECTIVE)"
+    # Use a different admin port to avoid conflict with system Caddy (default 2019)
+    local caddy_admin_port
+    caddy_admin_port=$(next_free_port 2020)
+    export CADDY_SERVER_ADMIN_PORT="$caddy_admin_port"
+
+    if [[ "$BLB_INGRESS_MODE" = "shared" ]] || [[ "$system_caddy_running" = true ]]; then
+        export HTTPS_PORT="$APP_PORT"
+        export USE_NON_PRIVILEGED_PORT=1
+        export TLS_DIRECTIVE=""
+        export CADDY_SCHEME="http"
+
+        if [[ "$BLB_INGRESS_MODE" = "shared" ]] && [[ "$system_caddy_running" = true ]]; then
+            REVERB_HOST="$FRONTEND_DOMAIN"
+            REVERB_PORT="443"
+            REVERB_SCHEME="https"
+            PUBLIC_APP_URL="https://${FRONTEND_DOMAIN}"
+            PUBLIC_BACKEND_URL="https://${BACKEND_DOMAIN}"
+        else
+            REVERB_HOST="$FRONTEND_DOMAIN"
+            REVERB_PORT="$APP_PORT"
+            REVERB_SCHEME="http"
+            PUBLIC_APP_URL="http://${FRONTEND_DOMAIN}:${APP_PORT}"
+            PUBLIC_BACKEND_URL="http://${BACKEND_DOMAIN}:${APP_PORT}"
+        fi
+    else
+        export HTTPS_PORT="443"
+        export USE_NON_PRIVILEGED_PORT=0
+        export TLS_DIRECTIVE="${TLS_DIRECTIVE:-tls internal}"
+        export CADDY_SCHEME="https"
+
+        REVERB_HOST="$FRONTEND_DOMAIN"
+        REVERB_PORT="443"
+        REVERB_SCHEME="https"
+        PUBLIC_APP_URL="https://${FRONTEND_DOMAIN}"
+        PUBLIC_BACKEND_URL="https://${BACKEND_DOMAIN}"
+    fi
+
+    VITE_REVERB_HOST="$REVERB_HOST"
+    VITE_REVERB_PORT="$REVERB_PORT"
+    VITE_REVERB_SCHEME="$REVERB_SCHEME"
+    APP_BIND_HOST=$(caddy_resolve_app_bind_host "${USE_NON_PRIVILEGED_PORT:-0}" "$(get_env_var "APP_BIND_HOST" "")")
+
+    export APP_BIND_HOST REVERB_HOST REVERB_PORT REVERB_SCHEME VITE_REVERB_HOST VITE_REVERB_PORT VITE_REVERB_SCHEME HTTPS_PORT PUBLIC_APP_URL PUBLIC_BACKEND_URL
+    log "Caddy env exported (TLS_DIRECTIVE=$TLS_DIRECTIVE, ADMIN_PORT=$CADDY_SERVER_ADMIN_PORT, HTTPS_PORT=$HTTPS_PORT, APP_BIND_HOST=$APP_BIND_HOST)"
     return 0
 }
 
@@ -502,6 +547,100 @@ start_services() {
 
     echo -e "${CYAN}ℹ${NC} Dev services output: ${dev_log_file}"
     echo -e "${CYAN}ℹ${NC} To watch: ${YELLOW}tail -f ${dev_log_file}${NC}"
+    return 0
+}
+
+print_runtime_guidance() {
+    if [[ "$BLB_INGRESS_MODE" = "shared" ]]; then
+        echo ""
+        echo -e "${CYAN}ℹ${NC} Shared ingress mode selected. FrankenPHP will listen on ${YELLOW}127.0.0.1:${APP_PORT}${NC}."
+        echo ""
+        if caddy_system_is_running; then
+            echo -e "${GREEN}✓${NC} System Caddy detected — public URLs should resolve through your configured hostnames"
+            log "Shared ingress mode active with system Caddy"
+        else
+            echo -e "${YELLOW}⚠${NC} Shared ingress mode is configured, but system Caddy is not running."
+            echo -e "  ${CYAN}The app will still start on a local HTTP listener for verification:${NC} ${YELLOW}${PUBLIC_APP_URL}${NC}"
+            echo -e "  ${CYAN}Run setup again to provision Caddy, or install this site block manually:${NC}"
+            echo ""
+            caddy_render_system_site_snippet "$PROJECT_ROOT" "$FRONTEND_DOMAIN" "$BACKEND_DOMAIN" "$APP_PORT" "$APP_ENV" | while IFS= read -r line; do
+                echo -e "    ${YELLOW}${line}${NC}"
+            done
+            echo ""
+            log "Shared ingress configured but system Caddy is not running"
+        fi
+        return 0
+    fi
+
+    if caddy_system_is_running; then
+        echo ""
+        echo -e "${YELLOW}⚠${NC} System Caddy is already active, so BLB will avoid :443 and use a local HTTP listener instead."
+        echo -e "  ${CYAN}If you want this to be permanent, set ${YELLOW}BLB_INGRESS_MODE=shared${NC} and run setup.${NC}"
+        echo -e "  ${CYAN}Until then, access the app through:${NC} ${YELLOW}${PUBLIC_APP_URL}${NC}"
+        echo ""
+        echo -e "  ${CYAN}Suggested system Caddy site block:${NC}"
+        echo ""
+        caddy_render_system_site_snippet "$PROJECT_ROOT" "$FRONTEND_DOMAIN" "$BACKEND_DOMAIN" "$APP_PORT" "$APP_ENV" | while IFS= read -r line; do
+            echo -e "    ${YELLOW}${line}${NC}"
+        done
+        echo ""
+        log "System Caddy detected while in direct mode; falling back to local HTTP listener"
+        return 0
+    fi
+
+    ensure_frankenphp_bind_capability
+    echo ""
+    echo -e "${CYAN}ℹ${NC} Direct mode selected. FrankenPHP will bind to ${YELLOW}${APP_BIND_HOST}:${HTTPS_PORT}${NC}."
+    return 0
+}
+
+get_healthcheck_url() {
+    if [[ "${USE_NON_PRIVILEGED_PORT:-0}" = "1" ]]; then
+        printf '%s\n' "http://127.0.0.1:${APP_PORT}"
+    else
+        printf '%s\n' "https://${FRONTEND_DOMAIN}"
+    fi
+
+    return 0
+}
+
+print_runtime_summary() {
+    echo ""
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}✓ Belimbing is ready!${NC}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "${CYAN}Access your application:${NC}"
+    echo -e "  ${GREEN}Frontend:${NC} ${YELLOW}${PUBLIC_APP_URL}${NC}"
+    echo -e "  ${GREEN}Backend:${NC}  ${YELLOW}${PUBLIC_BACKEND_URL}${NC}"
+    echo ""
+    echo -e "${CYAN}Services:${NC}"
+
+    if [[ "${USE_NON_PRIVILEGED_PORT:-0}" = "1" ]]; then
+        echo -e "  ${BULLET} FrankenPHP (Octane): http://127.0.0.1:${APP_PORT}"
+        echo -e "  ${BULLET} Vite:                http://127.0.0.1:$VITE_PORT"
+        if [[ "$REVERB_SCHEME" = "https" ]]; then
+            echo -e "  ${BULLET} Reverb (public):     wss://${FRONTEND_DOMAIN}/app"
+        else
+            echo -e "  ${BULLET} Reverb (public):     ws://${FRONTEND_DOMAIN}:${APP_PORT}/app"
+        fi
+        echo -e "  ${BULLET} Reverb (internal):   ws://127.0.0.1:$REVERB_SERVER_PORT"
+        echo ""
+        if [[ "$BLB_INGRESS_MODE" = "shared" ]] && caddy_system_is_running; then
+            echo -e "${GREEN}✓ System Caddy is active for shared ingress${NC}"
+        else
+            echo -e "${YELLOW}⚠ Public HTTPS is not being served by BLB directly in this mode${NC}"
+        fi
+    else
+        echo -e "  ${BULLET} FrankenPHP (Octane): https://${FRONTEND_DOMAIN} (:443, bind ${APP_BIND_HOST})"
+        echo -e "  ${BULLET} Vite:                http://127.0.0.1:$VITE_PORT"
+        echo -e "  ${BULLET} Reverb (public):     wss://${FRONTEND_DOMAIN}/app"
+        echo -e "  ${BULLET} Reverb (internal):   ws://127.0.0.1:$REVERB_SERVER_PORT"
+    fi
+    echo ""
+    echo -e "${CYAN}Log file:${NC} ${LOG_FILE}"
+    echo ""
+    echo -e "Press ${YELLOW}Ctrl+C${NC} to stop all services"
     return 0
 }
 
@@ -545,8 +684,7 @@ main() {
     check_dependencies
     log "Dependency check completed in $(( $(now_epoch_s) - t_deps ))s"
 
-    # Ensure FrankenPHP can bind to port 443 (Linux only)
-    ensure_frankenphp_bind_capability
+    print_runtime_guidance
 
     # Check and stop services if needed
     local t_ports
@@ -567,35 +705,16 @@ main() {
     start_services
     log "Dev services started in $(( $(now_epoch_s) - t_start ))s (PID $DEV_PID)"
 
-    # Wait for FrankenPHP/Octane to be ready (serves HTTPS on :443 via project Caddyfile)
-    wait_for_service "https://${FRONTEND_DOMAIN}" "FrankenPHP (Octane)" || true
+    # Wait for FrankenPHP/Octane to be ready on the actual local listener.
+    local healthcheck_url
+    healthcheck_url=$(get_healthcheck_url)
+    wait_for_service "$healthcheck_url" "FrankenPHP (Octane)" || true
     log "Start-app total time so far: $(( $(now_epoch_s) - t0 ))s"
 
-    local frontend_url="https://${FRONTEND_DOMAIN}"
-    local backend_url="https://${BACKEND_DOMAIN}"
-
-    # Display final success message
-    echo ""
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}✓ Belimbing is ready!${NC}"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "${CYAN}Access your application:${NC}"
-    echo -e "  ${GREEN}Frontend:${NC} ${YELLOW}${frontend_url}${NC}"
-    echo -e "  ${GREEN}Backend:${NC}  ${YELLOW}${backend_url}${NC}"
-    echo ""
-    echo -e "${CYAN}Services:${NC}"
-    echo -e "  ${BULLET} FrankenPHP (Octane): https://${FRONTEND_DOMAIN} (:443)"
-    echo -e "  ${BULLET} Vite:                http://127.0.0.1:$VITE_PORT"
-    echo -e "  ${BULLET} Reverb (public):     wss://${FRONTEND_DOMAIN}/app"
-    echo -e "  ${BULLET} Reverb (internal):   ws://127.0.0.1:$REVERB_SERVER_PORT"
-    echo ""
-    echo -e "${CYAN}Log file:${NC} ${LOG_FILE}"
-    echo ""
-    echo -e "Press ${YELLOW}Ctrl+C${NC} to stop all services"
+    print_runtime_summary
 
     # Launch browser if available
-    launch_browser "$frontend_url" || true
+    launch_browser "$PUBLIC_APP_URL" || true
 
     # Wait for background process
     wait "$DEV_PID" 2>/dev/null || true

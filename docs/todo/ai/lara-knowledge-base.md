@@ -83,7 +83,7 @@ These 15 concepts form the BLB core seed compilation target:
 
 | Concept | Key raw sources |
 |---|---|
-| BLB Framework Overview | `docs/brief.md`, `docs/architecture/overview.md` |
+| BLB Framework Overview | `docs/brief.md`, `docs/architecture/file-structure.md`, `docs/architecture/caddy-frankenphp-topology.md` |
 | Module System | `docs/architecture/file-structure.md`, `AGENTS.md` |
 | UI Design Tokens | `resources/core/css/tokens.css`, `resources/core/views/AGENTS.md` |
 | UI Components | `resources/core/views/components/ui/*`, `resources/core/views/AGENTS.md` |

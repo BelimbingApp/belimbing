@@ -28,26 +28,30 @@ source "$SCRIPT_DIR/shared/interactive.sh" 2>/dev/null || true
 clear
 print_section_banner "Belimbing Environment Setup"
 
-# Ask which environment to set up
-echo -e "${CYAN}Which environment do you want to set up?${NC}"
-echo ""
-echo -e "  1. ${GREEN}local${NC}      — Development with sample data"
-echo -e "  2. staging    — Pre-production testing"
-echo -e "  3. production — Live deployment"
-echo ""
+if [[ $# -gt 0 ]]; then
+    APP_ENV=$(normalize_and_validate_env "$1")
+else
+    # Ask which environment to set up
+    echo -e "${CYAN}Which environment do you want to set up?${NC}"
+    echo ""
+    echo -e "  1. ${GREEN}local${NC}      — Development with sample data"
+    echo -e "  2. staging    — Pre-production testing"
+    echo -e "  3. production — Live deployment"
+    echo ""
 
-read -r -p "Choose [1]: " env_choice
-env_choice="${env_choice:-1}"
+    read -r -p "Choose [1]: " env_choice
+    env_choice="${env_choice:-1}"
 
-case "$env_choice" in
-    1|local)      APP_ENV="local" ;;
-    2|staging)    APP_ENV="staging" ;;
-    3|production) APP_ENV="production" ;;
-    *)
-        echo -e "${RED}✗ Invalid choice: '$env_choice'${NC}" >&2
-        exit 1
-        ;;
-esac
+    case "$env_choice" in
+        1|local)      APP_ENV="local" ;;
+        2|staging)    APP_ENV="staging" ;;
+        3|production) APP_ENV="production" ;;
+        *)
+            echo -e "${RED}✗ Invalid choice: '$env_choice'${NC}" >&2
+            exit 1
+            ;;
+    esac
+fi
 
 echo ""
 echo -e "${GREEN}✓${NC} Environment: ${CYAN}${APP_ENV}${NC}"

@@ -4,13 +4,13 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "dev:all": "bunx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" \"php artisan octane:start --server=frankenphp --caddyfile=Caddyfile --port=${APP_PORT:-8000}\" \"php artisan queue:work --queue=ai-agent-tasks,ai-background-commands,ai-schedules,default --tries=1 --timeout=900 --sleep=1\" \"php artisan reverb:start\" \"bun run dev\" --names=server,queue,reverb,vite",
-        "dev:all:watch": "bunx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" \"php artisan octane:start --server=frankenphp --caddyfile=Caddyfile --port=${APP_PORT:-8000} --watch\" \"php artisan queue:work --queue=ai-agent-tasks,ai-background-commands,ai-schedules,default --tries=1 --timeout=900 --sleep=1\" \"php artisan reverb:start\" \"bun run dev\" --names=server,queue,reverb,vite"
+        "dev:all": "bunx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" \"php artisan octane:start --server=frankenphp --caddyfile=Caddyfile --host=${APP_BIND_HOST:-127.0.0.1} --port=${APP_PORT:-8000} --admin-port=${CADDY_SERVER_ADMIN_PORT:-2019}\" \"php artisan queue:work --queue=ai-agent-tasks,ai-background-commands,ai-schedules,default --tries=1 --timeout=900 --sleep=1\" \"php artisan reverb:start\" \"bun run dev\" --names=server,queue,reverb,vite",
+        "dev:all:watch": "bunx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" \"php artisan octane:start --server=frankenphp --caddyfile=Caddyfile --host=${APP_BIND_HOST:-127.0.0.1} --port=${APP_PORT:-8000} --admin-port=${CADDY_SERVER_ADMIN_PORT:-2019} --watch\" \"php artisan queue:work --queue=ai-agent-tasks,ai-background-commands,ai-schedules,default --tries=1 --timeout=900 --sleep=1\" \"php artisan reverb:start\" \"bun run dev\" --names=server,queue,reverb,vite"
     },
     "dependencies": {
         "@tailwindcss/vite": "^4.2.2",
         "alpinejs": "^3.15.11",
-        "autoprefixer": "^10.4.27",
+        "autoprefixer": "^10.5.0",
         "axios": "^1.14.0",
         "concurrently": "^9.2.1",
         "laravel-echo": "^2.3.3",
@@ -19,7 +19,7 @@
         "pusher-js": "^8.5.0",
         "sortablejs": "^1.15.7",
         "tailwindcss": "^4.2.2",
-        "vite": "^8.0.4"
+        "vite": "^8.0.8"
     },
     "optionalDependencies": {
         "@rollup/rollup-linux-x64-gnu": "4.60.1",

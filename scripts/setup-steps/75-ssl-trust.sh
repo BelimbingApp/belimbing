@@ -46,11 +46,12 @@ main() {
     echo -e "to generate mkcert certs, which are trusted automatically at start time."
     echo ""
 
-    # Check if Caddy is running (needed to generate certificates)
-    if ! pgrep -x "caddy" > /dev/null 2>&1; then
-        echo -e "${YELLOW}⚠${NC} Caddy is not currently running"
+    # Check if either the system Caddy daemon or app-local FrankenPHP has been started
+    # at least once. One of them must run long enough to generate the internal CA.
+    if ! pgrep -x "caddy" > /dev/null 2>&1 && ! pgrep -x "frankenphp" > /dev/null 2>&1; then
+        echo -e "${YELLOW}⚠${NC} Neither system Caddy nor app-local FrankenPHP is currently running"
         echo ""
-        echo -e "${CYAN}To generate SSL certificates, Caddy must be running at least once.${NC}"
+        echo -e "${CYAN}To generate the internal CA, BLB must start either system Caddy or app-local FrankenPHP at least once.${NC}"
         echo -e "Options:"
         echo -e "  1. Start the app: ${CYAN}./scripts/start-app.sh${NC}"
         echo -e "  2. Let it run for ~5 seconds (so Caddy generates certificates)"
@@ -71,7 +72,7 @@ main() {
             exit 0
         fi
     else
-        echo -e "${GREEN}✓${NC} Caddy is running"
+        echo -e "${GREEN}✓${NC} A Caddy-compatible runtime is running"
         echo ""
     fi
 
@@ -94,7 +95,7 @@ main() {
             echo -e "${YELLOW}⚠${NC} SSL trust setup incomplete"
             echo ""
             echo -e "You can:"
-            echo -e "  • Switch to mkcert: ${CYAN}./scripts/setup-steps/70-caddy.sh${NC} (recommended)"
+            echo -e "  • Switch to mkcert: ${CYAN}./scripts/setup-steps/70-domains.sh${NC} (recommended)"
             echo -e "  • Manually install the CA from: ${CYAN}storage/app/ssl/caddy-root-ca.crt${NC}"
             echo -e "  • Re-run this script later: ${CYAN}./scripts/setup-steps/75-ssl-trust.sh${NC}"
             echo ""

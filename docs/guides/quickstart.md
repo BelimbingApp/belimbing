@@ -40,7 +40,12 @@ cd ~/belimbing # go to the project root
 ./scripts/setup.sh
 ```
 
-The script will install or upgrade PHP, Composer, PostgreSQL, Redis, Caddy, and help configure everything. You can stop anytime by pressing `Ctrl+C`. The script can be run multiple times.
+The script will install or upgrade PHP, Composer, PostgreSQL, Redis, FrankenPHP, and help configure everything. Native setup defaults to shared ingress and still lets you choose:
+
+- `shared` — recommended default; system Caddy owns `:80` and `:443`, while BLB runs FrankenPHP on a pinned local app port
+- `direct` — single-instance fallback where BLB serves HTTPS itself on `:443` when no system Caddy is active
+
+When `shared` mode is selected, setup validates or installs system Caddy, generates the BLB site block, and reloads the daemon when possible. You can stop anytime by pressing `Ctrl+C`. The script can be run multiple times and is intended to be idempotent on already-provisioned machines.
 
 For _staging_ and _production_ environments, run `./scripts/setup.sh staging` or `./scripts/setup.sh production`.
 
@@ -86,9 +91,9 @@ cd ~/belimbing # go to the project root
 ./scripts/start-app.sh
 ```
 
-`./scripts/start-app.sh` automatically chooses free internal ports for Laravel, Vite, and Reverb when they are not pinned in `.env`, so multiple local BLB instances can run side-by-side without manual port edits.
+`./scripts/start-app.sh` automatically chooses free internal ports for Laravel, Vite, and Reverb when they are not pinned in `.env`, so multiple local BLB instances can run side-by-side without manual port edits. In `shared` ingress mode, keep `APP_PORT` pinned in `.env` so the generated system Caddy config always points to a stable upstream.
 
-Once the app is running, you can access it at https://local.blb.lara. To stop the app, ctrl+c in the terminal. The script will automatically stop the app when you exit the terminal. You can also stop the app manually using the following command:
+In `direct` mode, the app is usually available at `https://local.blb.lara`. In `shared` mode, the public URL remains the same, but system Caddy is the process serving `:443` and proxying to BLB's local FrankenPHP listener. To stop the app, press `Ctrl+C` in the terminal. The script will automatically stop the app when you exit the terminal. You can also stop the app manually using the following command:
 
 **Stop:**
 ```bash
