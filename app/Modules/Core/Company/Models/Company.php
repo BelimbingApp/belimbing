@@ -9,6 +9,7 @@ use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Address\Models\Addressable;
 use App\Modules\Core\Company\Database\Factories\CompanyFactory;
 use App\Modules\Core\Company\Exceptions\LicenseeCompanyDeletionException;
+use App\Modules\Core\User\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -304,6 +305,60 @@ class Company extends Model
     public function isLicensee(): bool
     {
         return $this->id === self::LICENSEE_ID;
+    }
+
+    /**
+     * Resolve the canonical admin user id stored in company metadata.
+     */
+    public function adminUserId(): ?int
+    {
+        $metadata = $this->metadata;
+
+        if (! is_array($metadata)) {
+            return null;
+        }
+
+        $adminUserId = $metadata['admin_user_id'] ?? null;
+
+        return is_numeric($adminUserId) ? (int) $adminUserId : null;
+    }
+
+    /**
+     * Resolve the canonical admin user for this company.
+     */
+    public function resolveAdminUser(): ?User
+    {
+        $adminUserId = $this->adminUserId();
+
+        if ($adminUserId === null) {
+            return null;
+        }
+
+        return User::query()
+            ->whereKey($adminUserId)
+            ->where('company_id', $this->id)
+            ->first();
+    }
+
+    /**
+     * Persist the canonical admin user id into company metadata.
+     */
+    public function assignAdminUser(User $user): void
+    {
+        if ((int) $user->company_id !== (int) $this->id) {
+            return;
+        }
+
+        $metadata = $this->metadata;
+
+        if (! is_array($metadata)) {
+            $metadata = [];
+        }
+
+        $metadata['admin_user_id'] = $user->getKey();
+
+        $this->metadata = $metadata;
+        $this->save();
     }
 
     /**

@@ -13,7 +13,7 @@
 # - Clears and rebuilds application caches
 #
 # Framework primitives (licensee company, admin user, Lara) are created by
-# MigrateCommand::ensureFrameworkPrimitives() in all environments.
+# FrameworkPrimitivesProvisioner (called from MigrateCommand) in all environments.
 # The licensee company is upserted onto id=1 so row 1 remains the canonical
 # licensee across repeated setup runs.
 # Values are NOT persisted to .env — the users table is stable (is_stable=true)
@@ -70,6 +70,14 @@ print_db_troubleshoot() {
 detect_admin_email() {
     git config user.email 2>/dev/null || echo "admin@example.com"
     return 0
+}
+
+# Extract a single key from a JSON string using PHP.
+# Usage: json_extract "$json_string" "key_name"
+json_extract() {
+    local json=$1
+    local key=$2
+    echo "$json" | php -r "\$data = json_decode(file_get_contents('php://stdin'), true) ?: []; echo \$data['${key}'] ?? '';" 2>/dev/null || echo ""
 }
 
 # Resolve the preferred admin user id from setup state when available.
@@ -198,10 +206,10 @@ main() {
         existing=$(echo "$existing" | grep -o '{.*}' 2>/dev/null || echo '{}')
 
         # Parse existing values from JSON
-        company_name=$(echo "$existing" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["company_name"] ?? "";' 2>/dev/null || echo "")
-        company_code=$(echo "$existing" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["company_code"] ?? "";' 2>/dev/null || echo "")
-        admin_name=$(echo "$existing" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["admin_name"] ?? "";' 2>/dev/null || echo "")
-        admin_email=$(echo "$existing" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["admin_email"] ?? "";' 2>/dev/null || echo "")
+        company_name=$(json_extract "$existing" "company_name")
+        company_code=$(json_extract "$existing" "company_code")
+        admin_name=$(json_extract "$existing" "admin_name")
+        admin_email=$(json_extract "$existing" "admin_email")
 
         if [[ -n "$company_name" && -n "$admin_email" ]]; then
             primitives_exist=true
@@ -277,10 +285,10 @@ main() {
     persisted=$(load_existing_framework_primitives "")
     persisted=$(echo "$persisted" | grep -o '{.*}' 2>/dev/null || echo '{}')
     local persisted_admin_name persisted_admin_email persisted_company_name persisted_company_code persisted_admin_user_id
-    persisted_company_name=$(echo "$persisted" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["company_name"] ?? "";' 2>/dev/null || echo "")
-    persisted_company_code=$(echo "$persisted" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["company_code"] ?? "";' 2>/dev/null || echo "")
-    persisted_admin_name=$(echo "$persisted" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["admin_name"] ?? "";' 2>/dev/null || echo "")
-    persisted_admin_email=$(echo "$persisted" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["admin_email"] ?? "";' 2>/dev/null || echo "")
+    persisted_company_name=$(json_extract "$persisted" "company_name")
+    persisted_company_code=$(json_extract "$persisted" "company_code")
+    persisted_admin_name=$(json_extract "$persisted" "admin_name")
+    persisted_admin_email=$(json_extract "$persisted" "admin_email")
     persisted_admin_user_id=$(php artisan tinker --execute='
         $company = App\Modules\Core\Company\Models\Company::query()->find(App\Modules\Core\Company\Models\Company::LICENSEE_ID);
         echo $company?->adminUserId() ?? "";

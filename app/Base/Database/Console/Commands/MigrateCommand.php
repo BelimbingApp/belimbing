@@ -5,18 +5,13 @@
 
 namespace App\Base\Database\Console\Commands;
 
-use App\Base\Authz\Enums\PrincipalType;
-use App\Base\Authz\Models\PrincipalRole;
-use App\Base\Authz\Models\Role;
 use App\Base\Database\Concerns\InteractsWithModuleMigrations;
 use App\Base\Database\Exceptions\CircularSeederDependencyException;
 use App\Base\Database\Models\SeederRegistry;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Seeders\DevSeeder;
+use App\Base\Foundation\Services\FrameworkPrimitivesProvisioner;
 use App\Base\Support\AppPath;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
 use Illuminate\Database\Console\Migrations\MigrateCommand as IlluminateMigrateCommand;
 use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -143,9 +138,9 @@ class MigrateCommand extends IlluminateMigrateCommand
                     $this->runModuleSeeders();
                 }
 
-                // Ensure framework primitives exist (Licensee company, Lara agent).
+                // Ensure framework primitives exist (Licensee company, admin user, Lara).
                 // Runs after production seeders, before dev seeders, in all environments.
-                $this->ensureFrameworkPrimitives();
+                $this->provisionFrameworkPrimitives();
 
                 // Handle dev seeders (--dev flag)
                 if ($this->option('dev')) {
@@ -265,101 +260,27 @@ class MigrateCommand extends IlluminateMigrateCommand
 
         $this->newLine();
         $this->info('✓ Dev seeders complete.');
-        $admin = User::query()->where('company_id', Company::LICENSEE_ID)->first();
-        if ($admin) {
-            $this->line("  Admin: {$admin->email}");
-        }
     }
 
     /**
-     * Ensure framework primitives exist: Licensee company (id=1), admin user, and Lara (employee id=1).
+     * Provision framework primitives: Licensee company, admin user, and Lara.
      *
-     * All three are idempotent — safe to call on every migrate. Ordering matters:
-     * Licensee must exist before admin user (user belongs to licensee company),
-     * and Lara runs last (Lara belongs to the licensee company).
-     *
-     * Values are read from env vars (passed transiently by the setup script).
-     * Defaults allow day-to-day `migrate:fresh --seed --dev` to work without
-     * env vars since `is_stable` preserves the users table across fresh runs.
-     * Reads LICENSEE_COMPANY_NAME and optional LICENSEE_COMPANY_CODE. The
-     * licensee company row is upserted onto id=1 so the canonical licensee ID
-     * remains stable across repeated setup runs.
+     * Delegates to FrameworkPrimitivesProvisioner to keep migration command
+     * focused on orchestration rather than domain logic.
      */
-    private function ensureFrameworkPrimitives(): void
+    private function provisionFrameworkPrimitives(): void
     {
+        $bootstrapFile = getenv('BLB_BOOTSTRAP_ADMIN_FILE') ?: null;
+
+        $provisioner = new FrameworkPrimitivesProvisioner(
+            fn (string $message) => $this->line("  {$message}"),
+            $bootstrapFile,
+        );
+
         $companyName = env('LICENSEE_COMPANY_NAME', 'My Company');
         $companyCode = env('LICENSEE_COMPANY_CODE');
 
-        if (Company::provisionLicensee($companyName, $companyCode)) {
-            $this->line("  Created licensee company: {$companyName}");
-        } else {
-            $this->line("  Updated licensee company: {$companyName}");
-        }
-
-        $this->ensureAdminUser();
-
-        if (Employee::provisionLara()) {
-            $this->line('  Created Lara (system Agent — orchestrator)');
-        }
-
-    }
-
-    /**
-     * Ensure the initial admin user exists in the licensee company.
-     *
-     * Reads ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD from env vars.
-     * On first setup these are provided transiently by 60-migrations.sh.
-     * On subsequent migrate:fresh runs the users table is stable (is_stable=true)
-     * so the row survives and this is a no-op.
-     */
-    private function ensureAdminUser(): void
-    {
-        $email = env('ADMIN_EMAIL', 'admin@example.com');
-        $name = env('ADMIN_NAME', 'Administrator');
-        $password = env('ADMIN_PASSWORD', 'password');
-
-        $user = User::query()->firstOrCreate(
-            ['email' => $email],
-            [
-                'company_id' => Company::LICENSEE_ID,
-                'name' => $name,
-                'password' => $password,
-                'email_verified_at' => now(),
-            ],
-        );
-
-        $this->ensureSystemRoleAssigned($user, 'core_admin');
-
-        if ($user->wasRecentlyCreated) {
-            $this->line("  Created admin user: {$email}");
-        }
-    }
-
-    /**
-     * Ensure the given user has the requested system role assignment.
-     */
-    private function ensureSystemRoleAssigned(User $user, string $roleCode): void
-    {
-        $role = Role::query()
-            ->whereNull('company_id')
-            ->where('is_system', true)
-            ->where('code', $roleCode)
-            ->first();
-
-        if ($role === null) {
-            return;
-        }
-
-        $principalRole = PrincipalRole::query()->firstOrCreate([
-            'company_id' => $user->company_id,
-            'principal_type' => PrincipalType::HUMAN_USER->value,
-            'principal_id' => $user->id,
-            'role_id' => $role->id,
-        ]);
-
-        if ($principalRole->wasRecentlyCreated) {
-            $this->line("  Assigned {$roleCode} role to admin user: {$user->email}");
-        }
+        $provisioner->provision($companyName, $companyCode);
     }
 
     /**
