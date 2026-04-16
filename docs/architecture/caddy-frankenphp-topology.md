@@ -1,7 +1,7 @@
 # Caddy and FrankenPHP Topology
 
-**Document Type:** Architecture Specification  
-**Scope:** Native BLB runtime across development, staging, and production  
+**Document Type:** Architecture Specification
+**Scope:** Native BLB runtime across development, staging, and production
 **Last Updated:** 2026-04-16
 
 ## Overview
@@ -81,6 +81,14 @@ In shared-ingress mode, that local routing surface serves plain HTTP on the inte
 FrankenPHP can emit HTTP `103 Early Hints`, but BLB does not enable `103` framework-wide.
 
 Use `103` only as a narrow, case-by-case optimization for specific HTML navigations that show measured benefit. Prefer route- or page-level opt-in over global middleware or framework-default behavior.
+
+### Mercure (Built Into FrankenPHP)
+
+FrankenPHP includes the Mercure hub (Server-Sent Events based real-time messaging), but BLB does **not** use Mercure.
+
+BLB's real-time broadcasting uses **Laravel Reverb** (WebSocket-based, documented in `docs/architecture/broadcasting.md`). Mercure remains available as a future alternative if Reverb's WebSocket model becomes unsuitable for specific use cases (e.g., corporate proxies that block WebSockets, or scenarios requiring SSE's automatic reconnection).
+
+If Mercure is adopted later, it would be configured in the Caddyfile alongside Reverb, with environment-driven hub credentials and JWT key management.
 
 ## Environment Parity
 

@@ -17,7 +17,7 @@ Remove Reverb, Echo, and `pusher-js` from the product and development stack with
 After this work:
 
 - Lara chat continues to use direct streaming for fresh turns and persisted replay for recovery.
-- Geonames postcode import still shows progress, but through polling or Livewire refresh instead of WebSocket push.
+- Geonames postcode import still shows progress, but through polling, Livewire refresh, or Mercure SSE instead of WebSocket push.
 - The system-level Reverb test page is removed rather than preserved under a different transport.
 - Frontend boot no longer initializes `window.Echo`.
 - Local development no longer starts a Reverb process.
@@ -67,17 +67,32 @@ A hybrid state is worse than either clear alternative:
 
 BLB should take the simpler system.
 
-### Recommendation: Replace Progress Push With Polling, Not Another Generic Transport Layer
+### Alternative Replacement Options
 
-The remaining live progress use case is Geonames import status. That is not a good reason to preserve a general-purpose websocket stack.
+Three approaches were considered for replacing the remaining live progress use case (Geonames import):
 
-The replacement should be task-specific:
+#### Option A: Polling (Recommended Default)
 
-- persist or expose import progress through the existing job/import state
-- poll from the UI on a short interval while import is active
-- keep the current immediate fallback message so UX still responds instantly
+Persist or expose import progress through the existing job/import state, poll from the UI on a short interval while import is active, and keep the current immediate fallback message so UX still responds instantly.
 
-This gives up nothing material for that workflow and removes a lot of platform complexity.
+- **Pros:** Simplest, no new infrastructure, works everywhere
+- **Cons:** Slightly more server load, small latency (acceptable for import progress)
+
+#### Option B: Plain SSE (Lara Chat Style)
+
+Use direct Server-Sent Events like Lara chat already does for streaming. Create an endpoint that streams progress events.
+
+- **Pros:** Real-time push without WebSocket overhead
+- **Cons:** Requires custom endpoint, no built-in retry/auth/topic multiplexing
+
+#### Option C: Mercure (FrankenPHP SSE Hub)
+
+Leverage Mercure, which is built into FrankenPHP. Mercure provides an SSE-based hub with built-in retry, authorization, and private topics.
+
+- **Pros:** Native to FrankenPHP, more capable than plain SSE, works across corporate proxies that block WebSockets, opportunity to unify with Lara chat's transport model in future
+- **Cons:** Requires Caddyfile configuration, JWT key management, adds complexity if only one feature needs it
+
+**Decision:** Use polling as the default replacement. Mercure is noted as a future opportunity if BLB's real-time needs grow or if unifying Lara chat's SSE with a hub becomes desirable.
 
 ### Recommendation: Delete the Reverb Test Surface
 
@@ -100,7 +115,7 @@ Goal: confirm the true removal boundary so the implementation does not leave hid
 
 Goal: replace the remaining user-visible Reverb behavior with simpler product-local behavior.
 
-- [ ] Replace Geonames postcode import WebSocket progress with polling or Livewire-native refresh
+- [ ] Replace Geonames postcode import WebSocket progress with polling or Livewire-native refresh (or Mercure if that path is chosen)
 - [ ] Remove `PostcodeImportProgress` broadcasting once the replacement path is in place
 - [ ] Remove the `TestReverb` system page, route, menu entry, and event class
 - [ ] Remove any now-unused broadcast channels from `routes/channels.php`
@@ -124,3 +139,12 @@ Goal: leave no stale operational or architectural guidance behind.
 - [ ] Verify local development starts cleanly without a Reverb process
 - [ ] Verify Geonames import still provides usable progress feedback after the transport change
 - [ ] Verify Lara chat and other AI surfaces still work with no `window.Echo` bootstrap present
+
+## Future Opportunity: Mercure and Lara Chat Unification
+
+Lara chat currently implements its own direct SSE streaming. Mercure (built into FrankenPHP) could eventually absorb this:
+
+- **Current:** Lara opens direct SSE stream to `/ai/chat/stream`
+- **Future:** Lara publishes tokens to Mercure topic `chat.{conversationId}`, client subscribes via Mercure hub
+
+This is **not required for Phase 1-4** but noted as a future consolidation opportunity if BLB adopts Mercure for other real-time features.
