@@ -139,6 +139,7 @@ check_existing() {
     # Verify it loads and compare version against target (strip leading 'v')
     local installed_version
     installed_version=$(verify_extension "$INSTALL_DIR" 2>/dev/null) || return 1
+    installed_version="${installed_version#v}"
 
     local target_version="${sqlite_vec_version#v}"
     [[ "$installed_version" == "$target_version" ]]

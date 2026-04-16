@@ -44,6 +44,49 @@ current_ingress_mode() {
     return 0
 }
 
+print_ingress_mode_guidance() {
+    local default_mode=$1
+    local frontend_domain
+    frontend_domain=$(get_env_var 'FRONTEND_DOMAIN' '')
+    local backend_domain
+    backend_domain=$(get_env_var 'BACKEND_DOMAIN' '')
+    local current_app_port
+    current_app_port=$(get_env_var 'APP_PORT' '')
+    local caddy_status='not installed'
+
+    if command_exists caddy; then
+        if system_caddy_is_running; then
+            caddy_status='installed and running'
+        else
+            caddy_status='installed but not running'
+        fi
+    fi
+
+    echo -e "${CYAN}How this choice works${NC}" >&2
+    echo -e "  ${GREEN}shared${NC} ${DIM}(Recommended)${NC}" \
+        "System Caddy owns ${CYAN}:80${NC}/${CYAN}:443${NC} and forwards traffic to BLB on an internal app port." >&2
+    echo -e "           Choose this if the machine may host multiple sites or you want the most conventional local setup." >&2
+    echo -e "  ${GREEN}direct${NC}              BLB serves HTTPS itself on ${CYAN}:443${NC} without writing a system Caddy site block." >&2
+    echo -e "           Choose this only when BLB is the only app that should bind the public HTTPS port." >&2
+    echo "" >&2
+    echo -e "${CYAN}Current context${NC}" >&2
+    echo -e "  Default mode: ${GREEN}${default_mode}${NC}" >&2
+    echo -e "  System Caddy: ${GREEN}${caddy_status}${NC}" >&2
+
+    if [[ -n "$current_app_port" ]]; then
+        echo -e "  Current APP_PORT: ${GREEN}${current_app_port}${NC}" >&2
+    fi
+
+    if [[ -n "$frontend_domain" ]] || [[ -n "$backend_domain" ]]; then
+        echo -e "  Domains: ${GREEN}${frontend_domain:-<unset>}${NC} / ${GREEN}${backend_domain:-<unset>}${NC}" >&2
+    fi
+
+    echo "" >&2
+    echo -e "${CYAN}If you're unsure:${NC} choose ${GREEN}shared${NC}. The setup can install Caddy and manage a BLB block in the system Caddyfile." >&2
+    echo "" >&2
+    return 0
+}
+
 prompt_for_ingress_mode() {
     local default_mode=$1
 
@@ -52,32 +95,39 @@ prompt_for_ingress_mode() {
         return 0
     fi
 
-    echo -e "${CYAN}Native ingress mode${NC}"
-    echo ""
-    echo -e "  1. ${GREEN}shared${NC} ${DIM}(Recommended)${NC} — system Caddy owns :80/:443 and proxies to BLB on a pinned app port"
-    echo -e "  2. direct  — single-instance fallback where BLB serves HTTPS itself on :443"
-    echo ""
-
     local default_choice='1'
     if [[ "$default_mode" = "$DIRECT_MODE" ]]; then
         default_choice='2'
     fi
 
-    read -r -p "Choose [${default_choice}]: " ingress_choice
-    ingress_choice="${ingress_choice:-$default_choice}"
+    echo -e "${CYAN}Native ingress mode${NC}" >&2
+    echo "" >&2
+    print_ingress_mode_guidance "$default_mode"
+    echo -e "  1. ${GREEN}shared${NC} ${DIM}(Recommended)${NC}" \
+        "— system Caddy owns ${CYAN}:80${NC}/${CYAN}:443${NC}; BLB listens on an internal app port" >&2
+    echo -e "  2. ${GREEN}direct${NC}" \
+        "             — BLB owns ${CYAN}:443${NC} directly; no managed system Caddy site block" >&2
+    echo "" >&2
 
-    case "$ingress_choice" in
-        1|shared)
-            printf '%s\n' "$SHARED_MODE"
-            ;;
-        2|direct)
-            printf '%s\n' "$DIRECT_MODE"
-            ;;
-        *)
-            echo -e "${YELLOW}⚠${NC} Invalid choice '${ingress_choice}', defaulting to ${default_mode}"
-            printf '%s\n' "$default_mode"
-            ;;
-    esac
+    local ingress_choice
+    while true; do
+        read -r -p "Choose [${default_choice}]: " ingress_choice
+        ingress_choice="${ingress_choice:-$default_choice}"
+
+        case "$ingress_choice" in
+            1|shared)
+                printf '%s\n' "$SHARED_MODE"
+                return 0
+                ;;
+            2|direct)
+                printf '%s\n' "$DIRECT_MODE"
+                return 0
+                ;;
+            *)
+                echo -e "${YELLOW}⚠${NC} Enter ${CYAN}1${NC} for ${GREEN}shared${NC} or ${CYAN}2${NC} for ${GREEN}direct${NC}." >&2
+                ;;
+        esac
+    done
 
     return 0
 }
@@ -224,24 +274,37 @@ get_generated_site_fragment_path() {
     return 0
 }
 
+get_system_caddy_include_dir() {
+    local caddyfile_path=$1
+    printf '%s\n' "$(dirname "$caddyfile_path")/blb"
+    return 0
+}
+
+get_installed_site_fragment_path() {
+    local caddyfile_path=$1
+    local frontend_domain=$2
+    local include_dir
+    include_dir=$(get_system_caddy_include_dir "$caddyfile_path")
+    printf '%s\n' "${include_dir}/${frontend_domain}.caddy"
+    return 0
+}
+
 render_tls_directive() {
     local frontend_domain=$1
     local cert_file="$PROJECT_ROOT/certs/${frontend_domain}.pem"
     local key_file="$PROJECT_ROOT/certs/${frontend_domain}-key.pem"
+
+    if [[ "$APP_ENV" = 'local' || "$APP_ENV" = 'testing' ]]; then
+        printf 'tls internal\n'
+        return 0
+    fi
 
     if [[ -f "$cert_file" ]] && [[ -f "$key_file" ]]; then
         printf 'tls %s %s\n' "$cert_file" "$key_file"
         return 0
     fi
 
-    case "$APP_ENV" in
-        local|testing)
-            printf 'tls internal\n'
-            ;;
-        *)
-            printf '\n'
-            ;;
-    esac
+    printf '\n'
 
     return 0
 }
@@ -308,30 +371,79 @@ replace_managed_block() {
     return 0
 }
 
-install_site_fragment_into_caddyfile() {
-    local fragment_path=$1
-    local caddyfile_path=$2
-    local managed_block_name
-    managed_block_name="BLB ${PROJECT_ROOT}"
-    local rendered_file
-    rendered_file=$(replace_managed_block "$caddyfile_path" "$managed_block_name" "$fragment_path")
+copy_file_with_elevation_if_needed() {
+    local source_path=$1
+    local target_path=$2
 
-    mkdir -p "$(dirname "$caddyfile_path")"
+    mkdir -p "$(dirname "$source_path")"
 
-    if [[ -w "$caddyfile_path" ]] || [[ ! -e "$caddyfile_path" && -w "$(dirname "$caddyfile_path")" ]]; then
-        cp "$rendered_file" "$caddyfile_path"
+    if [[ -w "$target_path" ]] || [[ ! -e "$target_path" && -w "$(dirname "$target_path")" ]]; then
+        mkdir -p "$(dirname "$target_path")"
+        cp "$source_path" "$target_path"
     else
-        sudo cp "$rendered_file" "$caddyfile_path"
+        sudo mkdir -p "$(dirname "$target_path")"
+        sudo cp "$source_path" "$target_path"
     fi
 
+    return 0
+}
+
+install_site_fragment_into_include_dir() {
+    local fragment_path=$1
+    local caddyfile_path=$2
+    local frontend_domain=$3
+    local installed_fragment_path
+    installed_fragment_path=$(get_installed_site_fragment_path "$caddyfile_path" "$frontend_domain")
+
+    copy_file_with_elevation_if_needed "$fragment_path" "$installed_fragment_path"
+
+    save_to_setup_state 'SYSTEM_CADDY_SITE_FRAGMENT' "$installed_fragment_path"
+    echo -e "${GREEN}✓${NC} Installed BLB site file: ${CYAN}${installed_fragment_path}${NC}"
+    return 0
+}
+
+install_caddy_import_into_caddyfile() {
+    local caddyfile_path=$1
+    local managed_block_name
+    managed_block_name="BLB ${PROJECT_ROOT}"
+    local include_dir
+    include_dir=$(get_system_caddy_include_dir "$caddyfile_path")
+    local import_file
+    import_file=$(mktemp)
+
+    cat > "$import_file" <<EOF
+import ${include_dir}/*.caddy
+EOF
+
+    local rendered_file
+    rendered_file=$(replace_managed_block "$caddyfile_path" "$managed_block_name" "$import_file")
+
+    copy_file_with_elevation_if_needed "$rendered_file" "$caddyfile_path"
+
+    rm -f "$import_file"
     rm -f "$rendered_file"
     save_to_setup_state 'SYSTEM_CADDY_CONFIG_PATH' "$caddyfile_path"
-    echo -e "${GREEN}✓${NC} Installed BLB site block into ${CYAN}${caddyfile_path}${NC}"
+    echo -e "${GREEN}✓${NC} Installed BLB import block into ${CYAN}${caddyfile_path}${NC}"
     return 0
 }
 
 validate_and_reload_caddy() {
     local caddyfile_path=$1
+    local reload_output
+    local formatted_file
+
+    echo -e "${CYAN}Formatting Caddy configuration...${NC}"
+    formatted_file=$(mktemp)
+    cp "$caddyfile_path" "$formatted_file"
+    caddy fmt --overwrite "$formatted_file" >/dev/null
+
+    if [[ -w "$caddyfile_path" ]]; then
+        cp "$formatted_file" "$caddyfile_path"
+    else
+        sudo cp "$formatted_file" "$caddyfile_path"
+    fi
+
+    rm -f "$formatted_file"
 
     echo -e "${CYAN}Validating Caddy configuration...${NC}"
     caddy validate --config "$caddyfile_path"
@@ -339,23 +451,26 @@ validate_and_reload_caddy() {
     echo -e "${CYAN}Reloading Caddy configuration...${NC}"
 
     if system_caddy_is_running; then
-        if ! caddy reload --config "$caddyfile_path" >/dev/null 2>&1; then
-            local os_type
-            os_type=$(detect_os)
-            case "$os_type" in
-                macos)
-                    brew services restart caddy >/dev/null 2>&1 || true
-                    ;;
-                linux|wsl2)
-                    sudo systemctl reload caddy >/dev/null 2>&1 || sudo systemctl restart caddy >/dev/null 2>&1 || true
-                    ;;
-                *)
-                    ;;
-            esac
+        if ! reload_output=$(caddy reload --config "$caddyfile_path" 2>&1); then
+            echo -e "${RED}✗${NC} Failed to reload system Caddy" >&2
+            echo "$reload_output" >&2
+            echo "" >&2
+            echo -e "${YELLOW}Likely cause:${NC} the running Caddy service cannot read one of the files referenced by the config." >&2
+            echo -e "Inspect the paths in ${CYAN}${caddyfile_path}${NC} and ensure the ${CYAN}caddy${NC} service user can access them." >&2
+            return 1
         fi
+
+        echo -e "${GREEN}✓${NC} Caddy configuration reloaded"
+        return 0
     else
         ensure_caddy_service_running || true
-        caddy reload --config "$caddyfile_path" >/dev/null 2>&1 || true
+        if ! reload_output=$(caddy reload --config "$caddyfile_path" 2>&1); then
+            echo -e "${RED}✗${NC} Failed to reload system Caddy after attempting to start it" >&2
+            echo "$reload_output" >&2
+            return 1
+        fi
+
+        echo -e "${GREEN}✓${NC} Caddy configuration reloaded"
     fi
 
     return 0
@@ -383,18 +498,20 @@ configure_shared_ingress() {
     local caddyfile_path
     caddyfile_path=$(get_system_caddyfile_path)
     echo -e "${CYAN}System Caddyfile:${NC} ${caddyfile_path}"
+    echo -e "${CYAN}BLB site include directory:${NC} $(get_system_caddy_include_dir "$caddyfile_path")"
 
     local install_block=true
-    if [[ -t 0 ]] && ! ask_yes_no "Install or update the BLB site block in ${caddyfile_path}?" "y"; then
+    if [[ -t 0 ]] && ! ask_yes_no "Install or update the BLB include import and site file?" "y"; then
         install_block=false
     fi
 
     if [[ "$install_block" = true ]]; then
-        install_site_fragment_into_caddyfile "$fragment_path" "$caddyfile_path"
+        install_site_fragment_into_include_dir "$fragment_path" "$caddyfile_path" "$frontend_domain"
+        install_caddy_import_into_caddyfile "$caddyfile_path"
         validate_and_reload_caddy "$caddyfile_path"
     else
-        echo -e "${YELLOW}⚠${NC} Skipped installing the system Caddy block"
-        echo -e "  Install the generated fragment manually: ${CYAN}${fragment_path}${NC}"
+        echo -e "${YELLOW}⚠${NC} Skipped installing the system Caddy include file and import"
+        echo -e "  Generated BLB site file: ${CYAN}${fragment_path}${NC}"
     fi
 
     ensure_caddy_service_running || true

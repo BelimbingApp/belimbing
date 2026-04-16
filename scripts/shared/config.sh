@@ -278,6 +278,34 @@ load_setup_state() {
     return 0
 }
 
+# Read a single variable from the setup state file.
+# Usage: get_setup_state_var KEY [default]
+get_setup_state_var() {
+    local key=$1
+    local default_value=${2:-}
+    local state_file
+    state_file=$(get_setup_state_file) || {
+        echo "$default_value"
+        return 0
+    }
+
+    if [[ ! -f "$state_file" ]]; then
+        echo "$default_value"
+        return 0
+    fi
+
+    local value
+    value=$(sed -n "s/^${key}=\"\\(.*\\)\"$/\\1/p" "$state_file" | tail -1)
+
+    if [[ -n "$value" ]]; then
+        echo "$value"
+    else
+        echo "$default_value"
+    fi
+
+    return 0
+}
+
 # Save a key-value pair to setup state file
 # Usage: save_to_setup_state "KEY" "value"
 save_to_setup_state() {
@@ -298,6 +326,26 @@ save_to_setup_state() {
 
     # Append new value
     echo "${key}=\"${value}\"" >> "$state_file"
+    return 0
+}
+
+# Remove a key from the setup state file if it exists.
+# Usage: remove_from_setup_state "KEY"
+remove_from_setup_state() {
+    local key=$1
+    local state_file
+    state_file=$(get_setup_state_file)
+
+    if [[ ! -f "$state_file" ]]; then
+        return 0
+    fi
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "/^${key}=/d" "$state_file" 2>/dev/null || true
+    else
+        sed -i "/^${key}=/d" "$state_file" 2>/dev/null || true
+    fi
+
     return 0
 }
 
