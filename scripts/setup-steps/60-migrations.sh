@@ -72,6 +72,56 @@ detect_admin_email() {
     return 0
 }
 
+# Resolve the preferred admin user id from setup state when available.
+preferred_admin_user_id() {
+    get_setup_state_var "ADMIN_USER_ID" ""
+    return 0
+}
+
+# Create a transient admin bootstrap payload file for the migrate command.
+create_admin_bootstrap_file() {
+    local admin_name=$1
+    local admin_email=$2
+    local admin_password=$3
+    local tmp_file
+    mkdir -p "$PROJECT_ROOT/storage/app/.devops"
+    tmp_file=$(mktemp "$PROJECT_ROOT/storage/app/.devops/admin-bootstrap.XXXXXX")
+    chmod 600 "$tmp_file"
+    printf '%s\n%s\n%s\n' "$admin_name" "$admin_email" "$admin_password" > "$tmp_file"
+    echo "$tmp_file"
+    return 0
+}
+
+# Load any existing framework primitive values from the database.
+# Returns a JSON object with empty-string values when records are absent.
+load_existing_framework_primitives() {
+    local preferred_user_id="${1:-}"
+
+    BLB_PREFERRED_ADMIN_USER_ID="$preferred_user_id" php artisan tinker --execute='
+        $company = App\Modules\Core\Company\Models\Company::query()->find(App\Modules\Core\Company\Models\Company::LICENSEE_ID);
+        $preferredAdminUserId = getenv("BLB_PREFERRED_ADMIN_USER_ID") ?: null;
+        $adminQuery = $company ? App\Modules\Core\User\Models\User::query()->where("company_id", $company->id) : null;
+        $admin = $company ? $company->resolveAdminUser() : null;
+
+        if ($admin === null && $adminQuery !== null && is_string($preferredAdminUserId) && $preferredAdminUserId !== "") {
+            $admin = (clone $adminQuery)->whereKey((int) $preferredAdminUserId)->first();
+        }
+
+        if ($admin === null && $adminQuery !== null) {
+            $admin = $adminQuery->orderBy("id")->first();
+        }
+
+        echo json_encode([
+            "company_name" => $company?->name ?? "",
+            "company_code" => $company?->code ?? "",
+            "admin_name" => $admin?->name ?? "",
+            "admin_email" => $admin?->email ?? "",
+        ]);
+    ' 2>/dev/null || echo '{}'
+
+    return 0
+}
+
 # Derive a default company code from company name (snake_case).
 default_company_code_from_name() {
     local company_name="${1:-}"
@@ -135,30 +185,23 @@ main() {
     echo ""
 
     # Check if framework primitives (licensee company + admin user) already exist in the DB.
-    # If they do, inform the user and skip prompting. Otherwise, prompt for values.
+    # If they do, inform the user and skip prompting. Otherwise, prompt with the
+    # best available defaults from the DB or setup state.
     local company_name="" company_code="" admin_name="" admin_email="" admin_password=""
     local primitives_exist=false
 
     local existing
-    existing=$(php artisan tinker --execute="
-        \$c = App\Modules\Core\Company\Models\Company::query()->find(App\Modules\Core\Company\Models\Company::LICENSEE_ID);
-        \$u = \$c ? App\Models\User::query()->where('company_id', \$c->id)->first() : null;
-        if (\$c && \$u) {
-            echo json_encode(['company_name' => \$c->name, 'company_code' => \$c->code, 'admin_name' => \$u->name, 'admin_email' => \$u->email]);
-        } else {
-            echo 'none';
-        }
-    " 2>/dev/null || echo "none")
+    existing=$(load_existing_framework_primitives "$(preferred_admin_user_id)")
 
-    # Strip any leading/trailing whitespace or Tinker decoration
-    existing=$(echo "$existing" | grep -o '{.*}' 2>/dev/null || echo "none")
+    if command_exists php; then
+        # Strip any leading/trailing whitespace or Tinker decoration
+        existing=$(echo "$existing" | grep -o '{.*}' 2>/dev/null || echo '{}')
 
-    if [[ "$existing" != "none" ]] && command_exists php; then
         # Parse existing values from JSON
-        company_name=$(echo "$existing" | php -r 'echo json_decode(file_get_contents("php://stdin"))->company_name;' 2>/dev/null || echo "")
-        company_code=$(echo "$existing" | php -r 'echo json_decode(file_get_contents("php://stdin"))->company_code;' 2>/dev/null || echo "")
-        admin_name=$(echo "$existing" | php -r 'echo json_decode(file_get_contents("php://stdin"))->admin_name;' 2>/dev/null || echo "")
-        admin_email=$(echo "$existing" | php -r 'echo json_decode(file_get_contents("php://stdin"))->admin_email;' 2>/dev/null || echo "")
+        company_name=$(echo "$existing" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["company_name"] ?? "";' 2>/dev/null || echo "")
+        company_code=$(echo "$existing" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["company_code"] ?? "";' 2>/dev/null || echo "")
+        admin_name=$(echo "$existing" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["admin_name"] ?? "";' 2>/dev/null || echo "")
+        admin_email=$(echo "$existing" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["admin_email"] ?? "";' 2>/dev/null || echo "")
 
         if [[ -n "$company_name" && -n "$admin_email" ]]; then
             primitives_exist=true
@@ -172,12 +215,20 @@ main() {
     if [[ "$primitives_exist" = false ]]; then
         # Prompt for framework primitives (licensee company, admin user).
         # These are passed as transient env vars to php artisan migrate.
-        company_name=$(ask_input "Licensee company name" "My Company")
+        local company_name_default company_code_default admin_name_default admin_email_default
+        company_name_default=$(get_setup_state_var "LICENSEE_COMPANY_NAME" "${company_name:-My Company}")
+        company_name=$(ask_input "Licensee company name" "$company_name_default")
+
         local default_code
         default_code=$(default_company_code_from_name "$company_name")
-        company_code=$(ask_input "Licensee company code" "$default_code")
-        admin_name=$(ask_input "Admin name" "Administrator")
-        admin_email=$(ask_input "Admin email" "$(detect_admin_email)")
+        company_code_default=$(get_setup_state_var "LICENSEE_COMPANY_CODE" "${company_code:-$default_code}")
+        company_code=$(ask_input "Licensee company code" "$company_code_default")
+
+        admin_name_default="${admin_name:-Administrator}"
+        admin_name=$(ask_input "Admin name" "$admin_name_default")
+
+        admin_email_default="${admin_email:-$(detect_admin_email)}"
+        admin_email=$(ask_input "Admin email" "$admin_email_default")
         admin_password=$(ask_password "Admin password (min 8 chars)")
         if [[ -z "$admin_password" ]]; then
             admin_password="password"
@@ -197,11 +248,15 @@ main() {
     echo -e "${CYAN}Running migrations...${NC}"
     echo -e "${CYAN}ℹ${NC} migrate ${migrate_args[*]}"
 
+    local admin_bootstrap_file=""
+    if [[ "$primitives_exist" = false ]]; then
+        admin_bootstrap_file=$(create_admin_bootstrap_file "$admin_name" "$admin_email" "$admin_password")
+        trap '[[ -n "$admin_bootstrap_file" && -f "$admin_bootstrap_file" ]] && rm -f "$admin_bootstrap_file"' EXIT
+    fi
+
     if ! LICENSEE_COMPANY_NAME="$company_name" \
             LICENSEE_COMPANY_CODE="$company_code" \
-         ADMIN_NAME="$admin_name" \
-         ADMIN_EMAIL="$admin_email" \
-         ADMIN_PASSWORD="$admin_password" \
+         BLB_BOOTSTRAP_ADMIN_FILE="$admin_bootstrap_file" \
          php artisan migrate "${migrate_args[@]}"; then
         echo -e "${RED}✗${NC} Migration failed" >&2
         echo -e "  Run ${CYAN}php artisan migrate ${migrate_args[*]}${NC} manually" >&2
@@ -209,10 +264,38 @@ main() {
     fi
     echo ""
 
+    if [[ -n "$admin_bootstrap_file" && -f "$admin_bootstrap_file" ]]; then
+        rm -f "$admin_bootstrap_file"
+        trap - EXIT
+    fi
+
     # Rebuild caches
     rebuild_caches
     echo ""
 
+    local persisted
+    persisted=$(load_existing_framework_primitives "")
+    persisted=$(echo "$persisted" | grep -o '{.*}' 2>/dev/null || echo '{}')
+    local persisted_admin_name persisted_admin_email persisted_company_name persisted_company_code persisted_admin_user_id
+    persisted_company_name=$(echo "$persisted" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["company_name"] ?? "";' 2>/dev/null || echo "")
+    persisted_company_code=$(echo "$persisted" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["company_code"] ?? "";' 2>/dev/null || echo "")
+    persisted_admin_name=$(echo "$persisted" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["admin_name"] ?? "";' 2>/dev/null || echo "")
+    persisted_admin_email=$(echo "$persisted" | php -r '$data = json_decode(file_get_contents("php://stdin"), true) ?: []; echo $data["admin_email"] ?? "";' 2>/dev/null || echo "")
+    persisted_admin_user_id=$(php artisan tinker --execute='
+        $company = App\Modules\Core\Company\Models\Company::query()->find(App\Modules\Core\Company\Models\Company::LICENSEE_ID);
+        echo $company?->adminUserId() ?? "";
+    ' 2>/dev/null || echo "")
+
+    company_name=${persisted_company_name:-$company_name}
+    company_code=${persisted_company_code:-$company_code}
+    admin_name=${persisted_admin_name:-$admin_name}
+    admin_email=${persisted_admin_email:-$admin_email}
+
+    save_to_setup_state "LICENSEE_COMPANY_NAME" "$company_name"
+    save_to_setup_state "LICENSEE_COMPANY_CODE" "$company_code"
+    save_to_setup_state "ADMIN_USER_ID" "$persisted_admin_user_id"
+    remove_from_setup_state "ADMIN_NAME"
+    remove_from_setup_state "ADMIN_EMAIL"
     save_to_setup_state "MIGRATIONS_RUN" "true"
 
     echo -e "${GREEN}✓ Database migrations complete!${NC}"

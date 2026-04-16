@@ -289,18 +289,48 @@ get_installed_site_fragment_path() {
     return 0
 }
 
+# Copy project cert files into the system Caddy include directory so the
+# caddy service user can read them (the project tree is often inside a home
+# directory that is not traversable by system daemons).
+# Prints the destination cert directory path on stdout.
+provision_certs_for_system_caddy() {
+    local caddyfile_path=$1
+    local frontend_domain=$2
+    local src_cert="$PROJECT_ROOT/certs/${frontend_domain}.pem"
+    local src_key="$PROJECT_ROOT/certs/${frontend_domain}-key.pem"
+    local include_dir
+    include_dir=$(get_system_caddy_include_dir "$caddyfile_path")
+    local dest_dir="${include_dir}/certs"
+    local dest_cert="${dest_dir}/${frontend_domain}.pem"
+    local dest_key="${dest_dir}/${frontend_domain}-key.pem"
+
+    copy_file_with_elevation_if_needed "$src_cert" "$dest_cert"
+    copy_file_with_elevation_if_needed "$src_key" "$dest_key"
+
+    # Ensure the caddy service user can read the copied files
+    if id caddy >/dev/null 2>&1; then
+        sudo chown caddy:caddy "$dest_cert" "$dest_key" 2>/dev/null || true
+    fi
+    chmod 644 "$dest_cert" 2>/dev/null || sudo chmod 644 "$dest_cert"
+    chmod 640 "$dest_key" 2>/dev/null || sudo chmod 640 "$dest_key"
+
+    printf '%s\n' "$dest_dir"
+    return 0
+}
+
 render_tls_directive() {
     local frontend_domain=$1
-    local cert_file="$PROJECT_ROOT/certs/${frontend_domain}.pem"
-    local key_file="$PROJECT_ROOT/certs/${frontend_domain}-key.pem"
-
-    if [[ "$APP_ENV" = 'local' || "$APP_ENV" = 'testing' ]]; then
-        printf 'tls internal\n'
-        return 0
-    fi
+    local cert_dir="${2:-$PROJECT_ROOT/certs}"
+    local cert_file="${cert_dir}/${frontend_domain}.pem"
+    local key_file="${cert_dir}/${frontend_domain}-key.pem"
 
     if [[ -f "$cert_file" ]] && [[ -f "$key_file" ]]; then
         printf 'tls %s %s\n' "$cert_file" "$key_file"
+        return 0
+    fi
+
+    if [[ "$APP_ENV" = 'local' || "$APP_ENV" = 'testing' ]]; then
+        printf 'tls internal\n'
         return 0
     fi
 
@@ -313,10 +343,11 @@ generate_site_fragment() {
     local frontend_domain=$1
     local backend_domain=$2
     local app_port=$3
+    local cert_dir="${4:-$PROJECT_ROOT/certs}"
     local fragment_path
     fragment_path=$(get_generated_site_fragment_path "$frontend_domain")
     local tls_directive
-    tls_directive=$(render_tls_directive "$frontend_domain")
+    tls_directive=$(render_tls_directive "$frontend_domain" "$cert_dir")
 
     mkdir -p "$(dirname "$fragment_path")"
 
@@ -492,13 +523,23 @@ configure_shared_ingress() {
         return 1
     fi
 
-    local fragment_path
-    fragment_path=$(generate_site_fragment "$frontend_domain" "$backend_domain" "$app_port")
-
     local caddyfile_path
     caddyfile_path=$(get_system_caddyfile_path)
     echo -e "${CYAN}System Caddyfile:${NC} ${caddyfile_path}"
     echo -e "${CYAN}BLB site include directory:${NC} $(get_system_caddy_include_dir "$caddyfile_path")"
+
+    # If mkcert certs exist, copy them into the system Caddy include dir so the
+    # caddy service user can read them (project tree may be inside a restricted home dir).
+    local system_cert_dir="$PROJECT_ROOT/certs"
+    local src_cert="$PROJECT_ROOT/certs/${frontend_domain}.pem"
+    local src_key="$PROJECT_ROOT/certs/${frontend_domain}-key.pem"
+    if [[ -f "$src_cert" ]] && [[ -f "$src_key" ]]; then
+        system_cert_dir=$(provision_certs_for_system_caddy "$caddyfile_path" "$frontend_domain")
+        echo -e "${GREEN}✓${NC} Provisioned certs for system Caddy: ${CYAN}${system_cert_dir}${NC}"
+    fi
+
+    local fragment_path
+    fragment_path=$(generate_site_fragment "$frontend_domain" "$backend_domain" "$app_port" "$system_cert_dir")
 
     local install_block=true
     if [[ -t 0 ]] && ! ask_yes_no "Install or update the BLB include import and site file?" "y"; then

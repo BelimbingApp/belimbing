@@ -18,7 +18,7 @@
 |-------|------|
 | Project vision & principles | `docs/brief.md` |
 | Architecture specs (layers, database, domain model, broadcasting) | `docs/architecture/` |
-| How-to guides (setup, theming, extensions) | `docs/guides/` |
+| How-to guides (setup, theming, extensions, trusted HTTPS) | `docs/guides/` |
 | Module documentation (Company, User, Employee, Geonames, Quality) | `docs/modules/` |
 | Tutorials (Caddy, Vite, Livewire, logging) | `docs/tutorials/` |
 | Reference (package evaluation) | `docs/reference/` |
