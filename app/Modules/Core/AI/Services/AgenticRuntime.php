@@ -60,7 +60,10 @@ class AgenticRuntime
      * @param  list<Message>  $messages  Conversation history
      * @param  int  $employeeId  Agent employee ID
      * @param  string|null  $systemPrompt  System prompt
-     * @param  string|null  $modelOverride  Optional model ID to override the resolved config
+     * @param  string|null  $modelOverride  Optional model override for the **primary** resolved slot only
+     *                                      (plain model id or composite `providerId:::modelId`).
+     *                                      Workspace fallback entries are left unchanged so backup
+     *                                      providers/models from Lara config are still attempted.
      * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
      * @param  string|null  $sessionId  Chat session ID for run ledger correlation
      * @param  array<string, mixed>|null  $configOverride  Optional fully resolved config override
@@ -112,8 +115,8 @@ class AgenticRuntime
             $fallbackAttempts = [];
             $lastErrorResult = null;
 
-            foreach ($configs as $config) {
-                if ($modelOverride !== null) {
+            foreach ($configs as $configIndex => $config) {
+                if ($modelOverride !== null && $configIndex === 0) {
                     $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
                 }
 
@@ -204,7 +207,7 @@ class AgenticRuntime
      * @param  list<Message>  $messages  Conversation history
      * @param  int  $employeeId  Agent employee ID
      * @param  string|null  $systemPrompt  System prompt
-     * @param  string|null  $modelOverride  Optional model ID override
+     * @param  string|null  $modelOverride  Optional model override for the **primary** slot only; see {@see run()}
      * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
      * @param  string|null  $sessionId  Chat session ID for run ledger correlation
      * @param  string|null  $turnId  Chat turn ULID for linking the run to a turn
@@ -257,12 +260,13 @@ class AgenticRuntime
             }
 
             $fallbackAttempts = [];
+            /** @var AiRuntimeError|null $lastError */
             $lastError = null;
             $lastConfig = null;
             $fallbackAttemptIndex = 0;
 
-            foreach ($configs as $config) {
-                if ($modelOverride !== null) {
+            foreach ($configs as $configIndex => $config) {
+                if ($modelOverride !== null && $configIndex === 0) {
                     $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
                 }
 
@@ -309,6 +313,15 @@ class AgenticRuntime
                             $fallbackAttempts[] = $this->buildFallbackAttemptFromStreamError($config, $streamError);
                             $lastConfig = $config;
                             $fallbackAttemptIndex++;
+                            $errorEventData = $event['data'] ?? [];
+                            $streamMeta = $errorEventData['meta'] ?? null;
+                            $lastError = is_array($streamMeta)
+                                ? $this->runtimeErrorFromAssistantMeta($streamMeta)
+                                : AiRuntimeError::fromType(
+                                    AiErrorType::tryFrom((string) $streamError) ?? AiErrorType::UnexpectedError,
+                                    is_string($errorEventData['message'] ?? null) ? $errorEventData['message'] : '',
+                                    latencyMs: 0,
+                                );
 
                             yield ['event' => 'status', 'data' => [
                                 'phase' => 'recovery_attempted',

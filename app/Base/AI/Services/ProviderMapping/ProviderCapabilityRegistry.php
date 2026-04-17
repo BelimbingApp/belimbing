@@ -46,6 +46,12 @@ final class ProviderCapabilityRegistry
             );
         }
 
+        if ($this->isMoonshotProvider($providerName)) {
+            return new ProviderExecutionCapabilities(
+                requiresAnyOfToolSchemas: true,
+            );
+        }
+
         return new ProviderExecutionCapabilities;
     }
 

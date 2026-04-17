@@ -139,6 +139,52 @@ describe('LlmClient tool calling request payloads', function () {
             return isset($body['temperature']) && $body['temperature'] === 0.3;
         });
     });
+
+    it('rewrites Moonshot tool schemas from oneOf to anyOf for non-K2.5 models', function () {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
+                'usage' => [],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'moonshot-v1-auto',
+            [['role' => 'user', 'content' => 'Hello']],
+            providerName: 'moonshotai',
+            executionControls: ExecutionControls::defaults(toolChoice: ToolChoiceMode::Auto),
+            tools: [[
+                'type' => 'function',
+                'function' => [
+                    'name' => 'notify_user',
+                    'description' => 'Notify a user or everyone.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'user_id' => [
+                                'oneOf' => [
+                                    ['type' => 'integer'],
+                                    ['type' => 'string', 'enum' => ['all']],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]],
+        ));
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+            $userIdSchema = $body['tools'][0]['function']['parameters']['properties']['user_id'] ?? null;
+
+            return is_array($userIdSchema)
+                && isset($userIdSchema['anyOf'])
+                && ! isset($userIdSchema['oneOf']);
+        });
+    });
 });
 
 describe('LlmClient tool calling response parsing', function () {

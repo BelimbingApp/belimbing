@@ -5,6 +5,7 @@
 
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
@@ -655,5 +656,73 @@ describe('AgenticRuntime', function () {
 
         expect($result['meta']['error_type'])->toBe('auth_error')
             ->and($result['meta']['fallback_attempts'])->toBeEmpty();
+    });
+
+    it('surfaces the last stream runtime error when every configuration hits a retryable stream failure', function () {
+        $rateLimit = AiRuntimeError::fromType(
+            AiErrorType::RateLimit,
+            'HTTP 429: Too Many Requests',
+            latencyMs: 50,
+        );
+
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chatStream')->twice()->andReturnUsing(function () use ($rateLimit) {
+            yield ['type' => 'error', 'runtime_error' => $rateLimit, 'latency_ms' => 50];
+        });
+
+        $configResolver = $this->mockResolvedConfigResolver([
+            $this->makeConfig('primary-provider', 'gpt-4-primary'),
+            $this->makeConfig('backup-provider', 'gpt-4-backup'),
+        ]);
+
+        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
+        $events = iterator_to_array($runtime->runStream(
+            [test()->makeMessage('user', 'Hello')],
+            1,
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        ));
+
+        $terminal = collect($events)->last(static fn (array $e): bool => $e['event'] === 'error');
+
+        expect($terminal)->not->toBeNull()
+            ->and($terminal['data']['meta']['error_type'] ?? null)->toBe('rate_limit')
+            ->and($terminal['data']['meta']['fallback_attempts'] ?? [])->toHaveCount(2)
+            ->and($terminal['data']['meta']['fallback_attempts'][0]['error_type'] ?? null)->toBe('rate_limit')
+            ->and($terminal['data']['meta']['fallback_attempts'][1]['error_type'] ?? null)->toBe('rate_limit');
+    });
+
+    it('applies model override only to the primary slot so fallback uses the workspace backup model', function () {
+        $primary = $this->makeConfig('github-copilot', 'gpt-primary-slot');
+        $backup = $this->makeConfig('moonshotai', 'moonshot-v1-auto', 'moon-key', 'https://api.moonshot.example/v1');
+        $configResolver = $this->mockResolvedConfigResolver([$primary, $backup]);
+
+        $llmClient = Mockery::mock(LlmClient::class);
+        $seenModels = [];
+        $llmClient->shouldReceive('chat')->times(3)->andReturnUsing(function (ChatRequest $request) use (&$seenModels): array {
+            $seenModels[] = [$request->model, $request->baseUrl];
+
+            if (count($seenModels) <= 2) {
+                return $this->makeErrorResponse(AiErrorType::RateLimit, 'HTTP 429', 50);
+            }
+
+            return $this->makeFinalResponse('From backup');
+        });
+
+        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
+        $result = $runtime->run(
+            [test()->makeMessage('user', 'Hi')],
+            1,
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            'claude-opus-4.6',
+        );
+
+        expect($result['content'])->toContain('From backup')
+            ->and($seenModels)->toHaveCount(3)
+            ->and($seenModels[0][0])->toBe('claude-opus-4.6')
+            ->and($seenModels[0][1])->toBe($primary['base_url'])
+            ->and($seenModels[1][0])->toBe('claude-opus-4.6')
+            ->and($seenModels[1][1])->toBe($primary['base_url'])
+            ->and($seenModels[2][0])->toBe('moonshot-v1-auto')
+            ->and($seenModels[2][1])->toBe($backup['base_url']);
     });
 });
