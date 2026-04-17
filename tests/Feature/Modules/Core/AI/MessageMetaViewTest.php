@@ -12,10 +12,12 @@ it('renders the run detail popup as an alpine popover instead of a native dialog
         ->toContain('x-show="popoverOpen"')
         ->toContain('@click.outside="popoverOpen = false"')
         ->toContain('role="dialog"')
+        ->toContain('run-12345678')
         ->not->toContain('<dialog')
         ->not->toContain('$el.show();')
         ->not->toContain('$el.close();')
-        ->not->toContain('open:flex');
+        ->not->toContain('open:flex')
+        ->not->toContain('View in Control Plane');
 });
 
 it('renders the run duration between the timestamp and provider label', function (): void {

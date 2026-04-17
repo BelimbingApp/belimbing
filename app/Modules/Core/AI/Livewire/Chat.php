@@ -17,6 +17,7 @@ use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\OperationsDispatchService;
 use App\Modules\Core\AI\Services\QuickActionRegistry;
 use App\Modules\Core\AI\Services\SessionManager;
+use App\Modules\Core\AI\Services\TranscriptFallbackBannerAttemptResolver;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
@@ -151,16 +152,23 @@ class Chat extends Component
             $activeTurnsBySession = $this->activeTurnsBySessionForCurrentUser();
         }
 
+        $sessionFallbackBannerAttempt = null;
+
         if ($agentActivated && $this->selectedSessionId !== null) {
             $messageManager = app(MessageManager::class);
             $messages = $messageManager->read($this->employeeId, $this->selectedSessionId);
             $sessionUsage = $messageManager->sessionUsage($this->employeeId, $this->selectedSessionId);
+
+            $sessionFallbackBannerAttempt = TranscriptFallbackBannerAttemptResolver::latestFailureAttempt($messages);
 
             if ($this->employeeId === Employee::LARA_ID && is_int(auth()->id())) {
                 $hasPendingDelegations = app(OperationsDispatchService::class)
                     ->hasPendingAgentTaskForSession(auth()->id(), $this->selectedSessionId);
             }
         }
+
+        $showSessionFallbackBanner = $sessionFallbackBannerAttempt !== null
+            && $this->shouldShowSessionFallbackBanner($sessionFallbackBannerAttempt);
 
         $markdown = app(ChatMarkdownRenderer::class);
 
@@ -195,7 +203,36 @@ class Chat extends Component
             'selectedSessionActiveTurn' => $selectedSessionActiveTurn,
             'activeTurnCount' => $activeTurnCount,
             'hasActiveTurns' => $activeTurnCount > 0,
+            'showSessionFallbackBanner' => $showSessionFallbackBanner,
+            'sessionFallbackBannerAttempt' => $sessionFallbackBannerAttempt,
         ]);
+    }
+
+    /**
+     * Whether the sticky session fallback notice should appear for the current model selection.
+     *
+     * The failed attempt is taken from the latest assistant transcript line only; when the user has
+     * switched the composer to a different provider/model than that failure, the notice is hidden.
+     *
+     * @param  array<string, mixed>  $failedAttempt
+     */
+    public function shouldShowSessionFallbackBanner(array $failedAttempt): bool
+    {
+        if ($this->selectedModel === null || $this->selectedModel === '') {
+            return true;
+        }
+
+        $resolved = $this->resolveModelConfigFromComposite($this->selectedModel);
+
+        if (isset($resolved['error'])) {
+            return true;
+        }
+
+        $failedProvider = is_string($failedAttempt['provider'] ?? null) ? $failedAttempt['provider'] : '';
+        $failedModel = is_string($failedAttempt['model'] ?? null) ? $failedAttempt['model'] : '';
+
+        return ($resolved['provider_name'] ?? '') === $failedProvider
+            && ($resolved['model'] ?? '') === $failedModel;
     }
 
     /**

@@ -592,18 +592,6 @@
                     "
                     x-effect="if (followTail) $nextTick(() => $refs.agentScroll.scrollTop = $refs.agentScroll.scrollHeight)"
                 >
-                    @php
-                        $sessionHadFallback = false;
-                        $lastFallbackAttempt = null;
-                        foreach ($messages as $msg) {
-                            $fa = $msg->getMetaArray('fallback_attempts');
-                            if (is_array($fa) && count($fa) > 0) {
-                                $sessionHadFallback = true;
-                                $lastFallbackAttempt = end($fa);
-                            }
-                        }
-                    @endphp
-
                     @forelse($messages as $index => $message)
                         @php
                             $messageProvider = $message->getMetaString('provider_name') ?? $message->getMetaString('llm.provider');
@@ -903,7 +891,7 @@
                 </div>
 
                 {{-- Fallback banner --}}
-                @if ($sessionHadFallback && $lastFallbackAttempt !== null)
+                @if ($showSessionFallbackBanner && $sessionFallbackBannerAttempt !== null)
                     <div
                         x-data="{ dismissed: false }"
                         x-show="!dismissed"
@@ -912,12 +900,12 @@
                     >
                         <x-icon name="heroicon-o-exclamation-triangle" class="w-4 h-4 shrink-0 mt-0.5" />
                         <div class="flex-1 min-w-0">
-                            <span>{{ __('Primary model (:provider/:model) failed: :error.', [
-                                'provider' => $lastFallbackAttempt['provider'] ?? '?',
-                                'model' => $lastFallbackAttempt['model'] ?? '?',
-                                'error' => $lastFallbackAttempt['error'] ?? __('unknown error'),
+                            <span>{{ __('Earlier in this conversation, :provider/:model reported: :error.', [
+                                'provider' => $sessionFallbackBannerAttempt['provider'] ?? '?',
+                                'model' => $sessionFallbackBannerAttempt['model'] ?? '?',
+                                'error' => $sessionFallbackBannerAttempt['error'] ?? __('unknown error'),
                             ]) }}</span>
-                            <span class="text-muted">{{ __('Consider switching to another model.') }}</span>
+                            <span class="text-muted">{{ __('If this keeps happening, try another model or retry in a few minutes.') }}</span>
                         </div>
                         <button type="button" @click="dismissed = true" class="shrink-0 text-amber-500 hover:text-amber-700 dark:hover:text-amber-300" aria-label="{{ __('Dismiss') }}">
                             <x-icon name="heroicon-o-x-mark" class="w-3.5 h-3.5" />

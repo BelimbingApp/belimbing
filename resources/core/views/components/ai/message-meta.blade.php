@@ -117,14 +117,15 @@
                     @click="popoverOpen = !popoverOpen"
                     @keydown.escape="popoverOpen = false"
                     tabindex="0"
-                    class="truncate outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0 hover:text-ink transition-colors"
+                    class="min-w-0 max-w-full text-left font-mono break-all outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0 hover:text-ink transition-colors"
                     :aria-expanded="popoverOpen"
+                    title="{{ $runIdLabel }}"
                     @if ($runDetailsId !== null)
                         aria-controls="{{ $runDetailsId }}"
                         aria-haspopup="dialog"
                     @endif
                 >
-                    {{ \Illuminate\Support\Str::limit($runIdLabel, 8, '…') }}
+                    {{ $runIdLabel }}
                 </button>
                 <div
                     @if ($runDetailsId !== null)
@@ -224,18 +225,6 @@
                                 @if ($errorMessage !== null)
                                     <div class="text-muted mt-0.5 line-clamp-2">{{ $errorMessage }}</div>
                                 @endif
-                            </div>
-                        @endif
-
-                        @if ($controlPlaneUrl !== null)
-                            <div class="border-t border-border-default pt-1.5 mt-1.5">
-                                <button
-                                    type="button"
-                                    @click.stop="popoverOpen = false; window.location.href = @js($controlPlaneUrl)"
-                                    class="text-[10px] text-accent hover:underline"
-                                >
-                                    {{ __('View in Control Plane') }} →
-                                </button>
                             </div>
                         @endif
                     </div>
