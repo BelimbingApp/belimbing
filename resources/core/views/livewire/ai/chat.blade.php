@@ -18,16 +18,7 @@
         activeTurnSummaries: @js($activeTurnsBySession),
         replayUrlTemplate: @js(route('ai.chat.turn.events', ['turnId' => '__TURN__'])),
         terminalTurnStatuses: ['completed', 'failed', 'cancelled'],
-        phaseLabels: {
-            waiting_for_worker: @js(__('Waiting for worker…')),
-            thinking: @js(__('Thinking…')),
-            running_tool: @js(__('Running tool…')),
-            streaming_answer: @js(__('Writing…')),
-            finalizing: @js(__('Finalizing…')),
-            failed: @js(__('Failed')),
-            cancelled: @js(__('Cancelled')),
-            booting: @js(__('Starting…')),
-        },
+        phaseLabels: @js($phaseLabels),
         _summaryPollTimer: null,
         SESSION_MIN: 160,
         SESSION_MAX: 320,
@@ -742,15 +733,20 @@
                             {{-- Thinking --}}
                             <template x-if="entry.type === 'thinking'">
                                 <div class="flex gap-2 py-1">
-                                    <div class="shrink-0 mt-0.5">
-                                        <x-icon name="heroicon-o-light-bulb" class="w-4 h-4 text-muted" />
-                                    </div>
                                     <div class="flex flex-col gap-0.5 min-w-0 max-w-full">
                                         <div class="flex items-center gap-1.5 text-xs text-muted">
                                             <template x-if="entry.active">
                                                 <span class="w-2 h-2 bg-accent rounded-full animate-pulse"></span>
                                             </template>
-                                            <span>{{ __('Thinking…') }}</span>
+                                            <span
+                                                x-text="
+                                                    entry.active
+                                                        ? (entry.thinkingContent && entry.thinkingContent.trim()
+                                                            ? @js(__('Reasoning…'))
+                                                            : (phaseLabels.awaiting_llm || @js(__('Awaiting model response…'))))
+                                                        : @js(__('Reasoning…'))
+                                                "
+                                            ></span>
                                         </div>
                                         <template x-if="entry.description">
                                             <div class="text-[11px] text-muted/70 italic" x-text="entry.description"></div>
@@ -1742,11 +1738,11 @@
             state.turnPhase = phase;
             state.turnLabel = label;
 
-            // Update the most recent thinking entry description when phase is thinking with a rich label
-            if (phase === 'thinking' && label && label !== 'Thinking…') {
+            // Update the most recent thinking entry description when we have a richer label.
+            if (phase === 'awaiting_llm' && label && label !== this.phaseLabels.awaiting_llm) {
                 for (let i = state.streamEntries.length - 1; i >= 0; i--) {
                     if (state.streamEntries[i].type === 'thinking') {
-                        state.streamEntries[i].description = label.replace(/^Thinking\s*—\s*/, '');
+                        state.streamEntries[i].description = label.replace(/^(?:Thinking|Working|Awaiting model response)\s*—\s*/u, '');
                         break;
                     }
                 }

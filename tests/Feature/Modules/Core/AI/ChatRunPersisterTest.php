@@ -16,8 +16,6 @@ use Mockery\MockInterface;
 const MAT_TEST_SESSION = 'sess_materializer_test';
 const MAT_TEST_RUN_ID = 'run_mat_test_001';
 
-const MAT_PHASE_THINKING_LABEL = 'Thinking…';
-
 const MAT_ASSISTANT_OUTPUT = 'Hello world';
 
 const MAT_TOOL_DENIED_MESSAGE = 'Tool was denied';
@@ -46,12 +44,12 @@ function populateHappyPathEvents(ChatTurn $turn, TurnEventPublisher $pub): void
     $pub->turnStarted($turn);
     $pub->runStarted($turn, MAT_TEST_RUN_ID);
     $turn->transitionTo(TurnStatus::Running);
-    $pub->phaseChanged($turn, TurnPhase::Thinking, MAT_PHASE_THINKING_LABEL);
+    $pub->phaseChanged($turn, TurnPhase::AwaitingLlm, TurnPhase::AwaitingLlm->label());
     $pub->thinkingStarted($turn);
     $pub->phaseChanged($turn, TurnPhase::RunningTool, 'bash');
     $pub->toolStarted($turn, 'bash', '{"cmd":"ls"}', 0);
     $pub->toolFinished($turn, 'bash', 'success', '10 files', 150, 32);
-    $pub->phaseChanged($turn, TurnPhase::Thinking, MAT_PHASE_THINKING_LABEL);
+    $pub->phaseChanged($turn, TurnPhase::AwaitingLlm, TurnPhase::AwaitingLlm->label());
     $pub->heartbeat($turn, 500);
     $pub->phaseChanged($turn, TurnPhase::StreamingAnswer, 'Responding…');
     $pub->outputDelta($turn, 'Hello ');
@@ -212,7 +210,7 @@ describe('ChatRunPersister materializeFromTurn', function () {
         $pub->turnStarted($turn);
         $pub->runStarted($turn, MAT_TEST_RUN_ID);
         $turn->transitionTo(TurnStatus::Running);
-        $pub->phaseChanged($turn, TurnPhase::Thinking, MAT_PHASE_THINKING_LABEL);
+        $pub->phaseChanged($turn, TurnPhase::AwaitingLlm, TurnPhase::AwaitingLlm->label());
         $pub->thinkingStarted($turn);
         $pub->turnCompleted($turn);
 

@@ -95,13 +95,6 @@
             <x-ui.datetime :value="$timestamp" format="time" />
         </button>
 
-        @if ($durationLabel !== null)
-            <span aria-hidden="true" class="shrink-0">·</span>
-            <span class="shrink-0">
-                {{ $durationLabel }}
-            </span>
-        @endif
-
         @if ($llmLabel !== null)
             <span aria-hidden="true" class="shrink-0">·</span>
             <span class="truncate">
@@ -229,6 +222,13 @@
                         @endif
                     </div>
                 </div>
+            </span>
+        @endif
+
+        @if ($durationLabel !== null)
+            <span aria-hidden="true" class="shrink-0">·</span>
+            <span class="shrink-0">
+                {{ $durationLabel }}
             </span>
         @endif
     </span>

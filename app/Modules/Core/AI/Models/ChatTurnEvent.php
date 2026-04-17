@@ -63,6 +63,15 @@ class ChatTurnEvent extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::creating(function (self $event): void {
+            if ($event->created_at === null) {
+                $event->created_at = now();
+            }
+        });
+    }
+
     // ── Relationships ────────────────────────────────────────────────
 
     /**

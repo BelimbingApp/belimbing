@@ -80,9 +80,9 @@ describe('ChatTurn model', function () {
     it('updates phase and label', function () {
         $turn = createTestTurn();
 
-        $turn->updatePhase(TurnPhase::Thinking, 'Analyzing prompt');
+        $turn->updatePhase(TurnPhase::AwaitingLlm, 'Analyzing prompt');
 
-        expect($turn->current_phase)->toBe(TurnPhase::Thinking)
+        expect($turn->current_phase)->toBe(TurnPhase::AwaitingLlm)
             ->and($turn->current_label)->toBe('Analyzing prompt');
     });
 
@@ -204,12 +204,12 @@ describe('TurnEventPublisher', function () {
         $turn->transitionTo(TurnStatus::Booting);
         $turn->transitionTo(TurnStatus::Running);
 
-        $event = $publisher->phaseChanged($turn, TurnPhase::Thinking, 'Reasoning about prompt');
+        $event = $publisher->phaseChanged($turn, TurnPhase::AwaitingLlm, 'Reasoning about prompt');
 
         expect($event->event_type)->toBe(TurnEventType::TurnPhaseChanged)
-            ->and($event->payload['phase'])->toBe('thinking')
+            ->and($event->payload['phase'])->toBe(TurnPhase::AwaitingLlm->value)
             ->and($event->payload['label'])->toBe('Reasoning about prompt')
-            ->and($turn->fresh()->current_phase)->toBe(TurnPhase::Thinking);
+            ->and($turn->fresh()->current_phase)->toBe(TurnPhase::AwaitingLlm);
     });
 
     it('publishes tool lifecycle events', function () {
@@ -303,7 +303,7 @@ describe('TurnEventPublisher', function () {
         $turn = createTestTurn();
 
         $publisher->turnStarted($turn);
-        $publisher->phaseChanged($turn, TurnPhase::Thinking);
+        $publisher->phaseChanged($turn, TurnPhase::AwaitingLlm);
         $publisher->toolStarted($turn, 'bash', 'echo hello');
         $publisher->toolFinished($turn, 'bash', 'success');
         $publisher->outputDelta($turn, 'Output');
@@ -323,7 +323,7 @@ describe('TurnEventPublisher', function () {
         $turn = createTestTurn();
 
         $publisher->turnStarted($turn);
-        $publisher->phaseChanged($turn, TurnPhase::Thinking);
+        $publisher->phaseChanged($turn, TurnPhase::AwaitingLlm);
         $publisher->outputDelta($turn, 'Some text');
         $publisher->heartbeat($turn, 2000);
 

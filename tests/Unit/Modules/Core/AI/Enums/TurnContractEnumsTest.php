@@ -98,7 +98,7 @@ describe('TurnPhase', function () {
 
     it('marks active phases as busy', function () {
         expect(TurnPhase::WaitingForWorker->isBusy())->toBeTrue()
-            ->and(TurnPhase::Thinking->isBusy())->toBeTrue()
+            ->and(TurnPhase::AwaitingLlm->isBusy())->toBeTrue()
             ->and(TurnPhase::RunningTool->isBusy())->toBeTrue()
             ->and(TurnPhase::StreamingAnswer->isBusy())->toBeTrue()
             ->and(TurnPhase::Finalizing->isBusy())->toBeTrue()
@@ -115,7 +115,7 @@ describe('TurnPhase', function () {
 
     it('maps expected backing values', function () {
         expect(TurnPhase::WaitingForWorker->value)->toBe('waiting_for_worker')
-            ->and(TurnPhase::Thinking->value)->toBe('thinking')
+            ->and(TurnPhase::AwaitingLlm->value)->toBe('awaiting_llm')
             ->and(TurnPhase::RunningTool->value)->toBe('running_tool')
             ->and(TurnPhase::StreamingAnswer->value)->toBe('streaming_answer')
             ->and(TurnPhase::Finalizing->value)->toBe('finalizing');

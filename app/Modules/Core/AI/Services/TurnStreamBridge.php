@@ -41,7 +41,7 @@ class TurnStreamBridge
      * Wrap a runtime event stream and publish turn events.
      *
      * Yields turn event payloads (same format as TurnEventStreamController JSON
-        * response and the direct stream controller).
+     * response and the direct stream controller).
      *
      * @param  ChatTurn  $turn  A freshly created turn in Queued status
      * @param  \Generator<int, array{event: string, data: array<string, mixed>}>  $runtimeStream
@@ -122,7 +122,7 @@ class TurnStreamBridge
     private function mapStatusEvent(ChatTurn $turn, array $data, int $turnStartedAt): array
     {
         return match ($data['phase'] ?? '') {
-            'thinking' => $this->onThinking($turn, $data),
+            TurnPhase::AwaitingLlm->value => $this->onAwaitingLlmPhase($turn, $data),
             'thinking_delta' => $this->onThinkingDelta($turn, $data),
             'tool_started' => $this->onToolStarted($turn, $data),
             'tool_stdout' => $this->onToolStdout($turn, $data),
@@ -135,17 +135,18 @@ class TurnStreamBridge
     }
 
     /**
+     * Maps a runtime "awaiting LLM" status to phase + optional reasoning panel seed.
+     *
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function onThinking(ChatTurn $turn, array $data): array
+    private function onAwaitingLlmPhase(ChatTurn $turn, array $data): array
     {
-        $description = $data['description'] ?? null;
-        $label = $description ? "Thinking — {$description}" : 'Thinking…';
+        $label = TurnPhase::AwaitingLlm->label();
 
         return [
-            $this->publisher->phaseChanged($turn, TurnPhase::Thinking, $label)->toSsePayload(),
-            $this->publisher->thinkingStarted($turn, $description)->toSsePayload(),
+            $this->publisher->phaseChanged($turn, TurnPhase::AwaitingLlm, $label)->toSsePayload(),
+            $this->publisher->thinkingStarted($turn)->toSsePayload(),
         ];
     }
 
@@ -202,7 +203,7 @@ class TurnStreamBridge
     {
         $elapsedMs = (int) ((hrtime(true) - $turnStartedAt) / 1_000_000);
         $toolName = (string) ($data['tool'] ?? '');
-        $postToolLabel = $toolName !== '' ? "Analyzing {$toolName} result" : 'Thinking…';
+        $postToolLabel = TurnPhase::AwaitingLlm->label();
 
         return [
             $this->publisher->toolFinished(
@@ -214,7 +215,7 @@ class TurnStreamBridge
                 isset($data['result_length']) ? (int) $data['result_length'] : null,
                 is_array($data['error_payload'] ?? null) ? $data['error_payload'] : null,
             )->toSsePayload(),
-            $this->publisher->phaseChanged($turn, TurnPhase::Thinking, $postToolLabel)->toSsePayload(),
+            $this->publisher->phaseChanged($turn, TurnPhase::AwaitingLlm, $postToolLabel)->toSsePayload(),
             $this->publisher->heartbeat($turn, $elapsedMs)->toSsePayload(),
         ];
     }

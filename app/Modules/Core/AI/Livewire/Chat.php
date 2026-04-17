@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Livewire;
 use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesStreaming;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesChatSessions;
@@ -184,6 +185,20 @@ class Chat extends Component
             : null;
         $activeTurnCount = count($activeTurnsBySession);
 
+        $phaseLabels = array_merge(
+            array_reduce(
+                TurnPhase::cases(),
+                function (array $labels, TurnPhase $phase): array {
+                    $labels[$phase->value] = __($phase->label());
+
+                    return $labels;
+                },
+                [],
+            ),
+            // Not a phase; represents TurnStatus::Booting.
+            ['booting' => __('Starting…')],
+        );
+
         return view('livewire.ai.chat', [
             'agentExists' => $agentExists,
             'agentActivated' => $agentActivated,
@@ -205,6 +220,7 @@ class Chat extends Component
             'hasActiveTurns' => $activeTurnCount > 0,
             'showSessionFallbackBanner' => $showSessionFallbackBanner,
             'sessionFallbackBannerAttempt' => $sessionFallbackBannerAttempt,
+            'phaseLabels' => $phaseLabels,
         ]);
     }
 

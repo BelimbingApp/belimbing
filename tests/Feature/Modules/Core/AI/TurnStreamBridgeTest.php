@@ -67,7 +67,7 @@ describe('TurnStreamBridge', function () {
         $bridge = app(TurnStreamBridge::class);
 
         $input = [
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'delta', 'data' => ['text' => 'Hi']],
             ['event' => 'done', 'data' => ['content' => 'Hi there', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ];
@@ -101,7 +101,7 @@ describe('TurnStreamBridge', function () {
         $bridge = app(TurnStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'done', 'data' => ['content' => 'Done', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ]);
 
@@ -118,7 +118,7 @@ describe('TurnStreamBridge', function () {
         $bridge = app(TurnStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'done', 'data' => ['content' => 'Result', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ]);
 
@@ -132,12 +132,12 @@ describe('TurnStreamBridge', function () {
             ->and($types)->toContain(TurnEventType::TurnReadyForInput);
     });
 
-    it('maps thinking status to phase change and thinking event', function () {
+    it('maps awaiting_llm status to phase change and thinking event', function () {
         $turn = createBridgeTurn();
         $bridge = app(TurnStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'done', 'data' => ['content' => 'Ok', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ]);
 
@@ -156,7 +156,7 @@ describe('TurnStreamBridge tool and streaming events', function () {
         $bridge = app(TurnStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'status', 'data' => [
                 'phase' => 'tool_started',
                 'tool' => 'bash',
@@ -199,7 +199,7 @@ describe('TurnStreamBridge tool and streaming events', function () {
         $bridge = app(TurnStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'status', 'data' => [
                 'phase' => 'tool_denied',
                 'tool' => 'dangerous_tool',
@@ -229,7 +229,7 @@ describe('TurnStreamBridge tool and streaming events', function () {
         $bridge = app(TurnStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'delta', 'data' => ['text' => 'Hello ']],
             ['event' => 'delta', 'data' => ['text' => 'world']],
             ['event' => 'done', 'data' => ['content' => 'Hello world', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
@@ -257,7 +257,7 @@ describe('TurnStreamBridge tool and streaming events', function () {
         $bridge = app(TurnStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'done', 'data' => ['content' => 'Final answer', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ]);
 
@@ -278,7 +278,7 @@ describe('TurnStreamBridge tool and streaming events', function () {
         $bridge = app(TurnStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'done', 'data' => [
                 'content' => 'Reply',
                 'run_id' => BRIDGE_TEST_RUN_ID,
@@ -303,7 +303,7 @@ describe('TurnStreamBridge tool and streaming events', function () {
         $bridge = app(TurnStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'status', 'data' => [
                 'phase' => 'tool_started', 'tool' => 'bash',
                 'args_summary' => 'pwd', 'tool_call_index' => 0,
@@ -374,7 +374,7 @@ describe('TurnStreamBridge error handling', function () {
 
         // Stream that produces events but no done/error
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
         ]);
 
         iterator_to_array($bridge->wrap($turn, $stream));
@@ -396,7 +396,7 @@ describe('TurnStreamBridge error handling', function () {
         $bridge = app(TurnStreamBridge::class);
 
         $throwingStream = (function () {
-            yield ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]];
+            yield ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]];
             throw new TurnStreamBridgeTestStreamFailure('LLM connection lost');
         })();
 
@@ -462,7 +462,7 @@ describe('TurnStreamBridge recovery events', function () {
                 'reason' => 'provider_fallback: API key invalid',
                 'run_id' => BRIDGE_TEST_RUN_ID,
             ]],
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'done', 'data' => ['content' => 'Ok', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ]);
 
@@ -498,7 +498,7 @@ describe('TurnStreamBridge recovery events', function () {
                 'reason' => 'retry',
                 'run_id' => BRIDGE_TEST_RUN_ID,
             ]],
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'done', 'data' => ['content' => 'Done', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ]);
 
@@ -514,7 +514,7 @@ describe('TurnStreamBridge recovery events', function () {
         $bridge = app(TurnStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => 'thinking', 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'status', 'data' => [
                 'phase' => 'tool_started',
                 'tool' => 'bash',

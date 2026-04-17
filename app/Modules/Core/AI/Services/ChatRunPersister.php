@@ -170,7 +170,7 @@ class ChatRunPersister
      * mean the model produced reasoning content — actual content only
      * arrives via `thinking_delta` events. Only persist when the model
      * genuinely produced reasoning text; discard empty thinking blocks
-     * so the transcript does not contain ghost "Thinking…" entries.
+     * so the transcript does not contain ghost working-phase entries.
      *
      * @param  object{runId: ?string, thinkingPending: bool, thinkingContent: string}  $state
      */

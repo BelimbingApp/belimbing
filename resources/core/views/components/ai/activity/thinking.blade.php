@@ -14,7 +14,7 @@
         @if ($active)
             <span class="w-2 h-2 bg-accent rounded-full animate-pulse"></span>
         @endif
-        <span>{{ __('Thinking…') }}</span>
+        <span>{{ $content !== '' ? __('Reasoning…') : __('Working…') }}</span>
         <span class="tabular-nums"><x-ui.datetime :value="$timestamp" format="time" /></span>
     </div>
     @if ($content !== '')

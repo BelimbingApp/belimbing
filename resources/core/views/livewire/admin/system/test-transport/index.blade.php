@@ -200,11 +200,11 @@
                     this.turnPhase = phase;
                     this.turnLabel = label;
 
-                    if (phase === 'thinking' && label && label !== @js(__('Thinking…'))) {
+                    if (phase === 'awaiting_llm' && label && label !== @js(__('Awaiting model response…'))) {
                         const thinking = this.streamEntries.find((e) => e.type === 'thinking');
 
                         if (thinking) {
-                            thinking.description = label.replace(/^Thinking\s*—\s*/, '');
+                            thinking.description = label.replace(/^(?:Thinking|Working|Awaiting model response)\s*—\s*/u, '');
                         }
                     }
 
@@ -559,15 +559,12 @@
                             {{-- Thinking --}}
                             <template x-if="entry.type === 'thinking'">
                                 <div class="flex gap-2 py-1">
-                                    <div class="shrink-0 mt-0.5">
-                                        <x-icon name="heroicon-o-light-bulb" class="w-4 h-4 text-muted" />
-                                    </div>
                                     <div class="flex flex-col gap-0.5">
                                         <div class="flex items-center gap-1.5 text-xs text-muted">
                                             <template x-if="entry.active">
                                                 <span class="w-2 h-2 bg-accent rounded-full animate-pulse"></span>
                                             </template>
-                                            <span>{{ __('Thinking…') }}</span>
+                                            <span>{{ __('Awaiting model response…') }}</span>
                                         </div>
                                         <template x-if="entry.description">
                                             <div class="text-[11px] text-muted/70 italic" x-text="entry.description"></div>

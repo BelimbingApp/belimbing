@@ -52,7 +52,7 @@ describe('SweepStaleTurnsCommand', function () {
             'session_id' => SWEEP_STALE_SESSION,
             'acting_for_user_id' => 1,
             'status' => TurnStatus::Booting,
-            'current_phase' => TurnPhase::Thinking,
+            'current_phase' => TurnPhase::AwaitingLlm,
         ]);
 
         ChatTurn::query()->where('id', $turn->id)->update([

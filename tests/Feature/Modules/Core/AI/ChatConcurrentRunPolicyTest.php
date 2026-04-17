@@ -90,7 +90,7 @@ it('rejects same-session submit when an active turn already exists', function ()
         'session_id' => $session->id,
         'acting_for_user_id' => $user->id,
         'status' => TurnStatus::Running,
-        'current_phase' => TurnPhase::Thinking,
+        'current_phase' => TurnPhase::AwaitingLlm,
         'current_label' => 'Analyzing context…',
         'created_at' => now()->subMinutes(3),
         'started_at' => now()->subMinutes(2),
@@ -106,7 +106,7 @@ it('rejects same-session submit when an active turn already exists', function ()
         ->and($result['status'])->toBe('session_busy')
         ->and($result['turnId'])->toBe($activeTurn->id)
         ->and($result['session_id'])->toBe($session->id)
-        ->and($result['phase'])->toBe(TurnPhase::Thinking->value)
+        ->and($result['phase'])->toBe(TurnPhase::AwaitingLlm->value)
         ->and($result['label'])->toBe('Analyzing context…')
         ->and($result['streamUrl'] ?? null)->toBeNull()
         ->and($component->instance()->messageInput)->toBe('Can you continue?');
@@ -132,7 +132,7 @@ it('allows a different user to start a run even when another user has an active 
         'session_id' => $session->id,
         'acting_for_user_id' => $userA->id,
         'status' => TurnStatus::Running,
-        'current_phase' => TurnPhase::Thinking,
+        'current_phase' => TurnPhase::AwaitingLlm,
         'current_label' => 'Busy elsewhere',
     ]);
 

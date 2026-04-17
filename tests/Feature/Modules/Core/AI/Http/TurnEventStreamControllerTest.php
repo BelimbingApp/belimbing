@@ -52,7 +52,7 @@ function createTurnWithReplayEvents(int $userId): ChatTurn
     $pub->turnStarted($turn);
     $pub->runStarted($turn, REPLAY_TEST_RUN);
     $turn->transitionTo(TurnStatus::Running);
-    $pub->phaseChanged($turn, TurnPhase::Thinking, 'Thinking…');
+    $pub->phaseChanged($turn, TurnPhase::AwaitingLlm, TurnPhase::AwaitingLlm->label());
     $pub->thinkingStarted($turn);
     $pub->phaseChanged($turn, TurnPhase::RunningTool, 'bash');
     $pub->toolStarted($turn, 'bash', '{"cmd":"ls"}', 0);

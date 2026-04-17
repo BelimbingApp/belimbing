@@ -17,6 +17,7 @@ use App\Base\AI\Tools\ToolResult;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
+use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorderStartInput;
 use Illuminate\Support\Str;
@@ -797,12 +798,11 @@ class AgenticRuntime
         $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
 
         while (true) {
-            // Emit thinking status at the start of every iteration
+            // Turn is blocked on the model round-trip for this loop iteration.
             yield ['event' => 'status', 'data' => [
-                'phase' => 'thinking',
+                'phase' => TurnPhase::AwaitingLlm->value,
                 'run_id' => $runId,
                 'iteration' => $iteration,
-                'description' => $iteration === 0 ? 'Analyzing request' : 'Analyzing result',
             ]];
 
             $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $toolLoopState['hookMetadata']);
@@ -1047,7 +1047,7 @@ class AgenticRuntime
 
         return ! in_array(
             (string) ($event['data']['phase'] ?? ''),
-            ['hook_action', 'thinking'],
+            ['hook_action', TurnPhase::AwaitingLlm->value],
             true,
         );
     }

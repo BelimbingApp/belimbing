@@ -74,7 +74,7 @@ class CodingAgentTransportSimulator
                 1 => [
                     'sequence' => $sequence,
                     'event_type' => TurnEventType::TurnPhaseChanged->value,
-                    'phase' => TurnPhase::Thinking->value,
+                    'phase' => TurnPhase::AwaitingLlm->value,
                     'message' => self::PHASE_LABELS[array_rand(self::PHASE_LABELS)],
                 ],
                 2 => $this->startToolPayload($sequence, $activeTool),
@@ -126,7 +126,7 @@ class CodingAgentTransportSimulator
                 'sequence' => ++$sequence,
                 'turn_number' => $turnNumber,
                 'event_type' => TurnEventType::TurnPhaseChanged->value,
-                'phase' => TurnPhase::Thinking->value,
+                'phase' => TurnPhase::AwaitingLlm->value,
                 'message' => self::PHASE_LABELS[($turnNumber - 1) % count(self::PHASE_LABELS)],
             ];
             $payloads[] = [

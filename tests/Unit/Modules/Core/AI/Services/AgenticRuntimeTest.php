@@ -13,6 +13,7 @@ use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\Enums\ExecutionMode;
+use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\RuntimeSessionContext;
@@ -572,9 +573,8 @@ describe('AgenticRuntime', function () {
         $firstEvent = $stream->current();
 
         expect($firstEvent['event'])->toBe('status')
-            ->and($firstEvent['data']['phase'])->toBe('thinking')
+            ->and($firstEvent['data']['phase'])->toBe(TurnPhase::AwaitingLlm->value)
             ->and($firstEvent['data']['iteration'])->toBe(0)
-            ->and($firstEvent['data']['description'])->toBe('Analyzing request')
             ->and($firstEvent['data']['run_id'])->toStartWith('run_');
 
         $stream->next();
