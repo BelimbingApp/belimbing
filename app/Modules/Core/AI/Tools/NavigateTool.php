@@ -34,6 +34,7 @@ class NavigateTool extends AbstractTool
     {
         return 'Navigate the user\'s browser to a BLB page. '
             .'Use this when the user asks to go to a page, or after completing a task to show results. '
+            .'When unsure of the path, call visible_nav_menu first for paths this user may open. '
             .'Provide the relative URL path (e.g., "/admin/users", "/admin/geonames/postcodes", "/dashboard").';
     }
 

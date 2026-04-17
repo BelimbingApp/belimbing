@@ -10,6 +10,7 @@ use App\Base\AI\Tools\ToolResult;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\Enums\AuthorizationReasonCode;
+use App\Base\Menu\Contracts\NavigableMenuSnapshot;
 use App\Modules\Core\AI\DTO\Orchestration\RoutingDecision;
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
@@ -27,6 +28,7 @@ use App\Modules\Core\AI\Tools\DelegateTaskTool;
 use App\Modules\Core\AI\Tools\DocumentAnalysisTool;
 use App\Modules\Core\AI\Tools\ImageAnalysisTool;
 use App\Modules\Core\AI\Tools\NavigateTool;
+use App\Modules\Core\AI\Tools\VisibleNavMenuSnapshotTool;
 use Illuminate\Foundation\Testing\TestCase;
 
 uses(TestCase::class);
@@ -338,6 +340,16 @@ describe('NavigateTool', function () {
 
         expect((string) $tool->execute(['url' => '/admin/<script>']))->toContain('Error');
         expect((string) $tool->execute(['url' => "/admin/users' OR 1=1"]))->toContain('Error');
+    });
+});
+
+describe('VisibleNavMenuSnapshotTool', function () {
+    it(TOOL_METADATA_DESCRIPTION, function () {
+        $menu = Mockery::mock(NavigableMenuSnapshot::class);
+        $tool = new VisibleNavMenuSnapshotTool($menu);
+
+        expect($tool->name())->toBe('visible_nav_menu');
+        expect($tool->requiredCapability())->toBeNull();
     });
 });
 

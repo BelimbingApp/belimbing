@@ -6,6 +6,7 @@
 namespace App\Base\Menu;
 
 use App\Base\Menu\Contracts\MenuAccessChecker;
+use App\Base\Menu\Contracts\NavigableMenuSnapshot;
 use App\Base\Menu\Services\DefaultMenuAccessChecker;
 use App\Base\Menu\Services\MenuConditionRegistry;
 use App\Base\Menu\Services\MenuDiscoveryService;
@@ -29,6 +30,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(PagePinResolver::class);
         $this->app->singleton(PinMetadataNormalizer::class);
         $this->app->singleton(VisibleNavMenuItemsFlat::class);
+        $this->app->bind(NavigableMenuSnapshot::class, VisibleNavMenuItemsFlat::class);
         $this->app->bindIf(
             MenuAccessChecker::class,
             DefaultMenuAccessChecker::class,

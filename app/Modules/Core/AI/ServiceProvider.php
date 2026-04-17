@@ -23,9 +23,9 @@ use App\Modules\Core\AI\Console\Commands\ReapOrphanRunsCommand;
 use App\Modules\Core\AI\Console\Commands\SchedulesTickCommand;
 use App\Modules\Core\AI\Console\Commands\SweepStaleTurnsCommand;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
-use App\Modules\Core\AI\Services\AgentTaskPromptFactory;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgentRuntime;
+use App\Modules\Core\AI\Services\AgentTaskPromptFactory;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\BackgroundCommandService;
 use App\Modules\Core\AI\Services\Browser\BrowserArtifactStore;
@@ -109,6 +109,7 @@ use App\Modules\Core\AI\Tools\QueryDataTool;
 use App\Modules\Core\AI\Tools\ScheduleTaskTool;
 use App\Modules\Core\AI\Tools\SystemInfoTool;
 use App\Modules\Core\AI\Tools\TicketUpdateTool;
+use App\Modules\Core\AI\Tools\VisibleNavMenuSnapshotTool;
 use App\Modules\Core\AI\Tools\WebFetchTool;
 use App\Modules\Core\AI\Tools\WebSearchTool;
 use App\Modules\Core\AI\Tools\WriteJsTool;
@@ -272,7 +273,7 @@ class ServiceProvider extends BaseServiceProvider
      *
      * The execution registry (AgentToolRegistry) receives only tools
      * that pass runtime availability checks. The metadata registry
-     * (ToolMetadataRegistry) receives ALL 24 tools so the workspace UI can
+     * (ToolMetadataRegistry) receives all built-in tools so the workspace UI can
      * display setup instructions even for unconfigured tools.
      */
     private function registerToolRegistries(): void
@@ -312,10 +313,10 @@ class ServiceProvider extends BaseServiceProvider
     }
 
     /**
-     * Instantiate all 24 Agent tools (memoized).
+     * Instantiate all always-on Agent tools (memoized).
      *
      * Returns three groups:
-     * - 'always': Tools that are always available (22 tools)
+     * - 'always': Tools that are always available (core set; see resolveToolInstances)
      * - 'conditional': Tools that depend on runtime config (may be null)
      * - 'metadataFallbacks': Metadata-only instances for conditional tools
      *   that failed availability checks — safe to call metadata methods on
@@ -345,6 +346,7 @@ class ServiceProvider extends BaseServiceProvider
             $this->buildMemoryStatusTool($app),
             $app->make(MessageTool::class),
             new NavigateTool,
+            $app->make(VisibleNavMenuSnapshotTool::class),
             new NotificationTool,
             new QueryDataTool,
             $app->make(ScheduleTaskTool::class),

@@ -21,7 +21,7 @@ trait AssertsToolBehavior
     protected function assertToolMetadata(
         Tool $tool,
         string $expectedName,
-        string $expectedCapability,
+        ?string $expectedCapability,
         array $expectedPropertyKeys = [],
         ?array $expectedRequired = null,
     ): void {

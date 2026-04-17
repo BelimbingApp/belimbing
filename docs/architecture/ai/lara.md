@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Status:** Active with forward-looking sections
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-04-17
 **Related:** `docs/architecture/ai/agent-model.md`, `docs/architecture/user-employee-company.md`, `docs/Base/AI/tool-framework.md`, `docs/architecture/ai/current-state.md`
 
 ---
@@ -401,7 +401,7 @@ Lara is a critical-path component — unlike a regular agent (where downtime onl
 
 ### 14.1 Problem
 
-Lara can navigate and chat but cannot **act**. Users expect an assistant that can execute commands, query data, navigate pages, and carry out multi-step workflows on their behalf — all gated by the user's authorization capabilities.
+Without **agentic tool execution**, Lara could only advise from text. Users expect an assistant that can execute commands, query data, navigate pages, and carry out multi-step workflows on their behalf — including work that runs as **server-side PHP** (Laravel) through tools such as `artisan` and `query_data` — all gated by the user's authorization capabilities.
 
 ### 14.2 Architecture
 
@@ -460,6 +460,7 @@ Each tool declares an optional authz capability. The `AgentToolRegistry` checks 
 | `artisan` | `ai.tool_artisan.execute` | Execute `php artisan` commands |
 | `bash` | `ai.tool_bash.execute` | Execute arbitrary bash commands |
 | `navigate` | `ai.tool_navigate.execute` | Browser page navigation |
+| `visible_nav_menu` | *(none — auth-only)* | List navigable sidebar paths for the current user |
 | (future) | `ai.tool_write_js.execute` | Write and execute client-side JS |
 
 System role `agent_power_user` grants all agent tool capabilities. The `agent_operator` role includes navigate but not artisan/bash.

@@ -324,6 +324,7 @@ Core/general tools:
 - `artisan`
 - `bash`
 - `navigate`
+- `visible_nav_menu`
 - `write_js`
 - `system_info`
 

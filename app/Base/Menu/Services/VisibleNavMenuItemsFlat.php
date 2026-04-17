@@ -6,6 +6,7 @@
 namespace App\Base\Menu\Services;
 
 use App\Base\Menu\Contracts\MenuAccessChecker;
+use App\Base\Menu\Contracts\NavigableMenuSnapshot;
 use App\Base\Menu\MenuItem;
 use App\Base\Menu\MenuRegistry;
 use Illuminate\Contracts\Foundation\Application;
@@ -15,7 +16,7 @@ use Illuminate\Support\Collection;
  * Builds the navigable menu item map for the authenticated user, including
  * registry bootstrap identical to the layout view composer.
  */
-final class VisibleNavMenuItemsFlat
+final class VisibleNavMenuItemsFlat implements NavigableMenuSnapshot
 {
     public function __construct(
         private readonly Application $app,
