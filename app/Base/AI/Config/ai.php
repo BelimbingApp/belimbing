@@ -32,8 +32,22 @@ return [
     |
     */
     'llm' => [
-        'max_tokens' => 8192,
-        'temperature' => 0.7,
+        'execution_controls' => [
+            'limits' => [
+                'max_output_tokens' => 8192,
+            ],
+            'sampling' => [
+                'temperature' => 0.7,
+            ],
+            'reasoning' => [
+                'mode' => 'auto',
+                'visibility' => 'none',
+            ],
+            'tools' => [
+                'choice' => null,
+                'preserve_reasoning_context' => false,
+            ],
+        ],
         'timeout' => 60,
         'timeout_tiers' => [
             'interactive' => 180,

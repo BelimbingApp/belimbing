@@ -6,6 +6,7 @@
 namespace App\Base\Database\Livewire\Queries;
 
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Base\AI\Services\LlmClient;
@@ -252,8 +253,10 @@ class Show extends Component
                         'content' => trim($this->editPrompt),
                     ],
                 ],
-                maxTokens: 1024,
-                temperature: 0.1,
+                executionControls: ExecutionControls::defaults(
+                    maxOutputTokens: 1024,
+                    temperature: 0.1,
+                ),
                 timeout: 30,
                 providerName: $config['provider_name'],
                 apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,

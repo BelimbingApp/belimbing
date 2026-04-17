@@ -7,8 +7,11 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Enums\ReasoningVisibility;
+use App\Base\AI\Enums\ToolChoiceMode;
 use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Tools\ToolResult;
 use App\Base\Support\Json as BlbJson;
@@ -282,50 +285,45 @@ class AgenticRuntime
                     $allowedToolNames,
                 );
 
-                $streamFailed = false;
-                $streamError = null;
-                $bufferedEvents = [];
+                $providerCommitted = false;
                 foreach ($stream as $event) {
-                    // Buffer events until we know if this config succeeds or fails
                     if ($event['event'] === 'error') {
-                        $streamFailed = true;
                         $streamError = $event['data']['meta']['error_type'] ?? null;
-                    }
-                    $bufferedEvents[] = $event;
-                }
 
-                if (! $streamFailed) {
-                    // Success — yield all buffered events and return
-                    foreach ($bufferedEvents as $event) {
+                        if (
+                            $this->shouldFallbackFromErrorType($streamError)
+                            && ! $providerCommitted
+                        ) {
+                            $fallbackAttempts[] = $this->buildFallbackAttemptFromStreamError($config, $streamError);
+                            $lastConfig = $config;
+                            $fallbackAttemptIndex++;
+
+                            yield ['event' => 'status', 'data' => [
+                                'phase' => 'recovery_attempted',
+                                'attempt' => $fallbackAttemptIndex,
+                                'reason' => 'provider_fallback: '.$this->errorTypeToUserMessage($streamError),
+                                'run_id' => $runId,
+                            ]];
+
+                            continue 2;
+                        }
+
                         yield $event;
+
+                        return;
                     }
 
-                    return;
-                }
-
-                // Stream failed — check if we should fallback to next config
-                if ($this->shouldFallbackFromErrorType($streamError)) {
-                    $fallbackAttempts[] = $this->buildFallbackAttemptFromStreamError($config, $streamError);
-                    $lastConfig = $config;
-                    $fallbackAttemptIndex++;
-
-                    // Emit recovery status but NOT the error events (we're falling back)
-                    yield ['event' => 'status', 'data' => [
-                        'phase' => 'recovery_attempted',
-                        'attempt' => $fallbackAttemptIndex,
-                        'reason' => 'provider_fallback: '.$this->errorTypeToUserMessage($streamError),
-                        'run_id' => $runId,
-                    ]];
-
-                    continue;
-                }
-
-                // Non-retryable error — yield all buffered events (including errors) and return
-                foreach ($bufferedEvents as $event) {
                     yield $event;
-                }
 
-                return;
+                    if ($this->streamEventLocksProvider($event)) {
+                        $providerCommitted = true;
+                        $lastConfig = $config;
+                    }
+
+                    if ($event['event'] === 'done') {
+                        return;
+                    }
+                }
             }
 
             $error = $lastError ?? AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED);
@@ -354,8 +352,8 @@ class AgenticRuntime
     /**
      * Apply a composite (providerId:::modelId) or plain model override.
      *
-     * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}  $config
-     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}
+     * @param  array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
+     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}
      */
     private function applyCompositeOrSimpleOverride(array $config, string $modelOverride): array
     {
@@ -384,7 +382,7 @@ class AgenticRuntime
      * The first LLM call uses retry. Once tool calls start, the provider is
      * locked and subsequent calls use retry but not provider fallback.
      *
-     * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}  $config
+     * @param  array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
      * @param  array{api_key: string, base_url: string}  $credentials
      * @param  list<Message>  $messages
      * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
@@ -490,7 +488,7 @@ class AgenticRuntime
      * Call the LLM with a single retry on transient failures.
      *
      * @param  array{api_key: string, base_url: string}  $credentials
-     * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}  $config
+     * @param  array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
      * @param  list<array<string, mixed>>  $apiMessages
      * @param  list<array<string, mixed>>  $tools
      * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $retryAttempts
@@ -540,24 +538,32 @@ class AgenticRuntime
      * Call the LLM with the current conversation and available tools.
      *
      * @param  array{api_key: string, base_url: string}  $credentials
-     * @param  array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}  $config
+     * @param  array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
      * @param  list<array<string, mixed>>  $apiMessages
      * @param  list<array<string, mixed>>  $tools
      * @return array<string, mixed>
      */
     private function chatWithTools(array $credentials, array $config, array $apiMessages, array $tools): array
     {
+        $executionControls = $tools !== []
+            ? $config['execution_controls']->withToolChoice(ToolChoiceMode::Auto)
+            : $config['execution_controls']->withToolChoice(null);
+
+        if (($config['api_type'] ?? AiApiType::OpenAiChatCompletions) === AiApiType::OpenAiResponses) {
+            $executionControls = $executionControls
+                ->withReasoningVisibility(ReasoningVisibility::Summary)
+                ->withReasoningContextPreservation(true);
+        }
+
         return $this->llmClient->chat(new ChatRequest(
             $credentials['base_url'],
             $credentials['api_key'],
             $config['model'],
             $apiMessages,
-            maxTokens: $config['max_tokens'],
-            temperature: $config['temperature'],
+            executionControls: $executionControls,
             timeout: $config['timeout'],
             providerName: $config['provider_name'],
             tools: $tools !== [] ? $tools : null,
-            toolChoice: $tools !== [] ? 'auto' : null,
             apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
         ));
     }
@@ -579,6 +585,10 @@ class AgenticRuntime
             'content' => $result['content'] ?? null,
             'tool_calls' => $result['tool_calls'],
         ];
+
+        if (is_string($result['reasoning_content'] ?? null) && $result['reasoning_content'] !== '') {
+            $message['reasoning_content'] = $result['reasoning_content'];
+        }
 
         if ($phase !== null) {
             $message['phase'] = $phase;
@@ -966,6 +976,31 @@ class AgenticRuntime
         $errorType = AiErrorType::tryFrom($errorTypeValue ?? 'unexpected_error') ?? AiErrorType::UnexpectedError;
 
         return $errorType->userMessage();
+    }
+
+    /**
+     * Determine whether a streamed event means the provider has committed.
+     *
+     * Once committed, stream-mode provider fallback is no longer valid because
+     * the turn transcript has already observed output from that provider.
+     *
+     * @param  array{event: string, data: array<string, mixed>}  $event
+     */
+    private function streamEventLocksProvider(array $event): bool
+    {
+        if ($event['event'] === 'delta' || $event['event'] === 'done') {
+            return true;
+        }
+
+        if ($event['event'] !== 'status') {
+            return false;
+        }
+
+        return ! in_array(
+            (string) ($event['data']['phase'] ?? ''),
+            ['hook_action', 'thinking'],
+            true,
+        );
     }
 
     /**

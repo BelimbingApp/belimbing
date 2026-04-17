@@ -18,6 +18,16 @@
         activeTurnSummaries: @js($activeTurnsBySession),
         replayUrlTemplate: @js(route('ai.chat.turn.events', ['turnId' => '__TURN__'])),
         terminalTurnStatuses: ['completed', 'failed', 'cancelled'],
+        phaseLabels: {
+            waiting_for_worker: @js(__('Waiting for worker…')),
+            thinking: @js(__('Thinking…')),
+            running_tool: @js(__('Running tool…')),
+            streaming_answer: @js(__('Writing…')),
+            finalizing: @js(__('Finalizing…')),
+            failed: @js(__('Failed')),
+            cancelled: @js(__('Cancelled')),
+            booting: @js(__('Starting…')),
+        },
         _summaryPollTimer: null,
         SESSION_MIN: 160,
         SESSION_MAX: 320,
@@ -43,6 +53,14 @@
 
         replayUrlFor(turnId, afterSeq = 0) {
             return this.replayUrlTemplate.replace('__TURN__', turnId) + '?after_seq=' + afterSeq;
+        },
+
+        labelForPhase(phase, fallback = null) {
+            if (phase && this.phaseLabels[phase]) {
+                return this.phaseLabels[phase];
+            }
+
+            return fallback;
         },
 
         syncSummary(sessionId, patch) {
@@ -111,7 +129,10 @@
                 session_id: sessionId,
                 status: payload.status,
                 phase: payload.current_phase || summary.phase || null,
-                label: payload.current_label || payload.current_phase || summary.label || null,
+                label: payload.current_label
+                    || this.labelForPhase(payload.current_phase, null)
+                    || summary.label
+                    || null,
                 started_at: payload.started_at || summary.started_at || null,
                 created_at: payload.created_at || summary.created_at || null,
                 timer_anchor_at: payload.started_at || payload.created_at || summary.timer_anchor_at || null,
@@ -1289,7 +1310,9 @@
             const turnId = activeTurn.turnId;
             const timerAnchor = activeTurn.started_at || activeTurn.created_at || null;
             const phase = activeTurn.phase || null;
-            const label = activeTurn.label || phase || this.waitingForWorkerLabel;
+            const label = activeTurn.label
+                || this.labelForPhase(phase, null)
+                || this.waitingForWorkerLabel;
 
             if (this.selectedTurnId !== turnId) {
                 this.resetTurnState();
@@ -1601,7 +1624,8 @@
             }
             if (json.current_phase) {
                 state.turnPhase = json.current_phase;
-                state.turnLabel = json.current_label || json.current_phase;
+                state.turnLabel = json.current_label
+                    || this.labelForPhase(json.current_phase, json.current_phase);
             }
 
             for (const event of (json.events || [])) {
@@ -1739,7 +1763,9 @@
 
         onPhaseChanged(data, turnId) {
             const phase = data.payload?.phase || data.phase;
-            const label = data.payload?.label || data.label || phase;
+            const label = data.payload?.label
+                || data.label
+                || this.labelForPhase(phase, phase);
             const state = this.ensureTurnState(turnId);
             if (!state) {
                 return;

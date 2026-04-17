@@ -10,7 +10,7 @@ use DateTimeImmutable;
 final readonly class Session
 {
     /**
-     * @param  array{strategy: string, provider_name: string, model: string, resolved_at: string, last_changed_at: string}|null  $llm
+     * @param  array<string, mixed>|null  $llm
      */
     public function __construct(
         public string $id,

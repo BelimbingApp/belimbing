@@ -9,6 +9,7 @@ use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Services\ProviderMapping\ProviderRequestMapperRegistry;
 use App\Base\Support\Json as BlbJson;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
@@ -35,6 +36,10 @@ class LlmClient
         'Editor-Plugin-Version' => 'copilot-chat/0.35.0',
         'Copilot-Integration-Id' => 'vscode-chat',
     ];
+
+    public function __construct(
+        private readonly ?ProviderRequestMapperRegistry $requestMappers = null,
+    ) {}
 
     // =========================================================================
     // Public API — route on apiType
@@ -80,15 +85,14 @@ class LlmClient
 
         try {
             $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS);
+            $payload = $this->requestMapperRegistry()
+                ->forApiType($request->apiType)
+                ->mapPayload($request, stream: false);
 
-            $response = $http->post(rtrim($request->baseUrl, '/').'/chat/completions', array_filter([
-                'model' => $request->model,
-                'messages' => $request->messages,
-                'max_tokens' => $request->maxTokens,
-                'temperature' => $request->temperature,
-                'tools' => $this->normalizeToolsForProvider($request->tools, $request->providerName),
-                'tool_choice' => $request->toolChoice,
-            ], fn ($v) => $v !== null));
+            $response = $http->post(
+                rtrim($request->baseUrl, '/').'/chat/completions',
+                $payload
+            );
         } catch (ConnectionException $e) {
             return LlmClientSupport::connectionError($e, $startTime);
         }
@@ -105,16 +109,14 @@ class LlmClient
 
         try {
             $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, stream: true);
+            $payload = $this->requestMapperRegistry()
+                ->forApiType($request->apiType)
+                ->mapPayload($request, stream: true);
 
-            $response = $http->post(rtrim($request->baseUrl, '/').'/chat/completions', array_filter([
-                'model' => $request->model,
-                'messages' => $request->messages,
-                'max_tokens' => $request->maxTokens,
-                'temperature' => $request->temperature,
-                'stream' => true,
-                'tools' => $this->normalizeToolsForProvider($request->tools, $request->providerName),
-                'tool_choice' => $request->toolChoice,
-            ], fn ($v) => $v !== null));
+            $response = $http->post(
+                rtrim($request->baseUrl, '/').'/chat/completions',
+                $payload
+            );
         } catch (ConnectionException $e) {
             yield from LlmClientSupport::connectionErrorStream($e, $startTime);
 
@@ -156,6 +158,7 @@ class LlmClient
 
         $content = $choice['content'] ?? '';
         $toolCalls = $choice['tool_calls'] ?? null;
+        $reasoningContent = $choice['reasoning_content'] ?? null;
         $hasToolCalls = is_array($toolCalls) && count($toolCalls) > 0;
         $usage = $data['usage'] ?? [];
 
@@ -182,6 +185,10 @@ class LlmClient
 
         if ($hasToolCalls) {
             $result['tool_calls'] = $toolCalls;
+        }
+
+        if (is_string($reasoningContent) && $reasoningContent !== '') {
+            $result['reasoning_content'] = $reasoningContent;
         }
 
         return $result;
@@ -265,6 +272,11 @@ class LlmClient
             yield ['type' => 'content_delta', 'text' => $contentDelta];
         }
 
+        $reasoningDelta = $delta['reasoning_content'] ?? null;
+        if (is_string($reasoningDelta) && $reasoningDelta !== '') {
+            yield ['type' => 'thinking_delta', 'text' => $reasoningDelta, 'source' => 'reasoning_content'];
+        }
+
         $toolCallDeltas = $delta['tool_calls'] ?? null;
         if (is_array($toolCallDeltas)) {
             foreach ($toolCallDeltas as $tcDelta) {
@@ -306,7 +318,9 @@ class LlmClient
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/responses',
-                $this->buildResponsesPayload($request, stream: false),
+                $this->requestMapperRegistry()
+                    ->forApiType($request->apiType)
+                    ->mapPayload($request, stream: false),
             );
         } catch (ConnectionException $e) {
             return LlmClientSupport::connectionError($e, $startTime);
@@ -327,7 +341,9 @@ class LlmClient
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/responses',
-                $this->buildResponsesPayload($request, stream: true),
+                $this->requestMapperRegistry()
+                    ->forApiType($request->apiType)
+                    ->mapPayload($request, stream: true),
             );
         } catch (ConnectionException $e) {
             yield from LlmClientSupport::connectionErrorStream($e, $startTime);
@@ -345,192 +361,9 @@ class LlmClient
         yield from $this->streamResponsesSse($response, $startTime);
     }
 
-    /**
-     * Build the Responses API request payload.
-     *
-     * System messages are extracted into the top-level `instructions` field
-     * rather than converted to developer-role input items.
-     */
-    private function buildResponsesPayload(ChatRequest $request, bool $stream): array
+    private function requestMapperRegistry(): ProviderRequestMapperRegistry
     {
-        [$instructions, $input] = $this->convertToResponsesInputWithInstructions($request->messages);
-
-        $payload = array_filter([
-            'model' => $request->model,
-            'instructions' => $instructions,
-            'input' => $input,
-            'max_output_tokens' => $request->maxTokens,
-            'stream' => $stream,
-            'store' => false,
-            'tools' => $request->tools !== null ? $this->convertToResponsesTools($request->tools) : null,
-            'tool_choice' => $request->toolChoice,
-        ], fn ($v) => $v !== null);
-
-        if ($request->reasoningSummary !== null) {
-            $payload['reasoning'] = ['summary' => $request->reasoningSummary];
-        }
-
-        return $payload;
-    }
-
-    /**
-     * Convert Chat Completions messages to Responses API input, extracting system prompts.
-     *
-     * System/developer messages are extracted as the top-level `instructions` field
-     * (concatenated if multiple). Remaining messages become input items.
-     *
-     * @param  list<array<string, mixed>>  $messages
-     * @return array{0: ?string, 1: list<array<string, mixed>>}
-     */
-    private function convertToResponsesInputWithInstructions(array $messages): array
-    {
-        $instructions = [];
-        $input = [];
-
-        foreach ($messages as $msg) {
-            $role = $msg['role'] ?? '';
-
-            if ($role === 'system') {
-                $instructions[] = $msg['content'] ?? '';
-
-                continue;
-            }
-
-            switch ($role) {
-                case 'user':
-                    $content = $msg['content'] ?? '';
-                    $input[] = [
-                        'role' => 'user',
-                        'content' => is_string($content)
-                            ? [['type' => 'input_text', 'text' => $content]]
-                            : $this->convertContentPartsToResponses($content),
-                    ];
-                    break;
-
-                case 'assistant':
-                    $this->appendAssistantMessageToResponsesInput($msg, $input);
-                    break;
-
-                case 'tool':
-                    $input[] = [
-                        'type' => 'function_call_output',
-                        'call_id' => $msg['tool_call_id'] ?? '',
-                        'output' => $msg['content'] ?? '',
-                    ];
-                    break;
-
-                default:
-                    // Unknown roles are ignored — not part of the Responses input contract.
-                    break;
-            }
-        }
-
-        $instructionText = implode("\n\n", array_filter($instructions));
-
-        return [$instructionText !== '' ? $instructionText : null, $input];
-    }
-
-    /**
-     * @param  array<string, mixed>  $msg
-     * @param  list<array<string, mixed>>  $input
-     */
-    private function appendAssistantMessageToResponsesInput(array $msg, array &$input): void
-    {
-        $content = $msg['content'] ?? '';
-        if ($content !== '' && $content !== null) {
-            $assistantItem = [
-                'type' => 'message',
-                'role' => 'assistant',
-                'content' => [['type' => 'output_text', 'text' => $content]],
-                'status' => 'completed',
-            ];
-
-            if (isset($msg['phase'])) {
-                $assistantItem['phase'] = $msg['phase'];
-            }
-
-            $input[] = $assistantItem;
-        }
-
-        $toolCalls = $msg['tool_calls'] ?? [];
-        foreach ($toolCalls as $tc) {
-            $input[] = [
-                'type' => 'function_call',
-                'call_id' => $tc['id'] ?? '',
-                'name' => $tc['function']['name'] ?? '',
-                'arguments' => $tc['function']['arguments'] ?? '{}',
-            ];
-        }
-    }
-
-    /**
-     * Convert Chat Completions multimodal content parts to Responses API format.
-     *
-     * Chat Completions: {type: "text", text: "..."}, {type: "image_url", image_url: {url: "..."}}
-     * Responses API:    {type: "input_text", text: "..."}, {type: "input_image", image_url: "..."}
-     *
-     * @param  list<array<string, mixed>>  $parts
-     * @return list<array<string, mixed>>
-     */
-    private function convertContentPartsToResponses(array $parts): array
-    {
-        $converted = [];
-
-        foreach ($parts as $part) {
-            $type = $part['type'] ?? '';
-
-            $converted[] = match ($type) {
-                'text' => ['type' => 'input_text', 'text' => $part['text'] ?? ''],
-                'image_url' => [
-                    'type' => 'input_image',
-                    'image_url' => $part['image_url']['url'] ?? $part['image_url'] ?? '',
-                ],
-                default => $part,
-            };
-        }
-
-        return $converted;
-    }
-
-    /**
-     * Convert Chat Completions tools to Responses API tools.
-     *
-     * Chat Completions: {type: "function", function: {name, description, parameters}}
-     * Responses API:    {type: "function", name, description, parameters}
-     *
-     * @param  list<array<string, mixed>>  $tools
-     * @return list<array<string, mixed>>
-     */
-    private function convertToResponsesTools(array $tools): array
-    {
-        return array_map(function (array $tool): array {
-            $fn = $tool['function'] ?? [];
-
-            return array_filter([
-                'type' => 'function',
-                'name' => $fn['name'] ?? $tool['name'] ?? '',
-                'description' => $fn['description'] ?? $tool['description'] ?? null,
-                'parameters' => $fn['parameters'] ?? $tool['parameters'] ?? null,
-            ], fn ($v) => $v !== null);
-        }, $tools);
-    }
-
-    /**
-     * Normalize tool schemas for provider-specific requirements.
-     *
-     * Delegates to ToolSchemaNormalizer which routes to the appropriate
-     * provider-specific normalizer (MoonshotNormalizer, DefaultNormalizer, etc.)
-     *
-     * @param  list<array<string, mixed>>|null  $tools
-     * @return list<array<string, mixed>>|null
-     */
-    private function normalizeToolsForProvider(?array $tools, ?string $providerName): ?array
-    {
-        if ($tools === null) {
-            return null;
-        }
-
-        return ToolSchemaNormalizer::forProvider($providerName)->normalizeTools($tools);
+        return $this->requestMappers ?? app(ProviderRequestMapperRegistry::class);
     }
 
     /**

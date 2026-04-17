@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
@@ -76,8 +77,10 @@ final readonly class ProviderTestService
                 apiKey: $credentials['api_key'],
                 model: $model,
                 messages: [['role' => 'user', 'content' => self::TEST_PROMPT]],
-                maxTokens: self::TEST_MAX_TOKENS,
-                temperature: null,
+                executionControls: ExecutionControls::defaults(
+                    maxOutputTokens: self::TEST_MAX_TOKENS,
+                    temperature: null,
+                ),
                 timeout: (int) $config['timeout'],
                 providerName: $providerName,
                 apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,

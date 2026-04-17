@@ -177,9 +177,9 @@ class SessionManager
      *
      * @param  int  $employeeId  Agent employee ID
      * @param  string  $sessionId  Session ID
-     * @param  string  $modelId  Model ID to override with
+     * @param  string|null  $modelId  Model ID to override with, or null to clear it
      */
-    public function updateModelOverride(int $employeeId, string $sessionId, string $modelId): void
+    public function updateModelOverride(int $employeeId, string $sessionId, ?string $modelId): void
     {
         $session = $this->get($employeeId, $sessionId);
 
@@ -188,7 +188,12 @@ class SessionManager
         }
 
         $llm = $session->llm ?? [];
-        $llm['model_override'] = $modelId;
+
+        if ($modelId === null || $modelId === '') {
+            unset($llm['model_override']);
+        } else {
+            $llm['model_override'] = $modelId;
+        }
 
         $updated = new Session(
             id: $session->id,

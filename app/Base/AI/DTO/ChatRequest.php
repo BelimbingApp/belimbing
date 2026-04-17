@@ -10,20 +10,21 @@ use InvalidArgumentException;
 
 class ChatRequest
 {
+    public readonly ExecutionControls $executionControls;
+
     public function __construct(
         public readonly string $baseUrl,
         public readonly string $apiKey,
         public readonly string $model,
         public readonly array $messages,
-        public readonly int $maxTokens = 2048,
-        public readonly ?float $temperature = 0.7,
+        ?ExecutionControls $executionControls = null,
         public readonly int $timeout = 60,
         public readonly ?string $providerName = null,
         public readonly ?array $tools = null,
-        public readonly ?string $toolChoice = null,
         public readonly AiApiType $apiType = AiApiType::OpenAiChatCompletions,
-        public readonly ?string $reasoningSummary = null,
     ) {
+        $this->executionControls = $executionControls ?? ExecutionControls::defaults();
+
         if ($this->baseUrl === '') {
             throw new InvalidArgumentException('baseUrl is required');
         }

@@ -27,7 +27,7 @@ use App\Modules\Core\Employee\Models\Employee;
  */
 trait HandlesStreaming
 {
-    private const STALE_QUEUED_STOP_MINUTES = 10;
+    private const BOOTING_FORCE_STOP_SECONDS = 30;
 
     private const STALE_RUNNING_STOP_MINUTES = 30;
 
@@ -102,7 +102,7 @@ trait HandlesStreaming
             'status' => TurnStatus::Queued,
             'current_phase' => TurnPhase::WaitingForWorker,
             'runtime_meta' => [
-                'model_override' => $this->selectedModel,
+                'model_override' => $this->normalizeModelOverride($this->selectedModel),
                 'page_context' => $this->resolvePageContextForDispatch(),
                 'execution_mode' => 'interactive',
             ],
@@ -376,19 +376,26 @@ trait HandlesStreaming
             return;
         }
 
+        $wasAlreadyCancelledOrDisconnected = $turn->isCancelRequested();
         $turn->requestCancel('User pressed stop');
 
-        if ($this->shouldForceStopImmediately($turn)) {
+        if ($this->shouldForceStopImmediately($turn->refresh(), $wasAlreadyCancelledOrDisconnected)) {
             $this->forceStopTurn($turn->refresh());
         }
 
         $this->isLoading = false;
     }
 
-    private function shouldForceStopImmediately(ChatTurn $turn): bool
+    private function shouldForceStopImmediately(ChatTurn $turn, bool $alreadyOrphaned = false): bool
     {
+        if ($alreadyOrphaned) {
+            return true;
+        }
+
         return match ($turn->status) {
-            TurnStatus::Queued, TurnStatus::Booting => $turn->created_at?->lte(now()->subMinutes(self::STALE_QUEUED_STOP_MINUTES)) ?? false,
+            TurnStatus::Queued => true,
+            TurnStatus::Booting => $turn->current_phase === TurnPhase::WaitingForWorker
+                && ($turn->created_at?->lte(now()->subSeconds(self::BOOTING_FORCE_STOP_SECONDS)) ?? false),
             TurnStatus::Running => $turn->started_at?->lte(now()->subMinutes(self::STALE_RUNNING_STOP_MINUTES))
                 ?? $turn->created_at?->lte(now()->subMinutes(self::STALE_RUNNING_STOP_MINUTES))
                 ?? false,

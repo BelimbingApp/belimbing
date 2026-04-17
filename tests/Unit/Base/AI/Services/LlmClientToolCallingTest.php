@@ -5,8 +5,10 @@
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Enums\ToolChoiceMode;
 use App\Base\AI\Services\LlmClient;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Facades\Http;
@@ -49,8 +51,8 @@ describe('LlmClient tool calling request payloads', function () {
             'test-key',
             'gpt-4',
             [['role' => 'user', 'content' => 'Hi']],
+            executionControls: ExecutionControls::defaults(toolChoice: ToolChoiceMode::Auto),
             tools: $tools,
-            toolChoice: 'auto',
         ));
 
         expect($result)->toHaveKey('content', LLM_TOOL_CALLING_GREETING);
@@ -85,6 +87,56 @@ describe('LlmClient tool calling request payloads', function () {
             $body = $request->data();
 
             return ! isset($body['tools']) && ! isset($body['tool_choice']);
+        });
+    });
+
+    it('forces Moonshot chat completions temperature to one', function () {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
+                'usage' => [],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'moonshotai/kimi-k2.5',
+            [['role' => 'user', 'content' => 'Hello']],
+            executionControls: ExecutionControls::defaults(temperature: 0.3),
+            providerName: 'moonshotai',
+        ));
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return isset($body['temperature']) && $body['temperature'] === 1.0;
+        });
+    });
+
+    it('does not rewrite Moonshot temperature for non-K2.5 models', function () {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
+                'usage' => [],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'moonshotai/kimi-latest',
+            [['role' => 'user', 'content' => 'Hello']],
+            executionControls: ExecutionControls::defaults(temperature: 0.3),
+            providerName: 'moonshotai',
+        ));
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return isset($body['temperature']) && $body['temperature'] === 0.3;
         });
     });
 });
@@ -171,6 +223,46 @@ describe('LlmClient tool calling response parsing', function () {
             ->and($result['runtime_error']->errorType)->toBe(AiErrorType::HtmlResponse)
             ->and($result['runtime_error']->hint)->toContain('base URL points to the API endpoint');
     });
+
+    it('preserves reasoning_content from chat completions responses', function () {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [
+                    [
+                        'message' => [
+                            'role' => 'assistant',
+                            'content' => null,
+                            'reasoning_content' => 'Need tool output before answering.',
+                            'tool_calls' => [
+                                [
+                                    'id' => 'call_reasoning_1',
+                                    'type' => 'function',
+                                    'function' => [
+                                        'name' => 'artisan',
+                                        'arguments' => '{"command":"route:list"}',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'usage' => ['prompt_tokens' => 12, 'completion_tokens' => 9],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $result = $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'moonshotai/kimi-k2.5',
+            [['role' => 'user', 'content' => 'List routes']],
+            providerName: 'moonshotai',
+            tools: [['type' => 'function', 'function' => ['name' => 'artisan', 'description' => 'Run artisan', 'parameters' => ['type' => 'object', 'properties' => []]]]],
+        ));
+
+        expect($result['reasoning_content'] ?? null)->toBe('Need tool output before answering.')
+            ->and($result['tool_calls'][0]['id'] ?? null)->toBe('call_reasoning_1');
+    });
 });
 
 describe('LlmClient tool calling responses api handling', function () {
@@ -195,7 +287,7 @@ describe('LlmClient tool calling responses api handling', function () {
             'test-key',
             'gpt-5.4',
             [['role' => 'user', 'content' => 'Hello']],
-            temperature: 0.7,
+            executionControls: ExecutionControls::defaults(temperature: 0.7),
             apiType: AiApiType::OpenAiResponses,
         ));
 

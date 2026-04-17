@@ -4,6 +4,7 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\Services\AgenticFinalResponseStreamer;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
@@ -45,8 +46,7 @@ it('prepends client actions when the final stream ends without content deltas', 
         [
             'api_type' => null,
             'model' => 'gpt-4.1',
-            'max_tokens' => 512,
-            'temperature' => 0.3,
+            'execution_controls' => ExecutionControls::defaults(maxOutputTokens: 512, temperature: 0.3),
             'timeout' => 60,
             'provider_name' => 'test-provider',
         ],

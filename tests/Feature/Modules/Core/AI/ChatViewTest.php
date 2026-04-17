@@ -2,9 +2,12 @@
 
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
+use App\Modules\Core\AI\Enums\TurnPhase;
+use App\Modules\Core\AI\Enums\TurnStatus;
 use App\Modules\Core\AI\Livewire\Chat;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Company\Models\Company;
@@ -73,6 +76,8 @@ it('renders the streaming console as a named alpine controller', function (): vo
     expect($html)
         ->toContain('x-data="agentChatStream({')
         ->toContain('Alpine.data(&#039;agentChatStream&#039;')
+        ->toContain('phaseLabels:')
+        ->toContain('labelForPhase(phase, fallback = null)')
         ->toContain('const text = payload.delta || payload.text ||')
         ->toContain('onServerTurnReady($event.detail || {})')
         ->toContain('this.$wire.finalizeStreamingRun(finalizedTurnId, finalizedSessionId)')
@@ -113,4 +118,50 @@ it('polls the chat view while the selected Lara session has pending delegated wo
         ->html();
 
     expect($html)->toContain('wire:poll.2s');
+});
+
+it('hydrates the selected model from the initially selected session override', function (): void {
+    $user = createChatViewFixture();
+    test()->actingAs($user);
+
+    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+    $provider = AiProvider::query()->where('name', CHAT_VIEW_TEST_PROVIDER)->firstOrFail();
+    $compositeModelId = $provider->id.':::'.CHAT_VIEW_TEST_MODEL;
+
+    app(SessionManager::class)->updateModelOverride(Employee::LARA_ID, $session->id, $compositeModelId);
+
+    Livewire::test(Chat::class)
+        ->assertSet('selectedSessionId', $session->id)
+        ->assertSet('selectedModel', $compositeModelId);
+});
+
+it('re-hydrates session override and active turn state when selectedSessionId is restored from the client', function (): void {
+    $user = createChatViewFixture();
+    test()->actingAs($user);
+
+    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+    $provider = AiProvider::query()->where('name', CHAT_VIEW_TEST_PROVIDER)->firstOrFail();
+    $compositeModelId = $provider->id.':::'.CHAT_VIEW_TEST_MODEL;
+
+    app(SessionManager::class)->updateModelOverride(Employee::LARA_ID, $session->id, $compositeModelId);
+
+    $turn = ChatTurn::query()->create([
+        'employee_id' => Employee::LARA_ID,
+        'session_id' => $session->id,
+        'acting_for_user_id' => $user->id,
+        'status' => TurnStatus::Queued,
+        'current_phase' => TurnPhase::WaitingForWorker,
+        'current_label' => TurnPhase::WaitingForWorker->label(),
+    ]);
+
+    Livewire::test(Chat::class)
+        ->set('selectedSessionId', $session->id)
+        ->assertSet('selectedModel', $compositeModelId)
+        ->assertDispatched(
+            'agent-chat-session-selected',
+            sessionId: $session->id,
+            activeTurnId: $turn->id,
+            activeTurnPhase: TurnPhase::WaitingForWorker->value,
+            activeTurnLabel: TurnPhase::WaitingForWorker->label(),
+        );
 });

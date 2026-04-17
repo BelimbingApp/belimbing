@@ -6,6 +6,7 @@
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -36,27 +37,25 @@ trait ManagesChatSessions
     }
 
     /**
+     * Hydrate session-scoped UI state when the selected session changes from the client.
+     *
+     * This covers localStorage restoration and direct client-side property updates,
+     * which bypass the explicit selectSession() action.
+     */
+    public function updatedSelectedSessionId(): void
+    {
+        $this->lastRunMeta = null;
+        $this->syncSelectedSessionState($this->selectedSessionId, dispatchSelectionEvent: true);
+    }
+
+    /**
      * Switch to an existing session.
      */
     public function selectSession(string $sessionId): void
     {
         $this->selectedSessionId = $sessionId;
         $this->lastRunMeta = null;
-
-        $session = app(SessionManager::class)->get($this->employeeId, $sessionId);
-        $this->selectedModel = $session?->llm['model_override'] ?? null;
-
-        $activeTurn = $this->findActiveTurnForSession($sessionId);
-        $this->dispatch(
-            'agent-chat-session-selected',
-            sessionId: $sessionId,
-            activeTurnId: $activeTurn?->id,
-            activeTurnPhase: $activeTurn?->current_phase?->value,
-            activeTurnLabel: $activeTurn?->current_label ?? $activeTurn?->current_phase?->label(),
-            activeTurnStartedAt: $activeTurn?->started_at?->toIso8601String(),
-            activeTurnCreatedAt: $activeTurn?->created_at?->toIso8601String(),
-        );
-
+        $this->syncSelectedSessionState($sessionId, dispatchSelectionEvent: true);
         $this->dispatch('agent-chat-focus-composer');
     }
 
@@ -68,7 +67,9 @@ trait ManagesChatSessions
      */
     public function updatedSelectedModel(): void
     {
-        if ($this->selectedSessionId !== null && $this->selectedModel !== null) {
+        $this->selectedModel = $this->normalizeModelOverride($this->selectedModel);
+
+        if ($this->selectedSessionId !== null) {
             app(SessionManager::class)->updateModelOverride(
                 $this->employeeId,
                 $this->selectedSessionId,
@@ -91,6 +92,7 @@ trait ManagesChatSessions
         if ($this->selectedSessionId === $sessionId) {
             $sessions = app(SessionManager::class)->list($this->employeeId);
             $this->selectedSessionId = empty($sessions) ? null : $sessions[0]->id;
+            $this->syncSelectedSessionState($this->selectedSessionId, dispatchSelectionEvent: true);
         }
 
         $this->lastRunMeta = null;
@@ -228,8 +230,10 @@ trait ManagesChatSessions
             $credentials['api_key'],
             $config['model'],
             $apiMessages,
-            maxTokens: 20,
-            temperature: 0.5,
+            executionControls: ExecutionControls::defaults(
+                maxOutputTokens: 20,
+                temperature: 0.5,
+            ),
             timeout: 15,
             providerName: $config['provider_name'] ?? null,
             apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
@@ -242,5 +246,39 @@ trait ManagesChatSessions
         $title = trim($response['content'] ?? '');
 
         return $title === '' ? null : trim($title, '"\'');
+    }
+
+    private function syncSelectedSessionState(?string $sessionId, bool $dispatchSelectionEvent = false): void
+    {
+        if (! is_string($sessionId) || $sessionId === '') {
+            $this->selectedModel = null;
+
+            return;
+        }
+
+        $session = app(SessionManager::class)->get($this->employeeId, $sessionId);
+        $this->selectedModel = $this->normalizeModelOverride($session?->llm['model_override'] ?? null);
+
+        if (! $dispatchSelectionEvent) {
+            return;
+        }
+
+        $activeTurn = $this->findActiveTurnForSession($sessionId);
+        $this->dispatch(
+            'agent-chat-session-selected',
+            sessionId: $sessionId,
+            activeTurnId: $activeTurn?->id,
+            activeTurnPhase: $activeTurn?->current_phase?->value,
+            activeTurnLabel: $activeTurn?->current_label ?? $activeTurn?->current_phase?->label(),
+            activeTurnStartedAt: $activeTurn?->started_at?->toIso8601String(),
+            activeTurnCreatedAt: $activeTurn?->created_at?->toIso8601String(),
+        );
+    }
+
+    private function normalizeModelOverride(mixed $modelOverride): ?string
+    {
+        return is_string($modelOverride) && $modelOverride !== ''
+            ? $modelOverride
+            : null;
     }
 }

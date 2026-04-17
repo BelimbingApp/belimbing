@@ -7,8 +7,11 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Enums\ReasoningVisibility;
+use App\Base\AI\Enums\ToolChoiceMode;
 use App\Base\AI\Services\LlmClient;
 
 /**
@@ -29,7 +32,7 @@ final class AgenticToolLoopStreamReader
      * Consumes chatStream(), yields thinking_delta events to the outer generator,
      * accumulates tool_call_delta and content_delta events internally.
      *
-     * @param  array<string, mixed>  $config
+     * @param  array{model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
      * @param  array<string, mixed>  $credentials
      * @param  array<string, mixed>  $toolLoopState
      * @return \Generator<int, array{event: string, data: array<string, mixed>}, mixed, array<string, mixed>>
@@ -41,23 +44,31 @@ final class AgenticToolLoopStreamReader
         array &$toolLoopState,
         AiApiType $apiType,
     ): \Generator {
+        $executionControls = $toolLoopState['tools'] !== []
+            ? $config['execution_controls']->withToolChoice(ToolChoiceMode::Auto)
+            : $config['execution_controls']->withToolChoice(null);
+
+        if ($apiType === AiApiType::OpenAiResponses) {
+            $executionControls = $executionControls
+                ->withReasoningVisibility(ReasoningVisibility::Summary)
+                ->withReasoningContextPreservation(true);
+        }
+
         $stream = $this->llmClient->chatStream(new ChatRequest(
             baseUrl: $credentials['base_url'],
             apiKey: $credentials['api_key'],
             model: $config['model'],
             messages: $toolLoopState['apiMessages'],
-            maxTokens: $config['max_tokens'],
-            temperature: $config['temperature'],
+            executionControls: $executionControls,
             timeout: $config['timeout'],
             providerName: $config['provider_name'],
             tools: $toolLoopState['tools'] !== [] ? $toolLoopState['tools'] : null,
-            toolChoice: $toolLoopState['tools'] !== [] ? 'auto' : null,
             apiType: $apiType,
-            reasoningSummary: $apiType === AiApiType::OpenAiResponses ? 'auto' : null,
         ));
 
         $content = '';
         $commentary = '';
+        $reasoningContent = '';
         $toolCalls = [];
         $toolCallArgs = [];
         $usage = null;
@@ -74,6 +85,10 @@ final class AgenticToolLoopStreamReader
 
                     if (($event['source'] ?? '') === 'commentary') {
                         $commentary .= $event['text'];
+                    }
+
+                    if (($event['source'] ?? '') === 'reasoning_content') {
+                        $reasoningContent .= $event['text'];
                     }
 
                     break;
@@ -115,6 +130,7 @@ final class AgenticToolLoopStreamReader
             'content' => $commentary !== '' ? $commentary : $content,
             'tool_calls' => array_values($toolCalls),
             'commentary' => $commentary,
+            'reasoning_content' => $reasoningContent,
             'final_content' => $content,
             'usage' => $usage,
             'latency_ms' => $latencyMs,

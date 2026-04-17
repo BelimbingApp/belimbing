@@ -5,8 +5,9 @@
 
 namespace App\Modules\Core\AI\Services;
 
-use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
@@ -72,8 +73,10 @@ class TaskModelRecommendationService
             $credentials['api_key'],
             $config['model'],
             $messages,
-            maxTokens: 120,
-            temperature: 0.2,
+            executionControls: ExecutionControls::defaults(
+                maxOutputTokens: 120,
+                temperature: 0.2,
+            ),
             timeout: 30,
             providerName: $config['provider_name'] ?? null,
             apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,

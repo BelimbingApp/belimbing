@@ -4,6 +4,7 @@ namespace Tests\Support;
 
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -14,7 +15,6 @@ use App\Modules\Core\AI\Services\AgenticToolLoopStreamReader;
 use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
-use App\Modules\Core\AI\Services\RuntimeSessionContext;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRegistry;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRunner;
@@ -22,6 +22,7 @@ use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
 use App\Modules\Core\AI\Services\RuntimeHookCoordinator;
 use App\Modules\Core\AI\Services\RuntimeMessageBuilder;
 use App\Modules\Core\AI\Services\RuntimeResponseFactory;
+use App\Modules\Core\AI\Services\RuntimeSessionContext;
 use DateTimeImmutable;
 use Psr\Log\NullLogger;
 
@@ -37,8 +38,10 @@ trait MakesRuntimeResponses
             'api_key' => $apiKey,
             'base_url' => $baseUrl,
             'model' => $model,
-            'max_tokens' => 2048,
-            'temperature' => 0.7,
+            'execution_controls' => ExecutionControls::defaults(
+                maxOutputTokens: 2048,
+                temperature: 0.7,
+            ),
             'timeout' => 60,
             'provider_name' => $provider,
         ];

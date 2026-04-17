@@ -1,5 +1,7 @@
 <?php
 
+use App\Base\AI\DTO\ExecutionControls;
+use App\Base\AI\Enums\AiApiType;
 use App\Modules\Core\AI\DTO\LaraTaskExecutionProfile;
 use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Enums\OperationStatus;
@@ -106,10 +108,10 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
             'api_key' => 'key',
             'base_url' => 'https://api.example.test/v1',
             'model' => 'gpt-coder',
-            'max_tokens' => 2048,
-            'temperature' => 0.7,
+            'execution_controls' => ExecutionControls::defaults(),
             'timeout' => 60,
             'provider_name' => 'openai',
+            'api_type' => AiApiType::OpenAiChatCompletions,
         ]);
 
     $job = new RunLaraTaskProfileJob($dispatch->id);
@@ -207,10 +209,10 @@ it('runs the Lara research task profile with the resolved research model', funct
             'api_key' => 'key',
             'base_url' => 'https://api.example.test/v1',
             'model' => 'gpt-research',
-            'max_tokens' => 2048,
-            'temperature' => 0.7,
+            'execution_controls' => ExecutionControls::defaults(),
             'timeout' => 60,
             'provider_name' => 'openai',
+            'api_type' => AiApiType::OpenAiChatCompletions,
         ]);
 
     $job = new RunLaraTaskProfileJob($dispatch->id);

@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Services\ModelCatalogService;
 use App\Base\Support\File as BlbFile;
@@ -32,7 +33,7 @@ class ConfigResolver
      * Returns an empty array if no LLM configuration is available.
      *
      * @param  int  $employeeId  Agent employee ID
-     * @return list<array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null, api_type: AiApiType}>
+     * @return list<array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}>
      */
     public function resolve(int $employeeId): array
     {
@@ -65,7 +66,7 @@ class ConfigResolver
      * Resolve LLM configurations for a Agent, falling back to the company's default.
      *
      * @param  int  $employeeId  Agent employee ID
-     * @return list<array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}>
+     * @return list<array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}>
      */
     public function resolveWithDefaultFallback(int $employeeId): array
     {
@@ -90,7 +91,7 @@ class ConfigResolver
      * Resolve the highest-priority config for a Agent, with company-default fallback.
      *
      * @param  int  $employeeId  Agent employee ID
-     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null}|null
+     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}|null
      */
     public function resolvePrimaryWithDefaultFallback(int $employeeId): ?array
     {
@@ -143,7 +144,7 @@ class ConfigResolver
     /**
      * Resolve the configured model for a Lara task, falling back to Lara's primary model.
      *
-     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null, api_type: AiApiType}|null
+     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}|null
      */
     public function resolveTaskWithPrimaryFallback(int $employeeId, string $taskKey): ?array
     {
@@ -238,20 +239,20 @@ class ConfigResolver
      *
      * @param  array<string, mixed>  $modelConfig  Per-model config from workspace
      * @param  int|null  $companyId  Company ID for provider lookup
-     * @param  array<string, mixed>  $runtimeDefaults  Fallback runtime parameters
-     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null, api_type: AiApiType}
+     * @param  array{execution_controls: ExecutionControls, timeout: int}  $runtimeDefaults  Fallback runtime parameters
+     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}
      */
     private function resolveModelConfig(array $modelConfig, ?int $companyId, array $runtimeDefaults): array
     {
         $modelId = $modelConfig['model'] ?? '';
         $providerName = $modelConfig['provider'] ?? null;
+        $controlsConfig = is_array($modelConfig['execution_controls'] ?? null) ? $modelConfig['execution_controls'] : [];
 
         $resolved = [
             'api_key' => '',
             'base_url' => '',
             'model' => $modelId,
-            'max_tokens' => (int) ($modelConfig['max_tokens'] ?? $runtimeDefaults['max_tokens']),
-            'temperature' => (float) ($modelConfig['temperature'] ?? $runtimeDefaults['temperature']),
+            'execution_controls' => ExecutionControls::fromConfig($controlsConfig, $runtimeDefaults['execution_controls']),
             'timeout' => (int) ($modelConfig['timeout'] ?? $runtimeDefaults['timeout']),
             'provider_name' => null,
             'api_type' => app(ModelCatalogService::class)->resolveApiType($providerName, $modelId),
@@ -285,7 +286,7 @@ class ConfigResolver
      * as fallback for agents without workspace config.
      *
      * @param  int  $companyId  Company ID
-     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null, api_type: AiApiType}|null
+     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}|null
      */
     public function resolveDefault(int $companyId): ?array
     {
@@ -333,8 +334,7 @@ class ConfigResolver
             'api_key' => $provider->credentials['api_key'] ?? '',
             'base_url' => $provider->base_url,
             'model' => $model->model_id,
-            'max_tokens' => $defaults['max_tokens'],
-            'temperature' => $defaults['temperature'],
+            'execution_controls' => $defaults['execution_controls'],
             'timeout' => $defaults['timeout'],
             'provider_name' => $provider->name,
             'api_type' => app(ModelCatalogService::class)->resolveApiType($provider->name, $model->model_id),
@@ -349,7 +349,7 @@ class ConfigResolver
      *
      * @param  int  $providerId  Provider database ID
      * @param  string  $modelId  Model identifier
-     * @return array{api_key: string, base_url: string, model: string, max_tokens: int, temperature: float, timeout: int, provider_name: string|null, api_type: AiApiType}|null
+     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}|null
      */
     public function resolveForProvider(int $providerId, string $modelId): ?array
     {
@@ -368,8 +368,7 @@ class ConfigResolver
             'api_key' => $provider->credentials['api_key'] ?? '',
             'base_url' => $provider->base_url,
             'model' => $modelId,
-            'max_tokens' => $defaults['max_tokens'],
-            'temperature' => $defaults['temperature'],
+            'execution_controls' => $defaults['execution_controls'],
             'timeout' => $defaults['timeout'],
             'provider_name' => $provider->name,
             'api_type' => app(ModelCatalogService::class)->resolveApiType($provider->name, $modelId),
@@ -379,13 +378,15 @@ class ConfigResolver
     /**
      * Get runtime parameter defaults from application config.
      *
-     * @return array{max_tokens: int, temperature: float, timeout: int}
+     * @return array{execution_controls: ExecutionControls, timeout: int}
      */
     private function runtimeDefaults(): array
     {
         return [
-            'max_tokens' => (int) config('ai.llm.max_tokens', 2048),
-            'temperature' => (float) config('ai.llm.temperature', 0.7),
+            'execution_controls' => ExecutionControls::fromConfig(
+                config('ai.llm.execution_controls', []),
+                ExecutionControls::defaults(),
+            ),
             'timeout' => (int) config('ai.llm.timeout', 60),
         ];
     }

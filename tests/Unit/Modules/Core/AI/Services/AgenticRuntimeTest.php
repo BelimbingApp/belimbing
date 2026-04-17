@@ -301,6 +301,55 @@ describe('AgenticRuntime', function () {
         expect($result['meta']['tool_actions'][0]['arguments'])->toBe(['input' => 'world']);
     });
 
+    it('preserves assistant reasoning_content across tool loop iterations', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+
+        $llmClient->shouldReceive('chat')->once()->andReturn([
+            'content' => null,
+            'reasoning_content' => 'Need the tool result before answering.',
+            'latency_ms' => 200,
+            'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 15],
+            'tool_calls' => [
+                [
+                    'id' => 'call_reasoning_001',
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'echo_tool',
+                        'arguments' => '{"input":"world"}',
+                    ],
+                ],
+            ],
+        ]);
+
+        $llmClient->shouldReceive('chat')
+            ->once()
+            ->withArgs(function ($request): bool {
+                $assistantMessages = array_values(array_filter(
+                    $request->messages,
+                    static fn (array $message): bool => ($message['role'] ?? null) === 'assistant'
+                ));
+
+                if ($assistantMessages === []) {
+                    return false;
+                }
+
+                $assistantMessage = $assistantMessages[0];
+
+                return ($assistantMessage['reasoning_content'] ?? null) === 'Need the tool result before answering.'
+                    && ($assistantMessage['tool_calls'][0]['id'] ?? null) === 'call_reasoning_001';
+            })
+            ->andReturn($this->makeFinalResponse('The echo result was: executed:echo_tool:world'));
+
+        $result = runAgenticConversation(
+            $llmClient,
+            toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+            userMessage: 'Echo world',
+            systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        );
+
+        expect($result['content'])->toContain('executed:echo_tool:world');
+    });
+
     it('exposes the active chat session to tool execution and clears it afterwards', function () {
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')->once()->andReturn(
@@ -488,6 +537,105 @@ describe('AgenticRuntime', function () {
             ->and($doneEvent['data']['meta']['fallback_attempts'] ?? [])->toHaveCount(1)
             ->and($doneEvent['data']['meta']['fallback_attempts'][0]['provider'] ?? '')->toBe('primary-provider')
             ->and($doneEvent['data']['meta']['fallback_attempts'][0]['error_type'] ?? '')->toBe('rate_limit');
+    });
+
+    it('yields stream events before the full provider stream completes', function () {
+        $allowCompletion = false;
+
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chatStream')->once()->andReturnUsing(function () use (&$allowCompletion) {
+            return (function () use (&$allowCompletion) {
+                yield ['type' => 'thinking_delta', 'text' => 'Inspecting...'];
+
+                if (! $allowCompletion) {
+                    throw new RuntimeException('Stream advanced before caller consumed the first chunk');
+                }
+
+                yield ['type' => 'content_delta', 'text' => 'Hi'];
+                yield [
+                    'type' => 'done',
+                    'finish_reason' => 'stop',
+                    'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+                    'latency_ms' => 200,
+                ];
+            })();
+        });
+
+        $runtime = $this->makeAgenticRuntime($llmClient);
+        $stream = $runtime->runStream(
+            [test()->makeMessage('user', 'Hello')],
+            1,
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        );
+
+        $firstEvent = $stream->current();
+
+        expect($firstEvent['event'])->toBe('status')
+            ->and($firstEvent['data']['phase'])->toBe('thinking')
+            ->and($firstEvent['data']['iteration'])->toBe(0)
+            ->and($firstEvent['data']['description'])->toBe('Analyzing request')
+            ->and($firstEvent['data']['run_id'])->toStartWith('run_');
+
+        $stream->next();
+        $secondEvent = $stream->current();
+
+        expect($secondEvent['event'])->toBe('status')
+            ->and($secondEvent['data']['phase'])->toBe('thinking_delta')
+            ->and($secondEvent['data']['delta'])->toBe('Inspecting...');
+
+        $allowCompletion = true;
+
+        $stream->next();
+        $thirdEvent = $stream->current();
+
+        expect($thirdEvent['event'])->toBe('delta')
+            ->and($thirdEvent['data']['text'])->toBe('Hi');
+
+        $stream->next();
+        $doneEvent = $stream->current();
+
+        expect($doneEvent['event'])->toBe('done')
+            ->and($doneEvent['data']['meta']['latency_ms'])->toBe(200);
+    });
+
+    it('does not fall back in stream mode after the provider already emitted output', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chatStream')->once()->andReturnUsing(function () {
+            yield ['type' => 'thinking_delta', 'text' => 'Inspecting...'];
+            yield ['type' => 'error', 'runtime_error' => AiRuntimeError::fromType(
+                AiErrorType::RateLimit,
+                'HTTP 429: Too Many Requests',
+                latencyMs: 50
+            ), 'latency_ms' => 50];
+        });
+
+        $configResolver = $this->mockResolvedConfigResolver([
+            $this->makeConfig('primary-provider', 'gpt-4-primary'),
+            $this->makeConfig('backup-provider', 'gpt-4-backup'),
+        ]);
+
+        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
+        $events = iterator_to_array($runtime->runStream(
+            [test()->makeMessage('user', 'Hello')],
+            1,
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        ));
+
+        expect(collect($events)->pluck('event')->all())->toContain('error')
+            ->and(collect($events)->pluck('event')->all())->not->toContain('done');
+
+        $recoveryEvents = array_values(array_filter(
+            $events,
+            static fn (array $event): bool => $event['event'] === 'status'
+                && ($event['data']['phase'] ?? null) === 'recovery_attempted'
+        ));
+
+        expect($recoveryEvents)->toBeEmpty();
+
+        $errorEvent = collect($events)->firstWhere('event', 'error');
+
+        expect($errorEvent['data']['meta']['model'] ?? null)->toBe('gpt-4-primary')
+            ->and($errorEvent['data']['meta']['fallback_attempts'] ?? [])->toBeEmpty();
     });
 
     it('does not fall back on non-retryable runtime error in sync mode', function () {

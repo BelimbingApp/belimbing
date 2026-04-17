@@ -88,6 +88,7 @@ class Chat extends Component
         $sessions = app(SessionManager::class)->list($this->employeeId);
         if (! empty($sessions)) {
             $this->selectedSessionId = $sessions[0]->id;
+            $this->syncSelectedSessionState($this->selectedSessionId);
         }
     }
 

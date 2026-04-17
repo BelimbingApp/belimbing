@@ -7,8 +7,11 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Enums\ReasoningVisibility;
+use App\Base\AI\Enums\ToolChoiceMode;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 
@@ -27,7 +30,7 @@ final class AgenticFinalResponseStreamer
     ) {}
 
     /**
-     * @param  array<string, mixed>  $config
+     * @param  array{api_type: AiApiType|null, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
      * @param  array{api_key: string, base_url: string}  $credentials
      * @param  array{
      *     api_messages: list<array<string, mixed>>,
@@ -47,20 +50,26 @@ final class AgenticFinalResponseStreamer
         array $streamState,
     ): \Generator {
         $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
+        $executionControls = $streamState['tools'] !== []
+            ? $config['execution_controls']->withToolChoice(ToolChoiceMode::Auto)
+            : $config['execution_controls']->withToolChoice(null);
+
+        if ($apiType === AiApiType::OpenAiResponses) {
+            $executionControls = $executionControls
+                ->withReasoningVisibility(ReasoningVisibility::Summary)
+                ->withReasoningContextPreservation(true);
+        }
 
         $stream = $this->llmClient->chatStream(new ChatRequest(
             baseUrl: $credentials['base_url'],
             apiKey: $credentials['api_key'],
             model: $config['model'],
             messages: $streamState['api_messages'],
-            maxTokens: $config['max_tokens'],
-            temperature: $config['temperature'],
+            executionControls: $executionControls,
             timeout: $config['timeout'],
             providerName: $config['provider_name'],
             tools: $streamState['tools'] !== [] ? $streamState['tools'] : null,
-            toolChoice: $streamState['tools'] !== [] ? 'auto' : null,
             apiType: $apiType,
-            reasoningSummary: $apiType === AiApiType::OpenAiResponses ? 'auto' : null,
         ));
 
         $accumulator = [

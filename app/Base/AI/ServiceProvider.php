@@ -13,6 +13,8 @@ use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Services\ModelCatalogQueryService;
 use App\Base\AI\Services\ModelCatalogService;
 use App\Base\AI\Services\ProviderDiscoveryService;
+use App\Base\AI\Services\ProviderMapping\ProviderCapabilityRegistry;
+use App\Base\AI\Services\ProviderMapping\ProviderRequestMapperRegistry;
 use App\Base\AI\Services\UrlSafetyGuard;
 use App\Base\AI\Services\VectorStoreService;
 use App\Base\AI\Services\WebFetchService;
@@ -33,6 +35,8 @@ class ServiceProvider extends BaseServiceProvider
 
         $this->app->singleton(ModelCatalogService::class);
         $this->app->singleton(ModelCatalogQueryService::class);
+        $this->app->singleton(ProviderCapabilityRegistry::class);
+        $this->app->singleton(ProviderRequestMapperRegistry::class);
         $this->app->singleton(LlmClient::class);
         $this->app->singleton(KnowledgeNavigator::class);
         $this->app->singleton(ProviderDiscoveryService::class);
