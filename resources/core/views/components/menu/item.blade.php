@@ -6,6 +6,8 @@
 >
     @php
         $iconName = $item->icon ?? 'heroicon-o-squares-2x2';
+        // Top-level container items (like Administration, Business Operations) get accent color in rail view
+        $isTopLevelContainer = $item->isContainer() && $item->parent === null;
     @endphp
 
     @if($item->hasRoute())
@@ -15,7 +17,7 @@
             x-cloak
             href="{{ $item->route ? route($item->route) : $item->url }}"
             @if($item->route) wire:navigate @endif
-            class="flex items-center justify-center w-full h-8 rounded-none transition text-link {{ $isActive ? 'bg-surface-card text-ink' : 'hover:bg-surface-subtle' }}"
+            class="flex items-center justify-center w-full h-8 rounded-none transition {{ $isActive ? 'bg-surface-card text-ink' : 'text-link hover:bg-surface-subtle' }}"
             aria-label="{{ __($item->label) }}"
             title="{{ __($item->label) }}"
         >
@@ -65,7 +67,7 @@
             x-cloak
             type="button"
             @click="expanded = !expanded"
-            class="flex items-center justify-center w-full h-8 rounded-none transition text-link {{ $hasActiveChild ? 'text-ink' : 'hover:bg-surface-subtle' }}"
+            class="flex items-center justify-center w-full h-8 rounded-none transition {{ $isTopLevelContainer ? 'text-accent' : ($hasActiveChild ? 'text-ink' : 'text-link hover:bg-surface-subtle') }}"
             aria-label="{{ __($item->label) }}"
             title="{{ __($item->label) }}"
         >
