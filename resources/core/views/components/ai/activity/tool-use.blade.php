@@ -25,7 +25,7 @@
     $hasDetail = $errorPayload !== null || $resultPreview !== '';
 @endphp
 
-<x-ai.activity.entry type="tool_call" :timestamp="now()">
+<x-ai.activity.entry type="tool_use" :timestamp="now()">
     <div class="rounded-lg border border-border-default bg-surface-card">
         <div class="px-2.5 py-1.5 text-left text-xs">
             <div class="flex items-start gap-2">

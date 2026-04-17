@@ -5,7 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
-use App\Modules\Core\AI\DTO\ToolResultEntry;
+use App\Modules\Core\AI\DTO\ToolUseEntry;
 use App\Modules\Core\AI\Enums\TurnEventType;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\ChatTurn;
@@ -64,6 +64,9 @@ class ChatRunPersister
 
             /** @var array<string, mixed> */
             public array $usageMeta = [];
+
+            /** @var array<int, array{tool: string, args_summary: string, tool_call_index: int}> */
+            public array $pendingToolCalls = [];
         };
 
         foreach ($events as $event) {
@@ -189,8 +192,10 @@ class ChatRunPersister
     }
 
     /**
+     * Buffer the tool call data until the corresponding ToolFinished arrives.
+     *
      * @param  array<string, mixed>  $payload
-     * @param  object{runId: ?string}  $state
+     * @param  object{pendingToolCalls: array<int, array{tool: string, args_summary: string, tool_call_index: int}>}  $state
      */
     private function materializeToolStarted(
         MessageManager $mm,
@@ -199,23 +204,20 @@ class ChatRunPersister
         array $payload,
         object $state,
     ): void {
-        if ($state->runId === null) {
-            return;
-        }
+        $index = (int) ($payload['tool_call_index'] ?? 0);
 
-        $mm->appendToolCall(
-            $employeeId,
-            $sessionId,
-            $state->runId,
-            (string) ($payload['tool'] ?? ''),
-            (string) ($payload['args_summary'] ?? '{}'),
-            (int) ($payload['tool_call_index'] ?? 0),
-        );
+        $state->pendingToolCalls[$index] = [
+            'tool' => (string) ($payload['tool'] ?? ''),
+            'args_summary' => (string) ($payload['args_summary'] ?? '{}'),
+            'tool_call_index' => $index,
+        ];
     }
 
     /**
+     * Write a single tool_use entry merging buffered call data with the result.
+     *
      * @param  array<string, mixed>  $payload
-     * @param  object{runId: ?string}  $state
+     * @param  object{runId: ?string, pendingToolCalls: array<int, array{tool: string, args_summary: string, tool_call_index: int}>}  $state
      */
     private function materializeToolFinished(
         MessageManager $mm,
@@ -228,12 +230,18 @@ class ChatRunPersister
             return;
         }
 
-        $mm->appendToolResult(
+        $index = (int) ($payload['tool_call_index'] ?? 0);
+        $buffered = $state->pendingToolCalls[$index] ?? null;
+        unset($state->pendingToolCalls[$index]);
+
+        $mm->appendToolUse(
             $employeeId,
             $sessionId,
             $state->runId,
-            new ToolResultEntry(
-                toolName: (string) ($payload['tool'] ?? ''),
+            new ToolUseEntry(
+                toolName: (string) ($payload['tool'] ?? ($buffered['tool'] ?? '')),
+                argsSummary: $buffered['args_summary'] ?? '{}',
+                toolCallIndex: $buffered['tool_call_index'] ?? $index,
                 resultPreview: (string) ($payload['result_preview'] ?? ''),
                 resultLength: (int) ($payload['result_length'] ?? 0),
                 status: (string) ($payload['status'] ?? 'success'),

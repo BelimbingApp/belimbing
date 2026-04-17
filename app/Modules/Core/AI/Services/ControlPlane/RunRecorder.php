@@ -151,7 +151,7 @@ class RunRecorder
                 continue;
             }
 
-            if ($message->type === 'tool_result') {
+            if ($message->type === 'tool_use') {
                 $toolActions[] = $this->reconstructedToolAction($message);
 
                 continue;

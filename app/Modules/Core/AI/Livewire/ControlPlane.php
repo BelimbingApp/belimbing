@@ -19,7 +19,9 @@ use App\Modules\Core\AI\Services\ControlPlane\HealthAndPresenceService;
 use App\Modules\Core\AI\Services\ControlPlane\LifecycleControlService;
 use App\Modules\Core\AI\Services\ControlPlane\RunInspectionService;
 use App\Modules\Core\AI\Services\MessageManager;
+use DateTimeImmutable;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class ControlPlane extends Component
@@ -360,6 +362,13 @@ class ControlPlane extends Component
     /**
      * Load transcript entries for a run, filtered to that run's messages.
      *
+     * Reads the JSONL transcript and filters to entries belonging to this
+     * run. When no typed entries (thinking, tool_use) exist
+     * in the transcript — e.g. because the session was pruned or
+     * materializeFromTurn never ran — synthesizes entries from the
+     * ai_runs.tool_actions column as a fallback so operators always see
+     * the tool activity recorded in the ledger.
+     *
      * Returned as view data (not a public property) because Message DTOs
      * contain DateTimeImmutable which Livewire cannot dehydrate.
      *
@@ -372,21 +381,97 @@ class ControlPlane extends Component
         }
 
         $run = AiRun::query()->find($this->inspectRunId);
-        if ($run === null || $run->session_id === null) {
+        if ($run === null) {
             return [];
         }
 
-        $messageManager = app(MessageManager::class);
-        $allMessages = $messageManager->read($run->employee_id, $run->session_id);
         $runId = $this->inspectRunId;
+        $entries = [];
 
-        return array_values(array_filter(
-            $allMessages,
-            fn (Message $msg) => $msg->runId === $runId
-                || $msg->type === 'thinking'
-                || $msg->type === 'tool_call'
-                || $msg->type === 'tool_result',
-        ));
+        if ($run->session_id !== null) {
+            $messageManager = app(MessageManager::class);
+            $allMessages = $messageManager->read($run->employee_id, $run->session_id);
+
+            $entries = array_values(array_filter(
+                $allMessages,
+                fn (Message $msg) => $msg->runId === $runId,
+            ));
+        }
+
+        $hasTypedEntries = array_filter(
+            $entries,
+            fn (Message $msg) => in_array($msg->type, ['thinking', 'tool_use'], true),
+        ) !== [];
+
+        if (! $hasTypedEntries) {
+            $entries = array_merge($entries, $this->synthesizeFromToolActions($run));
+        }
+
+        return $entries;
+    }
+
+    /**
+     * Synthesize transcript entries from ai_runs.tool_actions.
+     *
+     * Produces unified tool_use Message DTOs so operators can see
+     * which tools were invoked even when the JSONL transcript is missing.
+     * Builds args_summary from the raw arguments array stored in the ledger.
+     *
+     * @return list<Message>
+     */
+    private function synthesizeFromToolActions(AiRun $run): array
+    {
+        $actions = $run->tool_actions ?? [];
+        if ($actions === []) {
+            return [];
+        }
+
+        $ts = $run->started_at ?? $run->created_at ?? now();
+        $messages = [];
+
+        foreach ($actions as $action) {
+            if (! is_array($action)) {
+                continue;
+            }
+
+            $messages[] = new Message(
+                role: 'assistant',
+                content: '',
+                timestamp: new DateTimeImmutable($ts->toIso8601String()),
+                runId: $run->id,
+                meta: [
+                    'tool' => (string) ($action['tool'] ?? $action['name'] ?? 'unknown'),
+                    'args_summary' => $this->buildArgsSummary($action),
+                    'status' => isset($action['error_payload']) ? 'error' : 'success',
+                    'result_preview' => (string) ($action['result_preview'] ?? ''),
+                    'result_length' => isset($action['result_length']) ? (int) $action['result_length'] : 0,
+                    'error_payload' => is_array($action['error_payload'] ?? null) ? $action['error_payload'] : null,
+                    'synthesized' => true,
+                ],
+                type: 'tool_use',
+            );
+        }
+
+        return $messages;
+    }
+
+    /**
+     * Build a truncated args summary string from a tool action's arguments.
+     */
+    private function buildArgsSummary(array $action): string
+    {
+        if (isset($action['args_summary'])) {
+            return (string) $action['args_summary'];
+        }
+
+        if (isset($action['arguments']) && is_array($action['arguments'])) {
+            return Str::limit(
+                json_encode($action['arguments'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}',
+                200,
+            );
+        }
+
+        return '';
     }
 
     private function resolveLifecycleAction(): ?LifecycleAction

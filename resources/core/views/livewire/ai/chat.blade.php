@@ -606,15 +606,6 @@
 
                     @forelse($messages as $index => $message)
                         @php
-                            $nextMessage = $messages[$index + 1] ?? null;
-                            $previousMessage = $messages[$index - 1] ?? null;
-                            $isToolCallWithImmediateResult = $message->type === 'tool_call'
-                                && $nextMessage !== null
-                                && $nextMessage->type === 'tool_result';
-                            $isToolResultFollowingImmediateCall = $message->type === 'tool_result'
-                                && $previousMessage !== null
-                                && $previousMessage->type === 'tool_call';
-
                             $messageProvider = $message->getMetaString('provider_name') ?? $message->getMetaString('llm.provider');
                             $messageModel = $message->getMetaString('model') ?? $message->getMetaString('llm.model');
                             $messageTokens = $message->getMetaInt('tokens');
@@ -640,25 +631,14 @@
                             $messageSource = $message->getMetaString('source');
                             $messageType = $message->getMetaString('message_type');
                             $messageOrchestrationStatus = $message->getMeta('orchestration.status');
-
-                            $previousMessageTool = $previousMessage?->getMetaString('tool', '') ?? '';
-                            $previousMessageArgsSummary = $previousMessage?->getMetaString('args_summary', '{}') ?? '{}';
                         @endphp
 
                         @if ($message->type === 'thinking')
                             <x-ai.activity.thinking :timestamp="$message->timestamp" :active="false" :content="$message->content" />
-                        @elseif ($message->type === 'tool_call')
-                            @if (! $isToolCallWithImmediateResult)
-                                <x-ai.activity.tool-call
-                                    :tool="$messageTool"
-                                    :args-summary="$messageArgsSummary"
-                                    status="success"
-                                />
-                            @endif
-                        @elseif ($message->type === 'tool_result')
-                            <x-ai.activity.tool-call
-                                :tool="$messageTool !== '' ? $messageTool : ($isToolResultFollowingImmediateCall ? $previousMessageTool : '')"
-                                :args-summary="$isToolResultFollowingImmediateCall ? $previousMessageArgsSummary : ''"
+                        @elseif ($message->type === 'tool_use')
+                            <x-ai.activity.tool-use
+                                :tool="$messageTool"
+                                :args-summary="$messageArgsSummary"
                                 :status="$messageStatus"
                                 :duration-ms="$messageDurationMs"
                                 :result-preview="$messageResultPreview"
@@ -767,7 +747,7 @@
 
                     <template x-for="(entry, idx) in streamEntries" :key="idx">
                         <div x-show="
-                            entry.type !== 'tool_call'
+                            entry.type !== 'tool_use'
                             || !toolsCollapsed
                             || entry.status === 'running'
                         ">
@@ -794,8 +774,8 @@
                                 </div>
                             </template>
 
-                            {{-- Tool call --}}
-                            <template x-if="entry.type === 'tool_call'">
+                            {{-- Tool use --}}
+                            <template x-if="entry.type === 'tool_use'">
                                 <div class="py-1">
                                     <div class="min-w-0">
                                         <div class="rounded-lg border border-border-default bg-surface-card px-2.5 py-1.5 text-xs">
@@ -1835,7 +1815,7 @@
             state.toolMap[toolKey] = idx;
 
             state.streamEntries.push({
-                type: 'tool_call',
+                type: 'tool_use',
                 tool: payload.tool || '',
                 argsSummary: payload.args_summary || '',
                 status: 'running',
@@ -1877,10 +1857,10 @@
                 return;
             }
 
-            // Find the last running tool_call entry matching this tool
+            // Find the last running tool_use entry matching this tool
             for (let i = state.streamEntries.length - 1; i >= 0; i--) {
                 const entry = state.streamEntries[i];
-                if (entry.type === 'tool_call' && entry.tool === toolName && entry.status === 'running') {
+                if (entry.type === 'tool_use' && entry.tool === toolName && entry.status === 'running') {
                     // Cap buffer at 10KB to prevent DOM bloat
                     if ((entry.stdoutBuffer || '').length < 10240) {
                         entry.stdoutBuffer = (entry.stdoutBuffer || '') + delta;

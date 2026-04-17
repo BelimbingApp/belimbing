@@ -9,7 +9,7 @@ use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
 use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\DTO\Message;
-use App\Modules\Core\AI\DTO\ToolResultEntry;
+use App\Modules\Core\AI\DTO\ToolUseEntry;
 use App\Modules\Core\AI\Models\AiRun;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Collection;
 class MessageManager
 {
     /** @var list<string> Valid transcript entry types for v2 format */
-    private const KNOWN_ENTRY_TYPES = ['message', 'tool_call', 'tool_result', 'thinking', 'hook_action'];
+    private const KNOWN_ENTRY_TYPES = ['message', 'tool_use', 'thinking', 'hook_action'];
 
     public function __construct(
         private readonly SessionManager $sessionManager,
@@ -122,53 +122,21 @@ class MessageManager
     }
 
     /**
-     * Append a tool call entry to a session transcript.
+     * Append a tool use entry to a session transcript.
+     *
+     * Captures both the invocation (tool name, args) and the result
+     * (status, preview, duration) in a single transcript entry.
      *
      * @param  int  $employeeId  Agent employee ID
      * @param  string  $sessionId  Session UUID
      * @param  string  $runId  Runtime run ID
-     * @param  string  $toolName  Tool name
-     * @param  string  $argsSummary  Truncated args (≤200 chars)
-     * @param  int  $toolCallIndex  Sequential index within the run
+     * @param  ToolUseEntry  $entry  Combined tool call + result data
      */
-    public function appendToolCall(
+    public function appendToolUse(
         int $employeeId,
         string $sessionId,
         string $runId,
-        string $toolName,
-        string $argsSummary,
-        int $toolCallIndex,
-    ): void {
-        $this->append($employeeId, $sessionId, new Message(
-            role: 'assistant',
-            content: '',
-            timestamp: new DateTimeImmutable,
-            runId: $runId,
-            meta: [
-                'tool' => $toolName,
-                'args_summary' => $argsSummary,
-                'tool_call_index' => $toolCallIndex,
-            ],
-            type: 'tool_call',
-        ));
-    }
-
-    /**
-     * Append a tool result entry to a session transcript.
-     *
-     * Full result content is NOT persisted — only a truncated preview
-     * and the result length. See Phase 0 §0.8 redaction rules.
-     *
-     * @param  int  $employeeId  Agent employee ID
-     * @param  string  $sessionId  Session UUID
-     * @param  string  $runId  Runtime run ID
-     * @param  ToolResultEntry  $entry  Tool result metadata
-     */
-    public function appendToolResult(
-        int $employeeId,
-        string $sessionId,
-        string $runId,
-        ToolResultEntry $entry,
+        ToolUseEntry $entry,
     ): void {
         $this->append($employeeId, $sessionId, new Message(
             role: 'assistant',
@@ -176,7 +144,7 @@ class MessageManager
             timestamp: new DateTimeImmutable,
             runId: $runId,
             meta: $entry->toMeta(),
-            type: 'tool_result',
+            type: 'tool_use',
         ));
     }
 

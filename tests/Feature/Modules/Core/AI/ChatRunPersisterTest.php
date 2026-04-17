@@ -75,8 +75,7 @@ function mockMessageManager(): MockInterface
 
     // Default: allow all append methods, return null for void methods
     $mm->shouldReceive('appendThinking')->byDefault();
-    $mm->shouldReceive('appendToolCall')->byDefault();
-    $mm->shouldReceive('appendToolResult')->byDefault();
+    $mm->shouldReceive('appendToolUse')->byDefault();
     $mm->shouldReceive('appendHookAction')->byDefault();
     $mm->shouldReceive('appendAssistantMessage')->byDefault()->andReturn(
         new Message(
@@ -96,24 +95,15 @@ function expectMaterializerHappyPathAppendMocks(MockInterface $mm, ChatTurn $tur
 {
     $mm->shouldNotReceive('appendThinking');
 
-    $mm->shouldReceive('appendToolCall')
-        ->once()
-        ->with(
-            $turn->employee_id,
-            MAT_TEST_SESSION,
-            MAT_TEST_RUN_ID,
-            'bash',
-            '{"cmd":"ls"}',
-            0,
-        );
-
-    $mm->shouldReceive('appendToolResult')
+    $mm->shouldReceive('appendToolUse')
         ->once()
         ->withArgs(function ($empId, $sessId, $runId, $entry) use ($turn) {
             return $empId === $turn->employee_id
                 && $sessId === MAT_TEST_SESSION
                 && $runId === MAT_TEST_RUN_ID
                 && $entry->toolName === 'bash'
+                && $entry->argsSummary === '{"cmd":"ls"}'
+                && $entry->toolCallIndex === 0
                 && $entry->status === 'success'
                 && $entry->resultPreview === '10 files'
                 && $entry->durationMs === 150
@@ -295,10 +285,10 @@ describe('ChatRunPersister materializeFromTurn', function () {
 
         $mm = mockMessageManager();
 
-        $mm->shouldReceive('appendToolCall')->once();
-        $mm->shouldReceive('appendToolResult')
+        $mm->shouldReceive('appendToolUse')
             ->once()
-            ->withArgs(fn (...$args) => $args[3]->status === 'error'
+            ->withArgs(fn (...$args) => $args[3]->argsSummary === '{"cmd":"rm -rf /"}'
+                && $args[3]->status === 'error'
                 && $args[3]->resultLength === 17
                 && $args[3]->errorPayload['code'] === 'permission_denied');
         $mm->shouldReceive('appendAssistantMessage')

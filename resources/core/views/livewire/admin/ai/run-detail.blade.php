@@ -43,23 +43,12 @@ use App\Modules\Core\AI\Livewire\RunDetail;
                             $markdown = app(\App\Modules\Core\AI\Services\ChatMarkdownRenderer::class);
                         @endphp
                         @foreach($transcript as $message)
-                            @php
-                                $messageProvider = $message->meta['provider_name'] ?? $message->meta['llm']['provider'] ?? null;
-                                $messageModel = $message->meta['model'] ?? $message->meta['llm']['model'] ?? null;
-                            @endphp
-
                             @if ($message->type === 'thinking')
-                                <x-ai.activity.thinking :timestamp="$message->timestamp" :active="false" />
-                            @elseif ($message->type === 'tool_call')
-                                <x-ai.activity.tool-call
+                                <x-ai.activity.thinking :timestamp="$message->timestamp" :active="false" :content="$message->content" />
+                            @elseif ($message->type === 'tool_use')
+                                <x-ai.activity.tool-use
                                     :tool="$message->meta['tool'] ?? ''"
                                     :args-summary="$message->meta['args_summary'] ?? '{}'"
-                                    status="success"
-                                />
-                            @elseif ($message->type === 'tool_result')
-                                <x-ai.activity.tool-call
-                                    :tool="$message->meta['tool'] ?? ''"
-                                    :args-summary="''"
                                     :status="$message->meta['status'] ?? 'success'"
                                     :duration-ms="$message->meta['duration_ms'] ?? null"
                                     :result-preview="$message->meta['result_preview'] ?? ''"
@@ -83,18 +72,12 @@ use App\Modules\Core\AI\Livewire\RunDetail;
                                     :message="$message->content"
                                     :error-type="$message->meta['error_type'] ?? null"
                                     :timestamp="$message->timestamp"
-                                    :run-id="$message->runId"
-                                    :provider="$messageProvider"
-                                    :model="$messageModel"
                                     :markdown="$markdown"
                                 />
                             @elseif ($message->role === 'assistant')
                                 <x-ai.activity.assistant-result
                                     :content="$message->content"
                                     :timestamp="$message->timestamp"
-                                    :run-id="$message->runId"
-                                    :provider="$messageProvider"
-                                    :model="$messageModel"
                                     :markdown="$markdown"
                                 />
                             @endif

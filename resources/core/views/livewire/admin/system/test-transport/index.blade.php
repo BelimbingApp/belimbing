@@ -294,7 +294,7 @@
             this._toolMap[toolKey] = idx;
 
             this.streamEntries.push({
-                type: 'tool_call',
+                type: 'tool_use',
                 tool: payload.tool || '',
                 argsSummary: payload.args_summary || '',
                 status: 'running',
@@ -329,7 +329,7 @@
             for (let i = this.streamEntries.length - 1; i >= 0; i--) {
                 const entry = this.streamEntries[i];
 
-                if (entry.type === 'tool_call' && entry.tool === toolName && entry.status === 'running') {
+                if (entry.type === 'tool_use' && entry.tool === toolName && entry.status === 'running') {
                     if ((entry.stdoutBuffer || '').length < 10240) {
                         entry.stdoutBuffer = (entry.stdoutBuffer || '') + delta;
                     }
@@ -552,7 +552,7 @@
 
                     <template x-for="(entry, idx) in streamEntries" :key="idx">
                         <div x-show="
-                            entry.type !== 'tool_call'
+                            entry.type !== 'tool_use'
                             || !toolsCollapsed
                             || entry.status === 'running'
                         ">
@@ -576,8 +576,8 @@
                                 </div>
                             </template>
 
-                            {{-- Tool call --}}
-                            <template x-if="entry.type === 'tool_call'">
+                            {{-- Tool use --}}
+                            <template x-if="entry.type === 'tool_use'">
                                 <div class="py-1">
                                     <div class="min-w-0">
                                         <div class="rounded-lg border border-border-default bg-surface-card px-2.5 py-1.5 text-xs">
