@@ -6,6 +6,7 @@
 namespace App\Modules\Core\User\Controllers;
 
 use App\Base\Menu\Services\PinMetadataNormalizer;
+use App\Base\Menu\Services\VisibleNavMenuItemsFlat;
 use App\Modules\Core\User\Models\UserPin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class PinController
 {
     public function __construct(
         private readonly PinMetadataNormalizer $pinMetadataNormalizer,
+        private readonly VisibleNavMenuItemsFlat $visibleNavMenuItemsFlat,
     ) {}
 
     /**
@@ -52,7 +54,7 @@ class PinController
 
             return response()->json([
                 'pinned' => false,
-                'pins' => $user->getPins(),
+                'pins' => $this->enrichedPinsFor($user),
             ]);
         }
 
@@ -75,7 +77,7 @@ class PinController
 
         return response()->json([
             'pinned' => true,
-            'pins' => $user->getPins(),
+            'pins' => $this->enrichedPinsFor($user),
         ]);
     }
 
@@ -103,7 +105,20 @@ class PinController
         }
 
         return response()->json([
-            'pins' => $user->getPins(),
+            'pins' => $this->enrichedPinsFor($user),
         ]);
+    }
+
+    /**
+     * @return list<array{id: int, label: string, url: string, icon: string|null}>
+     */
+    private function enrichedPinsFor(mixed $user): array
+    {
+        $flat = $this->visibleNavMenuItemsFlat->snapshotForUser($user)['flat'];
+
+        return $this->pinMetadataNormalizer->mergeMissingPinIcons(
+            method_exists($user, 'getPins') ? $user->getPins() : [],
+            $flat,
+        );
     }
 }

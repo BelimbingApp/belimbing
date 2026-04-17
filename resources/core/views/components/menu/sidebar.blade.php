@@ -4,6 +4,30 @@
 ?>
 @props(['menuTree', 'menuItemsFlat' => [], 'pins' => []])
 
+@php
+    $defaultRailPinIcon = 'heroicon-o-squares-2x2';
+
+    $pinRailIconNames = collect($pins)
+        ->pluck('icon')
+        ->merge(collect($menuItemsFlat)->pluck('icon'))
+        ->filter()
+        ->unique()
+        ->values();
+
+    if (! $pinRailIconNames->contains($defaultRailPinIcon)) {
+        $pinRailIconNames->push($defaultRailPinIcon);
+    }
+
+    $pinRailIconSvgs = $pinRailIconNames->mapWithKeys(
+        static fn (string $name): array => [
+            $name => \Illuminate\Support\Facades\Blade::render(
+                '<x-icon :name="$name" class="w-[1.125rem] h-[1.125rem]" />',
+                ['name' => $name],
+            ),
+        ],
+    )->all();
+@endphp
+
 <aside
     {{ $attributes->class([
         'shrink-0 bg-surface-sidebar h-full w-full flex flex-col border-r border-border-default',
@@ -131,6 +155,26 @@
             this._dropIdx = null;
         },
 
+        defaultRailPinIcon: @js($defaultRailPinIcon),
+        pinRailIconSvgs: @js($pinRailIconSvgs),
+        pinRailIconName(pin) {
+            if (pin?.icon) {
+                return pin.icon;
+            }
+            const needle = this._normalizeUrl(pin.url);
+            for (const id in this.menuItemsFlat) {
+                const item = this.menuItemsFlat[id];
+                if (item?.href && this._normalizeUrl(item.href) === needle) {
+                    return item.icon ?? this.defaultRailPinIcon;
+                }
+            }
+            return this.defaultRailPinIcon;
+        },
+        pinRailIconHtml(pin) {
+            const name = this.pinRailIconName(pin);
+            return this.pinRailIconSvgs[name] ?? this.pinRailIconSvgs[this.defaultRailPinIcon];
+        },
+
         menuItemsFlat: @js($menuItemsFlat),
     }"
 >
@@ -152,7 +196,7 @@
                             'border-t-2 border-accent': _dropIdx === idx && _dragIdx !== null && _dragIdx !== idx,
                         }"
                     >
-                        {{-- Rail view: icon only --}}
+                        {{-- Rail view: icon only (using the menu item's icon) --}}
                         <a
                             x-show="sidebarRail"
                             x-cloak
@@ -162,7 +206,7 @@
                             :aria-label="pin.label"
                             class="flex items-center justify-center w-full h-8 rounded-none transition text-link hover:bg-surface-subtle"
                         >
-                            <x-icon name="heroicon-o-pin" class="w-[1.125rem] h-[1.125rem]" />
+                            <span class="inline-flex shrink-0 items-center justify-center" x-html="pinRailIconHtml(pin)"></span>
                             <span class="sr-only" x-text="pin.label"></span>
                         </a>
 

@@ -28,6 +28,64 @@ class PinMetadataNormalizer
     }
 
     /**
+     * Normalize a URL to its path only (scheme, host, query, and fragment ignored).
+     *
+     * Used to match pins to menu entries when the stored pin URL includes query
+     * parameters but the menu href does not, or when {@see normalizeUrl} keys
+     * would otherwise diverge.
+     */
+    public function normalizePathKey(string $url): string
+    {
+        $parts = parse_url($url);
+
+        if ($parts === false) {
+            return $this->normalizePath(trim($url));
+        }
+
+        $path = isset($parts['path']) && is_string($parts['path'])
+            ? $this->normalizePath($parts['path'])
+            : '/';
+
+        return $path;
+    }
+
+    /**
+     * Fill missing pin icons from visible navigable menu items matched by path.
+     *
+     * @param  list<array{id: int, label: string, url: string, icon: string|null}>  $pins
+     * @param  array<string, array{label: string, pinLabel: string, icon: string, href: string|null, route: string|null}>  $menuItemsFlat
+     * @return list<array{id: int, label: string, url: string, icon: string|null}>
+     */
+    public function mergeMissingPinIcons(array $pins, array $menuItemsFlat): array
+    {
+        $pathToIcon = [];
+
+        foreach ($menuItemsFlat as $item) {
+            $href = $item['href'] ?? null;
+
+            if (! is_string($href) || $href === '') {
+                continue;
+            }
+
+            $pathToIcon[$this->normalizePathKey($href)] = $item['icon'] ?? 'heroicon-o-squares-2x2';
+        }
+
+        return array_map(function (array $pin) use ($pathToIcon): array {
+            if (! empty($pin['icon'])) {
+                return $pin;
+            }
+
+            $key = $this->normalizePathKey($pin['url']);
+
+            if (isset($pathToIcon[$key])) {
+                $pin['icon'] = $pathToIcon[$key];
+            }
+
+            return $pin;
+        }, $pins);
+    }
+
+    /**
      * Normalize a URL into a destination key suitable for duplicate detection.
      *
      * Compares app-internal destinations by:
