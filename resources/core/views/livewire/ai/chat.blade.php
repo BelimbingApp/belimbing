@@ -635,7 +635,11 @@
                                 :timestamp="$message->timestamp"
                             />
                         @elseif ($message->role === 'user')
-                            <x-ai.activity.user-message :content="$message->content" :timestamp="$message->timestamp" />
+                            <x-ai.activity.user-message
+                                :content="$message->content"
+                                :timestamp="$message->timestamp"
+                                :meta="$message->meta"
+                            />
                         @elseif ($message->role === 'assistant' && $messageType === 'error')
                             <x-ai.activity.error
                                 :message="$message->content"

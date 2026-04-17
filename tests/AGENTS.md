@@ -27,14 +27,14 @@
 
 - Do not add tests just to increase test count.
 - Tests consume time and compute; as Belimbing grows, every low-value test makes the suite slower and noisier.
-- Prefer tests that protect business rules, authorization boundaries, data integrity, workflow state changes, and framework customizations.
-- Keep tests only while they protect an enduring contract the project still cares about.
+- Prefer tests that protect business rules, authorization boundaries, data integrity, workflow state changes, and framework customizations — especially when the underlying contract is easy to break during refactors (routes, authz, persistence, event streams, file/path resolution, DTO/view-model shapes).
 - Development-only tests are acceptable while shaping or debugging a feature, but remove them once the feature is stable if they no longer guard meaningful long-term behavior.
 - Avoid smoke-only and low-signal tests such as:
   - simple `200 OK` page-render checks
   - guest-to-login redirect checks that only restate framework middleware
   - brittle string or DOM-presence assertions that do not verify behavior
   - tests that only repeat trivial implementation details already obvious from the code
+  - brittle UI markup tests unless they protect a particularly fragile contract
 - Keep tests that would catch a meaningful regression. Remove or avoid tests that only prove the framework can render a page.
 
 ## Reducing Sonar and Static Analysis Noise

@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Livewire;
 use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesStreaming;
@@ -185,6 +186,58 @@ class Chat extends Component
             : null;
         $activeTurnCount = count($activeTurnsBySession);
 
+        $messagesWithUi = array_map(function (Message $message): Message {
+            $attachments = $message->getMetaArray('attachments', []);
+            if ($attachments === []) {
+                return new Message(
+                    role: $message->role,
+                    content: $message->content,
+                    timestamp: $message->timestamp,
+                    runId: $message->runId,
+                    meta: array_merge($message->meta, ['attachments_ui' => []]),
+                    type: $message->type,
+                );
+            }
+
+            $mapped = array_map(function ($att): ?array {
+                if (! is_array($att)) {
+                    return null;
+                }
+
+                $id = $att['id'] ?? null;
+                if (! is_string($id) || $id === '') {
+                    return null;
+                }
+
+                $kind = is_string($att['kind'] ?? null) ? (string) $att['kind'] : 'document';
+                $mime = is_string($att['mime_type'] ?? null) ? (string) $att['mime_type'] : 'application/octet-stream';
+                $name = is_string($att['original_name'] ?? null) ? (string) $att['original_name'] : $id;
+                $size = is_int($att['size'] ?? null) ? (int) $att['size'] : null;
+
+                return [
+                    'id' => $id,
+                    'kind' => $kind,
+                    'mime_type' => $mime,
+                    'original_name' => $name,
+                    'size' => $size,
+                    'url' => route('ai.chat.attachments.show', [
+                        'employeeId' => $this->employeeId,
+                        'sessionId' => (string) $this->selectedSessionId,
+                        'attachmentId' => $id,
+                    ]).'?mime='.urlencode($mime),
+                ];
+            }, $attachments);
+
+            return new Message(
+                role: $message->role,
+                content: $message->content,
+                timestamp: $message->timestamp,
+                runId: $message->runId,
+                meta: array_merge($message->meta, ['attachments_ui' => array_values(array_filter($mapped))]),
+                type: $message->type,
+            );
+        }, $messages);
+
         $phaseLabels = array_merge(
             array_reduce(
                 TurnPhase::cases(),
@@ -204,7 +257,7 @@ class Chat extends Component
             'agentActivated' => $agentActivated,
             'agentIdentity' => $this->agentIdentity(),
             'sessions' => $sessions,
-            'messages' => $messages,
+            'messages' => $messagesWithUi,
             'settingsUrl' => $settingsUrl,
             'canSelectModel' => $this->canSelectModel(),
             'canAttachFiles' => $canAttach,

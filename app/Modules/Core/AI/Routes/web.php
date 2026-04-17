@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
+use App\Modules\Core\AI\Http\Controllers\ChatAttachmentController;
+use App\Modules\Core\AI\Http\Controllers\ChatTurnStreamController;
 use App\Modules\Core\AI\Http\Controllers\MessagingWebhookController;
 use App\Modules\Core\AI\Http\Controllers\ProviderSetupController;
-use App\Modules\Core\AI\Http\Controllers\ChatTurnStreamController;
 use App\Modules\Core\AI\Http\Controllers\TurnEventStreamController;
 use App\Modules\Core\AI\Livewire\ControlPlane;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
@@ -28,6 +29,12 @@ Route::middleware(['auth'])->group(function () {
     // Direct streaming for interactive chat turns (NDJSON)
     Route::get('api/ai/chat/turns/{turnId}/stream', ChatTurnStreamController::class)
         ->name('ai.chat.turn.stream');
+    // Session attachment retrieval (images/files referenced from transcript meta)
+    Route::get('api/ai/chat/attachments/{employeeId}/{sessionId}/{attachmentId}', ChatAttachmentController::class)
+        ->name('ai.chat.attachments.show')
+        ->whereNumber('employeeId')
+        ->where('sessionId', '[0-9]{8}-[0-9]{6}')
+        ->where('attachmentId', '[a-zA-Z0-9_]+');
     // Lara setup
     Route::get('admin/setup/lara', Lara::class)
         ->name('admin.setup.lara');
