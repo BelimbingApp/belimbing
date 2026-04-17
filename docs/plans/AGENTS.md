@@ -11,10 +11,11 @@ Norms: **in-repo** single source of truth; **recommendation-driven** copy; stabl
 ## Workflow and visibility
 
 1. User opens a discussion (problem, goal, constraint).
-2. Agent records a coherent plan when asked—recommendations and tradeoffs stated plainly, not questionnaires or “Decision Needed” dumps.
+2. Agent records a coherent plan when asked—recommendations and tradeoffs stated plainly, not questionnaires or "Decision Needed" dumps.
 3. User reacts; agent updates the doc.
-4. User approves implementation; agent implements and verifies locally.
-5. **Do not** commit or push unless the user asks.
+4. **HALT — Mandatory Pause for Review** — After creating a plan, the agent **must stop and wait for explicit user approval** before proceeding to implementation.
+5. User approves implementation; agent implements and verifies locally.
+6. **Do not** commit or push unless the user asks.
 
 Hidden session/tool-only plans are fine as scratch **only** if the same execution truth is **mirrored** into this file. Anyone opening the plan should see design, current phase, done vs. open work (via **Phases** checklists), and what changed.
 
@@ -32,7 +33,7 @@ Skipping plan updates creates a false source of truth: the checklist and design 
 
 **Title:** the **filename** (and path under `docs/plans/`). Optional lone `#` matching the filename if your renderer needs it—no filler “Plan” / “Notes” sections.
 
-**Preamble** (substantive plans): compact block with **Status** (e.g. Identified, In Progress, Blocked, Complete, or phase label), **Last Updated** (`YYYY-MM-DD` when narrative or status meaningfully changes), **Sources** (issues, ADRs, parent plans, paths—or `None`). Preamble = compass; do not paste the whole **Phases** section there.
+**Preamble** (substantive plans): compact block with **Agent** (identity that authored the plan), **Status** (e.g. Identified, In Progress, Blocked, Complete, or phase label), **Last Updated** (`YYYY-MM-DD` when narrative or status meaningfully changes), **Sources** (issues, ADRs, parent plans, paths—or `None`). Preamble = compass; do not paste the whole **Phases** section there.
 
 **Body** (order when sections exist; early drafts may stop after the first two):
 
