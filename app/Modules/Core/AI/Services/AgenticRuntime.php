@@ -143,7 +143,6 @@ class AgenticRuntime
                     $allowedToolNames,
                 );
 
-                // Check if we should fallback on runtime error
                 if (isset($result['meta']['error_type'])) {
                     $errorTypeValue = $result['meta']['error_type'];
                     if ($this->shouldFallbackFromErrorType($errorTypeValue)) {
@@ -152,6 +151,15 @@ class AgenticRuntime
 
                         continue;
                     }
+
+                    $result['meta']['fallback_attempts'] = $fallbackAttempts;
+                    $this->runRecorder->fail(
+                        $runId,
+                        $this->runtimeErrorFromAssistantMeta($result['meta']),
+                        $result['meta'],
+                    );
+
+                    return $result;
                 }
 
                 $result['meta']['fallback_attempts'] = $fallbackAttempts;
@@ -168,9 +176,13 @@ class AgenticRuntime
             );
             $result['meta']['fallback_attempts'] = $fallbackAttempts;
 
+            $terminalError = $lastErrorResult !== null
+                ? $this->runtimeErrorFromAssistantMeta($lastErrorResult['meta'])
+                : AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED);
+
             $this->runRecorder->fail(
                 $runId,
-                AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED),
+                $terminalError,
                 $result['meta'],
             );
 
@@ -931,6 +943,30 @@ class AgenticRuntime
             'latency_ms' => $error->latencyMs,
             'diagnostic' => $error->diagnostic !== '' ? $error->diagnostic : null,
         ];
+    }
+
+    /**
+     * Rebuild a structured runtime error from assistant response metadata.
+     *
+     * Used when recording {@see RunRecorder::fail()} so ledger rows match the
+     * user-visible outcome instead of a generic aggregate message.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private function runtimeErrorFromAssistantMeta(array $meta): AiRuntimeError
+    {
+        $type = AiErrorType::tryFrom((string) ($meta['error_type'] ?? '')) ?? AiErrorType::UnexpectedError;
+        $diagnostic = is_string($meta['diagnostic'] ?? null) ? $meta['diagnostic'] : '';
+
+        return new AiRuntimeError(
+            $type,
+            is_string($meta['error'] ?? null) ? $meta['error'] : null,
+            $diagnostic,
+            null,
+            null,
+            (int) ($meta['latency_ms'] ?? 0),
+            null,
+        );
     }
 
     /**
