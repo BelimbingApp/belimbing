@@ -4,8 +4,11 @@ use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Company\Models\RelationshipType;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
 
 /*
 |--------------------------------------------------------------------------
@@ -18,8 +21,8 @@ use Illuminate\Support\Facades\DB;
 |
 */
 
-pest()->extend(Tests\TestCase::class)
-    ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
+pest()->extend(TestCase::class)
+    ->use(RefreshDatabase::class)
     ->in('Feature');
 
 /*
@@ -93,7 +96,7 @@ function createAdminUser(): User
 
     PrincipalRole::query()->create([
         'company_id' => $company->id,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $user->id,
         'role_id' => $role->id,
     ]);
@@ -104,13 +107,13 @@ function createAdminUser(): User
 /**
  * Create two companies and a default relationship type for relationship tests.
  *
- * @return array{Company, Company, \App\Modules\Core\Company\Models\RelationshipType}
+ * @return array{Company, Company, RelationshipType}
  */
 function createCompanyRelationshipFixture(): array
 {
     return [
         Company::factory()->create(),
         Company::factory()->create(),
-        \App\Modules\Core\Company\Models\RelationshipType::factory()->create(),
+        RelationshipType::factory()->create(),
     ];
 }

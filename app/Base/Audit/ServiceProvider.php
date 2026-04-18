@@ -180,13 +180,13 @@ class ServiceProvider extends BaseServiceProvider
 
         $roleNames = PrincipalRole::query()
             ->join('base_authz_roles', 'base_authz_roles.id', '=', 'base_authz_principal_roles.role_id')
-            ->where('base_authz_principal_roles.principal_type', PrincipalType::HUMAN_USER->value)
+            ->where('base_authz_principal_roles.principal_type', PrincipalType::USER->value)
             ->where('base_authz_principal_roles.principal_id', $user->getAuthIdentifier())
             ->pluck('base_authz_roles.code')
             ->sort()
             ->implode(',');
 
-        return Actor::forUser($user, PrincipalType::HUMAN_USER, attributes: [
+        return Actor::forUser($user, PrincipalType::USER, attributes: [
             'role' => $roleNames !== '' ? $roleNames : null,
         ]);
     }

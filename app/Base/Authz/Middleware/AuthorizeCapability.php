@@ -45,7 +45,7 @@ class AuthorizeCapability
      * Resolve the principal type from the authenticated user.
      *
      * Checks for a principalType() method on the user model,
-     * falling back to HUMAN_USER for standard web authentication.
+     * falling back to USER for standard web authentication.
      */
     private function resolvePrincipalType(mixed $user): PrincipalType
     {
@@ -53,6 +53,6 @@ class AuthorizeCapability
             return $user->principalType();
         }
 
-        return PrincipalType::HUMAN_USER;
+        return PrincipalType::USER;
     }
 }

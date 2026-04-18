@@ -170,7 +170,7 @@ test('user without delete capability cannot delete users', function (): void {
 
     PrincipalRole::query()->create([
         'company_id' => $company->id,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $viewer->id,
         'role_id' => $viewerRole->id,
     ]);

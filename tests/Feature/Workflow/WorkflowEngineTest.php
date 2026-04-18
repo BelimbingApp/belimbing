@@ -75,7 +75,7 @@ function createTestActor(): Actor
     ]);
 
     return new Actor(
-        type: PrincipalType::HUMAN_USER,
+        type: PrincipalType::USER,
         id: $user->id,
         companyId: $company->id,
         attributes: ['role' => 'technician', 'department' => 'IT', 'employee_id' => $employee->id],

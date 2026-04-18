@@ -25,7 +25,7 @@ function createRoleTestAdmin(): User
 
     PrincipalRole::query()->create([
         'company_id' => $company->id,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $user->id,
         'role_id' => $role->id,
     ]);
@@ -279,7 +279,7 @@ test('custom role scope cannot be changed when users are assigned', function ():
 
     PrincipalRole::query()->create([
         'company_id' => $user->company_id,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $user->id,
         'role_id' => $role->id,
     ]);
@@ -306,7 +306,7 @@ test('users without update capability cannot modify role capabilities', function
     // Give viewer only user_viewer role (has core.user.list + core.user.view, not admin.role.update)
     PrincipalRole::query()->create([
         'company_id' => $company->id,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $viewer->id,
         'role_id' => $viewerRole->id,
     ]);
@@ -363,7 +363,7 @@ test('users can be removed from a role from role show page', function (): void {
 
     $assignment = PrincipalRole::query()->create([
         'company_id' => $admin->company_id,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $targetUser->id,
         'role_id' => $role->id,
     ]);
@@ -437,7 +437,7 @@ test('direct capabilities can be removed from a user', function (): void {
 
     $cap = PrincipalCapability::query()->create([
         'company_id' => $company->id,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $targetUser->id,
         'capability_key' => 'core.company.view',
         'is_allowed' => true,
@@ -460,7 +460,7 @@ test('role capability can be denied for a user', function (): void {
     $role = Role::query()->where('code', 'user_viewer')->firstOrFail();
     PrincipalRole::query()->create([
         'company_id' => $company->id,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $targetUser->id,
         'role_id' => $role->id,
     ]);
@@ -486,7 +486,7 @@ test('denied capability can be un-denied by removing it', function (): void {
 
     $deny = PrincipalCapability::query()->create([
         'company_id' => $company->id,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $targetUser->id,
         'capability_key' => 'core.user.view',
         'is_allowed' => false,

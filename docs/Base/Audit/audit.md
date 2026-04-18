@@ -29,7 +29,7 @@ Reuses `Authz\DTO\Actor` and `Authz\Enums\PrincipalType`. The enum was extended 
 
 | `PrincipalType` | `actor_id` | Context |
 |---|---|---|
-| `human_user` | User ID | Browser / API requests |
+| `user` | User ID | Browser / API requests |
 | `agent` | Agent ID | AI agent operations |
 | `console` | User ID or 0 | Artisan commands (may be run by a user) |
 | `scheduler` | 0 | Cron-triggered scheduled tasks |

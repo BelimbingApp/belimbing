@@ -11,7 +11,7 @@ it('builds a human user actor from a company scoped user', function (): void {
 
     $actor = Actor::forUser($user);
 
-    expect($actor->type)->toBe(PrincipalType::HUMAN_USER)
+    expect($actor->type)->toBe(PrincipalType::USER)
         ->and($actor->id)->toBe(42)
         ->and($actor->companyId)->toBe(7)
         ->and($actor->actingForUserId)->toBeNull();

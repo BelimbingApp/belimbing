@@ -30,7 +30,7 @@ final readonly class Actor
      */
     public static function forUser(
         Authenticatable $user,
-        PrincipalType $type = PrincipalType::HUMAN_USER,
+        PrincipalType $type = PrincipalType::USER,
         ?int $actingForUserId = null,
         array $attributes = [],
     ): self {
@@ -43,9 +43,9 @@ final readonly class Actor
         );
     }
 
-    public function isHumanUser(): bool
+    public function isUser(): bool
     {
-        return $this->type === PrincipalType::HUMAN_USER;
+        return $this->type === PrincipalType::USER;
     }
 
     public function isAgent(): bool

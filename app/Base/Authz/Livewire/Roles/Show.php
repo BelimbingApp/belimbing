@@ -210,7 +210,7 @@ class Show extends Component implements ProvidesLaraPageContext
 
             PrincipalRole::query()->firstOrCreate([
                 'company_id' => $user->company_id,
-                'principal_type' => PrincipalType::HUMAN_USER->value,
+                'principal_type' => PrincipalType::USER->value,
                 'principal_id' => $user->id,
                 'role_id' => $this->role->id,
             ]);
@@ -269,7 +269,7 @@ class Show extends Component implements ProvidesLaraPageContext
         $assignedPrincipalRoles = PrincipalRole::query()
             ->with('role')
             ->where('role_id', $this->role->id)
-            ->where('principal_type', PrincipalType::HUMAN_USER->value)
+            ->where('principal_type', PrincipalType::USER->value)
             ->get();
 
         $assignedUserIds = $assignedPrincipalRoles->pluck('principal_id')->all();

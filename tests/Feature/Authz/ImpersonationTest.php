@@ -20,7 +20,7 @@ it('allows admin to start impersonation', function (): void {
 
     PrincipalRole::query()->create([
         'company_id' => $company->id,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $admin->id,
         'role_id' => $role->id,
     ]);
@@ -52,7 +52,7 @@ it('stops impersonation and restores original user', function (): void {
 
     PrincipalRole::query()->create([
         'company_id' => $company->id,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $admin->id,
         'role_id' => $role->id,
     ]);
@@ -74,7 +74,7 @@ it('prevents impersonating yourself', function (): void {
 
     PrincipalRole::query()->create([
         'company_id' => $company->id,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $admin->id,
         'role_id' => $role->id,
     ]);

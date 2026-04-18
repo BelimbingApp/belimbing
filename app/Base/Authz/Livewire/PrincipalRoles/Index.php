@@ -5,6 +5,7 @@
 
 namespace App\Base\Authz\Livewire\PrincipalRoles;
 
+use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Foundation\Livewire\SearchablePaginatedList;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
@@ -24,7 +25,7 @@ class Index extends SearchablePaginatedList
             ->with('role')
             ->leftJoin('users', function ($join): void {
                 $join->on('base_authz_principal_roles.principal_id', '=', 'users.id')
-                    ->where('base_authz_principal_roles.principal_type', '=', 'human_user');
+                    ->where('base_authz_principal_roles.principal_type', '=', PrincipalType::USER->value);
             })
             ->leftJoin('companies', 'base_authz_principal_roles.company_id', '=', 'companies.id')
             ->select(

@@ -5,6 +5,7 @@
 
 namespace App\Base\Authz\Livewire\PrincipalCapabilities;
 
+use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Foundation\Livewire\SearchablePaginatedList;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
@@ -29,7 +30,7 @@ class Index extends SearchablePaginatedList
         return PrincipalCapability::query()
             ->leftJoin('users', function ($join): void {
                 $join->on('base_authz_principal_capabilities.principal_id', '=', 'users.id')
-                    ->where('base_authz_principal_capabilities.principal_type', '=', 'human_user');
+                    ->where('base_authz_principal_capabilities.principal_type', '=', PrincipalType::USER->value);
             })
             ->leftJoin('companies', 'base_authz_principal_capabilities.company_id', '=', 'companies.id')
             ->select(

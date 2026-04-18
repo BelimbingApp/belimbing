@@ -21,11 +21,9 @@
                 </div>
                 <x-ui.select id="filter-actor-type" wire:model.live="filterActorType">
                     <option value="">{{ __('All Actor Types') }}</option>
-                    <option value="human_user">{{ __('Human User') }}</option>
-                    <option value="agent">{{ __('Agent') }}</option>
-                    <option value="console">{{ __('Console') }}</option>
-                    <option value="scheduler">{{ __('Scheduler') }}</option>
-                    <option value="queue">{{ __('Queue') }}</option>
+                    @foreach ($actorTypeOptions as $actorType)
+                        <option value="{{ $actorType->value }}">{{ $actorType->label() }}</option>
+                    @endforeach
                 </x-ui.select>
             </div>
 
