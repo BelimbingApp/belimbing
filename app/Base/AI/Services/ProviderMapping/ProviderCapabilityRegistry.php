@@ -10,6 +10,7 @@ use App\Base\AI\DTO\SamplingControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\ReasoningEffort;
 use App\Base\AI\Enums\ReasoningVisibility;
+use App\Base\AI\Enums\ToolChoiceMode;
 
 final class ProviderCapabilityRegistry
 {
@@ -21,6 +22,22 @@ final class ProviderCapabilityRegistry
                 supportedReasoningEffort: [ReasoningEffort::Low, ReasoningEffort::Medium, ReasoningEffort::High],
                 supportsReasoningBudget: true,
                 supportsReasoningContextPreservation: true,
+            );
+        }
+
+        if ($apiType === AiApiType::AnthropicMessages && $this->isAnthropicProvider($providerName)) {
+            return new ProviderExecutionCapabilities(
+                supportedReasoningVisibility: [ReasoningVisibility::None, ReasoningVisibility::Summary],
+                supportedReasoningEffort: $this->supportsAnthropicAdaptiveThinking($model)
+                    ? [ReasoningEffort::Low, ReasoningEffort::Medium, ReasoningEffort::High]
+                    : [],
+                supportsReasoningBudget: true,
+                supportsReasoningContextPreservation: true,
+                supportedToolChoiceModesWhenReasoning: [ToolChoiceMode::Auto, ToolChoiceMode::None],
+                supportsNativeReasoningBlocks: true,
+                supportsAdaptiveReasoning: $this->supportsAnthropicAdaptiveThinking($model),
+                defaultReasoningBudget: 2048,
+                interleavedThinkingBetaHeader: 'interleaved-thinking-2025-05-14',
             );
         }
 
@@ -58,5 +75,17 @@ final class ProviderCapabilityRegistry
     private function isMoonshotProvider(?string $providerName): bool
     {
         return in_array($providerName, ['moonshotai', 'moonshotai-cn', 'kimi-for-coding'], true);
+    }
+
+    private function isAnthropicProvider(?string $providerName): bool
+    {
+        return $providerName === 'anthropic';
+    }
+
+    private function supportsAnthropicAdaptiveThinking(string $model): bool
+    {
+        return str_starts_with($model, 'claude-opus-4-6')
+            || str_starts_with($model, 'claude-sonnet-4-6')
+            || str_starts_with($model, 'claude-mythos');
     }
 }

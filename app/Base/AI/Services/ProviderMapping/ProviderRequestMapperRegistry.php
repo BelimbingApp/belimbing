@@ -17,6 +17,7 @@ final class ProviderRequestMapperRegistry
     {
         return match ($apiType) {
             AiApiType::OpenAiResponses => new OpenAiResponsesRequestMapper($this->capabilities),
+            AiApiType::AnthropicMessages => new AnthropicMessagesRequestMapper($this->capabilities),
             default => new OpenAiChatCompletionsRequestMapper($this->capabilities),
         };
     }

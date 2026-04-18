@@ -277,11 +277,17 @@ trait ManagesAgentModelSelection
             ->active()
             ->firstOrFail();
 
+        $resolver = app(ConfigResolver::class);
+        $workspaceConfig = $resolver->readWorkspaceConfig($employeeId) ?? [];
+        $llm = is_array($workspaceConfig['llm'] ?? null) ? $workspaceConfig['llm'] : [];
+        $existingModels = is_array($llm['models'] ?? null) ? array_values($llm['models']) : [];
+
         $models = [
-            [
-                'provider' => $provider->name,
-                'model' => $this->selectedModelId,
-            ],
+            $this->buildModelConfigEntry(
+                providerName: $provider->name,
+                modelId: $this->selectedModelId,
+                existingEntry: is_array($existingModels[0] ?? null) ? $existingModels[0] : null,
+            ),
         ];
 
         if ($this->backupProviderId !== null && $this->backupModelId !== null) {
@@ -291,19 +297,43 @@ trait ManagesAgentModelSelection
                 ->active()
                 ->firstOrFail();
 
-            $models[] = [
-                'provider' => $backupProvider->name,
-                'model' => $this->backupModelId,
-            ];
+            $models[] = $this->buildModelConfigEntry(
+                providerName: $backupProvider->name,
+                modelId: $this->backupModelId,
+                existingEntry: is_array($existingModels[1] ?? null) ? $existingModels[1] : null,
+            );
         }
 
-        $resolver = app(ConfigResolver::class);
-        $workspaceConfig = $resolver->readWorkspaceConfig($employeeId) ?? [];
-        $llm = is_array($workspaceConfig['llm'] ?? null) ? $workspaceConfig['llm'] : [];
         $llm['models'] = $models;
         $workspaceConfig['llm'] = $llm;
 
         $resolver->writeWorkspaceConfig($employeeId, $workspaceConfig);
+    }
+
+    /**
+     * Preserve canonical runtime overrides while the Lara setup page edits model identity.
+     *
+     * @param  array<string, mixed>|null  $existingEntry
+     * @return array<string, mixed>
+     */
+    private function buildModelConfigEntry(string $providerName, ?string $modelId, ?array $existingEntry): array
+    {
+        $entry = [
+            'provider' => $providerName,
+            'model' => $modelId,
+        ];
+
+        $executionControls = $existingEntry['execution_controls'] ?? null;
+        if (is_array($executionControls)) {
+            $entry['execution_controls'] = $executionControls;
+        }
+
+        $timeout = $existingEntry['timeout'] ?? null;
+        if (is_int($timeout) || is_numeric($timeout)) {
+            $entry['timeout'] = (int) $timeout;
+        }
+
+        return $entry;
     }
 
     private function providerIdForName(?string $providerName): ?int

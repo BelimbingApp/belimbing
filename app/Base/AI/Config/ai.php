@@ -214,6 +214,9 @@ return [
             'description' => 'Claude models — advanced reasoning and coding',
             'base_url' => 'https://api.anthropic.com/v1',
             'api_key_url' => 'https://console.anthropic.com/settings/keys',
+            'api_type_overrides' => [
+                'claude-*' => 'anthropic_messages',
+            ],
         ],
         'google' => [
             'category' => ['leading-lab'],

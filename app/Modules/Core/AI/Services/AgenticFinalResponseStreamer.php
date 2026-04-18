@@ -58,6 +58,9 @@ final class AgenticFinalResponseStreamer
             $executionControls = $executionControls
                 ->withReasoningVisibility(ReasoningVisibility::Summary)
                 ->withReasoningContextPreservation(true);
+        } elseif ($apiType === AiApiType::AnthropicMessages) {
+            $executionControls = $executionControls
+                ->withReasoningContextPreservation(true);
         }
 
         $stream = $this->llmClient->chatStream(new ChatRequest(
@@ -76,6 +79,7 @@ final class AgenticFinalResponseStreamer
             'full_content' => '',
             'usage' => null,
             'latency_ms' => 0,
+            'provider_mapping' => null,
         ];
 
         yield from $this->yieldFinalResponseStreamEvents($runId, $stream, $accumulator, $config, $streamState);
@@ -106,6 +110,10 @@ final class AgenticFinalResponseStreamer
             'retry_attempts' => $streamState['retry_attempts'],
         ];
 
+        if (is_array($accumulator['provider_mapping'] ?? null) && $accumulator['provider_mapping'] !== []) {
+            $meta['provider_mapping'] = $accumulator['provider_mapping'];
+        }
+
         if ($streamState['tool_actions'] !== []) {
             $meta['tool_actions'] = $streamState['tool_actions'];
         }
@@ -124,7 +132,7 @@ final class AgenticFinalResponseStreamer
     }
 
     /**
-     * @param  array{full_content: string, usage: mixed, latency_ms: int}  $accumulator
+     * @param  array{full_content: string, usage: mixed, latency_ms: int, provider_mapping: mixed}  $accumulator
      * @param  array{
      *     retry_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
      *     fallback_attempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
@@ -161,6 +169,7 @@ final class AgenticFinalResponseStreamer
                 case 'done':
                     $accumulator['usage'] = $event['usage'] ?? null;
                     $accumulator['latency_ms'] = $event['latency_ms'] ?? 0;
+                    $accumulator['provider_mapping'] = $event['provider_mapping'] ?? null;
                     break;
 
                 case 'error':

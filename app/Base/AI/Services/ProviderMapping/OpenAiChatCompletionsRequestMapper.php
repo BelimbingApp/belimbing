@@ -6,6 +6,7 @@
 namespace App\Base\AI\Services\ProviderMapping;
 
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Enums\ReasoningMode;
 
 final class OpenAiChatCompletionsRequestMapper implements ProviderRequestMapper
@@ -16,9 +17,10 @@ final class OpenAiChatCompletionsRequestMapper implements ProviderRequestMapper
         private readonly ProviderCapabilityRegistry $capabilities,
     ) {}
 
-    public function mapPayload(ChatRequest $request, bool $stream): array
+    public function mapPayload(ChatRequest $request, bool $stream): ProviderRequestMapping
     {
         $capabilities = $this->capabilities->capabilitiesFor($request->providerName, $request->model, $request->apiType);
+        $adjustments = [];
         $payload = [
             'model' => $request->model,
             'messages' => $request->messages,
@@ -37,9 +39,12 @@ final class OpenAiChatCompletionsRequestMapper implements ProviderRequestMapper
             $payload['thinking'] = ['type' => 'disabled'];
         }
 
-        return array_filter(
-            $this->applyFixedSampling($payload, $request, $capabilities),
-            fn ($value) => $value !== null
+        return new ProviderRequestMapping(
+            payload: array_filter(
+                $this->applyFixedSampling($payload, $request, $capabilities, $adjustments),
+                fn ($value) => $value !== null
+            ),
+            controlAdjustments: $adjustments,
         );
     }
 }

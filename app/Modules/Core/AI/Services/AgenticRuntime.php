@@ -612,13 +612,17 @@ class AgenticRuntime
      */
     private function chatWithTools(array $credentials, array $config, array $apiMessages, array $tools): array
     {
+        $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
         $executionControls = $tools !== []
             ? $config['execution_controls']->withToolChoice(ToolChoiceMode::Auto)
             : $config['execution_controls']->withToolChoice(null);
 
-        if (($config['api_type'] ?? AiApiType::OpenAiChatCompletions) === AiApiType::OpenAiResponses) {
+        if ($apiType === AiApiType::OpenAiResponses) {
             $executionControls = $executionControls
                 ->withReasoningVisibility(ReasoningVisibility::Summary)
+                ->withReasoningContextPreservation(true);
+        } elseif ($apiType === AiApiType::AnthropicMessages) {
+            $executionControls = $executionControls
                 ->withReasoningContextPreservation(true);
         }
 
@@ -631,7 +635,7 @@ class AgenticRuntime
             timeout: $config['timeout'],
             providerName: $config['provider_name'],
             tools: $tools !== [] ? $tools : null,
-            apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
+            apiType: $apiType,
         ));
     }
 
@@ -655,6 +659,10 @@ class AgenticRuntime
 
         if (is_string($result['reasoning_content'] ?? null) && $result['reasoning_content'] !== '') {
             $message['reasoning_content'] = $result['reasoning_content'];
+        }
+
+        if (is_array($result['reasoning_blocks'] ?? null) && $result['reasoning_blocks'] !== []) {
+            $message['reasoning_blocks'] = $result['reasoning_blocks'];
         }
 
         if ($phase !== null) {
@@ -789,13 +797,13 @@ class AgenticRuntime
             );
         }
 
-        return $this->responseFactory->success(
-            $runId,
-            $config,
-            $llmResult,
-            $toolActions !== [] ? ['tool_actions' => $toolActions] : [],
-            $content,
-        );
+        $extraMeta = $toolActions !== [] ? ['tool_actions' => $toolActions] : [];
+
+        if (is_array($llmResult['provider_mapping'] ?? null) && $llmResult['provider_mapping'] !== []) {
+            $extraMeta['provider_mapping'] = $llmResult['provider_mapping'];
+        }
+
+        return $this->responseFactory->success($runId, $config, $llmResult, $extraMeta, $content);
     }
 
     /**
@@ -963,6 +971,10 @@ class AgenticRuntime
             'fallback_attempts' => $fallbackAttempts,
             'retry_attempts' => $toolLoopState['retryAttempts'],
         ];
+
+        if (is_array($iterResult['provider_mapping'] ?? null) && $iterResult['provider_mapping'] !== []) {
+            $meta['provider_mapping'] = $iterResult['provider_mapping'];
+        }
 
         if ($toolLoopState['toolActions'] !== []) {
             $meta['tool_actions'] = $toolLoopState['toolActions'];

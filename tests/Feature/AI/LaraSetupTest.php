@@ -114,3 +114,80 @@ test('lara activation works with no task config present', function (): void {
         ->and($workspaceConfig['llm']['models'][0]['model'] ?? null)->toBe('gpt-primary')
         ->and($workspaceConfig['llm']['tasks'] ?? null)->toBeNull();
 });
+
+test('lara setup preserves execution controls and timeout when the model changes', function (): void {
+    Company::query()->find(Company::LICENSEE_ID)
+        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+
+    Employee::provisionLara();
+
+    $primaryProvider = AiProvider::query()->create([
+        'company_id' => Company::LICENSEE_ID,
+        'name' => 'openai',
+        'display_name' => 'OpenAI',
+        'base_url' => 'https://openai.example.test',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'openai-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 1,
+    ]);
+
+    $secondaryProvider = AiProvider::query()->create([
+        'company_id' => Company::LICENSEE_ID,
+        'name' => 'anthropic',
+        'display_name' => 'Anthropic',
+        'base_url' => 'https://anthropic.example.test',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'anthropic-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 2,
+    ]);
+
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $primaryProvider->id,
+        'model_id' => 'gpt-primary',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $secondaryProvider->id,
+        'model_id' => 'claude-primary',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    app(ConfigResolver::class)->writeWorkspaceConfig(Employee::LARA_ID, [
+        'llm' => [
+            'models' => [[
+                'provider' => 'openai',
+                'model' => 'gpt-primary',
+                'execution_controls' => [
+                    'limits' => [
+                        'max_output_tokens' => 4096,
+                    ],
+                    'reasoning' => [
+                        'mode' => 'auto',
+                        'visibility' => 'summary',
+                    ],
+                ],
+                'timeout' => 120,
+            ]],
+        ],
+    ]);
+
+    Livewire::test(Lara::class)
+        ->set('selectedProviderId', $secondaryProvider->id)
+        ->call('activateLara');
+
+    $workspaceConfig = app(ConfigResolver::class)->readWorkspaceConfig(Employee::LARA_ID);
+
+    expect($workspaceConfig)->not->toBeNull()
+        ->and($workspaceConfig['llm']['models'][0]['provider'] ?? null)->toBe('anthropic')
+        ->and($workspaceConfig['llm']['models'][0]['model'] ?? null)->toBe('claude-primary')
+        ->and($workspaceConfig['llm']['models'][0]['execution_controls']['limits']['max_output_tokens'] ?? null)->toBe(4096)
+        ->and($workspaceConfig['llm']['models'][0]['execution_controls']['reasoning']['visibility'] ?? null)->toBe('summary')
+        ->and($workspaceConfig['llm']['models'][0]['timeout'] ?? null)->toBe(120);
+});

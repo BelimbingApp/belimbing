@@ -6,6 +6,9 @@
 namespace App\Base\AI\Services\ProviderMapping;
 
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ProviderControlAdjustment;
+use App\Base\AI\DTO\ProviderRequestMapping;
+use App\Base\AI\Enums\ProviderControlAdjustmentType;
 use App\Base\AI\Enums\ReasoningVisibility;
 
 final class OpenAiResponsesRequestMapper implements ProviderRequestMapper
@@ -16,10 +19,11 @@ final class OpenAiResponsesRequestMapper implements ProviderRequestMapper
         private readonly ProviderCapabilityRegistry $capabilities,
     ) {}
 
-    public function mapPayload(ChatRequest $request, bool $stream): array
+    public function mapPayload(ChatRequest $request, bool $stream): ProviderRequestMapping
     {
         [$instructions, $input] = $this->convertToResponsesInputWithInstructions($request->messages);
         $capabilities = $this->capabilities->capabilitiesFor($request->providerName, $request->model, $request->apiType);
+        $adjustments = [];
         $payload = array_filter([
             'model' => $request->model,
             'instructions' => $instructions,
@@ -36,6 +40,14 @@ final class OpenAiResponsesRequestMapper implements ProviderRequestMapper
             && $request->executionControls->reasoning->visibility === ReasoningVisibility::Summary
         ) {
             $payload['reasoning'] = ['summary' => 'auto'];
+        } elseif ($request->executionControls->reasoning->visibility === ReasoningVisibility::Full) {
+            $adjustments[] = new ProviderControlAdjustment(
+                ProviderControlAdjustmentType::Unsupported,
+                'reasoning.visibility',
+                $request->executionControls->reasoning->visibility->value,
+                null,
+                'OpenAI Responses supports summary visibility, not full reasoning visibility.',
+            );
         }
 
         if (
@@ -43,6 +55,14 @@ final class OpenAiResponsesRequestMapper implements ProviderRequestMapper
             && in_array($request->executionControls->reasoning->effort, $capabilities->supportedReasoningEffort, true)
         ) {
             $payload['reasoning']['effort'] = $request->executionControls->reasoning->effort->value;
+        } elseif ($request->executionControls->reasoning->effort !== null) {
+            $adjustments[] = new ProviderControlAdjustment(
+                ProviderControlAdjustmentType::Unsupported,
+                'reasoning.effort',
+                $request->executionControls->reasoning->effort->value,
+                null,
+                'OpenAI Responses does not support the requested reasoning effort for this model.',
+            );
         }
 
         if (
@@ -50,8 +70,19 @@ final class OpenAiResponsesRequestMapper implements ProviderRequestMapper
             && $capabilities->supportsReasoningBudget
         ) {
             $payload['reasoning']['budget_tokens'] = $request->executionControls->reasoning->budget;
+        } elseif ($request->executionControls->reasoning->budget !== null) {
+            $adjustments[] = new ProviderControlAdjustment(
+                ProviderControlAdjustmentType::Unsupported,
+                'reasoning.budget',
+                $request->executionControls->reasoning->budget,
+                null,
+                'OpenAI Responses does not support reasoning budgets for this model.',
+            );
         }
 
-        return $payload;
+        return new ProviderRequestMapping(
+            payload: $payload,
+            controlAdjustments: $adjustments,
+        );
     }
 }

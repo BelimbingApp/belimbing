@@ -23,8 +23,10 @@ enum AiApiType: string
     /** OpenAI Responses API — POST /responses */
     case OpenAiResponses = 'openai_responses';
 
-    // Future — only when BLB adds native provider SDKs:
-    // case AnthropicMessages = 'anthropic_messages';
+    /** Anthropic Messages API — POST /messages */
+    case AnthropicMessages = 'anthropic_messages';
+
+    // Future — only when BLB adds more native provider SDKs:
     // case GoogleGenerativeAi = 'google_generative_ai';
     // case BedrockConverseStream = 'bedrock_converse_stream';
 }

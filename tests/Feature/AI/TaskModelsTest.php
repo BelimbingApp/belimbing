@@ -178,6 +178,45 @@ test('lara setup preserves task config when primary model changes', function ():
     ]);
 });
 
+test('task model save preserves existing execution controls', function (): void {
+    activateLaraForTaskModels();
+    $user = createTaskModelsTestUser();
+    $this->actingAs($user);
+
+    app(ConfigResolver::class)->writeTaskConfig(Employee::LARA_ID, 'coding', [
+        'mode' => 'manual',
+        'provider' => 'openai',
+        'model' => 'gpt-primary',
+        'execution_controls' => [
+            'limits' => [
+                'max_output_tokens' => 1024,
+            ],
+            'reasoning' => [
+                'mode' => 'auto',
+                'visibility' => 'summary',
+            ],
+        ],
+    ]);
+
+    Livewire::test(TaskModels::class)
+        ->set('taskModes.coding', 'primary');
+
+    $config = app(ConfigResolver::class)->readTaskConfig(Employee::LARA_ID, 'coding');
+
+    expect($config)->toMatchArray([
+        'mode' => 'primary',
+        'execution_controls' => [
+            'limits' => [
+                'max_output_tokens' => 1024,
+            ],
+            'reasoning' => [
+                'mode' => 'auto',
+                'visibility' => 'summary',
+            ],
+        ],
+    ]);
+});
+
 function createTaskModelsTestUser(): User
 {
     $company = Company::query()->find(Company::LICENSEE_ID)

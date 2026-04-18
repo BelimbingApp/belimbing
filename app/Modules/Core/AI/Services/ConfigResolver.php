@@ -154,23 +154,34 @@ class ConfigResolver
             return $this->resolvePrimaryWithDefaultFallback($employeeId);
         }
 
+        $taskExecutionControls = is_array($taskConfig['execution_controls'] ?? null) ? $taskConfig['execution_controls'] : [];
+
         $mode = $taskConfig['mode'] ?? TaskModelSelectionMode::Recommended->value;
 
         if ($mode === TaskModelSelectionMode::Primary->value) {
-            return $this->resolvePrimaryWithDefaultFallback($employeeId);
+            return $this->applyExecutionControlsOverride(
+                $this->resolvePrimaryWithDefaultFallback($employeeId),
+                $taskExecutionControls,
+            );
         }
 
         $providerName = is_string($taskConfig['provider'] ?? null) ? $taskConfig['provider'] : null;
         $modelId = is_string($taskConfig['model'] ?? null) ? $taskConfig['model'] : null;
 
         if ($providerName === null || $modelId === null) {
-            return $this->resolvePrimaryWithDefaultFallback($employeeId);
+            return $this->applyExecutionControlsOverride(
+                $this->resolvePrimaryWithDefaultFallback($employeeId),
+                $taskExecutionControls,
+            );
         }
 
         $companyId = $this->findCompanyIdForFallback($employeeId);
 
         if ($companyId === null) {
-            return $this->resolvePrimaryWithDefaultFallback($employeeId);
+            return $this->applyExecutionControlsOverride(
+                $this->resolvePrimaryWithDefaultFallback($employeeId),
+                $taskExecutionControls,
+            );
         }
 
         $provider = AiProvider::query()
@@ -180,7 +191,10 @@ class ConfigResolver
             ->first();
 
         if ($provider === null) {
-            return $this->resolvePrimaryWithDefaultFallback($employeeId);
+            return $this->applyExecutionControlsOverride(
+                $this->resolvePrimaryWithDefaultFallback($employeeId),
+                $taskExecutionControls,
+            );
         }
 
         $modelExists = AiProviderModel::query()
@@ -190,13 +204,13 @@ class ConfigResolver
             ->exists();
 
         if (! $modelExists) {
-            return $this->resolvePrimaryWithDefaultFallback($employeeId);
+            return $this->applyExecutionControlsOverride(
+                $this->resolvePrimaryWithDefaultFallback($employeeId),
+                $taskExecutionControls,
+            );
         }
 
-        return $this->resolveModelConfig([
-            'provider' => $providerName,
-            'model' => $modelId,
-        ], $companyId, $this->runtimeDefaults());
+        return $this->resolveModelConfig($taskConfig, $companyId, $this->runtimeDefaults());
     }
 
     /**
@@ -389,6 +403,27 @@ class ConfigResolver
             ),
             'timeout' => (int) config('ai.llm.timeout', 60),
         ];
+    }
+
+    /**
+     * Apply task-level execution controls onto a resolved model configuration.
+     *
+     * @param  array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}|null  $resolvedConfig
+     * @param  array<string, mixed>  $controlsConfig
+     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}|null
+     */
+    private function applyExecutionControlsOverride(?array $resolvedConfig, array $controlsConfig): ?array
+    {
+        if ($resolvedConfig === null || $controlsConfig === []) {
+            return $resolvedConfig;
+        }
+
+        $resolvedConfig['execution_controls'] = ExecutionControls::fromConfig(
+            $controlsConfig,
+            $resolvedConfig['execution_controls'],
+        );
+
+        return $resolvedConfig;
     }
 
     /**

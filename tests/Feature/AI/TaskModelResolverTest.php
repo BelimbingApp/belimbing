@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\AI\Enums\ReasoningVisibility;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -220,4 +221,73 @@ test('resolve task uses lara primary when the task mode is primary', function ()
     expect($resolved)->not->toBeNull()
         ->and($resolved['provider_name'])->toBe('openai')
         ->and($resolved['model'])->toBe('gpt-primary');
+});
+
+test('resolve task overlays task execution controls onto the fallback primary model', function (): void {
+    $company = Company::query()->find(Company::LICENSEE_ID)
+        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+    Employee::provisionLara();
+
+    $primaryProvider = AiProvider::query()->create([
+        'company_id' => $company->id,
+        'name' => 'openai',
+        'display_name' => 'OpenAI',
+        'base_url' => TASK_MODEL_RESOLVER_OPENAI_BASE_URL,
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'openai-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 1,
+    ]);
+
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $primaryProvider->id,
+        'model_id' => 'gpt-primary',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    $resolver = app(ConfigResolver::class);
+    $resolver->writeWorkspaceConfig(Employee::LARA_ID, [
+        'llm' => [
+            'models' => [[
+                'provider' => 'openai',
+                'model' => 'gpt-primary',
+                'execution_controls' => [
+                    'limits' => [
+                        'max_output_tokens' => 2048,
+                    ],
+                    'sampling' => [
+                        'temperature' => 0.7,
+                    ],
+                    'reasoning' => [
+                        'mode' => 'auto',
+                        'visibility' => 'none',
+                    ],
+                ],
+            ]],
+            'tasks' => [
+                'titling' => [
+                    'mode' => 'primary',
+                    'execution_controls' => [
+                        'limits' => [
+                            'max_output_tokens' => 64,
+                        ],
+                        'reasoning' => [
+                            'visibility' => 'summary',
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ]);
+
+    $resolved = $resolver->resolveTaskWithPrimaryFallback(Employee::LARA_ID, 'titling');
+
+    expect($resolved)->not->toBeNull()
+        ->and($resolved['provider_name'])->toBe('openai')
+        ->and($resolved['model'])->toBe('gpt-primary')
+        ->and($resolved['execution_controls']->limits->maxOutputTokens)->toBe(64)
+        ->and($resolved['execution_controls']->sampling->temperature)->toBe(0.7)
+        ->and($resolved['execution_controls']->reasoning->visibility)->toBe(ReasoningVisibility::Summary);
 });

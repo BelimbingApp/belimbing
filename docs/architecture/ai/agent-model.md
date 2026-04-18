@@ -507,14 +507,26 @@ workspace/{employee_id}/
             {
                 "provider": "anthropic",
                 "model": "claude-sonnet-4-20250514",
-                "max_tokens": 4096,
-                "temperature": 0.5
+                "execution_controls": {
+                    "limits": {
+                        "max_output_tokens": 4096
+                    },
+                    "sampling": {
+                        "temperature": 0.5
+                    }
+                }
             },
             {
                 "provider": "openai",
                 "model": "gpt-4o-mini",
-                "max_tokens": 2048,
-                "temperature": 0.7
+                "execution_controls": {
+                    "limits": {
+                        "max_output_tokens": 2048
+                    },
+                    "sampling": {
+                        "temperature": 0.7
+                    }
+                }
             }
         ],
         "tasks": {
@@ -522,7 +534,12 @@ workspace/{employee_id}/
                 "mode": "recommended",
                 "provider": "openai",
                 "model": "gpt-5-nano",
-                "reason": "Fast and sufficient for short titles."
+                "reason": "Fast and sufficient for short titles.",
+                "execution_controls": {
+                    "limits": {
+                        "max_output_tokens": 64
+                    }
+                }
             },
             "research": {
                 "mode": "manual",
@@ -537,12 +554,12 @@ workspace/{employee_id}/
 }
 ```
 
-- `models`: ordered list of chat model configurations (maximum two entries). First entry is primary; the optional second entry is a backup tried on transient failures (timeout, connection error, rate limit, server error, empty response).
+- `models`: ordered list of chat model configurations (maximum two entries). First entry is primary; the optional second entry is a backup tried on transient failures (timeout, connection error, rate limit, server error, empty response). Each entry may include canonical `execution_controls` for that slot.
 - Lara's backup model is configured through the Lara setup UI ("Backup Model" card) and can use a different provider than the primary.
-- `tasks`: optional Lara-only task-model configuration. Each task entry stores a mode (`primary`, `recommended`, or `manual`) and, for `recommended`/`manual`, a stable saved provider/model pair plus optional UI reason text. Recommendation is on-demand and persists a stable choice; it is not recomputed automatically on every run.
+- `tasks`: optional Lara-only task-model configuration. Each task entry stores a mode (`primary`, `recommended`, or `manual`) and, for `recommended`/`manual`, a stable saved provider/model pair plus optional UI reason text. A task entry may also include canonical `execution_controls`; those controls overlay the resolved model config even when the task uses `mode: primary`. Recommendation is on-demand and persists a stable choice; it is not recomputed automatically on every run.
 - `provider`: references `ai_providers.name` within the agent's company.
 - `model`: the specific model within that provider.
-- `max_tokens`, `temperature`: optional per-agent overrides; fall back to global `config('ai.llm.*')` defaults.
+- `execution_controls`: canonical BLB runtime controls persisted in provider-agnostic form; omitted fields fall back to global `config('ai.llm.execution_controls')` defaults or, for tasks, the resolved chat model entry.
 
 ### 15.3 Config Resolution Order
 

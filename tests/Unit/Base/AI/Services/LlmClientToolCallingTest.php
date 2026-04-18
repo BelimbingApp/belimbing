@@ -8,6 +8,8 @@ use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Enums\ReasoningMode;
+use App\Base\AI\Enums\ReasoningVisibility;
 use App\Base\AI\Enums\ToolChoiceMode;
 use App\Base\AI\Services\LlmClient;
 use Illuminate\Foundation\Testing\TestCase;
@@ -115,6 +117,33 @@ describe('LlmClient tool calling request payloads', function () {
         });
     });
 
+    it('reports provider mapping adjustments when Moonshot forces sampling values', function () {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
+                'usage' => [],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $result = $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'moonshotai/kimi-k2.5',
+            [['role' => 'user', 'content' => 'Hello']],
+            executionControls: ExecutionControls::defaults(
+                temperature: 0.3,
+                topP: 0.8,
+            ),
+            providerName: 'moonshotai',
+        ));
+
+        expect($result['provider_mapping']['control_adjustments'] ?? [])
+            ->toHaveCount(2)
+            ->and($result['provider_mapping']['control_adjustments'][0]['type'] ?? null)->toBe('forced')
+            ->and($result['provider_mapping']['control_adjustments'][0]['control'] ?? null)->toBe('sampling.temperature');
+    });
+
     it('does not rewrite Moonshot temperature for non-K2.5 models', function () {
         Http::fake([
             '*/chat/completions' => Http::response([
@@ -183,6 +212,60 @@ describe('LlmClient tool calling request payloads', function () {
             return is_array($userIdSchema)
                 && isset($userIdSchema['anyOf'])
                 && ! isset($userIdSchema['oneOf']);
+        });
+    });
+
+    it('sends Anthropic Messages payloads with native thinking headers and tool-choice adjustments', function () {
+        Http::fake([
+            '*/messages' => Http::response([
+                'content' => [
+                    ['type' => 'text', 'text' => LLM_TOOL_CALLING_GREETING],
+                ],
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $tools = [[
+            'type' => 'function',
+            'function' => [
+                'name' => 'lookup_weather',
+                'description' => 'Look up weather by city.',
+                'parameters' => ['type' => 'object', 'properties' => []],
+            ],
+        ]];
+
+        $result = $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'anthropic-key',
+            'claude-sonnet-4-6',
+            [['role' => 'user', 'content' => 'Check the weather in Kuala Lumpur']],
+            executionControls: ExecutionControls::defaults(
+                toolChoice: ToolChoiceMode::Required,
+                reasoningMode: ReasoningMode::Enabled,
+                reasoningVisibility: ReasoningVisibility::Summary,
+                reasoningBudget: 1500,
+            ),
+            providerName: 'anthropic',
+            tools: $tools,
+            apiType: AiApiType::AnthropicMessages,
+        ));
+
+        expect($result['provider_mapping']['control_adjustments'] ?? [])
+            ->toHaveCount(1)
+            ->and($result['provider_mapping']['control_adjustments'][0]['control'] ?? null)->toBe('tools.choice')
+            ->and($result['provider_mapping']['control_adjustments'][0]['applied_value'] ?? null)->toBe('auto');
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return str_ends_with($request->url(), '/messages')
+                && ($body['thinking']['type'] ?? null) === 'enabled'
+                && ($body['thinking']['budget_tokens'] ?? null) === 1500
+                && ($body['tool_choice']['type'] ?? null) === 'auto'
+                && $request->hasHeader('x-api-key', ['anthropic-key'])
+                && $request->hasHeader('anthropic-version', ['2023-06-01'])
+                && $request->hasHeader('anthropic-beta', ['interleaved-thinking-2025-05-14']);
         });
     });
 });
@@ -309,6 +392,54 @@ describe('LlmClient tool calling response parsing', function () {
         expect($result['reasoning_content'] ?? null)->toBe('Need tool output before answering.')
             ->and($result['tool_calls'][0]['id'] ?? null)->toBe('call_reasoning_1');
     });
+
+    it('preserves Anthropic thinking blocks and tool calls from Messages responses', function () {
+        Http::fake([
+            '*/messages' => Http::response([
+                'content' => [
+                    [
+                        'type' => 'thinking',
+                        'thinking' => 'Need a tool before I can answer.',
+                        'signature' => 'sig_123',
+                    ],
+                    [
+                        'type' => 'tool_use',
+                        'id' => 'toolu_123',
+                        'name' => 'lookup_weather',
+                        'input' => ['city' => 'Kuala Lumpur'],
+                    ],
+                ],
+                'usage' => ['input_tokens' => 12, 'output_tokens' => 9],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $result = $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'anthropic-key',
+            'claude-sonnet-4-6',
+            [['role' => 'user', 'content' => 'Need the weather in Kuala Lumpur']],
+            executionControls: ExecutionControls::defaults(
+                reasoningMode: ReasoningMode::Enabled,
+                reasoningVisibility: ReasoningVisibility::Summary,
+                reasoningBudget: 1500,
+            ),
+            providerName: 'anthropic',
+            tools: [[
+                'type' => 'function',
+                'function' => [
+                    'name' => 'lookup_weather',
+                    'description' => 'Look up weather by city.',
+                    'parameters' => ['type' => 'object', 'properties' => []],
+                ],
+            ]],
+            apiType: AiApiType::AnthropicMessages,
+        ));
+
+        expect($result['tool_calls'][0]['id'] ?? null)->toBe('toolu_123')
+            ->and($result['tool_calls'][0]['function']['arguments'] ?? null)->toBe('{"city":"Kuala Lumpur"}')
+            ->and($result['reasoning_blocks'][0]['signature'] ?? null)->toBe('sig_123');
+    });
 });
 
 describe('LlmClient tool calling responses api handling', function () {
@@ -371,5 +502,79 @@ describe('LlmClient tool calling responses api handling', function () {
             ->and($result['runtime_error']->userMessage)->toStartWith(AiErrorType::BadRequest->userMessage())
             ->and($result['runtime_error']->userMessage)->toContain("Unsupported parameter: 'temperature'")
             ->and($result['runtime_error']->hint)->toContain("Unsupported parameter: 'temperature'");
+    });
+});
+
+describe('LlmClient anthropic streaming handling', function () {
+    it('streams Anthropic thinking and tool-call deltas while preserving reasoning blocks', function () {
+        $payload = <<<'SSE'
+event: message_start
+data: {"type":"message_start","message":{"usage":{"input_tokens":12}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":null}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Need a tool."}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig_stream"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_stream","name":"lookup_weather","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"city\":\"Kua"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"la Lumpur\"}"}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":9}}
+
+event: message_stop
+data: {"type":"message_stop"}
+SSE;
+
+        Http::fake([
+            '*/messages' => Http::response($payload, 200, ['Content-Type' => 'text/event-stream']),
+        ]);
+
+        $client = new LlmClient;
+        $events = iterator_to_array($client->chatStream(new ChatRequest(
+            TEST_API_BASE_URL,
+            'anthropic-key',
+            'claude-sonnet-4-6',
+            [['role' => 'user', 'content' => 'Need the weather in Kuala Lumpur']],
+            executionControls: ExecutionControls::defaults(
+                reasoningMode: ReasoningMode::Enabled,
+                reasoningVisibility: ReasoningVisibility::Summary,
+                reasoningBudget: 1500,
+            ),
+            providerName: 'anthropic',
+            tools: [[
+                'type' => 'function',
+                'function' => [
+                    'name' => 'lookup_weather',
+                    'description' => 'Look up weather by city.',
+                    'parameters' => ['type' => 'object', 'properties' => []],
+                ],
+            ]],
+            apiType: AiApiType::AnthropicMessages,
+        )));
+
+        expect($events[0]['type'] ?? null)->toBe('thinking_delta')
+            ->and($events[0]['text'] ?? null)->toBe('Need a tool.')
+            ->and($events[1]['type'] ?? null)->toBe('tool_call_delta')
+            ->and($events[1]['id'] ?? null)->toBe('toolu_stream')
+            ->and($events[2]['arguments_delta'] ?? null)->toBe('{"city":"Kua')
+            ->and($events[3]['arguments_delta'] ?? null)->toBe('la Lumpur"}')
+            ->and($events[4]['type'] ?? null)->toBe('done')
+            ->and($events[4]['reasoning_blocks'][0]['signature'] ?? null)->toBe('sig_stream')
+            ->and($events[4]['usage']['prompt_tokens'] ?? null)->toBe(12)
+            ->and($events[4]['usage']['completion_tokens'] ?? null)->toBe(9);
     });
 });

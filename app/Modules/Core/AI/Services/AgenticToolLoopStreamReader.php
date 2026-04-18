@@ -52,6 +52,9 @@ final class AgenticToolLoopStreamReader
             $executionControls = $executionControls
                 ->withReasoningVisibility(ReasoningVisibility::Summary)
                 ->withReasoningContextPreservation(true);
+        } elseif ($apiType === AiApiType::AnthropicMessages) {
+            $executionControls = $executionControls
+                ->withReasoningContextPreservation(true);
         }
 
         $stream = $this->llmClient->chatStream(new ChatRequest(
@@ -71,8 +74,10 @@ final class AgenticToolLoopStreamReader
         $reasoningContent = '';
         $toolCalls = [];
         $toolCallArgs = [];
+        $reasoningBlocks = [];
         $usage = null;
         $latencyMs = 0;
+        $providerMapping = null;
 
         foreach ($stream as $event) {
             switch ($event['type']) {
@@ -104,6 +109,8 @@ final class AgenticToolLoopStreamReader
                 case 'done':
                     $usage = $event['usage'] ?? null;
                     $latencyMs = $event['latency_ms'] ?? 0;
+                    $providerMapping = is_array($event['provider_mapping'] ?? null) ? $event['provider_mapping'] : $providerMapping;
+                    $reasoningBlocks = is_array($event['reasoning_blocks'] ?? null) ? $event['reasoning_blocks'] : $reasoningBlocks;
                     break;
 
                 case 'error':
@@ -131,9 +138,11 @@ final class AgenticToolLoopStreamReader
             'tool_calls' => array_values($toolCalls),
             'commentary' => $commentary,
             'reasoning_content' => $reasoningContent,
+            'reasoning_blocks' => $reasoningBlocks,
             'final_content' => $content,
             'usage' => $usage,
             'latency_ms' => $latencyMs,
+            'provider_mapping' => $providerMapping,
         ];
     }
 

@@ -158,7 +158,13 @@ class AgentRuntime
             );
         }
 
-        return $this->responseFactory->success($runId, $config, $result);
+        $extraMeta = [];
+
+        if (is_array($result['provider_mapping'] ?? null) && $result['provider_mapping'] !== []) {
+            $extraMeta['provider_mapping'] = $result['provider_mapping'];
+        }
+
+        return $this->responseFactory->success($runId, $config, $result, $extraMeta);
     }
 
     /**

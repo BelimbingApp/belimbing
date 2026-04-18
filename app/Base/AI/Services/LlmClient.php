@@ -7,6 +7,7 @@ namespace App\Base\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\ProviderMapping\ProviderRequestMapperRegistry;
@@ -41,10 +42,6 @@ class LlmClient
         private readonly ?ProviderRequestMapperRegistry $requestMappers = null,
     ) {}
 
-    // =========================================================================
-    // Public API — route on apiType
-    // =========================================================================
-
     /**
      * Execute a sync LLM call using the protocol specified by the request.
      */
@@ -52,6 +49,7 @@ class LlmClient
     {
         return match ($request->apiType) {
             AiApiType::OpenAiResponses => $this->chatViaResponses($request),
+            AiApiType::AnthropicMessages => $this->chatViaAnthropicMessages($request),
             default => $this->chatViaChatCompletions($request),
         };
     }
@@ -71,33 +69,31 @@ class LlmClient
     {
         return match ($request->apiType) {
             AiApiType::OpenAiResponses => yield from $this->chatStreamViaResponses($request),
+            AiApiType::AnthropicMessages => yield from $this->chatStreamViaAnthropicMessages($request),
             default => yield from $this->chatStreamViaChatCompletions($request),
         };
     }
 
-    // =========================================================================
-    // Chat Completions protocol — POST /chat/completions
-    // =========================================================================
-
     private function chatViaChatCompletions(ChatRequest $request): array
     {
         $startTime = hrtime(true);
+        $mapping = $this->mapRequest($request, stream: false);
 
         try {
-            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS);
-            $payload = $this->requestMapperRegistry()
-                ->forApiType($request->apiType)
-                ->mapPayload($request, stream: false);
+            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, $mapping->headers);
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/chat/completions',
-                $payload
+                $mapping->payload,
             );
         } catch (ConnectionException $e) {
             return LlmClientSupport::connectionError($e, $startTime);
         }
 
-        return $this->parseChatCompletionsResponse($response, LlmClientSupport::latencyMs($startTime), $request->model);
+        return $this->withProviderMapping(
+            $this->parseChatCompletionsResponse($response, LlmClientSupport::latencyMs($startTime), $request->model),
+            $mapping,
+        );
     }
 
     /**
@@ -106,16 +102,14 @@ class LlmClient
     private function chatStreamViaChatCompletions(ChatRequest $request): Generator
     {
         $startTime = hrtime(true);
+        $mapping = $this->mapRequest($request, stream: true);
 
         try {
-            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, stream: true);
-            $payload = $this->requestMapperRegistry()
-                ->forApiType($request->apiType)
-                ->mapPayload($request, stream: true);
+            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, $mapping->headers, stream: true);
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/chat/completions',
-                $payload
+                $mapping->payload,
             );
         } catch (ConnectionException $e) {
             yield from LlmClientSupport::connectionErrorStream($e, $startTime);
@@ -130,7 +124,7 @@ class LlmClient
             return;
         }
 
-        yield from $this->streamChatCompletionsSse($response, $startTime);
+        yield from $this->streamChatCompletionsSse($response, $startTime, $mapping);
     }
 
     private function parseChatCompletionsResponse(Response $response, int $latencyMs, string $model): array
@@ -197,7 +191,7 @@ class LlmClient
     /**
      * @return Generator<int, array<string, mixed>>
      */
-    private function streamChatCompletionsSse(Response $response, int $startTime): Generator
+    private function streamChatCompletionsSse(Response $response, int $startTime, ProviderRequestMapping $mapping): Generator
     {
         $stream = $response->toPsrResponse()->getBody();
         $buffer = '';
@@ -220,7 +214,7 @@ class LlmClient
                     continue;
                 }
 
-                yield from $this->parseChatCompletionsSsePayload(substr($line, 6), $finishReason, $startTime);
+                yield from $this->parseChatCompletionsSsePayload(substr($line, 6), $finishReason, $startTime, $mapping);
 
                 if ($finishReason === '__done__') {
                     return;
@@ -232,26 +226,25 @@ class LlmClient
             }
         }
 
-        yield [
-            'type' => 'done',
-            'finish_reason' => $finishReason ?? 'stop',
-            'usage' => null,
-            'latency_ms' => LlmClientSupport::latencyMs($startTime),
-        ];
+        yield $this->buildDoneEvent(
+            $finishReason ?? 'stop',
+            null,
+            $startTime,
+            $mapping,
+        );
     }
 
     /**
      * @return Generator<int, array<string, mixed>>
      */
-    private function parseChatCompletionsSsePayload(string $payload, ?string &$finishReason, int $startTime): Generator
-    {
+    private function parseChatCompletionsSsePayload(
+        string $payload,
+        ?string &$finishReason,
+        int $startTime,
+        ProviderRequestMapping $mapping,
+    ): Generator {
         if ($payload === '[DONE]') {
-            yield [
-                'type' => 'done',
-                'finish_reason' => $finishReason ?? 'stop',
-                'usage' => null,
-                'latency_ms' => LlmClientSupport::latencyMs($startTime),
-            ];
+            yield $this->buildDoneEvent($finishReason ?? 'stop', null, $startTime, $mapping);
 
             $finishReason = '__done__';
 
@@ -291,42 +284,40 @@ class LlmClient
         }
 
         if ($finishReason !== null && is_array($usage)) {
-            yield [
-                'type' => 'done',
-                'finish_reason' => $finishReason,
-                'usage' => [
+            yield $this->buildDoneEvent(
+                $finishReason,
+                [
                     'prompt_tokens' => $usage['prompt_tokens'] ?? null,
                     'completion_tokens' => $usage['completion_tokens'] ?? null,
                 ],
-                'latency_ms' => LlmClientSupport::latencyMs($startTime),
-            ];
+                $startTime,
+                $mapping,
+            );
 
             $finishReason = '__done__';
         }
     }
 
-    // =========================================================================
-    // Responses protocol — POST /responses
-    // =========================================================================
-
     private function chatViaResponses(ChatRequest $request): array
     {
         $startTime = hrtime(true);
+        $mapping = $this->mapRequest($request, stream: false);
 
         try {
-            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS);
+            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, $mapping->headers);
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/responses',
-                $this->requestMapperRegistry()
-                    ->forApiType($request->apiType)
-                    ->mapPayload($request, stream: false),
+                $mapping->payload,
             );
         } catch (ConnectionException $e) {
             return LlmClientSupport::connectionError($e, $startTime);
         }
 
-        return $this->parseResponsesResponse($response, LlmClientSupport::latencyMs($startTime), $request->model);
+        return $this->withProviderMapping(
+            $this->parseResponsesResponse($response, LlmClientSupport::latencyMs($startTime), $request->model),
+            $mapping,
+        );
     }
 
     /**
@@ -335,15 +326,14 @@ class LlmClient
     private function chatStreamViaResponses(ChatRequest $request): Generator
     {
         $startTime = hrtime(true);
+        $mapping = $this->mapRequest($request, stream: true);
 
         try {
-            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, stream: true);
+            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, $mapping->headers, stream: true);
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/responses',
-                $this->requestMapperRegistry()
-                    ->forApiType($request->apiType)
-                    ->mapPayload($request, stream: true),
+                $mapping->payload,
             );
         } catch (ConnectionException $e) {
             yield from LlmClientSupport::connectionErrorStream($e, $startTime);
@@ -358,17 +348,9 @@ class LlmClient
             return;
         }
 
-        yield from $this->streamResponsesSse($response, $startTime);
+        yield from $this->streamResponsesSse($response, $startTime, $mapping);
     }
 
-    private function requestMapperRegistry(): ProviderRequestMapperRegistry
-    {
-        return $this->requestMappers ?? app(ProviderRequestMapperRegistry::class);
-    }
-
-    /**
-     * Parse a sync Responses API response into the normalized result array.
-     */
     private function parseResponsesResponse(Response $response, int $latencyMs, string $model): array
     {
         if ($response->failed()) {
@@ -421,14 +403,9 @@ class LlmClient
     }
 
     /**
-     * Stream and parse Responses API SSE events.
-     *
-     * Responses API uses paired "event:" + "data:" lines, unlike Chat Completions
-     * which uses only "data:" lines.
-     *
      * @return Generator<int, array<string, mixed>>
      */
-    private function streamResponsesSse(Response $response, int $startTime): Generator
+    private function streamResponsesSse(Response $response, int $startTime, ProviderRequestMapping $mapping): Generator
     {
         $stream = $response->toPsrResponse()->getBody();
         $buffer = '';
@@ -479,11 +456,394 @@ class LlmClient
             }
         }
 
-        yield [
-            'type' => 'done',
-            'finish_reason' => 'stop',
-            'usage' => null,
-            'latency_ms' => LlmClientSupport::latencyMs($startTime),
+        yield $this->buildDoneEvent('stop', null, $startTime, $mapping);
+    }
+
+    private function chatViaAnthropicMessages(ChatRequest $request): array
+    {
+        $startTime = hrtime(true);
+        $mapping = $this->mapRequest($request, stream: false);
+
+        try {
+            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, $mapping->headers);
+
+            $response = $http->post(
+                rtrim($request->baseUrl, '/').'/messages',
+                $mapping->payload,
+            );
+        } catch (ConnectionException $e) {
+            return LlmClientSupport::connectionError($e, $startTime);
+        }
+
+        return $this->withProviderMapping(
+            $this->parseAnthropicMessagesResponse($response, LlmClientSupport::latencyMs($startTime), $request->model),
+            $mapping,
+        );
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function chatStreamViaAnthropicMessages(ChatRequest $request): Generator
+    {
+        $startTime = hrtime(true);
+        $mapping = $this->mapRequest($request, stream: true);
+
+        try {
+            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, $mapping->headers, stream: true);
+
+            $response = $http->post(
+                rtrim($request->baseUrl, '/').'/messages',
+                $mapping->payload,
+            );
+        } catch (ConnectionException $e) {
+            yield from LlmClientSupport::connectionErrorStream($e, $startTime);
+
+            return;
+        }
+
+        $error = LlmClientSupport::checkFailedResponse($response, $startTime);
+        if ($error !== null) {
+            yield $error;
+
+            return;
+        }
+
+        yield from $this->streamAnthropicMessagesSse($response, $startTime, $mapping);
+    }
+
+    private function parseAnthropicMessagesResponse(Response $response, int $latencyMs, string $model): array
+    {
+        if ($response->failed()) {
+            return LlmClientSupport::parseFailedResponse($response, $latencyMs);
+        }
+
+        $data = $response->json();
+        if (! is_array($data)) {
+            return LlmClientSupport::invalidPayloadError($response, $latencyMs, $model);
+        }
+
+        $content = '';
+        $toolCalls = [];
+        $reasoningBlocks = [];
+
+        foreach ($data['content'] ?? [] as $block) {
+            if (! is_array($block)) {
+                continue;
+            }
+
+            $type = $block['type'] ?? null;
+
+            if ($type === 'text') {
+                $content .= (string) ($block['text'] ?? '');
+
+                continue;
+            }
+
+            if ($type === 'tool_use') {
+                $toolCalls[] = [
+                    'id' => (string) ($block['id'] ?? ''),
+                    'type' => 'function',
+                    'function' => [
+                        'name' => (string) ($block['name'] ?? ''),
+                        'arguments' => $this->encodeAnthropicToolInput($block['input'] ?? []),
+                    ],
+                ];
+
+                continue;
+            }
+
+            if (in_array($type, ['thinking', 'redacted_thinking'], true)) {
+                $reasoningBlocks[] = $block;
+            }
+        }
+
+        $hasToolCalls = $toolCalls !== [];
+        $usage = $data['usage'] ?? [];
+
+        if ($content === '' && ! $hasToolCalls) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::EmptyResponse,
+                    "Model \"{$model}\" produced no text content",
+                    'The model may be unavailable for this provider key or endpoint.',
+                    latencyMs: $latencyMs,
+                ),
+                'latency_ms' => $latencyMs,
+            ];
+        }
+
+        $result = [
+            'content' => $content,
+            'usage' => [
+                'prompt_tokens' => $usage['input_tokens'] ?? null,
+                'completion_tokens' => $usage['output_tokens'] ?? null,
+            ],
+            'latency_ms' => $latencyMs,
         ];
+
+        if ($hasToolCalls) {
+            $result['tool_calls'] = $toolCalls;
+        }
+
+        if ($reasoningBlocks !== []) {
+            $result['reasoning_blocks'] = $reasoningBlocks;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function streamAnthropicMessagesSse(
+        Response $response,
+        int $startTime,
+        ProviderRequestMapping $mapping,
+    ): Generator {
+        $stream = $response->toPsrResponse()->getBody();
+        $buffer = '';
+        $pendingEventType = null;
+        $contentBlocks = [];
+        $toolInputJson = [];
+        $reasoningBlocks = [];
+        $promptTokens = null;
+        $completionTokens = null;
+        $finishReason = 'stop';
+
+        while (! $stream->eof()) {
+            $chunk = $stream->read(8192);
+            if ($chunk === '') {
+                continue;
+            }
+
+            $buffer .= $chunk;
+            $lines = explode("\n", $buffer);
+            $buffer = array_pop($lines);
+
+            foreach ($lines as $line) {
+                $line = trim($line);
+
+                if ($line === '' || str_starts_with($line, ':')) {
+                    continue;
+                }
+
+                if (str_starts_with($line, 'event: ')) {
+                    $pendingEventType = substr($line, 7);
+
+                    continue;
+                }
+
+                if (! str_starts_with($line, 'data: ')) {
+                    continue;
+                }
+
+                $data = BlbJson::decodeArray(substr($line, 6));
+                if ($data === null) {
+                    continue;
+                }
+
+                switch ($pendingEventType) {
+                    case 'message_start':
+                        $promptTokens = $data['message']['usage']['input_tokens'] ?? null;
+                        break;
+
+                    case 'content_block_start':
+                        $index = (int) ($data['index'] ?? 0);
+                        $contentBlocks[$index] = $data['content_block'] ?? [];
+
+                        if (($contentBlocks[$index]['type'] ?? null) === 'tool_use') {
+                            $toolInputJson[$index] = '';
+
+                            yield [
+                                'type' => 'tool_call_delta',
+                                'index' => $index,
+                                'id' => $contentBlocks[$index]['id'] ?? null,
+                                'name' => $contentBlocks[$index]['name'] ?? null,
+                                'arguments_delta' => '',
+                            ];
+                        }
+                        break;
+
+                    case 'content_block_delta':
+                        $index = (int) ($data['index'] ?? 0);
+                        $delta = $data['delta'] ?? [];
+                        $deltaType = $delta['type'] ?? null;
+
+                        if ($deltaType === 'text_delta') {
+                            $text = (string) ($delta['text'] ?? '');
+                            if ($text !== '') {
+                                $contentBlocks[$index]['text'] = ($contentBlocks[$index]['text'] ?? '').$text;
+                                yield ['type' => 'content_delta', 'text' => $text];
+                            }
+
+                            break;
+                        }
+
+                        if ($deltaType === 'thinking_delta') {
+                            $thinking = (string) ($delta['thinking'] ?? '');
+                            if ($thinking !== '') {
+                                $contentBlocks[$index]['thinking'] = ($contentBlocks[$index]['thinking'] ?? '').$thinking;
+                                yield ['type' => 'thinking_delta', 'text' => $thinking, 'source' => 'anthropic_thinking'];
+                            }
+
+                            break;
+                        }
+
+                        if ($deltaType === 'signature_delta') {
+                            $contentBlocks[$index]['signature'] = $delta['signature'] ?? null;
+
+                            break;
+                        }
+
+                        if ($deltaType === 'input_json_delta') {
+                            $partialJson = (string) ($delta['partial_json'] ?? '');
+                            $toolInputJson[$index] = ($toolInputJson[$index] ?? '').$partialJson;
+
+                            yield [
+                                'type' => 'tool_call_delta',
+                                'index' => $index,
+                                'id' => $contentBlocks[$index]['id'] ?? null,
+                                'name' => $contentBlocks[$index]['name'] ?? null,
+                                'arguments_delta' => $partialJson,
+                            ];
+                        }
+                        break;
+
+                    case 'content_block_stop':
+                        $index = (int) ($data['index'] ?? 0);
+                        $block = $contentBlocks[$index] ?? null;
+
+                        if (! is_array($block)) {
+                            break;
+                        }
+
+                        if (($block['type'] ?? null) === 'tool_use') {
+                            $block['input'] = BlbJson::decodeArray($toolInputJson[$index] ?? '') ?? [];
+                            $contentBlocks[$index] = $block;
+                        }
+
+                        if (in_array($block['type'] ?? null, ['thinking', 'redacted_thinking'], true)) {
+                            $reasoningBlocks[] = $block;
+                        }
+
+                        unset($toolInputJson[$index]);
+                        break;
+
+                    case 'message_delta':
+                        $finishReason = $data['delta']['stop_reason'] ?? $finishReason;
+                        $completionTokens = $data['usage']['output_tokens'] ?? $completionTokens;
+                        break;
+
+                    case 'message_stop':
+                        yield $this->buildDoneEvent(
+                            $finishReason,
+                            [
+                                'prompt_tokens' => $promptTokens,
+                                'completion_tokens' => $completionTokens,
+                            ],
+                            $startTime,
+                            $mapping,
+                            $reasoningBlocks !== [] ? ['reasoning_blocks' => $reasoningBlocks] : [],
+                        );
+
+                        return;
+
+                    case 'error':
+                        $message = $data['error']['message'] ?? 'Anthropic stream error';
+
+                        yield [
+                            'type' => 'error',
+                            'runtime_error' => AiRuntimeError::fromType(
+                                AiErrorType::ServerError,
+                                $message,
+                                latencyMs: LlmClientSupport::latencyMs($startTime),
+                            ),
+                            'latency_ms' => LlmClientSupport::latencyMs($startTime),
+                        ];
+
+                        return;
+
+                    default:
+                        break;
+                }
+            }
+        }
+
+        yield $this->buildDoneEvent(
+            $finishReason,
+            [
+                'prompt_tokens' => $promptTokens,
+                'completion_tokens' => $completionTokens,
+            ],
+            $startTime,
+            $mapping,
+            $reasoningBlocks !== [] ? ['reasoning_blocks' => $reasoningBlocks] : [],
+        );
+    }
+
+    private function requestMapperRegistry(): ProviderRequestMapperRegistry
+    {
+        return $this->requestMappers ?? app(ProviderRequestMapperRegistry::class);
+    }
+
+    private function mapRequest(ChatRequest $request, bool $stream): ProviderRequestMapping
+    {
+        return $this->requestMapperRegistry()
+            ->forApiType($request->apiType)
+            ->mapPayload($request, $stream);
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     * @return array<string, mixed>
+     */
+    private function withProviderMapping(array $result, ProviderRequestMapping $mapping): array
+    {
+        $meta = $mapping->meta();
+
+        if ($meta !== null) {
+            $result['provider_mapping'] = $meta;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param  array{prompt_tokens: int|null, completion_tokens: int|null}|null  $usage
+     * @param  array<string, mixed>  $extra
+     * @return array<string, mixed>
+     */
+    private function buildDoneEvent(
+        string $finishReason,
+        ?array $usage,
+        int $startTime,
+        ProviderRequestMapping $mapping,
+        array $extra = [],
+    ): array {
+        $event = array_merge([
+            'type' => 'done',
+            'finish_reason' => $finishReason,
+            'usage' => $usage,
+            'latency_ms' => LlmClientSupport::latencyMs($startTime),
+        ], $extra);
+
+        $meta = $mapping->meta();
+        if ($meta !== null) {
+            $event['provider_mapping'] = $meta;
+        }
+
+        return $event;
+    }
+
+    private function encodeAnthropicToolInput(mixed $input): string
+    {
+        if (! is_array($input)) {
+            return '{}';
+        }
+
+        $normalized = $input === [] ? (object) [] : $input;
+
+        return json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 }

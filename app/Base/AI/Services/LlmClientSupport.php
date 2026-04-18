@@ -7,6 +7,7 @@ namespace App\Base\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
@@ -18,16 +19,27 @@ final class LlmClientSupport
 {
     /**
      * @param  array<string, string>  $copilotHeaders
+     * @param  array<string, string>  $providerHeaders
      */
-    public static function buildHttp(ChatRequest $request, array $copilotHeaders, bool $stream = false): PendingRequest
-    {
+    public static function buildHttp(
+        ChatRequest $request,
+        array $copilotHeaders,
+        array $providerHeaders = [],
+        bool $stream = false,
+    ): PendingRequest {
         $http = Http::timeout($request->timeout);
 
         if ($stream) {
             $http = $http->withOptions(['stream' => true]);
         }
 
-        if ($request->apiKey !== '') {
+        if ($providerHeaders !== []) {
+            $http = $http->withHeaders($providerHeaders);
+        }
+
+        if ($request->apiType === AiApiType::AnthropicMessages && $request->apiKey !== '') {
+            $http = $http->withHeaders(['x-api-key' => $request->apiKey]);
+        } elseif ($request->apiKey !== '') {
             $http = $http->withToken($request->apiKey);
         }
 

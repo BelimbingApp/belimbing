@@ -1,8 +1,8 @@
 # Provider Execution Controls
 
-**Status:** Phase 3 In Progress
-**Last Updated:** 2026-04-16
-**Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/DTO/ChatRequest.php`, `app/Base/AI/DTO/ExecutionControls.php`, `app/Base/AI/Services/LlmClient.php`, `app/Base/AI/Services/ProviderMapping/ProviderCapabilityRegistry.php`, `app/Base/AI/Services/ProviderMapping/ProviderRequestMapperRegistry.php`, `app/Base/AI/Services/ProviderMapping/OpenAiChatCompletionsRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/OpenAiResponsesRequestMapper.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Services/AgentRuntime.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/AgenticToolLoopStreamReader.php`, `docs/plans/thinking-content-streaming.md`, `https://platform.kimi.ai/docs/guide/kimi-k2-5-quickstart`, `https://platform.kimi.ai/docs/guide/use-kimi-api-to-complete-tool-calls`, `https://platform.openai.com/docs/guides/reasoning-best-practices`, `https://platform.openai.com/docs/guides/responses-vs-chat-completions`, `https://platform.claude.com/docs/en/build-with-claude/extended-thinking`, `https://platform.claude.com/docs/en/api/openai-sdk`
+**Status:** In Progress
+**Last Updated:** 2026-04-18
+**Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/DTO/ChatRequest.php`, `app/Base/AI/DTO/ExecutionControls.php`, `app/Base/AI/DTO/ProviderRequestMapping.php`, `app/Base/AI/Enums/AiApiType.php`, `app/Base/AI/Services/LlmClient.php`, `app/Base/AI/Services/LlmClientSupport.php`, `app/Base/AI/Services/ProviderMapping/ProviderCapabilityRegistry.php`, `app/Base/AI/Services/ProviderMapping/ProviderRequestMapperRegistry.php`, `app/Base/AI/Services/ProviderMapping/OpenAiChatCompletionsRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/OpenAiResponsesRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/AnthropicMessagesRequestMapper.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Services/AgentRuntime.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/AgenticToolLoopStreamReader.php`, `docs/plans/thinking-content-streaming.md`, `https://platform.kimi.ai/docs/guide/kimi-k2-5-quickstart`, `https://platform.kimi.ai/docs/guide/use-kimi-api-to-complete-tool-calls`, `https://platform.openai.com/docs/guides/reasoning-best-practices`, `https://platform.openai.com/docs/guides/responses-vs-chat-completions`, `https://platform.claude.com/docs/en/build-with-claude/extended-thinking`, `https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`, `https://platform.claude.com/docs/en/api/streaming`, `https://platform.claude.com/docs/en/api/complete`
 
 ## Problem Essence
 
@@ -65,9 +65,11 @@ This keeps `LlmClient` shallow and prevents provider logic from leaking into Lar
 
 For Anthropic, this component must be allowed to map into a non-OpenAI-native wire shape. Anthropic's OpenAI compatibility layer is useful for experimentation, but Anthropic's own docs position the native API as the path for full extended thinking, prompt caching, and detailed reasoning behaviour. BLB should not freeze its framework contract around the compatibility layer if that would block first-class thinking support.
 
+The shipped mapper seam now returns a structured provider request mapping rather than a bare payload array. That mapping carries the final payload, any provider-specific headers, and control-adjustment metadata so callers can inspect forced or ignored controls when needed without teaching `LlmClient` or UI surfaces about individual provider quirks.
+
 ### Core AI config persistence
 
-Core AI should persist execution controls alongside model selection in Lara workspace config. The config shape should express what BLB wants the model to do, not how a provider spells the option. The initial implementation already replaces the old scalar model-config shape directly for runtime resolution; task-specific persisted controls remain future work.
+Core AI should persist execution controls alongside model selection in Lara workspace config. The config shape should express what BLB wants the model to do, not how a provider spells the option. Lara chat slots should store canonical controls at `llm.models[*].execution_controls`, and task-specific overrides should live at `llm.tasks.<task>.execution_controls`. Task resolution should overlay task controls onto the resolved model config, including `mode: primary`, so execution intent remains independent from model routing and survives fallback to Lara's primary model.
 
 ### Capability-driven UI
 
@@ -82,6 +84,8 @@ OpenAI's current direction is to put advanced reasoning behaviour in the Respons
 ### Anthropic
 
 Anthropic's current thinking model is richer than what its OpenAI compatibility layer exposes. In the native Messages API, extended thinking can emit thinking blocks, requires those blocks to be preserved across tool turns, and restricts tool choice while thinking is enabled. The compatibility layer can enable thinking for quick evaluation, but Anthropic explicitly recommends the native API for full feature access. This means BLB should plan for Anthropic-native request mapping rather than treating OpenAI-compatibility as the long-term integration surface.
+
+The current implementation now routes the `anthropic` provider through `AiApiType::AnthropicMessages`, maps canonical controls onto native `thinking`, `tool_choice`, and header fields, and round-trips `thinking` plus `redacted_thinking` blocks through tool loops so reasoning continuity survives interleaved tool use.
 
 ### Moonshot
 
@@ -171,15 +175,15 @@ Goal: move provider policy into explicit framework components.
 - [x] Evolve the existing provider normalizer seam so tool-schema normalization and request mapping live under the same provider contract without overloading `LlmClient`
 - [x] Move Moonshot K2.5 fixed sampling and thinking-related rules into the new provider request mapper
 - [x] Model OpenAI Responses reasoning summaries and reasoning-item continuity through the same mapper seam
-- [ ] Model Anthropic native thinking, thinking-block preservation, and tool-choice constraints through the same seam
-- [ ] Define how provider mapping reports forced values or unsupported controls to callers when that signal is useful
+- [x] Model Anthropic native thinking, thinking-block preservation, and tool-choice constraints through the same seam
+- [x] Define how provider mapping reports forced values or unsupported controls to callers when that signal is useful
 
 ### Phase 3 — Thread canonical controls through Core AI runtime
 
 Goal: make runtime config and orchestration use the new contract instead of direct scalar fields.
 
 - [x] Extend `ConfigResolver` to read and return canonical execution controls
-- [ ] Decide where Lara primary model config and task config should persist execution controls in workspace config
+- [x] Decide where Lara primary model config and task config should persist execution controls in workspace config
 - [x] Update `AgentRuntime`, `AgenticRuntime`, `AgenticToolLoopStreamReader`, and any other `ChatRequest` callers to pass canonical controls
 - [x] Keep current behavior working for chat, task recommendations, provider tests, task resolution, and agentic tool loops under the new contract
 - [x] Add focused tests around control resolution, provider mapping, and protocol payload generation

@@ -8,11 +8,11 @@ namespace App\Modules\Core\AI\Livewire;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\Enums\TaskModelSelectionMode;
+use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\LaraTaskRegistry;
 use App\Modules\Core\AI\Services\TaskModelRecommendationService;
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Contracts\View\View;
@@ -164,11 +164,13 @@ class TaskModels extends Component implements ProvidesLaraPageContext
             return;
         }
 
+        $resolver = app(ConfigResolver::class);
+        $existingConfig = $resolver->readTaskConfig(Employee::LARA_ID, $taskKey) ?? [];
         $mode = $this->taskModes[$taskKey] ?? TaskModelSelectionMode::Recommended->value;
-        $payload = ['mode' => $mode];
+        $payload = $this->carryForwardTaskExecutionControls(['mode' => $mode], $existingConfig);
 
         if ($mode === TaskModelSelectionMode::Primary->value) {
-            app(ConfigResolver::class)->writeTaskConfig(Employee::LARA_ID, $taskKey, $payload);
+            $resolver->writeTaskConfig(Employee::LARA_ID, $taskKey, $payload);
             $this->dispatch("task-{$taskKey}-saved", message: __('Task now uses Lara\'s primary model.'));
 
             return;
@@ -178,7 +180,7 @@ class TaskModels extends Component implements ProvidesLaraPageContext
         $modelId = $this->taskModelIds[$taskKey] ?? null;
 
         if ($providerId === null || $modelId === null) {
-            app(ConfigResolver::class)->writeTaskConfig(Employee::LARA_ID, $taskKey, $payload);
+            $resolver->writeTaskConfig(Employee::LARA_ID, $taskKey, $payload);
 
             return;
         }
@@ -211,13 +213,31 @@ class TaskModels extends Component implements ProvidesLaraPageContext
             $payload['reason'] = $reason;
         }
 
-        app(ConfigResolver::class)->writeTaskConfig(Employee::LARA_ID, $taskKey, $payload);
+        $resolver->writeTaskConfig(Employee::LARA_ID, $taskKey, $payload);
 
         $message = $mode === TaskModelSelectionMode::Manual->value
             ? __('Manual model saved: :provider/:model', ['provider' => $provider->name, 'model' => $modelId])
             : __('Recommended model saved: :provider/:model', ['provider' => $provider->name, 'model' => $modelId]);
 
         $this->dispatch("task-{$taskKey}-saved", message: $message);
+    }
+
+    /**
+     * Preserve task execution intent while the current UI edits only model-routing fields.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $existingConfig
+     * @return array<string, mixed>
+     */
+    private function carryForwardTaskExecutionControls(array $payload, array $existingConfig): array
+    {
+        $executionControls = $existingConfig['execution_controls'] ?? null;
+
+        if (is_array($executionControls)) {
+            $payload['execution_controls'] = $executionControls;
+        }
+
+        return $payload;
     }
 
     private function availableProviders(): Collection

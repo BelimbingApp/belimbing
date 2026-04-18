@@ -6,7 +6,9 @@
 namespace App\Base\AI\Services\ProviderMapping;
 
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ProviderControlAdjustment;
 use App\Base\AI\DTO\ProviderExecutionCapabilities;
+use App\Base\AI\Enums\ProviderControlAdjustmentType;
 use App\Base\AI\Enums\ReasoningMode;
 
 trait OpenAiRequestMapperHelpers
@@ -58,10 +60,15 @@ trait OpenAiRequestMapperHelpers
 
     /**
      * @param  array<string, mixed>  $payload
+     * @param  list<ProviderControlAdjustment>  $adjustments
      * @return array<string, mixed>
      */
-    private function applyFixedSampling(array $payload, ChatRequest $request, ProviderExecutionCapabilities $capabilities): array
-    {
+    private function applyFixedSampling(
+        array $payload,
+        ChatRequest $request,
+        ProviderExecutionCapabilities $capabilities,
+        array &$adjustments,
+    ): array {
         $fixedSampling = $request->executionControls->reasoning->mode === ReasoningMode::Disabled
             ? $capabilities->fixedSamplingWhenReasoningDisabled
             : $capabilities->fixedSamplingWhenReasoningEnabled;
@@ -71,22 +78,67 @@ trait OpenAiRequestMapperHelpers
         }
 
         if (array_key_exists('temperature', $payload) && $payload['temperature'] !== null) {
+            if ($payload['temperature'] !== $fixedSampling->temperature) {
+                $adjustments[] = new ProviderControlAdjustment(
+                    ProviderControlAdjustmentType::Forced,
+                    'sampling.temperature',
+                    $payload['temperature'],
+                    $fixedSampling->temperature,
+                    'Provider enforces a fixed temperature for this reasoning mode.',
+                );
+            }
             $payload['temperature'] = $fixedSampling->temperature;
         }
 
         if (array_key_exists('top_p', $payload) && $payload['top_p'] !== null) {
+            if ($payload['top_p'] !== $fixedSampling->topP) {
+                $adjustments[] = new ProviderControlAdjustment(
+                    ProviderControlAdjustmentType::Forced,
+                    'sampling.top_p',
+                    $payload['top_p'],
+                    $fixedSampling->topP,
+                    'Provider enforces a fixed top-p value for this reasoning mode.',
+                );
+            }
             $payload['top_p'] = $fixedSampling->topP;
         }
 
         if (array_key_exists('n', $payload) && $payload['n'] !== null) {
+            if ($payload['n'] !== $fixedSampling->candidateCount) {
+                $adjustments[] = new ProviderControlAdjustment(
+                    ProviderControlAdjustmentType::Forced,
+                    'sampling.candidate_count',
+                    $payload['n'],
+                    $fixedSampling->candidateCount,
+                    'Provider enforces a single candidate for this reasoning mode.',
+                );
+            }
             $payload['n'] = $fixedSampling->candidateCount;
         }
 
         if (array_key_exists('presence_penalty', $payload) && $payload['presence_penalty'] !== null) {
+            if ($payload['presence_penalty'] !== $fixedSampling->presencePenalty) {
+                $adjustments[] = new ProviderControlAdjustment(
+                    ProviderControlAdjustmentType::Forced,
+                    'sampling.presence_penalty',
+                    $payload['presence_penalty'],
+                    $fixedSampling->presencePenalty,
+                    'Provider enforces a fixed presence penalty for this reasoning mode.',
+                );
+            }
             $payload['presence_penalty'] = $fixedSampling->presencePenalty;
         }
 
         if (array_key_exists('frequency_penalty', $payload) && $payload['frequency_penalty'] !== null) {
+            if ($payload['frequency_penalty'] !== $fixedSampling->frequencyPenalty) {
+                $adjustments[] = new ProviderControlAdjustment(
+                    ProviderControlAdjustmentType::Forced,
+                    'sampling.frequency_penalty',
+                    $payload['frequency_penalty'],
+                    $fixedSampling->frequencyPenalty,
+                    'Provider enforces a fixed frequency penalty for this reasoning mode.',
+                );
+            }
             $payload['frequency_penalty'] = $fixedSampling->frequencyPenalty;
         }
 
