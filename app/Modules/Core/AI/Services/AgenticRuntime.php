@@ -345,15 +345,7 @@ class AgenticRuntime
                         $fallbackAttempts[] = $this->buildFallbackAttemptFromStreamError($config, $streamError);
                         $lastConfig = $config;
                         $fallbackAttemptIndex++;
-                        $errorEventData = $event['data'] ?? [];
-                        $streamMeta = $errorEventData['meta'] ?? null;
-                        $lastError = is_array($streamMeta)
-                            ? $this->runtimeErrorFromAssistantMeta($streamMeta)
-                            : AiRuntimeError::fromType(
-                                AiErrorType::tryFrom((string) $streamError) ?? AiErrorType::UnexpectedError,
-                                is_string($errorEventData['message'] ?? null) ? $errorEventData['message'] : '',
-                                latencyMs: 0,
-                            );
+                        $lastError = $this->lastErrorFromStreamErrorEvent($event, $streamError);
 
                         yield ['event' => 'status', 'data' => [
                             'phase' => 'recovery_attempted',
@@ -401,6 +393,27 @@ class AgenticRuntime
                 ['fallback_attempts' => $fallbackAttempts],
             ),
         ]];
+    }
+
+    /**
+     * Build a structured runtime error from a streamed error event payload.
+     *
+     * @param  array{event: string, data?: array<string, mixed>}  $event
+     */
+    private function lastErrorFromStreamErrorEvent(array $event, ?string $streamError): AiRuntimeError
+    {
+        $errorEventData = $event['data'] ?? [];
+        $streamMeta = $errorEventData['meta'] ?? null;
+
+        if (is_array($streamMeta)) {
+            return $this->runtimeErrorFromAssistantMeta($streamMeta);
+        }
+
+        return AiRuntimeError::fromType(
+            AiErrorType::tryFrom((string) $streamError) ?? AiErrorType::UnexpectedError,
+            is_string($errorEventData['message'] ?? null) ? $errorEventData['message'] : '',
+            latencyMs: 0,
+        );
     }
 
     /**

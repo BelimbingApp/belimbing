@@ -238,7 +238,7 @@ function runAgenticConversation(
         ->run([test()->makeMessage('user', $userMessage)], 1, $systemPrompt, null, $policy, null, null, $allowedToolNames);
 }
 
-describe('AgenticRuntime', function () {
+describe('AgenticRuntime (sync)', function () {
     it('returns direct response when LLM produces no tool calls', function () {
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')->once()->andReturn([
@@ -493,7 +493,9 @@ describe('AgenticRuntime', function () {
             ->and($result['meta']['fallback_attempts'][0]['provider'])->toBe('primary-provider')
             ->and($result['meta']['fallback_attempts'][0]['error_type'])->toBe('rate_limit');
     });
+});
 
+describe('AgenticRuntime (streaming)', function () {
     it('falls back to backup model on retryable runtime error in stream mode', function () {
         $llmClient = Mockery::mock(LlmClient::class);
         // Primary fails with rate limit - streaming error
@@ -551,7 +553,9 @@ describe('AgenticRuntime', function () {
                 yield ['type' => 'thinking_delta', 'text' => 'Inspecting...'];
 
                 if (! $allowCompletion) {
-                    throw new RuntimeException('Stream advanced before caller consumed the first chunk');
+                    throw new RuntimeException(
+                        'Stream advanced before caller consumed the first chunk',
+                    );
                 }
 
                 yield ['type' => 'content_delta', 'text' => 'Hi'];

@@ -42,11 +42,11 @@ class PinMetadataNormalizer
             return $this->normalizePath(trim($url));
         }
 
-        $path = isset($parts['path']) && is_string($parts['path'])
-            ? $this->normalizePath($parts['path'])
-            : '/';
+        if (isset($parts['path']) && is_string($parts['path'])) {
+            return $this->normalizePath($parts['path']);
+        }
 
-        return $path;
+        return '/';
     }
 
     /**

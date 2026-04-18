@@ -117,7 +117,7 @@ class ChatRunPersister
             TurnEventType::RunStarted => $this->materializeRunStarted($payload, $state),
             TurnEventType::AssistantThinkingStarted => $this->materializeThinkingStarted($mm, $employeeId, $sessionId, $state),
             TurnEventType::AssistantThinkingDelta => $this->materializeThinkingDelta($payload, $state),
-            TurnEventType::ToolStarted => $this->materializeToolStarted($mm, $employeeId, $sessionId, $payload, $state),
+            TurnEventType::ToolStarted => $this->materializeToolStarted($payload, $state),
             TurnEventType::ToolFinished => $this->materializeToolFinished($mm, $employeeId, $sessionId, $payload, $state),
             TurnEventType::ToolDenied => $this->materializeToolDenied($mm, $employeeId, $sessionId, $payload, $state),
             TurnEventType::AssistantOutputDelta => $this->materializeOutputDelta($payload, $state),
@@ -198,9 +198,6 @@ class ChatRunPersister
      * @param  object{pendingToolCalls: array<int, array{tool: string, args_summary: string, tool_call_index: int}>}  $state
      */
     private function materializeToolStarted(
-        MessageManager $mm,
-        int $employeeId,
-        string $sessionId,
         array $payload,
         object $state,
     ): void {
@@ -351,9 +348,12 @@ class ChatRunPersister
 
         $providerName = (string) ($errorMeta['provider_name'] ?? '');
         $model = (string) ($errorMeta['model'] ?? '');
-        $providerTag = ($providerName !== '' && $providerName !== 'unknown')
-            ? $providerName.'/'.$model
-            : ($model !== '' && $model !== 'unknown' ? $model : '');
+        $providerTag = '';
+        if ($providerName !== '' && $providerName !== 'unknown') {
+            $providerTag = $providerName.'/'.$model;
+        } elseif ($model !== '' && $model !== 'unknown') {
+            $providerTag = $model;
+        }
 
         $content = __('⚠ :detail', ['detail' => $errorMessage]);
 

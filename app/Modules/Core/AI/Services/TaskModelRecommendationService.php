@@ -210,17 +210,53 @@ class TaskModelRecommendationService
             }
         }
 
-        if (preg_match_all('/\{.*?\}/s', $trimmed, $matches) === 1 || ! empty($matches[0])) {
-            foreach ($matches[0] as $candidateJson) {
-                $decoded = BlbJson::decodeArray(trim($candidateJson));
+        foreach ($this->braceBoundedJsonCandidates($trimmed) as $candidateJson) {
+            $decoded = BlbJson::decodeArray(trim($candidateJson));
 
-                if ($decoded !== null) {
-                    return $decoded;
-                }
+            if ($decoded !== null) {
+                return $decoded;
             }
         }
 
         return null;
+    }
+
+    /**
+     * Extract `{ ... }` spans by brace depth (heuristic JSON recovery without catastrophic backtracking).
+     *
+     * @return list<string>
+     */
+    private function braceBoundedJsonCandidates(string $text): array
+    {
+        $out = [];
+        $len = strlen($text);
+
+        for ($i = 0; $i < $len; $i++) {
+            if ($text[$i] !== '{') {
+                continue;
+            }
+
+            $depth = 0;
+
+            for ($j = $i; $j < $len; $j++) {
+                $c = $text[$j];
+
+                if ($c === '{') {
+                    $depth++;
+                } elseif ($c === '}') {
+                    $depth--;
+
+                    if ($depth === 0) {
+                        $out[] = substr($text, $i, $j - $i + 1);
+                        $i = $j;
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $out;
     }
 
     /**
