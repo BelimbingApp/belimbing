@@ -210,7 +210,7 @@ class TaskModelRecommendationService
             }
         }
 
-        foreach ($this->braceBoundedJsonCandidates($trimmed) as $candidateJson) {
+        foreach (BlbJson::braceBoundedObjectCandidates($trimmed) as $candidateJson) {
             $decoded = BlbJson::decodeArray(trim($candidateJson));
 
             if ($decoded !== null) {
@@ -219,44 +219,6 @@ class TaskModelRecommendationService
         }
 
         return null;
-    }
-
-    /**
-     * Extract `{ ... }` spans by brace depth (heuristic JSON recovery without catastrophic backtracking).
-     *
-     * @return list<string>
-     */
-    private function braceBoundedJsonCandidates(string $text): array
-    {
-        $out = [];
-        $len = strlen($text);
-
-        for ($i = 0; $i < $len; $i++) {
-            if ($text[$i] !== '{') {
-                continue;
-            }
-
-            $depth = 0;
-
-            for ($j = $i; $j < $len; $j++) {
-                $c = $text[$j];
-
-                if ($c === '{') {
-                    $depth++;
-                } elseif ($c === '}') {
-                    $depth--;
-
-                    if ($depth === 0) {
-                        $out[] = substr($text, $i, $j - $i + 1);
-                        $i = $j;
-
-                        break;
-                    }
-                }
-            }
-        }
-
-        return $out;
     }
 
     /**

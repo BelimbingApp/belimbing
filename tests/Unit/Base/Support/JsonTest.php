@@ -22,3 +22,11 @@ it('returns null for scalar JSON payloads', function (): void {
     expect(Json::decodeArray('"text"'))->toBeNull()
         ->and(Json::decodeArray('123'))->toBeNull();
 });
+
+it('extracts brace-bounded object spans for salvage', function (): void {
+    expect(Json::braceBoundedObjectCandidates(''))->toBe([])
+        ->and(Json::braceBoundedObjectCandidates('no braces'))->toBe([])
+        ->and(Json::braceBoundedObjectCandidates('x {"a":1} y'))->toBe(['{"a":1}'])
+        ->and(Json::braceBoundedObjectCandidates('{"x":{"y":1}}'))->toBe(['{"x":{"y":1}}'])
+        ->and(Json::braceBoundedObjectCandidates('{"a":1}{"b":2}'))->toBe(['{"a":1}', '{"b":2}']);
+});
