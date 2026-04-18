@@ -42,7 +42,9 @@ class FrameworkPrimitivesProvisioner
      */
     public function __construct(?callable $outputCallback = null, ?string $bootstrapAdminFile = null)
     {
-        $this->outputCallback = $outputCallback ?? static function (): void {};
+        $this->outputCallback = $outputCallback ?? static function (): void {
+            // Intentionally silent: headless provisioning when no output sink is configured.
+        };
         $this->bootstrapAdminFile = $bootstrapAdminFile;
     }
 

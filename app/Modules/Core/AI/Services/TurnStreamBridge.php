@@ -140,7 +140,7 @@ class TurnStreamBridge
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function onAwaitingLlmPhase(ChatTurn $turn, array $data): array
+    private function onAwaitingLlmPhase(ChatTurn $turn, array $_data): array
     {
         $label = TurnPhase::AwaitingLlm->label();
 
