@@ -50,6 +50,20 @@ next_free_port() {
     return 1
 }
 
+# Use preferred port if available, otherwise find the next free port.
+# Falls back to searching from fallback_start when the preferred port is busy.
+resolve_port() {
+    local preferred=$1
+    local fallback_start=${2:-$preferred}
+
+    if is_port_available "$preferred"; then
+        echo "$preferred"
+        return 0
+    fi
+
+    next_free_port "$fallback_start"
+}
+
 # Check if a port is valid (1-65535)
 is_valid_port() {
     local port=$1

@@ -314,26 +314,32 @@ check_hosts_entries() {
 get_ports() {
     local preferred
 
-    # APP_PORT: .env pin → free port from 8000
+    # APP_PORT: In shared ingress mode the port must match the Caddy site
+    # fragment, so a pinned value that is busy is a hard conflict.  In direct
+    # mode (or when unpinned) we can auto-find a free port.
     preferred=$(get_env_var "APP_PORT" "")
     if [[ -n "$preferred" ]] && [[ "$preferred" =~ ^[0-9]+$ ]]; then
-        APP_PORT="$preferred"
+        if [[ "$BLB_INGRESS_MODE" = "shared" ]]; then
+            APP_PORT="$preferred"
+        else
+            APP_PORT=$(resolve_port "$preferred" 8000)
+        fi
     else
         APP_PORT=$(next_free_port 8000)
     fi
 
-    # VITE_PORT: .env pin → free port from 5173
+    # VITE_PORT: .env pin (if available) → free port from preferred or 5173
     preferred=$(get_env_var "VITE_PORT" "")
     if [[ -n "$preferred" ]] && [[ "$preferred" =~ ^[0-9]+$ ]]; then
-        VITE_PORT="$preferred"
+        VITE_PORT=$(resolve_port "$preferred" 5173)
     else
         VITE_PORT=$(next_free_port 5173)
     fi
 
-    # REVERB_SERVER_PORT: .env pin → free port from 8080
+    # REVERB_SERVER_PORT: .env pin (if available) → free port from preferred or 8080
     preferred=$(get_env_var "REVERB_SERVER_PORT" "")
     if [[ -n "$preferred" ]] && [[ "$preferred" =~ ^[0-9]+$ ]]; then
-        REVERB_SERVER_PORT="$preferred"
+        REVERB_SERVER_PORT=$(resolve_port "$preferred" 8080)
     else
         REVERB_SERVER_PORT=$(next_free_port 8080)
     fi
@@ -353,7 +359,9 @@ EOF
     return 0
 }
 
-# Check if preferred port is available; if not, fail with clear message (don't silently steal another instance's port).
+# Check if the app port is available.  In shared mode, when the pinned port
+# is busy, re-run the ingress setup step to auto-assign a free port and
+# regenerate the Caddy site fragment so they stay in sync.
 check_and_stop_services() {
     local port=$1
 
@@ -361,12 +369,26 @@ check_and_stop_services() {
         return 0
     fi
 
-    echo -e "${RED}✗${NC} Port $port is already in use." >&2
-    echo -e "${YELLOW}Either stop the other instance first:${NC}" >&2
-    echo -e "  ${CYAN}./scripts/stop-app.sh${NC}  (from that project's directory)" >&2
-    echo -e "${YELLOW}Or pin different ports in this project's .env:${NC}" >&2
-    echo -e "  ${CYAN}APP_PORT=8001  VITE_PORT=5174${NC}" >&2
-    log "ERROR: Port $port is in use; refusing to stop other instance"
+    if [[ "$BLB_INGRESS_MODE" = "shared" ]]; then
+        echo -e "${YELLOW}⚠${NC} Port ${CYAN}${port}${NC} is busy — reassigning port and updating Caddy..." >&2
+        log "Port $port busy; re-running ingress setup to reassign"
+
+        # Re-use the ingress setup step to pick a free port, update .env,
+        # and regenerate + install the Caddy site fragment.
+        local ingress_script="$SCRIPT_DIR/setup-steps/72-caddy-ingress.sh"
+        if ! bash "$ingress_script" "$APP_ENV" </dev/null; then
+            echo -e "${RED}✗${NC} Ingress setup failed — resolve the port conflict manually" >&2
+            exit 1
+        fi
+
+        # Reload the newly pinned port
+        APP_PORT=$(get_env_var 'APP_PORT' "$port")
+        export APP_PORT
+        return 0
+    fi
+
+    echo -e "${RED}✗${NC} Port ${CYAN}${port}${NC} is already in use." >&2
+    log "ERROR: Port $port is in use"
     exit 1
 }
 

@@ -67,7 +67,7 @@ print_ingress_mode_guidance() {
         "System Caddy owns ${CYAN}:80${NC}/${CYAN}:443${NC} and forwards traffic to BLB on an internal app port." >&2
     echo -e "           Choose this if the machine may host multiple sites or you want the most conventional local setup." >&2
     echo -e "  ${GREEN}direct${NC}              BLB serves HTTPS itself on ${CYAN}:443${NC} without writing a system Caddy site block." >&2
-    echo -e "           Choose this only when BLB is the only app that should bind the public HTTPS port." >&2
+    echo -e "           Single-instance only — choose this only when BLB is the only app that should bind ${CYAN}:443${NC}." >&2
     echo "" >&2
     echo -e "${CYAN}Current context${NC}" >&2
     echo -e "  Default mode: ${GREEN}${default_mode}${NC}" >&2
@@ -104,9 +104,9 @@ prompt_for_ingress_mode() {
     echo "" >&2
     print_ingress_mode_guidance "$default_mode"
     echo -e "  1. ${GREEN}shared${NC} ${DIM}(Recommended)${NC}" \
-        "— system Caddy owns ${CYAN}:80${NC}/${CYAN}:443${NC}; BLB listens on an internal app port" >&2
+        "— system Caddy owns ${CYAN}:80${NC}/${CYAN}:443${NC}; BLB listens on an internal app port (multi-instance)" >&2
     echo -e "  2. ${GREEN}direct${NC}" \
-        "             — BLB owns ${CYAN}:443${NC} directly; no managed system Caddy site block" >&2
+        "             — BLB owns ${CYAN}:443${NC} directly (single-instance only)" >&2
     echo "" >&2
 
     local ingress_choice
@@ -256,15 +256,28 @@ ensure_shared_app_port_is_pinned() {
     local app_port
     app_port=$(get_env_var 'APP_PORT' '')
 
-    if [[ -n "$app_port" ]]; then
+    if [[ -n "$app_port" ]] && is_port_available "$app_port"; then
         echo -e "${GREEN}✓${NC} Shared-ingress app port pinned: ${CYAN}${app_port}${NC}" >&2
         printf '%s\n' "$app_port"
         return 0
     fi
 
-    update_env_file 'APP_PORT' "$DEFAULT_SHARED_APP_PORT"
-    echo -e "${GREEN}✓${NC} Pinned APP_PORT for shared ingress: ${CYAN}${DEFAULT_SHARED_APP_PORT}${NC}" >&2
-    printf '%s\n' "$DEFAULT_SHARED_APP_PORT"
+    # Pinned port is busy or unset — find a free one starting from the
+    # preferred value (or the default).  This lets multiple BLB instances
+    # coexist on the same machine without manual port management.
+    local starting_port="${app_port:-$DEFAULT_SHARED_APP_PORT}"
+    local resolved_port
+    resolved_port=$(next_free_port "$starting_port")
+
+    update_env_file 'APP_PORT' "$resolved_port"
+
+    if [[ -n "$app_port" ]] && [[ "$resolved_port" != "$app_port" ]]; then
+        echo -e "${YELLOW}⚠${NC} APP_PORT ${CYAN}${app_port}${NC} is busy; reassigned to ${CYAN}${resolved_port}${NC}" >&2
+    else
+        echo -e "${GREEN}✓${NC} Pinned APP_PORT for shared ingress: ${CYAN}${resolved_port}${NC}" >&2
+    fi
+
+    printf '%s\n' "$resolved_port"
     return 0
 }
 
@@ -366,7 +379,6 @@ $( [[ -n "$tls_directive" ]] && printf '    %s\n' "$tls_directive" )
 }
 EOF
 
-    save_to_setup_state 'SYSTEM_CADDY_SITE_FRAGMENT' "$fragment_path"
     echo -e "${GREEN}✓${NC} Generated BLB Caddy site fragment: ${CYAN}${fragment_path}${NC}" >&2
     printf '%s\n' "$fragment_path"
     return 0
@@ -419,6 +431,47 @@ copy_file_with_elevation_if_needed() {
     return 0
 }
 
+# Remove the previously installed site fragment for this project if the
+# domain has changed.  Prevents stale definitions from lingering in the
+# shared include directory.  Only touches files inside the system Caddy
+# include directory — never project-local generated files.
+remove_stale_site_fragment() {
+    local caddyfile_path=$1
+    local current_domain=$2
+    local previous_fragment
+    previous_fragment=$(get_setup_state_var 'SYSTEM_CADDY_SITE_FRAGMENT' '')
+
+    if [[ -z "$previous_fragment" ]]; then
+        return 0
+    fi
+
+    local include_dir
+    include_dir=$(get_system_caddy_include_dir "$caddyfile_path")
+
+    # Safety: only remove fragments that live inside the system include dir
+    case "$previous_fragment" in
+        "${include_dir}/"*) ;;
+        *) return 0 ;;
+    esac
+
+    local current_fragment
+    current_fragment=$(get_installed_site_fragment_path "$caddyfile_path" "$current_domain")
+
+    # Only remove if the domain actually changed (different file path)
+    if [[ "$previous_fragment" = "$current_fragment" ]]; then
+        return 0
+    fi
+
+    if [[ -f "$previous_fragment" ]]; then
+        if [[ -w "$previous_fragment" ]]; then
+            rm -f "$previous_fragment"
+        else
+            sudo rm -f "$previous_fragment"
+        fi
+        echo -e "${GREEN}✓${NC} Removed stale site fragment: ${CYAN}${previous_fragment}${NC}"
+    fi
+}
+
 install_site_fragment_into_include_dir() {
     local fragment_path=$1
     local caddyfile_path=$2
@@ -433,10 +486,31 @@ install_site_fragment_into_include_dir() {
     return 0
 }
 
+# Remove old per-project-root managed blocks (e.g. "# BEGIN BLB /path/to/project")
+# that previous versions of this script created.  All BLB instances now share a
+# single "# BEGIN BLB" / "# END BLB" block, so the per-path variants must go.
+remove_legacy_blb_blocks() {
+    local caddyfile_path=$1
+
+    if ! grep -qE '^# BEGIN BLB /' "$caddyfile_path" 2>/dev/null; then
+        return 0
+    fi
+
+    local temp_file
+    temp_file=$(mktemp)
+
+    awk '
+        /^# BEGIN BLB \// { skip = 1; next }
+        /^# END BLB \//   { skip = 0; next }
+        skip != 1          { print }
+    ' "$caddyfile_path" > "$temp_file"
+
+    copy_file_with_elevation_if_needed "$temp_file" "$caddyfile_path"
+    rm -f "$temp_file"
+}
+
 install_caddy_import_into_caddyfile() {
     local caddyfile_path=$1
-    local managed_block_name
-    managed_block_name="BLB ${PROJECT_ROOT}"
     local include_dir
     include_dir=$(get_system_caddy_include_dir "$caddyfile_path")
     local import_file
@@ -446,8 +520,14 @@ install_caddy_import_into_caddyfile() {
 import ${include_dir}/*.caddy
 EOF
 
+    # Migrate: remove any old per-project-root managed blocks so only
+    # one shared "BLB" block remains.  Previous versions wrote separate
+    # blocks named "BLB <project_root>" for each BLB instance, which
+    # caused the same glob to be imported multiple times.
+    remove_legacy_blb_blocks "$caddyfile_path"
+
     local rendered_file
-    rendered_file=$(replace_managed_block "$caddyfile_path" "$managed_block_name" "$import_file")
+    rendered_file=$(replace_managed_block "$caddyfile_path" 'BLB' "$import_file")
 
     copy_file_with_elevation_if_needed "$rendered_file" "$caddyfile_path"
 
@@ -477,12 +557,13 @@ validate_and_reload_caddy() {
     rm -f "$formatted_file"
 
     echo -e "${CYAN}Validating Caddy configuration...${NC}"
-    caddy validate --config "$caddyfile_path"
+    # Use sudo so caddy can read cert key files owned by the caddy service user
+    sudo caddy validate --config "$caddyfile_path"
 
     echo -e "${CYAN}Reloading Caddy configuration...${NC}"
 
     if system_caddy_is_running; then
-        if ! reload_output=$(caddy reload --config "$caddyfile_path" 2>&1); then
+        if ! reload_output=$(sudo caddy reload --config "$caddyfile_path" 2>&1); then
             echo -e "${RED}✗${NC} Failed to reload system Caddy" >&2
             echo "$reload_output" >&2
             echo "" >&2
@@ -495,7 +576,7 @@ validate_and_reload_caddy() {
         return 0
     else
         ensure_caddy_service_running || true
-        if ! reload_output=$(caddy reload --config "$caddyfile_path" 2>&1); then
+        if ! reload_output=$(sudo caddy reload --config "$caddyfile_path" 2>&1); then
             echo -e "${RED}✗${NC} Failed to reload system Caddy after attempting to start it" >&2
             echo "$reload_output" >&2
             return 1
@@ -547,6 +628,7 @@ configure_shared_ingress() {
     fi
 
     if [[ "$install_block" = true ]]; then
+        remove_stale_site_fragment "$caddyfile_path" "$frontend_domain"
         install_site_fragment_into_include_dir "$fragment_path" "$caddyfile_path" "$frontend_domain"
         install_caddy_import_into_caddyfile "$caddyfile_path"
         validate_and_reload_caddy "$caddyfile_path"
