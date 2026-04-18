@@ -23,6 +23,7 @@ use Tests\Support\MakesRuntimeResponses;
 uses(TestCase::class, MakesRuntimeResponses::class);
 
 const AGENTIC_RUNTIME_SYSTEM_PROMPT = 'You are Lara.';
+const AGENTIC_RUNTIME_TOO_MANY_REQUESTS = 'HTTP 429: Too Many Requests';
 
 class TestTool implements Tool
 {
@@ -472,7 +473,7 @@ describe('AgenticRuntime', function () {
         $llmClient = Mockery::mock(LlmClient::class);
         // Primary fails with rate limit on BOTH attempts (initial + retry)
         $llmClient->shouldReceive('chat')->twice()->andReturn(
-            $this->makeErrorResponse(AiErrorType::RateLimit, 'HTTP 429: Too Many Requests', 50)
+            $this->makeErrorResponse(AiErrorType::RateLimit, AGENTIC_RUNTIME_TOO_MANY_REQUESTS, 50)
         );
         // Backup succeeds
         $llmClient->shouldReceive('chat')->once()->andReturn(
@@ -499,7 +500,7 @@ describe('AgenticRuntime', function () {
         $llmClient->shouldReceive('chatStream')->once()->andReturnUsing(function () {
             yield ['type' => 'error', 'runtime_error' => AiRuntimeError::fromType(
                 AiErrorType::RateLimit,
-                'HTTP 429: Too Many Requests',
+                AGENTIC_RUNTIME_TOO_MANY_REQUESTS,
                 latencyMs: 50
             ), 'latency_ms' => 50];
         });
@@ -605,7 +606,7 @@ describe('AgenticRuntime', function () {
             yield ['type' => 'thinking_delta', 'text' => 'Inspecting...'];
             yield ['type' => 'error', 'runtime_error' => AiRuntimeError::fromType(
                 AiErrorType::RateLimit,
-                'HTTP 429: Too Many Requests',
+                AGENTIC_RUNTIME_TOO_MANY_REQUESTS,
                 latencyMs: 50
             ), 'latency_ms' => 50];
         });
@@ -661,7 +662,7 @@ describe('AgenticRuntime', function () {
     it('surfaces the last stream runtime error when every configuration hits a retryable stream failure', function () {
         $rateLimit = AiRuntimeError::fromType(
             AiErrorType::RateLimit,
-            'HTTP 429: Too Many Requests',
+            AGENTIC_RUNTIME_TOO_MANY_REQUESTS,
             latencyMs: 50,
         );
 

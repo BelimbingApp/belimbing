@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 
+const TASK_MODELS_FAST_REASON = 'Fast for short labels.';
+
 beforeEach(function (): void {
     config()->set('ai.workspace_path', storage_path('framework/testing/task-models-'.Str::random(16)));
 });
@@ -65,7 +67,7 @@ test('recommendation saves a stable recommended task model choice', function ():
         ->andReturn([
             'provider' => 'anthropic',
             'model' => 'claude-quick-title',
-            'reason' => 'Fast for short labels.',
+            'reason' => TASK_MODELS_FAST_REASON,
         ]);
     app()->instance(TaskModelRecommendationService::class, $service);
 
@@ -74,7 +76,7 @@ test('recommendation saves a stable recommended task model choice', function ():
         ->assertSet('taskModes.titling', 'recommended')
         ->assertSet('taskProviderIds.titling', $secondaryProvider->id)
         ->assertSet('taskModelIds.titling', 'claude-quick-title')
-        ->assertSet('taskReasons.titling', 'Fast for short labels.');
+        ->assertSet('taskReasons.titling', TASK_MODELS_FAST_REASON);
 
     $config = app(ConfigResolver::class)->readTaskConfig(Employee::LARA_ID, 'titling');
 
@@ -82,7 +84,7 @@ test('recommendation saves a stable recommended task model choice', function ():
         'mode' => 'recommended',
         'provider' => 'anthropic',
         'model' => 'claude-quick-title',
-        'reason' => 'Fast for short labels.',
+        'reason' => TASK_MODELS_FAST_REASON,
     ]);
 });
 

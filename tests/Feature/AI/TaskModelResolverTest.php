@@ -8,6 +8,8 @@ use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
+const TASK_MODEL_RESOLVER_OPENAI_BASE_URL = 'https://openai.example.test';
+
 beforeEach(function (): void {
     config()->set('ai.workspace_path', storage_path('framework/testing/task-resolver-'.Str::random(16)));
 });
@@ -29,7 +31,7 @@ test('resolve task uses the saved task model when it is valid', function (): voi
         'company_id' => $company->id,
         'name' => 'openai',
         'display_name' => 'OpenAI',
-        'base_url' => 'https://openai.example.test',
+        'base_url' => TASK_MODEL_RESOLVER_OPENAI_BASE_URL,
         'auth_type' => 'api_key',
         'credentials' => ['api_key' => 'openai-key'],
         'connection_config' => [],
@@ -89,7 +91,7 @@ test('resolve task falls back to lara primary when the saved task model is incom
         'company_id' => $company->id,
         'name' => 'openai',
         'display_name' => 'OpenAI',
-        'base_url' => 'https://openai.example.test',
+        'base_url' => TASK_MODEL_RESOLVER_OPENAI_BASE_URL,
         'auth_type' => 'api_key',
         'credentials' => ['api_key' => 'openai-key'],
         'connection_config' => [],
@@ -135,7 +137,7 @@ test('resolve task falls back to lara primary when the saved recommended model i
         'company_id' => $company->id,
         'name' => 'openai',
         'display_name' => 'OpenAI',
-        'base_url' => 'https://openai.example.test',
+        'base_url' => TASK_MODEL_RESOLVER_OPENAI_BASE_URL,
         'auth_type' => 'api_key',
         'credentials' => ['api_key' => 'openai-key'],
         'connection_config' => [],
@@ -183,7 +185,7 @@ test('resolve task uses lara primary when the task mode is primary', function ()
         'company_id' => $company->id,
         'name' => 'openai',
         'display_name' => 'OpenAI',
-        'base_url' => 'https://openai.example.test',
+        'base_url' => TASK_MODEL_RESOLVER_OPENAI_BASE_URL,
         'auth_type' => 'api_key',
         'credentials' => ['api_key' => 'openai-key'],
         'connection_config' => [],

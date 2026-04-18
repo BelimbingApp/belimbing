@@ -12,6 +12,8 @@ use Illuminate\Foundation\Testing\TestCase;
 
 uses(TestCase::class);
 
+const AGENTIC_STREAM_READER_NEED_TOOL_RESULT = 'Need tool result.';
+
 it('captures reasoning_content deltas for follow-up tool loop requests', function (): void {
     $llmClient = Mockery::mock(LlmClient::class);
     $llmClient->shouldReceive('chatStream')
@@ -20,7 +22,7 @@ it('captures reasoning_content deltas for follow-up tool loop requests', functio
         ->andReturn((function (): Generator {
             yield [
                 'type' => 'thinking_delta',
-                'text' => 'Need tool result.',
+                'text' => AGENTIC_STREAM_READER_NEED_TOOL_RESULT,
                 'source' => 'reasoning_content',
             ];
             yield [
@@ -81,9 +83,9 @@ it('captures reasoning_content deltas for follow-up tool loop requests', functio
     expect($events)->toHaveCount(1)
         ->and($events[0]['event'])->toBe('status')
         ->and($events[0]['data']['phase'])->toBe('thinking_delta')
-        ->and($events[0]['data']['delta'])->toBe('Need tool result.');
+        ->and($events[0]['data']['delta'])->toBe(AGENTIC_STREAM_READER_NEED_TOOL_RESULT);
 
-    expect($result['reasoning_content'])->toBe('Need tool result.')
+    expect($result['reasoning_content'])->toBe(AGENTIC_STREAM_READER_NEED_TOOL_RESULT)
         ->and($result['tool_calls'][0]['id'])->toBe('call_stream_reasoning_1')
         ->and($result['tool_calls'][0]['function']['arguments'])->toBe('{"input":"world"}')
         ->and($result['latency_ms'])->toBe(123);

@@ -260,119 +260,147 @@ class AgenticRuntime
                 return;
             }
 
-            $fallbackAttempts = [];
-            /** @var AiRuntimeError|null $lastError */
-            $lastError = null;
-            $lastConfig = null;
-            $fallbackAttemptIndex = 0;
+            yield from $this->streamWithFallbackConfigs(
+                $runId,
+                $configs,
+                $messages,
+                $systemPrompt,
+                $modelOverride,
+                $policy,
+                $allowedToolNames,
+            );
+        } finally {
+            $this->sessionContext->clear();
+        }
+    }
 
-            foreach ($configs as $configIndex => $config) {
-                if ($modelOverride !== null && $configIndex === 0) {
-                    $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
-                }
+    /**
+     * Stream a run across provider configs with pre-commit fallback.
+     *
+     * @param  list<array<string, mixed>>  $configs
+     * @param  list<Message>  $messages
+     * @param  list<string>|null  $allowedToolNames
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function streamWithFallbackConfigs(
+        string $runId,
+        array $configs,
+        array $messages,
+        ?string $systemPrompt,
+        ?string $modelOverride,
+        ExecutionPolicy $policy,
+        ?array $allowedToolNames = null,
+    ): \Generator {
+        $fallbackAttempts = [];
+        /** @var AiRuntimeError|null $lastError */
+        $lastError = null;
+        $lastConfig = null;
+        $fallbackAttemptIndex = 0;
 
-                $credentials = $this->credentialResolver->resolve($config);
+        foreach ($configs as $configIndex => $config) {
+            if ($modelOverride !== null && $configIndex === 0) {
+                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
+            }
 
-                if (isset($credentials['runtime_error'])) {
-                    $error = $credentials['runtime_error'];
-                    $fallbackAttempts[] = $this->buildFallbackAttempt($config, $error);
-                    $lastError = $error;
-                    $lastConfig = $config;
-                    $fallbackAttemptIndex++;
+            $credentials = $this->credentialResolver->resolve($config);
 
-                    yield ['event' => 'status', 'data' => [
-                        'phase' => 'recovery_attempted',
-                        'attempt' => $fallbackAttemptIndex,
-                        'reason' => 'provider_fallback: '.$error->userMessage,
-                        'run_id' => $runId,
-                    ]];
+            if (isset($credentials['runtime_error'])) {
+                $error = $credentials['runtime_error'];
+                $fallbackAttempts[] = $this->buildFallbackAttempt($config, $error);
+                $lastError = $error;
+                $lastConfig = $config;
+                $fallbackAttemptIndex++;
 
-                    continue;
-                }
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'recovery_attempted',
+                    'attempt' => $fallbackAttemptIndex,
+                    'reason' => 'provider_fallback: '.$error->userMessage,
+                    'run_id' => $runId,
+                ]];
 
-                $config['timeout'] = $policy->timeoutSeconds;
+                continue;
+            }
 
-                $stream = $this->runStreamingToolLoop(
-                    $runId,
-                    $config,
-                    $credentials,
-                    $messages,
-                    $systemPrompt,
-                    $fallbackAttempts,
-                    $allowedToolNames,
-                );
+            $config['timeout'] = $policy->timeoutSeconds;
 
-                $providerCommitted = false;
-                foreach ($stream as $event) {
-                    if ($event['event'] === 'error') {
-                        $streamError = $event['data']['meta']['error_type'] ?? null;
+            $stream = $this->runStreamingToolLoop(
+                $runId,
+                $config,
+                $credentials,
+                $messages,
+                $systemPrompt,
+                $fallbackAttempts,
+                $allowedToolNames,
+            );
 
-                        if (
-                            $this->shouldFallbackFromErrorType($streamError)
-                            && ! $providerCommitted
-                        ) {
-                            $fallbackAttempts[] = $this->buildFallbackAttemptFromStreamError($config, $streamError);
-                            $lastConfig = $config;
-                            $fallbackAttemptIndex++;
-                            $errorEventData = $event['data'] ?? [];
-                            $streamMeta = $errorEventData['meta'] ?? null;
-                            $lastError = is_array($streamMeta)
-                                ? $this->runtimeErrorFromAssistantMeta($streamMeta)
-                                : AiRuntimeError::fromType(
-                                    AiErrorType::tryFrom((string) $streamError) ?? AiErrorType::UnexpectedError,
-                                    is_string($errorEventData['message'] ?? null) ? $errorEventData['message'] : '',
-                                    latencyMs: 0,
-                                );
+            $providerCommitted = false;
+            foreach ($stream as $event) {
+                if ($event['event'] === 'error') {
+                    $streamError = $event['data']['meta']['error_type'] ?? null;
 
-                            yield ['event' => 'status', 'data' => [
-                                'phase' => 'recovery_attempted',
-                                'attempt' => $fallbackAttemptIndex,
-                                'reason' => 'provider_fallback: '.$this->errorTypeToUserMessage($streamError),
-                                'run_id' => $runId,
-                            ]];
+                    if (
+                        $this->shouldFallbackFromErrorType($streamError)
+                        && ! $providerCommitted
+                    ) {
+                        $fallbackAttempts[] = $this->buildFallbackAttemptFromStreamError($config, $streamError);
+                        $lastConfig = $config;
+                        $fallbackAttemptIndex++;
+                        $errorEventData = $event['data'] ?? [];
+                        $streamMeta = $errorEventData['meta'] ?? null;
+                        $lastError = is_array($streamMeta)
+                            ? $this->runtimeErrorFromAssistantMeta($streamMeta)
+                            : AiRuntimeError::fromType(
+                                AiErrorType::tryFrom((string) $streamError) ?? AiErrorType::UnexpectedError,
+                                is_string($errorEventData['message'] ?? null) ? $errorEventData['message'] : '',
+                                latencyMs: 0,
+                            );
 
-                            continue 2;
-                        }
+                        yield ['event' => 'status', 'data' => [
+                            'phase' => 'recovery_attempted',
+                            'attempt' => $fallbackAttemptIndex,
+                            'reason' => 'provider_fallback: '.$this->errorTypeToUserMessage($streamError),
+                            'run_id' => $runId,
+                        ]];
 
-                        yield $event;
-
-                        return;
+                        continue 2;
                     }
 
                     yield $event;
 
-                    if ($this->streamEventLocksProvider($event)) {
-                        $providerCommitted = true;
-                        $lastConfig = $config;
-                    }
+                    return;
+                }
 
-                    if ($event['event'] === 'done') {
-                        return;
-                    }
+                yield $event;
+
+                if ($this->streamEventLocksProvider($event)) {
+                    $providerCommitted = true;
+                    $lastConfig = $config;
+                }
+
+                if ($event['event'] === 'done') {
+                    return;
                 }
             }
-
-            $error = $lastError ?? AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED);
-            $this->runRecorder->fail($runId, $error, [
-                'fallback_attempts' => $fallbackAttempts,
-            ]);
-
-            $errorConfig = $lastConfig ?? $configs[0];
-            yield ['event' => 'error', 'data' => [
-                'message' => $error->userMessage,
-                'run_id' => $runId,
-                'meta' => array_merge(
-                    $this->responseFactory->errorMeta(
-                        $errorConfig['model'] ?? 'unknown',
-                        (string) ($errorConfig['provider_name'] ?? 'unknown'),
-                        $error,
-                    ),
-                    ['fallback_attempts' => $fallbackAttempts],
-                ),
-            ]];
-        } finally {
-            $this->sessionContext->clear();
         }
+
+        $error = $lastError ?? AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED);
+        $this->runRecorder->fail($runId, $error, [
+            'fallback_attempts' => $fallbackAttempts,
+        ]);
+
+        $errorConfig = $lastConfig ?? $configs[0];
+        yield ['event' => 'error', 'data' => [
+            'message' => $error->userMessage,
+            'run_id' => $runId,
+            'meta' => array_merge(
+                $this->responseFactory->errorMeta(
+                    $errorConfig['model'] ?? 'unknown',
+                    (string) ($errorConfig['provider_name'] ?? 'unknown'),
+                    $error,
+                ),
+                ['fallback_attempts' => $fallbackAttempts],
+            ),
+        ]];
     }
 
     /**

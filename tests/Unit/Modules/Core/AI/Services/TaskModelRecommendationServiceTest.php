@@ -17,6 +17,9 @@ use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
 
+const TASK_MODEL_RECO_BASE_URL = 'https://api.example.test/v1';
+const TASK_MODEL_RECO_FAST_REASON = 'Fast for short labels.';
+
 function makeTaskRecommendationService(string $responseContent): TaskModelRecommendationService
 {
     $configResolver = Mockery::mock(ConfigResolver::class);
@@ -24,7 +27,7 @@ function makeTaskRecommendationService(string $responseContent): TaskModelRecomm
         ->once()
         ->andReturn([
             'api_key' => 'primary-key',
-            'base_url' => 'https://api.example.test/v1',
+            'base_url' => TASK_MODEL_RECO_BASE_URL,
             'model' => 'gpt-primary',
             'provider_name' => 'openai',
         ]);
@@ -56,7 +59,7 @@ function makeTaskRecommendationService(string $responseContent): TaskModelRecomm
         ->once()
         ->andReturn([
             'api_key' => 'primary-key',
-            'base_url' => 'https://api.example.test/v1',
+            'base_url' => TASK_MODEL_RECO_BASE_URL,
         ]);
 
     return new TaskModelRecommendationService(
@@ -74,7 +77,7 @@ function makeTaskRecommendationServiceWithRuntimeError(AiRuntimeError $runtimeEr
         ->once()
         ->andReturn([
             'api_key' => 'primary-key',
-            'base_url' => 'https://api.example.test/v1',
+            'base_url' => TASK_MODEL_RECO_BASE_URL,
             'model' => 'gpt-primary',
             'provider_name' => 'openai',
         ]);
@@ -105,7 +108,7 @@ function makeTaskRecommendationServiceWithRuntimeError(AiRuntimeError $runtimeEr
         ->once()
         ->andReturn([
             'api_key' => 'primary-key',
-            'base_url' => 'https://api.example.test/v1',
+            'base_url' => TASK_MODEL_RECO_BASE_URL,
         ]);
 
     return new TaskModelRecommendationService(
@@ -163,36 +166,36 @@ function seedRecommendationCandidates(): void
 test('recommendation parses fenced json responses', function (): void {
     seedRecommendationCandidates();
 
-    $service = makeTaskRecommendationService(<<<'TEXT'
-```json
-{"provider":"anthropic","model":"claude-quick-title","reason":"Fast for short labels."}
-```
-TEXT);
+    $service = makeTaskRecommendationService(
+        "```json\n"
+        .'{"provider":"anthropic","model":"claude-quick-title","reason":"'.TASK_MODEL_RECO_FAST_REASON."\"}\n"
+        ."```\n"
+    );
 
     $result = $service->recommend(1, 'titling');
 
     expect($result)->toBe([
         'provider' => 'anthropic',
         'model' => 'claude-quick-title',
-        'reason' => 'Fast for short labels.',
+        'reason' => TASK_MODEL_RECO_FAST_REASON,
     ]);
 });
 
 test('recommendation parses structured plain text responses', function (): void {
     seedRecommendationCandidates();
 
-    $service = makeTaskRecommendationService(<<<'TEXT'
-provider: anthropic
-model: claude-quick-title
-reason: Fast for short labels.
-TEXT);
+    $service = makeTaskRecommendationService(
+        "provider: anthropic\n"
+        ."model: claude-quick-title\n"
+        .'reason: '.TASK_MODEL_RECO_FAST_REASON."\n"
+    );
 
     $result = $service->recommend(1, 'titling');
 
     expect($result)->toBe([
         'provider' => 'anthropic',
         'model' => 'claude-quick-title',
-        'reason' => 'Fast for short labels.',
+        'reason' => TASK_MODEL_RECO_FAST_REASON,
     ]);
 });
 

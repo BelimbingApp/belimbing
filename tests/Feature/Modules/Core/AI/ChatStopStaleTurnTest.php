@@ -57,18 +57,45 @@ function createStopStaleFixture(): array
     ];
 }
 
-it('stopping a stale turn materializes streamed assistant output with run metadata', function (): void {
-    $fixture = createStopStaleFixture();
-    $this->actingAs($fixture['user']);
+/**
+ * @param  object  $test  Pest test case instance
+ */
+function actingAsStopStaleUser(object $test, User $user): void
+{
+    $test->actingAs($user);
+}
 
-    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+function createStopStaleSession(): object
+{
+    return app(SessionManager::class)->create(Employee::LARA_ID);
+}
 
-    $turn = ChatTurn::query()->create([
+/**
+ * @param  array<string, mixed>  $overrides
+ */
+function createStopStaleTurn(array $overrides): ChatTurn
+{
+    return ChatTurn::query()->create(array_merge([
         'employee_id' => Employee::LARA_ID,
-        'session_id' => $session->id,
-        'acting_for_user_id' => $fixture['user']->id,
         'status' => TurnStatus::Queued,
         'current_phase' => TurnPhase::WaitingForWorker,
+    ], $overrides));
+}
+
+function cancelStopStaleTurn(ChatTurn $turn): void
+{
+    Livewire::test(Chat::class)->call('cancelActiveTurn', $turn->id);
+}
+
+it('stopping a stale turn materializes streamed assistant output with run metadata', function (): void {
+    $fixture = createStopStaleFixture();
+    actingAsStopStaleUser($this, $fixture['user']);
+
+    $session = createStopStaleSession();
+
+    $turn = createStopStaleTurn([
+        'session_id' => $session->id,
+        'acting_for_user_id' => $fixture['user']->id,
     ]);
 
     $publisher = app(TurnEventPublisher::class);
@@ -98,8 +125,7 @@ it('stopping a stale turn materializes streamed assistant output with run metada
         'started_at' => now()->subMinutes(340),
     ])->save();
 
-    Livewire::test(Chat::class)
-        ->call('cancelActiveTurn', $turn->id);
+    cancelStopStaleTurn($turn);
 
     $turn->refresh();
 
@@ -119,21 +145,17 @@ it('stopping a stale turn materializes streamed assistant output with run metada
 
 it('stopping a queued waiting-for-worker turn cancels it immediately', function (): void {
     $fixture = createStopStaleFixture();
-    $this->actingAs($fixture['user']);
+    actingAsStopStaleUser($this, $fixture['user']);
 
-    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+    $session = createStopStaleSession();
 
-    $turn = ChatTurn::query()->create([
-        'employee_id' => Employee::LARA_ID,
+    $turn = createStopStaleTurn([
         'session_id' => $session->id,
         'acting_for_user_id' => $fixture['user']->id,
-        'status' => TurnStatus::Queued,
-        'current_phase' => TurnPhase::WaitingForWorker,
         'created_at' => now()->subMinutes(3),
     ]);
 
-    Livewire::test(Chat::class)
-        ->call('cancelActiveTurn', $turn->id);
+    cancelStopStaleTurn($turn);
 
     $turn->refresh();
 
@@ -144,12 +166,11 @@ it('stopping a queued waiting-for-worker turn cancels it immediately', function 
 
 it('stopping a booting turn still waiting for worker force-cancels it after the grace window', function (): void {
     $fixture = createStopStaleFixture();
-    $this->actingAs($fixture['user']);
+    actingAsStopStaleUser($this, $fixture['user']);
 
-    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+    $session = createStopStaleSession();
 
-    $turn = ChatTurn::query()->create([
-        'employee_id' => Employee::LARA_ID,
+    $turn = createStopStaleTurn([
         'session_id' => $session->id,
         'acting_for_user_id' => $fixture['user']->id,
         'status' => TurnStatus::Booting,
@@ -160,8 +181,7 @@ it('stopping a booting turn still waiting for worker force-cancels it after the 
         'created_at' => now()->subMinute(),
     ])->save();
 
-    Livewire::test(Chat::class)
-        ->call('cancelActiveTurn', $turn->id);
+    cancelStopStaleTurn($turn);
 
     $turn->refresh();
 
@@ -172,12 +192,11 @@ it('stopping a booting turn still waiting for worker force-cancels it after the 
 
 it('stopping an orphaned turn after client disconnect force-cancels it immediately', function (): void {
     $fixture = createStopStaleFixture();
-    $this->actingAs($fixture['user']);
+    actingAsStopStaleUser($this, $fixture['user']);
 
-    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+    $session = createStopStaleSession();
 
-    $turn = ChatTurn::query()->create([
-        'employee_id' => Employee::LARA_ID,
+    $turn = createStopStaleTurn([
         'session_id' => $session->id,
         'acting_for_user_id' => $fixture['user']->id,
         'status' => TurnStatus::Booting,
@@ -186,8 +205,7 @@ it('stopping an orphaned turn after client disconnect force-cancels it immediate
 
     $turn->requestCancel('Client disconnected');
 
-    Livewire::test(Chat::class)
-        ->call('cancelActiveTurn', $turn->id);
+    cancelStopStaleTurn($turn);
 
     $turn->refresh();
 

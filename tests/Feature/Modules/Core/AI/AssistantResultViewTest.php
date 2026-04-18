@@ -24,6 +24,6 @@ BLADE,
 
     expect($html)
         ->toContain('You stopped this run before it finished.')
-        ->toContain('run-stop…')
+        ->toContain('title="run-stop-note-001"')
         ->toContain('openai/gpt-5');
 });

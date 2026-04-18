@@ -23,6 +23,9 @@ const DELEGATE_ANALYZE_SALES_DATA = 'Analyze sales data';
 const DELEGATE_GENERATE_MONTHLY_REPORT = 'Generate monthly report';
 const DELEGATE_REPORT_GENERATOR = 'Report Generator';
 const DELEGATE_DATA_ANALYST = 'Data Analyst';
+const DELEGATE_OPENAI_DOCS_TASK = 'Investigate the latest OpenAI docs changes';
+const DELEGATE_TARGET_AGENT_NAME = 'Target Agent';
+const DELEGATE_FROM_CHAT_TASK = 'From chat';
 
 function makeOperationDispatch(array $overrides = []): OperationDispatch
 {
@@ -240,7 +243,7 @@ describe('dispatch with auto-matching', function () {
             ->andReturn(RoutingDecision::local(['No delegable agents available for the current user.']));
         $this->taskProfileSelector->shouldReceive('select')
             ->once()
-            ->with('Investigate the latest OpenAI docs changes', 'research')
+            ->with(DELEGATE_OPENAI_DOCS_TASK, 'research')
             ->andReturn([
                 'definition' => $researchTask,
                 'reasons' => ['Explicit task type matched Research.'],
@@ -249,7 +252,7 @@ describe('dispatch with auto-matching', function () {
 
         $dispatch = makeOperationDispatch([
             'employee_id' => 1,
-            'task' => 'Investigate the latest OpenAI docs changes',
+            'task' => DELEGATE_OPENAI_DOCS_TASK,
             'meta' => [
                 'employee_name' => 'Lara',
                 'task_type' => 'research',
@@ -260,11 +263,11 @@ describe('dispatch with auto-matching', function () {
 
         $this->dispatcher->shouldReceive('dispatchTaskProfileForCurrentUser')
             ->once()
-            ->with('research', 'Investigate the latest OpenAI docs changes', [])
+            ->with('research', DELEGATE_OPENAI_DOCS_TASK, [])
             ->andReturn($dispatch);
 
         $result = $this->tool->execute([
-            'task' => 'Investigate the latest OpenAI docs changes',
+            'task' => DELEGATE_OPENAI_DOCS_TASK,
             'task_type' => 'research',
         ]);
 
@@ -289,7 +292,7 @@ describe('execution context', function () {
             ->withArgs(function ($request) {
                 return $request->requestingEmployeeId === 5;
             })
-            ->andReturn(makeDelegateAgentDecision(7, 'Target Agent'));
+            ->andReturn(makeDelegateAgentDecision(7, DELEGATE_TARGET_AGENT_NAME));
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
@@ -306,13 +309,13 @@ describe('execution context', function () {
             ->withArgs(function ($request) {
                 return $request->requestingEmployeeId === 1; // Employee::LARA_ID
             })
-            ->andReturn(makeDelegateAgentDecision(7, 'Target Agent'));
+            ->andReturn(makeDelegateAgentDecision(7, DELEGATE_TARGET_AGENT_NAME));
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
             ->andReturn(makeOperationDispatch());
 
-        $this->tool->execute(['task' => 'From chat', 'task_type' => 'general']);
+        $this->tool->execute(['task' => DELEGATE_FROM_CHAT_TASK, 'task_type' => 'general']);
     });
 
     it('passes the active runtime session to delegated work', function () {
@@ -320,20 +323,20 @@ describe('execution context', function () {
 
         $this->router->shouldReceive('route')
             ->once()
-            ->andReturn(makeDelegateAgentDecision(7, 'Target Agent'));
+            ->andReturn(makeDelegateAgentDecision(7, DELEGATE_TARGET_AGENT_NAME));
 
         $this->dispatcher->shouldReceive('dispatchForCurrentUser')
             ->once()
-            ->with(7, 'general', 'From chat', ['session_id' => 'sess_lara_123'])
+            ->with(7, 'general', DELEGATE_FROM_CHAT_TASK, ['session_id' => 'sess_lara_123'])
             ->andReturn(makeOperationDispatch([
                 'meta' => [
-                    'employee_name' => 'Target Agent',
+                    'employee_name' => DELEGATE_TARGET_AGENT_NAME,
                     'task_type' => 'general',
                     'session_id' => 'sess_lara_123',
                 ],
             ]));
 
-        $this->tool->execute(['task' => 'From chat', 'task_type' => 'general']);
+        $this->tool->execute(['task' => DELEGATE_FROM_CHAT_TASK, 'task_type' => 'general']);
     });
 });
 

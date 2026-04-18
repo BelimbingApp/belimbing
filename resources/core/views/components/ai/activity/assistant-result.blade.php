@@ -52,13 +52,13 @@
             :timestamp="$timestamp"
             :provider="$provider"
             :model="$model"
-            :run-id="$runId"
+            :runId="$runId"
             :tokens="$tokens"
-            :latency-ms="$latencyMs"
-            :timeout-seconds="$timeoutSeconds"
-            :retry-attempts="$retryAttempts"
-            :fallback-attempts="$fallbackAttempts"
-            :run-status="$runStatus"
+            :latencyMs="$latencyMs"
+            :timeoutSeconds="$timeoutSeconds"
+            :retryAttempts="$retryAttempts"
+            :fallbackAttempts="$fallbackAttempts"
+            :runStatus="$runStatus"
         />
     </div>
 </div>

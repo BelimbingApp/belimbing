@@ -15,6 +15,7 @@ use App\Base\Workflow\Services\TransitionValidator;
 use App\Base\Workflow\Services\WorkflowEngine;
 use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\Event;
 
@@ -67,13 +68,17 @@ function seedTestWorkflow(): void
 function createTestActor(): Actor
 {
     $company = Company::factory()->create();
-    $user = User::factory()->create(['company_id' => $company->id]);
+    $employee = Employee::factory()->create(['company_id' => $company->id]);
+    $user = User::factory()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+    ]);
 
     return new Actor(
         type: PrincipalType::HUMAN_USER,
         id: $user->id,
         companyId: $company->id,
-        attributes: ['role' => 'technician', 'department' => 'IT'],
+        attributes: ['role' => 'technician', 'department' => 'IT', 'employee_id' => $employee->id],
     );
 }
 
@@ -83,10 +88,19 @@ function createTestActor(): Actor
 function createTestTicket(?Actor $actor = null): Ticket
 {
     $actor ??= createTestActor();
+    $employeeId = $actor->attributes['employee_id'] ?? null;
+
+    if (! is_int($employeeId)) {
+        $employeeId = is_numeric($employeeId) ? (int) $employeeId : null;
+    }
+
+    if ($employeeId === null) {
+        $employeeId = Employee::factory()->create(['company_id' => $actor->companyId])->id;
+    }
 
     return Ticket::query()->create([
         'company_id' => $actor->companyId,
-        'reporter_id' => $actor->id,
+        'reporter_id' => $employeeId,
         'title' => 'Test printer not working',
         'status' => 'open',
         'priority' => 'medium',

@@ -22,6 +22,10 @@ use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
+const LARA_PROFILE_TASK_DASHBOARD = 'Build a dashboard page';
+const LARA_PROFILE_TASK_RESEARCH_DOCS = 'Investigate the latest AI provider docs changes';
+const LARA_PROFILE_BASE_PROMPT = 'Base Lara prompt';
+
 it('runs the Lara coding task profile and clears auth and execution context', function (): void {
     $user = User::factory()->create();
 
@@ -30,7 +34,7 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
         'operation_type' => OperationType::AgentTask,
         'employee_id' => Employee::LARA_ID,
         'acting_for_user_id' => $user->id,
-        'task' => 'Build a dashboard page',
+        'task' => LARA_PROFILE_TASK_DASHBOARD,
         'status' => OperationStatus::Queued,
         'meta' => [
             'task_profile' => 'coding',
@@ -70,8 +74,8 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
             array $allowedToolNames,
         ): bool {
             return $employeeId === Employee::LARA_ID
-                && $messages[0]->content === 'Build a dashboard page'
-                && str_contains($systemPrompt, 'Base Lara prompt')
+                && $messages[0]->content === LARA_PROFILE_TASK_DASHBOARD
+                && str_contains($systemPrompt, LARA_PROFILE_BASE_PROMPT)
                 && str_contains($systemPrompt, 'coding task profile')
                 && $modelOverride === null
                 && $sessionId === null
@@ -87,8 +91,8 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
     $promptFactory = Mockery::mock(LaraPromptFactory::class);
     $promptFactory->shouldReceive('buildForCurrentUser')
         ->once()
-        ->with('Build a dashboard page')
-        ->andReturn('Base Lara prompt');
+        ->with(LARA_PROFILE_TASK_DASHBOARD)
+        ->andReturn(LARA_PROFILE_BASE_PROMPT);
 
     $profileRegistry = Mockery::mock(LaraTaskExecutionProfileRegistry::class);
     $profileRegistry->shouldReceive('find')
@@ -97,8 +101,8 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
         ->andReturn($profile);
     $profileRegistry->shouldReceive('composeSystemPrompt')
         ->once()
-        ->with($profile, 'Base Lara prompt')
-        ->andReturn("Base Lara prompt\n\nTask profile instructions:\nYou are running Lara's coding task profile.");
+        ->with($profile, LARA_PROFILE_BASE_PROMPT)
+        ->andReturn(LARA_PROFILE_BASE_PROMPT."\n\nTask profile instructions:\nYou are running Lara's coding task profile.");
 
     $configResolver = Mockery::mock(ConfigResolver::class);
     $configResolver->shouldReceive('resolveTaskWithPrimaryFallback')
@@ -142,7 +146,7 @@ it('runs the Lara research task profile with the resolved research model', funct
         'operation_type' => OperationType::AgentTask,
         'employee_id' => Employee::LARA_ID,
         'acting_for_user_id' => $user->id,
-        'task' => 'Investigate the latest AI provider docs changes',
+        'task' => LARA_PROFILE_TASK_RESEARCH_DOCS,
         'status' => OperationStatus::Queued,
         'meta' => [
             'task_profile' => 'research',
@@ -171,8 +175,8 @@ it('runs the Lara research task profile with the resolved research model', funct
             array $allowedToolNames,
         ): bool {
             return $employeeId === Employee::LARA_ID
-                && $messages[0]->content === 'Investigate the latest AI provider docs changes'
-                && str_contains($systemPrompt, 'Base Lara prompt')
+                && $messages[0]->content === LARA_PROFILE_TASK_RESEARCH_DOCS
+                && str_contains($systemPrompt, LARA_PROFILE_BASE_PROMPT)
                 && str_contains($systemPrompt, 'research task profile')
                 && $modelOverride === null
                 && $sessionId === null
@@ -188,8 +192,8 @@ it('runs the Lara research task profile with the resolved research model', funct
     $promptFactory = Mockery::mock(LaraPromptFactory::class);
     $promptFactory->shouldReceive('buildForCurrentUser')
         ->once()
-        ->with('Investigate the latest AI provider docs changes')
-        ->andReturn('Base Lara prompt');
+        ->with(LARA_PROFILE_TASK_RESEARCH_DOCS)
+        ->andReturn(LARA_PROFILE_BASE_PROMPT);
 
     $profileRegistry = Mockery::mock(LaraTaskExecutionProfileRegistry::class);
     $profileRegistry->shouldReceive('find')
@@ -198,8 +202,8 @@ it('runs the Lara research task profile with the resolved research model', funct
         ->andReturn($profile);
     $profileRegistry->shouldReceive('composeSystemPrompt')
         ->once()
-        ->with($profile, 'Base Lara prompt')
-        ->andReturn("Base Lara prompt\n\nTask profile instructions:\nYou are running Lara's research task profile.");
+        ->with($profile, LARA_PROFILE_BASE_PROMPT)
+        ->andReturn(LARA_PROFILE_BASE_PROMPT."\n\nTask profile instructions:\nYou are running Lara's research task profile.");
 
     $configResolver = Mockery::mock(ConfigResolver::class);
     $configResolver->shouldReceive('resolveTaskWithPrimaryFallback')
