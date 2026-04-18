@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\User\Models;
 
+use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\ExternalAccess;
@@ -20,7 +21,7 @@ use Illuminate\Support\Str;
 
 class User extends Authenticatable implements CompanyScoped
 {
-    /** @use HasFactory<\App\Modules\Core\User\Database\Factories\UserFactory> */
+    /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
     /**
@@ -68,6 +69,14 @@ class User extends Authenticatable implements CompanyScoped
             ->take(2)
             ->map(fn ($word) => Str::substr($word, 0, 1))
             ->implode('');
+    }
+
+    /**
+     * Principal kind for authorization.
+     */
+    public function principalType(): PrincipalType
+    {
+        return PrincipalType::USER;
     }
 
     /**

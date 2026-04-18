@@ -61,7 +61,7 @@ All togglable via config: `log_http_requests`, `log_auth_events`, `log_console_c
 
 | `actor_type` | `actor_id` | `url` | Meaning |
 |---|---|---|---|
-| `human_user` | 42 | `https://app/employees` | User 42 via browser |
+| `user` | 42 | `https://app/employees` | User 42 via browser |
 | `agent` | 7 | `https://app/api/...` | AI agent 7 |
 | `console` | 42 | `artisan:blb:export employees` | User 42 ran artisan command |
 | `console` | 0 | `artisan:migrate --seed` | Artisan with no authenticated user |

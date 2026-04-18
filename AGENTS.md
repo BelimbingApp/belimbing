@@ -1,24 +1,22 @@
 # Belimbing (BLB) Architect & Agent Guidelines
 
 ## 1. Project Context
-Belimbing (BLB) is an enterprise-grade **framework** built on Laravel, leveraging the TALL stack evolution:
+Belimbing (BLB) is a Laravel-based framework:
 - **PHP:** 8.5+
 - **Framework:** Laravel 13
-- **App Server:** FrankenPHP 1.12.1 (required for Belimbing's PHP worker model)
+- **App Server:** FrankenPHP 1.12.2 (required for Belimbing's PHP worker model)
 - **Frontend/Logic:** Livewire 4 + Tailwind CSS 4 + Alpine.js 3
 - **Testing:** Pest 4
 - **Linting:** Laravel Pint
 - **Dependencies:** Always on the latest available minor/patch within each major version.
 
-BLB is a higher-order framework layered on top of Laravel. It preserves compatibility where practical but will intentionally diverge when necessary to uphold BLB's architectural principles. BLB extends and adapts Laravel internals accordingly, guided by Ousterhout's design tenets: deep modules, simple interfaces, and clear boundaries.
-
-Think of Laravel as the Level 0 foundation and BLB as a Level 1 framework built atop it — cohesive, opinionated, and extensible. BLB is not a mere Laravel application; it has no qualms about customizing Laravel to align with its architectural principles.
+BLB extends Laravel (not a stock app): keep compatibility where practical, but diverge and customize when its architecture requires. Favor deep modules, simple interfaces, and clear boundaries.
 
 ## 2. Development Philosophy: Early & Fluid
 **Context:** Initialization phase — no external users, no production deployment. This gives *design freedom* to build correctly from the start. Do not treat it as permission to shortcut quality.
 
 ### Production Mindset
-**No MVP mindset.** Build production-grade from day one. Scope may be small, but the bar is high: deep modules, clear contracts, zero tolerance for tech debt. If an approach would be unacceptable in production, it is unacceptable in the initialization phase too.
+**No MVP mindset.** Build to production standards from the start—initialization is not an excuse for shortcuts.
 
 ### Core Principles
 - **Boy-Scout Rule:** Leave the codebase better than you found it. When editing a file or area, fix nearby issues (naming, dead code, missing tests, unclear comments) in the same change — small, scoped improvements compound. Specifically:
@@ -30,18 +28,19 @@ Think of Laravel as the Level 0 foundation and BLB as a Level 1 framework built 
 - **Destructive Evolution:** Prioritize the best current design over backward compatibility. Drop tables, refactor schemas, and rewrite APIs freely — no migration paths for data. Use this freedom for structural improvement, not for cutting corners.
 - **Strategic Programming:** Prefer structural solutions over tactical patches. Refactor immediately upon discovering design flaws (zero tolerance for tech debt); resist quick fixes and aim for simplicity to lower future costs.
 - **Deep Modules:** Modules should provide powerful functionality through simple interfaces. Hide complexity; do not leak implementation details.
+- **Honesty:** Names, persisted values, APIs, docs, and UI copy should be truthful, transparent, and grounded in facts from code and data; prefer shared types and existing rules over ad hoc strings or duplicated logic.
 
-## 3. Laravel Customization: Embrace When Needed
+## 3. Laravel Customization
 
-**BLB is NOT a pure Laravel application.** It's a framework built on Laravel. BLB will diverge from Laravel defaults when necessary to uphold architectural principles.
+Relationship to upstream Laravel is in **section 1** above. Before changing Laravel internals or defaults for BLB:
 
-**When you see opportunities to improve Laravel defaults for framework needs:**
 1. **Flag it immediately** — Discuss with user before implementing
 2. **Consider framework perspective** — How does this help adopters?
 3. **Document the divergence** — Why BLB does it differently
 
 ## 4. Planning Through Plan Docs
-When work needs a real plan, keep the **visible** plan in `docs/plans/` per `docs/plans/AGENTS.md`—that file is the sole actionable source of truth (not hidden session or tool-only state), update it and its preamble as design or implementation moves, use judgment so only substantive work gets a plan doc, and treat legacy `docs/todo/` files under `docs/todo/AGENTS.md` until migrated.
+
+When work needs a real plan, keep the **visible** plan in `docs/plans/` per `docs/plans/AGENTS.md`—that file is the sole actionable source of truth (not hidden session or tool-only state), update it and its preamble as design or implementation moves, use judgment so only substantive work gets a plan doc.
 
 ## 5. PHP Coding Conventions
 
@@ -126,20 +125,18 @@ public function __construct(
 - **Use `NOSONAR` only for real false positives** and always explain the trust boundary or framework constraint in the comment.
 - **In JavaScript / Node ESM**, prefer `node:` built-ins, `Number.parseInt`, top-level `await` in entry scripts, and narrow catches that rethrow unexpected errors.
 - **In PHP services**, throw dedicated domain exceptions at module boundaries instead of generic `RuntimeException`/`Exception` when the failure belongs to a named subsystem. Nested guides apply this principle to their own subsystems; do not restate the rule — add domain-specific boundaries only.
-- Nested `AGENTS.md` files (see table below) carry **domain-specific** guards for shell, browser, AI, and test code. The root rules above are the canonical source; nested files should reference, not repeat them.
+- Nested `AGENTS.md` files (see section 6) carry **domain-specific** guards for shell, browser, AI, and test code. The root rules above are the canonical source; nested files should reference, not repeat them.
 
 ## 6. Nested AGENTS.md Files
 
-Agents should read the nearest AGENTS.md in the directory tree for context-specific instructions:
+Agents should read the nearest `AGENTS.md` in the directory tree for context-specific instructions:
 
-| Scope | File |
-|-------|------|
-| UI / Blade | `resources/core/views/AGENTS.md` |
-| Database | `app/Base/Database/AGENTS.md` |
-| Authz | `app/Base/Authz/AGENTS.md` |
-| Foundation | `app/Base/Foundation/AGENTS.md` |
-| Shell scripts | `scripts/AGENTS.md` |
-| Docs | `docs/AGENTS.md` |
+- UI / Blade — `resources/core/views/AGENTS.md`
+- Database — `app/Base/Database/AGENTS.md`
+- Authz — `app/Base/Authz/AGENTS.md`
+- Foundation — `app/Base/Foundation/AGENTS.md`
+- Shell scripts — `scripts/AGENTS.md`
+- Docs — `docs/AGENTS.md`
 
 ## 7. Module-First Placement Guard
 

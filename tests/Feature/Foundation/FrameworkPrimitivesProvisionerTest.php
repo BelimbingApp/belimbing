@@ -144,7 +144,7 @@ test('provisioner assigns core_admin role to admin user', function (): void {
 
     expect(PrincipalRole::query()->where([
         'company_id' => Company::LICENSEE_ID,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $user->id,
         'role_id' => $role->id,
     ])->exists())->toBeTrue();

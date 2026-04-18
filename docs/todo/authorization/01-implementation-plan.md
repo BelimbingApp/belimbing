@@ -17,7 +17,7 @@ Implement a company-scoped, deny-by-default AuthZ foundation used consistently b
 2. Scope model now: `company_id` only (`group_id`, as in Group of Companies as an entity, is intentionally deferred)
 3. `menu.php` is consumer-only of AuthZ decisions
 4. Agent uses same AuthZ engine via delegated actor model
-5. Naming is canonical: `Agent`, principal values `human_user | agent`, and AI capability prefix `ai.agent.*`
+5. Naming is canonical: `Agent`, principal values `user | agent`, and AI capability prefix `ai.agent.*`
 6. Delegation context uses `actingForUserId` in current DTO (extendable to richer supervision metadata later)
 7. **Agent permission model:** Same RBAC as human (`principal_id = employee_id`). Assignment-only: validate at assign time that supervisor can only assign what they have. Cascade revocation: when supervisor loses role/capability, cascade to all subordinates (Employee.supervisor_id). No runtime policy that loads supervisor effective permissions.
 
@@ -140,7 +140,7 @@ Implement a company-scoped, deny-by-default AuthZ foundation used consistently b
 
 ### Done Criteria
 - [ ] 1. Assignment validation: cannot assign role/capability to subordinate without assigner having it
-- [x] 2. Decision logs distinguish `human_user` vs `agent`
+- [x] 2. Decision logs distinguish `user` vs `agent`
 - [x] 3. Delegation context validation covered (Agent without `actingForUserId` denied)
 - [ ] 4. Cascade revocation: when supervisor loses role/capability, subordinates lose it too
 

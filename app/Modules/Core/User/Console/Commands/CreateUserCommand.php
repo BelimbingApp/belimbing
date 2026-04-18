@@ -104,7 +104,7 @@ class CreateUserCommand extends Command
 
         PrincipalRole::query()->firstOrCreate([
             'company_id' => $user->company_id,
-            'principal_type' => PrincipalType::HUMAN_USER->value,
+            'principal_type' => PrincipalType::USER->value,
             'principal_id' => $user->id,
             'role_id' => $role->id,
         ]);

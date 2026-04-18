@@ -27,7 +27,7 @@
                         @forelse($assignments as $assignment)
                             <tr wire:key="assignment-{{ $assignment->id }}" class="hover:bg-surface-subtle/50 transition-colors">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                    @if($assignment->principal_name && $assignment->principal_type === 'human_user')
+                                    @if($assignment->principal_name && $assignment->principal_type === \App\Base\Authz\Enums\PrincipalType::USER->value)
                                         <a href="{{ route('admin.users.show', $assignment->principal_id) }}" wire:navigate class="text-sm font-medium text-accent hover:underline">{{ $assignment->principal_name }}</a>
                                         <div class="text-xs text-muted">{{ $assignment->principal_email }}</div>
                                     @elseif($assignment->principal_name)
@@ -38,7 +38,7 @@
                                     @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                    @if($assignment->principal_type === 'human_user')
+                                    @if($assignment->principal_type === \App\Base\Authz\Enums\PrincipalType::USER->value)
                                         <x-ui.badge variant="default">{{ __('User') }}</x-ui.badge>
                                     @else
                                         <x-ui.badge variant="warning">{{ __('Agent') }}</x-ui.badge>

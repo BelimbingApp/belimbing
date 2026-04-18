@@ -19,6 +19,7 @@ use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
@@ -136,7 +137,7 @@ class Show extends Component
         foreach ($this->selectedRoleIds as $roleId) {
             PrincipalRole::query()->firstOrCreate([
                 'company_id' => $this->user->company_id,
-                'principal_type' => PrincipalType::HUMAN_USER->value,
+                'principal_type' => PrincipalType::USER->value,
                 'principal_id' => $this->user->id,
                 'role_id' => (int) $roleId,
             ]);
@@ -157,7 +158,7 @@ class Show extends Component
         PrincipalRole::query()
             ->where('id', $principalRoleId)
             ->where('principal_id', $this->user->id)
-            ->where('principal_type', PrincipalType::HUMAN_USER->value)
+            ->where('principal_type', PrincipalType::USER->value)
             ->delete();
     }
 
@@ -178,7 +179,7 @@ class Show extends Component
             PrincipalCapability::query()->firstOrCreate(
                 [
                     'company_id' => $this->user->company_id,
-                    'principal_type' => PrincipalType::HUMAN_USER->value,
+                    'principal_type' => PrincipalType::USER->value,
                     'principal_id' => $this->user->id,
                     'capability_key' => $capKey,
                 ],
@@ -203,7 +204,7 @@ class Show extends Component
         PrincipalCapability::query()
             ->where('id', $capabilityId)
             ->where('principal_id', $this->user->id)
-            ->where('principal_type', PrincipalType::HUMAN_USER->value)
+            ->where('principal_type', PrincipalType::USER->value)
             ->delete();
     }
 
@@ -223,7 +224,7 @@ class Show extends Component
         PrincipalCapability::query()->firstOrCreate(
             [
                 'company_id' => $this->user->company_id,
-                'principal_type' => PrincipalType::HUMAN_USER->value,
+                'principal_type' => PrincipalType::USER->value,
                 'principal_id' => $this->user->id,
                 'capability_key' => $capabilityKey,
             ],
@@ -310,7 +311,7 @@ class Show extends Component
         Session::flash('success', __('Employee record created.'));
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $authUser = auth()->user();
 
@@ -322,7 +323,7 @@ class Show extends Component
 
         $assignedRoles = PrincipalRole::query()
             ->with('role')
-            ->where('principal_type', PrincipalType::HUMAN_USER->value)
+            ->where('principal_type', PrincipalType::USER->value)
             ->where('principal_id', $this->user->id)
             ->get();
 
@@ -337,7 +338,7 @@ class Show extends Component
 
         // Direct capabilities — keyed by capability_key → id
         $directEntries = PrincipalCapability::query()
-            ->where('principal_type', PrincipalType::HUMAN_USER->value)
+            ->where('principal_type', PrincipalType::USER->value)
             ->where('principal_id', $this->user->id)
             ->get(['id', 'capability_key', 'is_allowed']);
 

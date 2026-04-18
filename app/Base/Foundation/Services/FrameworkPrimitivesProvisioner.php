@@ -238,7 +238,7 @@ class FrameworkPrimitivesProvisioner
             $coreAdmins = User::query()
                 ->join('base_authz_principal_roles', function ($join) use ($coreAdminRole): void {
                     $join->on('base_authz_principal_roles.principal_id', '=', 'users.id')
-                        ->where('base_authz_principal_roles.principal_type', '=', PrincipalType::HUMAN_USER->value)
+                        ->where('base_authz_principal_roles.principal_type', '=', PrincipalType::USER->value)
                         ->where('base_authz_principal_roles.role_id', '=', $coreAdminRole->id);
                 })
                 ->where('users.company_id', Company::LICENSEE_ID)
@@ -280,7 +280,7 @@ class FrameworkPrimitivesProvisioner
 
         $principalRole = PrincipalRole::query()->firstOrCreate([
             'company_id' => $user->company_id,
-            'principal_type' => PrincipalType::HUMAN_USER->value,
+            'principal_type' => PrincipalType::USER->value,
             'principal_id' => $user->id,
             'role_id' => $role->id,
         ]);

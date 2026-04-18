@@ -30,7 +30,7 @@ beforeEach(function (): void {
         correlationId: 'test-correlation-id',
         ipAddress: '127.0.0.1',
         url: 'https://test.example.com/test',
-        actorType: PrincipalType::HUMAN_USER->value,
+        actorType: PrincipalType::USER->value,
         actorId: 42,
         companyId: 1,
     ));
@@ -66,7 +66,7 @@ it('logs field values on model creation', function (): void {
         ->first();
 
     expect($mutation)->not->toBeNull();
-    expect($mutation->actor_type)->toBe('human_user');
+    expect($mutation->actor_type)->toBe(PrincipalType::USER->value);
     expect($mutation->actor_id)->toBe(42);
     expect($mutation->correlation_id)->toBe('test-correlation-id');
 

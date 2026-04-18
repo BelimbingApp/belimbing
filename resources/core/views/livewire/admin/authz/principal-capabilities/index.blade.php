@@ -34,7 +34,7 @@
                                     @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                    @if($cap->principal_type === 'human_user')
+                                    @if($cap->principal_type === \App\Base\Authz\Enums\PrincipalType::USER->value)
                                         <x-ui.badge variant="default">{{ __('User') }}</x-ui.badge>
                                     @else
                                         <x-ui.badge variant="warning">{{ __('Agent') }}</x-ui.badge>

@@ -16,14 +16,14 @@ BLB needs one authorization system that consistently decides what both humans an
 | Term | Canonical Meaning |
 |------|-------------------|
 | Agent | Agent; the non-human employee actor type in BLB. |
-| Human User | A human principal represented by `PrincipalType::HUMAN_USER` and stored as `'human_user'`. |
+| Human User | A human principal represented by `PrincipalType::USER` and stored as `'user'`. |
 | Supervisor | The immediate principal responsible for a Agent (human or Agent). |
 | Supervision Chain | Directed chain from a Agent to an accountable human. Must be acyclic. |
 | Delegation Context | Execution context linking Agent actions to a human accountability chain (`actingForUserId` in current actor DTO; may evolve to richer supervision metadata). |
 
 Naming rules locked for AuthZ v1:
-1. Principal enum: `PrincipalType::AGENT` and `PrincipalType::HUMAN_USER`.
-2. Persisted principal type values: `'agent'` and `'human_user'`.
+1. Principal enum: `PrincipalType::AGENT` and `PrincipalType::USER`.
+2. Persisted principal type values: `'agent'` and `'user'`.
 3. Capability namespace for framework AI operations: `ai.agent.*`.
 
 ---
@@ -69,7 +69,7 @@ interface AuthorizationService
 final readonly class Actor
 {
     public function __construct(
-        public PrincipalType $type,  // PrincipalType::HUMAN_USER | PrincipalType::AGENT
+        public PrincipalType $type,  // PrincipalType::USER | PrincipalType::AGENT
         public int $id,
         public ?int $companyId,
         public ?int $actingForUserId = null,
@@ -318,7 +318,7 @@ base_authz_role_capabilities
 base_authz_principal_roles
 ├── id (PK)
 ├── company_id (nullable, index)
-├── principal_type (varchar 40) — 'human_user' | 'agent'
+├── principal_type (varchar 40) — 'user' | 'agent'
 ├── principal_id (unsigned bigint)
 ├── role_id (FK → roles, cascade delete)
 ├── index(principal_type, principal_id)
@@ -397,7 +397,7 @@ Route::get('/users', ...)->middleware('authz:core.user.list');
 
 The middleware:
 1. Resolves the authenticated user.
-2. Derives principal type via `$user->principalType()` if the method exists, falling back to `HUMAN_USER`.
+2. Derives principal type via `$user->principalType()` if the method exists, falling back to `USER`.
 3. Constructs an `Actor` DTO.
 4. Calls `AuthorizationService::authorize()`.
 5. Returns 401 (unauthenticated) or 403 (denied).
@@ -532,7 +532,7 @@ app/Base/Authz/
 │   ├── AuthorizationDecision.php     # Decision DTO with reason code
 │   └── ResourceContext.php           # Resource context DTO
 ├── Enums/
-│   ├── PrincipalType.php             # human_user | agent
+│   ├── PrincipalType.php             # user | agent
 │   └── AuthorizationReasonCode.php   # Decision reason codes
 ├── Exceptions/
 │   ├── AuthorizationDeniedException.php

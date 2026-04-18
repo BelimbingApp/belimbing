@@ -17,7 +17,7 @@ return new class extends Migration
         Schema::create('base_authz_principal_roles', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('company_id')->nullable()->index();
-            $table->string('principal_type', 40); // human_user | agent
+            $table->string('principal_type', 40); // user | agent
             $table->unsignedBigInteger('principal_id');
             $table->foreignId('role_id')->constrained('base_authz_roles')->cascadeOnDelete();
             $table->timestamps();

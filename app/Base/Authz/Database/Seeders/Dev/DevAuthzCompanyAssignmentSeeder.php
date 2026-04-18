@@ -10,12 +10,14 @@ use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Database\Seeders\DevSeeder;
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\User\Database\Seeders\Dev\DevUserSeeder;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 
 class DevAuthzCompanyAssignmentSeeder extends DevSeeder
 {
     protected array $dependencies = [
-        \App\Modules\Core\User\Database\Seeders\Dev\DevUserSeeder::class,
+        DevUserSeeder::class,
     ];
 
     /**
@@ -42,7 +44,7 @@ class DevAuthzCompanyAssignmentSeeder extends DevSeeder
     /**
      * Grant core_admin (grant_all) role to the licensee admin user.
      *
-     * @param  \Illuminate\Database\Eloquent\Collection<int, Role>  $systemRoles
+     * @param  Collection<int, Role>  $systemRoles
      */
     private function grantDevAdminFullAccess($systemRoles): void
     {
@@ -66,7 +68,7 @@ class DevAuthzCompanyAssignmentSeeder extends DevSeeder
 
         PrincipalRole::query()->firstOrCreate([
             'company_id' => $adminUser->company_id,
-            'principal_type' => PrincipalType::HUMAN_USER->value,
+            'principal_type' => PrincipalType::USER->value,
             'principal_id' => $adminUser->id,
             'role_id' => $coreAdminRole->id,
         ]);
@@ -75,7 +77,7 @@ class DevAuthzCompanyAssignmentSeeder extends DevSeeder
     /**
      * Assign core_admin to the first user in each company (excluding the dev admin's company).
      *
-     * @param  \Illuminate\Database\Eloquent\Collection<int, Role>  $systemRoles
+     * @param  Collection<int, Role>  $systemRoles
      */
     private function assignCoreAdminPerCompany($systemRoles): void
     {
@@ -97,7 +99,7 @@ class DevAuthzCompanyAssignmentSeeder extends DevSeeder
         foreach ($users as $user) {
             PrincipalRole::query()->firstOrCreate([
                 'company_id' => $user->company_id,
-                'principal_type' => PrincipalType::HUMAN_USER->value,
+                'principal_type' => PrincipalType::USER->value,
                 'principal_id' => $user->id,
                 'role_id' => $coreAdminRole->id,
             ]);

@@ -6,7 +6,10 @@
 namespace App\Base\Audit\Livewire\AuditLog;
 
 use App\Base\Audit\Models\AuditMutation;
+use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -32,19 +35,19 @@ class Mutations extends Component
         $this->resetPage();
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.audit.mutations', [
             'mutations' => $this->getMutations(),
         ]);
     }
 
-    private function getMutations(): \Illuminate\Contracts\Pagination\LengthAwarePaginator
+    private function getMutations(): LengthAwarePaginator
     {
         return AuditMutation::query()
             ->leftJoin('users', function ($join): void {
                 $join->on('base_audit_mutations.actor_id', '=', 'users.id')
-                    ->where('base_audit_mutations.actor_type', '=', 'human_user');
+                    ->where('base_audit_mutations.actor_type', '=', PrincipalType::USER->value);
             })
             ->select('base_audit_mutations.*', 'users.name as actor_name')
             ->when($this->search, function ($query, $search): void {

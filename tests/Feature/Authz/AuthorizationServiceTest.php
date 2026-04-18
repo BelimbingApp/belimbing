@@ -17,7 +17,7 @@ beforeEach(function (): void {
 it('denies when actor context is invalid', function (): void {
     $service = app(AuthorizationService::class);
 
-    $decision = $service->can(new Actor(PrincipalType::HUMAN_USER, 0, null), 'core.user.view');
+    $decision = $service->can(new Actor(PrincipalType::USER, 0, null), 'core.user.view');
 
     expect($decision->allowed)->toBeFalse();
     expect($decision->reasonCode)->toBe(AuthorizationReasonCode::DENIED_INVALID_ACTOR_CONTEXT);
@@ -39,7 +39,7 @@ it('denies when resource company is outside actor scope', function (): void {
     $service = app(AuthorizationService::class);
 
     $decision = $service->can(
-        new Actor(PrincipalType::HUMAN_USER, 888, 10),
+        new Actor(PrincipalType::USER, 888, 10),
         'core.user.view',
         new ResourceContext('users', 1, 20)
     );
@@ -51,12 +51,12 @@ it('denies when resource company is outside actor scope', function (): void {
 it('denies unknown capability and authorize throws', function (): void {
     $service = app(AuthorizationService::class);
 
-    $decision = $service->can(new Actor(PrincipalType::HUMAN_USER, 999, 10), 'core.user.manage');
+    $decision = $service->can(new Actor(PrincipalType::USER, 999, 10), 'core.user.manage');
 
     expect($decision->allowed)->toBeFalse();
     expect($decision->reasonCode)->toBe(AuthorizationReasonCode::DENIED_UNKNOWN_CAPABILITY);
 
-    expect(fn () => $service->authorize(new Actor(PrincipalType::HUMAN_USER, 999, 10), 'core.user.manage'))
+    expect(fn () => $service->authorize(new Actor(PrincipalType::USER, 999, 10), 'core.user.manage'))
         ->toThrow(AuthorizationDeniedException::class);
 });
 
@@ -65,7 +65,7 @@ it('allows when user has capability via role', function (): void {
 
     PrincipalRole::query()->create([
         'company_id' => 10,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => 42,
         'role_id' => $role->id,
     ]);
@@ -73,7 +73,7 @@ it('allows when user has capability via role', function (): void {
     $service = app(AuthorizationService::class);
 
     $decision = $service->can(
-        new Actor(PrincipalType::HUMAN_USER, 42, 10),
+        new Actor(PrincipalType::USER, 42, 10),
         'core.user.view'
     );
 
@@ -85,7 +85,7 @@ it('allows when user has capability via role', function (): void {
 it('allows when user has explicit direct capability grant', function (): void {
     PrincipalCapability::query()->create([
         'company_id' => 10,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => 55,
         'capability_key' => 'core.company.view',
         'is_allowed' => true,
@@ -94,7 +94,7 @@ it('allows when user has explicit direct capability grant', function (): void {
     $service = app(AuthorizationService::class);
 
     $decision = $service->can(
-        new Actor(PrincipalType::HUMAN_USER, 55, 10),
+        new Actor(PrincipalType::USER, 55, 10),
         'core.company.view'
     );
 
@@ -107,14 +107,14 @@ it('denies when user has explicit direct deny even with role grant', function ()
 
     PrincipalRole::query()->create([
         'company_id' => 10,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => 60,
         'role_id' => $role->id,
     ]);
 
     PrincipalCapability::query()->create([
         'company_id' => 10,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => 60,
         'capability_key' => 'core.user.delete',
         'is_allowed' => false,
@@ -123,7 +123,7 @@ it('denies when user has explicit direct deny even with role grant', function ()
     $service = app(AuthorizationService::class);
 
     $decision = $service->can(
-        new Actor(PrincipalType::HUMAN_USER, 60, 10),
+        new Actor(PrincipalType::USER, 60, 10),
         'core.user.delete'
     );
 
@@ -135,7 +135,7 @@ it('denies when user has no grants at all', function (): void {
     $service = app(AuthorizationService::class);
 
     $decision = $service->can(
-        new Actor(PrincipalType::HUMAN_USER, 999, 10),
+        new Actor(PrincipalType::USER, 999, 10),
         'core.user.view'
     );
 
@@ -148,13 +148,13 @@ it('filters allowed resources correctly', function (): void {
 
     PrincipalRole::query()->create([
         'company_id' => 10,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => 70,
         'role_id' => $role->id,
     ]);
 
     $service = app(AuthorizationService::class);
-    $actor = new Actor(PrincipalType::HUMAN_USER, 70, 10);
+    $actor = new Actor(PrincipalType::USER, 70, 10);
 
     $resources = [
         new ResourceContext('users', 1, 10),
@@ -193,7 +193,7 @@ it('records applied policy trail in decision', function (): void {
 
     PrincipalRole::query()->create([
         'company_id' => 10,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => 80,
         'role_id' => $role->id,
     ]);
@@ -201,7 +201,7 @@ it('records applied policy trail in decision', function (): void {
     $service = app(AuthorizationService::class);
 
     $decision = $service->can(
-        new Actor(PrincipalType::HUMAN_USER, 80, 10),
+        new Actor(PrincipalType::USER, 80, 10),
         'core.user.view'
     );
 

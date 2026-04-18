@@ -57,7 +57,7 @@ Ship a production-usable AuthZ foundation that enforces identical rules for user
 
 ### Naming Contract (Locked)
 1. Term: `Agent` (not `PA`)
-2. Principal type values: `human_user` and `agent`
+2. Principal type values: `user` and `agent`
 3. Framework AI capability prefix: `ai.agent.*`
 4. Delegation context field in current actor DTO: `actingForUserId` (may later be complemented by richer supervision context)
 
@@ -112,7 +112,7 @@ Deliverables:
 1. Agent actor mapping (same RBAC; `principal_id = employee_id`)
 2. Assignment-time validation: supervisor can only assign roles/capabilities they have
 3. Cascade revocation: when supervisor loses role/capability, cascade to all subordinates (Employee.supervisor_id)
-4. Decision logs include actor type (`human_user` / `agent`)
+4. Decision logs include actor type (`user` / `agent`)
 
 Acceptance:
 1. Agent ≤ supervisor invariant via assignment validation + cascade (no runtime policy)

@@ -97,7 +97,7 @@ test('framework primitives provisioner assigns core admin role when creating the
 
     expect(PrincipalRole::query()->where([
         'company_id' => Company::LICENSEE_ID,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $user->id,
         'role_id' => $role->id,
     ])->exists())->toBeTrue();
@@ -126,7 +126,7 @@ test('framework primitives provisioner backfills core admin role for an existing
 
     expect(PrincipalRole::query()->where([
         'company_id' => Company::LICENSEE_ID,
-        'principal_type' => PrincipalType::HUMAN_USER->value,
+        'principal_type' => PrincipalType::USER->value,
         'principal_id' => $user->id,
         'role_id' => $role->id,
     ])->exists())->toBeTrue();
