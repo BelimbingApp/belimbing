@@ -39,12 +39,12 @@ Skipping plan updates creates a false source of truth: the checklist and design 
 
 1. **Problem Essence** (required) — one or two sentences; if fuzzy, design is fuzzy.
 2. **Desired Outcome** (required) — what “done” achieves.
-3. **Public Contract** — when the surface/promises are clear enough to state.
-4. **Top-Level Components** — when responsibilities are nameable.
-5. **Design Decisions** — chosen direction and why.
+3. **Top-Level Components** — when responsibilities are nameable; the system, before the rationale.
+4. **Design Decisions** — chosen direction and why (follows the structure above).
+5. **Public Contract** — when the surface/promises are clear enough to state; often firmest once components and decisions exist.
 6. **Phases** — when work can be chunked; may stay thin until the how firms up.
 
-Add later sections only when there is real content—no filler. Flow design → execution; never open with low-level tasks before (1) and (2). **Reserve `Build Sequence` only** to match an external artifact’s wording; otherwise use **`Phases`** so every plan uses one predictable label.
+Add later sections only when there is real content—no filler. Flow **intent → system → why → contract → execution**; never open with low-level tasks before (1) and (2). **Reserve `Build Sequence` only** to match an external artifact’s wording; otherwise use **`Phases`** so every plan uses one predictable label.
 
 ## Phases = build sheet
 
@@ -58,19 +58,11 @@ Refine as you build: split big items, add sub-tasks and new rows when scope shar
 
 Prefix plan filenames with the module or subsystem they belong to, so related plans sort together and ownership is obvious at a glance.
 
-| Prefix | Scope | Examples |
-|--------|-------|----------|
-| `ai-` | Core AI module (agent runtime, control plane, tools, operations) | `ai-control-plane-debuggability.md`, `ai-operations-dashboard.md` |
-| `employee-` | Employee module | `employee-onboarding-wizard.md` |
-| `company-` | Company module | `company-multi-tenant-isolation.md` |
-| `base-` | Base framework infrastructure | `base-database-migrations.md` |
-| `ui-` | Cross-cutting UI/UX work | `ui-design-system-v2.md` |
-
 When a plan spans multiple modules, use the primary module's prefix. Cross-cutting or project-wide plans (e.g., theming, locale) need no prefix.
 
 ## Splitting and migration
 
-Prefer one file until it is hard to use. **Split:** (a) **master**—essence, outcome, contract, components, decisions; (b) **companion** or **per-phase files**—each file a short build sheet with checklists. Large work: e.g. `docs/plans/<topic>/phase-1.md`, …—master indexes them in **Sources** or a phase index; each phase file links back. Name paths predictably.
+Prefer one file until it is hard to use. **Split:** (a) **master**—essence, outcome, components, decisions, contract; (b) **companion** or **per-phase files**—each file a short build sheet with checklists. Large work: e.g. `docs/plans/<topic>/phase-1.md`, …—master indexes them in **Sources** or a phase index; each phase file links back. Name paths predictably.
 
 **Legacy:** new plans live here. Unmigrated work stays under `docs/todo/` per `docs/todo/AGENTS.md`. On move: git history, fix links, optional **Sources** to old path.
 
