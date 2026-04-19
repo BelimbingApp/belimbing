@@ -25,19 +25,6 @@ use Illuminate\Http\Client\Response;
  */
 class LlmClient
 {
-    /**
-     * Copilot-required headers for IDE auth.
-     *
-     * GitHub Copilot's API rejects requests without these headers.
-     * Values mirror those used by VS Code Copilot Chat.
-     */
-    private const COPILOT_HEADERS = [
-        'User-Agent' => 'GitHubCopilotChat/0.35.0',
-        'Editor-Version' => 'vscode/1.107.0',
-        'Editor-Plugin-Version' => 'copilot-chat/0.35.0',
-        'Copilot-Integration-Id' => 'vscode-chat',
-    ];
-
     public function __construct(
         private readonly ?ProviderRequestMapperRegistry $requestMappers = null,
     ) {}
@@ -80,7 +67,7 @@ class LlmClient
         $mapping = $this->mapRequest($request, stream: false);
 
         try {
-            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, $mapping->headers);
+            $http = LlmClientSupport::buildHttp($request, $mapping->headers);
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/chat/completions',
@@ -105,7 +92,7 @@ class LlmClient
         $mapping = $this->mapRequest($request, stream: true);
 
         try {
-            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, $mapping->headers, stream: true);
+            $http = LlmClientSupport::buildHttp($request, $mapping->headers, stream: true);
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/chat/completions',
@@ -304,7 +291,7 @@ class LlmClient
         $mapping = $this->mapRequest($request, stream: false);
 
         try {
-            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, $mapping->headers);
+            $http = LlmClientSupport::buildHttp($request, $mapping->headers);
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/responses',
@@ -329,7 +316,7 @@ class LlmClient
         $mapping = $this->mapRequest($request, stream: true);
 
         try {
-            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, $mapping->headers, stream: true);
+            $http = LlmClientSupport::buildHttp($request, $mapping->headers, stream: true);
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/responses',
@@ -465,7 +452,7 @@ class LlmClient
         $mapping = $this->mapRequest($request, stream: false);
 
         try {
-            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, $mapping->headers);
+            $http = LlmClientSupport::buildHttp($request, $mapping->headers);
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/messages',
@@ -490,7 +477,7 @@ class LlmClient
         $mapping = $this->mapRequest($request, stream: true);
 
         try {
-            $http = LlmClientSupport::buildHttp($request, self::COPILOT_HEADERS, $mapping->headers, stream: true);
+            $http = LlmClientSupport::buildHttp($request, $mapping->headers, stream: true);
 
             $response = $http->post(
                 rtrim($request->baseUrl, '/').'/messages',

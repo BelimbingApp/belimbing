@@ -15,6 +15,7 @@ final class OpenAiChatCompletionsRequestMapper implements ProviderRequestMapper
 
     public function __construct(
         private readonly ProviderCapabilityRegistry $capabilities,
+        private readonly ProviderRequestHeaderResolver $headers,
     ) {}
 
     public function mapPayload(ChatRequest $request, bool $stream): ProviderRequestMapping
@@ -44,6 +45,7 @@ final class OpenAiChatCompletionsRequestMapper implements ProviderRequestMapper
                 $this->applyFixedSampling($payload, $request, $capabilities, $adjustments),
                 fn ($value) => $value !== null
             ),
+            headers: $this->headers->headersFor($request),
             controlAdjustments: $adjustments,
         );
     }

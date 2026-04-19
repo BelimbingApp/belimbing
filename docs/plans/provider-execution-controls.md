@@ -1,7 +1,7 @@
 # Provider Execution Controls
 
 **Status:** In Progress
-**Last Updated:** 2026-04-18
+**Last Updated:** 2026-04-19
 **Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/DTO/ChatRequest.php`, `app/Base/AI/DTO/ExecutionControls.php`, `app/Base/AI/DTO/ProviderRequestMapping.php`, `app/Base/AI/Enums/AiApiType.php`, `app/Base/AI/Services/LlmClient.php`, `app/Base/AI/Services/LlmClientSupport.php`, `app/Base/AI/Services/ProviderMapping/ProviderCapabilityRegistry.php`, `app/Base/AI/Services/ProviderMapping/ProviderRequestMapperRegistry.php`, `app/Base/AI/Services/ProviderMapping/OpenAiChatCompletionsRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/OpenAiResponsesRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/AnthropicMessagesRequestMapper.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Services/AgentRuntime.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/AgenticToolLoopStreamReader.php`, `docs/plans/thinking-content-streaming.md`, `https://platform.kimi.ai/docs/guide/kimi-k2-5-quickstart`, `https://platform.kimi.ai/docs/guide/use-kimi-api-to-complete-tool-calls`, `https://platform.openai.com/docs/guides/reasoning-best-practices`, `https://platform.openai.com/docs/guides/responses-vs-chat-completions`, `https://platform.claude.com/docs/en/build-with-claude/extended-thinking`, `https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`, `https://platform.claude.com/docs/en/api/streaming`, `https://platform.claude.com/docs/en/api/complete`
 
 ## Problem Essence
@@ -65,7 +65,7 @@ This keeps `LlmClient` shallow and prevents provider logic from leaking into Lar
 
 For Anthropic, this component must be allowed to map into a non-OpenAI-native wire shape. Anthropic's OpenAI compatibility layer is useful for experimentation, but Anthropic's own docs position the native API as the path for full extended thinking, prompt caching, and detailed reasoning behaviour. BLB should not freeze its framework contract around the compatibility layer if that would block first-class thinking support.
 
-The shipped mapper seam now returns a structured provider request mapping rather than a bare payload array. That mapping carries the final payload, any provider-specific headers, and control-adjustment metadata so callers can inspect forced or ignored controls when needed without teaching `LlmClient` or UI surfaces about individual provider quirks.
+The shipped mapper seam now returns a structured provider request mapping rather than a bare payload array. That mapping carries the final payload, any provider-specific headers, and control-adjustment metadata so callers can inspect forced or ignored controls when needed without teaching `LlmClient` or UI surfaces about individual provider quirks. Static transport requirements such as GitHub Copilot's IDE-identification headers now follow this same path instead of living as transport branches in `LlmClient`.
 
 ### Core AI config persistence
 
@@ -177,6 +177,7 @@ Goal: move provider policy into explicit framework components.
 - [x] Model OpenAI Responses reasoning summaries and reasoning-item continuity through the same mapper seam
 - [x] Model Anthropic native thinking, thinking-block preservation, and tool-choice constraints through the same seam
 - [x] Define how provider mapping reports forced values or unsupported controls to callers when that signal is useful
+- [x] Move GitHub Copilot's required IDE headers out of `LlmClient` transport branching and into provider request mapping
 
 ### Phase 3 — Thread canonical controls through Core AI runtime
 

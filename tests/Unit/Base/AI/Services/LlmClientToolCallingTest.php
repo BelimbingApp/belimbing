@@ -92,6 +92,32 @@ describe('LlmClient tool calling request payloads', function () {
         });
     });
 
+    it('maps GitHub Copilot IDE headers through provider request mapping', function () {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
+                'usage' => [],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'copilot-key',
+            'gpt-4',
+            [['role' => 'user', 'content' => 'Hello']],
+            providerName: 'github-copilot',
+        ));
+
+        Http::assertSent(function ($request) {
+            return $request->hasHeader('User-Agent', ['GitHubCopilotChat/0.35.0'])
+                && $request->hasHeader('Editor-Version', ['vscode/1.107.0'])
+                && $request->hasHeader('Editor-Plugin-Version', ['copilot-chat/0.35.0'])
+                && $request->hasHeader('Copilot-Integration-Id', ['vscode-chat'])
+                && $request->hasHeader('Authorization', ['Bearer copilot-key']);
+        });
+    });
+
     it('forces Moonshot chat completions temperature to one', function () {
         Http::fake([
             '*/chat/completions' => Http::response([

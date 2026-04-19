@@ -18,12 +18,10 @@ use Illuminate\Support\Facades\Http;
 final class LlmClientSupport
 {
     /**
-     * @param  array<string, string>  $copilotHeaders
      * @param  array<string, string>  $providerHeaders
      */
     public static function buildHttp(
         ChatRequest $request,
-        array $copilotHeaders,
         array $providerHeaders = [],
         bool $stream = false,
     ): PendingRequest {
@@ -41,10 +39,6 @@ final class LlmClientSupport
             $http = $http->withHeaders(['x-api-key' => $request->apiKey]);
         } elseif ($request->apiKey !== '') {
             $http = $http->withToken($request->apiKey);
-        }
-
-        if ($request->providerName === 'github-copilot') {
-            $http = $http->withHeaders($copilotHeaders);
         }
 
         return $http;

@@ -17,6 +17,7 @@ final class OpenAiResponsesRequestMapper implements ProviderRequestMapper
 
     public function __construct(
         private readonly ProviderCapabilityRegistry $capabilities,
+        private readonly ProviderRequestHeaderResolver $headers,
     ) {}
 
     public function mapPayload(ChatRequest $request, bool $stream): ProviderRequestMapping
@@ -82,6 +83,7 @@ final class OpenAiResponsesRequestMapper implements ProviderRequestMapper
 
         return new ProviderRequestMapping(
             payload: $payload,
+            headers: $this->headers->headersFor($request),
             controlAdjustments: $adjustments,
         );
     }
