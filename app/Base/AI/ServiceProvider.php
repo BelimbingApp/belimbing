@@ -12,6 +12,7 @@ use App\Base\AI\Services\KnowledgeNavigator;
 use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Services\ModelCatalogQueryService;
 use App\Base\AI\Services\ModelCatalogService;
+use App\Base\AI\Services\Protocols\LlmProtocolClientRegistry;
 use App\Base\AI\Services\ProviderDiscoveryService;
 use App\Base\AI\Services\ProviderMapping\ProviderCapabilityRegistry;
 use App\Base\AI\Services\ProviderMapping\ProviderRequestHeaderResolver;
@@ -39,6 +40,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(ProviderCapabilityRegistry::class);
         $this->app->singleton(ProviderRequestHeaderResolver::class);
         $this->app->singleton(ProviderRequestMapperRegistry::class);
+        $this->app->singleton(LlmProtocolClientRegistry::class);
         $this->app->singleton(LlmClient::class);
         $this->app->singleton(KnowledgeNavigator::class);
         $this->app->singleton(ProviderDiscoveryService::class);

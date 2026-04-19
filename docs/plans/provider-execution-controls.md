@@ -2,7 +2,7 @@
 
 **Status:** In Progress
 **Last Updated:** 2026-04-19
-**Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/DTO/ChatRequest.php`, `app/Base/AI/DTO/ExecutionControls.php`, `app/Base/AI/DTO/ProviderRequestMapping.php`, `app/Base/AI/Enums/AiApiType.php`, `app/Base/AI/Services/LlmClient.php`, `app/Base/AI/Services/LlmClientSupport.php`, `app/Base/AI/Services/ProviderMapping/ProviderCapabilityRegistry.php`, `app/Base/AI/Services/ProviderMapping/ProviderRequestMapperRegistry.php`, `app/Base/AI/Services/ProviderMapping/OpenAiChatCompletionsRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/OpenAiResponsesRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/AnthropicMessagesRequestMapper.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Services/AgentRuntime.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/AgenticToolLoopStreamReader.php`, `docs/plans/thinking-content-streaming.md`, `https://platform.kimi.ai/docs/guide/kimi-k2-5-quickstart`, `https://platform.kimi.ai/docs/guide/use-kimi-api-to-complete-tool-calls`, `https://platform.openai.com/docs/guides/reasoning-best-practices`, `https://platform.openai.com/docs/guides/responses-vs-chat-completions`, `https://platform.claude.com/docs/en/build-with-claude/extended-thinking`, `https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`, `https://platform.claude.com/docs/en/api/streaming`, `https://platform.claude.com/docs/en/api/complete`
+**Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/DTO/ChatRequest.php`, `app/Base/AI/DTO/ExecutionControls.php`, `app/Base/AI/DTO/ProviderRequestMapping.php`, `app/Base/AI/Enums/AiApiType.php`, `app/Base/AI/Services/LlmClient.php`, `app/Base/AI/Services/LlmClientSupport.php`, `app/Base/AI/Services/Protocols/LlmProtocolClientRegistry.php`, `app/Base/AI/Services/Protocols/ChatCompletionsProtocolClient.php`, `app/Base/AI/Services/Protocols/ResponsesProtocolClient.php`, `app/Base/AI/Services/Protocols/AnthropicMessagesProtocolClient.php`, `app/Base/AI/Services/ProviderMapping/ProviderCapabilityRegistry.php`, `app/Base/AI/Services/ProviderMapping/ProviderRequestMapperRegistry.php`, `app/Base/AI/Services/ProviderMapping/OpenAiChatCompletionsRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/OpenAiResponsesRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/AnthropicMessagesRequestMapper.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Services/AgentRuntime.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/AgenticToolLoopStreamReader.php`, `docs/plans/thinking-content-streaming.md`, `https://platform.kimi.ai/docs/guide/kimi-k2-5-quickstart`, `https://platform.kimi.ai/docs/guide/use-kimi-api-to-complete-tool-calls`, `https://platform.openai.com/docs/guides/reasoning-best-practices`, `https://platform.openai.com/docs/guides/responses-vs-chat-completions`, `https://platform.claude.com/docs/en/build-with-claude/extended-thinking`, `https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`, `https://platform.claude.com/docs/en/api/streaming`, `https://platform.claude.com/docs/en/api/complete`
 
 ## Problem Essence
 
@@ -105,6 +105,8 @@ One component should answer "what controls exist and what do they mean for this 
 
 `LlmClient` should not become a policy engine. Its job is to route by protocol, hand the request to the provider mapper, send the HTTP request, and decode responses. Capability rules and fixed-value decisions belong in provider metadata and mappers, not in the transport class.
 
+The shipped structure now keeps `LlmClient` as a thin facade over a protocol-client registry keyed by `AiApiType`. Chat Completions, OpenAI Responses, and Anthropic Messages each own their own endpoint handling and response decoding so protocol-specific SSE state machines do not accumulate in one class.
+
 ### Prefer direct replacement over compatibility shims
 
 BLB is still in an initialization phase and this request concerns internal framework contracts, not an adopted public API. That means we should not carry compatibility shims just to preserve a transitional shape inside the codebase. Once the canonical execution-controls contract is defined, runtime call sites should be updated to use it directly and the legacy scalar fields should be removed in the same body of work.
@@ -178,6 +180,7 @@ Goal: move provider policy into explicit framework components.
 - [x] Model Anthropic native thinking, thinking-block preservation, and tool-choice constraints through the same seam
 - [x] Define how provider mapping reports forced values or unsupported controls to callers when that signal is useful
 - [x] Move GitHub Copilot's required IDE headers out of `LlmClient` transport branching and into provider request mapping
+- [x] Split protocol transport and response decoding into `AiApiType`-specific handlers so `LlmClient` remains a thin facade
 
 ### Phase 3 — Thread canonical controls through Core AI runtime
 
