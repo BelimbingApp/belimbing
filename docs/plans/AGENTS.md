@@ -54,6 +54,20 @@ Refine as you build: split big items, add sub-tasks and new rows when scope shar
 
 **Progress hygiene:** refresh preamble when status/sources shift; delete abandoned prose and dead checklists; evidence for claims (files, tests). Coupled follow-ups: handle inline; independent work: finish current phase first. Prefer “we should X because Y” and one main path with tradeoffs; attach risks/assumptions to the phase they belong to.
 
+## Filename prefix convention
+
+Prefix plan filenames with the module or subsystem they belong to, so related plans sort together and ownership is obvious at a glance.
+
+| Prefix | Scope | Examples |
+|--------|-------|----------|
+| `ai-` | Core AI module (agent runtime, control plane, tools, operations) | `ai-control-plane-debuggability.md`, `ai-operations-dashboard.md` |
+| `employee-` | Employee module | `employee-onboarding-wizard.md` |
+| `company-` | Company module | `company-multi-tenant-isolation.md` |
+| `base-` | Base framework infrastructure | `base-database-migrations.md` |
+| `ui-` | Cross-cutting UI/UX work | `ui-design-system-v2.md` |
+
+When a plan spans multiple modules, use the primary module's prefix. Cross-cutting or project-wide plans (e.g., theming, locale) need no prefix.
+
 ## Splitting and migration
 
 Prefer one file until it is hard to use. **Split:** (a) **master**—essence, outcome, contract, components, decisions; (b) **companion** or **per-phase files**—each file a short build sheet with checklists. Large work: e.g. `docs/plans/<topic>/phase-1.md`, …—master indexes them in **Sources** or a phase index; each phase file links back. Name paths predictably.
