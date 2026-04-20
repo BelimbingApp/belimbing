@@ -64,7 +64,6 @@ it('captures reasoning_content deltas for follow-up tool loop requests', functio
 
     $stream = $reader->consumeIterationStream(
         'run_123',
-        1,
         [
             'model' => 'moonshotai/kimi-k2.5',
             'execution_controls' => ExecutionControls::defaults(maxOutputTokens: 512, temperature: 0.7),

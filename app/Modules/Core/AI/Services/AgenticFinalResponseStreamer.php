@@ -48,7 +48,6 @@ final class AgenticFinalResponseStreamer
      */
     public function streamFinalResponse(
         string $runId,
-        int $employeeId,
         array $config,
         array $credentials,
         array $streamState,
