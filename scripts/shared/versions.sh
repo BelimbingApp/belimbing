@@ -263,8 +263,17 @@ compare_version() {
 # Check if version A is lower than version B.
 # Usage: if version_is_less_than "1.2.3" "1.2.4"; then ...; fi
 version_is_less_than() {
-    compare_version "$1" "$2"
-    [[ $? -eq 2 ]]
+    local v1=$1
+    local v2=$2
+
+    compare_version "$v1" "$v2"
+    local cmp=$?
+
+    if [[ $cmp -eq 2 ]]; then
+        return 0
+    fi
+
+    return 1
 }
 
 # Check if a version string meets minimum requirement

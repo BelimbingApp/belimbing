@@ -12,30 +12,16 @@ use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClientSupport;
 use App\Base\Support\Json as BlbJson;
 use Generator;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 
 final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
 {
     public function chat(ChatRequest $request): array
     {
-        $startTime = hrtime(true);
-        $mapping = $this->mapRequest($request, stream: false);
-
-        try {
-            $http = LlmClientSupport::buildHttp($request, $mapping->headers);
-
-            $response = $http->post(
-                rtrim($request->baseUrl, '/').'/chat/completions',
-                $mapping->payload,
-            );
-        } catch (ConnectionException $e) {
-            return LlmClientSupport::connectionError($e, $startTime);
-        }
-
-        return $this->withProviderMapping(
-            $this->parseResponse($response, LlmClientSupport::latencyMs($startTime), $request->model),
-            $mapping,
+        return $this->chatOverHttp(
+            $request,
+            'chat/completions',
+            fn (Response $response, int $latencyMs, string $model): array => $this->parseResponse($response, $latencyMs, $model),
         );
     }
 
@@ -44,30 +30,7 @@ final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
      */
     public function chatStream(ChatRequest $request): Generator
     {
-        $startTime = hrtime(true);
-        $mapping = $this->mapRequest($request, stream: true);
-
-        try {
-            $http = LlmClientSupport::buildHttp($request, $mapping->headers, stream: true);
-
-            $response = $http->post(
-                rtrim($request->baseUrl, '/').'/chat/completions',
-                $mapping->payload,
-            );
-        } catch (ConnectionException $e) {
-            yield from LlmClientSupport::connectionErrorStream($e, $startTime);
-
-            return;
-        }
-
-        $error = LlmClientSupport::checkFailedResponse($response, $startTime);
-        if ($error !== null) {
-            yield $error;
-
-            return;
-        }
-
-        yield from $this->streamSse($response, $startTime, $mapping);
+        yield from $this->chatStreamOverHttp($request, 'chat/completions');
     }
 
     private function parseResponse(Response $response, int $latencyMs, string $model): array
@@ -134,7 +97,7 @@ final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
     /**
      * @return Generator<int, array<string, mixed>>
      */
-    private function streamSse(Response $response, int $startTime, ProviderRequestMapping $mapping): Generator
+    protected function protocolStreamSse(Response $response, int $startTime, ProviderRequestMapping $mapping): Generator
     {
         $stream = $response->toPsrResponse()->getBody();
         $buffer = '';

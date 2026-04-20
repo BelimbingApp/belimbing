@@ -2,6 +2,7 @@
 
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
+use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\LaraTaskExecutionProfile;
 use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Enums\OperationStatus;
@@ -68,11 +69,14 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
             int $employeeId,
             string $systemPrompt,
             ?string $modelOverride,
-            $policy,
+            ?ExecutionPolicy $policy,
             ?string $sessionId,
             array $configOverride,
             array $allowedToolNames,
         ): bool {
+            expect($policy)->not->toBeNull()
+                ->and($policy->mode)->toBe(ExecutionMode::Background);
+
             return $employeeId === Employee::LARA_ID
                 && $messages[0]->content === LARA_PROFILE_TASK_DASHBOARD
                 && str_contains($systemPrompt, LARA_PROFILE_BASE_PROMPT)
@@ -169,11 +173,14 @@ it('runs the Lara research task profile with the resolved research model', funct
             int $employeeId,
             string $systemPrompt,
             ?string $modelOverride,
-            $policy,
+            ?ExecutionPolicy $policy,
             ?string $sessionId,
             array $configOverride,
             array $allowedToolNames,
         ): bool {
+            expect($policy)->not->toBeNull()
+                ->and($policy->mode)->toBe(ExecutionMode::Background);
+
             return $employeeId === Employee::LARA_ID
                 && $messages[0]->content === LARA_PROFILE_TASK_RESEARCH_DOCS
                 && str_contains($systemPrompt, LARA_PROFILE_BASE_PROMPT)
