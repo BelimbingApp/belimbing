@@ -121,7 +121,6 @@ final class ResponsesProtocolClient extends AbstractLlmProtocolClient
                     trim($line),
                     $ctx,
                     $startTime,
-                    $mapping,
                     $done,
                 );
 
@@ -141,7 +140,6 @@ final class ResponsesProtocolClient extends AbstractLlmProtocolClient
         string $line,
         object $ctx,
         int $startTime,
-        ProviderRequestMapping $mapping,
         bool &$terminal,
     ): Generator {
         if ($line === '' || str_starts_with($line, ':')) {
