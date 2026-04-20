@@ -99,35 +99,16 @@ final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
      */
     protected function protocolStreamSse(Response $response, int $startTime, ProviderRequestMapping $mapping): Generator
     {
-        $stream = $response->toPsrResponse()->getBody();
-        $buffer = '';
         $finishReason = null;
 
-        while (! $stream->eof()) {
-            $chunk = $stream->read(8192);
-            if ($chunk === '') {
+        foreach ($this->sseLines($response) as $line) {
+            if ($line === '' || str_starts_with($line, ':') || ! str_starts_with($line, 'data: ')) {
                 continue;
             }
 
-            $buffer .= $chunk;
-            $lines = explode("\n", $buffer);
-            $buffer = array_pop($lines);
+            yield from $this->parseSsePayload(substr($line, 6), $finishReason, $startTime, $mapping);
 
-            foreach ($lines as $line) {
-                $line = trim($line);
-
-                if ($line === '' || str_starts_with($line, ':') || ! str_starts_with($line, 'data: ')) {
-                    continue;
-                }
-
-                yield from $this->parseSsePayload(substr($line, 6), $finishReason, $startTime, $mapping);
-
-                if ($finishReason === '__done__') {
-                    return;
-                }
-            }
-
-            if ($finishReason !== null) {
+            if ($finishReason === '__done__') {
                 return;
             }
         }
