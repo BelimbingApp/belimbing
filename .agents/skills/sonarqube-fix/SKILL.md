@@ -20,11 +20,11 @@ PR. All in one pass — no user prompts needed.
 
 ## Git workspace, branch, and remotes (do not skip)
 
-Sonar **code edits** belong only under **`/home/kiat/repo/laravel/blb-quality-tree`**
-on **`quality/sonarqube-fix`**, not on the default checkout **`/home/kiat/repo/laravel/blb`**
-alone. Confirm **`pwd`** / paths are under the worktree **before** the first
-edit. End with **`git push -u origin quality/sonarqube-fix`**, **`gh pr create`**, and the
-PR URL in the report.
+Sonar **code edits** belong only under `/home/kiat/repo/laravel/blb-quality-tree`
+on `quality/sonarqube-fix`, not on the default checkout `/home/kiat/repo/laravel/blb`
+alone. Confirm `pwd` / paths are under the worktree **before** the first
+edit. End with `git push -u origin quality/sonarqube-fix`, `gh pr create`
+for a **normal PR (not draft)**, and the PR URL in the report.
 
 - **BLB_REMOTE:** first of `origin`, `upstream` whose URL contains `BelimbingApp/belimbing`. If neither matches, stop and fix remotes. ([canonical repo](https://github.com/BelimbingApp/belimbing))
 - **Fetch / reset / `worktree add` base:** use `$BLB_REMOTE` / `$BLB_REMOTE/main`.
@@ -47,14 +47,14 @@ Step 1 implements the list above. **Re-resolve `BLB_REMOTE` in a new shell** bef
 ## Workflow Checklist
 
 - [ ] Read and validate `SONAR_TOKEN` from `.env`
-- [ ] **Git:** complete **Step 1** (worktree, **`BLB_REMOTE`**, **`quality/sonarqube-fix`**, **`pwd`** gate — see **Git workspace, branch, and remotes**)
+- [ ] **Git:** complete **Step 1** (worktree, `BLB_REMOTE`, `quality/sonarqube-fix`, `pwd` gate — see **Git workspace, branch, and remotes**)
 - [ ] Fetch open Sonar issues, hotspots, and quality-gate metrics
 - [ ] Fetch per-file metric breakdown for new-code duplication / other metric-only failures
 - [ ] Triage into false positives, safe hotspots, fixable issues, skipped issues, and metric-only refactors
 - [ ] Mark false positives and safe hotspots via API
 - [ ] Apply code fixes (§ **Git workspace** only)
 - [ ] Validate with tests, Pint, and build when needed
-- [ ] **Step 7:** commit, **`git push -u origin quality/sonarqube-fix`**, **`gh pr create`**; paste PR URL
+- [ ] **Step 7:** commit, `git push -u origin quality/sonarqube-fix`, `gh pr create` for a normal PR (not draft); paste PR URL
 - [ ] Report counts, fixes, skips, and human-review items
 
 ## Authentication
@@ -174,33 +174,33 @@ Triage every issue before touching code.
 
 ### Always false positive — mark on SonarCloud
 
-- **`php:S4144` on Livewire `updated{Property}()` hooks** — Different event handlers, identical bodies are intentional
-- **`php:S1192` on i18n keys** (`__('some.key')`) — Translation keys are not duplicate string literals
-- **`php:S1192` in Laravel config files** (`config/*.php`) — Each config block (database connection, logging channel) is independent and self-contained. Extracting literals to constants breaks Laravel conventions.
-- **`php:S107` on Laravel constructor DI** (≥8 injected services) — Container-resolved DI is not the same problem as arbitrary parameters
-- **`php:S1142` ("too many returns") on straightforward guard-clause flow** — Early returns are intentional; leave them alone
-- **Complexity flags on `render()`, Eloquent model definitions, or migration `up()`** — Framework-driven, structurally unavoidable
+- `php:S4144` on Livewire `updated{Property}()` hooks** — Different event handlers, identical bodies are intentional
+- `php:S1192` on i18n keys** (`__('some.key')`) — Translation keys are not duplicate string literals
+- `php:S1192` in Laravel config files** (`config/*.php`) — Each config block (database connection, logging channel) is independent and self-contained. Extracting literals to constants breaks Laravel conventions.
+- `php:S107` on Laravel constructor DI** (≥8 injected services) — Container-resolved DI is not the same problem as arbitrary parameters
+- `php:S1142` ("too many returns") on straightforward guard-clause flow** — Early returns are intentional; leave them alone
+- **Complexity flags on `render()`, Eloquent model definitions, or migration `up()` — Framework-driven, structurally unavoidable
 - **Any issue where the only fix is to add logic, change a message, or alter control flow** — That is a behavior change; handle separately
 
 **BLB-specific gotchas:**
 - `md5()` is often used as a **non-cryptographic shortener** (cache keys / stable identifiers). This is safe when not used for passwords, signatures, auth tokens, integrity checks, or any security boundary.
 
 **BLB-specific hotspot safe patterns:**
-- **`php:S4790` (`sha1`/`md5`) in test files** — Often required to match Laravel's own framework conventions (e.g. email verification URLs use `sha1($user->email)`). Safe when mirroring framework behavior, not implementing security.
-- **`Web:S5725` (missing SRI) on CDN font stylesheets** — SRI is impractical for CDN-served CSS that may update content hashes. Font stylesheets carry no executable code risk.
-- **`php:S5042` (archive expansion) on trusted data sources** — Safe when extracting known data files from official sources (e.g. GeoNames). No user-supplied archives.
-- **`githubactions:S7637` (version tags instead of SHA)** — Safe for well-known, high-profile GitHub Actions (e.g. `actions/checkout`, `shivammathur/setup-php`). Version tags are the standard practice recommended by GitHub.
+- `php:S4790` (`sha1`/`md5`) in test files** — Often required to match Laravel's own framework conventions (e.g. email verification URLs use `sha1($user->email)`). Safe when mirroring framework behavior, not implementing security.
+- `Web:S5725` (missing SRI) on CDN font stylesheets** — SRI is impractical for CDN-served CSS that may update content hashes. Font stylesheets carry no executable code risk.
+- `php:S5042` (archive expansion) on trusted data sources** — Safe when extracting known data files from official sources (e.g. GeoNames). No user-supplied archives.
+- `githubactions:S7637` (version tags instead of SHA)** — Safe for well-known, high-profile GitHub Actions (e.g. `actions/checkout`, `shivammathur/setup-php`). Version tags are the standard practice recommended by GitHub.
 
 ### Fix with confidence
 
-- **`php:S3776` — High cognitive complexity** — Extract cohesive private methods; each must have a single nameable responsibility
-- **`php:S107` — Too many parameters (non-DI contexts)** — Introduce or reuse an existing DTO (check for existing DTOs first)
-- **`php:S1448` — Too many methods** — Extract to Livewire concerns or service classes; group by *what* the methods are about
-- **`php:S4144` — Identical method bodies (non-lifecycle)** — Extract a private helper
-- **`php:S3358` — Nested ternaries** — Unpack to `if` / `return` chain
-- **`Web:S5256` — Missing table headers** — Add `<thead>` with `<th scope="col">`; use `class="sr-only"` if visually unnecessary
-- **`Web:S7927` — aria-label mismatch** — Align `aria-label` with visible text, or remove it if visible text is sufficient
-- **`php:S1192` — Duplicate literals in production code** — Extract to a `private const`
+- `php:S3776` — High cognitive complexity** — Extract cohesive private methods; each must have a single nameable responsibility
+- `php:S107` — Too many parameters (non-DI contexts)** — Introduce or reuse an existing DTO (check for existing DTOs first)
+- `php:S1448` — Too many methods** — Extract to Livewire concerns or service classes; group by *what* the methods are about
+- `php:S4144` — Identical method bodies (non-lifecycle)** — Extract a private helper
+- `php:S3358` — Nested ternaries** — Unpack to `if` / `return` chain
+- `Web:S5256` — Missing table headers** — Add `<thead>` with `<th scope="col">`; use `class="sr-only"` if visually unnecessary
+- `Web:S7927` — aria-label mismatch** — Align `aria-label` with visible text, or remove it if visible text is sufficient
+- `php:S1192` — Duplicate literals in production code** — Extract to a `private const`
 
 ### Metric-only duplication fixes
 
@@ -233,10 +233,10 @@ Avoid these anti-patterns:
 
 ### Apply carefully (requires judgement)
 
-- **`php:S108` — Empty code block** — If intentional: add `// No action needed — <reason>`. Never add logic silently inside a quality fix.
-- **`php:S1142` — Too many returns (complex flows)** — Usually skip when control flow is already straightforward. Only refactor if it clearly improves readability, and prefer extracting a well-named private method over re-shaping the logic.
-- **`php:S1192` — Duplicate literals in test files** — Extract only if the string is test data that would be painful to update; keep expectations inline
-- **`sh:S7682` — Shell function without explicit return** — Add `return 0` only if the caller checks `$?`
+- `php:S108` — Empty code block** — If intentional: add `// No action needed — <reason>`. Never add logic silently inside a quality fix.
+- `php:S1142` — Too many returns (complex flows)** — Usually skip when control flow is already straightforward. Only refactor if it clearly improves readability, and prefer extracting a well-named private method over re-shaping the logic.
+- `php:S1192` — Duplicate literals in test files** — Extract only if the string is test data that would be painful to update; keep expectations inline
+- `sh:S7682` — Shell function without explicit return** — Add `return 0` only if the caller checks `$?`
 
 ### Security hotspots
 
@@ -369,13 +369,14 @@ vendor/bin/pint --dirty
 php artisan test --stop-on-failure
 
 # Build only if frontend assets or browser-facing resources changed
-npm run build
+bun run build
 ```
 
 ## Step 7: Commit and create PR
 
-On **`quality/sonarqube-fix`** only; PR **`--head quality/sonarqube-fix`**. Set **`MAIN_REPO`** and
-**`BLB_REMOTE`** with the **same resolver as Step 1** (§ **Git workspace**).
+On `quality/sonarqube-fix` only; PR `--head quality/sonarqube-fix` and
+create a **normal PR (not draft)**. Set `MAIN_REPO` and `BLB_REMOTE`
+with the **same resolver as Step 1** (§ **Git workspace**).
 
 ```bash
 MAIN_REPO=/home/kiat/repo/laravel/blb
@@ -404,7 +405,7 @@ gh pr create --base main --head quality/sonarqube-fix --title "quality: fix Sona
 ## Test plan
 - [ ] php artisan test --stop-on-failure
 - [ ] vendor/bin/pint --dirty
-- [ ] npm run build (if frontend files changed)
+- [ ] bun run build (if frontend files changed)
 EOF
 )"
 ```
