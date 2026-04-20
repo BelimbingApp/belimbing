@@ -89,8 +89,6 @@ final class ResponsesProtocolClient extends AbstractLlmProtocolClient
      */
     protected function protocolStreamSse(Response $response, int $startTime, ProviderRequestMapping $mapping): Generator
     {
-        $stream = $response->toPsrResponse()->getBody();
-        $buffer = '';
         $ctx = new class
         {
             public ?string $pendingEventType = null;
@@ -104,29 +102,18 @@ final class ResponsesProtocolClient extends AbstractLlmProtocolClient
             public mixed $currentMessagePhase = null;
         };
 
-        while (! $stream->eof()) {
-            $chunk = $stream->read(8192);
-            if ($chunk === '') {
-                continue;
-            }
+        foreach ($this->sseLines($response) as $line) {
+            $done = false;
 
-            $buffer .= $chunk;
-            $lines = explode("\n", $buffer);
-            $buffer = array_pop($lines);
+            yield from $this->yieldResponsesSseLineEvents(
+                $line,
+                $ctx,
+                $startTime,
+                $done,
+            );
 
-            foreach ($lines as $line) {
-                $done = false;
-
-                yield from $this->yieldResponsesSseLineEvents(
-                    trim($line),
-                    $ctx,
-                    $startTime,
-                    $done,
-                );
-
-                if ($done) {
-                    return;
-                }
+            if ($done) {
+                return;
             }
         }
 

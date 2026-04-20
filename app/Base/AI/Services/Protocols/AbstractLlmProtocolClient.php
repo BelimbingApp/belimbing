@@ -12,6 +12,7 @@ use App\Base\AI\Services\ProviderMapping\ProviderRequestMapperRegistry;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
+use Psr\Http\Message\StreamInterface;
 
 abstract class AbstractLlmProtocolClient implements LlmProtocolClient
 {
@@ -132,6 +133,45 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
         }
 
         yield from $this->protocolStreamSse($response, $startTime, $mapping);
+    }
+
+    /**
+     * @return Generator<int, string>
+     */
+    protected function sseLines(Response $response, bool $flushTrailingBuffer = false): Generator
+    {
+        yield from $this->sseLinesFromStream($response->toPsrResponse()->getBody(), $flushTrailingBuffer);
+    }
+
+    /**
+     * @return Generator<int, string>
+     */
+    private function sseLinesFromStream(StreamInterface $stream, bool $flushTrailingBuffer): Generator
+    {
+        $buffer = '';
+
+        while (! $stream->eof()) {
+            $chunk = $stream->read(8192);
+            if ($chunk === '') {
+                continue;
+            }
+
+            $buffer .= $chunk;
+            $lines = explode("\n", $buffer);
+            $buffer = (string) array_pop($lines);
+
+            foreach ($lines as $line) {
+                yield trim($line);
+            }
+        }
+
+        if (! $flushTrailingBuffer || trim($buffer) === '') {
+            return;
+        }
+
+        foreach (explode("\n", $buffer) as $line) {
+            yield trim($line);
+        }
     }
 
     /**

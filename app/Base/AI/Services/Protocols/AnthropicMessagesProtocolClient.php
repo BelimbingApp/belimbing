@@ -119,8 +119,6 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
      */
     protected function protocolStreamSse(Response $response, int $startTime, ProviderRequestMapping $mapping): Generator
     {
-        $stream = $response->toPsrResponse()->getBody();
-        $buffer = '';
         $ctx = new class
         {
             public ?string $pendingEventType = null;
@@ -141,48 +139,19 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
             public string $finishReason = 'stop';
         };
 
-        while (! $stream->eof()) {
-            $chunk = $stream->read(8192);
-            if ($chunk === '') {
-                continue;
-            }
+        foreach ($this->sseLines($response, flushTrailingBuffer: true) as $line) {
+            $terminal = false;
 
-            $buffer .= $chunk;
-            $lines = explode("\n", $buffer);
-            $buffer = array_pop($lines);
+            yield from $this->anthropicYieldFromSseLine(
+                $line,
+                $ctx,
+                $startTime,
+                $mapping,
+                $terminal,
+            );
 
-            foreach ($lines as $line) {
-                $terminal = false;
-
-                yield from $this->anthropicYieldFromSseLine(
-                    $line,
-                    $ctx,
-                    $startTime,
-                    $mapping,
-                    $terminal,
-                );
-
-                if ($terminal) {
-                    return;
-                }
-            }
-        }
-
-        if (trim($buffer) !== '') {
-            foreach (explode("\n", $buffer) as $line) {
-                $terminal = false;
-
-                yield from $this->anthropicYieldFromSseLine(
-                    $line,
-                    $ctx,
-                    $startTime,
-                    $mapping,
-                    $terminal,
-                );
-
-                if ($terminal) {
-                    return;
-                }
+            if ($terminal) {
+                return;
             }
         }
 
