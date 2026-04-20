@@ -37,35 +37,33 @@ Route::middleware(['auth'])->group(function () {
         ->where('attachmentId', '[a-zA-Z0-9_]+');
     // Lara setup
     Route::get('admin/setup/lara', Lara::class)
+        ->middleware('authz:admin.ai_lara.manage')
         ->name('admin.setup.lara');
 
     Route::get('admin/ai/task-models', TaskModels::class)
+        ->middleware('authz:admin.ai_task_model.manage')
         ->name('admin.ai.task-models');
-
-    Route::redirect('admin/ai/playground', '/admin/ai/task-models')
-        ->name('admin.ai.playground');
 
     // Unified AI Providers page (management + catalog)
     Route::get('admin/ai/providers', Providers::class)
+        ->middleware('authz:admin.ai_provider.manage')
         ->name('admin.ai.providers');
 
     // Dynamic provider setup - resolve component class in controller
     Route::get('admin/ai/providers/setup/{providerKey}', ProviderSetupController::class)
+        ->middleware('authz:admin.ai_provider.manage')
         ->name('admin.ai.providers.setup');
 
-    // Legacy redirects — old Browse and Connections URLs point to the unified page.
-    Route::redirect('admin/ai/providers/browse', '/admin/ai/providers')
-        ->name('admin.ai.providers.browse');
-    Route::redirect('admin/ai/providers/connections', '/admin/ai/providers')
-        ->name('admin.ai.providers.connections');
-
     Route::get('admin/ai/tools/{toolName?}', Tools::class)
+        ->middleware('authz:admin.ai_tool.manage')
         ->name('admin.ai.tools');
 
     Route::get('admin/ai/control-plane', ControlPlane::class)
+        ->middleware('authz:admin.ai_control_plane.view')
         ->name('admin.ai.control-plane');
 
     Route::get('admin/ai/runs/{runId}', RunDetail::class)
+        ->middleware('authz:admin.ai_control_plane.view')
         ->name('admin.ai.runs.show')
         ->where('runId', '[a-zA-Z0-9_\-]+');
 });

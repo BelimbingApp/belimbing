@@ -8,6 +8,7 @@ use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\Services\AgenticFinalResponseStreamer;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
+use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\RuntimeResponseFactory;
 use Illuminate\Foundation\Testing\TestCase;
 
@@ -39,10 +40,12 @@ it('prepends client actions when the final stream ends without content deltas', 
         $llmClient,
         $runRecorder,
         app(RuntimeResponseFactory::class),
+        Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
     );
 
     $events = iterator_to_array($streamer->streamFinalResponse(
         'run_123',
+        1,
         [
             'api_type' => null,
             'model' => 'gpt-4.1',

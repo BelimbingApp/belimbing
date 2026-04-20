@@ -20,6 +20,8 @@ use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorderStartInput;
+use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
+use App\Modules\Core\AI\Services\ControlPlane\WireLoggingTransportTap;
 use Illuminate\Support\Str;
 
 /**
@@ -49,6 +51,7 @@ class AgenticRuntime
         private readonly RunRecorder $runRecorder,
         private readonly AgenticToolLoopStreamReader $toolLoopStreamReader,
         private readonly RuntimeSessionContext $sessionContext,
+        private readonly WireLogger $wireLogger,
     ) {}
 
     /**
@@ -139,6 +142,7 @@ class AgenticRuntime
 
                 $result = $this->runToolCallingLoop(
                     $runId,
+                    $employeeId,
                     $config,
                     $credentials,
                     $messages,
@@ -262,6 +266,7 @@ class AgenticRuntime
 
             yield from $this->streamWithFallbackConfigs(
                 $runId,
+                $employeeId,
                 $configs,
                 $messages,
                 $systemPrompt,
@@ -284,6 +289,7 @@ class AgenticRuntime
      */
     private function streamWithFallbackConfigs(
         string $runId,
+        int $employeeId,
         array $configs,
         array $messages,
         ?string $systemPrompt,
@@ -325,6 +331,7 @@ class AgenticRuntime
 
             $stream = $this->runStreamingToolLoop(
                 $runId,
+                $employeeId,
                 $config,
                 $credentials,
                 $messages,
@@ -458,6 +465,7 @@ class AgenticRuntime
      */
     private function runToolCallingLoop(
         string $runId,
+        int $employeeId,
         array $config,
         array $credentials,
         array $messages,
@@ -465,8 +473,6 @@ class AgenticRuntime
         array &$fallbackAttempts,
         ?array $allowedToolNames = null,
     ): array {
-        $employeeId = (int) ($config['employee_id'] ?? 0);
-
         // Hook: PreContextBuild — augment system prompt before message assembly
         $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
 
@@ -494,7 +500,7 @@ class AgenticRuntime
             // Hook: PreLlmCall — observe or augment before each LLM call
             $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $hookMetadata);
 
-            $result = $this->chatWithRetry($credentials, $config, $apiMessages, $tools, $retryAttempts);
+            $result = $this->chatWithRetry($runId, $employeeId, $credentials, $config, $apiMessages, $tools, $retryAttempts);
 
             if (isset($result['runtime_error'])) {
                 // On first iteration, this is a pre-commit failure — record for fallback
@@ -562,13 +568,15 @@ class AgenticRuntime
      * @return array<string, mixed>
      */
     private function chatWithRetry(
+        string $runId,
+        int $employeeId,
         array $credentials,
         array $config,
         array $apiMessages,
         array $tools,
         array &$retryAttempts,
     ): array {
-        $result = $this->chatWithTools($credentials, $config, $apiMessages, $tools);
+        $result = $this->chatWithTools($runId, $employeeId, $credentials, $config, $apiMessages, $tools);
 
         if (! isset($result['runtime_error'])) {
             return $result;
@@ -598,7 +606,7 @@ class AgenticRuntime
             'latency_ms' => $runtimeError->latencyMs,
         ];
 
-        return $this->chatWithTools($credentials, $config, $apiMessages, $tools);
+        return $this->chatWithTools($runId, $employeeId, $credentials, $config, $apiMessages, $tools);
     }
 
     /**
@@ -610,7 +618,14 @@ class AgenticRuntime
      * @param  list<array<string, mixed>>  $tools
      * @return array<string, mixed>
      */
-    private function chatWithTools(array $credentials, array $config, array $apiMessages, array $tools): array
+    private function chatWithTools(
+        string $runId,
+        int $employeeId,
+        array $credentials,
+        array $config,
+        array $apiMessages,
+        array $tools,
+    ): array
     {
         $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
         $executionControls = $tools !== []
@@ -636,6 +651,9 @@ class AgenticRuntime
             providerName: $config['provider_name'],
             tools: $tools !== [] ? $tools : null,
             apiType: $apiType,
+            transportTap: $this->wireLogger->enabled()
+                ? new WireLoggingTransportTap($this->wireLogger, $runId)
+                : null,
         ));
     }
 
@@ -823,6 +841,7 @@ class AgenticRuntime
      */
     private function runStreamingToolLoop(
         string $runId,
+        int $employeeId,
         array $config,
         array $credentials,
         array $messages,
@@ -830,7 +849,6 @@ class AgenticRuntime
         array $fallbackAttempts,
         ?array $allowedToolNames = null,
     ): \Generator {
-        $employeeId = (int) ($config['employee_id'] ?? 0);
         $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt, $allowedToolNames);
 
         if ($toolLoopState['removedTools'] !== []) {
@@ -858,6 +876,7 @@ class AgenticRuntime
 
             $iterResult = yield from $this->toolLoopStreamReader->consumeIterationStream(
                 $runId,
+                $employeeId,
                 $config,
                 $credentials,
                 $toolLoopState,
@@ -1225,6 +1244,12 @@ class AgenticRuntime
 
             if ($hookVerdict['denied']) {
                 $denialMessage = 'Tool call denied: '.($hookVerdict['reason'] ?? 'denied by policy');
+                $this->recordToolWireEvent($runId, 'tool.denied', [
+                    'tool' => $functionName,
+                    'arguments' => $arguments,
+                    'reason' => $hookVerdict['reason'],
+                    'source' => 'hook',
+                ]);
 
                 $toolLoopState['toolActions'][] = [
                     'tool' => $functionName,
@@ -1261,6 +1286,12 @@ class AgenticRuntime
                 'started_at' => now()->toIso8601String(),
                 'run_id' => $runId,
             ]];
+            $this->recordToolWireEvent($runId, 'tool.started', [
+                'tool' => $functionName,
+                'arguments' => $arguments,
+                'tool_call_id' => $toolCallId,
+                'tool_call_index' => $toolIndex,
+            ]);
 
             $toolStartTime = hrtime(true);
 
@@ -1298,6 +1329,16 @@ class AgenticRuntime
                 'error_payload' => $toolExecution['action']['error_payload'] ?? null,
                 'run_id' => $runId,
             ]];
+            $this->recordToolWireEvent($runId, 'tool.finished', [
+                'tool' => $functionName,
+                'arguments' => $arguments,
+                'tool_call_id' => $toolCallId,
+                'tool_call_index' => $toolIndex,
+                'duration_ms' => $durationMs,
+                'status' => isset($toolExecution['action']['error_payload']) ? 'error' : 'success',
+                'error_payload' => $toolExecution['action']['error_payload'] ?? null,
+                'result_full' => $resultString,
+            ]);
 
             // Emit authorization denial as a hook_action for transcript visibility
             if (($toolExecution['action']['error_payload']['code'] ?? null) === 'permission_denied') {
@@ -1345,6 +1386,12 @@ class AgenticRuntime
 
             if ($hookVerdict['denied']) {
                 $denialMessage = 'Tool call denied: '.($hookVerdict['reason'] ?? 'denied by policy');
+                $this->recordToolWireEvent($runId, 'tool.denied', [
+                    'tool' => $functionName,
+                    'arguments' => $arguments,
+                    'reason' => $hookVerdict['reason'],
+                    'source' => 'hook',
+                ]);
                 $toolActions[] = [
                     'tool' => $functionName,
                     'arguments' => $arguments,
@@ -1362,13 +1409,40 @@ class AgenticRuntime
                 continue;
             }
 
+            $this->recordToolWireEvent($runId, 'tool.started', [
+                'tool' => $functionName,
+                'arguments' => $arguments,
+                'tool_call_id' => $toolCallId,
+            ]);
             $toolExecution = $this->executeToolCall($toolCall, $allowedToolNames);
 
             $toolActions[] = $toolExecution['action'];
             array_push($clientActions, ...$toolExecution['client_actions']);
             $apiMessages[] = $toolExecution['message'];
+            $this->recordToolWireEvent($runId, 'tool.finished', [
+                'tool' => $functionName,
+                'arguments' => $arguments,
+                'tool_call_id' => $toolCallId,
+                'status' => isset($toolExecution['action']['error_payload']) ? 'error' : 'success',
+                'error_payload' => $toolExecution['action']['error_payload'] ?? null,
+                'result_full' => $toolExecution['message']['content'] ?? '',
+            ]);
 
             $this->hookCoordinator->postToolResult($runId, $employeeId, $toolExecution['action'], $hookMetadata);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function recordToolWireEvent(string $runId, string $type, array $payload): void
+    {
+        if (! $this->wireLogger->enabled()) {
+            return;
+        }
+
+        $this->wireLogger->append($runId, array_merge([
+            'type' => $type,
+        ], $payload));
     }
 }

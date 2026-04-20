@@ -200,27 +200,27 @@ class LaraNavigationRouter
             'providers' => [
                 'route' => 'admin.ai.providers',
                 'label' => __('AI Providers'),
-                'capability' => null,
+                'capability' => 'admin.ai_provider.manage',
             ],
             'models' => [
                 'route' => 'admin.ai.providers',
                 'label' => __('AI Providers'),
-                'capability' => null,
+                'capability' => 'admin.ai_provider.manage',
             ],
             'playground' => [
                 'route' => 'admin.ai.task-models',
                 'label' => __('Task Models'),
-                'capability' => null,
+                'capability' => 'admin.ai_task_model.manage',
             ],
             'task-models' => [
                 'route' => 'admin.ai.task-models',
                 'label' => __('Task Models'),
-                'capability' => null,
+                'capability' => 'admin.ai_task_model.manage',
             ],
             'setup-lara' => [
                 'route' => 'admin.setup.lara',
                 'label' => __('Lara Setup'),
-                'capability' => null,
+                'capability' => 'admin.ai_lara.manage',
             ],
         ];
     }

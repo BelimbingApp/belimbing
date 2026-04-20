@@ -6,6 +6,7 @@
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
@@ -14,10 +15,21 @@ use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Enums\TurnPhase;
+use App\Modules\Core\AI\Services\AgenticRuntime;
+use App\Modules\Core\AI\Services\AgenticToolLoopStreamReader;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
+use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
+use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
+use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRegistry;
+use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRunner;
+use App\Modules\Core\AI\Services\RuntimeHookCoordinator;
+use App\Modules\Core\AI\Services\RuntimeMessageBuilder;
+use App\Modules\Core\AI\Services\RuntimeResponseFactory;
 use App\Modules\Core\AI\Services\RuntimeSessionContext;
 use Illuminate\Foundation\Testing\TestCase;
+use Illuminate\Support\Facades\File;
+use Psr\Log\NullLogger;
 use Tests\Support\MakesRuntimeResponses;
 
 uses(TestCase::class, MakesRuntimeResponses::class);
@@ -254,6 +266,58 @@ describe('AgenticRuntime (sync)', function () {
         expect($result['meta']['model'])->toBe('gpt-4');
         expect($result['meta']['provider_name'])->toBe('test-provider');
         expect($result['meta'])->not->toHaveKey('tool_actions');
+    });
+
+    it('writes wire logs into the global run-scoped directory', function () {
+        $workspacePath = storage_path('framework/testing/agentic-wire-log-'.str()->random(16));
+        config()->set('ai.workspace_path', $workspacePath);
+        config()->set('ai.wire_logging.enabled', true);
+
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')
+            ->once()
+            ->with(Mockery::on(function (ChatRequest $request): bool {
+                $request->transportTap?->request(
+                    $request,
+                    new ProviderRequestMapping(payload: ['model' => $request->model]),
+                    '/chat/completions',
+                    false,
+                );
+
+                return true;
+            }))
+            ->andReturn([
+                'content' => 'Hello, I am Lara!',
+                'latency_ms' => 150,
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 8],
+            ]);
+
+        $runtime = new AgenticRuntime(
+            defaultAgenticConfigResolver(),
+            $llmClient,
+            $this->makeToolRegistry(),
+            $this->makePassthroughCredentialResolver(),
+            new RuntimeMessageBuilder,
+            new RuntimeResponseFactory,
+            new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
+            Mockery::mock(RunRecorder::class)->shouldIgnoreMissing(),
+            new AgenticToolLoopStreamReader($llmClient, app(WireLogger::class)),
+            app(RuntimeSessionContext::class),
+            app(WireLogger::class),
+        );
+
+        $result = $runtime->run(
+            [$this->makeMessage('user', 'Hi')],
+            1,
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        );
+
+        expect(file_exists(storage_path('app/ai/wire-logs/'.$result['run_id'].'.jsonl')))->toBeTrue()
+            ->and(file_exists($workspacePath.'/1/wire-logs/'.$result['run_id'].'.jsonl'))->toBeFalse()
+            ->and(file_exists($workspacePath.'/0/wire-logs/'.$result['run_id'].'.jsonl'))->toBeFalse();
+
+        File::deleteDirectory($workspacePath);
+        @unlink(storage_path('app/ai/wire-logs/'.$result['run_id'].'.jsonl'));
     });
 
     it('omits disallowed tools from the LLM request', function () {

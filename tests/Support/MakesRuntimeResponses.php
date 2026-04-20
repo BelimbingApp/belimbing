@@ -16,6 +16,7 @@ use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
+use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRegistry;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRunner;
 use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
@@ -156,8 +157,9 @@ trait MakesRuntimeResponses
             $responseFactory,
             new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
             $runRecorder,
-            new AgenticToolLoopStreamReader($llmClient),
+            new AgenticToolLoopStreamReader($llmClient, \Mockery::mock(WireLogger::class)->shouldIgnoreMissing()),
             app(RuntimeSessionContext::class),
+            \Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
         );
     }
 

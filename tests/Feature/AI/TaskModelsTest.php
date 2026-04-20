@@ -6,6 +6,9 @@ use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\TaskModelRecommendationService;
+use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalRole;
+use App\Base\Authz\Models\Role;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
@@ -219,15 +222,28 @@ test('task model save preserves existing execution controls', function (): void 
 
 function createTaskModelsTestUser(): User
 {
+    setupAuthzRoles();
+
     $company = Company::query()->find(Company::LICENSEE_ID)
         ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
 
     $employee = Employee::factory()->create(['company_id' => $company->id]);
 
-    return User::factory()->create([
+    $user = User::factory()->create([
         'company_id' => $company->id,
         'employee_id' => $employee->id,
     ]);
+
+    $role = Role::query()->where('code', 'ai_operator')->whereNull('company_id')->firstOrFail();
+
+    PrincipalRole::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $user->id,
+        'role_id' => $role->id,
+    ]);
+
+    return $user;
 }
 
 /**

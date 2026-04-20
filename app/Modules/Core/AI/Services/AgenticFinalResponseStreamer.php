@@ -14,6 +14,8 @@ use App\Base\AI\Enums\ReasoningVisibility;
 use App\Base\AI\Enums\ToolChoiceMode;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
+use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
+use App\Modules\Core\AI\Services\ControlPlane\WireLoggingTransportTap;
 
 /**
  * Streams the final LLM text response after tool calls complete in agentic runs.
@@ -27,6 +29,7 @@ final class AgenticFinalResponseStreamer
         private readonly LlmClient $llmClient,
         private readonly RunRecorder $runRecorder,
         private readonly RuntimeResponseFactory $responseFactory,
+        private readonly WireLogger $wireLogger,
     ) {}
 
     /**
@@ -45,6 +48,7 @@ final class AgenticFinalResponseStreamer
      */
     public function streamFinalResponse(
         string $runId,
+        int $employeeId,
         array $config,
         array $credentials,
         array $streamState,
@@ -73,6 +77,9 @@ final class AgenticFinalResponseStreamer
             providerName: $config['provider_name'],
             tools: $streamState['tools'] !== [] ? $streamState['tools'] : null,
             apiType: $apiType,
+            transportTap: $this->wireLogger->enabled()
+                ? new WireLoggingTransportTap($this->wireLogger, $runId)
+                : null,
         ));
 
         $accumulator = [

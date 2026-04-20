@@ -17,6 +17,7 @@ use App\Modules\Core\AI\Services\Browser\BrowserArtifactStore;
 use App\Modules\Core\AI\Services\Browser\BrowserSessionManager;
 use App\Modules\Core\AI\Services\ControlPlane\LifecycleControlService;
 use App\Modules\Core\AI\Services\ControlPlane\OperationalTelemetryService;
+use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\Memory\MemoryCompactor;
 use App\Modules\Core\AI\Services\OperationsDispatchService;
 use App\Modules\Core\AI\Services\SessionManager;
@@ -63,6 +64,7 @@ function makeLcsMocks(): array
         'operationsDispatch' => Mockery::mock(OperationsDispatchService::class),
         'sessionManager' => Mockery::mock(SessionManager::class),
         'telemetry' => $telemetry,
+        'wireLogger' => Mockery::mock(WireLogger::class),
     ];
 }
 
@@ -75,6 +77,7 @@ function makeLcsService(array $mocks): LifecycleControlService
         $mocks['operationsDispatch'],
         $mocks['sessionManager'],
         $mocks['telemetry'],
+        $mocks['wireLogger'],
     );
 }
 
@@ -208,6 +211,22 @@ describe('preview', function () {
         expect($preview->affectedCount)->toBe(0)
             ->and($preview->affectedSummary[0])->toContain('Specify a session_id');
     });
+
+    it('previews prune wire logs with retention context', function () {
+        $mocks = makeLcsMocks();
+        $mocks['wireLogger']->shouldReceive('totalBytes')->once()->andReturn(4096);
+
+        $service = makeLcsService($mocks);
+        $preview = $service->preview(
+            LifecycleAction::PruneWireLogs,
+            ['retention_days' => 14],
+        );
+
+        expect($preview->action)->toBe(LifecycleAction::PruneWireLogs)
+            ->and($preview->isDestructive)->toBeTrue()
+            ->and($preview->affectedSummary[0])->toContain('14')
+            ->and($preview->affectedSummary[0])->toContain('4');
+    });
 });
 
 // ------------------------------------------------------------------
@@ -269,6 +288,25 @@ describe('execute', function () {
 
         expect($result->status)->toBe(LifecycleActionStatus::Completed)
             ->and($result->result['pruned_sessions'])->toBe(1);
+    });
+
+    it('executes prune wire logs and records the deleted count', function () {
+        $mocks = makeLcsMocks();
+        $mocks['wireLogger']->shouldReceive('totalBytes')->once()->andReturn(2048);
+        $mocks['wireLogger']->shouldReceive('pruneOlderThan')
+            ->once()
+            ->with(7)
+            ->andReturn(3);
+
+        $service = makeLcsService($mocks);
+        $result = $service->execute(
+            LifecycleAction::PruneWireLogs,
+            ['retention_days' => 7],
+        );
+
+        expect($result->status)->toBe(LifecycleActionStatus::Completed)
+            ->and($result->result['pruned_wire_logs'])->toBe(3)
+            ->and($result->result['retention_days'])->toBe(7);
     });
 
     it('executes sweep browser sessions', function () {

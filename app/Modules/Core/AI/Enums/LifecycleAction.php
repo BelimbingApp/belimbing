@@ -28,6 +28,9 @@ enum LifecycleAction: string
     /** Sweep stale operation dispatches stuck in running state. */
     case SweepOperations = 'sweep_operations';
 
+    /** Prune retained per-run wire log files. */
+    case PruneWireLogs = 'prune_wire_logs';
+
     /**
      * Human-readable label.
      */
@@ -39,6 +42,7 @@ enum LifecycleAction: string
             self::PruneArtifacts => 'Prune Artifacts',
             self::SweepBrowserSessions => 'Sweep Browser Sessions',
             self::SweepOperations => 'Sweep Operations',
+            self::PruneWireLogs => 'Prune Wire Logs',
         };
     }
 
@@ -51,6 +55,19 @@ enum LifecycleAction: string
             self::CompactMemory => false,
             self::PruneSessions, self::PruneArtifacts => true,
             self::SweepBrowserSessions, self::SweepOperations => false,
+            self::PruneWireLogs => true,
+        };
+    }
+
+    public function description(): string
+    {
+        return match ($this) {
+            self::CompactMemory => __('Condense daily memory notes into durable knowledge without deleting the source sessions.'),
+            self::PruneSessions => __('Delete stale session transcripts and metadata after the selected retention window.'),
+            self::PruneArtifacts => __('Delete browser screenshots, PDFs, and snapshots for a specific session.'),
+            self::SweepBrowserSessions => __('Mark expired browser sessions as swept so abandoned automation contexts stop accumulating.'),
+            self::SweepOperations => __('Cancel or mark stale background operations that appear to be stuck.'),
+            self::PruneWireLogs => __('Delete retained per-run transport wire logs older than the selected retention window.'),
         };
     }
 }

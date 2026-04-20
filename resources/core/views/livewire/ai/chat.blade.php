@@ -494,6 +494,18 @@
                                             {{ $session->title ?? __('Untitled') }}<span class="sr-only">, {{ __('edit title') }}</span>
                                         </button>
                                         <div class="text-xs text-muted tabular-nums">{{ $session->lastActivityAt->format('M j, H:i') }}</div>
+                                        @if ($canAccessControlPlane && isset($sessionTurnTargets[$session->id]))
+                                            <div class="mt-0.5">
+                                                <a
+                                                    href="{{ route('admin.ai.control-plane', ['tab' => 'turns', 'turnId' => $sessionTurnTargets[$session->id]['turn_id']]) }}"
+                                                    wire:navigate
+                                                    class="text-[10px] text-accent hover:underline"
+                                                >
+                                                    {{ $sessionTurnTargets[$session->id]['is_active'] ? __('Current Turn') : __('Last Turn') }}:
+                                                    <span class="font-mono">{{ \Illuminate\Support\Str::limit($sessionTurnTargets[$session->id]['turn_id'], 14, '...') }}</span>
+                                                </a>
+                                            </div>
+                                        @endif
                                         <div
                                             x-show="activeTurnSummaries['{{ $session->id }}']"
                                             x-cloak
@@ -964,6 +976,16 @@
                                 <x-icon name="heroicon-o-plus" class="w-3 h-3" />
                                 <span>{{ __('New session') }}</span>
                             </x-ui.button>
+                            @if ($canAccessControlPlane && $selectedSessionTurnTarget)
+                                <a
+                                    href="{{ route('admin.ai.control-plane', ['tab' => 'turns', 'turnId' => $selectedSessionTurnTarget['turn_id']]) }}"
+                                    wire:navigate
+                                    class="inline-flex items-center gap-1 rounded-full border border-border-default bg-surface-card px-2 py-1 text-[11px] text-accent hover:border-accent/40 hover:bg-surface-subtle"
+                                >
+                                    <x-icon name="heroicon-o-adjustments-horizontal" class="h-3 w-3" />
+                                    <span>{{ __('Open in Control Plane') }}</span>
+                                </a>
+                            @endif
                         </div>
 
                         @if ($sessionUsage && ($sessionUsage['total_prompt_tokens'] > 0 || $sessionUsage['total_completion_tokens'] > 0))

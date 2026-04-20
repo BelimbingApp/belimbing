@@ -64,7 +64,6 @@ Route::middleware('auth')->group(function () {
         ->name('admin.users.show');
 
     // User settings
-    Route::redirect('settings', 'settings/profile');
     Route::get('settings/profile', Profile::class)->name('profile.edit');
     Route::get('settings/password', Password::class)->name('password.edit');
     Route::get('settings/appearance', Appearance::class)->name('appearance.edit');

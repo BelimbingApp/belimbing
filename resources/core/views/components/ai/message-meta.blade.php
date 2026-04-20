@@ -36,7 +36,7 @@
     $runIdLabel = is_string($runId) && $runId !== '' ? $runId : null;
     $runDetailsId = $runIdLabel !== null ? 'run-details-'.$runIdLabel : null;
     $runDetailsTitleId = $runIdLabel !== null ? 'run-details-title-'.$runIdLabel : null;
-    $controlPlaneUrl = $runIdLabel !== null ? route('admin.ai.control-plane', ['inspectRunId' => $runIdLabel]) : null;
+    $controlPlaneUrl = $runIdLabel !== null ? route('admin.ai.control-plane', ['tab' => 'inspector', 'runId' => $runIdLabel]) : null;
 
     $toneClasses = match ($tone) {
         'inverse' => 'text-accent-on/70 focus-visible:ring-accent-on/40',
@@ -49,7 +49,7 @@
     if ($runIdLabel !== null && auth()->check()) {
         $actor = \App\Base\Authz\DTO\Actor::forUser(auth()->user());
         $canAccessControlPlane = app(\App\Base\Authz\Contracts\AuthorizationService::class)
-            ->can($actor, 'admin.ai.control-plane')
+            ->can($actor, 'admin.ai_control_plane.view')
             ->allowed;
     }
 

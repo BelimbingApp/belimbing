@@ -13,6 +13,7 @@ use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesStreaming;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesChatSessions;
+use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\MessageManager;
@@ -171,6 +172,13 @@ class Chat extends Component
 
         $showSessionFallbackBanner = $sessionFallbackBannerAttempt !== null
             && $this->shouldShowSessionFallbackBanner($sessionFallbackBannerAttempt);
+        $canAccessControlPlane = $this->canAccessControlPlane();
+        $sessionTurnTargets = $agentActivated
+            ? $this->sessionTurnTargets($sessions, $activeTurnsBySession)
+            : [];
+        $selectedSessionTurnTarget = $this->selectedSessionId !== null
+            ? ($sessionTurnTargets[$this->selectedSessionId] ?? null)
+            : null;
 
         $markdown = app(ChatMarkdownRenderer::class);
 
@@ -274,6 +282,9 @@ class Chat extends Component
             'showSessionFallbackBanner' => $showSessionFallbackBanner,
             'sessionFallbackBannerAttempt' => $sessionFallbackBannerAttempt,
             'phaseLabels' => $phaseLabels,
+            'canAccessControlPlane' => $canAccessControlPlane,
+            'sessionTurnTargets' => $sessionTurnTargets,
+            'selectedSessionTurnTarget' => $selectedSessionTurnTarget,
         ]);
     }
 
@@ -317,6 +328,18 @@ class Chat extends Component
         $actor = Actor::forUser($user);
 
         return app(AuthorizationService::class)->can($actor, 'ai.chat_model.manage')->allowed;
+    }
+
+    public function canAccessControlPlane(): bool
+    {
+        $user = auth()->user();
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        return app(AuthorizationService::class)
+            ->can(Actor::forUser($user), 'admin.ai_control_plane.view')
+            ->allowed;
     }
 
     /**
@@ -386,5 +409,48 @@ class Chat extends Component
         }
 
         return route('admin.setup.lara');
+    }
+
+    /**
+     * @param  list<\App\Modules\Core\AI\DTO\Session>  $sessions
+     * @param  array<string, array{turnId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, status: string}>  $activeTurnsBySession
+     * @return array<string, array{turn_id: string, is_active: bool}>
+     */
+    private function sessionTurnTargets(array $sessions, array $activeTurnsBySession): array
+    {
+        $userId = auth()->id();
+
+        if (! is_numeric($userId) || $sessions === []) {
+            return [];
+        }
+
+        $sessionIds = array_map(
+            static fn ($session): string => $session->id,
+            $sessions,
+        );
+
+        $latestTurns = ChatTurn::query()
+            ->where('employee_id', $this->employeeId)
+            ->where('acting_for_user_id', (int) $userId)
+            ->whereIn('session_id', $sessionIds)
+            ->orderByDesc('created_at')
+            ->get(['id', 'session_id']);
+
+        $targets = [];
+
+        foreach ($latestTurns as $turn) {
+            if (isset($targets[$turn->session_id])) {
+                continue;
+            }
+
+            $activeTurnId = $activeTurnsBySession[$turn->session_id]['turnId'] ?? null;
+
+            $targets[$turn->session_id] = [
+                'turn_id' => $turn->id,
+                'is_active' => is_string($activeTurnId) && $activeTurnId === $turn->id,
+            ];
+        }
+
+        return $targets;
     }
 }

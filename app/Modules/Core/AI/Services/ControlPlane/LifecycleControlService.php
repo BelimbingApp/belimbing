@@ -38,6 +38,7 @@ class LifecycleControlService
         private readonly OperationsDispatchService $operationsDispatchService,
         private readonly SessionManager $sessionManager,
         private readonly OperationalTelemetryService $telemetry,
+        private readonly WireLogger $wireLogger,
     ) {}
 
     /**
@@ -54,6 +55,7 @@ class LifecycleControlService
             LifecycleAction::PruneArtifacts => $this->previewPruneArtifacts($scope),
             LifecycleAction::SweepBrowserSessions => $this->previewSweepBrowserSessions(),
             LifecycleAction::SweepOperations => $this->previewSweepOperations($scope),
+            LifecycleAction::PruneWireLogs => $this->previewPruneWireLogs($scope),
         };
     }
 
@@ -91,6 +93,7 @@ class LifecycleControlService
                 LifecycleAction::PruneArtifacts => $this->executePruneArtifacts($scope),
                 LifecycleAction::SweepBrowserSessions => $this->executeSweepBrowserSessions(),
                 LifecycleAction::SweepOperations => $this->executeSweepOperations($scope),
+                LifecycleAction::PruneWireLogs => $this->executePruneWireLogs($scope),
             };
 
             $request->markCompleted($result);
@@ -268,6 +271,23 @@ class LifecycleControlService
         );
     }
 
+    private function previewPruneWireLogs(array $scope): LifecyclePreview
+    {
+        $retentionDays = max(1, (int) ($scope['retention_days'] ?? $this->wireLogger->retentionDays()));
+
+        return new LifecyclePreview(
+            action: LifecycleAction::PruneWireLogs,
+            scope: ['retention_days' => $retentionDays],
+            affectedCount: 0,
+            affectedSummary: [
+                __('Wire logs older than :days day(s) will be deleted.', ['days' => $retentionDays]),
+                __('Current wire-log footprint: :size bytes.', ['size' => number_format($this->wireLogger->totalBytes())]),
+            ],
+            isDestructive: true,
+            generatedAt: now()->toIso8601String(),
+        );
+    }
+
     // -- Execute implementations --
 
     /**
@@ -337,6 +357,20 @@ class LifecycleControlService
         $swept = $this->operationsDispatchService->sweepStale($staleMinutes);
 
         return ['swept_operations' => $swept, 'stale_minutes' => $staleMinutes];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function executePruneWireLogs(array $scope): array
+    {
+        $retentionDays = max(1, (int) ($scope['retention_days'] ?? $this->wireLogger->retentionDays()));
+        $deleted = $this->wireLogger->pruneOlderThan($retentionDays);
+
+        return [
+            'pruned_wire_logs' => $deleted,
+            'retention_days' => $retentionDays,
+        ];
     }
 
     /**

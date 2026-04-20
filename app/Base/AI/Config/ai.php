@@ -149,6 +149,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Wire Logging
+    |--------------------------------------------------------------------------
+    |
+    | Raw request/response diagnostics for operator drill-down. Wire logs are
+    | stored under the agent workspace and can be pruned by age.
+    |
+    */
+    'wire_logging' => [
+        'enabled' => env('AI_WIRE_LOGGING_ENABLED', env('APP_ENV', 'production') !== 'production'),
+        'retention_days' => (int) env('AI_WIRE_LOGGING_RETENTION_DAYS', 7),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Lara (System Agent)
     |--------------------------------------------------------------------------
     |

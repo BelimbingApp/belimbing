@@ -48,7 +48,7 @@ These are the authenticated browser-visible AI surfaces in the product today.
 | `/admin/ai/providers` | `admin.ai.providers` | Company-scoped provider and model management |
 | `/admin/ai/providers/setup/{providerKey}` | `admin.ai.providers.setup` | Provider-specific setup flow |
 | `/admin/ai/tools/{toolName?}` | `admin.ai.tools` | Tool catalog and per-tool workspace |
-| `/admin/ai/control-plane` | `admin.ai.control-plane` | Operator control plane |
+| `/admin/ai/control-plane` | `admin.ai_control_plane.view` | Operator control plane |
 | `/admin/ai/runs/{runId}` | `admin.ai.runs.show` | Standalone run detail page |
 
 Legacy compatibility redirects still exist for removed product surfaces:

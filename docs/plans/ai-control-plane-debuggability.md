@@ -1,9 +1,9 @@
 # Control Plane Debuggability
 
-**Agent:** Amp  
-**Status:** Identified  
-**Last Updated:** 2025-04-19  
-**Sources:** `app/Modules/Core/AI/Livewire/ControlPlane.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Base/AI/Services/LlmClient.php`, `app/Modules/Core/AI/Services/TurnStreamBridge.php`, `app/Modules/Core/AI/Services/ControlPlane/RunRecorder.php`
+**Agent:** Codex
+**Status:** Complete
+**Last Updated:** 2026-04-20
+**Sources:** `app/Modules/Core/AI/Livewire/ControlPlane.php`, `app/Modules/Core/AI/Livewire/RunDetail.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Base/AI/Services/LlmClient.php`, `app/Modules/Core/AI/Services/TurnStreamBridge.php`, `app/Modules/Core/AI/Services/ControlPlane/RunRecorder.php`, `app/Modules/Core/AI/Routes/web.php`
 
 ## Problem Essence
 
@@ -37,9 +37,17 @@ This plan covers the *diagnostic drill-down* (micro). The macro operational dash
 
 (File renamed from `control-plane-debuggability.md` → `ai-control-plane-debuggability.md` per module prefix convention.)
 
+### Operations return path: query-driven until the dashboard lands
+
+The control plane now accepts `from=operations` and an optional relative `returnTo` query parameter. When present, both the control plane and standalone run detail surfaces render a "Back to AI / Operations" action, and internal run/turn drill-down links preserve that return context. This finishes the breadcrumb contract without inventing an operations page before `docs/plans/ai-operations-dashboard.md` is implemented.
+
+### Access control: capability-gated admin surface
+
+The control plane and standalone run detail routes must be guarded by `authz:admin.ai_control_plane.view`, not plain authentication and not owner-only transcript access. The operator surface is intentionally cross-agent and cross-user, so the authorization boundary is the admin capability itself. Shared diagnostic services read run, turn, transcript, and wire-log data in an admin-safe way instead of relying on user-scoped session helpers.
+
 ### Raw traffic capture: file-based, not database
 
-Raw API payloads can be large (full conversation context, tool definitions, streaming response bodies). Storing them in the database would bloat `ai_runs` and make queries slow. Instead, write per-run wire log files to `storage/app/workspace/{employee_id}/wire-logs/{run_id}.jsonl` — one JSONL file per run containing timestamped request/response entries. The control plane reads these on demand when drilling into a run. A lifecycle action (`PruneWireLogs`) handles cleanup by age.
+Raw API payloads can be large (full conversation context, tool definitions, streaming response bodies). Storing them in the database would bloat `ai_runs` and make queries slow. Instead, write per-run wire log files to `storage/app/ai/wire-logs/{run_id}.jsonl` — one JSONL file per run containing timestamped request/response entries. The control plane reads these on demand when drilling into a run. A lifecycle action (`PruneWireLogs`) handles cleanup by age.
 
 The wire log captures:
 - **Outbound**: full `ChatRequest` DTO as JSON (messages, tools, system prompt, model, provider, execution controls) — with API keys redacted
@@ -48,6 +56,8 @@ The wire log captures:
 - **Timing**: timestamps at request-start, first-byte, and completion
 
 This is opt-in via a config toggle (`ai.wire_logging.enabled`, default `true` in non-production, `false` in production) so it can be disabled when storage is a concern.
+
+The capture seam lives at the protocol transport layer rather than as a decorator around `LlmProtocolClient`. That lower seam can see the mapped outbound payload, raw sync response bodies, and raw streaming lines before normalization removes unknown provider keys.
 
 ### Recent activity: query-driven, not new storage
 
@@ -67,42 +77,42 @@ A small trait or inline query (`Employee::where('employee_type', 'agent')`) used
 
 Goal: The control plane renders correctly and is usable without knowing IDs in advance.
 
-- [ ] Fix Health & Presence tab rendering bug (likely tab `id` mismatch or duplicate panel content)
-- [ ] Replace all Employee ID free-text inputs with agent dropdown (`x-ui.select`), default to Lara
-- [ ] Add recent activity table to Run Inspector: auto-load last 20 turns on mount, show status/agent/session/timing/outcome, each row clickable to populate run detail (navigation aid, not the macro view — see Design Decisions)
-- [ ] Show triggering prompt: when displaying a run, fetch the preceding user message from the transcript and display it as "Triggering Prompt" above the activity transcript
-- [ ] Auto-load turn queue health + tool snapshots when Health tab activates (instead of requiring manual Refresh)
-- [ ] Add provider health cards to Health tab (call existing `providerSnapshot()`)
-- [ ] Add inline descriptions to each Lifecycle action explaining when/why to use it
+- [x] Fix Health & Presence tab rendering bug so the tab shows health content instead of lifecycle content
+- [x] Replace all Employee ID free-text inputs with agent dropdown (`x-ui.select`), default to Lara
+- [x] Add recent activity tables to the control plane: recent runs in Run Inspector and recent turns in Turn Inspector, auto-loaded on mount and directly drill-downable
+- [x] Show triggering prompt: when displaying a run, fetch the preceding user message from the transcript and display it as "Triggering Prompt" above the activity transcript
+- [x] Auto-load turn queue health + tool snapshots on mount so Health & Presence is immediately useful
+- [x] Add provider health cards to Health tab (call existing `providerSnapshot()`)
+- [x] Add inline descriptions to each Lifecycle action explaining when/why to use it
 
 ### Phase 2 — Turn timeline and diagnostic drill-down
 
 Goal: An operator can trace the full lifecycle of any stuck or failed turn without reading raw event logs.
 
-- [ ] Build turn timeline component: vertical timeline rendering all `ai_chat_turn_events` for a turn, showing event type, payload summary, timestamp, and computed duration since previous event
-- [ ] Highlight anomalies: events with > 30s gap get a warning indicator, stuck phases get a danger indicator
-- [ ] Link turns ↔ runs bidirectionally: from turn timeline, click run ID to see run detail; from run detail, link back to the turn timeline
-- [ ] Add "Recent Turns" quick-nav to Turn Inspector tab (same pattern as Phase 1's recent activity)
-- [ ] Surface stop/cancel diagnostics: show `cancel_requested_at` vs actual terminal event timestamp, and whether the turn was force-stopped or cooperatively cancelled
+- [x] Build turn timeline component: vertical timeline rendering all `ai_chat_turn_events` for a turn, showing event type, payload summary, timestamp, and computed duration since previous event
+- [x] Highlight anomalies: events with > 30s gap get a warning indicator, stuck phases get a danger indicator
+- [x] Link turns ↔ runs bidirectionally: from turn timeline, click run ID to see run detail; from run detail, link back to the turn timeline
+- [x] Add "Recent Turns" quick-nav to Turn Inspector tab (same pattern as Phase 1's recent activity)
+- [x] Surface stop/cancel diagnostics: show `cancel_requested_at` vs actual terminal event timestamp, and whether the turn was force-stopped or cooperatively cancelled
 
 ### Phase 3 — Raw API wire logging
 
 Goal: Full unfiltered request/response data is captured per run and viewable in the control plane.
 
-- [ ] Add `ai.wire_logging.enabled` config toggle (default `true` for dev, `false` for production)
-- [ ] Create `WireLogger` service: writes per-run JSONL files to `storage/app/workspace/{employee_id}/wire-logs/{run_id}.jsonl`
-- [ ] Instrument `LlmClient::chat()` — log the mapped request payload (API key redacted) and full response body before normalization
-- [ ] Instrument `LlmClient::chatStream*()` — log the mapped request payload, then append each raw SSE line as received (before protocol-specific parsing)
-- [ ] Instrument `AgenticRuntime` — log tool call arguments (full, not truncated) and tool result bodies (full, not just preview + length)
-- [ ] Add "Wire Log" tab/section to the run detail view in the control plane: renders the JSONL entries with syntax-highlighted JSON, collapsible sections for large payloads
-- [ ] Add `PruneWireLogs` lifecycle action: delete wire log files older than N days (default 7)
+- [x] Add `ai.wire_logging.enabled` config toggle (default `true` for dev, `false` for production)
+- [x] Create `WireLogger` service: writes per-run JSONL files to `storage/app/ai/wire-logs/{run_id}.jsonl`
+- [x] Instrument protocol sync calls to log the mapped request payload (API key redacted) and full response body before normalization
+- [x] Instrument protocol streaming calls to log the mapped request payload, then append each raw SSE line as received before protocol-specific parsing
+- [x] Instrument `AgenticRuntime` to log tool call arguments in full and tool result bodies in full
+- [x] Add "Wire Log" section to the control plane run detail and standalone run detail views with collapsible JSON payloads
+- [x] Add `PruneWireLogs` lifecycle action: delete wire log files older than N days (default 7)
 
 ### Phase 4 — Cross-surface navigation
 
 Goal: The control plane is the drill-down destination from other surfaces, not a standalone island. The deep-link contract here is a dependency for the operations dashboard (`docs/plans/ai-operations-dashboard.md`), which needs to link aggregates (failure spikes, degraded providers, tool errors) directly into the right control plane tab with context pre-filled.
 
-- [ ] Deep-link support: `/admin/ai/control-plane?tab=turns&turnId=xxx` auto-opens the Turn Inspector and loads that turn; similarly for `?tab=inspector&runId=xxx` and `?tab=health`
-- [ ] Make run IDs in the chat activity stream clickable links to the control plane run detail
-- [ ] Make turn IDs in session views clickable links to the turn timeline
-- [ ] Add "Open in Control Plane" action to the chat console for the current/last turn (visible to admins)
-- [ ] Add breadcrumb back to AI > Operations when arriving via drill-down from the operations dashboard
+- [x] Deep-link support: `/admin/ai/control-plane?tab=turns&turnId=xxx` auto-opens the Turn Inspector and loads that turn; similarly for `?tab=inspector&runId=xxx` and `?tab=health`
+- [x] Make run IDs in the chat activity stream clickable links to the control plane run detail
+- [x] Make turn IDs in session views clickable links to the turn timeline
+- [x] Add "Open in Control Plane" action to the chat console for the current/last turn (visible to admins)
+- [x] Add breadcrumb back to AI > Operations when arriving via drill-down from the operations dashboard

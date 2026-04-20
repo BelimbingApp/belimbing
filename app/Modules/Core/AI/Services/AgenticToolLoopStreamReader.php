@@ -13,6 +13,8 @@ use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Enums\ReasoningVisibility;
 use App\Base\AI\Enums\ToolChoiceMode;
 use App\Base\AI\Services\LlmClient;
+use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
+use App\Modules\Core\AI\Services\ControlPlane\WireLoggingTransportTap;
 
 /**
  * Consumes one LLM chat stream iteration for the agentic tool loop.
@@ -24,6 +26,7 @@ final class AgenticToolLoopStreamReader
 {
     public function __construct(
         private readonly LlmClient $llmClient,
+        private readonly WireLogger $wireLogger,
     ) {}
 
     /**
@@ -39,6 +42,7 @@ final class AgenticToolLoopStreamReader
      */
     public function consumeIterationStream(
         string $runId,
+        int $employeeId,
         array $config,
         array $credentials,
         array &$toolLoopState,
@@ -67,6 +71,9 @@ final class AgenticToolLoopStreamReader
             providerName: $config['provider_name'],
             tools: $toolLoopState['tools'] !== [] ? $toolLoopState['tools'] : null,
             apiType: $apiType,
+            transportTap: $this->wireLogger->enabled()
+                ? new WireLoggingTransportTap($this->wireLogger, $runId)
+                : null,
         ));
 
         $content = '';

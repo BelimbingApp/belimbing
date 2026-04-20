@@ -5,6 +5,7 @@
 
 namespace App\Base\AI\DTO;
 
+use App\Base\AI\Contracts\LlmTransportTap;
 use App\Base\AI\Enums\AiApiType;
 use InvalidArgumentException;
 
@@ -22,6 +23,7 @@ class ChatRequest
         public readonly ?string $providerName = null,
         public readonly ?array $tools = null,
         public readonly AiApiType $apiType = AiApiType::OpenAiChatCompletions,
+        public readonly ?LlmTransportTap $transportTap = null,
     ) {
         $this->executionControls = $executionControls ?? ExecutionControls::defaults();
 

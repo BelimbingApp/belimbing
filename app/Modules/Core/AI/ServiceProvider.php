@@ -37,7 +37,9 @@ use App\Modules\Core\AI\Services\ControlPlane\HealthAndPresenceService;
 use App\Modules\Core\AI\Services\ControlPlane\LifecycleControlService;
 use App\Modules\Core\AI\Services\ControlPlane\OperationalTelemetryService;
 use App\Modules\Core\AI\Services\ControlPlane\PolicyEvaluationService;
+use App\Modules\Core\AI\Services\ControlPlane\RunDiagnosticService;
 use App\Modules\Core\AI\Services\ControlPlane\RunInspectionService;
+use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraContextProvider;
 use App\Modules\Core\AI\Services\LaraNavigationRouter;
@@ -213,10 +215,12 @@ class ServiceProvider extends BaseServiceProvider
 
         // Control plane subsystem
         $this->app->singleton(RunInspectionService::class);
+        $this->app->singleton(RunDiagnosticService::class);
         $this->app->singleton(OperationalTelemetryService::class);
         $this->app->singleton(HealthAndPresenceService::class);
         $this->app->singleton(LifecycleControlService::class);
         $this->app->singleton(PolicyEvaluationService::class);
+        $this->app->singleton(WireLogger::class);
 
         $this->registerToolRegistries();
 
