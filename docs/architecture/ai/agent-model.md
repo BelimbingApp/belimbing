@@ -187,7 +187,7 @@ The per-Agent workspace base path is configured in `app/Base/AI/Config/ai.php` (
 
 - Config key: `config('ai.workspace_path')`
 - Env override: `AI_WORKSPACE_PATH`
-- Default: `storage_path('app/workspace')` → `storage/app/workspace/`
+- Default: `storage_path('app/ai/workspace')` → `storage/app/ai/workspace/`
 
 Each Agent gets a subdirectory: `{workspace_path}/{employee_id}/` containing `config.json` (per-agent LLM config, see §15), `sessions/`, and future `MEMORY.md`, `memory/`, `memory.db` (see §14).
 

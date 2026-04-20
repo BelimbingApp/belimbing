@@ -20,7 +20,7 @@
   - `DB_DATABASE=:memory:`
 - In that setup, test DB refreshes do not modify the local development database.
 - Tests must not delete or mutate real runtime directories under the default local app storage.
-- In particular, do not write tests that delete agent workspace or session directories such as `storage/app/workspace/`.
+- In particular, do not write tests that delete agent workspace or session directories such as `storage/app/ai/workspace/`.
 - If filesystem isolation is required, point the code under test to a test-specific temporary path and clean up only that isolated path.
 
 ## Write High-Value Tests

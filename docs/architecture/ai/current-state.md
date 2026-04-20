@@ -387,7 +387,7 @@ The implemented runtime is layered like this:
 
 Implemented persistent AI state now spans:
 
-- workspace directories under `storage/app/workspace/{employee_id}/`
+- workspace directories under `storage/app/ai/workspace/{employee_id}/`
 - `ai_runs` canonical run ledger rows
 - session `.jsonl` transcript files
 - session `.meta.json` metadata files

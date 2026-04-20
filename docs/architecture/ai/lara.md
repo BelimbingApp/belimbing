@@ -325,7 +325,7 @@ Lara still gets a workspace directory (`workspace/{LARA_ID}/`) for:
 
 She does **not** get `IDENTITY.md`, `SOUL.md`, etc. — her identity is framework-defined, not workspace-defined.
 
-**Note:** The workspace path (`storage/app/workspace/{LARA_ID}/`) is gitignored and created at runtime. Framework-managed files for Lara (e.g., system prompt templates, knowledge base) should live in the codebase proper (e.g., `app/Modules/Core/AI/Resources/lara/`) so they version with the framework and deploy cleanly. The workspace directory is for runtime-only data (config, sessions).
+**Note:** The workspace path (`storage/app/ai/workspace/{LARA_ID}/`) is gitignored and created at runtime. Framework-managed files for Lara (e.g., system prompt templates, knowledge base) should live in the codebase proper (e.g., `app/Modules/Core/AI/Resources/lara/`) so they version with the framework and deploy cleanly. The workspace directory is for runtime-only data (config, sessions).
 
 ---
 

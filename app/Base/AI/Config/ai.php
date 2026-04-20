@@ -19,7 +19,7 @@ return [
     | files, and vector indexes.
     |
     */
-    'workspace_path' => env('AI_WORKSPACE_PATH', storage_path('app/workspace')),
+    'workspace_path' => env('AI_WORKSPACE_PATH', storage_path('app/ai/workspace')),
 
     /*
     |--------------------------------------------------------------------------

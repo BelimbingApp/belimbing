@@ -80,8 +80,8 @@ These finish Phase 0. None depend on each other.
   - Archive existing v1 session files
   - Only needed if dev workspace has pre-migration sessions
   - **Implementation notes (✅ done):**
-    - 4 v1 meta.json files existed at `storage/app/workspace/1/sessions/6/`
-    - Archived to `storage/app/workspace/1/sessions-archived-v1/`
+    - 4 v1 meta.json files existed at `storage/app/ai/workspace/1/sessions/6/`
+    - Archived to `storage/app/ai/workspace/1/sessions-archived-v1/`
 
 - [x] **§0.10: Streaming path `RunRecorder` in `ChatStreamController`** — `ai-run-ledger.md` §0.10
   - `ChatStreamController` already receives events from `AgenticRuntime` which now calls `RunRecorder`.

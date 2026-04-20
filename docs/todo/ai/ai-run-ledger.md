@@ -183,7 +183,7 @@ The JSONL transcript format changes with the activity stream (new entry types). 
 
 Existing v1 session files lack `transcript_version` and contain `runs` maps that no longer exist. Archive before wiping.
 
-- [x] Archive existing sessions: `mv storage/app/workspace/*/sessions/ storage/app/workspace/*/sessions-archived-v1/`
+- [x] Archive existing sessions: `mv storage/app/ai/workspace/*/sessions/ storage/app/ai/workspace/*/sessions-archived-v1/`
 - [x] Log the archive location in migration output — skipped (manual archive, not a migration)
 - [x] New sessions created with v2 schema going forward
 - [x] Archived sessions can be deleted manually after verification (no automated purge)
