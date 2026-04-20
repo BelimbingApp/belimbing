@@ -19,6 +19,8 @@ uses(TestCase::class);
 
 const TEST_API_BASE_URL = 'https://api.example.com/v1';
 const LLM_TOOL_CALLING_GREETING = 'Hello!';
+const LLM_TOOL_CALLING_MOONSHOT_MODEL = 'moonshotai/kimi-k2.5';
+const LLM_TOOL_CALLING_WEATHER_TOOL_DESCRIPTION = 'Look up weather by city.';
 
 describe('LlmClient tool calling request payloads', function () {
     it('sends tools and tool_choice in request payload when provided', function () {
@@ -130,7 +132,7 @@ describe('LlmClient tool calling request payloads', function () {
         $client->chat(new ChatRequest(
             TEST_API_BASE_URL,
             'test-key',
-            'moonshotai/kimi-k2.5',
+            LLM_TOOL_CALLING_MOONSHOT_MODEL,
             [['role' => 'user', 'content' => 'Hello']],
             executionControls: ExecutionControls::defaults(temperature: 0.3),
             providerName: 'moonshotai',
@@ -155,7 +157,7 @@ describe('LlmClient tool calling request payloads', function () {
         $result = $client->chat(new ChatRequest(
             TEST_API_BASE_URL,
             'test-key',
-            'moonshotai/kimi-k2.5',
+            LLM_TOOL_CALLING_MOONSHOT_MODEL,
             [['role' => 'user', 'content' => 'Hello']],
             executionControls: ExecutionControls::defaults(
                 temperature: 0.3,
@@ -256,7 +258,7 @@ describe('LlmClient tool calling request payloads', function () {
             'type' => 'function',
             'function' => [
                 'name' => 'lookup_weather',
-                'description' => 'Look up weather by city.',
+                'description' => LLM_TOOL_CALLING_WEATHER_TOOL_DESCRIPTION,
                 'parameters' => ['type' => 'object', 'properties' => []],
             ],
         ]];
@@ -409,7 +411,7 @@ describe('LlmClient tool calling response parsing', function () {
         $result = $client->chat(new ChatRequest(
             TEST_API_BASE_URL,
             'test-key',
-            'moonshotai/kimi-k2.5',
+            LLM_TOOL_CALLING_MOONSHOT_MODEL,
             [['role' => 'user', 'content' => 'List routes']],
             providerName: 'moonshotai',
             tools: [['type' => 'function', 'function' => ['name' => 'artisan', 'description' => 'Run artisan', 'parameters' => ['type' => 'object', 'properties' => []]]]],
@@ -455,7 +457,7 @@ describe('LlmClient tool calling response parsing', function () {
                 'type' => 'function',
                 'function' => [
                     'name' => 'lookup_weather',
-                    'description' => 'Look up weather by city.',
+                    'description' => LLM_TOOL_CALLING_WEATHER_TOOL_DESCRIPTION,
                     'parameters' => ['type' => 'object', 'properties' => []],
                 ],
             ]],
@@ -585,7 +587,7 @@ SSE;
                 'type' => 'function',
                 'function' => [
                     'name' => 'lookup_weather',
-                    'description' => 'Look up weather by city.',
+                    'description' => LLM_TOOL_CALLING_WEATHER_TOOL_DESCRIPTION,
                     'parameters' => ['type' => 'object', 'properties' => []],
                 ],
             ]],

@@ -78,6 +78,8 @@ json_extract() {
     local json=$1
     local key=$2
     echo "$json" | php -r "\$data = json_decode(file_get_contents('php://stdin'), true) ?: []; echo \$data['${key}'] ?? '';" 2>/dev/null || echo ""
+
+    return 0
 }
 
 # Resolve the preferred admin user id from setup state when available.

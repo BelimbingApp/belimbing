@@ -45,9 +45,11 @@ class LlmClient
      */
     public function chatStream(ChatRequest $request): Generator
     {
-        yield from $this->protocolClientRegistry()
-            ->forApiType($request->apiType)
-            ->chatStream($request);
+        $protocol = $this->protocolClientRegistry()->forApiType($request->apiType);
+
+        foreach ($protocol->chatStream($request) as $event) {
+            yield $event;
+        }
     }
 
     private function protocolClientRegistry(): LlmProtocolClientRegistry

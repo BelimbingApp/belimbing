@@ -12,30 +12,16 @@ use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClientSupport;
 use App\Base\Support\Json as BlbJson;
 use Generator;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 
 final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
 {
     public function chat(ChatRequest $request): array
     {
-        $startTime = hrtime(true);
-        $mapping = $this->mapRequest($request, stream: false);
-
-        try {
-            $http = LlmClientSupport::buildHttp($request, $mapping->headers);
-
-            $response = $http->post(
-                rtrim($request->baseUrl, '/').'/messages',
-                $mapping->payload,
-            );
-        } catch (ConnectionException $e) {
-            return LlmClientSupport::connectionError($e, $startTime);
-        }
-
-        return $this->withProviderMapping(
-            $this->parseResponse($response, LlmClientSupport::latencyMs($startTime), $request->model),
-            $mapping,
+        return $this->chatOverHttp(
+            $request,
+            'messages',
+            fn (Response $response, int $latencyMs, string $model): array => $this->parseResponse($response, $latencyMs, $model),
         );
     }
 
@@ -44,30 +30,7 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
      */
     public function chatStream(ChatRequest $request): Generator
     {
-        $startTime = hrtime(true);
-        $mapping = $this->mapRequest($request, stream: true);
-
-        try {
-            $http = LlmClientSupport::buildHttp($request, $mapping->headers, stream: true);
-
-            $response = $http->post(
-                rtrim($request->baseUrl, '/').'/messages',
-                $mapping->payload,
-            );
-        } catch (ConnectionException $e) {
-            yield from LlmClientSupport::connectionErrorStream($e, $startTime);
-
-            return;
-        }
-
-        $error = LlmClientSupport::checkFailedResponse($response, $startTime);
-        if ($error !== null) {
-            yield $error;
-
-            return;
-        }
-
-        yield from $this->streamSse($response, $startTime, $mapping);
+        yield from $this->chatStreamOverHttp($request, 'messages');
     }
 
     private function parseResponse(Response $response, int $latencyMs, string $model): array
@@ -154,17 +117,29 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
     /**
      * @return Generator<int, array<string, mixed>>
      */
-    private function streamSse(Response $response, int $startTime, ProviderRequestMapping $mapping): Generator
+    protected function protocolStreamSse(Response $response, int $startTime, ProviderRequestMapping $mapping): Generator
     {
         $stream = $response->toPsrResponse()->getBody();
         $buffer = '';
-        $pendingEventType = null;
-        $contentBlocks = [];
-        $toolInputJson = [];
-        $reasoningBlocks = [];
-        $promptTokens = null;
-        $completionTokens = null;
-        $finishReason = 'stop';
+        $ctx = new class
+        {
+            public ?string $pendingEventType = null;
+
+            /** @var array<int, array<string, mixed>> */
+            public array $contentBlocks = [];
+
+            /** @var array<int, string> */
+            public array $toolInputJson = [];
+
+            /** @var array<int, array<string, mixed>> */
+            public array $reasoningBlocks = [];
+
+            public mixed $promptTokens = null;
+
+            public mixed $completionTokens = null;
+
+            public string $finishReason = 'stop';
+        };
 
         while (! $stream->eof()) {
             $chunk = $stream->read(8192);
@@ -177,164 +152,310 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
             $buffer = array_pop($lines);
 
             foreach ($lines as $line) {
-                $line = trim($line);
+                $terminal = false;
 
-                if ($line === '' || str_starts_with($line, ':')) {
-                    continue;
+                yield from $this->anthropicYieldFromSseLine(
+                    $line,
+                    $ctx,
+                    $startTime,
+                    $mapping,
+                    $terminal,
+                );
+
+                if ($terminal) {
+                    return;
                 }
+            }
+        }
 
-                if (str_starts_with($line, 'event: ')) {
-                    $pendingEventType = substr($line, 7);
+        if (trim($buffer) !== '') {
+            foreach (explode("\n", $buffer) as $line) {
+                $terminal = false;
 
-                    continue;
-                }
+                yield from $this->anthropicYieldFromSseLine(
+                    $line,
+                    $ctx,
+                    $startTime,
+                    $mapping,
+                    $terminal,
+                );
 
-                if (! str_starts_with($line, 'data: ')) {
-                    continue;
-                }
-
-                $data = BlbJson::decodeArray(substr($line, 6));
-                if ($data === null) {
-                    continue;
-                }
-
-                switch ($pendingEventType) {
-                    case 'message_start':
-                        $promptTokens = $data['message']['usage']['input_tokens'] ?? null;
-                        break;
-
-                    case 'content_block_start':
-                        $index = (int) ($data['index'] ?? 0);
-                        $contentBlocks[$index] = $data['content_block'] ?? [];
-
-                        if (($contentBlocks[$index]['type'] ?? null) === 'tool_use') {
-                            $toolInputJson[$index] = '';
-
-                            yield [
-                                'type' => 'tool_call_delta',
-                                'index' => $index,
-                                'id' => $contentBlocks[$index]['id'] ?? null,
-                                'name' => $contentBlocks[$index]['name'] ?? null,
-                                'arguments_delta' => '',
-                            ];
-                        }
-                        break;
-
-                    case 'content_block_delta':
-                        $index = (int) ($data['index'] ?? 0);
-                        $delta = $data['delta'] ?? [];
-                        $deltaType = $delta['type'] ?? null;
-
-                        if ($deltaType === 'text_delta') {
-                            $text = (string) ($delta['text'] ?? '');
-                            if ($text !== '') {
-                                $contentBlocks[$index]['text'] = ($contentBlocks[$index]['text'] ?? '').$text;
-                                yield ['type' => 'content_delta', 'text' => $text];
-                            }
-
-                            break;
-                        }
-
-                        if ($deltaType === 'thinking_delta') {
-                            $thinking = (string) ($delta['thinking'] ?? '');
-                            if ($thinking !== '') {
-                                $contentBlocks[$index]['thinking'] = ($contentBlocks[$index]['thinking'] ?? '').$thinking;
-                                yield ['type' => 'thinking_delta', 'text' => $thinking, 'source' => 'anthropic_thinking'];
-                            }
-
-                            break;
-                        }
-
-                        if ($deltaType === 'signature_delta') {
-                            $contentBlocks[$index]['signature'] = $delta['signature'] ?? null;
-
-                            break;
-                        }
-
-                        if ($deltaType === 'input_json_delta') {
-                            $partialJson = (string) ($delta['partial_json'] ?? '');
-                            $toolInputJson[$index] = ($toolInputJson[$index] ?? '').$partialJson;
-
-                            yield [
-                                'type' => 'tool_call_delta',
-                                'index' => $index,
-                                'id' => $contentBlocks[$index]['id'] ?? null,
-                                'name' => $contentBlocks[$index]['name'] ?? null,
-                                'arguments_delta' => $partialJson,
-                            ];
-                        }
-                        break;
-
-                    case 'content_block_stop':
-                        $index = (int) ($data['index'] ?? 0);
-                        $block = $contentBlocks[$index] ?? null;
-
-                        if (! is_array($block)) {
-                            break;
-                        }
-
-                        if (($block['type'] ?? null) === 'tool_use') {
-                            $block['input'] = BlbJson::decodeArray($toolInputJson[$index] ?? '') ?? [];
-                            $contentBlocks[$index] = $block;
-                        }
-
-                        if (in_array($block['type'] ?? null, ['thinking', 'redacted_thinking'], true)) {
-                            $reasoningBlocks[] = $block;
-                        }
-
-                        unset($toolInputJson[$index]);
-                        break;
-
-                    case 'message_delta':
-                        $finishReason = $data['delta']['stop_reason'] ?? $finishReason;
-                        $completionTokens = $data['usage']['output_tokens'] ?? $completionTokens;
-                        break;
-
-                    case 'message_stop':
-                        yield $this->buildDoneEvent(
-                            $finishReason,
-                            [
-                                'prompt_tokens' => $promptTokens,
-                                'completion_tokens' => $completionTokens,
-                            ],
-                            $startTime,
-                            $mapping,
-                            $reasoningBlocks !== [] ? ['reasoning_blocks' => $reasoningBlocks] : [],
-                        );
-
-                        return;
-
-                    case 'error':
-                        $message = $data['error']['message'] ?? 'Anthropic stream error';
-
-                        yield [
-                            'type' => 'error',
-                            'runtime_error' => AiRuntimeError::fromType(
-                                AiErrorType::ServerError,
-                                $message,
-                                latencyMs: LlmClientSupport::latencyMs($startTime),
-                            ),
-                            'latency_ms' => LlmClientSupport::latencyMs($startTime),
-                        ];
-
-                        return;
-
-                    default:
-                        break;
+                if ($terminal) {
+                    return;
                 }
             }
         }
 
         yield $this->buildDoneEvent(
-            $finishReason,
+            $ctx->finishReason,
             [
-                'prompt_tokens' => $promptTokens,
-                'completion_tokens' => $completionTokens,
+                'prompt_tokens' => $ctx->promptTokens,
+                'completion_tokens' => $ctx->completionTokens,
             ],
             $startTime,
             $mapping,
-            $reasoningBlocks !== [] ? ['reasoning_blocks' => $reasoningBlocks] : [],
+            $ctx->reasoningBlocks !== [] ? ['reasoning_blocks' => $ctx->reasoningBlocks] : [],
         );
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicYieldFromSseLine(
+        string $line,
+        object $ctx,
+        int $startTime,
+        ProviderRequestMapping $mapping,
+        bool &$terminal,
+    ): Generator {
+        $line = trim($line);
+
+        if ($line === '' || str_starts_with($line, ':')) {
+            return;
+        }
+
+        if (str_starts_with($line, 'event: ')) {
+            $ctx->pendingEventType = substr($line, 7);
+
+            return;
+        }
+
+        if (! str_starts_with($line, 'data: ')) {
+            return;
+        }
+
+        $data = BlbJson::decodeArray(substr($line, 6));
+        if ($data === null) {
+            return;
+        }
+
+        yield from $this->anthropicDispatchSseData($ctx, $data, $startTime, $mapping, $terminal);
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicDispatchSseData(
+        object $ctx,
+        array $data,
+        int $startTime,
+        ProviderRequestMapping $mapping,
+        bool &$terminal,
+    ): Generator {
+        yield from match ($ctx->pendingEventType) {
+            'message_start' => $this->anthropicOnMessageStart($data, $ctx),
+            'content_block_start' => $this->anthropicOnContentBlockStart($data, $ctx),
+            'content_block_delta' => $this->anthropicOnContentBlockDelta($data, $ctx),
+            'content_block_stop' => $this->anthropicOnContentBlockStop($data, $ctx),
+            'message_delta' => $this->anthropicOnMessageDelta($data, $ctx),
+            'message_stop' => $this->anthropicOnMessageStop($ctx, $startTime, $mapping, $terminal),
+            'error' => $this->anthropicOnStreamError($data, $startTime, $terminal),
+            default => $this->anthropicNoOpStream(),
+        };
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicNoOpStream(): Generator
+    {
+        yield from [];
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicOnMessageStart(array $data, object $ctx): Generator
+    {
+        $ctx->promptTokens = $data['message']['usage']['input_tokens'] ?? null;
+
+        yield from [];
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicOnContentBlockStart(array $data, object $ctx): Generator
+    {
+        $index = (int) ($data['index'] ?? 0);
+        $ctx->contentBlocks[$index] = $data['content_block'] ?? [];
+
+        if (($ctx->contentBlocks[$index]['type'] ?? null) !== 'tool_use') {
+            yield from [];
+        } else {
+            $ctx->toolInputJson[$index] = '';
+
+            yield [
+                'type' => 'tool_call_delta',
+                'index' => $index,
+                'id' => $ctx->contentBlocks[$index]['id'] ?? null,
+                'name' => $ctx->contentBlocks[$index]['name'] ?? null,
+                'arguments_delta' => '',
+            ];
+        }
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicOnContentBlockDelta(array $data, object $ctx): Generator
+    {
+        $index = (int) ($data['index'] ?? 0);
+        $delta = $data['delta'] ?? [];
+        $deltaType = $delta['type'] ?? null;
+
+        yield from match ($deltaType) {
+            'text_delta' => $this->anthropicOnTextDelta($index, $delta, $ctx),
+            'thinking_delta' => $this->anthropicOnThinkingDelta($index, $delta, $ctx),
+            'signature_delta' => $this->anthropicOnSignatureDelta($index, $delta, $ctx),
+            'input_json_delta' => $this->anthropicOnInputJsonDelta($index, $delta, $ctx),
+            default => $this->anthropicNoOpStream(),
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $delta
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicOnTextDelta(int $index, array $delta, object $ctx): Generator
+    {
+        $text = (string) ($delta['text'] ?? '');
+        if ($text === '') {
+            yield from [];
+        } else {
+            $ctx->contentBlocks[$index]['text'] = ($ctx->contentBlocks[$index]['text'] ?? '').$text;
+
+            yield ['type' => 'content_delta', 'text' => $text];
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $delta
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicOnThinkingDelta(int $index, array $delta, object $ctx): Generator
+    {
+        $thinking = (string) ($delta['thinking'] ?? '');
+        if ($thinking === '') {
+            yield from [];
+        } else {
+            $ctx->contentBlocks[$index]['thinking'] = ($ctx->contentBlocks[$index]['thinking'] ?? '').$thinking;
+
+            yield ['type' => 'thinking_delta', 'text' => $thinking, 'source' => 'anthropic_thinking'];
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $delta
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicOnSignatureDelta(int $index, array $delta, object $ctx): Generator
+    {
+        $ctx->contentBlocks[$index]['signature'] = $delta['signature'] ?? null;
+
+        yield from [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $delta
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicOnInputJsonDelta(int $index, array $delta, object $ctx): Generator
+    {
+        $partialJson = (string) ($delta['partial_json'] ?? '');
+        $ctx->toolInputJson[$index] = ($ctx->toolInputJson[$index] ?? '').$partialJson;
+
+        yield [
+            'type' => 'tool_call_delta',
+            'index' => $index,
+            'id' => $ctx->contentBlocks[$index]['id'] ?? null,
+            'name' => $ctx->contentBlocks[$index]['name'] ?? null,
+            'arguments_delta' => $partialJson,
+        ];
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicOnContentBlockStop(array $data, object $ctx): Generator
+    {
+        $index = (int) ($data['index'] ?? 0);
+        $block = $ctx->contentBlocks[$index] ?? null;
+
+        if (! is_array($block)) {
+            yield from [];
+        } else {
+            if (($block['type'] ?? null) === 'tool_use') {
+                $block['input'] = BlbJson::decodeArray($ctx->toolInputJson[$index] ?? '') ?? [];
+                $ctx->contentBlocks[$index] = $block;
+            }
+
+            if (in_array($block['type'] ?? null, ['thinking', 'redacted_thinking'], true)) {
+                $ctx->reasoningBlocks[] = $block;
+            }
+
+            unset($ctx->toolInputJson[$index]);
+
+            yield from [];
+        }
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicOnMessageDelta(array $data, object $ctx): Generator
+    {
+        $ctx->finishReason = $data['delta']['stop_reason'] ?? $ctx->finishReason;
+        $ctx->completionTokens = $data['usage']['output_tokens'] ?? $ctx->completionTokens;
+
+        yield from [];
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicOnMessageStop(
+        object $ctx,
+        int $startTime,
+        ProviderRequestMapping $mapping,
+        bool &$terminal,
+    ): Generator {
+        yield $this->buildDoneEvent(
+            $ctx->finishReason,
+            [
+                'prompt_tokens' => $ctx->promptTokens,
+                'completion_tokens' => $ctx->completionTokens,
+            ],
+            $startTime,
+            $mapping,
+            $ctx->reasoningBlocks !== [] ? ['reasoning_blocks' => $ctx->reasoningBlocks] : [],
+        );
+
+        $terminal = true;
+
+        yield from [];
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    private function anthropicOnStreamError(array $data, int $startTime, bool &$terminal): Generator
+    {
+        $message = $data['error']['message'] ?? 'Anthropic stream error';
+
+        yield [
+            'type' => 'error',
+            'runtime_error' => AiRuntimeError::fromType(
+                AiErrorType::ServerError,
+                $message,
+                latencyMs: LlmClientSupport::latencyMs($startTime),
+            ),
+            'latency_ms' => LlmClientSupport::latencyMs($startTime),
+        ];
+
+        $terminal = true;
+
+        yield from [];
     }
 
     private function encodeToolInput(mixed $input): string

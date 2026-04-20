@@ -9,6 +9,9 @@ use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Services\LlmClientSupport;
 use App\Base\AI\Services\ProviderMapping\ProviderRequestMapperRegistry;
+use Generator;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 
 abstract class AbstractLlmProtocolClient implements LlmProtocolClient
 {
@@ -69,4 +72,76 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
     {
         return $this->requestMappers ?? app(ProviderRequestMapperRegistry::class);
     }
+
+    /**
+     * @param  callable(Response, int, string): array<string, mixed>  $parseResponse
+     * @return array<string, mixed>
+     */
+    protected function chatOverHttp(ChatRequest $request, string $pathSuffix, callable $parseResponse): array
+    {
+        $startTime = hrtime(true);
+        $mapping = $this->mapRequest($request, stream: false);
+
+        try {
+            $http = LlmClientSupport::buildHttp($request, $mapping->headers);
+
+            $response = $http->post(
+                rtrim($request->baseUrl, '/').'/'.$pathSuffix,
+                $mapping->payload,
+            );
+        } catch (ConnectionException $e) {
+            return LlmClientSupport::connectionError($e, $startTime);
+        }
+
+        return $this->withProviderMapping(
+            $parseResponse(
+                $response,
+                LlmClientSupport::latencyMs($startTime),
+                $request->model,
+            ),
+            $mapping,
+        );
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    protected function chatStreamOverHttp(ChatRequest $request, string $pathSuffix): Generator
+    {
+        $startTime = hrtime(true);
+        $mapping = $this->mapRequest($request, stream: true);
+
+        try {
+            $http = LlmClientSupport::buildHttp($request, $mapping->headers, stream: true);
+
+            $response = $http->post(
+                rtrim($request->baseUrl, '/').'/'.$pathSuffix,
+                $mapping->payload,
+            );
+        } catch (ConnectionException $e) {
+            yield from LlmClientSupport::connectionErrorStream($e, $startTime);
+
+            return;
+        }
+
+        $error = LlmClientSupport::checkFailedResponse($response, $startTime);
+        if ($error !== null) {
+            yield $error;
+
+            return;
+        }
+
+        yield from $this->protocolStreamSse($response, $startTime, $mapping);
+    }
+
+    /**
+     * Decode provider-specific Server-Sent Events after a successful streaming POST.
+     *
+     * @return Generator<int, array<string, mixed>>
+     */
+    abstract protected function protocolStreamSse(
+        Response $response,
+        int $startTime,
+        ProviderRequestMapping $mapping,
+    ): Generator;
 }

@@ -122,7 +122,7 @@ class TurnStreamBridge
     private function mapStatusEvent(ChatTurn $turn, array $data, int $turnStartedAt): array
     {
         return match ($data['phase'] ?? '') {
-            TurnPhase::AwaitingLlm->value => $this->onAwaitingLlmPhase($turn, $data),
+            TurnPhase::AwaitingLlm->value => $this->onAwaitingLlmPhase($turn),
             'thinking_delta' => $this->onThinkingDelta($turn, $data),
             'tool_started' => $this->onToolStarted($turn, $data),
             'tool_stdout' => $this->onToolStdout($turn, $data),
@@ -137,10 +137,9 @@ class TurnStreamBridge
     /**
      * Maps a runtime "awaiting LLM" status to phase + optional reasoning panel seed.
      *
-     * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function onAwaitingLlmPhase(ChatTurn $turn, array $_data): array
+    private function onAwaitingLlmPhase(ChatTurn $turn): array
     {
         $label = TurnPhase::AwaitingLlm->label();
 

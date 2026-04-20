@@ -120,16 +120,15 @@
                 >
                     {{ $runIdLabel }}
                 </button>
-                <div
+                <dialog
                     @if ($runDetailsId !== null)
                         id="{{ $runDetailsId }}"
                     @endif
-                    x-show="popoverOpen"
+                    x-bind:open="popoverOpen"
                     x-cloak
                     x-transition.opacity.duration.100ms
                     @click.outside="popoverOpen = false"
                     @keydown.escape.window="popoverOpen = false"
-                    role="dialog"
                     tabindex="-1"
                     @if ($runDetailsTitleId !== null)
                         aria-labelledby="{{ $runDetailsTitleId }}"
@@ -221,7 +220,7 @@
                             </div>
                         @endif
                     </div>
-                </div>
+                </dialog>
             </span>
         @endif
 
