@@ -16,6 +16,7 @@ uses(TestCase::class);
 
 const CP_ENUM_LABEL_COLOR_CASE_MESSAGE = 'provides label and color for every case';
 const CP_ENUM_FIVE_CASES_MESSAGE = 'has five cases';
+const CP_ENUM_SIX_CASES_MESSAGE = 'has six cases';
 const CP_ENUM_NON_EMPTY_LABELS_MESSAGE = 'provides non-empty labels for all cases';
 
 // ------------------------------------------------------------------
@@ -74,8 +75,8 @@ describe('PresenceState', function () {
 // ------------------------------------------------------------------
 
 describe('LifecycleAction', function () {
-    it(CP_ENUM_FIVE_CASES_MESSAGE, function () {
-        expect(LifecycleAction::cases())->toHaveCount(5);
+    it(CP_ENUM_SIX_CASES_MESSAGE, function () {
+        expect(LifecycleAction::cases())->toHaveCount(6);
     });
 
     it('marks destructive actions correctly', function () {
@@ -83,7 +84,8 @@ describe('LifecycleAction', function () {
             ->and(LifecycleAction::PruneSessions->isDestructive())->toBeTrue()
             ->and(LifecycleAction::PruneArtifacts->isDestructive())->toBeTrue()
             ->and(LifecycleAction::SweepBrowserSessions->isDestructive())->toBeFalse()
-            ->and(LifecycleAction::SweepOperations->isDestructive())->toBeFalse();
+            ->and(LifecycleAction::SweepOperations->isDestructive())->toBeFalse()
+            ->and(LifecycleAction::PruneWireLogs->isDestructive())->toBeTrue();
     });
 
     it(CP_ENUM_NON_EMPTY_LABELS_MESSAGE, function () {

@@ -49,6 +49,15 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('authz:admin.ai_provider.manage')
         ->name('admin.ai.providers');
 
+    // Legacy provider sub-pages — keep backward compatible redirects
+    Route::get('admin/ai/providers/browse', fn () => redirect()->route('admin.ai.providers'))
+        ->middleware('authz:admin.ai_provider.manage')
+        ->name('admin.ai.providers.browse');
+
+    Route::get('admin/ai/providers/connections', fn () => redirect()->route('admin.ai.providers'))
+        ->middleware('authz:admin.ai_provider.manage')
+        ->name('admin.ai.providers.connections');
+
     // Dynamic provider setup - resolve component class in controller
     Route::get('admin/ai/providers/setup/{providerKey}', ProviderSetupController::class)
         ->middleware('authz:admin.ai_provider.manage')
