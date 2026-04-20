@@ -100,21 +100,27 @@ class LaraContextProvider
     }
 
     /**
-     * @return array{commands: array{go: string, models: string, guide: string, delegate: string}, default_references: list<array{title: string, path: string, summary: string}>, query_references: list<array{title: string, path: string, summary: string}>}
+     * @return array{commands: array{go: string, models: string, guide: string, delegate: string}, query_references: list<array{title: string, path: string, summary: string}>}
      */
     private function knowledgeContext(?string $query): array
     {
-        return [
+        $context = [
             'commands' => [
                 'go' => '/go <target>',
                 'models' => '/models <filter>',
                 'guide' => '/guide <topic>',
                 'delegate' => '/delegate <task>',
             ],
-            'default_references' => $this->knowledgeNavigator->defaultReferences(),
-            'query_references' => is_string($query)
-                ? $this->knowledgeNavigator->search($query)
-                : [],
         ];
+
+        if (is_string($query)) {
+            $references = $this->knowledgeNavigator->search($query);
+
+            if ($references !== []) {
+                $context['query_references'] = $references;
+            }
+        }
+
+        return $context;
     }
 }
