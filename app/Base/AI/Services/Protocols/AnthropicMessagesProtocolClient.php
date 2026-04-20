@@ -209,27 +209,19 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
         bool &$terminal,
     ): Generator {
         $line = trim($line);
+        $data = null;
 
-        if ($line === '' || str_starts_with($line, ':')) {
-            return;
+        if ($line !== '' && ! str_starts_with($line, ':')) {
+            if (str_starts_with($line, 'event: ')) {
+                $ctx->pendingEventType = substr($line, 7);
+            } elseif (str_starts_with($line, 'data: ')) {
+                $data = BlbJson::decodeArray(substr($line, 6));
+            }
         }
 
-        if (str_starts_with($line, 'event: ')) {
-            $ctx->pendingEventType = substr($line, 7);
-
-            return;
+        if ($data !== null) {
+            yield from $this->anthropicDispatchSseData($ctx, $data, $startTime, $mapping, $terminal);
         }
-
-        if (! str_starts_with($line, 'data: ')) {
-            return;
-        }
-
-        $data = BlbJson::decodeArray(substr($line, 6));
-        if ($data === null) {
-            return;
-        }
-
-        yield from $this->anthropicDispatchSseData($ctx, $data, $startTime, $mapping, $terminal);
     }
 
     /**
