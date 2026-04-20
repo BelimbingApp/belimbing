@@ -55,104 +55,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
     >
         <x-ui.tab id="inspector">
             <div class="space-y-section-gap">
-                <x-ui.card>
-                    <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-                        <div class="space-y-4">
-                            <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                                <x-ui.input
-                                    id="inspect-run-id"
-                                    wire:model="inspectRunId"
-                                    :label="__('Run ID')"
-                                    :placeholder="__('run_abc123')"
-                                />
-                                <div class="flex items-end">
-                                    <x-ui.button wire:click="inspectRun" variant="primary" size="sm">
-                                        {{ __('Inspect Run') }}
-                                    </x-ui.button>
-                                </div>
-                            </div>
-
-                            @if ($inspectionError)
-                                <x-ui.alert variant="warning">{{ $inspectionError }}</x-ui.alert>
-                            @endif
-                        </div>
-
-                        <div class="rounded-2xl border border-border-default bg-surface-subtle p-card-inner">
-                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Wire Log Footprint') }}</p>
-                            <p class="mt-2 text-2xl font-medium tracking-tight text-ink">{{ number_format($wireLogDiskUsageBytes / 1024, 1) }} KB</p>
-                            <p class="mt-1 text-xs text-muted">{{ __('Retained raw transport and tool payloads across all employees.') }}</p>
-                        </div>
-                    </div>
-                </x-ui.card>
-
-                <x-ui.card>
-                    <div class="mb-4 flex items-center justify-between gap-3">
-                        <div>
-                            <h3 class="text-sm font-medium text-ink">{{ __('Recent Runs') }}</h3>
-                            <p class="mt-1 text-xs text-muted">{{ __('Newest runs first. Inspecting a row loads transcript, prompt, and wire-log detail below.') }}</p>
-                        </div>
-                        <x-ui.button wire:click="refreshInspectorLists" variant="secondary" size="sm">
-                            {{ __('Refresh') }}
-                        </x-ui.button>
-                    </div>
-
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-border-default text-sm">
-                            <thead class="bg-surface-subtle/80">
-                                <tr>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Run') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Agent') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Provider') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Turn') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Action') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-border-default bg-surface-card">
-                                @forelse ($recentRuns as $run)
-                                    <tr wire:key="recent-run-{{ $run['run_id'] }}" class="hover:bg-surface-subtle/60 transition-colors">
-                                        <td class="px-table-cell-x py-table-cell-y">
-                                            <p class="font-mono text-xs text-ink">{{ $run['run_id'] }}</p>
-                                            <p class="mt-1 text-xs text-muted tabular-nums">{{ $run['started_at'] ?? $run['recorded_at'] }}</p>
-                                        </td>
-                                        <td class="px-table-cell-x py-table-cell-y text-ink">{{ $run['employee_name'] }}</td>
-                                        <td class="px-table-cell-x py-table-cell-y">
-                                            <p class="text-ink">{{ $run['provider'] }}</p>
-                                            <p class="mt-1 text-xs text-muted">{{ $run['model'] }}</p>
-                                        </td>
-                                        <td class="px-table-cell-x py-table-cell-y">
-                                            <x-ui.badge :variant="$run['status_color'] ?? ($run['outcome_color'] ?? 'secondary')">
-                                                {{ $run['status_label'] ?? ($run['outcome_label'] ?? __('Unknown')) }}
-                                            </x-ui.badge>
-                                        </td>
-                                        <td class="px-table-cell-x py-table-cell-y">
-                                            @if ($run['turn_id'])
-                                                <button
-                                                    type="button"
-                                                    wire:click="inspectRecentTurn('{{ $run['turn_id'] }}')"
-                                                    class="font-mono text-xs text-accent hover:underline"
-                                                >
-                                                    {{ Str::limit($run['turn_id'], 18, '...') }}
-                                                </button>
-                                            @else
-                                                <span class="text-muted">---</span>
-                                            @endif
-                                        </td>
-                                        <td class="px-table-cell-x py-table-cell-y text-right">
-                                            <x-ui.button wire:click="inspectRecentRun('{{ $run['run_id'] }}')" variant="secondary" size="sm">
-                                                {{ __('Inspect') }}
-                                            </x-ui.button>
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="6" class="px-table-cell-x py-table-cell-y text-sm text-muted">{{ __('No runs have been recorded yet.') }}</td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
-                </x-ui.card>
+                @include('livewire.admin.ai.control-plane.partials.recent-runs')
 
                 @if ($runView)
                     <x-ui.card>
@@ -169,7 +72,12 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                     </x-ui.card>
 
                     <x-ui.card>
-                        <h3 class="mb-4 text-sm font-medium text-ink">{{ __('Wire Log') }}</h3>
+                        <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+                            <h3 class="text-sm font-medium text-ink">{{ __('Wire Log') }}</h3>
+                            <p class="text-xs text-muted tabular-nums">
+                                {{ __('Footprint: :size', ['size' => number_format($wireLogDiskUsageBytes / 1024, 1).' KB']) }}
+                            </p>
+                        </div>
                         @include('livewire.admin.ai.control-plane.partials.wire-log', [
                             'entries' => $runView['wire_log_entries'],
                             'wireLoggingEnabled' => $runView['wire_logging_enabled'],

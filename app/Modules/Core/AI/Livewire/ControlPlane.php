@@ -21,12 +21,19 @@ use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 class ControlPlane extends Component
 {
+    use WithPagination;
+
     public string $activeTab = 'inspector';
 
     public string $inspectRunId = '';
+
+    public bool $recentRunsCollapsed = false;
+
+    public string $recentRunsSearch = '';
 
     public string $inspectTurnId = '';
 
@@ -34,9 +41,6 @@ class ControlPlane extends Component
 
     /** @var list<array{id: int, label: string}> */
     public array $agentOptions = [];
-
-    /** @var list<array<string, mixed>> */
-    public array $recentRuns = [];
 
     /** @var list<array<string, mixed>> */
     public array $recentTurns = [];
@@ -112,7 +116,11 @@ class ControlPlane extends Component
 
         if (app(RunDiagnosticService::class)->buildRunView($this->inspectRunId) === null) {
             $this->inspectionError = __('Run not found.');
+
+            return;
         }
+
+        $this->recentRunsCollapsed = true;
     }
 
     public function inspectTurn(): void
@@ -146,8 +154,13 @@ class ControlPlane extends Component
     public function refreshInspectorLists(): void
     {
         $service = app(RunDiagnosticService::class);
-        $this->recentRuns = $service->recentRuns();
         $this->recentTurns = $service->recentTurns();
+        $this->resetPage();
+    }
+
+    public function updatedRecentRunsSearch(): void
+    {
+        $this->resetPage();
     }
 
     public function refreshHealthSnapshots(): void
@@ -277,18 +290,25 @@ class ControlPlane extends Component
 
     public function render(): View
     {
+        $diagnostics = app(RunDiagnosticService::class);
+        $recentRuns = $diagnostics
+            ->recentRunsQuery($this->recentRunsSearch)
+            ->paginate(25)
+            ->through(fn ($run): array => $diagnostics->mapRecentRun($run));
+
         $runView = $this->inspectRunId !== ''
-            ? app(RunDiagnosticService::class)->buildRunView($this->inspectRunId)
+            ? $diagnostics->buildRunView($this->inspectRunId)
             : null;
         $turnView = $this->inspectTurnId !== ''
-            ? app(RunDiagnosticService::class)->buildTurnView($this->inspectTurnId)
+            ? $diagnostics->buildTurnView($this->inspectTurnId)
             : null;
 
         return view('livewire.admin.ai.control-plane', [
             'activeTab' => $this->activeTab,
+            'recentRuns' => $recentRuns,
             'runView' => $this->mapRunView($runView),
             'turnView' => $turnView,
-            'wireLogDiskUsageBytes' => app(RunDiagnosticService::class)->wireLogDiskUsageBytes(),
+            'wireLogDiskUsageBytes' => $diagnostics->wireLogDiskUsageBytes(),
             'selectedLifecycleAction' => $this->resolveLifecycleAction(),
             'operationsBreadcrumb' => $this->operationsBreadcrumb(),
         ]);

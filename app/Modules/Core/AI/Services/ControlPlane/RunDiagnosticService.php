@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services\ControlPlane;
 
+use App\Base\DateTime\Contracts\DateTimeDisplayService;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
 use App\Modules\Core\AI\DTO\Message;
@@ -23,6 +24,7 @@ class RunDiagnosticService
 
     public function __construct(
         private readonly WireLogger $wireLogger,
+        private readonly DateTimeDisplayService $dateTimeDisplay,
     ) {}
 
     public function inspectRun(string $runId): ?AiRun
@@ -65,25 +67,44 @@ class RunDiagnosticService
      */
     public function recentRuns(int $limit = 20): array
     {
-        return AiRun::query()
-            ->with(['employee', 'turn'])
-            ->orderByDesc('started_at')
-            ->orderByDesc('created_at')
+        return $this->recentRunsQuery()
             ->limit($limit)
             ->get()
-            ->map(function (AiRun $run): array {
-                $inspection = RunInspection::fromAiRun($run)->toArray();
-
-                return array_merge($inspection, [
-                    'employee_name' => $run->employee?->displayName() ?? __('Unknown Agent'),
-                    'turn_id' => $run->turn_id,
-                    'turn_status' => $run->turn?->status?->value,
-                    'turn_status_label' => $run->turn?->status?->label(),
-                    'turn_status_color' => $run->turn?->status?->color(),
-                ]);
-            })
+            ->map(fn (AiRun $run): array => $this->mapRecentRun($run))
             ->values()
             ->all();
+    }
+
+    public function recentRunsQuery(string $search = ''): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = AiRun::query()
+            ->with(['employee', 'turn'])
+            ->orderByDesc('started_at')
+            ->orderByDesc('created_at');
+
+        if ($search !== '') {
+            $query->where('id', 'like', '%'.$search.'%');
+        }
+
+        return $query;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function mapRecentRun(AiRun $run): array
+    {
+        $inspection = RunInspection::fromAiRun($run)->toArray();
+
+        return array_merge($inspection, [
+            'employee_name' => $run->employee?->displayName() ?? __('Unknown Agent'),
+            'turn_id' => $run->turn_id,
+            'turn_status' => $run->turn?->status?->value,
+            'turn_status_label' => $run->turn?->status?->label(),
+            'turn_status_color' => $run->turn?->status?->color(),
+            'recorded_at_display' => $this->dateTimeDisplay->formatDateTime($inspection['recorded_at'] ?? null),
+            'started_at_display' => $this->dateTimeDisplay->formatDateTime($inspection['started_at'] ?? null),
+        ]);
     }
 
     /**
