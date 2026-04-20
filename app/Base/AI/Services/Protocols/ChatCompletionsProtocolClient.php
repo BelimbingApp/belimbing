@@ -6,7 +6,6 @@
 namespace App\Base\AI\Services\Protocols;
 
 use App\Base\AI\DTO\AiRuntimeError;
-use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClientSupport;
@@ -16,24 +15,12 @@ use Illuminate\Http\Client\Response;
 
 final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
 {
-    public function chat(ChatRequest $request): array
+    protected function pathSuffix(): string
     {
-        return $this->chatOverHttp(
-            $request,
-            'chat/completions',
-            fn (Response $response, int $latencyMs, string $model): array => $this->parseResponse($response, $latencyMs, $model),
-        );
+        return 'chat/completions';
     }
 
-    /**
-     * @return Generator<int, array<string, mixed>>
-     */
-    public function chatStream(ChatRequest $request): Generator
-    {
-        yield from $this->chatStreamOverHttp($request, 'chat/completions');
-    }
-
-    private function parseResponse(Response $response, int $latencyMs, string $model): array
+    protected function parseResponse(Response $response, int $latencyMs, string $model): array
     {
         if ($response->failed()) {
             return LlmClientSupport::parseFailedResponse($response, $latencyMs);
