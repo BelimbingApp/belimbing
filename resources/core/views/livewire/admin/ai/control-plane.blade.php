@@ -52,6 +52,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
             ['id' => 'lifecycle', 'label' => __('Lifecycle Controls'), 'icon' => 'heroicon-o-arrow-path'],
         ]"
         :default="$activeTab"
+        persistence="query"
     >
         <x-ui.tab id="inspector">
             <div class="space-y-section-gap">

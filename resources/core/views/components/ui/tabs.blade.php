@@ -33,6 +33,8 @@
     'default' => null,
     'variant' => 'underline',
     'size' => 'md',
+    'persistence' => 'hash', // 'hash' (default) or 'query'
+    'queryKey' => 'tab',
 ])
 
 @php
@@ -81,10 +83,19 @@
         tabs: @js(collect($tabs)->pluck('id')->values()->all()),
         defaultTab: @js($defaultTab),
         prefix: '{{ $tabsId }}',
+        persistence: @js($persistence),
+        queryKey: @js($queryKey),
 
         init() {
+            const url = new URL(window.location.href)
+            const queryTab = url.searchParams.get(this.queryKey)
             const hash = window.location.hash?.slice(1)
-            this.activeTab = (hash && this.tabs.includes(hash)) ? hash : this.defaultTab
+
+            const initial = (this.persistence === 'query')
+                ? queryTab
+                : hash
+
+            this.activeTab = (initial && this.tabs.includes(initial)) ? initial : this.defaultTab
 
             {{-- Listen for hash changes (e.g., back/forward navigation) --}}
             this._onHashChange = () => {
@@ -93,16 +104,41 @@
                     this.activeTab = h
                 }
             }
-            window.addEventListener('hashchange', this._onHashChange)
+            if (this.persistence === 'hash') {
+                window.addEventListener('hashchange', this._onHashChange)
+            }
+
+            this._onPopState = () => {
+                const u = new URL(window.location.href)
+                const qt = u.searchParams.get(this.queryKey)
+                if (qt && this.tabs.includes(qt)) {
+                    this.activeTab = qt
+                }
+            }
+            if (this.persistence === 'query') {
+                window.addEventListener('popstate', this._onPopState)
+            }
         },
 
         destroy() {
-            window.removeEventListener('hashchange', this._onHashChange)
+            if (this.persistence === 'hash') {
+                window.removeEventListener('hashchange', this._onHashChange)
+            }
+            if (this.persistence === 'query') {
+                window.removeEventListener('popstate', this._onPopState)
+            }
         },
 
         select(tabId) {
             this.activeTab = tabId
-            history.replaceState(null, '', '#' + tabId)
+            if (this.persistence === 'query') {
+                const url = new URL(window.location.href)
+                url.searchParams.set(this.queryKey, tabId)
+                url.hash = ''
+                history.replaceState(null, '', url.toString())
+            } else {
+                history.replaceState(null, '', '#' + tabId)
+            }
         },
 
         isActive(tabId) {

@@ -55,13 +55,13 @@
                         @forelse ($recentRuns as $run)
                             <tr wire:key="recent-run-{{ $run['run_id'] }}" class="hover:bg-surface-subtle/60 transition-colors">
                                 <td class="px-table-cell-x py-table-cell-y">
-                                    <button
-                                        type="button"
-                                        wire:click="inspectRecentRun('{{ $run['run_id'] }}')"
+                                    <a
+                                        href="{{ route('admin.ai.control-plane', array_merge($controlPlaneContext ?? [], ['tab' => 'inspector', 'runId' => $run['run_id']])) }}"
+                                        wire:navigate
                                         class="font-mono text-xs text-accent hover:underline"
                                     >
                                         {{ $run['run_id'] }}
-                                    </button>
+                                    </a>
                                     <p class="mt-1 text-xs text-muted tabular-nums">{{ $run['started_at_display'] ?? $run['recorded_at_display'] ?? '—' }}</p>
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y text-ink">{{ $run['employee_name'] }}</td>
@@ -76,13 +76,13 @@
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y">
                                     @if ($run['turn_id'])
-                                        <button
-                                            type="button"
-                                            wire:click="inspectRecentTurn('{{ $run['turn_id'] }}')"
+                                        <a
+                                            href="{{ route('admin.ai.control-plane', array_merge($controlPlaneContext ?? [], ['tab' => 'turns', 'turnId' => $run['turn_id']])) }}"
+                                            wire:navigate
                                             class="font-mono text-xs text-accent hover:underline"
                                         >
                                             {{ \Illuminate\Support\Str::limit($run['turn_id'], 18, '...') }}
-                                        </button>
+                                        </a>
                                     @else
                                         <span class="text-muted">---</span>
                                     @endif
