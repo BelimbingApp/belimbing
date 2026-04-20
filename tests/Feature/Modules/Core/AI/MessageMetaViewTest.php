@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Blade;
 
-it('renders the run detail popup as an alpine popover instead of a native dialog', function (): void {
+it('renders the run detail popup as a native dialog with alpine popover behavior', function (): void {
     $html = html_entity_decode(Blade::render(
         '<x-ai.message-meta :timestamp="$timestamp" provider="openai" model="gpt-5" run-id="run-12345678" />',
         ['timestamp' => now()]
@@ -11,9 +11,10 @@ it('renders the run detail popup as an alpine popover instead of a native dialog
     expect($html)
         ->toContain('x-show="popoverOpen"')
         ->toContain('@click.outside="popoverOpen = false"')
-        ->toContain('role="dialog"')
+        ->toContain('<dialog')
+        ->toContain(':open="popoverOpen"')
+        ->toContain('@close="popoverOpen = false"')
         ->toContain('run-12345678')
-        ->not->toContain('<dialog')
         ->not->toContain('$el.show();')
         ->not->toContain('$el.close();')
         ->not->toContain('open:flex')
