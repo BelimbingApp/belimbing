@@ -18,6 +18,23 @@ code**, triage them using BLB-specific rules, **mark false positives on
 SonarCloud via API**, apply behavior-preserving fixes, validate, and create a
 PR. All in one pass — no user prompts needed.
 
+## Git workspace, branch, and remotes (do not skip)
+
+Sonar **code edits** belong only under **`/home/kiat/repo/laravel/blb-quality-tree`**
+on **`quality/sonarqube-fix`**, not on the default checkout **`/home/kiat/repo/laravel/blb`**
+alone. Confirm **`pwd`** / paths are under the worktree **before** the first
+edit. End with **`git push -u origin quality/sonarqube-fix`**, **`gh pr create`**, and the
+PR URL in the report.
+
+- **BLB_REMOTE:** first of `origin`, `upstream` whose URL contains `BelimbingApp/belimbing`. If neither matches, stop and fix remotes. ([canonical repo](https://github.com/BelimbingApp/belimbing))
+- **Fetch / reset / `worktree add` base:** use `$BLB_REMOTE` / `$BLB_REMOTE/main`.
+- **Push:** always `origin` (fork or direct clone).
+- **Branch:** `quality/sonarqube-fix` only. Clean start: `git reset --hard "$BLB_REMOTE/main"` after fetch. If push is rejected after that reset: `git push --force-with-lease origin quality/sonarqube-fix` only for this pass.
+- **Worktree path:** `/home/kiat/repo/laravel/blb-quality-tree`. If that path exists as a plain directory (not a worktree), move it aside, then `worktree add` from `$BLB_REMOTE/main`.
+- **Edited on `main` by mistake:** copy into worktree `quality/sonarqube-fix`, commit, push, PR, then `git restore .` on `main`.
+
+Step 1 implements the list above. **Re-resolve `BLB_REMOTE` in a new shell** before Step 7 (same snippet).
+
 ## Gotchas
 
 - Use BLB-specific triage rules, not generic Sonar advice.
@@ -25,24 +42,19 @@ PR. All in one pass — no user prompts needed.
 - Skip metric-only fixes that worsen the design; note them for human review.
 - A red quality gate with **zero open issues** often means a metric failure, not a clean project. Check measures before concluding there is nothing to fix.
 - `new_*` metrics are usually stored in SonarCloud's `periods[0].value`, not `value`. Parse both.
-- Use only the dedicated quality worktree at `/home/kiat/repo/laravel/blb-quality-tree`. If it is missing, create it from `origin/main` before doing any Sonar work.
-- If `/home/kiat/repo/laravel/blb-quality-tree` already exists as a plain directory instead of a Git worktree, move it aside first and then create the worktree at that exact path.
-- Work in the quality worktree, but create a fresh topic branch from `origin/main` before committing if `sonar-gate` is dirty or diverged.
 - Metric-only duplication failures cannot be transitioned like normal issues. If the remaining failure is a project metric, either refactor the code or recommend a Sonar scope / quality-gate change.
 
 ## Workflow Checklist
 
 - [ ] Read and validate `SONAR_TOKEN` from `.env`
-- [ ] Ensure `/home/kiat/repo/laravel/blb-quality-tree` exists; create it from `origin/main` if missing
-- [ ] If that path exists but is not a Git worktree, move it aside and recreate the worktree there
-- [ ] Switch `blb-quality-tree` to `sonar-gate` and reset to the remote default branch
+- [ ] **Git:** complete **Step 1** (worktree, **`BLB_REMOTE`**, **`quality/sonarqube-fix`**, **`pwd`** gate — see **Git workspace, branch, and remotes**)
 - [ ] Fetch open Sonar issues, hotspots, and quality-gate metrics
 - [ ] Fetch per-file metric breakdown for new-code duplication / other metric-only failures
 - [ ] Triage into false positives, safe hotspots, fixable issues, skipped issues, and metric-only refactors
 - [ ] Mark false positives and safe hotspots via API
-- [ ] Apply code fixes
+- [ ] Apply code fixes (§ **Git workspace** only)
 - [ ] Validate with tests, Pint, and build when needed
-- [ ] Commit, push, and open the PR
+- [ ] **Step 7:** commit, **`git push -u origin quality/sonarqube-fix`**, **`gh pr create`**; paste PR URL
 - [ ] Report counts, fixes, skips, and human-review items
 
 ## Authentication
@@ -70,25 +82,42 @@ curl -sS -u "$SONAR_TOKEN:" "https://sonarcloud.io/api/authentication/validate"
 
 ## Step 1: Switch to quality worktree
 
+Implements **Git workspace, branch, and remotes** (list above).
+
 ```bash
 QUALITY_TREE=/home/kiat/repo/laravel/blb-quality-tree
 MAIN_REPO=/home/kiat/repo/laravel/blb
 
-git -C "$MAIN_REPO" fetch --prune origin
+ORIGIN_URL=$(git -C "$MAIN_REPO" remote get-url origin 2>/dev/null || true)
+UPSTREAM_URL=$(git -C "$MAIN_REPO" remote get-url upstream 2>/dev/null || true)
+
+BLB_REMOTE=
+case "$ORIGIN_URL" in *BelimbingApp/belimbing*) BLB_REMOTE=origin ;; esac
+if [ -z "$BLB_REMOTE" ]; then
+  case "$UPSTREAM_URL" in *BelimbingApp/belimbing*) BLB_REMOTE=upstream ;; esac
+fi
+if [ -z "$BLB_REMOTE" ]; then
+  echo "ERROR: BelimbingApp/belimbing not found on origin or upstream." >&2
+  echo "  origin=$ORIGIN_URL" >&2
+  echo "  upstream=$UPSTREAM_URL" >&2
+  exit 1
+fi
+
+git -C "$MAIN_REPO" fetch --prune "$BLB_REMOTE"
 
 if ! git -C "$MAIN_REPO" worktree list --porcelain | grep -Fxq "worktree $QUALITY_TREE"; then
   if [ -e "$QUALITY_TREE" ] && [ ! -e "$QUALITY_TREE/.git" ]; then
     mv "$QUALITY_TREE" "${QUALITY_TREE}-stale-$(date +%Y%m%d%H%M%S)"
   fi
 
-  git -C "$MAIN_REPO" worktree add -b sonar-gate "$QUALITY_TREE" origin/main
+  git -C "$MAIN_REPO" worktree add -b quality/sonarqube-fix "$QUALITY_TREE" "$BLB_REMOTE/main"
 fi
 
 cd "$QUALITY_TREE"
-git switch sonar-gate
+git switch quality/sonarqube-fix
 
-git fetch --prune origin
-git reset --hard origin/main
+git fetch --prune "$BLB_REMOTE"
+git reset --hard "$BLB_REMOTE/main"
 ```
 
 ## Step 2: Retrieve issues from SonarCloud
@@ -267,7 +296,8 @@ Process by rule:
 
 ## Step 5: Apply code fixes
 
-Apply fixes only after marking false positives and safe hotspots.
+Apply fixes only after marking false positives and safe hotspots. Edits only
+under **§ Git workspace, branch, and remotes** (after Step 1).
 
 For metric-only duplication failures, there may be nothing to mark in SonarCloud;
 go straight from triage to refactor.
@@ -344,20 +374,30 @@ npm run build
 
 ## Step 7: Commit and create PR
 
-```bash
-cd /home/kiat/repo/laravel/blb-quality-tree
-git switch sonar-gate
-git fetch --prune origin
+On **`quality/sonarqube-fix`** only; PR **`--head quality/sonarqube-fix`**. Set **`MAIN_REPO`** and
+**`BLB_REMOTE`** with the **same resolver as Step 1** (§ **Git workspace**).
 
-# If sonar-gate has existing work, create a fresh topic branch from origin/main
-git switch -c quality/sonar-fix origin/main
+```bash
+MAIN_REPO=/home/kiat/repo/laravel/blb
+ORIGIN_URL=$(git -C "$MAIN_REPO" remote get-url origin 2>/dev/null || true)
+UPSTREAM_URL=$(git -C "$MAIN_REPO" remote get-url upstream 2>/dev/null || true)
+BLB_REMOTE=
+case "$ORIGIN_URL" in *BelimbingApp/belimbing*) BLB_REMOTE=origin ;; esac
+if [ -z "$BLB_REMOTE" ]; then case "$UPSTREAM_URL" in *BelimbingApp/belimbing*) BLB_REMOTE=upstream ;; esac; fi
+[ -n "$BLB_REMOTE" ] || { echo "ERROR: BelimbingApp/belimbing not on origin or upstream" >&2; exit 1; }
+
+cd /home/kiat/repo/laravel/blb-quality-tree
+git fetch --prune "$BLB_REMOTE"
+git switch quality/sonarqube-fix
+# git reset --hard "$BLB_REMOTE/main"   # if not aligned at start of pass
 
 git add .
 git commit -m "quality: fix Sonar issues"
 
-git push -u origin quality/sonar-fix
+git push -u origin quality/sonarqube-fix
+# git push --force-with-lease origin quality/sonarqube-fix   # if needed after reset to $BLB_REMOTE/main
 
-gh pr create --base main --head quality/sonar-fix --title "quality: fix Sonar issues" --body "$(cat <<'EOF'
+gh pr create --base main --head quality/sonarqube-fix --title "quality: fix Sonar issues" --body "$(cat <<'EOF'
 ## Summary
 - Fix Sonar findings (no behavior change)
 
