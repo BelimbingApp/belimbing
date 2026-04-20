@@ -45,7 +45,6 @@ it('prepends client actions when the final stream ends without content deltas', 
 
     $events = iterator_to_array($streamer->streamFinalResponse(
         'run_123',
-        1,
         [
             'api_type' => null,
             'model' => 'gpt-4.1',

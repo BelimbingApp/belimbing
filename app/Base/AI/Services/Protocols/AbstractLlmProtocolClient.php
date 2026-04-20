@@ -5,6 +5,7 @@
 
 namespace App\Base\AI\Services\Protocols;
 
+use App\Base\AI\Contracts\LlmTransportTap;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Services\LlmClientSupport;
@@ -99,6 +100,9 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
     {
         $startTime = hrtime(true);
         $mapping = $this->mapRequest($request, stream: false);
+        $endpoint = '/'.$pathSuffix;
+
+        $request->transportTap?->request($request, $mapping, $endpoint, false);
 
         try {
             $http = LlmClientSupport::buildHttp($request, $mapping->headers);
@@ -108,17 +112,34 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
                 $mapping->payload,
             );
         } catch (ConnectionException $e) {
+            $request->transportTap?->error('connection', $e->getMessage());
+            $request->transportTap?->complete([
+                'latency_ms' => LlmClientSupport::latencyMs($startTime),
+            ]);
+
             return LlmClientSupport::connectionError($e, $startTime);
         }
 
-        return $this->withProviderMapping(
-            $parseResponse(
-                $response,
-                LlmClientSupport::latencyMs($startTime),
-                $request->model,
-            ),
-            $mapping,
+        $request->transportTap?->responseStatus($response->status(), false);
+        $request->transportTap?->responseBody($response->body(), $response->status());
+
+        $result = $parseResponse(
+            $response,
+            LlmClientSupport::latencyMs($startTime),
+            $request->model,
         );
+
+        if (isset($result['runtime_error'])) {
+            $request->transportTap?->error('normalize', $result['runtime_error']->userMessage, [
+                'error_type' => $result['runtime_error']->errorType->value,
+            ]);
+        }
+
+        $request->transportTap?->complete([
+            'latency_ms' => LlmClientSupport::latencyMs($startTime),
+        ]);
+
+        return $this->withProviderMapping($result, $mapping);
     }
 
     /**
@@ -128,6 +149,9 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
     {
         $startTime = hrtime(true);
         $mapping = $this->mapRequest($request, stream: true);
+        $endpoint = '/'.$pathSuffix;
+
+        $request->transportTap?->request($request, $mapping, $endpoint, true);
 
         try {
             $http = LlmClientSupport::buildHttp($request, $mapping->headers, stream: true);
@@ -137,35 +161,66 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
                 $mapping->payload,
             );
         } catch (ConnectionException $e) {
+            $request->transportTap?->error('connection', $e->getMessage());
+            $request->transportTap?->complete([
+                'latency_ms' => LlmClientSupport::latencyMs($startTime),
+            ]);
             yield from LlmClientSupport::connectionErrorStream($e, $startTime);
 
             return;
         }
 
+        $request->transportTap?->responseStatus($response->status(), true);
+
         $error = LlmClientSupport::checkFailedResponse($response, $startTime);
         if ($error !== null) {
+            $request->transportTap?->responseBody($response->body(), $response->status());
+            $request->transportTap?->error(
+                'http',
+                (string) (($error['runtime_error'] ?? null)?->userMessage ?? 'Streaming request failed'),
+            );
+            $request->transportTap?->complete([
+                'latency_ms' => LlmClientSupport::latencyMs($startTime),
+            ]);
             yield $error;
 
             return;
         }
 
-        yield from $this->protocolStreamSse($response, $startTime, $mapping);
+        try {
+            yield from $this->protocolStreamSse($response, $startTime, $mapping, $request->transportTap);
+        } finally {
+            $request->transportTap?->complete([
+                'latency_ms' => LlmClientSupport::latencyMs($startTime),
+            ]);
+        }
     }
 
     /**
      * @return Generator<int, string>
      */
-    protected function sseLines(Response $response, bool $flushTrailingBuffer = false): Generator
-    {
-        yield from $this->sseLinesFromStream($response->toPsrResponse()->getBody(), $flushTrailingBuffer);
+    protected function sseLines(
+        Response $response,
+        ?LlmTransportTap $transportTap = null,
+        bool $flushTrailingBuffer = false,
+    ): Generator {
+        yield from $this->sseLinesFromStream(
+            $response->toPsrResponse()->getBody(),
+            $transportTap,
+            $flushTrailingBuffer,
+        );
     }
 
     /**
      * @return Generator<int, string>
      */
-    private function sseLinesFromStream(StreamInterface $stream, bool $flushTrailingBuffer): Generator
-    {
+    private function sseLinesFromStream(
+        StreamInterface $stream,
+        ?LlmTransportTap $transportTap,
+        bool $flushTrailingBuffer,
+    ): Generator {
         $buffer = '';
+        $firstByteRecorded = false;
 
         while (! $stream->eof()) {
             $chunk = $stream->read(8192);
@@ -173,12 +228,20 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
                 continue;
             }
 
+            if (! $firstByteRecorded) {
+                $transportTap?->firstByte();
+                $firstByteRecorded = true;
+            }
+
             $buffer .= $chunk;
             $lines = explode("\n", $buffer);
             $buffer = (string) array_pop($lines);
 
             foreach ($lines as $line) {
-                yield trim($line);
+                $trimmedLine = trim($line);
+                $transportTap?->streamLine($trimmedLine);
+
+                yield $trimmedLine;
             }
         }
 
@@ -187,7 +250,10 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
         }
 
         foreach (explode("\n", $buffer) as $line) {
-            yield trim($line);
+            $trimmedLine = trim($line);
+            $transportTap?->streamLine($trimmedLine);
+
+            yield $trimmedLine;
         }
     }
 
@@ -212,5 +278,6 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
         Response $response,
         int $startTime,
         ProviderRequestMapping $mapping,
+        ?LlmTransportTap $transportTap,
     ): Generator;
 }

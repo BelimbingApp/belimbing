@@ -42,7 +42,6 @@ final class AgenticToolLoopStreamReader
      */
     public function consumeIterationStream(
         string $runId,
-        int $employeeId,
         array $config,
         array $credentials,
         array &$toolLoopState,

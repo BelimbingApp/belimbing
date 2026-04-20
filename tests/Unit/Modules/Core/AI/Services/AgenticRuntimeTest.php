@@ -36,6 +36,8 @@ uses(TestCase::class, MakesRuntimeResponses::class);
 
 const AGENTIC_RUNTIME_SYSTEM_PROMPT = 'You are Lara.';
 const AGENTIC_RUNTIME_TOO_MANY_REQUESTS = 'HTTP 429: Too Many Requests';
+const AGENTIC_RUNTIME_HELLO_RESPONSE = 'Hello, I am Lara!';
+const AGENTIC_RUNTIME_WIRE_LOG_EXTENSION = '.jsonl';
 
 class TestTool implements Tool
 {
@@ -254,14 +256,14 @@ describe('AgenticRuntime (sync)', function () {
     it('returns direct response when LLM produces no tool calls', function () {
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')->once()->andReturn([
-            'content' => 'Hello, I am Lara!',
+            'content' => AGENTIC_RUNTIME_HELLO_RESPONSE,
             'latency_ms' => 150,
             'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 8],
         ]);
 
         $result = runAgenticConversation($llmClient, userMessage: 'Hi', systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT);
 
-        expect($result['content'])->toBe('Hello, I am Lara!');
+        expect($result['content'])->toBe(AGENTIC_RUNTIME_HELLO_RESPONSE);
         expect($result['run_id'])->toStartWith('run_');
         expect($result['meta']['model'])->toBe('gpt-4');
         expect($result['meta']['provider_name'])->toBe('test-provider');
@@ -287,7 +289,7 @@ describe('AgenticRuntime (sync)', function () {
                 return true;
             }))
             ->andReturn([
-                'content' => 'Hello, I am Lara!',
+                'content' => AGENTIC_RUNTIME_HELLO_RESPONSE,
                 'latency_ms' => 150,
                 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 8],
             ]);
@@ -312,12 +314,12 @@ describe('AgenticRuntime (sync)', function () {
             AGENTIC_RUNTIME_SYSTEM_PROMPT,
         );
 
-        expect(file_exists(storage_path('app/ai/wire-logs/'.$result['run_id'].'.jsonl')))->toBeTrue()
-            ->and(file_exists($workspacePath.'/1/wire-logs/'.$result['run_id'].'.jsonl'))->toBeFalse()
-            ->and(file_exists($workspacePath.'/0/wire-logs/'.$result['run_id'].'.jsonl'))->toBeFalse();
+        expect(file_exists(storage_path('app/ai/wire-logs/'.$result['run_id'].AGENTIC_RUNTIME_WIRE_LOG_EXTENSION)))->toBeTrue()
+            ->and(file_exists($workspacePath.'/1/wire-logs/'.$result['run_id'].AGENTIC_RUNTIME_WIRE_LOG_EXTENSION))->toBeFalse()
+            ->and(file_exists($workspacePath.'/0/wire-logs/'.$result['run_id'].AGENTIC_RUNTIME_WIRE_LOG_EXTENSION))->toBeFalse();
 
         File::deleteDirectory($workspacePath);
-        @unlink(storage_path('app/ai/wire-logs/'.$result['run_id'].'.jsonl'));
+        @unlink(storage_path('app/ai/wire-logs/'.$result['run_id'].AGENTIC_RUNTIME_WIRE_LOG_EXTENSION));
     });
 
     it('omits disallowed tools from the LLM request', function () {

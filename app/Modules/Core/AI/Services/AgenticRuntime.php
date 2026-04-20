@@ -876,7 +876,6 @@ class AgenticRuntime
 
             $iterResult = yield from $this->toolLoopStreamReader->consumeIterationStream(
                 $runId,
-                $employeeId,
                 $config,
                 $credentials,
                 $toolLoopState,
