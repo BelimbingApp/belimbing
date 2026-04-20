@@ -20,6 +20,23 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
         private readonly ?ProviderRequestMapperRegistry $requestMappers = null,
     ) {}
 
+    public function chat(ChatRequest $request): array
+    {
+        return $this->chatOverHttp(
+            $request,
+            $this->pathSuffix(),
+            fn (Response $response, int $latencyMs, string $model): array => $this->parseResponse($response, $latencyMs, $model),
+        );
+    }
+
+    /**
+     * @return Generator<int, array<string, mixed>>
+     */
+    public function chatStream(ChatRequest $request): Generator
+    {
+        yield from $this->chatStreamOverHttp($request, $this->pathSuffix());
+    }
+
     protected function mapRequest(ChatRequest $request, bool $stream): ProviderRequestMapping
     {
         return $this->requestMapperRegistry()
@@ -173,6 +190,18 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
             yield trim($line);
         }
     }
+
+    /**
+     * Decode provider-specific Server-Sent Events after a successful streaming POST.
+     *
+     * @return Generator<int, array<string, mixed>>
+     */
+    abstract protected function pathSuffix(): string;
+
+    /**
+     * @return array<string, mixed>
+     */
+    abstract protected function parseResponse(Response $response, int $latencyMs, string $model): array;
 
     /**
      * Decode provider-specific Server-Sent Events after a successful streaming POST.
