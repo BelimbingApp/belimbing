@@ -12,11 +12,8 @@ it('registers authz middleware on AI admin routes', function (): void {
     $expectedMiddleware = [
         'admin.setup.lara' => 'authz:admin.ai_lara.manage',
         'admin.ai.task-models' => 'authz:admin.ai_task_model.manage',
-        'admin.ai.playground' => 'authz:admin.ai_task_model.manage',
         'admin.ai.providers' => 'authz:admin.ai_provider.manage',
         'admin.ai.providers.setup' => 'authz:admin.ai_provider.manage',
-        'admin.ai.providers.browse' => 'authz:admin.ai_provider.manage',
-        'admin.ai.providers.connections' => 'authz:admin.ai_provider.manage',
         'admin.ai.tools' => 'authz:admin.ai_tool.manage',
         'admin.ai.control-plane' => 'authz:admin.ai_control_plane.view',
         'admin.ai.runs.show' => 'authz:admin.ai_control_plane.view',

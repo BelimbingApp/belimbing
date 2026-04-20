@@ -65,6 +65,8 @@ it('resolves /go providers to AI Providers route', function (): void {
     $fixture = $this->createLaraFixture();
     $this->actingAs($fixture['user']);
 
+    $this->app->instance(AuthorizationService::class, makeAuthorizationService(true));
+
     $router = app(LaraNavigationRouter::class);
     $result = $router->resolve('/go providers');
 
@@ -150,6 +152,8 @@ it('returns null for non-navigation messages', function (): void {
 it('orchestration service delegates explicit /go to router', function (): void {
     $fixture = $this->createLaraFixture();
     $this->actingAs($fixture['user']);
+
+    $this->app->instance(AuthorizationService::class, makeAuthorizationService(true));
 
     $service = app(\App\Modules\Core\AI\Services\LaraOrchestrationService::class);
     $result = $service->dispatchFromMessage('/go providers');
