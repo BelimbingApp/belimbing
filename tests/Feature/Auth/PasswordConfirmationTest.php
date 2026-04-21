@@ -16,6 +16,8 @@ test('password can be confirmed', function () {
     $response
         ->assertHasNoErrors()
         ->assertRedirect(route('dashboard', absolute: false));
+
+    expect(session('auth.password_confirmed_at'))->toBeInt();
 });
 
 test('password is not confirmed with invalid password', function () {

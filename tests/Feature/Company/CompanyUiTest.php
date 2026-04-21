@@ -57,6 +57,12 @@ test('company can be created from create page component', function (): void {
         ->not()->toBeNull()
         ->and($company->code)
         ->toBe('northwind_holdings')
+        ->and($company->status)
+        ->toBe('active')
+        ->and($company->email)
+        ->toBe('ops@northwind.example')
         ->and($company->scope_activities['industry'])
-        ->toBe('Logistics');
+        ->toBe('Logistics')
+        ->and($company->metadata['employee_count'])
+        ->toBe(250);
 });

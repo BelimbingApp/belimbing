@@ -125,6 +125,14 @@ Latest Phase 4 result:
 
 - the expansion pass is still finding real defects, not just documentation churn
 - one tightened streaming test exposed a production bug in `AgenticFinalResponseStreamer`, which is now fixed and covered
+- a cheap-candidate auth/settings slice showed the redirect-only heuristic needs human review, not automatic downgrades
+- `AuthenticationTest.php`, `EmailVerificationTest.php`, and `ProfileUpdateTest.php` reviewed as `keep`
+- `PasswordResetTest.php` tightened to assert the reset actually changes the stored password, rotates the remember token, and dispatches the reset event
+- `PasswordConfirmationTest.php` tightened to assert the confirmation timestamp is written to session
+- both auth test tightenings were validated with narrow temporary production mutations before restoring the real code
+- another cheap-candidate slice showed `RoleUiTest.php`, `ImpersonationTest.php`, and `LocalizationUiTest.php` are behavior-heavy keeps rather than smoke tests
+- `CompanyUiTest.php` tightened so company creation now asserts persisted status, email, and decoded metadata instead of only code generation plus one JSON field
+- the company-create tightening was validated by temporarily breaking metadata persistence in `Create.php` and confirming the focused test failed before restoring production code
 
 ### Phase 5 — Add CI Guardrails
 
