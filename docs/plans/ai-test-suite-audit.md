@@ -1,9 +1,9 @@
 # AI Test Suite Audit
 
 **Agent:** Codex
-**Status:** Pilot Complete
+**Status:** Phase 4 In Progress
 **Last Updated:** 2026-04-21
-**Sources:** `docs/plans/test-suite-audit.md`, `docs/plans/test-suite-audit-rubric.md`, `docs/plans/test-suite-audit-inventory.md`, `tests/Feature/AI/ProviderConnectionsTest.php`, `tests/Feature/AI/ProvidersUiTest.php`, `tests/Feature/AI/LaraSetupTest.php`, `tests/Feature/AI/TaskModelsTest.php`, `tests/Feature/AI/AiAdminMenuAccessTest.php`, `tests/Unit/Modules/Core/AI/Services/AgenticRuntimeTest.php`, `tests/Unit/Modules/Core/AI/Services/ToolCallingTest.php`, `tests/Unit/Modules/Core/AI/Tools/BrowserToolTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserSessionManagerTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserRuntimeAdapterTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserSessionRepositoryTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserPoolManagerTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserArtifactStoreTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserSsrfGuardTest.php`, `tests/Unit/Modules/Core/AI/Console/Commands/BrowserStatusCommandTest.php`, `tests/Unit/Modules/Core/AI/Console/Commands/BrowserSweepCommandTest.php`, `tests/Unit/Modules/Core/AI/Services/SessionAccessGuardTest.php`, `tests/Unit/Modules/Core/AI/Services/ControlPlane/HealthAndPresenceServiceTest.php`, `tests/Unit/Modules/Core/AI/Services/ControlPlane/LifecycleControlServiceTest.php`, `app/Modules/Core/AI/Services/Browser/BrowserArtifactStore.php`
+**Sources:** `docs/plans/test-suite-audit.md`, `docs/plans/test-suite-audit-rubric.md`, `docs/plans/test-suite-audit-inventory.md`, `tests/Feature/AI/ProviderConnectionsTest.php`, `tests/Feature/AI/ProvidersUiTest.php`, `tests/Feature/AI/LaraSetupTest.php`, `tests/Feature/AI/TaskModelsTest.php`, `tests/Feature/AI/AiAdminMenuAccessTest.php`, `tests/Unit/Modules/Core/AI/Services/AgenticRuntimeTest.php`, `tests/Unit/Modules/Core/AI/Services/ToolCallingTest.php`, `tests/Unit/Modules/Core/AI/Tools/BrowserToolTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserSessionManagerTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserRuntimeAdapterTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserSessionRepositoryTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserPoolManagerTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserArtifactStoreTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserSsrfGuardTest.php`, `tests/Unit/Modules/Core/AI/Console/Commands/BrowserStatusCommandTest.php`, `tests/Unit/Modules/Core/AI/Console/Commands/BrowserSweepCommandTest.php`, `tests/Unit/Modules/Core/AI/Services/SessionAccessGuardTest.php`, `tests/Unit/Modules/Core/AI/Services/ControlPlane/HealthAndPresenceServiceTest.php`, `tests/Unit/Modules/Core/AI/Services/ControlPlane/LifecycleControlServiceTest.php`, `tests/Unit/Modules/Core/AI/Tools/MessageToolTest.php`, `tests/Unit/Modules/Core/AI/Tools/ScheduleTaskToolTest.php`, `tests/Unit/Modules/Core/AI/Services/ToolReadinessServiceTest.php`, `tests/Unit/Modules/Core/AI/Services/AgenticToolLoopStreamReaderTest.php`, `tests/Unit/Modules/Core/AI/Services/AgenticFinalResponseStreamerTest.php`, `tests/Unit/Modules/Core/AI/Services/DispatchTranscriptBridgeTest.php`, `app/Modules/Core/AI/Services/Browser/BrowserArtifactStore.php`, `app/Modules/Core/AI/Services/AgenticFinalResponseStreamer.php`
 
 ## Problem Essence
 
@@ -29,6 +29,36 @@ Real changes from the pilot:
 - recorded dispositions for browser, control-plane, setup, access, and provider-related tests
 
 The remaining AI files should now be handled as Phase 4 module expansion, not as unresolved pilot setup.
+
+## Phase 4 Progress
+
+Current expansion slice: remaining high-ranked AI tool/service files after the pilot. This slice covers:
+
+- `MessageToolTest.php`
+- `ScheduleTaskToolTest.php`
+- `ToolReadinessServiceTest.php`
+
+Outcome so far:
+
+- `MessageToolTest.php`: keep
+- `ScheduleTaskToolTest.php`: keep
+- `ToolReadinessServiceTest.php`: tighten
+
+The tool-boundary files remain mock-heavy but behavior-oriented. The readiness service test needed one real tightening because it barely exercised `allSnapshots()` and only covered one conditional tool name.
+
+Next expansion slice: streaming/runtime-adjacent AI services. This slice covers:
+
+- `AgenticToolLoopStreamReaderTest.php`
+- `AgenticFinalResponseStreamerTest.php`
+- `DispatchTranscriptBridgeTest.php`
+
+Outcome so far:
+
+- `AgenticToolLoopStreamReaderTest.php`: tighten
+- `AgenticFinalResponseStreamerTest.php`: tighten
+- `DispatchTranscriptBridgeTest.php`: keep
+
+This slice found a real production defect, not just a test gap: `AgenticFinalResponseStreamer` emitted a runtime-error event but then continued into the empty-response path. The current pass tightened the streamer tests and fixed the production control flow so stream errors terminate correctly.
 
 ## Design Decisions
 
@@ -179,3 +209,33 @@ Goal: review a small set of AI feature tests and make at least one real cleanup 
 
 - **Disposition:** keep
 - **Reason:** it exercises the control-plane lifecycle surface across preview, execute, persistence, and failure recording. The breadth is justified because the service coordinates multiple destructive operations and audit behavior behind one public interface.
+
+### `tests/Unit/Modules/Core/AI/Tools/MessageToolTest.php`
+
+- **Disposition:** keep
+- **Reason:** despite its size, the file protects the public tool contract rather than its internals: action validation, channel capability gating, company-context enforcement, outbound-service routing, and limit handling across the supported message actions.
+
+### `tests/Unit/Modules/Core/AI/Tools/ScheduleTaskToolTest.php`
+
+- **Disposition:** keep
+- **Reason:** it covers the real CRUD surface of the scheduling tool, including company-context gating, service-level validation failures, not-found handling, and argument normalization for add/update/remove/status flows.
+
+### `tests/Unit/Modules/Core/AI/Services/ToolReadinessServiceTest.php`
+
+- **Disposition:** tighten
+- **Reason:** the file already covered the main readiness states, but it barely exercised `allSnapshots()` and only proved one conditional-tool name. The current pass extends it so the suite protects metadata-bearing snapshots and both known conditional tools.
+
+### `tests/Unit/Modules/Core/AI/Services/AgenticToolLoopStreamReaderTest.php`
+
+- **Disposition:** tighten
+- **Reason:** the file had value but only covered the happy streaming path. The current pass adds the runtime-error return branch so the extracted stream reader is tested as both an accumulator and a failure boundary.
+
+### `tests/Unit/Modules/Core/AI/Services/AgenticFinalResponseStreamerTest.php`
+
+- **Disposition:** tighten
+- **Reason:** the file previously covered only the client-action prepend path. The current pass adds the runtime-error and empty-response branches, which exposed and then fixed a real production bug where stream errors fell through into the empty-response handler.
+
+### `tests/Unit/Modules/Core/AI/Services/DispatchTranscriptBridgeTest.php`
+
+- **Disposition:** keep
+- **Reason:** it protects the user-visible transcript contract for delegated background work: success and failure outcomes must be mirrored back into Lara's session with the correct target labeling and summary/error text.

@@ -3,9 +3,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
+use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
+use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\Services\AgenticToolLoopStreamReader;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
@@ -90,4 +92,60 @@ it('captures reasoning_content deltas for follow-up tool loop requests', functio
         ->and($result['tool_calls'][0]['id'])->toBe('call_stream_reasoning_1')
         ->and($result['tool_calls'][0]['function']['arguments'])->toBe('{"input":"world"}')
         ->and($result['latency_ms'])->toBe(123);
+});
+
+it('returns the runtime error when the iteration stream fails', function (): void {
+    $runtimeError = AiRuntimeError::fromType(
+        AiErrorType::RateLimit,
+        'Rate limit exceeded by provider.',
+        latencyMs: 77,
+    );
+
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('chatStream')
+        ->once()
+        ->with(Mockery::type(ChatRequest::class))
+        ->andReturn((function () use ($runtimeError): Generator {
+            yield [
+                'type' => 'thinking_delta',
+                'text' => 'Checking quotas...',
+                'source' => 'reasoning_content',
+            ];
+            yield [
+                'type' => 'error',
+                'runtime_error' => $runtimeError,
+            ];
+        })());
+
+    $reader = new AgenticToolLoopStreamReader($llmClient, Mockery::mock(WireLogger::class)->shouldIgnoreMissing());
+    $toolLoopState = [
+        'apiMessages' => [
+            ['role' => 'user', 'content' => 'Retry later'],
+        ],
+        'tools' => [],
+    ];
+
+    $stream = $reader->consumeIterationStream(
+        'run_456',
+        [
+            'model' => 'gpt-5.4',
+            'execution_controls' => ExecutionControls::defaults(maxOutputTokens: 512, temperature: 0.7),
+            'timeout' => 60,
+            'provider_name' => 'openai',
+        ],
+        [
+            'base_url' => 'https://api.example.test/v1',
+            'api_key' => 'test-key',
+        ],
+        $toolLoopState,
+        AiApiType::OpenAiChatCompletions,
+    );
+
+    $events = iterator_to_array($stream, false);
+    $result = $stream->getReturn();
+
+    expect($events)->toHaveCount(1)
+        ->and($events[0]['event'])->toBe('status')
+        ->and($events[0]['data']['delta'])->toBe('Checking quotas...')
+        ->and($result['runtime_error'])->toBe($runtimeError);
 });

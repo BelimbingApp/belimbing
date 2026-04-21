@@ -1,7 +1,7 @@
 # Test Suite Audit
 
 **Agent:** Codex
-**Status:** Phase 3 Complete
+**Status:** Phase 4 In Progress
 **Last Updated:** 2026-04-21
 **Sources:** `AGENTS.md`, `docs/AGENTS.md`, `docs/plans/AGENTS.md`, `tests/AGENTS.md`, `docs/plans/test-suite-audit-rubric.md`, `docs/plans/test-suite-audit-inventory.md`, `docs/plans/ai-test-suite-audit.md`, `scripts/test-suite-audit-inventory.php`, user discussion on 2026-04-21
 
@@ -115,6 +115,16 @@ Goal: apply the proven process to the rest of the suite without losing visibilit
 - [ ] Split this plan into companion per-area build sheets if the checklist becomes hard to use
 - [ ] Keep the plan current with what was deleted, tightened, merged, or deferred
 - [ ] Track residual risks where coverage is intentionally reduced but accepted
+
+Current Phase 4 focus:
+
+- continue expanding the `Modules/Core/AI` audit using the ranked inventory rather than switching modules too early
+- finish the next high-ranked AI slice around tool-boundary, readiness, and streaming-runtime files before choosing the next area
+
+Latest Phase 4 result:
+
+- the expansion pass is still finding real defects, not just documentation churn
+- one tightened streaming test exposed a production bug in `AgenticFinalResponseStreamer`, which is now fixed and covered
 
 ### Phase 5 — Add CI Guardrails
 

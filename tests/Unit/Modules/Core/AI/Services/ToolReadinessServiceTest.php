@@ -13,6 +13,11 @@ use Illuminate\Foundation\Testing\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
+dataset('conditional tools', [
+    'web_search' => ['web_search'],
+    'memory_search' => ['memory_search'],
+]);
+
 function makeReadinessService(?AgentToolRegistry $toolRegistry = null): ToolReadinessService
 {
     $toolRegistry ??= Mockery::mock(AgentToolRegistry::class);
@@ -33,14 +38,14 @@ it('returns UNAVAILABLE for unregistered non-conditional tool', function (): voi
     expect($service->readiness('fake_tool'))->toBe(ToolReadiness::UNAVAILABLE);
 });
 
-it('returns UNCONFIGURED for unregistered conditional tool', function (): void {
+it('returns UNCONFIGURED for unregistered conditional tool', function (string $toolName): void {
     $toolRegistry = Mockery::mock(AgentToolRegistry::class);
-    $toolRegistry->shouldReceive('isRegistered')->with('web_search')->andReturn(false);
+    $toolRegistry->shouldReceive('isRegistered')->with($toolName)->andReturn(false);
 
     $service = makeReadinessService($toolRegistry);
 
-    expect($service->readiness('web_search'))->toBe(ToolReadiness::UNCONFIGURED);
-});
+    expect($service->readiness($toolName))->toBe(ToolReadiness::UNCONFIGURED);
+})->with('conditional tools');
 
 it('returns UNAUTHORIZED when user lacks tool capability', function (): void {
     $toolRegistry = Mockery::mock(AgentToolRegistry::class);
@@ -92,4 +97,19 @@ it('provides combined snapshot with readiness and lastVerified', function (): vo
     expect($snapshot)->toHaveKeys(['readiness', 'lastVerified'])
         ->and($snapshot['readiness'])->toBe(ToolReadiness::READY)
         ->and($snapshot['lastVerified'])->toBeNull();
+});
+
+it('provides metadata and readiness for all known tool snapshots', function (): void {
+    $toolRegistry = Mockery::mock(AgentToolRegistry::class);
+    $toolRegistry->shouldReceive('isRegistered')->withAnyArgs()->andReturn(false);
+
+    $service = makeReadinessService($toolRegistry);
+    $snapshots = $service->allSnapshots();
+
+    expect($snapshots)->toHaveKey('query_data')
+        ->and($snapshots)->toHaveKey('web_search')
+        ->and($snapshots['query_data']['readiness'])->toBe(ToolReadiness::UNAVAILABLE)
+        ->and($snapshots['web_search']['readiness'])->toBe(ToolReadiness::UNCONFIGURED)
+        ->and($snapshots['query_data']['metadata']->name)->toBe('query_data')
+        ->and($snapshots['web_search']['metadata']->name)->toBe('web_search');
 });

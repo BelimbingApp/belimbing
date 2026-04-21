@@ -88,7 +88,11 @@ final class AgenticFinalResponseStreamer
             'provider_mapping' => null,
         ];
 
-        yield from $this->yieldFinalResponseStreamEvents($runId, $stream, $accumulator, $config, $streamState);
+        $streamFailed = yield from $this->yieldFinalResponseStreamEvents($runId, $stream, $accumulator, $config, $streamState);
+
+        if ($streamFailed) {
+            return;
+        }
 
         $fullContent = $this->prependClientActions($accumulator['full_content'], $streamState['client_actions']);
         $usage = $accumulator['usage'];
@@ -148,7 +152,7 @@ final class AgenticFinalResponseStreamer
      *     tools: list<array<string, mixed>>,
      *     api_messages: list<array<string, mixed>>
      * }  $streamState
-     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}, mixed, bool>
      */
     private function yieldFinalResponseStreamEvents(
         string $runId,
@@ -181,12 +185,14 @@ final class AgenticFinalResponseStreamer
                 case 'error':
                     yield $this->streamFinalErrorEvent($runId, $config, $event, $streamState);
 
-                    return;
+                    return true;
 
                 default:
                     break;
             }
         }
+
+        return false;
     }
 
     /**
