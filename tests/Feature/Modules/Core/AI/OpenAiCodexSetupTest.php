@@ -106,7 +106,69 @@ test('openai codex setup marks provider expired when verification returns auth e
 
     expect($auth['status'] ?? null)->toBe('expired')
         ->and($auth['last_error_code'] ?? null)->toBe(AiErrorType::AuthError->value)
-        ->and($auth['last_error_message'] ?? null)->toContain('Authentication failed.');
+        ->and($auth['last_error_message'] ?? null)->toContain('OpenAI Codex rejected the ChatGPT backend session.');
+});
+
+test('openai codex setup disconnect clears credentials and resets auth state', function (): void {
+    $user = createAdminUser();
+    $provider = createOpenAiCodexProvider($user, [
+        'status' => 'connected',
+        'mode' => 'browser_pkce',
+        'completed_at' => now()->subMinutes(5)->toIso8601String(),
+        'last_refresh_at' => now()->subMinute()->toIso8601String(),
+        'plan_type' => 'codex_pro',
+        'last_error_code' => null,
+        'last_error_message' => null,
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(OpenAiCodexSetup::class, ['providerKey' => OpenAiCodexDefinition::KEY])
+        ->call('disconnect')
+        ->assertSet('connectedProviderId', null)
+        ->assertSet('authState.status', 'disconnected');
+
+    $provider->refresh();
+    $auth = $provider->connection_config[OpenAiCodexDefinition::AUTH_STATE_KEY] ?? [];
+
+    expect($provider->credentials)->toBe([])
+        ->and($auth['status'] ?? null)->toBe('disconnected')
+        ->and($auth['plan_type'] ?? null)->toBeNull()
+        ->and($auth['last_error_code'] ?? null)->toBeNull()
+        ->and($auth['last_error_message'] ?? null)->toBeNull();
+});
+
+test('openai codex setup shows reconnect guidance when verification returns a hint', function (): void {
+    $user = createAdminUser();
+    $provider = createOpenAiCodexProvider($user, [
+        'status' => 'connected',
+        'mode' => 'browser_pkce',
+        'completed_at' => now()->subMinutes(5)->toIso8601String(),
+        'last_error_code' => null,
+        'last_error_message' => null,
+    ]);
+    createOpenAiCodexModel($provider, 'gpt-5.1-codex-mini');
+
+    app()->instance(ProviderTestService::class, makeCodexProviderTestService(
+        providerId: $provider->id,
+        result: ProviderTestResult::failure(
+            providerName: OpenAiCodexDefinition::KEY,
+            model: 'gpt-5.1-codex-mini',
+            error: new AiRuntimeError(
+                errorType: AiErrorType::BadRequest,
+                userMessage: 'OpenAI Codex rejected the ChatGPT backend session.',
+                diagnostic: 'HTTP 400: missing chatgpt-account-id',
+                hint: 'Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.',
+            ),
+        ),
+    ));
+    $this->actingAs($user);
+
+    Livewire::test(OpenAiCodexSetup::class, ['providerKey' => OpenAiCodexDefinition::KEY])
+        ->call('verifyConnection')
+        ->assertSet('verificationResult.connected', false)
+        ->assertSet('verificationResult.hint', 'Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.')
+        ->assertSee('Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.');
 });
 
 /**
@@ -166,6 +228,7 @@ function makeCodexProviderTestService(int $providerId, ProviderTestResult $resul
         ->andReturn([
             'api_key' => 'aaa.bbb.ccc',
             'base_url' => 'https://chatgpt.com/backend-api',
+            'headers' => ['chatgpt-account-id' => 'acct_test'],
         ]);
 
     $llmClient = Mockery::mock(LlmClient::class);

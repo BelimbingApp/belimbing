@@ -11,6 +11,7 @@ use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
+use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\DTO\ProviderTestResult;
 use Illuminate\Support\Facades\Log;
 
@@ -92,7 +93,7 @@ final readonly class ProviderTestService
 
         if (isset($response['runtime_error'])) {
             /** @var AiRuntimeError $runtimeError */
-            $runtimeError = $response['runtime_error'];
+            $runtimeError = $this->normalizeProviderError($providerName, $response['runtime_error']);
 
             // Empty content on a minimal test prompt is acceptable — it proves
             // connectivity. The model reached us and returned a valid response
@@ -156,7 +157,53 @@ final readonly class ProviderTestService
             $context = array_merge($context, $result->error->toLogContext());
         }
 
+        if ($providerName === OpenAiCodexDefinition::KEY && $result->error !== null && $this->isCodexTransportRejection($result->error)) {
+            $context['compatibility_contract'] = 'undocumented_chatgpt_backend';
+            $context['operator_action'] = 'reconnect_or_disable';
+            $context['contract_change_suspected'] = true;
+        }
+
         $level = $result->connected ? 'info' : 'warning';
         Log::log($level, 'AI provider test completed', $context);
+    }
+
+    private function normalizeProviderError(string $providerName, AiRuntimeError $error): AiRuntimeError
+    {
+        if ($providerName !== OpenAiCodexDefinition::KEY || ! $this->isCodexTransportRejection($error)) {
+            return $error;
+        }
+
+        return new AiRuntimeError(
+            errorType: $error->errorType,
+            userMessage: __('OpenAI Codex rejected the ChatGPT backend session.'),
+            diagnostic: $error->diagnostic,
+            hint: __('Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.'),
+            httpStatus: $error->httpStatus,
+            latencyMs: $error->latencyMs,
+            retryable: false,
+        );
+    }
+
+    private function isCodexTransportRejection(AiRuntimeError $error): bool
+    {
+        $diagnostic = strtolower($error->diagnostic);
+
+        if (
+            str_contains($diagnostic, 'chatgpt-account-id')
+            || str_contains($diagnostic, 'backend-api')
+            || str_contains($diagnostic, 'responses=experimental')
+            || str_contains($diagnostic, 'codex/responses')
+        ) {
+            return true;
+        }
+
+        return match ($error->errorType) {
+            AiErrorType::AuthError,
+            AiErrorType::BadRequest,
+            AiErrorType::NotFound,
+            AiErrorType::HtmlResponse,
+            AiErrorType::UnsupportedResponseShape => true,
+            default => false,
+        };
     }
 }

@@ -1,9 +1,11 @@
 <?php
+
+use App\Modules\Core\AI\Livewire\Providers\OpenAiCodexSetup;
+
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-/** @var \App\Modules\Core\AI\Livewire\Providers\OpenAiCodexSetup $this */
-
+/** @var OpenAiCodexSetup $this */
 $codexAuthState = is_array($this->authState) ? $this->authState : [];
 $codexVerification = is_array($this->verificationResult) ? $this->verificationResult : null;
 $codexStatus = (string) ($codexAuthState['status'] ?? '');
@@ -94,4 +96,16 @@ $codexModeLabel = match ((string) ($codexAuthState['mode'] ?? '')) {
             @endif
         </x-ui.alert>
     </div>
+@endif
+
+@if(!empty($codexVerification['hint']))
+    <div class="mt-4">
+        <x-ui.alert variant="info">
+            {{ $codexVerification['hint'] }}
+        </x-ui.alert>
+    </div>
+@elseif(in_array($codexStatus, ['expired', 'error'], true))
+    <p class="mt-4 text-sm text-muted">
+        {{ __('Reconnect OpenAI Codex first. If the same failure returns, disable the provider until the external ChatGPT backend contract works again.') }}
+    </p>
 @endif

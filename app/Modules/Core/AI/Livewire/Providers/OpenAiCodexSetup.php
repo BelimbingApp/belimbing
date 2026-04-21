@@ -107,6 +107,7 @@ final class OpenAiCodexSetup extends ProviderSetup
                 $provider,
                 $error?->errorType->value ?? 'verification_failed',
                 $error?->userMessage ?? __('Verification failed.'),
+                $error?->hint,
             );
         }
 
@@ -260,7 +261,7 @@ final class OpenAiCodexSetup extends ProviderSetup
             ->first();
     }
 
-    private function storeVerificationFailure(AiProvider $provider, string $code, string $message): void
+    private function storeVerificationFailure(AiProvider $provider, string $code, string $message, ?string $hint = null): void
     {
         $storage = app(OpenAiCodexAuthStorage::class);
 
@@ -277,7 +278,7 @@ final class OpenAiCodexSetup extends ProviderSetup
             'latency_ms' => null,
             'error_type' => $code,
             'user_message' => $message,
-            'hint' => null,
+            'hint' => $hint,
             'checked_at' => now()->toIso8601String(),
         ];
     }
