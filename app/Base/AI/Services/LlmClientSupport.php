@@ -64,6 +64,19 @@ final class LlmClientSupport
             ? (string) $diagnostic
             : null;
 
+        // Some backends (notably ChatGPT/Codex) return quota/plan errors with terse messages.
+        // When present, surface a more actionable hint without binding this logic to a provider name.
+        if ($errorType === AiErrorType::RateLimit && is_array($body)) {
+            $code = $body['error']['code'] ?? null;
+            $message = $body['error']['message'] ?? null;
+
+            if (is_string($code) && str_contains($code, 'usage_limit')) {
+                $hint = 'Your Codex/ChatGPT plan may not allow this request (usage limit). Try again later or switch to a different provider/model.';
+            } elseif (is_string($message) && (str_contains(strtolower($message), 'usage limit') || str_contains(strtolower($message), 'quota'))) {
+                $hint = 'The provider rejected the request due to plan/quota limits. Try a smaller model, reduce output tokens, or switch providers.';
+            }
+        }
+
         return [
             'runtime_error' => AiRuntimeError::fromType(
                 $errorType,

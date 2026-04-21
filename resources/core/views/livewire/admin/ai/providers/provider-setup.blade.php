@@ -24,6 +24,12 @@
                 </div>
             </x-slot>
             <x-slot name="actions">
+                @if($providerKey === 'openai-codex')
+                    <x-ui.button variant="ghost" wire:click="disconnect">
+                        <x-icon name="heroicon-o-arrow-left-on-rectangle" class="w-4 h-4" />
+                        {{ __('Disconnect') }}
+                    </x-ui.button>
+                @endif
                 <x-ui.button variant="primary" wire:click="done">
                     <x-icon name="heroicon-o-check" class="w-4 h-4" />
                     {{ __('Done') }}
@@ -35,6 +41,11 @@
             :title="__('Set Up :provider', ['provider' => $displayName])"
             :subtitle="__('Enter your credentials to connect :provider.', ['provider' => $displayName])"
         >
+            @if($providerKey === 'openai-codex')
+                <x-slot name="subtitle">
+                    <span class="block">{{ __('Connect with browser OAuth to store refreshable subscription credentials.') }}</span>
+                </x-slot>
+            @endif
             @if($providerKey === 'cloudflare-ai-gateway')
                 <x-slot name="help">
                     <div class="space-y-2 text-sm text-muted">
@@ -119,10 +130,12 @@
                         <h3 class="text-base font-medium tracking-tight text-ink">{{ $displayName }}</h3>
                         @if($providerKey === 'copilot-proxy')
                             <p class="text-xs text-muted mt-0.5">{{ __('Requires the Copilot Proxy extension running in VS Code — start the extension, then connect.') }}</p>
+                        @elseif($providerKey === 'openai-codex')
+                            <p class="text-xs text-muted mt-0.5">{{ __('Codex subscription — browser sign-in is required. This integration depends on an undocumented external contract and may break without notice.') }}</p>
                         @elseif($authType === 'local')
                             <p class="text-xs text-muted mt-0.5">{{ __('Local server — API key is optional') }}</p>
                         @elseif($authType === 'oauth')
-                            <p class="text-xs text-muted mt-0.5">{{ __('OAuth provider — paste API key if available, or configure after connecting') }}</p>
+                            <p class="text-xs text-muted mt-0.5">{{ __('OAuth provider — connect via sign-in flow (API keys are not required)') }}</p>
                         @elseif($authType === 'subscription')
                             <p class="text-xs text-muted mt-0.5">{{ __('Subscription service — paste access token or API key') }}</p>
                         @elseif($authType === 'custom')
@@ -153,6 +166,25 @@
                 @if($authType === 'device_flow')
                     {{-- ── Device Flow UI (GitHub Copilot) ── --}}
                     @include('livewire.admin.ai.providers.partials.auth-device-flow')
+                @elseif($providerKey === 'openai-codex')
+                    <div class="space-y-3">
+                        <x-ui.alert variant="warning">
+                            {{ __('Browser sign-in required. OpenAI Codex uses subscription-backed ChatGPT credentials, not OpenAI API keys. This integration depends on an undocumented external contract and may break without notice.') }}
+                        </x-ui.alert>
+                        <x-ui.input
+                            id="provider-base-url"
+                            wire:model.live.blur="baseUrl"
+                            label="{{ __('Base URL') }}"
+                            required
+                            :error="$errors->first('baseUrl')"
+                        />
+                        <div class="flex justify-end">
+                            <x-ui.button variant="primary" wire:click="startOauthLogin">
+                                <x-icon name="heroicon-o-arrow-top-right-on-square" class="w-4 h-4" />
+                                {{ __('Sign in') }}
+                            </x-ui.button>
+                        </div>
+                    </div>
                 @elseif($providerKey === 'cloudflare-ai-gateway')
                     {{-- ── Cloudflare AI Gateway (Account ID + Gateway ID + API Key) ── --}}
                     <div class="space-y-4">

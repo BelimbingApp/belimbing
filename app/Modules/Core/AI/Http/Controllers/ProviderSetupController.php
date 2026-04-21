@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Http\Controllers;
 use App\Modules\Core\AI\Livewire\Providers\CopilotProxySetup;
 use App\Modules\Core\AI\Livewire\Providers\CloudflareGatewaySetup;
 use App\Modules\Core\AI\Livewire\Providers\GithubCopilotSetup;
+use App\Modules\Core\AI\Livewire\Providers\OpenAiCodexSetup;
 use App\Modules\Core\AI\Livewire\Providers\ProviderSetup;
 use Illuminate\Http\Request;
 
@@ -29,6 +30,7 @@ class ProviderSetupController
             'copilot-proxy' => CopilotProxySetup::class,
             'cloudflare-ai-gateway' => CloudflareGatewaySetup::class,
             'github-copilot' => GithubCopilotSetup::class,
+            'openai-codex' => OpenAiCodexSetup::class,
             default => ProviderSetup::class,
         };
 

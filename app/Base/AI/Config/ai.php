@@ -222,6 +222,23 @@ return [
                 'codex-*' => 'openai_responses',
             ],
         ],
+        'openai-codex' => [
+            'category' => ['leading-lab'],
+            'region' => ['global'],
+            'display_name' => 'OpenAI Codex',
+            'description' => 'Codex subscription via ChatGPT backend (browser OAuth required)',
+            'base_url' => 'https://chatgpt.com/backend-api',
+            'auth_type' => 'oauth',
+            'api_type_overrides' => [
+                '*' => 'openai_codex_responses',
+            ],
+            // Phase 3: curated v1 model seed (avoid /models discovery for this transport).
+            // Keep this list small and explicit; add more only after verifying the backend contract end-to-end.
+            'curated_models' => [
+                'gpt-5.1-codex-mini',
+            ],
+            // No api_key_url: this provider is subscription-backed, not API-key-backed.
+        ],
         'anthropic' => [
             'category' => ['leading-lab'],
             'region' => ['global'],

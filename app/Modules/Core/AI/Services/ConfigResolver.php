@@ -254,7 +254,7 @@ class ConfigResolver
      * @param  array<string, mixed>  $modelConfig  Per-model config from workspace
      * @param  int|null  $companyId  Company ID for provider lookup
      * @param  array{execution_controls: ExecutionControls, timeout: int}  $runtimeDefaults  Fallback runtime parameters
-     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}
+     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, provider_id: int|null, credentials: array<string, mixed>, connection_config: array<string, mixed>, api_type: AiApiType}
      */
     private function resolveModelConfig(array $modelConfig, ?int $companyId, array $runtimeDefaults): array
     {
@@ -269,6 +269,9 @@ class ConfigResolver
             'execution_controls' => ExecutionControls::fromConfig($controlsConfig, $runtimeDefaults['execution_controls']),
             'timeout' => (int) ($modelConfig['timeout'] ?? $runtimeDefaults['timeout']),
             'provider_name' => null,
+            'provider_id' => null,
+            'credentials' => [],
+            'connection_config' => [],
             'api_type' => app(ModelCatalogService::class)->resolveApiType($providerName, $modelId),
         ];
 
@@ -283,6 +286,9 @@ class ConfigResolver
                 $resolved['api_key'] = $provider->credentials['api_key'] ?? '';
                 $resolved['base_url'] = $provider->base_url;
                 $resolved['provider_name'] = $provider->name;
+                $resolved['provider_id'] = $provider->id;
+                $resolved['credentials'] = is_array($provider->credentials) ? $provider->credentials : [];
+                $resolved['connection_config'] = is_array($provider->connection_config) ? $provider->connection_config : [];
             }
         }
 
@@ -300,7 +306,7 @@ class ConfigResolver
      * as fallback for agents without workspace config.
      *
      * @param  int  $companyId  Company ID
-     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}|null
+     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, provider_id: int|null, credentials: array<string, mixed>, connection_config: array<string, mixed>, api_type: AiApiType}|null
      */
     public function resolveDefault(int $companyId): ?array
     {
@@ -351,6 +357,9 @@ class ConfigResolver
             'execution_controls' => $defaults['execution_controls'],
             'timeout' => $defaults['timeout'],
             'provider_name' => $provider->name,
+            'provider_id' => $provider->id,
+            'credentials' => is_array($provider->credentials) ? $provider->credentials : [],
+            'connection_config' => is_array($provider->connection_config) ? $provider->connection_config : [],
             'api_type' => app(ModelCatalogService::class)->resolveApiType($provider->name, $model->model_id),
         ];
     }
@@ -363,7 +372,7 @@ class ConfigResolver
      *
      * @param  int  $providerId  Provider database ID
      * @param  string  $modelId  Model identifier
-     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}|null
+     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, provider_id: int|null, credentials: array<string, mixed>, connection_config: array<string, mixed>, api_type: AiApiType}|null
      */
     public function resolveForProvider(int $providerId, string $modelId): ?array
     {
@@ -385,6 +394,9 @@ class ConfigResolver
             'execution_controls' => $defaults['execution_controls'],
             'timeout' => $defaults['timeout'],
             'provider_name' => $provider->name,
+            'provider_id' => $provider->id,
+            'credentials' => is_array($provider->credentials) ? $provider->credentials : [],
+            'connection_config' => is_array($provider->connection_config) ? $provider->connection_config : [],
             'api_type' => app(ModelCatalogService::class)->resolveApiType($provider->name, $modelId),
         ];
     }

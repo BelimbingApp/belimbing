@@ -346,7 +346,7 @@ class ProviderSetup extends Component
         return $provider;
     }
 
-    private function getCompanyId(): ?int
+    protected function getCompanyId(): ?int
     {
         $user = Auth::user();
 

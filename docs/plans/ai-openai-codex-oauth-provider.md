@@ -1,7 +1,7 @@
 # OpenAI Codex OAuth Provider
 
 **Agent:** Codex
-**Status:** Identified
+**Status:** Phase 3 complete
 **Last Updated:** 2026-04-21
 **Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/Config/ai.php`, `app/Modules/Core/AI/Contracts/ProviderDefinition.php`, `app/Modules/Core/AI/Definitions/GenericApiKeyDefinition.php`, `app/Modules/Core/AI/Livewire/Providers/ProviderSetup.php`, `app/Modules/Core/AI/Models/AiProvider.php`, `app/Modules/Core/AI/Services/ProviderAuthFlowService.php`, `app/Modules/Core/AI/Services/ProviderDefinitionRegistry.php`, `app/Modules/Core/AI/Values/ResolvedProviderConfig.php`, `resources/core/views/livewire/admin/ai/providers/provider-setup.blade.php`, `/home/kiat/repo/openclaw/src/plugins/provider-openai-codex-oauth.ts`, `/home/kiat/repo/openclaw/src/agents/cli-credentials.ts`, `/home/kiat/repo/openclaw/node_modules/@mariozechner/pi-ai/dist/utils/oauth/openai-codex.js`, `/home/kiat/repo/openclaw/node_modules/@mariozechner/pi-ai/dist/providers/openai-codex-responses.js`, `https://github.com/openai/codex/blob/1dcea729d33ac936b8207ffccae7a0c4cb6b4ff4/codex-rs/app-server/README.md`, `https://github.com/openai/codex/tree/1dcea729d33ac936b8207ffccae7a0c4cb6b4ff4/codex-rs/login/src/auth`
 
@@ -114,11 +114,11 @@ Implementation note: this section covers durable provider state only. Pending OA
 
 Goal: add a truthful provider contract before building the OAuth flow.
 
-- [ ] Add an `openai-codex` provider overlay entry with subscription-oriented display metadata instead of treating it as plain `openai`
-- [ ] Introduce a dedicated `OpenAiCodexDefinition` and register it in `ProviderDefinitionRegistry`
-- [ ] Define the persisted credential shape and runtime metadata needed for token refresh and request headers
-- [ ] Decide and implement the durable auth state location (`auth.status`, `auth.mode`, timestamps, last error) without persisting pending OAuth handshake secrets
-- [ ] Remove any admin copy that would misdescribe the provider as an API-key-based OpenAI connection
+- [x] Add an `openai-codex` provider overlay entry with subscription-oriented display metadata instead of treating it as plain `openai`
+- [x] Introduce a dedicated `OpenAiCodexDefinition` and register it in `ProviderDefinitionRegistry`
+- [x] Define the persisted credential shape and runtime metadata needed for token refresh and request headers
+- [x] Decide and implement the durable auth state location (`auth.status`, `auth.mode`, timestamps, last error) without persisting pending OAuth handshake secrets
+- [x] Remove any admin copy that would misdescribe the provider as an API-key-based OpenAI connection
 
 ### Phase 2 — Build browser OAuth support
 
@@ -126,29 +126,28 @@ Goal: make BLB able to sign a user into OpenAI Codex without depending on Codex 
 
 #### Phase 2.1 — Minimal route surface
 
-- [ ] Add the minimum HTTP route surface required for browser OAuth:
-  - [ ] **`GET /admin/ai/providers/openai-codex/auth/callback`** → validate `state`, exchange `code`, persist credentials, mark connected
-- [ ] Keep start, cancel, logout, and manual refresh as provider-setup Livewire actions unless implementation proves they need dedicated controllers or public POST endpoints.
+- [x] Add the minimum HTTP route surface required for browser OAuth:
+  - [x] **`GET /admin/ai/providers/openai-codex/auth/callback`** → validate `state`, exchange `code`, persist credentials, mark connected
+- [x] Keep start, cancel, logout, and manual refresh as provider-setup Livewire actions unless implementation proves they need dedicated controllers or public POST endpoints.
 
 #### Phase 2.2 — Service boundary (Codex-aligned “manager/storage/revoke”)
 
-- [ ] Introduce `OpenAiCodexAuthManager` (single public entrypoint used by controllers and runtime):
-  - [ ] `startLogin(AiProvider $provider): AuthStartResult` (build authorize URL, create pending session)
-  - [ ] `completeLogin(AiProvider $provider, CallbackPayload $payload): AuthCompleteResult` (state validation + code exchange)
-  - [ ] `refresh(AiProvider $provider): RefreshResult` (refresh token flow + persistence)
-  - [ ] `logout(AiProvider $provider): void` (clear local state; remote revoke only if that contract is verified)
-- [ ] Introduce `OpenAiCodexAuthStorage` responsible for persisting:
-  - [ ] credential bag updates (`AiProvider.credentials`) and auth status transitions
-- [ ] Keep pending session material (pkce verifier, `state`, started_at, expiry) in ephemeral cache storage owned by the auth manager rather than in durable provider state.
-- [ ] Add remote revoke support only if BLB verifies a stable upstream contract; otherwise logout is local disconnect semantics.
+- [x] Introduce `OpenAiCodexAuthManager` (single public entrypoint used by controllers and runtime):
+  - [x] `startLogin(...)` (build authorize URL, create pending session)
+  - [x] `completeCallback(...)` (state validation + code exchange)
+  - [x] `logout(...)` (local disconnect semantics; remote revoke not assumed)
+- [x] Introduce `OpenAiCodexAuthStorage` responsible for persisting:
+  - [x] credential bag updates (`AiProvider.credentials`) and auth status transitions
+- [x] Keep pending session material (pkce verifier, `state`, started_at, expiry) in ephemeral cache storage owned by the auth manager rather than in durable provider state.
+- [x] Add remote revoke support only if BLB verifies a stable upstream contract; otherwise logout is local disconnect semantics.
 
 #### Phase 2.3 — State transitions & operator behaviors
 
-- [ ] On start: `disconnected/error/expired` → `pending` with `auth.mode=browser_pkce`, set `started_at`, set TTL.
-- [ ] On callback success: `pending` → `connected`, set `completed_at`, clear pending session.
-- [ ] On callback failure: `pending` → `error`, set `last_error_*`.
-- [ ] On timeout/cancel: `pending` → `disconnected`.
-- [ ] On logout: `connected/expired/error` → `disconnected` and clear `credentials`. If BLB later verifies remote revoke, it may additionally record that outcome in local status or diagnostics.
+- [x] On start: `disconnected/error/expired` → `pending` with `auth.mode=browser_pkce`, set `started_at`, set TTL.
+- [x] On callback success: `pending` → `connected`, set `completed_at`, clear pending session.
+- [x] On callback failure: `pending` → `error`, set `last_error_*`.
+- [ ] On timeout/cancel: `pending` → `disconnected`. (not needed in v1; callback state expires by TTL)
+- [x] On logout: `connected/expired/error` → `disconnected` and clear `credentials`.
 
 #### Phase 2.4 — Manual fallback & “external bearer” escape hatch
 
@@ -162,24 +161,24 @@ Goal: make runtime requests use the ChatGPT backend contract instead of the publ
 
 #### Phase 3.1 — Resolve config (refresh-before-use)
 
-- [ ] Add a provider-specific resolver for `openai-codex`:
-  - [ ] If `credentials.expires_at` is within a skew window (e.g. 60s), call `OpenAiCodexAuthManager::refresh()` and persist updated credentials before building runtime config.
+- [x] Add a provider-specific resolver for `openai-codex`:
+  - [x] If `credentials.expires_at` is within a skew window (e.g. 60s), call `OpenAiCodexAuthManager::refresh()` and persist updated credentials before building runtime config.
   - [ ] If refresh fails, mark provider `auth.status=expired` (or `error`) and return a provider-specific failure (not “invalid API key”).
 
 #### Phase 3.2 — Transport contract (dedicated API family)
 
-- [ ] Add a dedicated API family / protocol client for Codex:
-  - [ ] Base URL: **`https://chatgpt.com/backend-api`**
-  - [ ] Required request material in `ResolvedProviderConfig`:
-    - [ ] `base_url`
-    - [ ] `authorization: Bearer <access_token>`
-    - [ ] `account_id` (header/value consumed by the transport)
-  - [ ] Ensure the transport does not reuse “OpenAI Responses” assumptions (no `/v1/models` discovery by default).
+- [x] Add a dedicated API family / protocol client for Codex:
+  - [x] Base URL: **`https://chatgpt.com/backend-api`**
+  - [x] Required request material in `ResolvedProviderConfig`:
+    - [x] `base_url`
+    - [x] `authorization: Bearer <access_token>`
+    - [x] `account_id` (derived from JWT for `chatgpt-account-id` header)
+  - [x] Ensure the transport does not reuse “OpenAI Responses” assumptions (no `/v1/models` discovery by default).
 
 #### Phase 3.3 — Model catalog (curated v1)
 
-- [ ] Seed a curated Codex model list in the provider definition (or `ModelCatalogService` overlay) and disable generic `/models` discovery for v1.
-- [ ] Add a “contract changed” error bucket in logs/UI when transport rejects the session or headers.
+- [x] Seed a curated Codex model list in the provider definition (or `ModelCatalogService` overlay) and disable generic `/models` discovery for v1.
+- [x] Add a “contract changed” error bucket in logs/UI when transport rejects the session or headers.
 
 ### Phase 4 — Harden admin UX and verification
 

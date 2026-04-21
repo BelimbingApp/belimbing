@@ -46,6 +46,10 @@ class ModelDiscoveryService
      */
     public function discoverModels(AiProvider $provider): array
     {
+        if ($provider->name === 'openai-codex') {
+            return $this->curatedCodexModels();
+        }
+
         $definition = $this->registry->for($provider->name);
         $resolved = $definition->resolveRuntime($provider);
 
@@ -53,6 +57,35 @@ class ModelDiscoveryService
             rtrim($resolved->baseUrl, '/'),
             $resolved->apiKey ?? '',
         );
+    }
+
+    /**
+     * Curated model list for OpenAI Codex.
+     *
+     * The ChatGPT backend transport does not safely support generic /models discovery.
+     *
+     * @return list<array{model_id: string, display_name: string}>
+     */
+    private function curatedCodexModels(): array
+    {
+        $models = config('ai.provider_overlay.openai-codex.curated_models', []);
+
+        if (! is_array($models) || $models === []) {
+            return [];
+        }
+
+        $result = [];
+
+        foreach ($models as $modelId) {
+            if (is_string($modelId) && $modelId !== '') {
+                $result[] = [
+                    'model_id' => $modelId,
+                    'display_name' => $modelId,
+                ];
+            }
+        }
+
+        return $result;
     }
 
     /**

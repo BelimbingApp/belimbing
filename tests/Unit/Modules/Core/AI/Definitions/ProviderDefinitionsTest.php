@@ -5,6 +5,7 @@ use App\Modules\Core\AI\Definitions\CopilotProxyDefinition;
 use App\Modules\Core\AI\Definitions\GenericApiKeyDefinition;
 use App\Modules\Core\AI\Definitions\GenericLocalDefinition;
 use App\Modules\Core\AI\Definitions\GithubCopilotDefinition;
+use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Exceptions\CopilotProxyRuntimeException;
@@ -20,6 +21,7 @@ uses(TestCase::class);
 const PDT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
 const PDT_OLLAMA_BASE_URL = 'http://localhost:11434';
 const PDT_COPILOT_PROXY_BASE_URL = 'http://localhost:1337/v1';
+const PDT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
 
 // ── GenericApiKeyDefinition ──
 
@@ -119,6 +121,44 @@ test('GenericLocalDefinition accepts optional api_key', function (): void {
 
     expect($result)
         ->toHaveKey('credentials', ['api_key' => 'optional-key']);
+});
+
+// ── OpenAiCodexDefinition ──
+
+test('OpenAiCodexDefinition has OAuth auth type and default base URL', function (): void {
+    $def = new OpenAiCodexDefinition(app(\App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager::class));
+
+    expect($def->key())->toBe('openai-codex')
+        ->and($def->authType())->toBe(AuthType::OAuth)
+        ->and($def->defaultBaseUrl())->toBe(PDT_CODEX_BASE_URL);
+});
+
+test('OpenAiCodexDefinition validates and normalizes create input without api key', function (): void {
+    $def = new OpenAiCodexDefinition(app(\App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager::class));
+
+    $result = $def->validateAndNormalize([
+        'base_url' => PDT_CODEX_BASE_URL,
+        'api_key' => '',
+    ], ProviderOperation::Create);
+
+    expect($result)
+        ->toHaveKey('base_url', PDT_CODEX_BASE_URL)
+        ->toHaveKey('auth_type', AuthType::OAuth)
+        ->toHaveKey('connection_config')
+        ->and($result['connection_config'])->toHaveKey(OpenAiCodexDefinition::AUTH_STATE_KEY);
+});
+
+test('OpenAiCodexDefinition edit preserves durable auth state by omitting connection_config', function (): void {
+    $def = new OpenAiCodexDefinition(app(\App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager::class));
+
+    $result = $def->validateAndNormalize([
+        'base_url' => PDT_CODEX_BASE_URL,
+    ], ProviderOperation::Edit);
+
+    expect($result)
+        ->toHaveKey('base_url', PDT_CODEX_BASE_URL)
+        ->toHaveKey('auth_type', AuthType::OAuth)
+        ->not->toHaveKey('connection_config');
 });
 
 test('GenericLocalDefinition resolveRuntime returns config without api_key when none set', function (): void {

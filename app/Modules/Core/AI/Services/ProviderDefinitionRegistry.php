@@ -13,6 +13,8 @@ use App\Modules\Core\AI\Definitions\CopilotProxyDefinition;
 use App\Modules\Core\AI\Definitions\GenericApiKeyDefinition;
 use App\Modules\Core\AI\Definitions\GenericLocalDefinition;
 use App\Modules\Core\AI\Definitions\GithubCopilotDefinition;
+use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
+use App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager;
 
 /**
  * Resolves the ProviderDefinition for a given provider key.
@@ -73,6 +75,7 @@ class ProviderDefinitionRegistry
         $this->register(new CloudflareGatewayDefinition());
         $this->register(new CopilotProxyDefinition());
         $this->register(new GithubCopilotDefinition($this->copilotAuth));
+        $this->register(new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class)));
 
         // Build generic definitions from catalog overlay
         $providers = $this->catalog->getProviders();

@@ -6,6 +6,7 @@
 use App\Modules\Core\AI\Http\Controllers\ChatAttachmentController;
 use App\Modules\Core\AI\Http\Controllers\ChatTurnStreamController;
 use App\Modules\Core\AI\Http\Controllers\MessagingWebhookController;
+use App\Modules\Core\AI\Http\Controllers\OpenAiCodexOAuthCallbackController;
 use App\Modules\Core\AI\Http\Controllers\ProviderSetupController;
 use App\Modules\Core\AI\Http\Controllers\TurnEventStreamController;
 use App\Modules\Core\AI\Livewire\ControlPlane;
@@ -62,6 +63,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('admin/ai/providers/setup/{providerKey}', ProviderSetupController::class)
         ->middleware('authz:admin.ai_provider.manage')
         ->name('admin.ai.providers.setup');
+
+    // OpenAI Codex OAuth callback (browser PKCE)
+    Route::get('admin/ai/providers/openai-codex/auth/callback', OpenAiCodexOAuthCallbackController::class)
+        ->middleware('authz:admin.ai_provider.manage')
+        ->name('admin.ai.providers.openai-codex.callback');
 
     Route::get('admin/ai/tools/{toolName?}', Tools::class)
         ->middleware('authz:admin.ai_tool.manage')

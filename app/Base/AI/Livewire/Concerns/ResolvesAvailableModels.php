@@ -143,6 +143,9 @@ trait ResolvesAvailableModels
             'api_key' => $provider->credentials['api_key'] ?? '',
             'base_url' => $provider->base_url,
             'provider_name' => $provider->name,
+            'provider_id' => $provider->id,
+            'credentials' => is_array($provider->credentials) ? $provider->credentials : [],
+            'connection_config' => is_array($provider->connection_config) ? $provider->connection_config : [],
         ]);
 
         if (isset($credentials['runtime_error'])) {

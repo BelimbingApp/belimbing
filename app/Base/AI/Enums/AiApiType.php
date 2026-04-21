@@ -23,6 +23,9 @@ enum AiApiType: string
     /** OpenAI Responses API — POST /responses */
     case OpenAiResponses = 'openai_responses';
 
+    /** OpenAI Codex Responses (ChatGPT backend) — POST /codex/responses */
+    case OpenAiCodexResponses = 'openai_codex_responses';
+
     /** Anthropic Messages API — POST /messages */
     case AnthropicMessages = 'anthropic_messages';
 

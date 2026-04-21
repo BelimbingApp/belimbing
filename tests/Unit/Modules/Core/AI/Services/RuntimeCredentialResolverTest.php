@@ -4,6 +4,7 @@ use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Exceptions\GithubCopilotAuthException;
 use App\Base\AI\Services\GithubCopilotAuthService;
+use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
@@ -154,5 +155,40 @@ test('provider resolution uses runtime config instead of persisted provider cred
     expect($result)
         ->toHaveKey('api_key', 'runtime-secret')
         ->toHaveKey('base_url', 'https://runtime.example/v1')
+        ->not->toHaveKey('runtime_error');
+});
+
+test('runtime resolution uses persisted codex provider credentials when provider_id is supplied', function (): void {
+    $provider = createRcrProvider(
+        OpenAiCodexDefinition::KEY,
+        'https://chatgpt.com/backend-api',
+        authType: AuthType::OAuth,
+    );
+
+    $provider->update([
+        'credentials' => [
+            OpenAiCodexDefinition::CRED_ACCESS_TOKEN => 'aaa.bbb.ccc',
+            OpenAiCodexDefinition::CRED_REFRESH_TOKEN => 'refresh-token',
+            OpenAiCodexDefinition::CRED_EXPIRES_AT => now()->addHour()->toIso8601String(),
+            OpenAiCodexDefinition::CRED_ACCOUNT_ID => 'acct_test',
+        ],
+        'connection_config' => [
+            OpenAiCodexDefinition::AUTH_STATE_KEY => [
+                'status' => 'connected',
+                'mode' => 'browser_pkce',
+            ],
+        ],
+    ]);
+
+    $result = makeResolver()->resolve([
+        'api_key' => '',
+        'base_url' => 'https://runtime.example.invalid',
+        'provider_name' => OpenAiCodexDefinition::KEY,
+        'provider_id' => $provider->id,
+    ]);
+
+    expect($result)
+        ->toHaveKey('api_key', 'aaa.bbb.ccc')
+        ->toHaveKey('base_url', 'https://chatgpt.com/backend-api')
         ->not->toHaveKey('runtime_error');
 });

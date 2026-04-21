@@ -100,11 +100,31 @@ class RuntimeCredentialResolver
      */
     private function providerFromConfig(string $providerName, array $config): AiProvider
     {
+        $providerId = $config['provider_id'] ?? null;
+
+        if (is_numeric($providerId)) {
+            $provider = AiProvider::query()->find((int) $providerId);
+
+            if ($provider instanceof AiProvider) {
+                return $provider;
+            }
+        }
+
+        $credentials = $config['credentials'] ?? null;
+        if (! is_array($credentials)) {
+            $credentials = ['api_key' => (string) ($config['api_key'] ?? '')];
+        }
+
+        $connectionConfig = $config['connection_config'] ?? null;
+        if (! is_array($connectionConfig)) {
+            $connectionConfig = [];
+        }
+
         return new AiProvider([
             'name' => $providerName,
             'base_url' => (string) ($config['base_url'] ?? ''),
-            'credentials' => ['api_key' => (string) ($config['api_key'] ?? '')],
-            'connection_config' => $config['connection_config'] ?? [],
+            'credentials' => $credentials,
+            'connection_config' => $connectionConfig,
         ]);
     }
 

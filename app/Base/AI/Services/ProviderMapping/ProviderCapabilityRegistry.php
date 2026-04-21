@@ -16,7 +16,7 @@ final class ProviderCapabilityRegistry
 {
     public function capabilitiesFor(?string $providerName, string $model, AiApiType $apiType): ProviderExecutionCapabilities
     {
-        if ($apiType === AiApiType::OpenAiResponses) {
+        if (in_array($apiType, [AiApiType::OpenAiResponses, AiApiType::OpenAiCodexResponses], true)) {
             return new ProviderExecutionCapabilities(
                 supportedReasoningVisibility: [ReasoningVisibility::None, ReasoningVisibility::Summary],
                 supportedReasoningEffort: [ReasoningEffort::Low, ReasoningEffort::Medium, ReasoningEffort::High],
