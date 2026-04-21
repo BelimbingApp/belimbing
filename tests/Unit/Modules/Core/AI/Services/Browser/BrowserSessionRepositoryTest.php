@@ -270,13 +270,15 @@ describe('getActiveSessionsForCompany', function () {
 
         $s1 = $this->repository->create($this->employeeId, $this->companyId, true, 300);
         $this->repository->markReady($s1);
+        $this->travel(1)->seconds();
 
         $s2 = $this->repository->create($employee2->id, $this->companyId, true, 300);
         $this->repository->markReady($s2);
 
         $sessions = $this->repository->getActiveSessionsForCompany($this->companyId);
 
-        expect($sessions)->toHaveCount(2);
+        expect($sessions)->toHaveCount(2)
+            ->and($sessions->pluck('id')->all())->toBe([$s2->id, $s1->id]);
     });
 
     it('excludes sessions from other companies', function () {

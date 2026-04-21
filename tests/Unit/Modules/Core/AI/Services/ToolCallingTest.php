@@ -143,6 +143,28 @@ function makeSimpleTool(string $name, ?string $capability = null): Tool
     };
 }
 
+function makeToolCallingTempRelativePath(string $filename): string
+{
+    return 'storage/framework/testing/tool-calling/'.uniqid('', true).'-'.$filename;
+}
+
+function writeToolCallingTempFile(string $relativePath, string $contents): void
+{
+    $absolutePath = base_path($relativePath);
+    $directory = dirname($absolutePath);
+
+    if (! is_dir($directory)) {
+        mkdir($directory, 0777, true);
+    }
+
+    file_put_contents($absolutePath, $contents);
+}
+
+function deleteToolCallingTempFile(string $relativePath): void
+{
+    @unlink(base_path($relativePath));
+}
+
 describe('AgentToolRegistry', function () {
     it('returns empty tool definitions when no tools registered', function () {
         $registry = new AgentToolRegistry(makeAllowAllAuthzService());
@@ -561,18 +583,18 @@ describe('DocumentAnalysisTool', function () {
     });
 
     it('returns file content and header for a created temp file', function () {
-        $tmpPath = storage_path('app/test_doc_analysis_tool.txt');
-        file_put_contents($tmpPath, 'Hello, document analysis!');
+        $relativePath = makeToolCallingTempRelativePath('test_doc_analysis_tool.txt');
+        writeToolCallingTempFile($relativePath, 'Hello, document analysis!');
 
         $tool = new DocumentAnalysisTool;
         $result = $tool->execute([
-            'path' => 'storage/app/test_doc_analysis_tool.txt',
+            'path' => $relativePath,
             'prompt' => 'Summarize this document.',
         ]);
 
-        @unlink($tmpPath);
+        deleteToolCallingTempFile($relativePath);
 
-        expect((string) $result)->toContain('"path": "storage/app/test_doc_analysis_tool.txt"');
+        expect((string) $result)->toContain('"path": "'.$relativePath.'"');
         expect((string) $result)->toContain('"prompt": "Summarize this document."');
     });
 });
@@ -621,19 +643,19 @@ describe('ImageAnalysisTool', function () {
         $png = base64_decode(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
         );
-        $tmpPath = storage_path('app/test_image_analysis_tool.png');
-        file_put_contents($tmpPath, $png);
+        $relativePath = makeToolCallingTempRelativePath('test_image_analysis_tool.png');
+        writeToolCallingTempFile($relativePath, $png);
 
         $tool = new ImageAnalysisTool;
         $result = $tool->execute([
-            'path' => 'storage/app/test_image_analysis_tool.png',
+            'path' => $relativePath,
             'prompt' => 'Describe this image.',
         ]);
 
-        @unlink($tmpPath);
+        deleteToolCallingTempFile($relativePath);
 
         expect((string) $result)->toContain('"action": "image_analysis"');
-        expect((string) $result)->toContain('"path": "storage/app/test_image_analysis_tool.png"');
+        expect((string) $result)->toContain('"path": "'.$relativePath.'"');
         expect((string) $result)->toContain('"prompt": "Describe this image."');
     });
 });

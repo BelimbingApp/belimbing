@@ -272,6 +272,7 @@ describe('AgenticRuntime (sync)', function () {
 
     it('writes wire logs into the global run-scoped directory', function () {
         $workspacePath = storage_path('framework/testing/agentic-wire-log-'.str()->random(16));
+        $wireLogPath = storage_path('framework/testing/agentic-wire-logs-'.str()->random(16));
         config()->set('ai.workspace_path', $workspacePath);
         config()->set('ai.wire_logging.enabled', true);
 
@@ -294,6 +295,18 @@ describe('AgenticRuntime (sync)', function () {
                 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 8],
             ]);
 
+        $wireLogger = new class($wireLogPath) extends WireLogger
+        {
+            public function __construct(
+                private readonly string $testWireLogPath,
+            ) {}
+
+            public function path(string $runId): string
+            {
+                return $this->testWireLogPath.'/'.$runId.'.jsonl';
+            }
+        };
+
         $runtime = new AgenticRuntime(
             defaultAgenticConfigResolver(),
             $llmClient,
@@ -303,9 +316,9 @@ describe('AgenticRuntime (sync)', function () {
             new RuntimeResponseFactory,
             new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
             Mockery::mock(RunRecorder::class)->shouldIgnoreMissing(),
-            new AgenticToolLoopStreamReader($llmClient, app(WireLogger::class)),
+            new AgenticToolLoopStreamReader($llmClient, $wireLogger),
             app(RuntimeSessionContext::class),
-            app(WireLogger::class),
+            $wireLogger,
         );
 
         $result = $runtime->run(
@@ -314,12 +327,12 @@ describe('AgenticRuntime (sync)', function () {
             AGENTIC_RUNTIME_SYSTEM_PROMPT,
         );
 
-        expect(file_exists(storage_path('app/ai/wire-logs/'.$result['run_id'].AGENTIC_RUNTIME_WIRE_LOG_EXTENSION)))->toBeTrue()
+        expect(file_exists($wireLogPath.'/'.$result['run_id'].AGENTIC_RUNTIME_WIRE_LOG_EXTENSION))->toBeTrue()
             ->and(file_exists($workspacePath.'/1/wire-logs/'.$result['run_id'].AGENTIC_RUNTIME_WIRE_LOG_EXTENSION))->toBeFalse()
             ->and(file_exists($workspacePath.'/0/wire-logs/'.$result['run_id'].AGENTIC_RUNTIME_WIRE_LOG_EXTENSION))->toBeFalse();
 
         File::deleteDirectory($workspacePath);
-        @unlink(storage_path('app/ai/wire-logs/'.$result['run_id'].AGENTIC_RUNTIME_WIRE_LOG_EXTENSION));
+        File::deleteDirectory($wireLogPath);
     });
 
     it('omits disallowed tools from the LLM request', function () {

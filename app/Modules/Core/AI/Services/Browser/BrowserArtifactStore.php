@@ -20,7 +20,7 @@ use Illuminate\Support\Str;
  */
 class BrowserArtifactStore
 {
-    private const ARTIFACT_DIR = 'browser-artifacts';
+    private const DEFAULT_ARTIFACT_DIR = 'browser-artifacts';
 
     /**
      * Store a browser artifact and return its metadata.
@@ -40,8 +40,8 @@ class BrowserArtifactStore
     ): BrowserArtifactMeta {
         $artifactId = 'ba_'.Str::ulid()->toBase32();
         $extension = $this->extensionForType($type);
-        $relativePath = self::ARTIFACT_DIR."/{$sessionId}/{$artifactId}.{$extension}";
-        $absolutePath = storage_path("app/{$relativePath}");
+        $relativePath = $this->artifactRootDir()."/{$sessionId}/{$artifactId}.{$extension}";
+        $absolutePath = $this->absoluteArtifactPath($relativePath);
 
         BlbFile::put($absolutePath, $content);
 
@@ -112,7 +112,7 @@ class BrowserArtifactStore
             return null;
         }
 
-        $path = storage_path("app/{$artifact->storage_path}");
+        $path = $this->absoluteArtifactPath($artifact->storage_path);
 
         if (! file_exists($path)) {
             return null;
@@ -131,7 +131,7 @@ class BrowserArtifactStore
             ->get();
 
         foreach ($artifacts as $artifact) {
-            $path = storage_path("app/{$artifact->storage_path}");
+            $path = $this->absoluteArtifactPath($artifact->storage_path);
 
             if (file_exists($path)) {
                 @unlink($path);
@@ -139,7 +139,7 @@ class BrowserArtifactStore
         }
 
         // Clean up session directory if empty.
-        $sessionDir = storage_path('app/'.self::ARTIFACT_DIR."/{$sessionId}");
+        $sessionDir = $this->sessionDirectoryPath($sessionId);
 
         if (is_dir($sessionDir) && count(scandir($sessionDir)) <= 2) {
             @rmdir($sessionDir);
@@ -173,5 +173,20 @@ class BrowserArtifactStore
             BrowserArtifactType::Pdf => 'pdf',
             BrowserArtifactType::EvaluateResult => 'json',
         };
+    }
+
+    private function artifactRootDir(): string
+    {
+        return (string) config('ai.tools.browser.artifact_dir', self::DEFAULT_ARTIFACT_DIR);
+    }
+
+    private function absoluteArtifactPath(string $relativePath): string
+    {
+        return storage_path("app/{$relativePath}");
+    }
+
+    private function sessionDirectoryPath(string $sessionId): string
+    {
+        return $this->absoluteArtifactPath($this->artifactRootDir()."/{$sessionId}");
     }
 }

@@ -1,0 +1,126 @@
+# Test Suite Audit
+
+**Agent:** Codex
+**Status:** Phase 3 Complete
+**Last Updated:** 2026-04-21
+**Sources:** `AGENTS.md`, `docs/AGENTS.md`, `docs/plans/AGENTS.md`, `tests/AGENTS.md`, `docs/plans/test-suite-audit-rubric.md`, `docs/plans/test-suite-audit-inventory.md`, `docs/plans/ai-test-suite-audit.md`, `scripts/test-suite-audit-inventory.php`, user discussion on 2026-04-21
+
+## Problem Essence
+
+The repository likely carries a large test suite with mixed value: some tests protect meaningful behavior, while others mostly restate framework behavior, overfit implementation details, or rely on scaffolding that would not catch realistic regressions. This creates CI cost, review drag, Sonar noise, and false confidence.
+
+## Desired Outcome
+
+BLB keeps a smaller, higher-signal test suite that protects behavior and fragile contracts, deletes obvious YAGNI coverage, tightens weak-but-important tests, and applies the same standard to newly added tests. The audit process should be repeatable, visible, and cheap enough to sustain in normal development rather than as a one-off purge.
+
+## Top-Level Components
+
+- **Audit Rubric** — a small set of rules that forces each test into a keep, tighten, merge, or delete decision.
+- **Inventory Pass** — a generated view of the current suite grouped by module, cost, and likely weakness patterns.
+- **Module Audit Passes** — bounded cleanup rounds that remove low-value tests and strengthen the tests worth keeping.
+- **Proof Standard** — regression-test claims must be backed by pre-fix reproduction or narrow production mutation, not by strengthening the test first.
+- **CI Guardrails** — lightweight checks that review newly added or changed tests without turning every PR into a full suite-governance exercise.
+
+## Design Decisions
+
+### 1. Audit by module, not by individual file across the whole repo
+
+The suite is too large for a flat file-by-file pass without losing context. The audit should move through coherent areas such as AI, database, authz, and UI-heavy feature tests. Each pass should end with an explicit outcome for that area: deleted low-value tests, tightened high-value tests, merged duplicates, and a short note on remaining risk.
+
+### 2. Use a forced-decision rubric
+
+Each reviewed test must land in one of four buckets:
+
+- **Keep** — it protects a specific bad code change and already does so with acceptable signal.
+- **Tighten** — the test protects the right area but has blind spots, overly optimistic doubles, or happy-path-only coverage.
+- **Merge** — multiple tests cover the same contract through different scaffolding and should collapse into fewer, deeper tests.
+- **Delete** — the test is smoke-only, mostly framework restatement, markup-only without a fragile contract, or otherwise not worth its CI and maintenance cost.
+
+The key litmus: "What specific bad code change would this test stop?" If that answer is vague, the test should not survive unchanged.
+
+### 3. Favor behavior over scaffolding
+
+When a test remains in the suite, its primary job is to protect production behavior, domain rules, persistence, workflow transitions, authz boundaries, and fragile framework customizations. Tests that mostly validate their own mocks, fixture builders, or implementation structure should be tightened or removed. Where practical, use real collaborators inside the unit boundary and mock only true external or configuration boundaries.
+
+### 4. Prove regression-test value with production-side failure
+
+When a test is claimed to protect a regression, its value must be demonstrated by reproducing the bug on pre-fix code or by applying a narrow temporary mutation to production code. Strengthening the test first and then showing the stronger test fails is not valid proof. This rule should guide both audit work and reviews of new regression tests.
+
+### 5. Keep CI policy lightweight and targeted
+
+The first CI goal is not to automatically score every existing test. It is to stop the suite from getting worse while the audit is underway. Initial guardrails should focus on new or changed tests and on a few obvious anti-patterns: touching real runtime storage, escaping test DB isolation, and adding low-value duplicated scaffolding. Broader quality metrics such as mutation sampling, slow-test reports, and flaky-test reports should run on scheduled jobs, not block every PR.
+
+### 6. Record progress in the master plan first, split only when an area gets large
+
+This master plan remains the status surface for the overall program. Audit outcomes stay inline here while a module pass is still compact. When one area grows beyond a short checklist and summary, create a module-prefixed companion build sheet under `docs/plans/` and link it from this plan's `Sources` or phase notes. This keeps the program visible without creating companion files too early.
+
+### 7. Use heuristic inventory for prioritization, not automated judgment
+
+The inventory generator should surface concentration areas and likely weak-test shapes without pretending it can decide test value mechanically. Static signals such as Mockery volume, redirect-only assertions, markup-heavy assertions, DB refresh traits, and filesystem setup are useful for ranking candidates. They are not delete instructions. Runtime should be treated as best-effort until profiling becomes reliable in CI or scheduled jobs.
+
+## Public Contract
+
+The audit program should produce visible artifacts in-repo:
+
+- a repeatable audit rubric for humans and agents
+- an inventory report or script output that can be regenerated
+- per-module cleanup progress tracked in this plan or linked companion files if the work grows
+- a defined review standard for new tests, especially regression tests
+- a CI policy that applies to newly added or changed tests before it expands further
+
+The program should not require blanket rewrites, mass deletions without rationale, or a monolithic gate that blocks ordinary development.
+
+## Phases
+
+### Phase 1 — Establish Audit Rules
+
+Goal: make the decision standard explicit before touching large parts of the suite.
+
+- [x] Write a small audit rubric document that defines keep, tighten, merge, and delete decisions with examples from BLB
+- [x] Define a short checklist for reviewing new tests, including the regression-proof rule from `tests/AGENTS.md`
+- [x] Decide how audit outcomes are recorded: inline in this plan, in companion docs, or both
+
+### Phase 2 — Generate Inventory
+
+Goal: make the suite visible enough to prioritize by value and cost instead of by guesswork.
+
+- [x] Build an inventory script or report that lists test files by module and suite
+- [x] Include basic cost signals such as runtime, DB use, filesystem use, and mock-heavy patterns where detectable
+- [x] Flag likely weak categories for manual review: smoke tests, markup-only assertions, duplicated datasets, and happy-path-only tests around error-prone code
+- [x] Produce a first ranked list of audit candidates rather than attempting to review the full suite at once
+
+### Phase 3 — Run Pilot Audit
+
+Goal: prove the process on one high-churn, high-cost area before scaling it repo-wide.
+
+- [x] Pick the first audit target area; current recommendation is AI tests because they mix protocol handling, UI-heavy behavior, and mock-heavy units
+- [x] Review that area test by test using the forced-decision rubric
+- [x] Delete obvious YAGNI coverage
+- [x] Tighten weak-but-important tests by closing blind spots and adding error-path coverage where the real failures happen
+- [x] Record examples of tests that were removed, merged, or improved so later passes follow the same standard
+
+Phase 3 outcome:
+
+- pilot area: `Modules/Core/AI`
+- reviewed files recorded in [ai-test-suite-audit.md](/home/kiat/repo/laravel/blb/docs/plans/ai-test-suite-audit.md:1)
+- observed all four practical outcomes needed for the rubric, including a real `delete + merge`
+- fixed repeated test-isolation failures around runtime storage and one false-coverage ordering test
+- left the remaining AI suite for Phase 4 expansion rather than pretending the whole module is fully audited
+
+### Phase 4 — Expand by Module
+
+Goal: apply the proven process to the rest of the suite without losing visibility.
+
+- [ ] Audit remaining modules in priority order based on runtime, churn, and weakness signals
+- [ ] Split this plan into companion per-area build sheets if the checklist becomes hard to use
+- [ ] Keep the plan current with what was deleted, tightened, merged, or deferred
+- [ ] Track residual risks where coverage is intentionally reduced but accepted
+
+### Phase 5 — Add CI Guardrails
+
+Goal: stop new low-value tests from entering the suite while keeping normal development flow workable.
+
+- [ ] Add lightweight checks for changed tests only, focused on obvious anti-patterns and test-isolation failures
+- [ ] Add a review standard for new regression tests so authors must state what bad code change the test is meant to stop
+- [ ] Add scheduled reporting for slow tests, flaky tests, and selected mutation-style checks on critical modules
+- [ ] Revisit whether any guardrail should graduate from scheduled reporting to PR blocking after the audit baseline is healthier

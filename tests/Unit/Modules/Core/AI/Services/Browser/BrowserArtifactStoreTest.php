@@ -4,16 +4,20 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Modules\Core\AI\Enums\BrowserArtifactType;
-use App\Modules\Core\AI\Models\BrowserSession;
 use App\Modules\Core\AI\Services\Browser\BrowserArtifactStore;
 use App\Modules\Core\AI\Services\Browser\BrowserSessionRepository;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Tests\Support\CreatesLaraFixtures;
 use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class, CreatesLaraFixtures::class);
 
 beforeEach(function () {
+    $this->artifactDir = 'framework/testing/browser-artifacts-'.Str::random(16);
+    config()->set('ai.tools.browser.artifact_dir', $this->artifactDir);
+
     $this->repository = new BrowserSessionRepository;
     $this->store = new BrowserArtifactStore;
 
@@ -26,6 +30,7 @@ beforeEach(function () {
 afterEach(function () {
     // Clean up written files.
     $this->store->deleteForSession($this->session->id);
+    File::deleteDirectory(storage_path('app/'.$this->artifactDir));
 });
 
 describe('store', function () {
@@ -40,6 +45,7 @@ describe('store', function () {
         expect($meta->artifactId)->toStartWith('ba_')
             ->and($meta->sessionId)->toBe($this->session->id)
             ->and($meta->type)->toBe(BrowserArtifactType::Snapshot)
+            ->and($meta->storagePath)->toStartWith($this->artifactDir.'/'.$this->session->id.'/')
             ->and($meta->mimeType)->toBe('text/plain')
             ->and($meta->sizeBytes)->toBe(20)
             ->and($meta->relatedUrl)->toBe('https://example.com');
