@@ -1,9 +1,9 @@
 # Test Suite Audit
 
 **Agent:** Codex
-**Status:** Phase 4 In Progress
+**Status:** Phase 5 In Progress
 **Last Updated:** 2026-04-21
-**Sources:** `AGENTS.md`, `docs/AGENTS.md`, `docs/plans/AGENTS.md`, `tests/AGENTS.md`, `docs/plans/test-suite-audit-rubric.md`, `docs/plans/test-suite-audit-inventory.md`, `docs/plans/ai-test-suite-audit.md`, `scripts/test-suite-audit-inventory.php`, user discussion on 2026-04-21
+**Sources:** `AGENTS.md`, `docs/AGENTS.md`, `docs/plans/AGENTS.md`, `tests/AGENTS.md`, `docs/plans/test-suite-audit-rubric.md`, `docs/plans/test-suite-audit-inventory.md`, `docs/plans/ai-test-suite-audit.md`, `scripts/test-suite-audit-inventory.php`, `scripts/check-changed-tests.php`, `scripts/run-critical-mutation-checks.php`, `.github/workflows/lint.yml`, `.github/workflows/test-audit-report.yml`, `.github/pull_request_template.md`, user discussion on 2026-04-21
 
 ## Problem Essence
 
@@ -130,7 +130,20 @@ Latest Phase 4 result:
 
 Goal: stop new low-value tests from entering the suite while keeping normal development flow workable.
 
-- [ ] Add lightweight checks for changed tests only, focused on obvious anti-patterns and test-isolation failures
-- [ ] Add a review standard for new regression tests so authors must state what bad code change the test is meant to stop
+- [x] Add lightweight checks for changed tests only, focused on obvious anti-patterns and test-isolation failures
+- [x] Add a review standard for new regression tests so authors must state what bad code change the test is meant to stop
 - [ ] Add scheduled reporting for slow tests, flaky tests, and selected mutation-style checks on critical modules
 - [ ] Revisit whether any guardrail should graduate from scheduled reporting to PR blocking after the audit baseline is healthier
+
+Current Phase 5 focus:
+
+- keep the first CI guardrail narrow: changed PHP tests only, PR-only, and concentrated on test-isolation failures we have already seen in this repo
+- enforce human review expectations for regression tests without inventing a heavyweight automated quality score
+
+Latest Phase 5 result:
+
+- added a PR-only changed-test guardrail in `lint.yml`
+- added `scripts/check-changed-tests.php` to fail on known runtime-storage violations and annotate suspicious literal `storage/app/` paths in changed tests
+- added a PR template section that requires authors to explain what a new or changed regression test is meant to stop and how its value was proven
+- added a weekly `test-audit-report` workflow that uploads a slow-test report and a curated mutation-check report for critical AI regressions
+- flaky reporting is still deferred because the current toolchain does not provide a trustworthy automatic flaky-test signal to consume

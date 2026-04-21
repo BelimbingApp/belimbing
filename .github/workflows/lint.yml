@@ -17,11 +17,17 @@ jobs:
     environment: Testing
     steps:
       - uses: actions/checkout@v4 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+        with:
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.5'
+
+      - name: Check Changed Tests
+        if: github.event_name == 'pull_request'
+        run: php scripts/check-changed-tests.php --base="${{ github.event.pull_request.base.sha }}" --head="${{ github.event.pull_request.head.sha }}"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects

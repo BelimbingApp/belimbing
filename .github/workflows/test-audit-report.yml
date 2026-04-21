@@ -1,0 +1,66 @@
+name: test-audit-report
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  scheduled-reporting:
+    runs-on: ubuntu-latest
+    environment: Testing
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2 # NOSONAR — well-known community PHP action; tag pinning is acceptable for internal projects
+        with:
+          php-version: '8.5'
+          extensions: pdo_sqlite, sqlite3
+          tools: composer:v2
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
+        with:
+          bun-version: '1.3.10'
+          no-cache: true
+
+      - name: Install JS Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Copy Environment File
+        run: cp .env.example .env
+
+      - name: Configure Database for Testing
+        run: |
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=:memory:/' .env
+          sed -i 's/value="pgsql"/value="sqlite"/' phpunit.xml
+          sed -i 's/value="blb"/value=":memory:"/' phpunit.xml
+
+      - name: Generate Application Key
+        run: php artisan key:generate
+
+      - name: Build Assets
+        run: bun run build
+
+      - name: Prepare Report Directory
+        run: mkdir -p build/reports
+
+      - name: Generate Slow Test Report
+        run: php artisan test --profile --compact | tee build/reports/slow-tests.txt
+
+      - name: Run Critical Mutation Checks
+        run: php scripts/run-critical-mutation-checks.php | tee build/reports/mutation-checks.md
+
+      - name: Upload Audit Reports
+        if: always()
+        uses: actions/upload-artifact@v4 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+        with:
+          name: test-audit-report
+          path: build/reports/
