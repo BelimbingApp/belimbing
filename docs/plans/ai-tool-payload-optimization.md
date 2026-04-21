@@ -1,9 +1,9 @@
 # AI Tool Payload Optimization
 
 **Agent:** Amp
-**Status:** Phase 1 Complete, Phase 2 Near-Complete
-**Last Updated:** 2025-04-20
-**Sources:** `storage/app/ai/wire-logs/run_9A4JM8k82gI7.jsonl`, `app/Modules/Core/AI/Services/AgentToolRegistry.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/LaraTaskExecutionProfileRegistry.php`, `app/Modules/Core/AI/Services/ChatToolProfileRegistry.php`, `app/Modules/Core/AI/Resources/lara/system_prompt.md`
+**Status:** Phase 1 Complete, Phase 2 Near-Complete — Skill-based architecture drafted
+**Last Updated:** 2025-04-21
+**Sources:** `storage/app/ai/wire-logs/run_9A4JM8k82gI7.jsonl`, `app/Modules/Core/AI/Services/AgentToolRegistry.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/LaraTaskExecutionProfileRegistry.php`, `app/Modules/Core/AI/Services/ChatToolProfileRegistry.php`, `app/Modules/Core/AI/Resources/lara/system_prompt.md`, `app/Base/Authz/Config/authz.php`
 
 ## Problem Essence
 
@@ -11,15 +11,16 @@ Every LLM request sends all 25 tool definitions (~23.8K chars) and a system prom
 
 ## Desired Outcome
 
-The tool set and system prompt sent per request are right-sized for the interaction context. Simple navigational or conversational turns carry only the tools they might plausibly need and a prompt free of tool-description duplication; the full set is still reachable when needed. Token spend drops by 50–70% for the majority of turns without sacrificing capability.
+The tool set and system prompt sent per request are right-sized for both the interaction context and the user's authorized capabilities. Simple navigational or conversational turns carry only the tools they might plausibly need and a prompt free of tool-description duplication; additional capabilities are progressively discoverable when needed. Token spend drops by 50–70% for the majority of turns without sacrificing capability. The user's authz-assigned skills determine which tool groups are available, so the AI surface reflects what the user is actually permitted to do.
 
 ## Top-Level Components
 
-- **Tool Profile Registry** — declares named tool subsets (profiles) for different interaction contexts.
-- **Intent Classifier** — lightweight mechanism that maps an incoming message to a profile before the main LLM call.
-- **Lazy Tool Injector** — meta-tool the model can call to request additional tools mid-conversation when the initial set is insufficient.
-- **Composite Tool Consolidator** — merges related tools behind a single schema with an `action` discriminator.
+- **Skill Registry** — first-class entity that bridges authz and AI. Each skill is a named bundle of tools, an authz gate capability, and optional behavioral prompt. Replaces the flat profile approach with authz-aware progressive disclosure.
+- **Tool Profile Registry** — declares named tool subsets (profiles) for different interaction contexts. Phase 1 implementation; to be evolved into skill presets (pre-loaded skill combinations).
+- **`load_skill` Meta-Tool** — lightweight tool included in the base set that lets the model request additional skill bundles on demand. Subsumes the old "lazy tool injector" concept with a richer, named-skill interface.
+- **Intent Classifier** — lightweight mechanism that pre-loads the right skills before the main LLM call, avoiding the extra round-trip when the intent is clear.
 - **System Prompt Tightener** — removes tool-description duplication and dead-code sections from the system prompt.
+- **Composite Tool Consolidator** — merges related tools behind a single schema with an `action` discriminator.
 - **Stored Tool Definitions** — provider-side caching of schemas so they aren't resent on every request.
 
 ## Design Decisions
@@ -89,6 +90,86 @@ The Responses API supports server-side tool storage, avoiding re-transmission of
 
 Worth pursuing only after profiles (approach 1) and lazy injection (approach 3) are in place, since those reduce the number of tools regardless of provider.
 
+### 7. Skill-Based Architecture (authz-aware progressive disclosure)
+
+Skills unify Phase 1 profiles, Phase 4 lazy injection, and the existing authz system into one coherent model. The direction is goal-up, not authz-down:
+
+**User goals / KPIs → Skills needed to accomplish them → Each skill defines capabilities + tools**
+
+The skill is the **primary entity**. You don't start with "what capabilities does this user have?" — you start with "what does this user need to accomplish?" and assign skills accordingly. Each skill is a self-contained definition (`skill.md`) that carries its own tool set, gate capability, and behavioral guidance. This parallels BLB's workspace markdown approach and makes skills inspectable as documentation, not just code.
+
+A **Skill** bridges three concerns:
+
+- **Goal side:** each skill maps to a job function or operational need. "This user manages employee records" → assign `data` skill. "This user coordinates work across agents" → assign `delegation` skill.
+- **AI side:** each skill bundles a set of tools and a behavioral prompt fragment (from `skill.md`). The `load_skill` meta-tool catalog shows only skills the user is assigned. Tools and prompt guidance are loaded together — the model gets context for *how* to use the tools, not just *what* tools exist.
+- **Authz side:** each skill declares a gate capability. Assigning a skill to a user's role grants the gate capability; removing it revokes access. The `load_skill` catalog is filtered by gate capabilities before it reaches the LLM, so the model never learns about skills the user can't use.
+
+**Motivation: authz-before-inference.** Currently, tool-level authz happens post-inference — the model calls a tool, the registry checks `requiredCapability()`, and returns "permission denied." This wastes a tool-calling round-trip and confuses the model into retries. With skill-level gating, unauthorized tools are invisible to the model.
+
+**Natural alignment with existing authz roles.** The current authz config already defines two tool-capability tiers that map cleanly to skill bundles:
+
+| Role | Current capabilities | Skill mapping (goal-oriented) |
+|---|---|---|
+| `agent_operator` | navigate, guide, system_info, query_data, memory, notifications, web, document/image analysis, delegation_status, agent_list | "Daily operational needs" → `navigation`, `memory`, `data` (read), `research`, `documents` |
+| `agent_power_user` | operator + artisan, bash, browser, edit_data, message, delegate, schedule, ticket_update, edit_file, write_js | "Build and coordinate" → adds `data` (write), `communication`, `delegation`, `development` |
+
+Skills don't replace these roles — they sit between roles and tools. A role represents a collection of goals; goals map to skills; skills define tools and capabilities. The existing roles become skill bundles: `agent_operator` = a preset of operational skills, `agent_power_user` = operational + power skills.
+
+**Proposed skill definitions:**
+
+| Skill | Goal it serves | Tools | Gate capability |
+|---|---|---|---|
+| `navigation` | Navigate the app and understand the UI | `navigate`, `visible_nav_menu`, `active_page_snapshot`, `guide`, `system_info`, `write_js` | `ai.skill_navigation.use` |
+| `memory` | Remember context across conversations | `memory_get`, `memory_search`, `memory_status` | `ai.skill_memory.use` |
+| `data` | Query and modify business data | `query_data`, `edit_data`, `artisan` | `ai.skill_data.use` |
+| `communication` | Send messages and notifications | `message`, `notification`, `ticket_update` | `ai.skill_communication.use` |
+| `delegation` | Coordinate and assign work to agents | `delegate_task`, `delegation_status`, `agent_list`, `schedule_task` | `ai.skill_delegation.use` |
+| `documents` | Analyze documents and images | `document_analysis`, `image_analysis` | `ai.skill_documents.use` |
+| `development` | Run commands and edit code/config | `bash`, `edit_file`, `browser` | `ai.skill_development.use` |
+| `research` | Search the web and fetch external content | `web_fetch`, `web_search` | `ai.skill_research.use` |
+
+**Progressive disclosure flow:**
+
+1. Every request starts with the `navigation` skill tools (always loaded) plus the `load_skill` meta-tool.
+2. The `load_skill` schema includes a catalog of available skills (names + one-line descriptions), filtered by the user's capabilities. The catalog itself is ~300 chars — vs. ~23.8K for all tool schemas.
+3. When the model needs additional capabilities, it calls `load_skill(skill: "data")`. The runtime injects the skill's tool definitions and optional prompt fragment, then re-invokes the LLM with the expanded tool set.
+4. Multiple skills can be loaded in one turn. A cap of 2 skill loads per turn prevents loops.
+5. The intent classifier (Phase 3) pre-loads likely skills before the first LLM call, avoiding the round-trip for predictable turns.
+
+**Effective payload per user role:**
+
+| User role | Base load | Available via `load_skill` | Max tools |
+|---|---|---|---|
+| `agent_operator` | 7 (navigation + load_skill) | memory, data-read, research, documents | ~18 |
+| `agent_power_user` | 7 (navigation + load_skill) | all 8 skills | ~26 |
+| Typical navigational turn | 7 | none loaded | 7 |
+| Typical data question | 7 + 3 (data pre-loaded) | — | 10 |
+
+**Relationship to Phase 1 profiles.** The existing `ChatToolProfileRegistry` profiles (`chat-core`, `chat-data`, `chat-action`, `chat-full`) become **skill presets** — predefined combinations of skills pre-loaded for known interaction patterns. `chat-core` ≈ `navigation` skill only. `chat-data` ≈ `navigation` + `memory` + `data` pre-loaded. The profile registry remains as the mechanism that maps a preset name to a resolved `allowedToolNames` list.
+
+**Skill definition format (`skill.md`).** Each skill is defined as a markdown file (e.g., `app/Modules/Core/AI/Resources/skills/data/skill.md`) that serves as both documentation and runtime configuration. The file declares the skill's goal, tools, gate capability, and behavioral prompt in a structured frontmatter + prose format. The `AiSkillRegistry` loads these files at boot, making skills inspectable and editable as documentation. This parallels BLB's workspace markdown approach (tool descriptions, system prompts) and the Amp skill pattern.
+
+The `skill.md` behavioral prompt fragment is injected into the system prompt only when the skill is loaded — so the model gets targeted guidance for the tools it's actually using, not a monolithic prompt covering all 26 tools. This extends Phase 2's prompt tightening: instead of one system prompt trying to cover everything, behavioral guidance is distributed across skill definitions and loaded on demand.
+
+**Layered skill resolution (framework → module → company).** BLB is a framework; each licensee's org structure, user goals, and KPIs are different. Skills follow the same three-tier pattern BLB already uses for authz roles and module discovery: framework defines defaults → modules extend → company customizes via database.
+
+*Layer 1 — Framework skills.* BLB ships the 8 default skills above as `skill.md` files under `app/Modules/Core/AI/Resources/skills/`. These cover universal operational needs (navigation, data, communication, etc.) that every deployment gets. They are the "vocabulary" layer — sensible defaults that work out of the box.
+
+*Layer 2 — Module skills.* Each module can register its own skills via auto-discovery. The framework scans `app/Modules/*/AI/Resources/skills/*/skill.md` at boot, the same way it discovers module service providers and authz capabilities. Examples: a Quality module ships a `quality-management` skill with NCR/CAPA/SCAR tools; a Ticketing module ships `ticket-triage` with triage and assignment tools. Module skills register their own gate capabilities in the module's `authz.php`. No changes to framework code needed — drop a `skill.md` in the right path and the skill appears.
+
+*Layer 3 — Company customization (database).* Per-company overrides stored in the database, managed through an admin UI. A company admin can:
+
+- **Disable** a framework or module skill for their org (e.g., disable `development` for non-technical teams)
+- **Override** a skill's tool list or behavioral prompt (e.g., a stricter `data` skill prompt for a regulated industry)
+- **Create** entirely new skills mapped to their org's specific KPIs and job functions
+- **Assign** skills to roles or individual employees based on what each person needs to accomplish
+
+This mirrors how authz works today: `authz.php` defines the vocabulary (capabilities, roles), the database stores assignments (which user has which role). For skills: `skill.md` files define the vocabulary (what skills exist, what tools they bundle), the database stores assignments (which company/role/employee has which skills) and overrides.
+
+**What the licensee's admin controls:** which skills are enabled, who gets which skills, custom skills for their business processes, behavioral prompt overrides. **What they don't touch:** tool implementations (code), gate capability wiring (framework), `load_skill` runtime mechanics (framework).
+
+**Implication for Phase 3 implementation:** start with Layer 1 only (file-backed framework skills, no database). Layer 2 (module discovery) follows when a second module needs skills. Layer 3 (company customization) follows when there's a licensee who needs it. The `AiSkillRegistry` interface should support all three layers from the start (query by company, accept overrides), but the initial implementation only reads from files.
+
 ## Phases
 
 ### Phase 1 — Chat Tool Profiles
@@ -113,36 +194,52 @@ Goal: eliminate duplication between system prompt prose and tool descriptions; r
 - [x] Verify prompt renders correctly via `LaraPromptFactory::buildForCurrentUser()` in a test
 - [ ] Compare wire-log payload sizes before and after
 
-### Phase 3 — Intent Classifier
+### Phase 3 — Skill Registry & Authz Integration
 
-Goal: automatically select the right profile per message without manual annotation.
+Goal: replace flat profiles with goal-driven, authz-aware skills so the tool surface reflects what each user needs to accomplish.
+
+- [ ] Create `AiSkill` DTO: `key`, `label`, `goal` (one-line purpose), `tools` (list), `gateCapability` (string), `promptFragment` (optional string from `skill.md`)
+- [ ] Create `skill.md` files for each of the 8 skills under `app/Modules/Core/AI/Resources/skills/<key>/skill.md` — each declares the skill's goal, tools, gate capability, and behavioral prompt
+- [ ] Create `AiSkillRegistry` service that loads skill definitions from `skill.md` files at boot
+- [ ] Add `ai.skill_*.use` gate capabilities to `app/Base/Authz/Config/authz.php` and map to `agent_operator` / `agent_power_user` roles
+- [ ] Create `SkillResolver` that collects available skills for the current user by checking gate capabilities via `AuthorizationService`
+- [ ] Refactor `ChatToolProfileRegistry` to resolve profiles as skill presets: `chat-core` = `navigation` only, `chat-data` = `navigation` + `memory` + `data`, etc.
+- [ ] Verify tool-level `requiredCapability()` checks remain as a second defense layer (belt-and-suspenders with skill gating)
+- [ ] Run authz seeder to sync new `ai.skill_*.use` capabilities
+
+### Phase 4 — `load_skill` Meta-Tool (Progressive Disclosure)
+
+Goal: let the model discover and load additional skills on demand, avoiding full-payload defaults.
+
+- [ ] Create `LoadSkillTool` with schema: `skill` (enum of available skill keys), description includes one-line catalog of user's available skills
+- [ ] `LoadSkillTool.execute()` returns a signal (not side-effects) to `AgenticRuntime` to inject the skill's tools and re-invoke the LLM
+- [ ] Build dynamic tool schema: the `skill` enum and description are generated per-user from `SkillResolver` (only shows skills the user can use)
+- [ ] Handle the injection signal in `AgenticRuntime.runToolCallingLoop()` and `runStreamingToolLoop()` — merge skill tools into current set, re-invoke LLM
+- [ ] Include `load_skill` in the base navigation skill (always available)
+- [ ] Cap skill loads at 2 per turn to prevent loops
+- [ ] Add `skill.loaded` wire-log event with skill key and tool count
+- [ ] Optional: attach skill-specific prompt fragment when a skill is loaded
+
+### Phase 5 — Intent Classifier (Skill Pre-Loading)
+
+Goal: pre-load the right skills before the first LLM call so the model doesn't need an extra round-trip for predictable turns.
 
 - [ ] Implement keyword/heuristic classifier as a service (`ChatIntentClassifier`)
-- [ ] Map classifier output to profile names
-- [ ] Integrate into `ChatTurnRunner` before runtime invocation
+- [ ] Map classifier output to skill names (not profile names) — e.g., "how many employees" → pre-load `data` skill
+- [ ] Integrate into `ChatTurnRunner` before runtime invocation: resolve skills, merge with base `navigation` tools
 - [ ] Measure classification accuracy against wire-log history (spot-check recent runs)
 - [ ] Optional: add small-model classifier tier for low-confidence cases
 
-### Phase 4 — Lazy Tool Injection
-
-Goal: make aggressive trimming safe by letting the model self-escalate.
-
-- [ ] Create `RequestToolsTool` (meta-tool) with minimal schema
-- [ ] Include `request_tools` in every profile's tool set
-- [ ] Handle the escalation signal in `AgenticRuntime.runToolCallingLoop()` — merge requested profile, re-invoke LLM
-- [ ] Cap escalation depth (max 1 escalation per turn to prevent loops)
-- [ ] Add wire-log event for escalation occurrences
-
-### Phase 5 — Composite Tool Consolidation
+### Phase 6 — Composite Tool Consolidation
 
 Goal: reduce total schema size for tools that naturally group.
 
 - [ ] Merge `memory_get`, `memory_search`, `memory_status` into a single `memory` tool with `action` discriminator
 - [ ] Merge `delegate_task`, `delegation_status`, `agent_list` into `delegation` tool
-- [ ] Update system prompt references to use new tool names
+- [ ] Update skill definitions to reference consolidated tool names
 - [ ] Verify model accuracy on composite tools with representative prompts
 
-### Phase 6 — Provider-Side Stored Definitions
+### Phase 7 — Provider-Side Stored Definitions
 
 Goal: eliminate re-transmission of tool schemas for providers that support it.
 
