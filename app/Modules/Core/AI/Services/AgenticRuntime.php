@@ -627,8 +627,7 @@ class AgenticRuntime
         array $config,
         array $apiMessages,
         array $tools,
-    ): array
-    {
+    ): array {
         $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
         $executionControls = $tools !== []
             ? $config['execution_controls']->withToolChoice(ToolChoiceMode::Auto)
@@ -656,6 +655,7 @@ class AgenticRuntime
             transportTap: $this->wireLogger->enabled()
                 ? new WireLoggingTransportTap($this->wireLogger, $runId)
                 : null,
+            providerHeaders: $credentials['headers'] ?? [],
         ));
     }
 

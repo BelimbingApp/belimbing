@@ -66,7 +66,7 @@ final readonly class ProviderTestService
     /**
      * Execute the minimal LLM call and return a test result.
      *
-     * @param  array{api_key: string, base_url: string}  $credentials
+     * @param  array{api_key: string, base_url: string, headers?: array<string, string>}  $credentials
      * @param  array{model: string, timeout: int, provider_name: string|null}  $config
      */
     private function executeTestCall(string $providerName, string $model, array $credentials, array $config): ProviderTestResult
@@ -84,6 +84,7 @@ final readonly class ProviderTestService
                 timeout: (int) $config['timeout'],
                 providerName: $providerName,
                 apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
+                providerHeaders: $credentials['headers'] ?? [],
             ));
         } catch (\Throwable $e) {
             return $this->loggedFailure($providerName, $model, AiRuntimeError::unexpected($e->getMessage()));

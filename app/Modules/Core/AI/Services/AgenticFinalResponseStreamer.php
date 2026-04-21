@@ -34,7 +34,7 @@ final class AgenticFinalResponseStreamer
 
     /**
      * @param  array{api_type: AiApiType|null, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
-     * @param  array{api_key: string, base_url: string}  $credentials
+     * @param  array{api_key: string, base_url: string, headers?: array<string, string>}  $credentials
      * @param  array{
      *     api_messages: list<array<string, mixed>>,
      *     tools: list<array<string, mixed>>,
@@ -79,6 +79,7 @@ final class AgenticFinalResponseStreamer
             transportTap: $this->wireLogger->enabled()
                 ? new WireLoggingTransportTap($this->wireLogger, $runId)
                 : null,
+            providerHeaders: $credentials['headers'] ?? [],
         ));
 
         $accumulator = [

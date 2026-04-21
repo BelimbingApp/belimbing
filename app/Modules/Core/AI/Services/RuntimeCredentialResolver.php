@@ -26,7 +26,7 @@ class RuntimeCredentialResolver
      * Resolve API credentials for a runtime request.
      *
      * @param  array<string, mixed>  $config  Provider config with api_key, base_url, provider_name
-     * @return array{api_key: string, base_url: string}|array{runtime_error: AiRuntimeError}
+     * @return array{api_key: string, base_url: string, headers: array<string, string>}|array{runtime_error: AiRuntimeError}
      */
     public function resolve(array $config): array
     {
@@ -43,7 +43,7 @@ class RuntimeCredentialResolver
      * Resolve credentials by dispatching to the provider's definition.
      *
      * @param  array<string, mixed>  $config
-     * @return array{api_key: string, base_url: string}|array{runtime_error: AiRuntimeError}
+     * @return array{api_key: string, base_url: string, headers: array<string, string>}|array{runtime_error: AiRuntimeError}
      */
     private function resolveCredentials(array $config): array
     {
@@ -53,6 +53,7 @@ class RuntimeCredentialResolver
             return [
                 'api_key' => $config['api_key'],
                 'base_url' => $config['base_url'],
+                'headers' => [],
             ];
         }
 
@@ -62,7 +63,7 @@ class RuntimeCredentialResolver
     /**
      * Resolve credentials through the provider's definition.
      *
-     * @return array{api_key: string, base_url: string}|array{runtime_error: AiRuntimeError}
+     * @return array{api_key: string, base_url: string, headers: array<string, string>}|array{runtime_error: AiRuntimeError}
      */
     private function resolveViaDefinition(AiProvider $provider): array
     {
@@ -74,6 +75,7 @@ class RuntimeCredentialResolver
             return [
                 'api_key' => $resolved->apiKey ?? '',
                 'base_url' => $resolved->baseUrl,
+                'headers' => $resolved->headers,
             ];
         } catch (GithubCopilotAuthException $e) {
             return [

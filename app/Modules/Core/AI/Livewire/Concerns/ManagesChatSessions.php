@@ -237,6 +237,7 @@ trait ManagesChatSessions
             timeout: 15,
             providerName: $config['provider_name'] ?? null,
             apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
+            providerHeaders: $credentials['headers'] ?? [],
         ));
 
         if (isset($response['runtime_error'])) {

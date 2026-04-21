@@ -31,8 +31,10 @@ final class LlmClientSupport
             $http = $http->withOptions(['stream' => true]);
         }
 
-        if ($providerHeaders !== []) {
-            $http = $http->withHeaders($providerHeaders);
+        $headers = array_merge($providerHeaders, $request->providerHeaders);
+
+        if ($headers !== []) {
+            $http = $http->withHeaders($headers);
         }
 
         if ($request->apiType === AiApiType::AnthropicMessages && $request->apiKey !== '') {

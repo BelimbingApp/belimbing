@@ -13,6 +13,9 @@ class ChatRequest
 {
     public readonly ExecutionControls $executionControls;
 
+    /**
+     * @param  array<string, string>  $providerHeaders
+     */
     public function __construct(
         public readonly string $baseUrl,
         public readonly string $apiKey,
@@ -24,6 +27,7 @@ class ChatRequest
         public readonly ?array $tools = null,
         public readonly AiApiType $apiType = AiApiType::OpenAiChatCompletions,
         public readonly ?LlmTransportTap $transportTap = null,
+        public readonly array $providerHeaders = [],
     ) {
         $this->executionControls = $executionControls ?? ExecutionControls::defaults();
 

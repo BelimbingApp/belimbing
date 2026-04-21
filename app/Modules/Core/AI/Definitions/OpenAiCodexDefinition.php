@@ -109,6 +109,7 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
         $accessToken = (string) ($provider->credentials[self::CRED_ACCESS_TOKEN] ?? '');
         $refreshToken = (string) ($provider->credentials[self::CRED_REFRESH_TOKEN] ?? '');
         $expiresAt = (string) ($provider->credentials[self::CRED_EXPIRES_AT] ?? '');
+        $accountId = (string) ($provider->credentials[self::CRED_ACCOUNT_ID] ?? '');
 
         if ($accessToken === '') {
             throw new \RuntimeException('OpenAI Codex is not connected.');
@@ -116,16 +117,20 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
 
         if ($expiresAt !== '' && $refreshToken !== '' && $this->isExpiredOrNearExpiry($expiresAt, skewSeconds: 60)) {
             $this->auth->refresh($provider);
-            $provider = $provider->fresh();
+            $provider = $provider->fresh() ?? $provider;
             $accessToken = (string) ($provider?->credentials[self::CRED_ACCESS_TOKEN] ?? $accessToken);
+            $accountId = (string) ($provider->credentials[self::CRED_ACCOUNT_ID] ?? $accountId);
+        }
+
+        if ($accountId === '') {
+            throw new \RuntimeException('OpenAI Codex is missing the ChatGPT account ID. Reconnect the provider.');
         }
 
         return new ResolvedProviderConfig(
             baseUrl: $provider->base_url,
             apiKey: $accessToken,
             headers: [
-                // Protocol client will add Authorization: Bearer automatically via apiKey.
-                // chatgpt-account-id is derived from JWT in ProviderRequestHeaderResolver.
+                'chatgpt-account-id' => $accountId,
             ],
             metadata: [
                 'provider_family' => 'openai_codex',

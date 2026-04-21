@@ -196,7 +196,7 @@ Goal: make the feature operable and supportable despite the external risk.
   - [ ] Add a dedicated logout/revoke-state regression test
 - [ ] Add runtime/diagnostic coverage for:
   - [x] expired refresh tokens → status becomes `expired` and UI prompts reconnect
-  - [ ] missing `account_id` → provider-specific validation error
+  - [x] missing `account_id` → provider-specific validation error
   - [ ] transport-level rejections → provider-specific error copy + structured logs
 - [ ] Document operator guidance for reconnecting or disabling the provider if OpenAI changes the external contract
 

@@ -147,6 +147,7 @@ class AgentRuntime
             timeout: $config['timeout'],
             providerName: $config['provider_name'],
             apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
+            providerHeaders: $credentials['headers'] ?? [],
         ));
 
         if (isset($result['runtime_error'])) {

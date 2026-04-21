@@ -79,6 +79,7 @@ test('copilot-proxy passes when server is reachable', function (): void {
     expect($result)
         ->toHaveKey('api_key')
         ->toHaveKey('base_url', RCR_PROXY_BASE_URL)
+        ->toHaveKey('headers', [])
         ->not->toHaveKey('runtime_error');
 });
 
@@ -94,6 +95,7 @@ test('non-proxy providers skip connectivity check', function (): void {
     expect($result)
         ->toHaveKey('api_key', 'sk-test')
         ->toHaveKey('base_url', 'https://api.openai.com/v1')
+        ->toHaveKey('headers', [])
         ->not->toHaveKey('runtime_error');
 
     Http::assertNothingSent();
@@ -155,6 +157,7 @@ test('provider resolution uses runtime config instead of persisted provider cred
     expect($result)
         ->toHaveKey('api_key', 'runtime-secret')
         ->toHaveKey('base_url', 'https://runtime.example/v1')
+        ->toHaveKey('headers', [])
         ->not->toHaveKey('runtime_error');
 });
 
@@ -190,7 +193,43 @@ test('runtime resolution uses persisted codex provider credentials when provider
     expect($result)
         ->toHaveKey('api_key', 'aaa.bbb.ccc')
         ->toHaveKey('base_url', 'https://chatgpt.com/backend-api')
+        ->toHaveKey('headers', ['chatgpt-account-id' => 'acct_test'])
         ->not->toHaveKey('runtime_error');
+});
+
+test('codex runtime resolution fails when account id is missing', function (): void {
+    $provider = createRcrProvider(
+        OpenAiCodexDefinition::KEY,
+        'https://chatgpt.com/backend-api',
+        authType: AuthType::OAuth,
+    );
+
+    $provider->update([
+        'credentials' => [
+            OpenAiCodexDefinition::CRED_ACCESS_TOKEN => 'aaa.bbb.ccc',
+            OpenAiCodexDefinition::CRED_REFRESH_TOKEN => 'refresh-token',
+            OpenAiCodexDefinition::CRED_EXPIRES_AT => now()->addHour()->toIso8601String(),
+        ],
+        'connection_config' => [
+            OpenAiCodexDefinition::AUTH_STATE_KEY => [
+                'status' => 'connected',
+                'mode' => 'browser_pkce',
+            ],
+        ],
+    ]);
+
+    $result = makeResolver()->resolve([
+        'api_key' => '',
+        'base_url' => 'https://chatgpt.com/backend-api',
+        'provider_name' => OpenAiCodexDefinition::KEY,
+        'provider_id' => $provider->id,
+    ]);
+
+    expect($result)
+        ->toHaveKey('runtime_error')
+        ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
+        ->and($result['runtime_error']->errorType)->toBe(AiErrorType::ConnectionError)
+        ->and($result['runtime_error']->diagnostic)->toContain('missing the ChatGPT account ID');
 });
 
 test('expiring codex credentials that fail refresh mark the provider expired', function (): void {

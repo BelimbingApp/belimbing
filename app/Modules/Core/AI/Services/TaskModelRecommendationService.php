@@ -80,6 +80,7 @@ class TaskModelRecommendationService
             timeout: 30,
             providerName: $config['provider_name'] ?? null,
             apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
+            providerHeaders: $credentials['headers'] ?? [],
         ));
 
         if (isset($response['runtime_error'])) {

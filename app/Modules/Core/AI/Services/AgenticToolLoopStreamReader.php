@@ -36,7 +36,7 @@ final class AgenticToolLoopStreamReader
      * accumulates tool_call_delta and content_delta events internally.
      *
      * @param  array{model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
-     * @param  array<string, mixed>  $credentials
+     * @param  array{api_key: string, base_url: string, headers?: array<string, string>}  $credentials
      * @param  array<string, mixed>  $toolLoopState
      * @return \Generator<int, array{event: string, data: array<string, mixed>}, mixed, array<string, mixed>>
      */
@@ -73,6 +73,7 @@ final class AgenticToolLoopStreamReader
             transportTap: $this->wireLogger->enabled()
                 ? new WireLoggingTransportTap($this->wireLogger, $runId)
                 : null,
+            providerHeaders: $credentials['headers'] ?? [],
         ));
 
         $content = '';
