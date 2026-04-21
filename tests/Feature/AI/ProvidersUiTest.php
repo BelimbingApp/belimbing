@@ -2,6 +2,7 @@
 
 use App\Modules\Core\AI\Livewire\Providers\GithubCopilotSetup;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
+use App\Modules\Core\AI\Livewire\Providers\ProviderSetup;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
 use App\Modules\Core\Company\Models\Company;
@@ -64,6 +65,24 @@ test('github copilot setup starts device flow for a company-scoped user without 
         ->assertSet('deviceFlow.status', 'pending')
         ->assertSee(AI_GITHUB_DEVICE_FLOW_USER_CODE)
         ->assertSee('Copy');
+});
+
+test('generic oauth provider setup is honest about missing dedicated sign-in support', function (): void {
+    $user = createAiProvidersTestUser();
+
+    $this->actingAs($user);
+
+    Livewire::test(ProviderSetup::class, ['providerKey' => 'qwen-portal'])
+        ->assertSee('requires a dedicated OAuth sign-in flow')
+        ->assertDontSee('API Key (optional)')
+        ->set('baseUrl', 'https://portal.qwen.ai/v1')
+        ->call('connect')
+        ->assertSet('connectError', 'This provider requires a dedicated OAuth sign-in flow. BLB does not implement a generic OAuth connector yet.');
+
+    expect(AiProvider::query()
+        ->where('company_id', $user->company_id)
+        ->where('name', 'qwen-portal')
+        ->exists())->toBeFalse();
 });
 
 function createAiProvidersTestUser(): User

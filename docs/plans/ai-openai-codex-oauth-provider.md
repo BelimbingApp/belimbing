@@ -1,7 +1,7 @@
 # OpenAI Codex OAuth Provider
 
 **Agent:** Codex
-**Status:** Phase 4 complete; optional Phase 2.4 and Phase 5 pending
+**Status:** Phase 5 complete; optional Phase 2.4 pending
 **Last Updated:** 2026-04-21
 **Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/Config/ai.php`, `app/Modules/Core/AI/Contracts/ProviderDefinition.php`, `app/Modules/Core/AI/Definitions/GenericApiKeyDefinition.php`, `app/Modules/Core/AI/Livewire/Providers/ProviderSetup.php`, `app/Modules/Core/AI/Models/AiProvider.php`, `app/Modules/Core/AI/Services/ProviderAuthFlowService.php`, `app/Modules/Core/AI/Services/ProviderDefinitionRegistry.php`, `app/Modules/Core/AI/Values/ResolvedProviderConfig.php`, `resources/core/views/livewire/admin/ai/providers/provider-setup.blade.php`, `/home/kiat/repo/openclaw/src/plugins/provider-openai-codex-oauth.ts`, `/home/kiat/repo/openclaw/src/agents/cli-credentials.ts`, `/home/kiat/repo/openclaw/node_modules/@mariozechner/pi-ai/dist/utils/oauth/openai-codex.js`, `/home/kiat/repo/openclaw/node_modules/@mariozechner/pi-ai/dist/providers/openai-codex-responses.js`, `https://github.com/openai/codex/blob/1dcea729d33ac936b8207ffccae7a0c4cb6b4ff4/codex-rs/app-server/README.md`, `https://github.com/openai/codex/tree/1dcea729d33ac936b8207ffccae7a0c4cb6b4ff4/codex-rs/login/src/auth`
 
@@ -43,7 +43,7 @@ The admin setup flow should present `OpenAI Codex` as a subscription-backed prov
 
 ### Do not rely on the generic `oauth` provider path
 
-The current generic path is incomplete: the UI treats `oauth` as API-key-optional, while the registry still resolves most such providers to `GenericApiKeyDefinition`. We should not compound that mismatch by shoving OpenAI Codex into it. The right fix is to add a dedicated provider definition now and only generalize shared OAuth primitives after the first real OAuth provider beyond GitHub Copilot exists in BLB.
+The current generic path is incomplete: the UI treated `oauth` as API-key-optional, while the registry resolved most such providers to `GenericApiKeyDefinition`. We should not compound that mismatch by shoving OpenAI Codex into it. The right fix is to add a dedicated provider definition first, then generalize only the proven shared pieces. Phase 5 therefore extracts durable OAuth auth-state primitives and introduces a truthful `GenericOAuthDefinition`, rather than broadening the generic API-key path.
 
 ### Treat this as an unsupported compatibility integration
 
@@ -204,6 +204,6 @@ Goal: make the feature operable and supportable despite the external risk.
 
 Goal: generalize only after BLB has one full OAuth provider path working end to end.
 
-- [ ] Audit the current `auth_type: oauth` path and decide which pieces should become reusable OAuth primitives
-- [ ] Move any now-proven shared logic out of the OpenAI Codex implementation without weakening the provider boundary
-- [ ] Keep unsupported-provider-specific assumptions out of the generic provider definition path
+- [x] Audit the current `auth_type: oauth` path and decide which pieces should become reusable OAuth primitives
+- [x] Move any now-proven shared logic out of the OpenAI Codex implementation without weakening the provider boundary
+- [x] Keep unsupported-provider-specific assumptions out of the generic provider definition path

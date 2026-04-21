@@ -202,7 +202,7 @@ return [
     | auth_type controls the connect wizard UI behavior:
     |   'api_key'      — Standard API key (base_url + api_key required)
     |   'local'        — Local/self-hosted server (api_key optional)
-    |   'oauth'        — OAuth flow required (api_key optional)
+    |   'oauth'        — Dedicated OAuth sign-in flow required (not a generic API-key variant)
     |   'device_flow'  — GitHub OAuth device flow (token obtained interactively)
     |   'custom'       — Requires additional configuration
     |

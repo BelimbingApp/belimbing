@@ -38,7 +38,7 @@ Core AI reads catalog data from `app/Base/AI/Services/ModelCatalogService`. It d
 |-------|----------|---------|----------|
 | `api_key` | Standard API key auth | Required | OpenAI, Anthropic, Google, most providers |
 | `local` | Local/self-hosted server | Optional | Ollama, vLLM, LiteLLM, Copilot Proxy |
-| `oauth` | OAuth flow required | Optional | Qwen Portal, Chutes |
+| `oauth` | Dedicated OAuth sign-in flow required | No generic API-key path | OpenAI Codex, Qwen Portal, Chutes |
 | `device_flow` | GitHub OAuth device flow | Auto (token) | GitHub Copilot |
 | `custom` | Needs additional config | Required | Cloudflare AI Gateway (Account ID + Gateway ID) |
 

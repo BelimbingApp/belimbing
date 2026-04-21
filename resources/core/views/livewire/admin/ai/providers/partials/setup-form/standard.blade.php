@@ -14,11 +14,10 @@
             id="provider-api-key"
             wire:model.live.blur="apiKey"
             type="password"
-            :label="in_array($authType, ['local', 'oauth', 'subscription']) ? __('API Key (optional)') : __('API Key')"
+            :label="in_array($authType, ['local', 'subscription']) ? __('API Key (optional)') : __('API Key')"
             :required="in_array($authType, ['api_key', 'custom'])"
             :placeholder="match($authType) {
                 'local' => __('Leave empty for local servers'),
-                'oauth' => __('Paste API key if available'),
                 'subscription' => __('Paste access token'),
                 default => __('Paste your API key'),
             }"

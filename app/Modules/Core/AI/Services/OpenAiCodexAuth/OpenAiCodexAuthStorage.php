@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Services\OpenAiCodexAuth;
 
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Values\ProviderOAuthState;
 
 /**
  * Persists durable provider auth state and credentials for OpenAI Codex.
@@ -20,94 +21,72 @@ final class OpenAiCodexAuthStorage
      */
     public function markPending(AiProvider $provider, string $mode = 'browser_pkce'): void
     {
-        $auth = $this->readAuthState($provider);
-        $auth['status'] = 'pending';
-        $auth['mode'] = $mode;
-        $auth['started_at'] = now()->toIso8601String();
-        $auth['completed_at'] = null;
-        $auth['plan_type'] = null;
-        $auth['last_error_code'] = null;
-        $auth['last_error_message'] = null;
-
-        $this->writeAuthState($provider, $auth);
+        $this->writeAuthState($provider, ProviderOAuthState::pending(
+            $this->readAuthState($provider),
+            $mode,
+        ));
     }
 
     public function markConnected(AiProvider $provider): void
     {
-        $auth = $this->readAuthState($provider);
-        $auth['status'] = 'connected';
-        $auth['completed_at'] = now()->toIso8601String();
-        $auth['last_refresh_at'] ??= null;
-        $auth['last_error_code'] = null;
-        $auth['last_error_message'] = null;
-
-        $this->writeAuthState($provider, $auth);
+        $this->writeAuthState($provider, ProviderOAuthState::connected(
+            $this->readAuthState($provider),
+            mode: 'browser_pkce',
+        ));
     }
 
     public function markRefreshed(AiProvider $provider): void
     {
-        $auth = $this->readAuthState($provider);
-        $auth['last_refresh_at'] = now()->toIso8601String();
-        $auth['last_error_code'] = null;
-        $auth['last_error_message'] = null;
-
-        $this->writeAuthState($provider, $auth);
+        $this->writeAuthState($provider, ProviderOAuthState::refreshed(
+            $this->readAuthState($provider),
+            mode: 'browser_pkce',
+        ));
     }
 
     public function markError(AiProvider $provider, string $code, string $message): void
     {
-        $auth = $this->readAuthState($provider);
-        $auth['status'] = 'error';
-        $auth['last_error_code'] = $code;
-        $auth['last_error_message'] = $message;
-
-        $this->writeAuthState($provider, $auth);
+        $this->writeAuthState($provider, ProviderOAuthState::error(
+            $this->readAuthState($provider),
+            $code,
+            $message,
+            mode: 'browser_pkce',
+        ));
     }
 
     public function markExpired(AiProvider $provider, string $code, string $message): void
     {
-        $auth = $this->readAuthState($provider);
-        $auth['status'] = 'expired';
-        $auth['last_error_code'] = $code;
-        $auth['last_error_message'] = $message;
-
-        $this->writeAuthState($provider, $auth);
+        $this->writeAuthState($provider, ProviderOAuthState::expired(
+            $this->readAuthState($provider),
+            $code,
+            $message,
+            mode: 'browser_pkce',
+        ));
     }
 
     public function markDisconnected(AiProvider $provider): void
     {
-        $auth = $this->readAuthState($provider);
-        $auth['status'] = 'disconnected';
-        $auth['started_at'] = null;
-        $auth['completed_at'] = null;
-        $auth['last_refresh_at'] = null;
-        $auth['plan_type'] = null;
-        $auth['last_error_code'] = null;
-        $auth['last_error_message'] = null;
-
-        $this->writeAuthState($provider, $auth);
+        $this->writeAuthState($provider, ProviderOAuthState::disconnected(
+            $this->readAuthState($provider),
+            mode: 'browser_pkce',
+        ));
     }
 
     public function clearDiagnosticError(AiProvider $provider): void
     {
-        $auth = $this->readAuthState($provider);
-        $auth['last_error_code'] = null;
-        $auth['last_error_message'] = null;
-
-        $this->writeAuthState($provider, $auth);
+        $this->writeAuthState($provider, ProviderOAuthState::clearDiagnosticError(
+            $this->readAuthState($provider),
+            mode: 'browser_pkce',
+        ));
     }
 
     public function recordDiagnosticFailure(AiProvider $provider, string $code, string $message): void
     {
-        $auth = $this->readAuthState($provider);
-        $auth['last_error_code'] = $code;
-        $auth['last_error_message'] = $message;
-
-        if (! isset($auth['status']) || $auth['status'] === null || $auth['status'] === '') {
-            $auth['status'] = 'error';
-        }
-
-        $this->writeAuthState($provider, $auth);
+        $this->writeAuthState($provider, ProviderOAuthState::diagnosticFailure(
+            $this->readAuthState($provider),
+            $code,
+            $message,
+            mode: 'browser_pkce',
+        ));
     }
 
     /**
@@ -137,9 +116,10 @@ final class OpenAiCodexAuthStorage
      */
     private function readAuthState(AiProvider $provider): array
     {
-        $auth = $provider->connection_config[OpenAiCodexDefinition::AUTH_STATE_KEY] ?? null;
-
-        return is_array($auth) ? $auth : [];
+        return ProviderOAuthState::normalize(
+            $provider->connection_config[OpenAiCodexDefinition::AUTH_STATE_KEY] ?? null,
+            mode: 'browser_pkce',
+        );
     }
 
     /**

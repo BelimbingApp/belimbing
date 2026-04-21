@@ -4,6 +4,7 @@ use App\Modules\Core\AI\Definitions\CloudflareGatewayDefinition;
 use App\Modules\Core\AI\Definitions\CopilotProxyDefinition;
 use App\Modules\Core\AI\Definitions\GenericApiKeyDefinition;
 use App\Modules\Core\AI\Definitions\GenericLocalDefinition;
+use App\Modules\Core\AI\Definitions\GenericOAuthDefinition;
 use App\Modules\Core\AI\Definitions\GithubCopilotDefinition;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Enums\AuthType;
@@ -132,6 +133,38 @@ test('GenericLocalDefinition accepts optional api_key', function (): void {
         ->toHaveKey('credentials', ['api_key' => 'optional-key']);
 });
 
+// ── GenericOAuthDefinition ──
+
+test('GenericOAuthDefinition has OAuth auth type and no generic runtime path', function (): void {
+    $def = new GenericOAuthDefinition('qwen-portal', 'https://portal.qwen.ai/v1');
+
+    expect($def->authType())->toBe(AuthType::OAuth)
+        ->and($def->defaultBaseUrl())->toBe('https://portal.qwen.ai/v1');
+});
+
+test('GenericOAuthDefinition validates and normalizes create input without credentials', function (): void {
+    $def = new GenericOAuthDefinition('qwen-portal');
+
+    $result = $def->validateAndNormalize([
+        'base_url' => 'https://portal.qwen.ai/v1',
+    ], ProviderOperation::Create);
+
+    expect($result)
+        ->toHaveKey('base_url', 'https://portal.qwen.ai/v1')
+        ->toHaveKey('auth_type', AuthType::OAuth)
+        ->toHaveKey('connection_config')
+        ->not->toHaveKey('credentials');
+});
+
+test('GenericOAuthDefinition refuses runtime resolution without a dedicated flow', function (): void {
+    $provider = new AiProvider;
+    $provider->base_url = 'https://portal.qwen.ai/v1';
+
+    $def = new GenericOAuthDefinition('qwen-portal');
+
+    $def->resolveRuntime($provider);
+})->throws(RuntimeException::class, 'dedicated OAuth sign-in flow');
+
 // ── OpenAiCodexDefinition ──
 
 test('OpenAiCodexDefinition has OAuth auth type and default base URL', function (): void {
@@ -147,7 +180,6 @@ test('OpenAiCodexDefinition validates and normalizes create input without api ke
 
     $result = $def->validateAndNormalize([
         'base_url' => PDT_CODEX_BASE_URL,
-        'api_key' => '',
     ], ProviderOperation::Create);
 
     expect($result)

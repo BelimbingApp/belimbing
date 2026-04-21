@@ -12,6 +12,7 @@ use App\Modules\Core\AI\Definitions\CloudflareGatewayDefinition;
 use App\Modules\Core\AI\Definitions\CopilotProxyDefinition;
 use App\Modules\Core\AI\Definitions\GenericApiKeyDefinition;
 use App\Modules\Core\AI\Definitions\GenericLocalDefinition;
+use App\Modules\Core\AI\Definitions\GenericOAuthDefinition;
 use App\Modules\Core\AI\Definitions\GithubCopilotDefinition;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager;
@@ -72,8 +73,8 @@ class ProviderDefinitionRegistry
         $this->built = true;
 
         // Register dedicated definitions for outlier providers
-        $this->register(new CloudflareGatewayDefinition());
-        $this->register(new CopilotProxyDefinition());
+        $this->register(new CloudflareGatewayDefinition);
+        $this->register(new CopilotProxyDefinition);
         $this->register(new GithubCopilotDefinition($this->copilotAuth));
         $this->register(new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class)));
 
@@ -90,6 +91,7 @@ class ProviderDefinitionRegistry
 
             $this->definitions[$key] = match ($authType) {
                 'local' => new GenericLocalDefinition($key, $baseUrl),
+                'oauth' => new GenericOAuthDefinition($key, $baseUrl),
                 default => new GenericApiKeyDefinition($key, $baseUrl),
             };
         }

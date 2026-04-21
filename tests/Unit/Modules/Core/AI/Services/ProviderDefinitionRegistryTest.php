@@ -5,12 +5,14 @@ use App\Modules\Core\AI\Definitions\CloudflareGatewayDefinition;
 use App\Modules\Core\AI\Definitions\CopilotProxyDefinition;
 use App\Modules\Core\AI\Definitions\GenericApiKeyDefinition;
 use App\Modules\Core\AI\Definitions\GenericLocalDefinition;
+use App\Modules\Core\AI\Definitions\GenericOAuthDefinition;
 use App\Modules\Core\AI\Definitions\GithubCopilotDefinition;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Services\ProviderDefinitionRegistry;
+use Tests\TestCase;
 
-uses(Tests\TestCase::class);
+uses(TestCase::class);
 
 test('registry resolves dedicated definitions for outlier providers', function (): void {
     $registry = app(ProviderDefinitionRegistry::class);
@@ -37,6 +39,15 @@ test('registry resolves GenericApiKeyDefinition for standard providers', functio
 
     expect($definition)->toBeInstanceOf(GenericApiKeyDefinition::class)
         ->and($definition->authType())->toBe(AuthType::ApiKey);
+});
+
+test('registry resolves GenericOAuthDefinition for generic oauth providers', function (): void {
+    $registry = app(ProviderDefinitionRegistry::class);
+
+    $definition = $registry->for('qwen-portal');
+
+    expect($definition)->toBeInstanceOf(GenericOAuthDefinition::class)
+        ->and($definition->authType())->toBe(AuthType::OAuth);
 });
 
 test('registry falls back to GenericApiKeyDefinition for unknown providers', function (): void {

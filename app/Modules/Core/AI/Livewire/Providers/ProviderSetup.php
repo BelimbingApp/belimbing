@@ -12,6 +12,7 @@ namespace App\Modules\Core\AI\Livewire\Providers;
 use App\Base\AI\Services\ModelCatalogService;
 use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Base\Support\Str as BlbStr;
+use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Livewire\Concerns\FormatsDisplayValues;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesModels;
@@ -147,6 +148,12 @@ class ProviderSetup extends Component
             return;
         }
 
+        if ($this->authType === AuthType::OAuth->value) {
+            $this->connectError = __('This provider requires a dedicated OAuth sign-in flow. BLB does not implement a generic OAuth connector yet.');
+
+            return;
+        }
+
         $this->connectError = null;
 
         try {
@@ -215,6 +222,10 @@ class ProviderSetup extends Component
             return;
         }
 
+        if ($this->authType === AuthType::OAuth->value) {
+            return;
+        }
+
         if ($this->baseUrl === '') {
             return;
         }
@@ -279,7 +290,7 @@ class ProviderSetup extends Component
     {
         return match ($this->authType) {
             'local' => __('Local server — API key is optional'),
-            'oauth' => __('OAuth provider — connect via sign-in flow (API keys are not required)'),
+            'oauth' => __('OAuth provider — requires a dedicated sign-in flow, not the generic API-key setup path'),
             'subscription' => __('Subscription service — paste access token or API key'),
             'custom' => __('Requires additional configuration after connecting'),
             'device_flow' => __('Requires GitHub device login — an active GitHub Copilot subscription is needed'),
@@ -309,7 +320,9 @@ class ProviderSetup extends Component
 
     public function providerCredentialsFormPartial(): ?string
     {
-        return null;
+        return $this->authType === AuthType::OAuth->value
+            ? 'livewire.admin.ai.providers.partials.setup-form.oauth-unavailable'
+            : null;
     }
 
     /**

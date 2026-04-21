@@ -11,6 +11,7 @@ use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager;
 use App\Modules\Core\AI\Values\ProviderField;
+use App\Modules\Core\AI\Values\ProviderOAuthState;
 use App\Modules\Core\AI\Values\ResolvedProviderConfig;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\Validator;
@@ -38,7 +39,7 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
     /**
      * Connection-config key for durable provider auth state.
      */
-    public const AUTH_STATE_KEY = 'auth';
+    public const AUTH_STATE_KEY = ProviderOAuthState::CONNECTION_CONFIG_KEY;
 
     public function __construct(
         private OpenAiCodexAuthManager $auth,
@@ -88,16 +89,7 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
         if ($operation === ProviderOperation::Create) {
             // Durable auth state lives in connection_config; pending OAuth handshake state remains ephemeral.
             $normalized['connection_config'] = [
-                self::AUTH_STATE_KEY => [
-                    'status' => 'disconnected',
-                    'mode' => 'browser_pkce',
-                    'started_at' => null,
-                    'completed_at' => null,
-                    'last_refresh_at' => null,
-                    'last_error_code' => null,
-                    'last_error_message' => null,
-                    'plan_type' => null,
-                ],
+                self::AUTH_STATE_KEY => ProviderOAuthState::defaults(mode: 'browser_pkce'),
             ];
         }
 
@@ -134,9 +126,10 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
             ],
             metadata: [
                 'provider_family' => 'openai_codex',
-                'auth' => is_array($provider->connection_config[self::AUTH_STATE_KEY] ?? null)
-                    ? $provider->connection_config[self::AUTH_STATE_KEY]
-                    : null,
+                'auth' => ProviderOAuthState::normalize(
+                    $provider->connection_config[self::AUTH_STATE_KEY] ?? null,
+                    mode: 'browser_pkce',
+                ),
             ],
         );
     }

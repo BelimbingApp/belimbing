@@ -41,7 +41,8 @@ final class ProviderHelpRegistry
         return match ($authType) {
             'local' => new LocalServerHelp,
             'device_flow' => new DeviceFlowHelp,
-            'api_key', 'oauth',
+            'oauth' => new OAuthHelp,
+            'api_key',
             'subscription', 'custom' => new ApiKeyHelp,
             default => new DefaultProviderHelp,
         };
