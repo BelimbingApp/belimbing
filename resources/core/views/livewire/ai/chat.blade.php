@@ -15,7 +15,7 @@
         pageAwareness: localStorage.getItem('blb-lara-page-awareness') || 'page',
         _draftKey: 'blb-lara-draft-{{ auth()->id() }}',
         _sessionDragging: false,
-        activeTurnSummaries: @js($activeTurnsBySession),
+        activeTurnSummaries: @js($activeTurnsBySession ?? []),
         replayUrlTemplate: @js(route('ai.chat.turn.events', ['turnId' => '__TURN__'])),
         terminalTurnStatuses: ['completed', 'failed', 'cancelled'],
         phaseLabels: @js($phaseLabels),
@@ -55,9 +55,10 @@
         },
 
         syncSummary(sessionId, patch) {
-            const current = this.activeTurnSummaries[sessionId] || {};
+            const summaries = this.activeTurnSummaries ?? {};
+            const current = summaries[sessionId] || {};
             this.activeTurnSummaries = {
-                ...this.activeTurnSummaries,
+                ...summaries,
                 [sessionId]: {
                     ...current,
                     ...patch,
@@ -66,7 +67,7 @@
         },
 
         clearSummary(sessionId, turnId = null) {
-            const current = this.activeTurnSummaries[sessionId] || null;
+            const current = (this.activeTurnSummaries ?? {})[sessionId] || null;
             if (!current) {
                 return;
             }
@@ -75,11 +76,11 @@
                 return;
             }
 
-            const next = { ...this.activeTurnSummaries };
+            const next = { ...(this.activeTurnSummaries ?? {}) };
             delete next[sessionId];
             this.activeTurnSummaries = next;
 
-            if (Object.keys(this.activeTurnSummaries).length === 0) {
+            if (Object.keys(this.activeTurnSummaries ?? {}).length === 0) {
                 this.stopSummaryPolling();
             }
         },
@@ -132,12 +133,12 @@
         },
 
         startSummaryPolling() {
-            if (this._summaryPollTimer || Object.keys(this.activeTurnSummaries).length === 0) {
+            if (this._summaryPollTimer || Object.keys(this.activeTurnSummaries ?? {}).length === 0) {
                 return;
             }
 
             const poll = () => {
-                Object.entries(this.activeTurnSummaries).forEach(([sessionId, summary]) => {
+                Object.entries(this.activeTurnSummaries ?? {}).forEach(([sessionId, summary]) => {
                     this.refreshSummary(sessionId, summary).catch(() => {
                         this.clearSummary(sessionId, summary?.turnId || null);
                     });
@@ -196,7 +197,7 @@
             }
         });
 
-        const savedDraft = localStorage.getItem(this._draftKey);
+        const savedDraft = localStorage.getItem($data._draftKey);
         if (savedDraft && !$wire.messageInput) {
             $wire.set('messageInput', savedDraft);
             $nextTick(() => {
@@ -209,13 +210,13 @@
 
         $watch('$wire.messageInput', v => {
             if (v && v.trim()) {
-                localStorage.setItem(this._draftKey, v);
+                localStorage.setItem($data._draftKey, v);
             } else {
-                localStorage.removeItem(this._draftKey);
+                localStorage.removeItem($data._draftKey);
             }
         });
-        if (Object.keys(this.activeTurnSummaries).length > 0) {
-            this.startSummaryPolling();
+        if (Object.keys($data.activeTurnSummaries ?? {}).length > 0) {
+            $data.startSummaryPolling();
         }
     "
     @navigate.window="$wire.set('pageUrl', window.location.href)"
@@ -1021,6 +1022,8 @@
 @script
 <script>
     Alpine.data('agentChatComposer', () => ({
+        draftKey: 'blb-lara-draft-{{ auth()->id() }}',
+
         async onSubmit(textarea, scrollContainer) {
             const value = textarea.value.trim();
             const hasAttachments = document.querySelectorAll('[wire\\:key^="att-"]').length > 0;
@@ -1064,14 +1067,14 @@
                     this.startPersistentFetch(result.turnId, result.streamUrl, scrollContainer);
                     textarea.value = '';
                     textarea.style.height = 'auto';
-                    localStorage.removeItem(this._draftKey);
+                    localStorage.removeItem(this.draftKey);
                     return;
                 }
 
                 this.pendingMessage = null;
                 textarea.value = '';
                 textarea.style.height = 'auto';
-                localStorage.removeItem(this._draftKey);
+                localStorage.removeItem(this.draftKey);
             } catch (e) {
                 this.ensureTurnState(this.selectedTurnId)?.streamEntries.push({
                     type: 'error',

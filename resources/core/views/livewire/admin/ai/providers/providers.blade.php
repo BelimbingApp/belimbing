@@ -65,7 +65,7 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                     wire:key="provider-{{ $provider->id }}"
                                     wire:click="toggleProvider({{ $provider->id }})"
                                     x-data="{ flash: false }"
-                                    x-init="$wire.on('priority-changed', (id) => { if (id == {{ $provider->id }}) { flash = true; setTimeout(() => flash = false, 1800) } })"
+                                    x-init="$wire.$on('priority-changed', (detail) => { const id = Array.isArray(detail) ? detail[0] : detail; if (id == {{ $provider->id }}) { flash = true; setTimeout(() => flash = false, 1800) } })"
                                     :class="flash ? 'bg-accent/10' : ''"
                                     class="hover:bg-surface-subtle/50 transition-colors duration-800 cursor-pointer"
                                 >

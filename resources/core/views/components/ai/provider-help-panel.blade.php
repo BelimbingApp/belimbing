@@ -2,10 +2,17 @@
     'providerName' => '',
     'help' => null,
     'colspan' => 7,
+    'rowAttributes' => null,
 ])
 
+@php
+    $rowAttributes = $rowAttributes instanceof \Illuminate\View\ComponentAttributeBag
+        ? $rowAttributes
+        : new \Illuminate\View\ComponentAttributeBag();
+@endphp
+
 @if($help)
-    <tr {{ $attributes }}>
+    <tr {!! $rowAttributes !!}>
         <td colspan="{{ $colspan }}" class="px-4 pb-3 pt-1">
             <div
                 x-data
