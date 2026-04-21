@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Livewire\Providers;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 class CopilotProxySetup extends ProviderSetup
@@ -12,6 +13,16 @@ class CopilotProxySetup extends ProviderSetup
     public ?string $baseUrlStatus = null;
 
     public string $baseUrlStatusMessage = '';
+
+    public function providerConnectionDescription(): ?string
+    {
+        return __('Requires the Copilot Proxy extension running in VS Code — start the extension, then connect.');
+    }
+
+    public function providerCredentialsFormPartial(): ?string
+    {
+        return 'livewire.admin.ai.providers.partials.setup-form.copilot-proxy';
+    }
 
     /**
      * Pre-set the checking state so the spinner is visible on first render.
@@ -49,7 +60,7 @@ class CopilotProxySetup extends ProviderSetup
                 $this->baseUrlStatus = 'offline';
                 $this->baseUrlStatusMessage = __('Server returned: :status', ['status' => $response->status()]);
             }
-        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+        } catch (ConnectionException $e) {
             $this->baseUrlStatus = 'offline';
             $this->baseUrlStatusMessage = __('Cannot connect — is the server running?');
         } catch (\Exception $e) {

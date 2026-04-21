@@ -24,9 +24,13 @@ final class OpenAiCodexAuthManager
 {
     // Values observed in the Codex/OpenClaw implementation.
     private const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
+
     private const AUTHORIZE_URL = 'https://auth.openai.com/oauth/authorize';
+
     private const TOKEN_URL = 'https://auth.openai.com/oauth/token';
+
     private const SCOPE = 'openid profile email offline_access';
+
     private const JWT_CLAIM_PATH = 'https://api.openai.com/auth';
 
     private const CACHE_TTL_SECONDS = 600;
@@ -146,38 +150,51 @@ final class OpenAiCodexAuthManager
         $refreshToken = (string) ($provider->credentials['refresh_token'] ?? '');
 
         if ($refreshToken === '') {
-            throw new OpenAiCodexOAuthException('refresh_failed', 'Missing refresh token.');
+            $exception = new OpenAiCodexOAuthException('refresh_failed', 'Missing refresh token.');
+            $this->storage->markExpired($provider, $exception->errorCode, $exception->getMessage());
+
+            throw $exception;
         }
 
-        $response = Http::asForm()->post(self::TOKEN_URL, [
-            'grant_type' => 'refresh_token',
-            'refresh_token' => $refreshToken,
-            'client_id' => self::CLIENT_ID,
-        ]);
+        try {
+            $response = Http::asForm()->post(self::TOKEN_URL, [
+                'grant_type' => 'refresh_token',
+                'refresh_token' => $refreshToken,
+                'client_id' => self::CLIENT_ID,
+            ]);
 
-        if (! $response->successful()) {
-            throw new OpenAiCodexOAuthException('refresh_failed', 'Token refresh failed ('.$response->status().').');
+            if (! $response->successful()) {
+                throw new OpenAiCodexOAuthException('refresh_failed', 'Token refresh failed ('.$response->status().').');
+            }
+
+            $json = $response->json();
+            $access = is_string($json['access_token'] ?? null) ? (string) $json['access_token'] : '';
+            $nextRefresh = is_string($json['refresh_token'] ?? null) ? (string) $json['refresh_token'] : '';
+            $expiresIn = $json['expires_in'] ?? null;
+
+            if ($access === '' || $nextRefresh === '' || ! is_numeric($expiresIn)) {
+                throw new OpenAiCodexOAuthException('refresh_failed', 'Refresh response missing required fields.');
+            }
+
+            $expiresAt = now()->addSeconds((int) $expiresIn)->toIso8601String();
+            $accountId = $this->extractAccountIdFromJwt($access);
+
+            $this->storage->persistCredentials($provider, [
+                'access_token' => $access,
+                'refresh_token' => $nextRefresh,
+                'expires_at' => $expiresAt,
+                'account_id' => $accountId,
+            ]);
+            $this->storage->markRefreshed($provider);
+        } catch (OpenAiCodexOAuthException $e) {
+            $this->storage->markExpired($provider, $e->errorCode, $e->getMessage());
+
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->storage->markError($provider, 'refresh_failed', $e->getMessage());
+
+            throw new OpenAiCodexOAuthException('refresh_failed', $e->getMessage(), $e);
         }
-
-        $json = $response->json();
-        $access = is_string($json['access_token'] ?? null) ? (string) $json['access_token'] : '';
-        $nextRefresh = is_string($json['refresh_token'] ?? null) ? (string) $json['refresh_token'] : '';
-        $expiresIn = $json['expires_in'] ?? null;
-
-        if ($access === '' || $nextRefresh === '' || ! is_numeric($expiresIn)) {
-            throw new OpenAiCodexOAuthException('refresh_failed', 'Refresh response missing required fields.');
-        }
-
-        $expiresAt = now()->addSeconds((int) $expiresIn)->toIso8601String();
-        $accountId = $this->extractAccountIdFromJwt($access);
-
-        $this->storage->persistCredentials($provider, [
-            'access_token' => $access,
-            'refresh_token' => $nextRefresh,
-            'expires_at' => $expiresAt,
-            'account_id' => $accountId,
-        ]);
-        $this->storage->markRefreshed($provider);
     }
 
     /**
@@ -267,4 +284,3 @@ final class OpenAiCodexAuthManager
         return $decoded === false ? '' : $decoded;
     }
 }
-

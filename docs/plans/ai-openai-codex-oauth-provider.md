@@ -1,7 +1,7 @@
 # OpenAI Codex OAuth Provider
 
 **Agent:** Codex
-**Status:** Phase 3 complete
+**Status:** Phase 4 in progress
 **Last Updated:** 2026-04-21
 **Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/Config/ai.php`, `app/Modules/Core/AI/Contracts/ProviderDefinition.php`, `app/Modules/Core/AI/Definitions/GenericApiKeyDefinition.php`, `app/Modules/Core/AI/Livewire/Providers/ProviderSetup.php`, `app/Modules/Core/AI/Models/AiProvider.php`, `app/Modules/Core/AI/Services/ProviderAuthFlowService.php`, `app/Modules/Core/AI/Services/ProviderDefinitionRegistry.php`, `app/Modules/Core/AI/Values/ResolvedProviderConfig.php`, `resources/core/views/livewire/admin/ai/providers/provider-setup.blade.php`, `/home/kiat/repo/openclaw/src/plugins/provider-openai-codex-oauth.ts`, `/home/kiat/repo/openclaw/src/agents/cli-credentials.ts`, `/home/kiat/repo/openclaw/node_modules/@mariozechner/pi-ai/dist/utils/oauth/openai-codex.js`, `/home/kiat/repo/openclaw/node_modules/@mariozechner/pi-ai/dist/providers/openai-codex-responses.js`, `https://github.com/openai/codex/blob/1dcea729d33ac936b8207ffccae7a0c4cb6b4ff4/codex-rs/app-server/README.md`, `https://github.com/openai/codex/tree/1dcea729d33ac936b8207ffccae7a0c4cb6b4ff4/codex-rs/login/src/auth`
 
@@ -64,6 +64,8 @@ Refreshing OAuth credentials and building request headers are related but differ
 ### Start with curated models, not blind `/models` discovery
 
 BLB's standard provider discovery assumes a bearer token plus `GET /models`. That assumption is unsafe for this transport. The first version should use a curated set of supported Codex models and only add live discovery if BLB verifies the backend contract and failure modes end to end.
+
+Implementation note: provider-specific discovery policy should live on the provider definition boundary rather than in `ModelDiscoveryService` branching on provider names. That keeps curated or non-HTTP discovery rules localized to the provider that owns them.
 
 ## Public Contract
 
@@ -163,7 +165,7 @@ Goal: make runtime requests use the ChatGPT backend contract instead of the publ
 
 - [x] Add a provider-specific resolver for `openai-codex`:
   - [x] If `credentials.expires_at` is within a skew window (e.g. 60s), call `OpenAiCodexAuthManager::refresh()` and persist updated credentials before building runtime config.
-  - [ ] If refresh fails, mark provider `auth.status=expired` (or `error`) and return a provider-specific failure (not “invalid API key”).
+  - [x] If refresh fails, mark provider `auth.status=expired` (or `error`) and return a provider-specific failure (not “invalid API key”).
 
 #### Phase 3.2 — Transport contract (dedicated API family)
 
@@ -184,14 +186,16 @@ Goal: make runtime requests use the ChatGPT backend contract instead of the publ
 
 Goal: make the feature operable and supportable despite the external risk.
 
-- [ ] Update the provider setup and help surfaces to explain the browser OAuth flow and the unsupported-contract risk
-- [ ] Surface plan type and login status in the admin UI when available, following the Codex app-server account model
-- [ ] Add a **“Verify connection”** admin action:
-  - [ ] Calls a confirmed, low-impact ChatGPT backend request that BLB already understands how to interpret safely using the resolved config
-  - [ ] Records a structured diagnostic result and updates `auth.last_error_*` on failure
+- [x] Update the provider setup and help surfaces to explain the browser OAuth flow and the unsupported-contract risk
+- [x] Surface plan type and login status in the admin UI when available, following the Codex app-server account model
+- [x] Add a **“Verify connection”** admin action:
+  - [x] Calls a confirmed, low-impact ChatGPT backend request that BLB already understands how to interpret safely using the resolved config
+  - [x] Records a structured diagnostic result and updates `auth.last_error_*` on failure
 - [ ] Add focused tests for provider definition validation, OAuth callback state handling, logout/revoke, credential refresh, and runtime resolution
+  - [x] Cover provider definition validation, OAuth callback state handling, credential refresh, runtime resolution, and setup-page diagnostics
+  - [ ] Add a dedicated logout/revoke-state regression test
 - [ ] Add runtime/diagnostic coverage for:
-  - [ ] expired refresh tokens → status becomes `expired` and UI prompts reconnect
+  - [x] expired refresh tokens → status becomes `expired` and UI prompts reconnect
   - [ ] missing `account_id` → provider-specific validation error
   - [ ] transport-level rejections → provider-specific error copy + structured logs
 - [ ] Document operator guidance for reconnecting or disabling the provider if OpenAI changes the external contract

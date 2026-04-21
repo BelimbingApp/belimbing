@@ -192,3 +192,53 @@ test('runtime resolution uses persisted codex provider credentials when provider
         ->toHaveKey('base_url', 'https://chatgpt.com/backend-api')
         ->not->toHaveKey('runtime_error');
 });
+
+test('expiring codex credentials that fail refresh mark the provider expired', function (): void {
+    $provider = createRcrProvider(
+        OpenAiCodexDefinition::KEY,
+        'https://chatgpt.com/backend-api',
+        authType: AuthType::OAuth,
+    );
+
+    $provider->update([
+        'credentials' => [
+            OpenAiCodexDefinition::CRED_ACCESS_TOKEN => 'stale-token',
+            OpenAiCodexDefinition::CRED_REFRESH_TOKEN => 'refresh-token',
+            OpenAiCodexDefinition::CRED_EXPIRES_AT => now()->subMinute()->toIso8601String(),
+            OpenAiCodexDefinition::CRED_ACCOUNT_ID => 'acct_test',
+        ],
+        'connection_config' => [
+            OpenAiCodexDefinition::AUTH_STATE_KEY => [
+                'status' => 'connected',
+                'mode' => 'browser_pkce',
+                'last_error_code' => null,
+                'last_error_message' => null,
+            ],
+        ],
+    ]);
+
+    Http::fake([
+        'https://auth.openai.com/oauth/token' => Http::response([
+            'error' => 'invalid_grant',
+        ], 401),
+    ]);
+
+    $result = makeResolver()->resolve([
+        'api_key' => '',
+        'base_url' => 'https://chatgpt.com/backend-api',
+        'provider_name' => OpenAiCodexDefinition::KEY,
+        'provider_id' => $provider->id,
+    ]);
+
+    expect($result)
+        ->toHaveKey('runtime_error')
+        ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
+        ->and($result['runtime_error']->errorType)->toBe(AiErrorType::ConnectionError)
+        ->and($result['runtime_error']->diagnostic)->toContain('Token refresh failed (401).');
+
+    $auth = $provider->fresh()->connection_config[OpenAiCodexDefinition::AUTH_STATE_KEY] ?? [];
+
+    expect($auth['status'] ?? null)->toBe('expired')
+        ->and($auth['last_error_code'] ?? null)->toBe('refresh_failed')
+        ->and($auth['last_error_message'] ?? null)->toBe('Token refresh failed (401).');
+});

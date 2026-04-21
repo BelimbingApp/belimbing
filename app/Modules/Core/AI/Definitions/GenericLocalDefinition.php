@@ -85,4 +85,9 @@ readonly class GenericLocalDefinition implements ProviderDefinition
             apiKey: $provider->credentials['api_key'] ?? null,
         );
     }
+
+    public function discoverModels(AiProvider $provider): ?array
+    {
+        return null;
+    }
 }

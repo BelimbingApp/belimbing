@@ -10,6 +10,7 @@ use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Values\ProviderField;
 use App\Modules\Core\AI\Values\ResolvedProviderConfig;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Owns a provider's configuration shape, validation, editor schema, and runtime mapping.
@@ -52,9 +53,9 @@ interface ProviderDefinition
      *
      * @param  array<string, mixed>  $input  Raw form input keyed by field key
      * @param  ProviderOperation  $operation  Whether creating or editing
-     * @return array<string, mixed>  Normalized model attributes
+     * @return array<string, mixed> Normalized model attributes
      *
-     * @throws \Illuminate\Validation\ValidationException
+     * @throws ValidationException
      */
     public function validateAndNormalize(array $input, ProviderOperation $operation): array;
 
@@ -65,4 +66,15 @@ interface ProviderDefinition
      * exchange for GitHub Copilot, connectivity probes for local providers).
      */
     public function resolveRuntime(AiProvider $provider): ResolvedProviderConfig;
+
+    /**
+     * Return provider-owned model discovery results when generic /models is unsafe or inapplicable.
+     *
+     * Returning `null` delegates discovery to the shared OpenAI-compatible
+     * `/models` path in Base AI. Returning a list makes the definition the
+     * source of truth for discovery policy.
+     *
+     * @return list<array{model_id: string, display_name: string}>|null
+     */
+    public function discoverModels(AiProvider $provider): ?array;
 }

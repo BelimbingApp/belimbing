@@ -5,9 +5,16 @@
 
 namespace App\Modules\Core\AI\Livewire\Providers;
 
+use App\Base\AI\Enums\AiErrorType;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
+use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager;
+use App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthStorage;
+use App\Modules\Core\AI\Services\ProviderDefinitionRegistry;
+use App\Modules\Core\AI\Services\ProviderTestService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 
@@ -24,17 +31,19 @@ final class OpenAiCodexSetup extends ProviderSetup
     /** @var array<string, mixed>|null */
     public ?array $authState = null;
 
+    /** @var array<string, mixed>|null */
+    public ?array $verificationResult = null;
+
     public function mount(string $providerKey): void
     {
         parent::mount($providerKey);
 
         $provider = $this->loadProvider();
-        $this->providerId = $provider?->id;
-        $this->authState = $this->readAuthState($provider);
-
-        if ($provider && ($this->authState['status'] ?? null) === 'connected') {
-            $this->connectedProviderId = $provider->id;
+        if ($provider && ($this->readAuthState($provider)['status'] ?? null) === 'connected') {
+            $provider = $this->syncModelsIfNeeded($provider);
         }
+
+        $this->syncStateFromProvider($provider);
     }
 
     public function startOauthLogin(): mixed
@@ -61,6 +70,47 @@ final class OpenAiCodexSetup extends ProviderSetup
         $this->providerId = $provider->id;
         $this->authState = $this->readAuthState($provider->fresh());
         $this->connectedProviderId = null;
+        $this->verificationResult = null;
+    }
+
+    public function verifyConnection(): void
+    {
+        $provider = $this->loadProvider();
+        if (! $provider) {
+            return;
+        }
+
+        $provider = $this->syncModelsIfNeeded($provider);
+        $model = $this->resolveVerificationModel($provider);
+
+        if (! $model) {
+            $this->storeVerificationFailure(
+                $provider,
+                'config_error',
+                __('OpenAI Codex has no active model configured for verification.'),
+            );
+
+            return;
+        }
+
+        $result = app(ProviderTestService::class)->testSelection($provider->id, $model->model_id);
+
+        $this->verificationResult = array_merge($result->toArray(), [
+            'checked_at' => now()->toIso8601String(),
+        ]);
+
+        if ($result->connected) {
+            app(OpenAiCodexAuthStorage::class)->clearDiagnosticError($provider->fresh() ?? $provider);
+        } else {
+            $error = $result->error;
+            $this->storeVerificationFailure(
+                $provider,
+                $error?->errorType->value ?? 'verification_failed',
+                $error?->userMessage ?? __('Verification failed.'),
+            );
+        }
+
+        $this->syncStateFromProvider($provider->fresh());
     }
 
     protected function tryAutoConnect(): void
@@ -90,10 +140,39 @@ final class OpenAiCodexSetup extends ProviderSetup
 
     public function render(): View
     {
-        $provider = $this->loadProvider();
-        $this->authState = $this->readAuthState($provider);
+        $this->syncStateFromProvider($this->loadProvider());
 
         return parent::render();
+    }
+
+    public function providerConnectionDescription(): ?string
+    {
+        return __('Codex subscription — browser sign-in is required. This integration depends on an undocumented external contract and may break without notice.');
+    }
+
+    public function providerHeaderSubtitle(): ?string
+    {
+        return __('Connect with browser OAuth to store refreshable subscription credentials.');
+    }
+
+    public function providerHeaderHelpPartial(): ?string
+    {
+        return 'livewire.admin.ai.providers.partials.setup-help.openai-codex';
+    }
+
+    public function providerConnectedActionsPartial(): ?string
+    {
+        return 'livewire.admin.ai.providers.partials.connected-actions.openai-codex';
+    }
+
+    public function providerStatusPanelPartial(): ?string
+    {
+        return 'livewire.admin.ai.providers.partials.setup-status.openai-codex';
+    }
+
+    public function providerCredentialsFormPartial(): ?string
+    {
+        return 'livewire.admin.ai.providers.partials.setup-form.openai-codex';
     }
 
     private function loadProvider(): ?AiProvider
@@ -123,8 +202,8 @@ final class OpenAiCodexSetup extends ProviderSetup
             return $existing;
         }
 
-        $definition = app(\App\Modules\Core\AI\Services\ProviderDefinitionRegistry::class)->for(OpenAiCodexDefinition::KEY);
-        $normalized = $definition->validateAndNormalize($this->gatherInput(), \App\Modules\Core\AI\Enums\ProviderOperation::Create);
+        $definition = app(ProviderDefinitionRegistry::class)->for(OpenAiCodexDefinition::KEY);
+        $normalized = $definition->validateAndNormalize($this->gatherInput(), ProviderOperation::Create);
 
         $provider = AiProvider::query()->create(array_merge($normalized, [
             'company_id' => $companyId,
@@ -151,5 +230,55 @@ final class OpenAiCodexSetup extends ProviderSetup
         $auth = $provider->connection_config[OpenAiCodexDefinition::AUTH_STATE_KEY] ?? null;
 
         return is_array($auth) ? $auth : null;
+    }
+
+    private function syncStateFromProvider(?AiProvider $provider): void
+    {
+        $this->providerId = $provider?->id;
+        $this->authState = $this->readAuthState($provider);
+        $this->connectedProviderId = $provider && ($this->authState['status'] ?? null) === 'connected'
+            ? $provider->id
+            : null;
+    }
+
+    private function syncModelsIfNeeded(AiProvider $provider): AiProvider
+    {
+        if (! $provider->models()->exists()) {
+            app(ModelDiscoveryService::class)->syncModels($provider);
+        }
+
+        return $provider->fresh() ?? $provider;
+    }
+
+    private function resolveVerificationModel(AiProvider $provider): ?AiProviderModel
+    {
+        return AiProviderModel::query()
+            ->where('ai_provider_id', $provider->id)
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderBy('model_id')
+            ->first();
+    }
+
+    private function storeVerificationFailure(AiProvider $provider, string $code, string $message): void
+    {
+        $storage = app(OpenAiCodexAuthStorage::class);
+
+        if ($code === AiErrorType::AuthError->value) {
+            $storage->markExpired($provider, $code, $message);
+        } else {
+            $storage->recordDiagnosticFailure($provider, $code, $message);
+        }
+
+        $this->verificationResult = [
+            'connected' => false,
+            'provider_name' => $provider->name,
+            'model' => $this->resolveVerificationModel($provider)?->model_id ?? '',
+            'latency_ms' => null,
+            'error_type' => $code,
+            'user_message' => $message,
+            'hint' => null,
+            'checked_at' => now()->toIso8601String(),
+        ];
     }
 }

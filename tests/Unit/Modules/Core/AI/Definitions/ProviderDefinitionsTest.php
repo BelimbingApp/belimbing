@@ -10,6 +10,7 @@ use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Exceptions\CopilotProxyRuntimeException;
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager;
 use App\Modules\Core\AI\Values\ResolvedProviderConfig;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -94,6 +95,14 @@ test('GenericApiKeyDefinition resolveRuntime returns config from provider', func
         ->and($resolved->apiKey)->toBe('sk-test');
 });
 
+test('GenericApiKeyDefinition delegates model discovery to shared provider discovery', function (): void {
+    $provider = new AiProvider;
+
+    $def = new GenericApiKeyDefinition('openai');
+
+    expect($def->discoverModels($provider))->toBeNull();
+});
+
 // ── GenericLocalDefinition ──
 
 test('GenericLocalDefinition has Local auth type and optional api_key', function (): void {
@@ -126,7 +135,7 @@ test('GenericLocalDefinition accepts optional api_key', function (): void {
 // ── OpenAiCodexDefinition ──
 
 test('OpenAiCodexDefinition has OAuth auth type and default base URL', function (): void {
-    $def = new OpenAiCodexDefinition(app(\App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager::class));
+    $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class));
 
     expect($def->key())->toBe('openai-codex')
         ->and($def->authType())->toBe(AuthType::OAuth)
@@ -134,7 +143,7 @@ test('OpenAiCodexDefinition has OAuth auth type and default base URL', function 
 });
 
 test('OpenAiCodexDefinition validates and normalizes create input without api key', function (): void {
-    $def = new OpenAiCodexDefinition(app(\App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager::class));
+    $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class));
 
     $result = $def->validateAndNormalize([
         'base_url' => PDT_CODEX_BASE_URL,
@@ -149,7 +158,7 @@ test('OpenAiCodexDefinition validates and normalizes create input without api ke
 });
 
 test('OpenAiCodexDefinition edit preserves durable auth state by omitting connection_config', function (): void {
-    $def = new OpenAiCodexDefinition(app(\App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager::class));
+    $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class));
 
     $result = $def->validateAndNormalize([
         'base_url' => PDT_CODEX_BASE_URL,
@@ -159,6 +168,18 @@ test('OpenAiCodexDefinition edit preserves durable auth state by omitting connec
         ->toHaveKey('base_url', PDT_CODEX_BASE_URL)
         ->toHaveKey('auth_type', AuthType::OAuth)
         ->not->toHaveKey('connection_config');
+});
+
+test('OpenAiCodexDefinition owns curated model discovery', function (): void {
+    config()->set('ai.provider_overlay.openai-codex.curated_models', ['gpt-5.1-codex-mini', 'gpt-5.1-codex']);
+
+    $provider = new AiProvider;
+    $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class));
+
+    expect($def->discoverModels($provider))->toBe([
+        ['model_id' => 'gpt-5.1-codex-mini', 'display_name' => 'gpt-5.1-codex-mini'],
+        ['model_id' => 'gpt-5.1-codex', 'display_name' => 'gpt-5.1-codex'],
+    ]);
 });
 
 test('GenericLocalDefinition resolveRuntime returns config without api_key when none set', function (): void {

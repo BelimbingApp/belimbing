@@ -28,8 +28,11 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
 
     // Persisted credential bag keys (encrypted AiProvider.credentials).
     public const CRED_ACCESS_TOKEN = 'access_token';
+
     public const CRED_REFRESH_TOKEN = 'refresh_token';
+
     public const CRED_EXPIRES_AT = 'expires_at';
+
     public const CRED_ACCOUNT_ID = 'account_id';
 
     /**
@@ -131,6 +134,28 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
                     : null,
             ],
         );
+    }
+
+    public function discoverModels(AiProvider $provider): ?array
+    {
+        $models = config('ai.provider_overlay.'.self::KEY.'.curated_models', []);
+
+        if (! is_array($models) || $models === []) {
+            return [];
+        }
+
+        $result = [];
+
+        foreach ($models as $modelId) {
+            if (is_string($modelId) && $modelId !== '') {
+                $result[] = [
+                    'model_id' => $modelId,
+                    'display_name' => $modelId,
+                ];
+            }
+        }
+
+        return $result;
     }
 
     private function isExpiredOrNearExpiry(string $expiresAt, int $skewSeconds): bool

@@ -46,46 +46,19 @@ class ModelDiscoveryService
      */
     public function discoverModels(AiProvider $provider): array
     {
-        if ($provider->name === 'openai-codex') {
-            return $this->curatedCodexModels();
+        $definition = $this->registry->for($provider->name);
+        $definitionModels = $definition->discoverModels($provider);
+
+        if ($definitionModels !== null) {
+            return $definitionModels;
         }
 
-        $definition = $this->registry->for($provider->name);
         $resolved = $definition->resolveRuntime($provider);
 
         return $this->providerDiscovery->discoverModels(
             rtrim($resolved->baseUrl, '/'),
             $resolved->apiKey ?? '',
         );
-    }
-
-    /**
-     * Curated model list for OpenAI Codex.
-     *
-     * The ChatGPT backend transport does not safely support generic /models discovery.
-     *
-     * @return list<array{model_id: string, display_name: string}>
-     */
-    private function curatedCodexModels(): array
-    {
-        $models = config('ai.provider_overlay.openai-codex.curated_models', []);
-
-        if (! is_array($models) || $models === []) {
-            return [];
-        }
-
-        $result = [];
-
-        foreach ($models as $modelId) {
-            if (is_string($modelId) && $modelId !== '') {
-                $result[] = [
-                    'model_id' => $modelId,
-                    'display_name' => $modelId,
-                ];
-            }
-        }
-
-        return $result;
     }
 
     /**
@@ -104,6 +77,13 @@ class ModelDiscoveryService
      */
     public function syncModels(AiProvider $provider): array
     {
+        $definition = $this->registry->for($provider->name);
+        $definitionModels = $definition->discoverModels($provider);
+
+        if ($definitionModels !== null) {
+            return $this->syncDiscoveredModels($provider, $definitionModels);
+        }
+
         $this->modelCatalog->ensureSynced();
 
         try {
@@ -114,6 +94,21 @@ class ModelDiscoveryService
 
         if ($discovered === []) {
             return $this->importFromCatalog($provider);
+        }
+
+        return $this->syncDiscoveredModels($provider, $discovered);
+    }
+
+    /**
+     * Persist discovered models and ensure a default exists.
+     *
+     * @param  list<array{model_id: string, display_name: string}>  $discovered
+     * @return array{added: int, updated: int, total: int}
+     */
+    private function syncDiscoveredModels(AiProvider $provider, array $discovered): array
+    {
+        if ($discovered === []) {
+            return ['added' => 0, 'updated' => 0, 'total' => 0];
         }
 
         $added = 0;

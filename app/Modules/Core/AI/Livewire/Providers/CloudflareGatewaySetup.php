@@ -11,6 +11,16 @@ class CloudflareGatewaySetup extends ProviderSetup
 
     public string $cloudflareGatewayId = '';
 
+    public function providerHeaderHelpPartial(): ?string
+    {
+        return 'livewire.admin.ai.providers.partials.setup-help.cloudflare-ai-gateway';
+    }
+
+    public function providerCredentialsFormPartial(): ?string
+    {
+        return 'livewire.admin.ai.providers.partials.setup-form.cloudflare-ai-gateway';
+    }
+
     /**
      * Auto-connect when the Cloudflare Gateway ID is updated (blur).
      *

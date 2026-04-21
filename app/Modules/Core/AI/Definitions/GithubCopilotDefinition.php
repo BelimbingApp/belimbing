@@ -102,4 +102,9 @@ final readonly class GithubCopilotDefinition implements ProviderDefinition
             apiKey: $copilot['token'],
         );
     }
+
+    public function discoverModels(AiProvider $provider): ?array
+    {
+        return null;
+    }
 }

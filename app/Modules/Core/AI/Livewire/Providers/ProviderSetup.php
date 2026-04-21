@@ -12,13 +12,13 @@ namespace App\Modules\Core\AI\Livewire\Providers;
 use App\Base\AI\Services\ModelCatalogService;
 use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Base\Support\Str as BlbStr;
+use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Livewire\Concerns\FormatsDisplayValues;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesModels;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesProviderHelp;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesSync;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
 use App\Modules\Core\AI\Services\ProviderDefinitionRegistry;
@@ -273,6 +273,43 @@ class ProviderSetup extends Component
             'connectedProvider' => $connectedProvider,
             'models' => $models,
         ]);
+    }
+
+    public function providerConnectionDescription(): ?string
+    {
+        return match ($this->authType) {
+            'local' => __('Local server — API key is optional'),
+            'oauth' => __('OAuth provider — connect via sign-in flow (API keys are not required)'),
+            'subscription' => __('Subscription service — paste access token or API key'),
+            'custom' => __('Requires additional configuration after connecting'),
+            'device_flow' => __('Requires GitHub device login — an active GitHub Copilot subscription is needed'),
+            default => null,
+        };
+    }
+
+    public function providerHeaderSubtitle(): ?string
+    {
+        return null;
+    }
+
+    public function providerHeaderHelpPartial(): ?string
+    {
+        return null;
+    }
+
+    public function providerConnectedActionsPartial(): ?string
+    {
+        return null;
+    }
+
+    public function providerStatusPanelPartial(): ?string
+    {
+        return null;
+    }
+
+    public function providerCredentialsFormPartial(): ?string
+    {
+        return null;
     }
 
     /**

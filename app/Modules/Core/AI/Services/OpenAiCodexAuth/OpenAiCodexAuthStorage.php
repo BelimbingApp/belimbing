@@ -25,6 +25,7 @@ final class OpenAiCodexAuthStorage
         $auth['mode'] = $mode;
         $auth['started_at'] = now()->toIso8601String();
         $auth['completed_at'] = null;
+        $auth['plan_type'] = null;
         $auth['last_error_code'] = null;
         $auth['last_error_message'] = null;
 
@@ -63,6 +64,16 @@ final class OpenAiCodexAuthStorage
         $this->writeAuthState($provider, $auth);
     }
 
+    public function markExpired(AiProvider $provider, string $code, string $message): void
+    {
+        $auth = $this->readAuthState($provider);
+        $auth['status'] = 'expired';
+        $auth['last_error_code'] = $code;
+        $auth['last_error_message'] = $message;
+
+        $this->writeAuthState($provider, $auth);
+    }
+
     public function markDisconnected(AiProvider $provider): void
     {
         $auth = $this->readAuthState($provider);
@@ -70,8 +81,31 @@ final class OpenAiCodexAuthStorage
         $auth['started_at'] = null;
         $auth['completed_at'] = null;
         $auth['last_refresh_at'] = null;
+        $auth['plan_type'] = null;
         $auth['last_error_code'] = null;
         $auth['last_error_message'] = null;
+
+        $this->writeAuthState($provider, $auth);
+    }
+
+    public function clearDiagnosticError(AiProvider $provider): void
+    {
+        $auth = $this->readAuthState($provider);
+        $auth['last_error_code'] = null;
+        $auth['last_error_message'] = null;
+
+        $this->writeAuthState($provider, $auth);
+    }
+
+    public function recordDiagnosticFailure(AiProvider $provider, string $code, string $message): void
+    {
+        $auth = $this->readAuthState($provider);
+        $auth['last_error_code'] = $code;
+        $auth['last_error_message'] = $message;
+
+        if (! isset($auth['status']) || $auth['status'] === null || $auth['status'] === '') {
+            $auth['status'] = 'error';
+        }
 
         $this->writeAuthState($provider, $auth);
     }
@@ -120,4 +154,3 @@ final class OpenAiCodexAuthStorage
         ]);
     }
 }
-
