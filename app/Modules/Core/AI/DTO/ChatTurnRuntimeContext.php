@@ -13,6 +13,7 @@ final readonly class ChatTurnRuntimeContext
     /**
      * @param  list<mixed>  $messages
      * @param  array<string, mixed>|null  $promptMeta
+     * @param  list<string>|null  $allowedToolNames  Tool profile allowlist (null = all tools)
      */
     public function __construct(
         public int $employeeId,
@@ -22,5 +23,6 @@ final readonly class ChatTurnRuntimeContext
         public ?string $modelOverride,
         public ExecutionPolicy $policy,
         public ?array $promptMeta,
+        public ?array $allowedToolNames = null,
     ) {}
 }

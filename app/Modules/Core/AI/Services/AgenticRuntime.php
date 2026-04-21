@@ -494,6 +494,8 @@ class AgenticRuntime
             $hookMetadata['pre_tool_registry_removed'] = $removedTools;
         }
 
+        $this->recordProfileWireEvent($runId, $allowedToolNames, $tools);
+
         $iteration = 0;
 
         while (true) {
@@ -1160,6 +1162,8 @@ class AgenticRuntime
             $hookMetadata['pre_tool_registry_removed'] = $removedTools;
         }
 
+        $this->recordProfileWireEvent($runId, $allowedToolNames, $tools);
+
         return [
             'apiMessages' => $apiMessages,
             'tools' => $tools,
@@ -1443,5 +1447,27 @@ class AgenticRuntime
         $this->wireLogger->append($runId, array_merge([
             'type' => $type,
         ], $payload));
+    }
+
+    /**
+     * Record which tool profile was selected for this run.
+     *
+     * @param  list<string>|null  $allowedToolNames
+     * @param  list<array<string, mixed>>  $tools
+     */
+    private function recordProfileWireEvent(string $runId, ?array $allowedToolNames, array $tools): void
+    {
+        if (! $this->wireLogger->enabled()) {
+            return;
+        }
+
+        $toolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
+
+        $this->wireLogger->append($runId, [
+            'type' => 'profile.selected',
+            'profile_tools' => $allowedToolNames,
+            'effective_tools' => $toolNames,
+            'tool_count' => count($toolNames),
+        ]);
     }
 }

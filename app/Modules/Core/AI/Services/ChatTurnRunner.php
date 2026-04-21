@@ -32,6 +32,7 @@ class ChatTurnRunner
         private readonly ChatRunPersister $persister,
         private readonly TurnStreamBridge $bridge,
         private readonly TurnEventPublisher $turnPublisher,
+        private readonly ChatToolProfileRegistry $profileRegistry,
     ) {}
 
     /**
@@ -57,6 +58,7 @@ class ChatTurnRunner
 
         $messages = $this->messageManager->read($employeeId, $sessionId);
         [$systemPrompt, $promptMeta] = $this->resolvePromptPackage($employeeId, $messages);
+        $allowedToolNames = $this->resolveToolProfile($runtimeMeta);
 
         $runtimeContext = new ChatTurnRuntimeContext(
             employeeId: $employeeId,
@@ -66,6 +68,7 @@ class ChatTurnRunner
             modelOverride: $modelOverride,
             policy: $this->resolveExecutionPolicy($turn),
             promptMeta: $promptMeta,
+            allowedToolNames: $allowedToolNames,
         );
 
         try {
@@ -93,6 +96,7 @@ class ChatTurnRunner
             $runtimeContext->policy,
             $runtimeContext->sessionId,
             turnId: $turn->id,
+            allowedToolNames: $runtimeContext->allowedToolNames,
         );
 
         $cancelled = false;
@@ -247,6 +251,23 @@ class ChatTurnRunner
         }
 
         return ExecutionPolicy::interactive();
+    }
+
+    /**
+     * Resolve the tool allowlist from the turn's tool profile.
+     *
+     * Reads `tool_profile` from runtime_meta if set; otherwise defaults
+     * to the registry's default profile. Returns null when all tools
+     * should be available.
+     *
+     * @param  array<string, mixed>  $runtimeMeta
+     * @return list<string>|null
+     */
+    private function resolveToolProfile(array $runtimeMeta): ?array
+    {
+        $profileKey = $runtimeMeta['tool_profile'] ?? ChatToolProfileRegistry::DEFAULT_PROFILE;
+
+        return $this->profileRegistry->resolve($profileKey);
     }
 
     private function markCurrentRunCancelled(?string $runId): void

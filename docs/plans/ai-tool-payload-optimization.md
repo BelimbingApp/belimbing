@@ -1,9 +1,9 @@
 # AI Tool Payload Optimization
 
 **Agent:** Amp
-**Status:** Phase 2 In Progress
+**Status:** Phase 1 Complete, Phase 2 Near-Complete
 **Last Updated:** 2025-04-20
-**Sources:** `storage/app/ai/wire-logs/run_9A4JM8k82gI7.jsonl`, `app/Modules/Core/AI/Services/AgentToolRegistry.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/LaraTaskExecutionProfileRegistry.php`, `app/Modules/Core/AI/Resources/lara/system_prompt.md`
+**Sources:** `storage/app/ai/wire-logs/run_9A4JM8k82gI7.jsonl`, `app/Modules/Core/AI/Services/AgentToolRegistry.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/LaraTaskExecutionProfileRegistry.php`, `app/Modules/Core/AI/Services/ChatToolProfileRegistry.php`, `app/Modules/Core/AI/Resources/lara/system_prompt.md`
 
 ## Problem Essence
 
@@ -95,12 +95,12 @@ Worth pursuing only after profiles (approach 1) and lazy injection (approach 3) 
 
 Goal: reduce interactive chat tool payloads from 25 to ~8 tools for typical turns.
 
-- [ ] Design the profile data structure in `LaraTaskExecutionProfileRegistry` (or a new `ChatToolProfileRegistry`) to support chat-path profiles with inheritance
-- [ ] Define the four starter profiles (`chat-core`, `chat-data`, `chat-action`, `chat-full`)
-- [ ] Wire `ChatTurnRunner` to accept and forward a profile name to `AgenticRuntime.runStream()`
-- [ ] Default to `chat-core` when no profile is specified
-- [ ] Add wire-log annotation for which profile was selected per request
-- [ ] Verify existing background task profiles (`research`, `coding`) are unaffected
+- [x] Design the profile data structure in a new `ChatToolProfileRegistry` with `ChatToolProfile` DTO supporting inheritance via `extends`
+- [x] Define the four starter profiles (`chat-core` 8 tools, `chat-data` extends core +3, `chat-action` extends data +6, `chat-full` = all)
+- [x] Wire `ChatTurnRunner` to resolve a profile via `ChatToolProfileRegistry` and forward `allowedToolNames` to `AgenticRuntime.runStream()`
+- [x] Default to `chat-core` when no `tool_profile` is set in `runtime_meta`
+- [x] Add `profile.selected` wire-log event with `profile_tools`, `effective_tools`, and `tool_count` in both streaming and non-streaming paths
+- [x] Verify existing background task profiles (`research`, `coding`) are unaffected — `LaraTaskExecutionProfileRegistry` untouched
 
 ### Phase 2 — System Prompt Tightening
 
