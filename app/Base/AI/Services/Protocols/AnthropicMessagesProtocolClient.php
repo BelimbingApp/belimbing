@@ -5,9 +5,11 @@
 
 namespace App\Base\AI\Services\Protocols;
 
+use App\Base\AI\Contracts\LlmTransportTap;
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Services\LlmClientSupport;
 use App\Base\Support\Json as BlbJson;
 use Generator;
 use Illuminate\Http\Client\Response;
@@ -107,9 +109,8 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
         Response $response,
         int $startTime,
         ProviderRequestMapping $mapping,
-        ?\App\Base\AI\Contracts\LlmTransportTap $transportTap,
-    ): Generator
-    {
+        ?LlmTransportTap $transportTap,
+    ): Generator {
         $ctx = new class
         {
             public ?string $pendingEventType = null;
