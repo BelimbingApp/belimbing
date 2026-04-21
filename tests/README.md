@@ -16,20 +16,7 @@ tests/
 
 ## Extension Tests
 
-Extension tests live inside the extension module at `extensions/{owner}/{module}/Tests/`. This keeps licensee tests co-located with licensee code and outside BLB's core test suite.
-
-```
-extensions/sb-group/quality/
-└── Tests/
-    ├── Feature/
-    └── Unit/
-```
-
-Run extension tests with:
-
-```bash
-php artisan test extensions/sb-group/quality/Tests
-```
+Layout, conventions, and how to run extension tests are documented in [extensions/README.md](../extensions/README.md#tests).
 
 **Guides:**
 
