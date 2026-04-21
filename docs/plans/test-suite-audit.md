@@ -1,7 +1,7 @@
 # Test Suite Audit
 
 **Agent:** Codex
-**Status:** Phase 5 In Progress
+**Status:** Phases 4-5 In Progress
 **Last Updated:** 2026-04-21
 **Sources:** `AGENTS.md`, `docs/AGENTS.md`, `docs/plans/AGENTS.md`, `tests/AGENTS.md`, `docs/plans/test-suite-audit-rubric.md`, `docs/plans/test-suite-audit-inventory.md`, `docs/plans/ai-test-suite-audit.md`, `scripts/test-suite-audit-inventory.php`, `scripts/check-changed-tests.php`, `scripts/run-critical-mutation-checks.php`, `.github/workflows/lint.yml`, `.github/workflows/test-audit-report.yml`, `.github/pull_request_template.md`, user discussion on 2026-04-21
 
@@ -118,13 +118,14 @@ Goal: apply the proven process to the rest of the suite without losing visibilit
 
 Current Phase 4 focus:
 
-- continue expanding the `Modules/Core/AI` audit using the ranked inventory rather than switching modules too early
-- finish the next high-ranked AI slice around tool-boundary, readiness, and streaming-runtime files before choosing the next area
+- treat the AI companion audit as complete at this checkpoint and continue through the next non-AI candidates surfaced by the inventory
+- keep using the cheap-candidate slices to separate heuristic false positives from real tighten/delete opportunities before moving deeper into slower modules
 
 Latest Phase 4 result:
 
 - the expansion pass is still finding real defects, not just documentation churn
 - one tightened streaming test exposed a production bug in `AgenticFinalResponseStreamer`, which is now fixed and covered
+- the AI-specific companion sheet is now marked complete because the recorded AI slices are done and active audit work has moved into other modules
 - a cheap-candidate auth/settings slice showed the redirect-only heuristic needs human review, not automatic downgrades
 - `AuthenticationTest.php`, `EmailVerificationTest.php`, and `ProfileUpdateTest.php` reviewed as `keep`
 - `PasswordResetTest.php` tightened to assert the reset actually changes the stored password, rotates the remember token, and dispatches the reset event
@@ -133,6 +134,13 @@ Latest Phase 4 result:
 - another cheap-candidate slice showed `RoleUiTest.php`, `ImpersonationTest.php`, and `LocalizationUiTest.php` are behavior-heavy keeps rather than smoke tests
 - `CompanyUiTest.php` tightened so company creation now asserts persisted status, email, and decoded metadata instead of only code generation plus one JSON field
 - the company-create tightening was validated by temporarily breaking metadata persistence in `Create.php` and confirming the focused test failed before restoring production code
+- `QualityWorkflowUiTest.php` reviewed as `keep`; despite the heuristic rank, it is a mixed workflow/service regression file with concrete business-state assertions
+- `RoleUiTest.php` remains a broad behavior-oriented keep overall, but its custom-role creation case was tightened to assert description persistence and redirect-to-created-role behavior
+- the role-creation tightening was validated by temporarily dropping description persistence in `Roles\\Create` and confirming the focused test failed before restoring production code
+- the remaining company slice reviewed `CompanyTest.php` and `CompanyTimezoneTest.php` as `keep`; both files protect real model and settings behavior with concrete persistence and hierarchy contracts
+- `CompanyRelationshipTest.php` and `ExternalAccessTest.php` were tightened so their scope tests now assert the specific returned records, not just counts
+- those company scope tightenings were validated by temporarily inverting `CompanyRelationship::scopeExternal()` and `ExternalAccess::scopeValid()`, then confirming the focused tests failed before restoring production code
+- the remaining authz slice reviewed `AuthorizationServiceTest.php` and `AuthzRoleCapabilitySeederTest.php` as `keep`; both protect high-value policy and configuration-failure contracts rather than UI smoke
 
 ### Phase 5 — Add CI Guardrails
 
@@ -140,13 +148,13 @@ Goal: stop new low-value tests from entering the suite while keeping normal deve
 
 - [x] Add lightweight checks for changed tests only, focused on obvious anti-patterns and test-isolation failures
 - [x] Add a review standard for new regression tests so authors must state what bad code change the test is meant to stop
-- [ ] Add scheduled reporting for slow tests, flaky tests, and selected mutation-style checks on critical modules
+- [x] Add scheduled reporting for slow tests, flaky tests, and selected mutation-style checks on critical modules
 - [ ] Revisit whether any guardrail should graduate from scheduled reporting to PR blocking after the audit baseline is healthier
 
 Current Phase 5 focus:
 
-- keep the first CI guardrail narrow: changed PHP tests only, PR-only, and concentrated on test-isolation failures we have already seen in this repo
-- enforce human review expectations for regression tests without inventing a heavyweight automated quality score
+- keep the existing CI guardrails narrow until more of the legacy suite has been audited
+- revisit whether any scheduled signals are trustworthy enough to promote into PR-blocking checks once the baseline is cleaner
 
 Latest Phase 5 result:
 

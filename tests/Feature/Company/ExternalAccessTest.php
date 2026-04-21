@@ -229,7 +229,7 @@ test('valid scope filters only valid accesses', function (): void {
     ]);
 
     // Valid
-    ExternalAccess::create([
+    $valid = ExternalAccess::create([
         'company_id' => $company->id,
         'relationship_id' => $relationship->id,
         'user_id' => $user->id,
@@ -239,7 +239,7 @@ test('valid scope filters only valid accesses', function (): void {
     ]);
 
     // Inactive
-    ExternalAccess::create([
+    $inactive = ExternalAccess::create([
         'company_id' => $company->id,
         'relationship_id' => $relationship->id,
         'user_id' => $user->id,
@@ -249,7 +249,7 @@ test('valid scope filters only valid accesses', function (): void {
     ]);
 
     // Expired
-    ExternalAccess::create([
+    $expired = ExternalAccess::create([
         'company_id' => $company->id,
         'relationship_id' => $relationship->id,
         'user_id' => $user->id,
@@ -260,5 +260,8 @@ test('valid scope filters only valid accesses', function (): void {
 
     $validAccesses = ExternalAccess::query()->valid()->get();
 
-    expect($validAccesses)->toHaveCount(1);
+    expect($validAccesses)->toHaveCount(1)
+        ->and($validAccesses->contains('id', $valid->id))->toBeTrue()
+        ->and($validAccesses->contains('id', $inactive->id))->toBeFalse()
+        ->and($validAccesses->contains('id', $expired->id))->toBeFalse();
 });

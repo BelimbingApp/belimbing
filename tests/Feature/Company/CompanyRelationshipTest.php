@@ -143,7 +143,7 @@ test('active scope filters only active relationships', function (): void {
     [$company1, $company2, $type] = createCompanyRelationshipFixture();
 
     // Active
-    CompanyRelationship::create([
+    $active = CompanyRelationship::create([
         'company_id' => $company1->id,
         'related_company_id' => $company2->id,
         'relationship_type_id' => $type->id,
@@ -152,7 +152,7 @@ test('active scope filters only active relationships', function (): void {
     ]);
 
     // Ended
-    CompanyRelationship::create([
+    $ended = CompanyRelationship::create([
         'company_id' => $company1->id,
         'related_company_id' => $company2->id,
         'relationship_type_id' => $type->id,
@@ -161,7 +161,7 @@ test('active scope filters only active relationships', function (): void {
     ]);
 
     // Pending
-    CompanyRelationship::create([
+    $pending = CompanyRelationship::create([
         'company_id' => $company1->id,
         'related_company_id' => $company2->id,
         'relationship_type_id' => $type->id,
@@ -171,7 +171,10 @@ test('active scope filters only active relationships', function (): void {
 
     $activeRelationships = CompanyRelationship::query()->active()->get();
 
-    expect($activeRelationships)->toHaveCount($before + 1);
+    expect($activeRelationships)->toHaveCount($before + 1)
+        ->and($activeRelationships->contains('id', $active->id))->toBeTrue()
+        ->and($activeRelationships->contains('id', $ended->id))->toBeFalse()
+        ->and($activeRelationships->contains('id', $pending->id))->toBeFalse();
 });
 
 test('of type scope filters relationships by type code', function (): void {
@@ -183,13 +186,13 @@ test('of type scope filters relationships by type code', function (): void {
     $customerType = RelationshipType::query()->firstOrCreate(['code' => 'customer'], RelationshipType::factory()->customer()->raw());
     $supplierType = RelationshipType::query()->firstOrCreate(['code' => 'supplier'], RelationshipType::factory()->supplier()->raw());
 
-    CompanyRelationship::create([
+    $customerRelationship = CompanyRelationship::create([
         'company_id' => $company1->id,
         'related_company_id' => $company2->id,
         'relationship_type_id' => $customerType->id,
     ]);
 
-    CompanyRelationship::create([
+    $supplierRelationship = CompanyRelationship::create([
         'company_id' => $company1->id,
         'related_company_id' => $company2->id,
         'relationship_type_id' => $supplierType->id,
@@ -199,7 +202,11 @@ test('of type scope filters relationships by type code', function (): void {
     $supplierRelationships = CompanyRelationship::query()->ofType('supplier')->get();
 
     expect($customerRelationships)->toHaveCount($beforeCustomer + 1)
-        ->and($supplierRelationships)->toHaveCount($beforeSupplier + 1);
+        ->and($customerRelationships->contains('id', $customerRelationship->id))->toBeTrue()
+        ->and($customerRelationships->contains('id', $supplierRelationship->id))->toBeFalse()
+        ->and($supplierRelationships)->toHaveCount($beforeSupplier + 1)
+        ->and($supplierRelationships->contains('id', $supplierRelationship->id))->toBeTrue()
+        ->and($supplierRelationships->contains('id', $customerRelationship->id))->toBeFalse();
 });
 
 test('external scope filters only external relationships', function (): void {
@@ -210,13 +217,13 @@ test('external scope filters only external relationships', function (): void {
     $externalType = RelationshipType::factory()->external()->create();
     $internalType = RelationshipType::factory()->internal()->create();
 
-    CompanyRelationship::create([
+    $externalRelationship = CompanyRelationship::create([
         'company_id' => $company1->id,
         'related_company_id' => $company2->id,
         'relationship_type_id' => $externalType->id,
     ]);
 
-    CompanyRelationship::create([
+    $internalRelationship = CompanyRelationship::create([
         'company_id' => $company1->id,
         'related_company_id' => $company2->id,
         'relationship_type_id' => $internalType->id,
@@ -224,7 +231,9 @@ test('external scope filters only external relationships', function (): void {
 
     $externalRelationships = CompanyRelationship::query()->external()->get();
 
-    expect($externalRelationships)->toHaveCount($before + 1);
+    expect($externalRelationships)->toHaveCount($before + 1)
+        ->and($externalRelationships->contains('id', $externalRelationship->id))->toBeTrue()
+        ->and($externalRelationships->contains('id', $internalRelationship->id))->toBeFalse();
 });
 
 test('same companies can have multiple relationship types', function (): void {

@@ -115,7 +115,7 @@ test('custom role can be created', function (): void {
     $user = createRoleTestAdmin();
     $this->actingAs($user);
 
-    Livewire::test('admin.roles.create')
+    $response = Livewire::test('admin.roles.create')
         ->set('name', 'Test Custom Role')
         ->set('code', 'test_custom')
         ->set('description', 'A test custom role')
@@ -127,8 +127,11 @@ test('custom role can be created', function (): void {
 
     expect($role)->not->toBeNull();
     expect($role->name)->toBe('Test Custom Role');
+    expect($role->description)->toBe('A test custom role');
     expect($role->is_system)->toBeFalse();
     expect($role->company_id)->toBe($user->company_id);
+
+    $response->assertRedirect(route('admin.roles.show', $role, absolute: false));
 });
 
 test('duplicate role code in same scope returns validation error', function (): void {

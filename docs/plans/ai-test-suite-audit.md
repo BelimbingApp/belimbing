@@ -1,7 +1,7 @@
 # AI Test Suite Audit
 
 **Agent:** Codex
-**Status:** Phase 4 In Progress
+**Status:** Complete
 **Last Updated:** 2026-04-21
 **Sources:** `docs/plans/test-suite-audit.md`, `docs/plans/test-suite-audit-rubric.md`, `docs/plans/test-suite-audit-inventory.md`, `tests/Feature/AI/ProviderConnectionsTest.php`, `tests/Feature/AI/ProvidersUiTest.php`, `tests/Feature/AI/LaraSetupTest.php`, `tests/Feature/AI/TaskModelsTest.php`, `tests/Feature/AI/AiAdminMenuAccessTest.php`, `tests/Unit/Modules/Core/AI/Services/AgenticRuntimeTest.php`, `tests/Unit/Modules/Core/AI/Services/ToolCallingTest.php`, `tests/Unit/Modules/Core/AI/Tools/BrowserToolTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserSessionManagerTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserRuntimeAdapterTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserSessionRepositoryTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserPoolManagerTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserArtifactStoreTest.php`, `tests/Unit/Modules/Core/AI/Services/Browser/BrowserSsrfGuardTest.php`, `tests/Unit/Modules/Core/AI/Console/Commands/BrowserStatusCommandTest.php`, `tests/Unit/Modules/Core/AI/Console/Commands/BrowserSweepCommandTest.php`, `tests/Unit/Modules/Core/AI/Services/SessionAccessGuardTest.php`, `tests/Unit/Modules/Core/AI/Services/ControlPlane/HealthAndPresenceServiceTest.php`, `tests/Unit/Modules/Core/AI/Services/ControlPlane/LifecycleControlServiceTest.php`, `tests/Unit/Modules/Core/AI/Tools/MessageToolTest.php`, `tests/Unit/Modules/Core/AI/Tools/ScheduleTaskToolTest.php`, `tests/Unit/Modules/Core/AI/Services/ToolReadinessServiceTest.php`, `tests/Unit/Modules/Core/AI/Services/AgenticToolLoopStreamReaderTest.php`, `tests/Unit/Modules/Core/AI/Services/AgenticFinalResponseStreamerTest.php`, `tests/Unit/Modules/Core/AI/Services/DispatchTranscriptBridgeTest.php`, `app/Modules/Core/AI/Services/Browser/BrowserArtifactStore.php`, `app/Modules/Core/AI/Services/AgenticFinalResponseStreamer.php`
 
@@ -59,6 +59,8 @@ Outcome so far:
 - `DispatchTranscriptBridgeTest.php`: keep
 
 This slice found a real production defect, not just a test gap: `AgenticFinalResponseStreamer` emitted a runtime-error event but then continued into the empty-response path. The current pass tightened the streamer tests and fixed the production control flow so stream errors terminate correctly.
+
+The AI-focused audit sheet is complete at this checkpoint. Later AI-specific cleanup can reopen this document or continue in the master audit plan if new weak candidates surface.
 
 ## Design Decisions
 
