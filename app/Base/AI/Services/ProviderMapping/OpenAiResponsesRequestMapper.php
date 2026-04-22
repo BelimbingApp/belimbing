@@ -8,6 +8,7 @@ namespace App\Base\AI\Services\ProviderMapping;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ProviderControlAdjustment;
 use App\Base\AI\DTO\ProviderRequestMapping;
+use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\ProviderControlAdjustmentType;
 use App\Base\AI\Enums\ReasoningVisibility;
 
@@ -23,6 +24,10 @@ final class OpenAiResponsesRequestMapper implements ProviderRequestMapper
     public function mapPayload(ChatRequest $request, bool $stream): ProviderRequestMapping
     {
         [$instructions, $input] = $this->convertToResponsesInputWithInstructions($request->messages);
+        if ($request->apiType === AiApiType::OpenAiCodexResponses && (! is_string($instructions) || trim($instructions) === '')) {
+            $instructions = 'You are Codex, a coding assistant. Follow the user request exactly and reply concisely.';
+        }
+
         $capabilities = $this->capabilities->capabilitiesFor($request->providerName, $request->model, $request->apiType);
         $adjustments = [];
         $payload = array_filter([
@@ -35,6 +40,17 @@ final class OpenAiResponsesRequestMapper implements ProviderRequestMapper
             'tools' => $request->tools !== null ? $this->convertToResponsesTools($request->tools) : null,
             'tool_choice' => $request->executionControls->tools->choice?->value,
         ], fn ($value) => $value !== null);
+
+        if ($request->apiType === AiApiType::OpenAiCodexResponses) {
+            unset($payload['max_output_tokens']);
+            $payload['text'] = ['verbosity' => 'medium'];
+            $payload['include'] = ['reasoning.encrypted_content'];
+            $payload['parallel_tool_calls'] = true;
+
+            if (! array_key_exists('tool_choice', $payload)) {
+                $payload['tool_choice'] = 'auto';
+            }
+        }
 
         if (
             in_array($request->executionControls->reasoning->visibility, $capabilities->supportedReasoningVisibility, true)

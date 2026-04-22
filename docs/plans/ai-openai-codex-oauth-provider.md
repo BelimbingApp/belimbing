@@ -1,9 +1,9 @@
 # OpenAI Codex OAuth Provider
 
 **Agent:** Codex
-**Status:** Phase 5 complete; optional Phase 2.4 pending
-**Last Updated:** 2026-04-21
-**Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/Config/ai.php`, `app/Modules/Core/AI/Contracts/ProviderDefinition.php`, `app/Modules/Core/AI/Definitions/GenericApiKeyDefinition.php`, `app/Modules/Core/AI/Livewire/Providers/ProviderSetup.php`, `app/Modules/Core/AI/Models/AiProvider.php`, `app/Modules/Core/AI/Services/ProviderAuthFlowService.php`, `app/Modules/Core/AI/Services/ProviderDefinitionRegistry.php`, `app/Modules/Core/AI/Values/ResolvedProviderConfig.php`, `resources/core/views/livewire/admin/ai/providers/provider-setup.blade.php`, `/home/kiat/repo/openclaw/src/plugins/provider-openai-codex-oauth.ts`, `/home/kiat/repo/openclaw/src/agents/cli-credentials.ts`, `/home/kiat/repo/openclaw/node_modules/@mariozechner/pi-ai/dist/utils/oauth/openai-codex.js`, `/home/kiat/repo/openclaw/node_modules/@mariozechner/pi-ai/dist/providers/openai-codex-responses.js`, `https://github.com/openai/codex/blob/1dcea729d33ac936b8207ffccae7a0c4cb6b4ff4/codex-rs/app-server/README.md`, `https://github.com/openai/codex/tree/1dcea729d33ac936b8207ffccae7a0c4cb6b4ff4/codex-rs/login/src/auth`
+**Status:** Phase 5 complete; manual localhost fallback implemented; optional external-bearer escape hatch pending
+**Last Updated:** 2026-04-22
+**Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/Config/ai.php`, `app/Modules/Core/AI/Contracts/ProviderDefinition.php`, `app/Modules/Core/AI/Definitions/GenericApiKeyDefinition.php`, `app/Modules/Core/AI/Livewire/Providers/ProviderSetup.php`, `app/Modules/Core/AI/Models/AiProvider.php`, `app/Modules/Core/AI/Services/ProviderAuthFlowService.php`, `app/Modules/Core/AI/Services/ProviderDefinitionRegistry.php`, `app/Modules/Core/AI/Values/ResolvedProviderConfig.php`, `resources/core/views/livewire/admin/ai/providers/provider-setup.blade.php`, `/home/kiat/repo/openclaw/docs/.local/openai-codex-oauth-flow-pseudocode.md`, `/home/kiat/repo/openclaw/src/plugins/provider-openai-codex-oauth.ts`, `/home/kiat/repo/openclaw/src/agents/cli-credentials.ts`, `/home/kiat/repo/openclaw/node_modules/@mariozechner/pi-ai/dist/utils/oauth/openai-codex.js`, `/home/kiat/repo/openclaw/node_modules/@mariozechner/pi-ai/dist/providers/openai-codex-responses.js`, `https://github.com/openai/codex/blob/1dcea729d33ac936b8207ffccae7a0c4cb6b4ff4/codex-rs/app-server/README.md`, `https://github.com/openai/codex/tree/1dcea729d33ac936b8207ffccae7a0c4cb6b4ff4/codex-rs/login/src/auth`
 
 ## Problem Essence
 
@@ -153,6 +153,9 @@ Goal: make BLB able to sign a user into OpenAI Codex without depending on Codex 
 
 #### Phase 2.4 — Manual fallback & “external bearer” escape hatch
 
+- [x] Add a manual localhost-callback fallback so BLB can emulate OpenClaw's working OAuth contract even without a local listener:
+  - [x] Start the browser flow with OpenClaw-compatible authorize parameters (`redirect_uri=http://localhost:1455/auth/callback`, `originator=openclaw`).
+  - [x] Keep the setup page open and let the operator paste the full localhost redirect URL back into BLB for final code exchange.
 - [ ] Add an **operator-only** fallback mode to set `auth.mode=external_bearer` for diagnostics:
   - [ ] Accept a bearer token/session token and store it encrypted with a short expiry.
   - [ ] Clearly label as non-primary and not “supported”; do not auto-refresh it.
@@ -160,6 +163,8 @@ Goal: make BLB able to sign a user into OpenAI Codex without depending on Codex 
 ### Phase 3 — Add the Codex runtime transport
 
 Goal: make runtime requests use the ChatGPT backend contract instead of the public OpenAI API path.
+
+Implementation note: the Codex transport now shares the common Responses parsing/streaming base with standard OpenAI Responses, but owns its own endpoint suffix (`/codex/responses`). The curated fallback model seed also now tracks the broader OpenClaw-compatible baseline (`gpt-5.4`, `gpt-5.4-mini`, `gpt-5.2`, `gpt-5.1-codex-mini`), and the Codex setup page resyncs that curated set for already-connected providers so older one-model connections self-heal.
 
 #### Phase 3.1 — Resolve config (refresh-before-use)
 

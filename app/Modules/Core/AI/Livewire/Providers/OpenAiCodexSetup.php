@@ -28,6 +28,12 @@ final class OpenAiCodexSetup extends ProviderSetup
 {
     public ?int $providerId = null;
 
+    public string $oauthRedirectUri = '';
+
+    public string $manualRedirectInput = '';
+
+    public ?string $manualCompletionError = null;
+
     /** @var array<string, mixed>|null */
     public ?array $authState = null;
 
@@ -37,26 +43,43 @@ final class OpenAiCodexSetup extends ProviderSetup
     public function mount(string $providerKey): void
     {
         parent::mount($providerKey);
+        $this->oauthRedirectUri = app(OpenAiCodexAuthManager::class)->redirectUri();
 
         $provider = $this->loadProvider();
         if ($provider && ($this->readAuthState($provider)['status'] ?? null) === 'connected') {
-            $provider = $this->syncModelsIfNeeded($provider);
+            $provider = $this->syncModels($provider);
         }
 
         $this->syncStateFromProvider($provider);
     }
 
-    public function startOauthLogin(): mixed
+    public function startOauthLogin(): void
     {
         $provider = $this->loadOrCreateProvider();
         if (! $provider) {
-            return null;
+            return;
         }
 
-        $redirectUri = route('admin.ai.providers.openai-codex.callback');
-        $result = app(OpenAiCodexAuthManager::class)->startLogin($provider, $redirectUri);
+        $result = app(OpenAiCodexAuthManager::class)->startLogin($provider);
+        $this->manualCompletionError = null;
+        $this->verificationResult = null;
+        $this->syncStateFromProvider($provider->fresh() ?? $provider);
 
-        return redirect()->away($result['authorize_url']);
+        $this->dispatch('openai-codex-oauth-opened', url: $result['authorize_url']);
+    }
+
+    public function completeOauthLogin(): void
+    {
+        try {
+            $provider = app(OpenAiCodexAuthManager::class)->completeManualInput($this->manualRedirectInput);
+            $provider = $this->syncModels($provider);
+            $this->manualRedirectInput = '';
+            $this->manualCompletionError = null;
+            $this->syncStateFromProvider($provider);
+        } catch (\Throwable $e) {
+            $this->manualCompletionError = $e->getMessage();
+            $this->syncStateFromProvider($this->loadProvider());
+        }
     }
 
     public function disconnect(): void
@@ -80,7 +103,7 @@ final class OpenAiCodexSetup extends ProviderSetup
             return;
         }
 
-        $provider = $this->syncModelsIfNeeded($provider);
+        $provider = $this->syncModels($provider);
         $model = $this->resolveVerificationModel($provider);
 
         if (! $model) {
@@ -148,12 +171,12 @@ final class OpenAiCodexSetup extends ProviderSetup
 
     public function providerConnectionDescription(): ?string
     {
-        return __('Codex subscription — browser sign-in is required. This integration depends on an undocumented external contract and may break without notice.');
+        return __('Codex subscription — browser sign-in is required. BLB emulates the OpenClaw/OpenAI localhost callback flow and depends on an undocumented external contract that may break without notice.');
     }
 
     public function providerHeaderSubtitle(): ?string
     {
-        return __('Connect with browser OAuth to store refreshable subscription credentials.');
+        return __('Connect with browser OAuth, then paste the localhost callback URL so BLB can store refreshable subscription credentials.');
     }
 
     public function providerHeaderHelpPartial(): ?string
@@ -242,11 +265,9 @@ final class OpenAiCodexSetup extends ProviderSetup
             : null;
     }
 
-    private function syncModelsIfNeeded(AiProvider $provider): AiProvider
+    private function syncModels(AiProvider $provider): AiProvider
     {
-        if (! $provider->models()->exists()) {
-            app(ModelDiscoveryService::class)->syncModels($provider);
-        }
+        app(ModelDiscoveryService::class)->syncModels($provider);
 
         return $provider->fresh() ?? $provider;
     }

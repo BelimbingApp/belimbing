@@ -5,7 +5,7 @@ define('LARAVEL_START', microtime(true));
 // Catch fatal errors before Laravel boots so the browser shows the error instead of 502
 register_shutdown_function(function (): void {
     $err = error_get_last();
-    if ($err === null || headers_sent()) {
+    if ($err === null || headers_sent() || headers_list() !== []) {
         return;
     }
     $fatals = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR];

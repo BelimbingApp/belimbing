@@ -203,14 +203,19 @@ test('OpenAiCodexDefinition edit preserves durable auth state by omitting connec
 });
 
 test('OpenAiCodexDefinition owns curated model discovery', function (): void {
-    config()->set('ai.provider_overlay.openai-codex.curated_models', ['gpt-5.1-codex-mini', 'gpt-5.1-codex']);
+    config()->set('ai.provider_overlay.openai-codex.curated_models', [
+        'gpt-5.4',
+        'gpt-5.4-mini',
+        'gpt-5.2',
+    ]);
 
     $provider = new AiProvider;
     $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class));
 
     expect($def->discoverModels($provider))->toBe([
-        ['model_id' => 'gpt-5.1-codex-mini', 'display_name' => 'gpt-5.1-codex-mini'],
-        ['model_id' => 'gpt-5.1-codex', 'display_name' => 'gpt-5.1-codex'],
+        ['model_id' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
+        ['model_id' => 'gpt-5.4-mini', 'display_name' => 'gpt-5.4-mini'],
+        ['model_id' => 'gpt-5.2', 'display_name' => 'gpt-5.2'],
     ]);
 });
 

@@ -2,6 +2,7 @@
 
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
@@ -33,7 +34,7 @@ test('openai codex oauth callback persists credentials and marks provider connec
         'provider_id' => $provider->id,
         'company_id' => $companyId,
         'verifier' => 'verifier-xyz',
-        'redirect_uri' => route('admin.ai.providers.openai-codex.callback'),
+        'redirect_uri' => app(OpenAiCodexAuthManager::class)->redirectUri(),
     ], 600);
 
     // Build a JWT payload containing the account id.
@@ -74,4 +75,3 @@ test('openai codex oauth callback fails when state is missing', function (): voi
         ->get(route('admin.ai.providers.openai-codex.callback', ['code' => 'code-1']))
         ->assertRedirect(route('admin.ai.providers.setup', ['providerKey' => OpenAiCodexDefinition::KEY]));
 });
-

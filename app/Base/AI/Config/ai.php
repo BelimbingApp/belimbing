@@ -232,10 +232,15 @@ return [
             'api_type_overrides' => [
                 '*' => 'openai_codex_responses',
             ],
-            // Phase 3: curated v1 model seed (avoid /models discovery for this transport).
-            // Keep this list small and explicit; add more only after verifying the backend contract end-to-end.
+            // Curated fallback seed for ChatGPT-backed Codex accounts.
+            // Keep this explicit until BLB has a verified live-discovery contract.
+            'default_model' => 'gpt-5.4',
             'curated_models' => [
-                'gpt-5.1-codex-mini',
+                'gpt-5.4',
+                'gpt-5.4-mini',
+                'gpt-5.2',
+                'gpt-5.2-codex',
+                'gpt-5.3-codex',
             ],
             // No api_key_url: this provider is subscription-backed, not API-key-backed.
         ],

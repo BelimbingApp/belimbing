@@ -69,15 +69,40 @@ trait ManagesSync
             return;
         }
 
-        $this->syncMessage = match (true) {
-            $result['added'] > 0 && $result['updated'] > 0 => __('Added :added, updated :updated models.', [
-                'added' => $result['added'],
-                'updated' => $result['updated'],
-            ]),
-            $result['added'] > 0 => __('Added :count new models.', ['count' => $result['added']]),
-            $result['updated'] > 0 => __('Updated :count models.', ['count' => $result['updated']]),
-            ($result['total'] ?? 0) === 0 => __('No models are listed in the catalog for this provider.'),
-            default => __('Models are up to date.'),
+        $source = (string) ($result['source'] ?? 'provider_api');
+        $added = (int) ($result['added'] ?? 0);
+        $updated = (int) ($result['updated'] ?? 0);
+        $deactivated = (int) ($result['deactivated'] ?? 0);
+        $total = (int) ($result['total'] ?? 0);
+
+        $this->syncMessage = match ($source) {
+            'provider_definition' => match (true) {
+                $total === 0 => __('BLB did not define any fallback models for this provider.'),
+                $deactivated > 0 => __('BLB checked this provider against its curated model list: :total supported models remain active locally, :deactivated', [
+                    'total' => $total,
+                    'deactivated' => trans_choice('{1} 1 unsupported local model deactivated.|[2,*] :count unsupported local models deactivated.', $deactivated, [
+                        'count' => $deactivated,
+                    ]),
+                ]),
+                default => __('BLB checked this provider against its curated model list: :total supported models are active locally.', [
+                    'total' => $total,
+                ]),
+            },
+            'catalog' => match (true) {
+                $total === 0 => __('No models are listed in the catalog for this provider.'),
+                $added > 0 => __('Imported :count catalog models into the local list.', ['count' => $added]),
+                default => __('The local model list already matches the catalog fallback.'),
+            },
+            default => match (true) {
+                $added > 0 && $updated > 0 => __('Added :added models and refreshed :updated existing entries from the provider.', [
+                    'added' => $added,
+                    'updated' => $updated,
+                ]),
+                $added > 0 => __('Added :count models from the provider.', ['count' => $added]),
+                $updated > 0 => __('Refreshed :count existing provider models.', ['count' => $updated]),
+                $total === 0 => __('The provider returned no models.'),
+                default => __('The local model list already matches the provider response.'),
+            },
         };
     }
 

@@ -71,7 +71,7 @@ class ModelDiscoveryService
      * If API discovery fails, falls back to importing from the models.dev catalog.
      *
      * @param  AiProvider  $provider  Provider to sync models for
-     * @return array{added: int, updated: int, total: int}
+     * @return array{added: int, updated: int, total: int, deactivated: int, source: string}
      *
      * @throws ModelCatalogSyncException When the models.dev catalog cannot be downloaded
      */
@@ -81,7 +81,12 @@ class ModelDiscoveryService
         $definitionModels = $definition->discoverModels($provider);
 
         if ($definitionModels !== null) {
-            return $this->syncDiscoveredModels($provider, $definitionModels);
+            return $this->syncDiscoveredModels(
+                $provider,
+                $definitionModels,
+                authoritative: true,
+                source: 'provider_definition',
+            );
         }
 
         $this->modelCatalog->ensureSynced();
@@ -96,23 +101,31 @@ class ModelDiscoveryService
             return $this->importFromCatalog($provider);
         }
 
-        return $this->syncDiscoveredModels($provider, $discovered);
+        return $this->syncDiscoveredModels($provider, $discovered, source: 'provider_api');
     }
 
     /**
      * Persist discovered models and ensure a default exists.
      *
      * @param  list<array{model_id: string, display_name: string}>  $discovered
-     * @return array{added: int, updated: int, total: int}
+     * @return array{added: int, updated: int, total: int, deactivated: int, source: string}
      */
-    private function syncDiscoveredModels(AiProvider $provider, array $discovered): array
+    private function syncDiscoveredModels(
+        AiProvider $provider,
+        array $discovered,
+        bool $authoritative = false,
+        string $source = 'provider_api',
+    ): array
     {
         if ($discovered === []) {
-            return ['added' => 0, 'updated' => 0, 'total' => 0];
+            return ['added' => 0, 'updated' => 0, 'total' => 0, 'deactivated' => 0, 'source' => $source];
         }
 
         $added = 0;
         $updated = 0;
+        $deactivated = 0;
+
+        $discoveredIds = [];
 
         foreach ($discovered as $model) {
             $modelId = $model['model_id'] ?? null;
@@ -121,10 +134,16 @@ class ModelDiscoveryService
                 continue;
             }
 
+            $discoveredIds[] = $modelId;
+
             $providerModel = AiProviderModel::query()->firstOrCreate([
                 'ai_provider_id' => $provider->id,
                 'model_id' => $modelId,
             ]);
+
+            if (! $providerModel->is_active) {
+                $providerModel->update(['is_active' => true]);
+            }
 
             if ($providerModel->wasRecentlyCreated) {
                 $added++;
@@ -135,6 +154,10 @@ class ModelDiscoveryService
             $updated++;
         }
 
+        if ($authoritative) {
+            $deactivated = $this->deactivateMissingModels($provider, $discoveredIds);
+        }
+
         // Auto-set default model if none exists for this provider
         $this->ensureDefaultModel($provider);
 
@@ -142,6 +165,8 @@ class ModelDiscoveryService
             'added' => $added,
             'updated' => $updated,
             'total' => count($discovered),
+            'deactivated' => $deactivated,
+            'source' => $source,
         ];
     }
 
@@ -150,14 +175,14 @@ class ModelDiscoveryService
      *
      * Used as fallback when API discovery fails or returns no models.
      *
-     * @return array{added: int, updated: int, total: int}
+     * @return array{added: int, updated: int, total: int, deactivated: int, source: string}
      */
     public function importFromCatalog(AiProvider $provider): array
     {
         $catalogModels = $this->modelCatalog->getModels($provider->name);
 
         if ($catalogModels === []) {
-            return ['added' => 0, 'updated' => 0, 'total' => 0];
+            return ['added' => 0, 'updated' => 0, 'total' => 0, 'deactivated' => 0, 'source' => 'catalog'];
         }
 
         $added = 0;
@@ -186,6 +211,8 @@ class ModelDiscoveryService
             'added' => $added,
             'updated' => 0,
             'total' => count($catalogModels),
+            'deactivated' => 0,
+            'source' => 'catalog',
         ];
     }
 
@@ -196,13 +223,33 @@ class ModelDiscoveryService
      */
     public function ensureDefaultModel(AiProvider $provider): void
     {
-        $hasDefault = AiProviderModel::query()
+        $currentDefault = AiProviderModel::query()
             ->where('ai_provider_id', $provider->id)
             ->where('is_default', true)
-            ->exists();
+            ->first();
 
-        if ($hasDefault) {
+        if ($currentDefault instanceof AiProviderModel && $currentDefault->is_active) {
             return;
+        }
+
+        if ($currentDefault instanceof AiProviderModel) {
+            $currentDefault->unsetDefault();
+        }
+
+        $preferredModelId = config('ai.provider_overlay.'.$provider->name.'.default_model');
+
+        if (is_string($preferredModelId) && $preferredModelId !== '') {
+            $preferredModel = AiProviderModel::query()
+                ->where('ai_provider_id', $provider->id)
+                ->where('model_id', $preferredModelId)
+                ->where('is_active', true)
+                ->first();
+
+            if ($preferredModel instanceof AiProviderModel) {
+                $preferredModel->setAsDefault();
+
+                return;
+            }
         }
 
         $candidate = AiProviderModel::query()
@@ -214,5 +261,20 @@ class ModelDiscoveryService
         if ($candidate instanceof AiProviderModel) {
             $candidate->setAsDefault();
         }
+    }
+
+    /**
+     * @param  list<string>  $discoveredIds
+     */
+    private function deactivateMissingModels(AiProvider $provider, array $discoveredIds): int
+    {
+        return AiProviderModel::query()
+            ->where('ai_provider_id', $provider->id)
+            ->whereNotIn('model_id', $discoveredIds)
+            ->where('is_active', true)
+            ->update([
+                'is_active' => false,
+                'is_default' => false,
+            ]);
     }
 }

@@ -25,11 +25,15 @@ final class OpenAiCodexAuthManager
     // Values observed in the Codex/OpenClaw implementation.
     private const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
 
+    private const REDIRECT_URI = 'http://localhost:1455/auth/callback';
+
     private const AUTHORIZE_URL = 'https://auth.openai.com/oauth/authorize';
 
     private const TOKEN_URL = 'https://auth.openai.com/oauth/token';
 
     private const SCOPE = 'openid profile email offline_access';
+
+    private const ORIGINATOR = 'openclaw';
 
     private const JWT_CLAIM_PATH = 'https://api.openai.com/auth';
 
@@ -45,7 +49,7 @@ final class OpenAiCodexAuthManager
      *
      * @return array{authorize_url: string, state: string}
      */
-    public function startLogin(AiProvider $provider, string $redirectUri, string $originator = 'blb'): array
+    public function startLogin(AiProvider $provider): array
     {
         $state = bin2hex(random_bytes(16));
         $verifier = $this->base64UrlEncode(random_bytes(32));
@@ -55,7 +59,7 @@ final class OpenAiCodexAuthManager
             'provider_id' => $provider->id,
             'company_id' => $provider->company_id,
             'verifier' => $verifier,
-            'redirect_uri' => $redirectUri,
+            'redirect_uri' => self::REDIRECT_URI,
             'created_at' => now()->toIso8601String(),
         ], self::CACHE_TTL_SECONDS);
 
@@ -64,20 +68,25 @@ final class OpenAiCodexAuthManager
         $query = [
             'response_type' => 'code',
             'client_id' => self::CLIENT_ID,
-            'redirect_uri' => $redirectUri,
+            'redirect_uri' => self::REDIRECT_URI,
             'scope' => self::SCOPE,
             'code_challenge' => $challenge,
             'code_challenge_method' => 'S256',
             'state' => $state,
             'id_token_add_organizations' => 'true',
             'codex_cli_simplified_flow' => 'true',
-            'originator' => $originator,
+            'originator' => self::ORIGINATOR,
         ];
 
         return [
             'authorize_url' => self::AUTHORIZE_URL.'?'.http_build_query($query),
             'state' => $state,
         ];
+    }
+
+    public function redirectUri(): string
+    {
+        return self::REDIRECT_URI;
     }
 
     /**
@@ -90,6 +99,30 @@ final class OpenAiCodexAuthManager
         $state = (string) $request->query('state', '');
         $code = (string) $request->query('code', '');
 
+        return $this->completeAuthorization($code, $state);
+    }
+
+    public function completeManualInput(string $input): AiProvider
+    {
+        $parsed = $this->parseAuthorizationInput($input);
+        $state = $parsed['state'] ?? '';
+        $code = $parsed['code'] ?? '';
+
+        if ($code === '' || $state === '') {
+            throw new OpenAiCodexOAuthException(
+                'callback_validation_failed',
+                'Paste the full redirect URL from http://localhost:1455/auth/callback so BLB can read both code and state.',
+            );
+        }
+
+        return $this->completeAuthorization($code, $state);
+    }
+
+    /**
+     * @return AiProvider The updated provider record
+     */
+    private function completeAuthorization(string $code, string $state): AiProvider
+    {
         if ($state === '' || $code === '') {
             throw new OpenAiCodexOAuthException('callback_validation_failed', 'Missing authorization code or state.');
         }
@@ -255,6 +288,58 @@ final class OpenAiCodexAuthManager
         }
 
         return $accountId;
+    }
+
+    /**
+     * Parse a pasted OAuth completion value.
+     *
+     * Mirrors OpenClaw's manual fallback parsing rules:
+     * - full redirect URL
+     * - `code#state`
+     * - raw query string (`code=...&state=...`)
+     *
+     * @return array{code?: string, state?: string}
+     */
+    private function parseAuthorizationInput(string $input): array
+    {
+        $value = trim($input);
+
+        if ($value === '') {
+            return [];
+        }
+
+        if (filter_var($value, FILTER_VALIDATE_URL)) {
+            $query = parse_url($value, PHP_URL_QUERY);
+
+            if (is_string($query) && $query !== '') {
+                parse_str($query, $params);
+
+                return [
+                    'code' => is_string($params['code'] ?? null) ? $params['code'] : null,
+                    'state' => is_string($params['state'] ?? null) ? $params['state'] : null,
+                ];
+            }
+        }
+
+        if (str_contains($value, '#')) {
+            [$code, $state] = explode('#', $value, 2);
+
+            return [
+                'code' => trim($code),
+                'state' => trim($state),
+            ];
+        }
+
+        if (str_contains($value, 'code=')) {
+            parse_str($value, $params);
+
+            return [
+                'code' => is_string($params['code'] ?? null) ? $params['code'] : null,
+                'state' => is_string($params['state'] ?? null) ? $params['state'] : null,
+            ];
+        }
+
+        return ['code' => $value];
     }
 
     private function pkceChallenge(string $verifier): string

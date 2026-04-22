@@ -169,6 +169,30 @@ final readonly class ProviderTestService
 
     private function normalizeProviderError(string $providerName, AiRuntimeError $error): AiRuntimeError
     {
+        if ($providerName === OpenAiCodexDefinition::KEY && $this->isCodexMissingInstructions($error)) {
+            return new AiRuntimeError(
+                errorType: AiErrorType::ConfigError,
+                userMessage: __('OpenAI Codex rejected the request because BLB did not send instructions.'),
+                diagnostic: $error->diagnostic,
+                hint: __('Retry after updating BLB. This is a provider-integration request-shape issue, not an OAuth reconnect issue.'),
+                httpStatus: $error->httpStatus,
+                latencyMs: $error->latencyMs,
+                retryable: false,
+            );
+        }
+
+        if ($providerName === OpenAiCodexDefinition::KEY && $this->isCodexUnsupportedModel($error)) {
+            return new AiRuntimeError(
+                errorType: AiErrorType::BadRequest,
+                userMessage: __('This OpenAI Codex model is not available for ChatGPT-backed Codex accounts.'),
+                diagnostic: $error->diagnostic,
+                hint: __('Sync models and switch to a supported Codex model such as gpt-5.4, gpt-5.4-mini, or gpt-5.2.'),
+                httpStatus: $error->httpStatus,
+                latencyMs: $error->latencyMs,
+                retryable: false,
+            );
+        }
+
         if ($providerName !== OpenAiCodexDefinition::KEY || ! $this->isCodexTransportRejection($error)) {
             return $error;
         }
@@ -188,6 +212,14 @@ final readonly class ProviderTestService
     {
         $diagnostic = strtolower($error->diagnostic);
 
+        if ($this->isCodexUnsupportedModel($error)) {
+            return false;
+        }
+
+        if ($this->isCodexMissingInstructions($error)) {
+            return false;
+        }
+
         if (
             str_contains($diagnostic, 'chatgpt-account-id')
             || str_contains($diagnostic, 'backend-api')
@@ -205,5 +237,17 @@ final readonly class ProviderTestService
             AiErrorType::UnsupportedResponseShape => true,
             default => false,
         };
+    }
+
+    private function isCodexUnsupportedModel(AiRuntimeError $error): bool
+    {
+        $diagnostic = strtolower($error->diagnostic);
+
+        return str_contains($diagnostic, 'not supported when using codex with a chatgpt account');
+    }
+
+    private function isCodexMissingInstructions(AiRuntimeError $error): bool
+    {
+        return str_contains(strtolower($error->diagnostic), 'instructions are required');
     }
 }

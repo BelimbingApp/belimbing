@@ -18,6 +18,8 @@ test('ProviderRequestHeaderResolver adds codex static headers without reconstruc
 
     expect($headers)->not->toHaveKey('chatgpt-account-id')
         ->and($headers['OpenAI-Beta'] ?? null)->toBe('responses=experimental')
-        ->and($headers)->not->toHaveKey('accept')
-        ->and($headers)->not->toHaveKey('content-type');
+        ->and($headers['originator'] ?? null)->toBe('pi')
+        ->and($headers['Accept'] ?? null)->toBe('text/event-stream')
+        ->and($headers['Content-Type'] ?? null)->toBe('application/json')
+        ->and($headers['User-Agent'] ?? null)->toBe('pi (php)');
 });

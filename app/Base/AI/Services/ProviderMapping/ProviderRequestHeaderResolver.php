@@ -9,6 +9,8 @@ use App\Base\AI\DTO\ChatRequest;
 
 final class ProviderRequestHeaderResolver
 {
+    private const CODEX_USER_AGENT = 'pi (php)';
+
     /**
      * GitHub Copilot's API rejects requests unless callers identify as a compatible IDE client.
      *
@@ -40,9 +42,13 @@ final class ProviderRequestHeaderResolver
     {
         return array_filter([
             // Mirrors Codex/OpenClaw usage; not a stable public contract.
-            'originator' => 'blb',
+            'originator' => 'pi',
             // Codex backend expects Responses experimental headers.
             'OpenAI-Beta' => 'responses=experimental',
+            // Codex uses SSE for both streamed and sync-style BLB calls.
+            'Accept' => 'text/event-stream',
+            'Content-Type' => 'application/json',
+            'User-Agent' => self::CODEX_USER_AGENT,
         ], fn ($value) => is_string($value) && $value !== '');
     }
 }

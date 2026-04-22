@@ -38,7 +38,7 @@ $codexModeLabel = match ((string) ($codexAuthState['mode'] ?? '')) {
             <x-ui.badge variant="accent">{{ __('Plan: :plan', ['plan' => $codexAuthState['plan_type']]) }}</x-ui.badge>
         @endif
     </div>
-    <p class="text-sm text-muted">{{ __('OpenAI Codex uses browser OAuth and the ChatGPT backend. Treat it as a compatibility integration rather than a standard OpenAI API provider.') }}</p>
+    <p class="text-sm text-muted">{{ __('OpenAI Codex uses browser OAuth and the ChatGPT backend. BLB mirrors the OpenClaw localhost callback flow, so a pending sign-in must be completed by pasting the localhost redirect URL back into this page.') }}</p>
 </div>
 
 <dl class="mt-4 grid grid-cols-1 gap-4 text-sm md:grid-cols-2 xl:grid-cols-4">

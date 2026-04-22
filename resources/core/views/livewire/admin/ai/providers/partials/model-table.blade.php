@@ -36,7 +36,7 @@ use Illuminate\Support\Collection;
                     class="flex flex-row flex-nowrap items-center gap-1.5"
                 >
                     <x-icon name="heroicon-o-arrow-path" class="inline-block h-3.5 w-3.5 shrink-0 align-middle" />
-                    <span class="whitespace-nowrap">{{ __('Update Models') }}</span>
+                    <span class="whitespace-nowrap">{{ __('Sync Models') }}</span>
                 </span>
                 <span
                     wire:loading
@@ -45,7 +45,7 @@ use Illuminate\Support\Collection;
                     aria-live="polite"
                 >
                     <x-icon name="heroicon-o-arrow-path" class="inline-block h-3.5 w-3.5 shrink-0 align-middle motion-safe:animate-spin" />
-                    <span class="whitespace-nowrap">{{ __('Update Models') }}</span>
+                    <span class="whitespace-nowrap">{{ __('Sync Models') }}</span>
                 </span>
             </x-ui.button>
             <x-ui.button variant="ghost" size="sm" wire:click.stop="openCreateModel({{ $provider->id }})">

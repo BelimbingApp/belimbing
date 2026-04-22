@@ -1,7 +1,7 @@
 <div class="space-y-3 text-sm text-muted">
     <div>
         <p class="font-medium text-ink">{{ __('How BLB signs in') }}</p>
-        <p>{{ __('BLB opens OpenAI in your browser, completes a PKCE OAuth callback back into BLB, then stores refreshable subscription credentials securely.') }}</p>
+        <p>{{ __('BLB opens OpenAI in your browser, OpenAI redirects to a localhost callback URL, and you paste that full URL back into BLB so it can exchange the code and store refreshable subscription credentials securely.') }}</p>
     </div>
     <div>
         <p class="font-medium text-ink">{{ __('What this is not') }}</p>
