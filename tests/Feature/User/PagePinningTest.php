@@ -65,7 +65,14 @@ test('pin toggle and reorder use URL-based identity', function (): void {
         ->assertOk()
         ->assertJsonPath('pinned', false);
 
-    expect(UserPin::query()->where('user_id', $user->id)->count())->toBe(1);
+    $remainingPins = UserPin::query()
+        ->where('user_id', $user->id)
+        ->orderBy('sort_order')
+        ->get(['label', 'url']);
+
+    expect($remainingPins)->toHaveCount(1);
+    expect($remainingPins->pluck('label')->all())->toBe([PAGE_PINNING_SECOND_LABEL]);
+    expect($remainingPins->pluck('url')->all())->toBe(['/second']);
 });
 
 test('duplicate URL is detected regardless of trailing slash or scheme', function (): void {

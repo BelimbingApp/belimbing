@@ -5,6 +5,7 @@ use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 
 const TEST_PASSWORD = 'SecurePassword123!';
@@ -62,7 +63,8 @@ test('user can be created from create page component', function (): void {
     expect($user)
         ->not()->toBeNull()
         ->and($user->name)->toBe('Jane Doe')
-        ->and($user->company_id)->toBeNull();
+        ->and($user->company_id)->toBeNull()
+        ->and(Hash::check(TEST_PASSWORD, $user->password))->toBeTrue();
 });
 
 test('user can be created with company', function (): void {
@@ -83,7 +85,8 @@ test('user can be created with company', function (): void {
 
     expect($user)
         ->not()->toBeNull()
-        ->and($user->company_id)->toBe($company->id);
+        ->and($user->company_id)->toBe($company->id)
+        ->and(Hash::check(TEST_PASSWORD, $user->password))->toBeTrue();
 });
 
 test('user fields can be inline edited from show page', function (): void {
@@ -149,6 +152,8 @@ test('password can be updated from show page', function (): void {
         ->set('passwordConfirmation', TEST_PASSWORD_NEW)
         ->call('updatePassword')
         ->assertHasNoErrors();
+
+    expect(Hash::check(TEST_PASSWORD_NEW, $user->fresh()->password))->toBeTrue();
 });
 
 test('password update requires confirmation', function (): void {

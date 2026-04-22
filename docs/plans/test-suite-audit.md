@@ -2,7 +2,7 @@
 
 **Agent:** Codex
 **Status:** Phases 4-5 In Progress
-**Last Updated:** 2026-04-21
+**Last Updated:** 2026-04-22
 **Sources:** `AGENTS.md`, `docs/AGENTS.md`, `docs/plans/AGENTS.md`, `tests/AGENTS.md`, `docs/plans/test-suite-audit-rubric.md`, `docs/plans/test-suite-audit-inventory.md`, `docs/plans/ai-test-suite-audit.md`, `scripts/test-suite-audit-inventory.php`, `scripts/check-changed-tests.php`, `scripts/run-critical-mutation-checks.php`, `.github/workflows/lint.yml`, `.github/workflows/test-audit-report.yml`, `.github/pull_request_template.md`, user discussion on 2026-04-21
 
 ## Problem Essence
@@ -115,6 +115,7 @@ Goal: apply the proven process to the rest of the suite without losing visibilit
 - [ ] Split this plan into companion per-area build sheets if the checklist becomes hard to use
 - [ ] Keep the plan current with what was deleted, tightened, merged, or deferred
 - [ ] Track residual risks where coverage is intentionally reduced but accepted
+- [ ] Update the draft skill at `.agents/draft/blb-test-suite-audit/` as new audit patterns prove stable enough to keep
 
 Current Phase 4 focus:
 
@@ -141,6 +142,18 @@ Latest Phase 4 result:
 - `CompanyRelationshipTest.php` and `ExternalAccessTest.php` were tightened so their scope tests now assert the specific returned records, not just counts
 - those company scope tightenings were validated by temporarily inverting `CompanyRelationship::scopeExternal()` and `ExternalAccess::scopeValid()`, then confirming the focused tests failed before restoring production code
 - the remaining authz slice reviewed `AuthorizationServiceTest.php` and `AuthzRoleCapabilitySeederTest.php` as `keep`; both protect high-value policy and configuration-failure contracts rather than UI smoke
+- the user feature slice reviewed `UserUiTest.php` and `PagePinningTest.php` as behavior-oriented keeps overall, but tightened their weak spots rather than leaving them as proxy assertions
+- `UserUiTest.php` now proves created and updated passwords are actually persisted correctly instead of only checking redirect or no-error outcomes
+- `PagePinningTest.php` now proves URL-based unpinning removes the intended pin and leaves the correct remaining record, not just a count of one
+- those user-slice tightenings were validated by temporarily breaking password persistence in `Users\\Create` and mis-targeting pin deletion in `PinController`, then confirming the focused tests failed before restoring production code
+- the remaining auth feature slice reviewed `RegistrationTest.php` as a keep with one tightening: it now proves the registered user is actually created with the expected password hash and emits `Registered`
+- the remaining system feature slice reviewed `TransportTestUiTest.php` as `keep`; it already protects authz, SSE transport shape, and Reverb dispatch behavior with concrete assertions
+- the registration tightening was validated by temporarily breaking password persistence in `Auth\\Register` and confirming the focused test failed before restoring production code
+- the database feature slice reviewed `DatabaseTablesShowTest.php`, `MigrateCommandTest.php`, `QueryTest.php`, and `TableRegistryReconciliationTest.php` as `keep`; they protect real schema, provisioning, query-safety, sharing, and reconciliation contracts
+- the smaller leftover feature sweep reviewed `AuditableTraitTest.php`, `BlbExceptionRenderingTest.php`, `FrameworkPrimitivesProvisionerTest.php`, and `WorkflowEngineTest.php` as `keep`
+- `AddressUiTest.php` was tightened so address creation now asserts persisted label, line, locality, postcode, country normalization, and verification status
+- the address tightening first exposed a form-state gotcha: changing `countryIso` resets dependent geo fields, so the test was adjusted to follow the real interaction order before assessing persistence
+- the final address tightening was validated by temporarily breaking locality persistence in `Addresses\\Create` and confirming the focused test failed before restoring production code
 
 ### Phase 5 — Add CI Guardrails
 

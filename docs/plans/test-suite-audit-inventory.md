@@ -1,9 +1,9 @@
 # Test Suite Audit Inventory
 
 **Agent:** Codex
-**Status:** Phase 2 inventory snapshot
-**Last Updated:** 2026-04-21
-**Sources:** `scripts/test-suite-audit-inventory.php`, `tests/`, attempted `php artisan test --profile` on 2026-04-21
+**Status:** Inventory and progress snapshot
+**Last Updated:** 2026-04-22
+**Sources:** `scripts/test-suite-audit-inventory.php`, `tests/`, `docs/plans/test-suite-audit.md`, `docs/plans/ai-test-suite-audit.md`, attempted `php artisan test --profile` on 2026-04-21
 
 ## Problem Essence
 
@@ -11,7 +11,40 @@ A useful audit needs a first-pass map of the suite: where the examples are conce
 
 ## Desired Outcome
 
-This report gives BLB a ranked starting point for manual review. The signals below are heuristics, not verdicts; they identify likely audit candidates and concentration areas so human review can decide keep, tighten, merge, or delete.
+This report gives BLB both a ranked starting point and a compact view of the remaining endgame. The signals below are heuristics, not verdicts; they identify likely audit candidates and concentration areas so human review can decide keep, tighten, merge, or delete.
+
+## Audit Progress Snapshot
+
+### Completed Or Mature Slices
+
+- `Modules/Core/AI` companion audit: complete at this checkpoint; see [ai-test-suite-audit.md](/home/kiat/repo/laravel/blb/docs/plans/ai-test-suite-audit.md:1)
+- Auth and Settings cheap-candidate slice: reviewed with real tightenings in password reset and password confirmation
+- Authz and System cheap-candidate slice: `ImpersonationTest.php`, `RoleUiTest.php`, and `LocalizationUiTest.php` reviewed; `RoleUiTest.php` tightened
+- Company feature slice: `CompanyUiTest.php`, `CompanyRelationshipTest.php`, and `ExternalAccessTest.php` tightened; `CompanyTest.php` and `CompanyTimezoneTest.php` kept
+- Quality cheap-candidate slice: `QualityWorkflowUiTest.php` reviewed as `keep`
+- User feature slice: `UserUiTest.php` and `PagePinningTest.php` reviewed; both kept with targeted tightenings
+- Remaining auth and system feature slices: `RegistrationTest.php` tightened; `TransportTestUiTest.php` reviewed as `keep`
+- Database feature slice: reviewed as `keep`
+- Smaller leftover feature sweep: `AddressUiTest.php` tightened; audit, foundation, and workflow feature files reviewed as `keep`
+- Phase 5 guardrails: changed-test linting, PR review prompt, and scheduled slow-test plus mutation-style reporting are in place
+
+### Current Checkpoint
+
+- The audit is past the pilot stage and no longer blocked on process design
+- Cheap-candidate heuristics have been useful for ranking, but have produced multiple false positives
+- The highest-confidence remaining work is now in untouched modules and smaller non-AI unit/service clusters rather than in the already-reviewed heuristic bucket
+
+### Next Recommended Slices
+
+- Database feature slice: `DatabaseTablesShowTest.php`, `MigrateCommandTest.php`, `QueryTest.php`, `TableRegistryReconciliationTest.php`
+- Base/AI unit slice: `LlmClientToolCallingTest.php`, provider/model catalog tests, and related service files
+- Remaining unit/service sweep outside AI: Base/Authz, Base/Settings, Base/Database, Base/Foundation, Base/Locale
+
+### Remaining Buckets After That
+
+- Feature modules not yet audited in this program: none of the remaining feature-only buckets are still unreviewed; the endgame is now mostly unit/service slices
+- Non-AI unit/service clusters that still look promising: Base/AI, Base/Authz, Base/Settings, Base/Database, Base/Foundation, Base/Locale
+- Revisit Phase 5 later to decide whether any scheduled guardrail is mature enough to become PR-blocking
 
 ## Summary
 
@@ -92,3 +125,9 @@ Runtime note: `php artisan test --profile` did not return a clean final profile 
 - Start the pilot audit in `Modules/Core/AI`; it dominates the example count and contains both mock-heavy units and filesystem-sensitive tests.
 - Review redirect-only and smoke-or-markup files early; they are cheap delete or merge candidates.
 - Treat the skipped `LlmClientToolCallingTest` file as its own audit topic because it already signals test-suite friction and missing trust in CI.
+
+## Updated Read Of The Inventory
+
+- The original ranking did its job for prioritization, but it is no longer the full story because many of the top-ranked files are already audited.
+- Cheap-candidate signals should continue to guide ordering, not decisions.
+- The endgame is now visible as a finite set of module slices rather than an undifferentiated list of 1000+ tests.
