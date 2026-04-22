@@ -21,9 +21,14 @@
         >
             <x-icon name="heroicon-o-bars-3" class="w-5 h-5" />
         </button>
-        <h1 class="text-base font-semibold text-ink">
-            Belimbing
-        </h1>
+        <a
+            href="{{ route('home') }}"
+            class="flex items-center gap-2 text-ink hover:opacity-90 transition"
+            wire:navigate
+            aria-label="{{ config('app.name', 'Belimbing') }}"
+        >
+            <x-app-logo />
+        </a>
     </div>
 
     {{-- Right: Timezone selector + Theme toggle --}}
