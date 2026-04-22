@@ -1,7 +1,7 @@
 # OpenAI Codex OAuth Provider
 
 **Agent:** Codex
-**Status:** Phase 5 complete; manual localhost fallback implemented; optional external-bearer escape hatch pending
+**Status:** Phase 5 complete; automatic localhost:1455 listener implemented; optional external-bearer escape hatch pending
 **Last Updated:** 2026-04-22
 **Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/Config/ai.php`, `app/Modules/Core/AI/Contracts/ProviderDefinition.php`, `app/Modules/Core/AI/Definitions/GenericApiKeyDefinition.php`, `app/Modules/Core/AI/Livewire/Providers/ProviderSetup.php`, `app/Modules/Core/AI/Models/AiProvider.php`, `app/Modules/Core/AI/Services/ProviderAuthFlowService.php`, `app/Modules/Core/AI/Services/ProviderDefinitionRegistry.php`, `app/Modules/Core/AI/Values/ResolvedProviderConfig.php`, `resources/core/views/livewire/admin/ai/providers/provider-setup.blade.php`, `/home/kiat/repo/openclaw/docs/.local/openai-codex-oauth-flow-pseudocode.md`, `/home/kiat/repo/openclaw/src/plugins/provider-openai-codex-oauth.ts`, `/home/kiat/repo/openclaw/src/agents/cli-credentials.ts`, `/home/kiat/repo/openclaw/node_modules/@mariozechner/pi-ai/dist/utils/oauth/openai-codex.js`, `/home/kiat/repo/openclaw/node_modules/@mariozechner/pi-ai/dist/providers/openai-codex-responses.js`, `https://github.com/openai/codex/blob/1dcea729d33ac936b8207ffccae7a0c4cb6b4ff4/codex-rs/app-server/README.md`, `https://github.com/openai/codex/tree/1dcea729d33ac936b8207ffccae7a0c4cb6b4ff4/codex-rs/login/src/auth`
 
@@ -151,14 +151,18 @@ Goal: make BLB able to sign a user into OpenAI Codex without depending on Codex 
 - [ ] On timeout/cancel: `pending` → `disconnected`. (not needed in v1; callback state expires by TTL)
 - [x] On logout: `connected/expired/error` → `disconnected` and clear `credentials`.
 
-#### Phase 2.4 — Manual fallback & “external bearer” escape hatch
+#### Phase 2.4 — Automatic localhost listener & fallback
 
-- [x] Add a manual localhost-callback fallback so BLB can emulate OpenClaw's working OAuth contract even without a local listener:
+- [x] Add an automatic localhost:1455 callback listener so BLB captures the OAuth redirect without manual URL pasting:
+  - [x] On sign-in, check if port 1455 is free; if so, spawn `blb:ai:codex:auth-listen` artisan command in background to bind `127.0.0.1:1455` and wait for the callback.
+  - [x] The listener receives the GET callback, delegates to `OpenAiCodexAuthManager::completeManualInput()`, serves a branded HTML response, then exits.
+  - [x] The setup page polls (`wire:poll.3s`) while pending and auto-detects when the provider becomes connected.
+- [x] Keep manual URL paste as a collapsed fallback when port 1455 is occupied by another tool (OpenClaw, Codex CLI, Pi).
   - [x] Start the browser flow with OpenClaw-compatible authorize parameters (`redirect_uri=http://localhost:1455/auth/callback`, `originator=openclaw`).
-  - [x] Keep the setup page open and let the operator paste the full localhost redirect URL back into BLB for final code exchange.
+  - [x] When port is busy, show the paste textarea open by default with an explanatory alert.
 - [ ] Add an **operator-only** fallback mode to set `auth.mode=external_bearer` for diagnostics:
   - [ ] Accept a bearer token/session token and store it encrypted with a short expiry.
-  - [ ] Clearly label as non-primary and not “supported”; do not auto-refresh it.
+  - [ ] Clearly label as non-primary and not "supported"; do not auto-refresh it.
 
 ### Phase 3 — Add the Codex runtime transport
 

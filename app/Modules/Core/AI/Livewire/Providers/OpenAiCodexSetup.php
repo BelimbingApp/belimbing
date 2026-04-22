@@ -34,6 +34,8 @@ final class OpenAiCodexSetup extends ProviderSetup
 
     public ?string $manualCompletionError = null;
 
+    public bool $listenerSpawned = false;
+
     /** @var array<string, mixed>|null */
     public ?array $authState = null;
 
@@ -64,6 +66,8 @@ final class OpenAiCodexSetup extends ProviderSetup
         $this->manualCompletionError = null;
         $this->verificationResult = null;
         $this->syncStateFromProvider($provider->fresh() ?? $provider);
+
+        $this->listenerSpawned = $this->spawnCallbackListener();
 
         $this->dispatch('openai-codex-oauth-opened', url: $result['authorize_url']);
     }
@@ -171,12 +175,12 @@ final class OpenAiCodexSetup extends ProviderSetup
 
     public function providerConnectionDescription(): ?string
     {
-        return __('Codex subscription — browser sign-in is required. BLB emulates the OpenClaw/OpenAI localhost callback flow and depends on an undocumented external contract that may break without notice.');
+        return __('Codex subscription — browser sign-in is required. BLB listens on localhost:1455 during sign-in and depends on an undocumented external contract that may break without notice.');
     }
 
     public function providerHeaderSubtitle(): ?string
     {
-        return __('Connect with browser OAuth, then paste the localhost callback URL so BLB can store refreshable subscription credentials.');
+        return __('Connect with browser OAuth. BLB listens for the callback automatically when possible.');
     }
 
     public function providerHeaderHelpPartial(): ?string
@@ -302,5 +306,69 @@ final class OpenAiCodexSetup extends ProviderSetup
             'hint' => $hint,
             'checked_at' => now()->toIso8601String(),
         ];
+    }
+
+    /**
+     * Spawn a background artisan process to listen on localhost:1455
+     * for the OAuth callback, so the user does not need to paste the URL.
+     */
+    private function spawnCallbackListener(): bool
+    {
+        if (! $this->isPortAvailable(1455)) {
+            return false;
+        }
+
+        $php = $this->resolvePhpBinary();
+        $artisan = base_path('artisan');
+        $logFile = storage_path('logs/codex-auth-listen.log');
+        $cmd = sprintf(
+            'nohup %s %s blb:ai:codex:auth-listen --timeout=180 >> %s 2>&1 &',
+            escapeshellarg($php),
+            escapeshellarg($artisan),
+            escapeshellarg($logFile),
+        );
+
+        exec($cmd);
+
+        return true;
+    }
+
+    /**
+     * Resolve the PHP CLI binary path.
+     *
+     * FrankenPHP workers set PHP_BINARY to empty string. Fall back to
+     * a versioned binary in PHP_BINDIR, then to an unversioned `php`.
+     */
+    private function resolvePhpBinary(): string
+    {
+        $binary = PHP_BINARY;
+
+        if ($binary !== '' && ! str_contains(basename($binary), 'frankenphp')) {
+            return $binary;
+        }
+
+        $versioned = PHP_BINDIR.'/php'.PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;
+        if (file_exists($versioned)) {
+            return $versioned;
+        }
+
+        $plain = PHP_BINDIR.'/php';
+        if (file_exists($plain)) {
+            return $plain;
+        }
+
+        return 'php';
+    }
+
+    private function isPortAvailable(int $port): bool
+    {
+        $conn = @fsockopen('127.0.0.1', $port, $errno, $errstr, 1);
+        if ($conn) {
+            fclose($conn);
+
+            return false;
+        }
+
+        return true;
     }
 }

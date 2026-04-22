@@ -11,6 +11,7 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Menu\Services\MenuConditionRegistry;
 use App\Modules\Core\AI\Console\Commands\BrowserStatusCommand;
 use App\Modules\Core\AI\Console\Commands\BrowserSweepCommand;
+use App\Modules\Core\AI\Console\Commands\CodexAuthListenCommand;
 use App\Modules\Core\AI\Console\Commands\HealthSnapshotCommand;
 use App\Modules\Core\AI\Console\Commands\InspectRunCommand;
 use App\Modules\Core\AI\Console\Commands\LifecycleExecuteCommand;
@@ -254,6 +255,7 @@ class ServiceProvider extends BaseServiceProvider
                 HealthSnapshotCommand::class,
                 LifecyclePreviewCommand::class,
                 LifecycleExecuteCommand::class,
+                CodexAuthListenCommand::class,
             ]);
         }
     }
