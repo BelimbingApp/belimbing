@@ -26,7 +26,7 @@
         <div wire:poll.3s class="space-y-4">
             @if($this->listenerSpawned)
                 <x-ui.alert variant="info">
-                    {{ __('Finish the browser sign-in. BLB is listening for the callback and will connect automatically.') }}
+                    {{ __('Finish the browser sign-in. Belimbing is listening for the callback and will connect automatically.') }}
                 </x-ui.alert>
                 <div class="flex items-center gap-2 text-sm text-muted">
                     <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

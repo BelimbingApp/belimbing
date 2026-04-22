@@ -64,9 +64,12 @@ class ModelDiscoveryService
     /**
      * Sync discovered models into the database for a provider.
      *
-     * Upserts models: adds new ones from API discovery. Catalog metadata
+     * Upserts models: adds new ones from API or provider-definition discovery. Catalog metadata
      * (display_name, costs, etc.) is served from ModelCatalogService at read
      * time — only model_id and admin config (is_active, cost_override) are stored.
+     *
+     * When the provider supplies a fixed curated list (authoritative sync), any local
+     * rows whose {@see AiProviderModel::$model_id} is not in that list are deleted.
      *
      * If API discovery fails, falls back to importing from the models.dev catalog.
      *
@@ -155,7 +158,7 @@ class ModelDiscoveryService
         }
 
         if ($authoritative) {
-            $deactivated = $this->deactivateMissingModels($provider, $discoveredIds);
+            $deactivated = $this->deleteMissingModels($provider, $discoveredIds);
         }
 
         // Auto-set default model if none exists for this provider
@@ -276,5 +279,21 @@ class ModelDiscoveryService
                 'is_active' => false,
                 'is_default' => false,
             ]);
+    }
+
+    /**
+     * Remove local rows whose model_id is not on the curated list (authoritative sync).
+     *
+     * Unlike {@see deactivateMissingModels()}, this drops already-inactive orphans so
+     * they do not linger in the admin model table after "Sync models".
+     *
+     * @param  list<string>  $discoveredIds
+     */
+    private function deleteMissingModels(AiProvider $provider, array $discoveredIds): int
+    {
+        return AiProviderModel::query()
+            ->where('ai_provider_id', $provider->id)
+            ->whereNotIn('model_id', $discoveredIds)
+            ->delete();
     }
 }

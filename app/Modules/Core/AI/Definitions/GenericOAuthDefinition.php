@@ -16,9 +16,9 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Honest generic definition for providers that advertise OAuth but have no dedicated BLB flow yet.
+ * Honest generic definition for providers that advertise OAuth but have no dedicated Belimbing flow yet.
  *
- * This keeps OAuth providers out of the generic API-key path until BLB ships
+ * This keeps OAuth providers out of the generic API-key path until Belimbing ships
  * a provider-specific sign-in implementation.
  */
 final readonly class GenericOAuthDefinition implements ProviderDefinition
@@ -79,7 +79,7 @@ final readonly class GenericOAuthDefinition implements ProviderDefinition
 
     public function resolveRuntime(AiProvider $provider): ResolvedProviderConfig
     {
-        throw new \RuntimeException('This provider requires a dedicated OAuth sign-in flow. BLB does not implement a generic OAuth runtime for it yet.');
+        throw new \RuntimeException('This provider requires a dedicated OAuth sign-in flow. Belimbing does not implement a generic OAuth runtime for it yet.');
     }
 
     public function discoverModels(AiProvider $provider): ?array

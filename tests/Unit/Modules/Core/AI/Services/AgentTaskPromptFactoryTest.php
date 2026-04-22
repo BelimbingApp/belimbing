@@ -40,6 +40,6 @@ it('falls back to the generic delegated-agent prompt when a non-system agent wor
         )
         ->and($package->sections[0]->label)->toBe('system_prompt')
         ->and($package->sections[0]->source)->toContain('Resources/agent-task/system_prompt.md')
-        ->and($package->sections[0]->content)->toContain('delegated BLB agent task')
+        ->and($package->sections[0]->content)->toContain('delegated Belimbing agent task')
         ->and($package->sections[1]->label)->toBe('dispatch_context');
 });

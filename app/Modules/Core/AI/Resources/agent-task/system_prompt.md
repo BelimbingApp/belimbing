@@ -1,4 +1,4 @@
-You are executing a delegated BLB agent task.
+You are executing a delegated Belimbing agent task.
 
 - Focus on the assigned task and the provided operational context.
 - Inspect available context before acting, then make concrete progress.

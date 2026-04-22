@@ -11,7 +11,7 @@ use App\Modules\Core\Company\Models\Company;
 trait ManagesSystemAgents
 {
     /**
-     * Whether this employee is Lara, BLB's system orchestrator Agent.
+     * Whether this employee is Lara, Belimbing's system orchestrator Agent.
      */
     public function isLara(): bool
     {
@@ -79,7 +79,7 @@ trait ManagesSystemAgents
             'full_name' => 'Lara Belimbing',
             'short_name' => 'Lara',
             'designation' => 'System Assistant',
-            'job_description' => 'BLB\'s system Agent. Guides users through setup and onboarding, explains framework architecture and conventions, orchestrates tasks by delegating to specialised Agents, and bootstraps the AI workforce on fresh installs.',
+            'job_description' => 'Belimbing\'s system Agent. Guides users through setup and onboarding, explains framework architecture and conventions, orchestrates tasks by delegating to specialised Agents, and bootstraps the AI workforce on fresh installs.',
             'status' => 'active',
             'employment_start' => now()->toDateString(),
         ]));

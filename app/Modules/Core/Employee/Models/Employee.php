@@ -26,7 +26,7 @@ class Employee extends Model
     use ManagesSystemAgents;
 
     /**
-     * The well-known ID for Lara, BLB's system orchestrator Agent.
+     * The well-known ID for Lara, Belimbing's system orchestrator Agent.
      *
      * Lara is provisioned at install time and cannot be deleted.
      * Mirrors the Licensee pattern (Company::LICENSEE_ID).

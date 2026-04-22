@@ -142,10 +142,10 @@ describe('readContent', function () {
 
     it('reads stored content from disk', function () {
         $stored = $this->store->store(
-            $this->session->id, BrowserArtifactType::Snapshot, 'Hello BLB',
+            $this->session->id, BrowserArtifactType::Snapshot, 'Hello Belimbing',
         );
 
-        expect($this->store->readContent($stored->artifactId))->toBe('Hello BLB');
+        expect($this->store->readContent($stored->artifactId))->toBe('Hello Belimbing');
     });
 });
 

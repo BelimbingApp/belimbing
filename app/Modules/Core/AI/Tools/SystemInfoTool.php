@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * System information reporting tool for Agents.
  *
- * Provides structured JSON about the BLB instance including framework
+ * Provides structured JSON about the Belimbing instance including framework
  * details, active modules, configured AI providers, and health checks.
  * The LLM reads this to answer system-related questions.
  *
@@ -46,7 +46,7 @@ class SystemInfoTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Report BLB system state including framework version, active modules, '
+        return 'Report Belimbing system state including framework version, active modules, '
             .'configured AI providers, and health checks. '
             .'Use this to answer questions like "What version of Laravel is running?", '
             .'"Which modules are active?", or "Is the database healthy?".';
@@ -83,8 +83,8 @@ class SystemInfoTool extends AbstractTool
     {
         return [
             'display_name' => 'System Info',
-            'summary' => 'Inspect non-sensitive BLB system state for diagnostics.',
-            'explanation' => 'Reports structured information about the BLB instance: framework versions, active modules, '
+            'summary' => 'Inspect non-sensitive Belimbing system state for diagnostics.',
+            'explanation' => 'Reports structured information about the Belimbing instance: framework versions, active modules, '
                 .'configured AI providers (keys masked), and health status. Useful for diagnostics and system awareness. '
                 .'This tool cannot modify system configuration or expose secrets.',
             'setup_requirements' => [
@@ -175,7 +175,7 @@ class SystemInfoTool extends AbstractTool
     }
 
     /**
-     * Active BLB modules by scanning `app/Modules/Core/` for directories
+     * Active Belimbing modules by scanning `app/Modules/Core/` for directories
      * that contain a `ServiceProvider.php`.
      *
      * @return list<string>

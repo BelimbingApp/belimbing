@@ -149,7 +149,7 @@ class ProviderSetup extends Component
         }
 
         if ($this->authType === AuthType::OAuth->value) {
-            $this->connectError = __('This provider requires a dedicated OAuth sign-in flow. BLB does not implement a generic OAuth connector yet.');
+            $this->connectError = __('This provider requires a dedicated OAuth sign-in flow. Belimbing does not implement a generic OAuth connector yet.');
 
             return;
         }

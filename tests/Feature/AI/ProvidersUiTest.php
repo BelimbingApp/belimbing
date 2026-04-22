@@ -77,7 +77,7 @@ test('generic oauth provider setup is honest about missing dedicated sign-in sup
         ->assertDontSee('API Key (optional)')
         ->set('baseUrl', 'https://portal.qwen.ai/v1')
         ->call('connect')
-        ->assertSet('connectError', 'This provider requires a dedicated OAuth sign-in flow. BLB does not implement a generic OAuth connector yet.');
+        ->assertSet('connectError', 'This provider requires a dedicated OAuth sign-in flow. Belimbing does not implement a generic OAuth connector yet.');
 
     expect(AiProvider::query()
         ->where('company_id', $user->company_id)

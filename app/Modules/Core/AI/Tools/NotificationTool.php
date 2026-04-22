@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Notification as NotificationFacade;
 /**
  * Notification sending tool for Agents.
  *
- * Sends notifications to BLB users via Laravel's notification system
+ * Sends notifications to Belimbing users via Laravel's notification system
  * (database or broadcast channels). Supports sending to a specific user
  * by ID or broadcasting to all users in the authenticated user's company.
  *
@@ -55,7 +55,7 @@ class NotificationTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Send a notification to a BLB user or all users in the current company. '
+        return 'Send a notification to a Belimbing user or all users in the current company. '
             .'Supports database and broadcast channels. '
             .'Use this when the user asks to notify someone, send an alert, '
             .'or broadcast a message to the team.';
@@ -102,9 +102,9 @@ class NotificationTool extends AbstractTool
     {
         return [
             'display_name' => 'Notification',
-            'summary' => 'Send notifications to BLB users via internal channels.',
+            'summary' => 'Send notifications to Belimbing users via internal channels.',
             'explanation' => 'Sends notifications via Laravel\'s notification system (database, email, broadcast). '
-                .'Targeted at internal BLB notifications — not an external messaging platform.',
+                .'Targeted at internal Belimbing notifications — not an external messaging platform.',
             'setup_requirements' => [
                 'Notification channels configured',
             ],
@@ -112,7 +112,7 @@ class NotificationTool extends AbstractTool
                 'Notification system available',
             ],
             'limits' => [
-                'Internal BLB users only',
+                'Internal Belimbing users only',
             ],
         ];
     }

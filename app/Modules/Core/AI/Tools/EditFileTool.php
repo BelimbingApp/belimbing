@@ -65,7 +65,7 @@ class EditFileTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Create or modify a file within the BLB project. '
+        return 'Create or modify a file within the Belimbing project. '
             .'Use operation "write" to create a new file or overwrite an existing one. '
             .'Use operation "append" to add content to the end of an existing file. '
             .'Provide the file_path relative to the project root. '
@@ -110,7 +110,7 @@ class EditFileTool extends AbstractTool
         return [
             'displayName' => 'Edit File',
             'summary' => 'Create or modify files in the project.',
-            'explanation' => 'Creates or modifies files within the BLB project root. '
+            'explanation' => 'Creates or modifies files within the Belimbing project root. '
                 .'Validates that file paths stay within the project directory and blocks '
                 .'writes to sensitive files (.env, vendor/, node_modules/).',
             'testExamples' => [

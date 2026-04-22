@@ -13,8 +13,8 @@ final class OllamaHelp implements ProviderHelpContract
             __('Install Ollama from ollama.com/download for your operating system.'),
             __('Start the Ollama server by running: ollama serve'),
             __('Pull a model to use, for example: ollama pull llama3.2'),
-            __('The server listens on :url by default — BLB is preconfigured for this address.', ['url' => 'http://localhost:11434']),
-            __('Click "Update Models" in BLB to discover all locally available models.'),
+            __('The server listens on :url by default — Belimbing is preconfigured for this address.', ['url' => 'http://localhost:11434']),
+            __('Click "Update Models" in Belimbing to discover all locally available models.'),
         ];
     }
 

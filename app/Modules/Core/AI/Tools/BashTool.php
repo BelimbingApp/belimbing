@@ -40,7 +40,7 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
     {
         return 'Execute a bash command and return its output. '
             .'Use this for system commands, file operations, package management, git, etc. '
-            .'Commands run from the BLB project root directory.';
+            .'Commands run from the Belimbing project root directory.';
     }
 
     protected function schema(): ToolSchemaBuilder
@@ -63,7 +63,7 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
         return [
             'display_name' => 'Bash',
             'summary' => 'Execute shell commands on the server.',
-            'explanation' => 'Runs shell commands on the BLB server. Extremely powerful — can modify files, '
+            'explanation' => 'Runs shell commands on the Belimbing server. Extremely powerful — can modify files, '
                 .'install packages, and interact with the operating system. '
                 .'Requires the highest authorization level.',
             'test_examples' => [

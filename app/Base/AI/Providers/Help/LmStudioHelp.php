@@ -14,7 +14,7 @@ final class LmStudioHelp implements ProviderHelpContract
             __('Open LM Studio and download a model from the Discover tab (search for a model name and click Download).'),
             __('Go to the "Local Server" tab (the ↔ icon in the left sidebar) and load your downloaded model.'),
             __('Click "Start Server" — LM Studio will listen on port 1234 by default.'),
-            __('Click "Update Models" in BLB to detect available models from LM Studio.'),
+            __('Click "Update Models" in Belimbing to detect available models from LM Studio.'),
         ];
     }
 

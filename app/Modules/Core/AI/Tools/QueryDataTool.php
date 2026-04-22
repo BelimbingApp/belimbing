@@ -70,7 +70,7 @@ class QueryDataTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Execute a read-only SQL query against the BLB database and return results. '
+        return 'Execute a read-only SQL query against the Belimbing database and return results. '
             .'Use this to answer data questions like "How many employees are active?", '
             .'"Show recent orders", or "List all companies". Only SELECT queries are allowed. '
             .'Results are returned as a formatted table. Maximum '.self::MAX_ROWS.' rows.';
@@ -115,7 +115,7 @@ class QueryDataTool extends AbstractTool
     {
         return [
             'display_name' => 'Query Data',
-            'summary' => 'Read data from BLB using safe, read-only SQL.',
+            'summary' => 'Read data from Belimbing using safe, read-only SQL.',
             'explanation' => 'Executes SELECT queries against the application database to answer data questions. '
                 .'Only read-only operations are allowed — write statements (INSERT, UPDATE, DELETE, DROP, etc.) '
                 .'are rejected at the SQL parsing level. Results are returned as formatted tables. '

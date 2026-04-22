@@ -50,7 +50,7 @@ class DevEmployeeSeeder extends DevSeeder
     }
 
     /**
-     * Seed licensee company employee and agents (tech company building BLB).
+     * Seed licensee company employee and agents (tech company building Belimbing).
      *
      * @param  Company  $company  The licensee company (Company::LICENSEE_ID)
      */
@@ -98,7 +98,7 @@ class DevEmployeeSeeder extends DevSeeder
                 'full_name' => 'Aiman Rahman',
                 'short_name' => 'Aiman',
                 'designation' => 'Lead Developer',
-                'job_description' => 'Leads BLB technical direction, designs core framework architecture, and delivers full-stack features across backend and frontend modules.',
+                'job_description' => 'Leads Belimbing technical direction, designs core framework architecture, and delivers full-stack features across backend and frontend modules.',
                 'department_id' => $itDeptId,
             ],
             [
@@ -106,7 +106,7 @@ class DevEmployeeSeeder extends DevSeeder
                 'full_name' => 'Sofia Lim',
                 'short_name' => 'Sofia',
                 'designation' => 'UX/UI Designer',
-                'job_description' => 'Shapes BLB product experience through user flows, design system components, accessible UI patterns, and consistent visual standards across modules.',
+                'job_description' => 'Shapes Belimbing product experience through user flows, design system components, accessible UI patterns, and consistent visual standards across modules.',
                 'department_id' => $itDeptId,
             ],
             [
@@ -114,7 +114,7 @@ class DevEmployeeSeeder extends DevSeeder
                 'full_name' => 'Daniel Khoo',
                 'short_name' => 'Daniel',
                 'designation' => 'Product Manager',
-                'job_description' => 'Defines BLB roadmap and release priorities, translates framework vision into clear requirements, and aligns delivery scope with adopter needs.',
+                'job_description' => 'Defines Belimbing roadmap and release priorities, translates framework vision into clear requirements, and aligns delivery scope with adopter needs.',
                 'department_id' => $itDeptId,
             ],
         ];

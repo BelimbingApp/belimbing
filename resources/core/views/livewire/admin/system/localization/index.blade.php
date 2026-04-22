@@ -207,12 +207,12 @@
                         @if ($bootstrap['suggested_locale'])
                             {{ __('Locale :locale was inferred from the licensee address (:country). Confirm it if it is correct, or choose another locale.', ['locale' => $bootstrap['suggested_locale'], 'country' => $bootstrap['country_name'] ?: $bootstrap['country_iso']]) }}
                         @else
-                            {{ __('The licensee address country :country is available, but BLB does not have a supported default locale mapping for it yet.', ['country' => $bootstrap['country_name'] ?: $bootstrap['country_iso']]) }}
+                            {{ __('The licensee address country :country is available, but Belimbing does not have a supported default locale mapping for it yet.', ['country' => $bootstrap['country_name'] ?: $bootstrap['country_iso']]) }}
                         @endif
                     </p>
                 @else
                     <p class="text-xs text-muted">
-                        {{ __('No licensee address country is available yet, so BLB cannot infer a default locale automatically.') }}
+                        {{ __('No licensee address country is available yet, so Belimbing cannot infer a default locale automatically.') }}
                     </p>
                 @endif
 

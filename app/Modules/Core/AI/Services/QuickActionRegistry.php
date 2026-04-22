@@ -167,7 +167,7 @@ class QuickActionRegistry
                 ['label' => __('Model info'), 'prompt' => '/models', 'icon' => 'heroicon-o-cpu-chip'],
             ],
             'admin.employees.' => [
-                ['label' => __('Employee help'), 'prompt' => 'How do I manage employees in BLB?', 'icon' => 'heroicon-o-users'],
+                ['label' => __('Employee help'), 'prompt' => 'How do I manage employees in Belimbing?', 'icon' => 'heroicon-o-users'],
             ],
         ];
     }

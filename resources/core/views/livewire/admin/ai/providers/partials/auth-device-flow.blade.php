@@ -27,7 +27,7 @@
 
             <div class="space-y-1.5">
                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted block">{{ __('Step 2 — Paste it on GitHub') }}</span>
-                <p class="text-xs text-muted">{{ __('Open the link below, paste the code, and approve access for BLB.') }}</p>
+                <p class="text-xs text-muted">{{ __('Open the link below, paste the code, and approve access for Belimbing.') }}</p>
                 <a
                     href="{{ $deviceFlow['verification_uri'] }}"
                     target="_blank"

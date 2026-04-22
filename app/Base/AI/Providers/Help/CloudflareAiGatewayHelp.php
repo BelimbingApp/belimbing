@@ -13,7 +13,7 @@ final class CloudflareAiGatewayHelp implements ProviderHelpContract
             __('Log in to the Cloudflare dashboard at dash.cloudflare.com.'),
             __('Navigate to AI → AI Gateway and click "Create Gateway". Give it a name (e.g. "blb-gateway").'),
             __('Copy your Account ID (found in the right sidebar on any Cloudflare page) and your Gateway ID (shown after creation).'),
-            __('In BLB, enter those two values — the base URL will be computed automatically.'),
+            __('In Belimbing, enter those two values — the base URL will be computed automatically.'),
             __('Optionally set a Cloudflare API token with "AI Gateway Read" permissions for authenticated requests.'),
         ];
     }

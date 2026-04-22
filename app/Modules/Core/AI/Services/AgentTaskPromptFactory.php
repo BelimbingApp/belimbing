@@ -195,7 +195,7 @@ class AgentTaskPromptFactory
         $content = is_file($path) ? file_get_contents($path) : false;
 
         if (! is_string($content) || trim($content) === '') {
-            return 'You are executing a delegated BLB agent task. Stay focused on the assigned work, use the provided context, and keep the result production-grade.';
+            return 'You are executing a delegated Belimbing agent task. Stay focused on the assigned work, use the provided context, and keep the result production-grade.';
         }
 
         return trim($content);

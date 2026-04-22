@@ -16,7 +16,7 @@ use App\Modules\Core\Employee\Models\Employee;
  * Agent-generic file reading tool for memory and documentation.
  *
  * Allows an agent to read files from two scopes:
- * - `docs`: The BLB project documentation directory (base_path('docs/'))
+ * - `docs`: The Belimbing project documentation directory (base_path('docs/'))
  * - `workspace`: The agent's workspace memory files
  *
  * Safety: Path traversal is blocked, absolute paths are rejected, binary

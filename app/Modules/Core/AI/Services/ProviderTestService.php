@@ -172,9 +172,9 @@ final readonly class ProviderTestService
         if ($providerName === OpenAiCodexDefinition::KEY && $this->isCodexMissingInstructions($error)) {
             return new AiRuntimeError(
                 errorType: AiErrorType::ConfigError,
-                userMessage: __('OpenAI Codex rejected the request because BLB did not send instructions.'),
+                userMessage: __('OpenAI Codex rejected the request because Belimbing did not send instructions.'),
                 diagnostic: $error->diagnostic,
-                hint: __('Retry after updating BLB. This is a provider-integration request-shape issue, not an OAuth reconnect issue.'),
+                hint: __('Retry after updating Belimbing. This is a provider-integration request-shape issue, not an OAuth reconnect issue.'),
                 httpStatus: $error->httpStatus,
                 latencyMs: $error->latencyMs,
                 retryable: false,

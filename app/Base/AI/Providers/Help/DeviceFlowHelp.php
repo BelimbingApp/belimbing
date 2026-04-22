@@ -14,7 +14,7 @@ final class DeviceFlowHelp implements ProviderHelpContract
             __('On the setup page, click the sign-in button — a one-time device code will appear.'),
             __('Open the verification URL shown on screen and enter the device code.'),
             __('Approve the authorization request in your browser.'),
-            __('BLB will detect the approval automatically and complete the connection.'),
+            __('Belimbing will detect the approval automatically and complete the connection.'),
         ];
     }
 

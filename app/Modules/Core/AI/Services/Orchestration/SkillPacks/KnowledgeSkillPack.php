@@ -14,8 +14,8 @@ use App\Modules\Core\AI\Enums\SkillPackStatus;
 /**
  * Framework knowledge skill pack.
  *
- * Packages the KnowledgeNavigator's curated BLB documentation catalog
- * as a skill pack manifest. This is the first real skill pack in BLB,
+ * Packages the KnowledgeNavigator's curated Belimbing documentation catalog
+ * as a skill pack manifest. This is the first real skill pack in Belimbing,
  * proving the abstraction works with actual framework content.
  *
  * The pack provides:
@@ -32,9 +32,9 @@ class KnowledgeSkillPack
 
     private const PACK_VERSION = '1.0.0';
 
-    private const PACK_NAME = 'BLB Framework Knowledge';
+    private const PACK_NAME = 'Belimbing Framework Knowledge';
 
-    private const PACK_DESCRIPTION = 'Curated BLB framework documentation references and search capability';
+    private const PACK_DESCRIPTION = 'Curated Belimbing framework documentation references and search capability';
 
     private const PACK_OWNER = 'Core AI';
 
@@ -87,7 +87,7 @@ class KnowledgeSkillPack
         return [
             new SkillPackPromptResource(
                 label: 'framework-knowledge-grounding',
-                content: "## BLB Framework References\n\n"
+                content: "## Belimbing Framework References\n\n"
                     ."The following curated references are available for framework knowledge:\n\n"
                     .$referenceList."\n"
                     .'Use the `guide_search` tool to search for specific topics across these references.',

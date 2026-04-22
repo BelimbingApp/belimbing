@@ -111,7 +111,7 @@ final class OpenAiCodexAuthManager
         if ($code === '' || $state === '') {
             throw new OpenAiCodexOAuthException(
                 'callback_validation_failed',
-                'Paste the full redirect URL from http://localhost:1455/auth/callback so BLB can read both code and state.',
+                'Paste the full redirect URL from http://localhost:1455/auth/callback so Belimbing can read both code and state.',
             );
         }
 

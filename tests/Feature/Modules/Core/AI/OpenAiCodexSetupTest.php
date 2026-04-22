@@ -11,6 +11,7 @@ use App\Modules\Core\AI\Livewire\Providers\OpenAiCodexSetup;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\ConfigResolver;
+use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager;
 use App\Modules\Core\AI\Services\ProviderTestService;
 use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
@@ -50,7 +51,7 @@ test('openai codex setup surfaces connected auth state and diagnostic action', f
         ->toContain('gpt-5.4', 'gpt-5.4-mini', 'gpt-5.2');
 });
 
-test('openai codex setup deactivates stale models and resets the default to the preferred curated model', function (): void {
+test('openai codex setup removes stale models and resets the default to the preferred curated model', function (): void {
     config()->set('ai.provider_overlay.openai-codex.curated_models', [
         'gpt-5.4',
         'gpt-5.4-mini',
@@ -75,17 +76,15 @@ test('openai codex setup deactivates stale models and resets the default to the 
     Livewire::test(OpenAiCodexSetup::class, ['providerKey' => OpenAiCodexDefinition::KEY])
         ->assertSet('connectedProviderId', $provider->id);
 
-    $staleModel = AiProviderModel::query()
-        ->where('ai_provider_id', $provider->id)
-        ->where('model_id', 'gpt-5.1-codex-mini')
-        ->firstOrFail();
     $preferredModel = AiProviderModel::query()
         ->where('ai_provider_id', $provider->id)
         ->where('model_id', 'gpt-5.4')
         ->firstOrFail();
 
-    expect($staleModel->fresh()?->is_active)->toBeFalse()
-        ->and($staleModel->fresh()?->is_default)->toBeFalse()
+    expect(AiProviderModel::query()
+        ->where('ai_provider_id', $provider->id)
+        ->where('model_id', 'gpt-5.1-codex-mini')
+        ->exists())->toBeFalse()
         ->and($preferredModel->fresh()?->is_active)->toBeTrue()
         ->and($preferredModel->fresh()?->is_default)->toBeTrue();
 });
@@ -114,8 +113,42 @@ test('openai codex setup sync message is honest about curated model reconciliati
 
     Livewire::test(OpenAiCodexSetup::class, ['providerKey' => OpenAiCodexDefinition::KEY])
         ->call('syncProviderModels', $provider->id)
-        ->assertSet('syncMessage', 'BLB checked this provider against its curated model list: 3 supported models are active locally.')
+        ->assertSet('syncMessage', 'Belimbing checked this provider against its curated model list: 3 supported models are active locally.')
         ->assertDontSee('Updated 3 models.');
+});
+
+test('openai codex model sync deletes inactive models not on the curated list', function (): void {
+    config()->set('ai.provider_overlay.openai-codex.curated_models', [
+        'gpt-5.4',
+        'gpt-5.4-mini',
+    ]);
+    config()->set('ai.provider_overlay.openai-codex.default_model', 'gpt-5.4');
+
+    $user = createAdminUser();
+    $provider = createOpenAiCodexProvider($user, [
+        'status' => 'connected',
+        'mode' => 'browser_pkce',
+        'completed_at' => now()->subMinutes(5)->toIso8601String(),
+        'last_refresh_at' => now()->subMinute()->toIso8601String(),
+        'plan_type' => 'codex_pro',
+        'last_error_code' => null,
+        'last_error_message' => null,
+    ]);
+
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $provider->id,
+        'model_id' => 'gpt-5.1-codex-mini',
+        'is_active' => false,
+        'is_default' => false,
+    ]);
+
+    $result = app(ModelDiscoveryService::class)->syncModels($provider);
+
+    expect($result['deactivated'])->toBe(1)
+        ->and(AiProviderModel::query()
+            ->where('ai_provider_id', $provider->id)
+            ->where('model_id', 'gpt-5.1-codex-mini')
+            ->exists())->toBeFalse();
 });
 
 test('openai codex setup records successful verification diagnostics', function (): void {
@@ -290,7 +323,7 @@ test('openai codex setup rejects pasted callback values without state', function
         ->set('manualRedirectInput', 'code=code-1')
         ->call('completeOauthLogin')
         ->assertSet('connectedProviderId', null)
-        ->assertSet('manualCompletionError', 'Paste the full redirect URL from http://localhost:1455/auth/callback so BLB can read both code and state.');
+        ->assertSet('manualCompletionError', 'Paste the full redirect URL from http://localhost:1455/auth/callback so Belimbing can read both code and state.');
 });
 
 test('openai codex setup shows reconnect guidance when verification returns a hint', function (): void {

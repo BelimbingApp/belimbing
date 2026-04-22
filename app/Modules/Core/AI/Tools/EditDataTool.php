@@ -91,7 +91,7 @@ class EditDataTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Execute a write SQL statement (INSERT, UPDATE, DELETE) against the BLB database. '
+        return 'Execute a write SQL statement (INSERT, UPDATE, DELETE) against the Belimbing database. '
             .'Use this when the user asks you to modify data — add records, update values, or remove rows. '
             .'DDL statements (DROP, ALTER, TRUNCATE, CREATE) are forbidden. '
             ."\n\n"
@@ -138,7 +138,7 @@ class EditDataTool extends AbstractTool
     {
         return [
             'display_name' => 'Edit Data',
-            'summary' => 'Modify data in BLB using safe, guarded SQL writes.',
+            'summary' => 'Modify data in Belimbing using safe, guarded SQL writes.',
             'explanation' => 'Executes INSERT, UPDATE, and DELETE statements against the application database. '
                 .'DDL and administrative statements (DROP, ALTER, TRUNCATE, CREATE, GRANT, REVOKE) are rejected '
                 .'at the SQL parsing level. The agent is instructed to warn before risky operations and refuse '

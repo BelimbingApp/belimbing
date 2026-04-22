@@ -175,12 +175,12 @@ final class OpenAiCodexSetup extends ProviderSetup
 
     public function providerConnectionDescription(): ?string
     {
-        return __('Codex subscription — browser sign-in is required. BLB listens on localhost:1455 during sign-in and depends on an undocumented external contract that may break without notice.');
+        return __('Codex subscription — browser sign-in is required. Belimbing listens on localhost:1455 during sign-in and depends on an undocumented external contract that may break without notice.');
     }
 
     public function providerHeaderSubtitle(): ?string
     {
-        return __('Connect with browser OAuth. BLB listens for the callback automatically when possible.');
+        return __('Connect with browser OAuth. Belimbing listens for the callback automatically when possible.');
     }
 
     public function providerHeaderHelpPartial(): ?string

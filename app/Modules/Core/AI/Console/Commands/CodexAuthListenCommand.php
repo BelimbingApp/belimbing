@@ -151,12 +151,12 @@ class CodexAuthListenCommand extends Command
         return <<<'HTML'
         <!DOCTYPE html>
         <html lang="en">
-        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BLB — Codex Connected</title></head>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Belimbing — Codex Connected</title></head>
         <body style="margin:0;background:#0a0a0a;color:#fafafa;font-family:system-ui,-apple-system,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh">
         <div style="text-align:center">
         <div style="font-size:4rem;color:#22c55e;margin-bottom:.5rem">✓</div>
         <h1 style="margin:0 0 .5rem;font-size:1.5rem;font-weight:600">OpenAI Codex connected</h1>
-        <p style="margin:0;color:#a1a1aa;font-size:.875rem">You can close this tab and return to BLB.</p>
+        <p style="margin:0;color:#a1a1aa;font-size:.875rem">You can close this tab and return to Belimbing.</p>
         </div>
         </body>
         </html>
@@ -170,7 +170,7 @@ class CodexAuthListenCommand extends Command
         return <<<HTML
         <!DOCTYPE html>
         <html lang="en">
-        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BLB — Authentication Failed</title></head>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Belimbing — Authentication Failed</title></head>
         <body style="margin:0;background:#0a0a0a;color:#fafafa;font-family:system-ui,-apple-system,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh">
         <div style="text-align:center">
         <div style="font-size:4rem;color:#ef4444;margin-bottom:.5rem">✗</div>

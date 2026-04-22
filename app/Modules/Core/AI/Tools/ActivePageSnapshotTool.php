@@ -14,7 +14,7 @@ use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\Services\PageContextHolder;
 
 /**
- * Tool for Lara to inspect the user's active BLB page in detail.
+ * Tool for Lara to inspect the user's active Belimbing page in detail.
  *
  * Returns the pre-built, pre-masked PageSnapshot DTO as JSON.
  * Phase 1 metadata (route, title, etc.) is already in the system prompt;
@@ -35,7 +35,7 @@ class ActivePageSnapshotTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Get a detailed snapshot of the user\'s current BLB page, including form fields (with values), table columns, modal state, and validation errors. Use this when you need to understand the page state beyond the basic metadata in the system prompt — for example, to diagnose why save is disabled, inspect form values, or describe table contents.';
+        return 'Get a detailed snapshot of the user\'s current Belimbing page, including form fields (with values), table columns, modal state, and validation errors. Use this when you need to understand the page state beyond the basic metadata in the system prompt — for example, to diagnose why save is disabled, inspect form values, or describe table contents.';
     }
 
     protected function schema(): ?ToolSchemaBuilder
@@ -63,7 +63,7 @@ class ActivePageSnapshotTool extends AbstractTool
         return [
             'displayName' => 'Active Page Snapshot',
             'summary' => 'Inspect the user\'s current page for forms, tables, modals, and validation state.',
-            'explanation' => 'Returns a structured JSON snapshot of the user\'s active BLB page. Includes form field values (sensitive fields are masked), table metadata, modal state, and validation errors. Only available when the page implements the snapshot contract and the user has consented to full page awareness.',
+            'explanation' => 'Returns a structured JSON snapshot of the user\'s active Belimbing page. Includes form field values (sensitive fields are masked), table metadata, modal state, and validation errors. Only available when the page implements the snapshot contract and the user has consented to full page awareness.',
             'limits' => [
                 'Only available on pages that implement ProvidesLaraPageSnapshot',
                 'Sensitive fields are masked server-side via #[LaraVisible]',
@@ -88,7 +88,7 @@ class ActivePageSnapshotTool extends AbstractTool
                 );
             }
 
-            return ToolResult::success('No page context is available. The user may not be viewing a BLB page.');
+            return ToolResult::success('No page context is available. The user may not be viewing a Belimbing page.');
         }
 
         $snapshot = $this->holder->getSnapshot();

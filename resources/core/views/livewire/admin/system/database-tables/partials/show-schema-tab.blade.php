@@ -136,7 +136,7 @@
         <div class="mb-3 flex items-center justify-between gap-3">
             <div>
                 <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Migration source') }}</h2>
-                <p class="text-sm text-muted">{{ __('The migration file that originally registered this table in BLB.') }}</p>
+                <p class="text-sm text-muted">{{ __('The migration file that originally registered this table in Belimbing.') }}</p>
             </div>
             <span class="text-xs font-mono text-muted">{{ $migrationSource['file_name'] }}</span>
         </div>

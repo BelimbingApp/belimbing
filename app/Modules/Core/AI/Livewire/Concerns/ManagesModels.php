@@ -12,9 +12,9 @@ use App\Modules\Core\AI\Services\ModelDiscoveryService;
  * Model management state and actions for the provider manager component.
  *
  * Handles add model (manual), toggle availability, inline cost overrides,
- * and default model selection. Models discovered via API sync are toggled
- * on/off rather than deleted — the activation checkbox controls whether a
- * model is available to Agents.
+ * and default model selection. For API-discovered providers, models are
+ * toggled on/off rather than deleted. Curated providers (e.g. OpenAI Codex)
+ * reconcile the DB on sync and drop rows that are not on the curated list.
  */
 trait ManagesModels
 {

@@ -91,7 +91,7 @@ class WebFetchService
         try {
             $response = Http::timeout($timeoutSeconds)
                 ->maxRedirects(self::MAX_REDIRECTS)
-                ->withHeaders(['User-Agent' => 'BLB/1.0 (Agent)'])
+                ->withHeaders(['User-Agent' => 'Belimbing/1.0 (Agent)'])
                 ->get($url);
         } catch (\Throwable $e) {
             return ['request_error' => $e->getMessage()];

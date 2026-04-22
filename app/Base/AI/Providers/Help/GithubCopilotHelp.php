@@ -14,7 +14,7 @@ final class GithubCopilotHelp implements ProviderHelpContract
             __('Browse AI Providers and click "Connect" on "GitHub Copilot".'),
             __('On the setup page, click "Sign in with GitHub" — a device code will be displayed.'),
             __('Open the verification URL shown on screen, enter the device code, and approve the access request.'),
-            __('BLB will detect the approval automatically and import the available models.'),
+            __('Belimbing will detect the approval automatically and import the available models.'),
         ];
     }
 

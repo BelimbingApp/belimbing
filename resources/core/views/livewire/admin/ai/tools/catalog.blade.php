@@ -8,7 +8,7 @@
     <x-ui.page-header :title="__('Tools')" :subtitle="__('Tools extend what Agents can do — they let AI take actions, query data, and interact with external systems beyond generating text.')">
         <x-slot name="help">
             <div class="space-y-3">
-                <p>{{ __('This page shows all Agent tools registered in BLB. Each tool is a capability that a agent can use during conversations or automated tasks.') }}</p>
+                <p>{{ __('This page shows all Agent tools registered in Belimbing. Each tool is a capability that a agent can use during conversations or automated tasks.') }}</p>
 
                 <div>
                     <p class="font-medium text-ink">{{ __('Readiness') }}</p>
@@ -24,7 +24,7 @@
                     <p class="font-medium text-ink">{{ __('Risk Classes') }}</p>
                     <ul class="list-disc list-inside space-y-1 text-muted mt-1">
                         <li>{{ __('Read-only — can only read data, no side effects.') }}</li>
-                        <li>{{ __('Internal — modifies internal BLB state (notifications, schedules).') }}</li>
+                        <li>{{ __('Internal — modifies internal Belimbing state (notifications, schedules).') }}</li>
                         <li>{{ __('External I/O — makes requests to external services.') }}</li>
                         <li>{{ __('Browser — interacts with web pages via headless browser.') }}</li>
                         <li>{{ __('Messaging — sends messages to external channels.') }}</li>

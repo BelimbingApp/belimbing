@@ -5,12 +5,12 @@
 
 <div class="space-y-3 text-sm text-muted">
     <div>
-        <p class="font-medium text-ink">{{ __('How BLB signs in') }}</p>
-        <p>{{ __('BLB opens OpenAI in your browser and listens on localhost:1455 for the callback. When OpenAI redirects after sign-in, BLB captures the authorization code automatically and stores refreshable subscription credentials securely.') }}</p>
+        <p class="font-medium text-ink">{{ __('How Belimbing signs in') }}</p>
+        <p>{{ __('Belimbing opens OpenAI in your browser and listens on localhost:1455 for the callback. When OpenAI redirects after sign-in, Belimbing captures the authorization code automatically and stores refreshable subscription credentials securely.') }}</p>
     </div>
     <div>
         <p class="font-medium text-ink">{{ __('Port 1455 conflict') }}</p>
-        <p>{{ __('If another tool (OpenClaw, Codex CLI, Pi) is using port 1455, BLB cannot listen automatically. Stop the conflicting tool or paste the callback URL manually using the fallback option.') }}</p>
+        <p>{{ __('If another tool (OpenClaw, Codex CLI, Pi) is using port 1455, Belimbing cannot listen automatically. Stop the conflicting tool or paste the callback URL manually using the fallback option.') }}</p>
     </div>
     <div>
         <p class="font-medium text-ink">{{ __('What this is not') }}</p>

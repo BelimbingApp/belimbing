@@ -59,6 +59,6 @@
     <ol class="list-inside list-decimal space-y-0.5 text-xs text-muted">
         <li>{{ __('Install the "Copilot Proxy" extension in VS Code.') }}</li>
         <li>{{ __('Open VS Code and ensure you are signed in to GitHub Copilot.') }}</li>
-        <li>{{ __('Start the proxy via the extension (it listens on localhost:1337 by default). BLB will connect automatically.') }}</li>
+        <li>{{ __('Start the proxy via the extension (it listens on localhost:1337 by default). Belimbing will connect automatically.') }}</li>
     </ol>
 </div>

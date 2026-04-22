@@ -196,7 +196,7 @@ class LaraOrchestrationService
      */
     private function guideResponseContent(string $topic, array $references): string
     {
-        $lines = [__('Here are the most relevant BLB references for ":topic":', ['topic' => $topic])];
+        $lines = [__('Here are the most relevant Belimbing references for ":topic":', ['topic' => $topic])];
 
         foreach ($references as $reference) {
             $lines[] = '- '.$reference['title'].' ('.$reference['path'].'): '.$reference['summary'];
@@ -209,7 +209,7 @@ class LaraOrchestrationService
     {
         if ($topic === '') {
             return $this->response(
-                __('Use "/guide <topic>" to find relevant BLB architecture and module references.'),
+                __('Use "/guide <topic>" to find relevant Belimbing architecture and module references.'),
                 ['status' => 'invalid_guide_command'],
             );
         }
@@ -217,7 +217,7 @@ class LaraOrchestrationService
         $references = $this->guideReferences($topic);
         if (count($references) === 0) {
             return $this->response(
-                __('No BLB references matched ":topic". Try a broader topic such as "authorization", "database", or "Lara".', [
+                __('No Belimbing references matched ":topic". Try a broader topic such as "authorization", "database", or "Lara".', [
                     'topic' => $topic,
                 ]),
                 [

@@ -117,7 +117,7 @@ it('returns null when message is not a delegation command', function (): void {
     expect($service->dispatchFromMessage('Hello Lara'))->toBeNull();
 });
 
-it('returns BLB references when user asks for a guide command', function (): void {
+it('returns Belimbing references when user asks for a guide command', function (): void {
     $fixture = createLaraOrchestrationFixture($this);
     $this->actingAs($fixture['user']);
 

@@ -39,7 +39,7 @@ final class VisibleNavMenuSnapshotTool extends AbstractTool
 
     public function description(): string
     {
-        return 'List BLB sidebar navigation entries visible to the current user (label, relative path, route name). '
+        return 'List Belimbing sidebar navigation entries visible to the current user (label, relative path, route name). '
             .'Use this before the navigate tool when you need valid internal paths instead of guessing. '
             .'Optional filter matches label or path (case-insensitive substring).';
     }
@@ -79,12 +79,12 @@ final class VisibleNavMenuSnapshotTool extends AbstractTool
     {
         return [
             'display_name' => 'Visible navigation menu',
-            'summary' => 'Read the navigable menu entries the current user can see in BLB.',
+            'summary' => 'Read the navigable menu entries the current user can see in Belimbing.',
             'explanation' => 'Returns the same navigable routes as the sidebar, filtered by authorization. '
                 .'Paths are normalized to a leading "/" for use with the navigate tool. '
                 .'Large menus are truncated with a flag in the payload.',
             'limits' => [
-                'Internal BLB navigation only',
+                'Internal Belimbing navigation only',
                 (string) self::MAX_ITEMS.' items maximum per response',
             ],
             'test_examples' => [

@@ -59,7 +59,7 @@ class ArtisanTool extends AbstractHighImpactProcessTool
     public function description(): string
     {
         return 'Execute a php artisan command and return its output. '
-            .'Use this to query data (e.g., tinker), run BLB commands, check system status, etc. '
+            .'Use this to query data (e.g., tinker), run Belimbing commands, check system status, etc. '
             .'Only artisan commands are allowed — no arbitrary shell commands. '
             .'Supports optional timeout override and background execution via Laravel queues. '
             .'Background mode only permits allowlisted commands.';
@@ -101,7 +101,7 @@ class ArtisanTool extends AbstractHighImpactProcessTool
         return [
             'display_name' => 'Artisan',
             'summary' => 'Execute Laravel artisan commands.',
-            'explanation' => 'Runs `php artisan` commands within the BLB application. '
+            'explanation' => 'Runs `php artisan` commands within the Belimbing application. '
                 .'Useful for system administration tasks. This is a powerful tool '
                 .'that can modify application state — use with appropriate authorization. '
                 .'Background mode uses a command allowlist for safety.',

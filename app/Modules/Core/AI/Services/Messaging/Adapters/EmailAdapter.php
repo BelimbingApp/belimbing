@@ -93,7 +93,7 @@ class EmailAdapter extends BaseChannelAdapter
         $fromAddress = $account->credentials['from_address'] ?? null;
         $fromName = $account->credentials['from_name'] ?? null;
         $mailer = $account->credentials['mailer'] ?? null;
-        $subject = $options['subject'] ?? 'Message from BLB';
+        $subject = $options['subject'] ?? 'Message from Belimbing';
 
         $mailable = new ChannelOutboundMail(
             body: $text,

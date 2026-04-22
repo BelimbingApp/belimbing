@@ -16,7 +16,7 @@ use App\Base\AI\Tools\ToolResult;
 /**
  * Browser navigation tool for agents.
  *
- * Allows an agent to navigate the user's browser to BLB pages.
+ * Allows an agent to navigate the user's browser to Belimbing pages.
  * Returns an `<agent-action>` block that the client-side executor handles.
  *
  * Gated by `ai.tool_navigate.execute` authz capability.
@@ -32,7 +32,7 @@ class NavigateTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Navigate the user\'s browser to a BLB page. '
+        return 'Navigate the user\'s browser to a Belimbing page. '
             .'Use this when the user asks to go to a page, or after completing a task to show results. '
             .'When unsure of the path, call visible_nav_menu first for paths this user may open. '
             .'Provide the relative URL path (e.g., "/admin/users", "/admin/geonames/postcodes", "/dashboard").';
@@ -66,12 +66,12 @@ class NavigateTool extends AbstractTool
     {
         return [
             'display_name' => 'Navigate',
-            'summary' => 'Navigate the user to a page within BLB.',
-            'explanation' => 'Triggers client-side SPA navigation to a BLB page. '
+            'summary' => 'Navigate the user to a page within Belimbing.',
+            'explanation' => 'Triggers client-side SPA navigation to a Belimbing page. '
                 .'The LLM uses this to direct users to relevant screens. '
-                .'Navigation is limited to internal BLB routes.',
+                .'Navigation is limited to internal Belimbing routes.',
             'limits' => [
-                'Internal BLB routes only',
+                'Internal Belimbing routes only',
             ],
         ];
     }

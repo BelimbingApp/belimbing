@@ -8,7 +8,7 @@ namespace App\Base\AI\Services;
 class KnowledgeNavigator
 {
     /**
-     * Curated BLB references Lara can use to navigate the framework knowledge base.
+     * Curated Belimbing references Lara can use to navigate the framework knowledge base.
      *
      * @return list<array{title: string, path: string, summary: string, keywords: list<string>}>
      */
@@ -16,9 +16,9 @@ class KnowledgeNavigator
     {
         return [
             [
-                'title' => 'BLB architecture overview',
+                'title' => 'Belimbing architecture overview',
                 'path' => 'docs/brief.md',
-                'summary' => 'BLB principles, framework boundaries, and strategic direction.',
+                'summary' => 'Belimbing principles, framework boundaries, and strategic direction.',
                 'keywords' => ['architecture', 'overview', 'framework', 'principles'],
             ],
             [
@@ -72,7 +72,7 @@ class KnowledgeNavigator
             [
                 'title' => 'Project brief',
                 'path' => 'docs/brief.md',
-                'summary' => 'BLB principles, philosophy, and strategic direction.',
+                'summary' => 'Belimbing principles, philosophy, and strategic direction.',
                 'keywords' => ['brief', 'principles', 'vision', 'strategy'],
             ],
         ];
@@ -92,7 +92,7 @@ class KnowledgeNavigator
     }
 
     /**
-     * Search curated BLB references by query keywords.
+     * Search curated Belimbing references by query keywords.
      *
      * @return list<array{title: string, path: string, summary: string}>
      */

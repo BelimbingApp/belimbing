@@ -142,7 +142,7 @@ it('returns null for non-navigation messages', function (): void {
     $router = app(LaraNavigationRouter::class);
 
     expect($router->resolve('Hello Lara'))->toBeNull()
-        ->and($router->resolve('what is BLB?'))->toBeNull()
+        ->and($router->resolve('what is Belimbing?'))->toBeNull()
         ->and($router->resolve('navigate to users page'))->toBeNull()
         ->and($router->resolve('show me the employees page'))->toBeNull();
 });

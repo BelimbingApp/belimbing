@@ -13,7 +13,7 @@ final class CopilotProxyHelp implements ProviderHelpContract
             __('Install the "Copilot Proxy" extension in VS Code (search for "Copilot Proxy" in the Extensions panel).'),
             __('Open VS Code and ensure you are signed in to GitHub Copilot (check the account icon in the bottom-left corner).'),
             __('Start the proxy via the extension — it listens on :url by default.', ['url' => 'http://localhost:1337']),
-            __('Return to BLB and click "Update Models" — the proxy will report the models available through your Copilot subscription.'),
+            __('Return to Belimbing and click "Update Models" — the proxy will report the models available through your Copilot subscription.'),
         ];
     }
 

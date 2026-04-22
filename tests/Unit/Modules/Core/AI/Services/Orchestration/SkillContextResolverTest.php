@@ -71,7 +71,7 @@ it('resolves a universal pack for any agent', function (): void {
     $registry->register(makeContextTestManifest(
         id: SKILL_CTX_UNIVERSAL_PACK_ID,
         promptResources: [
-            new SkillPackPromptResource(label: 'intro', content: 'Welcome to BLB.', order: 10),
+            new SkillPackPromptResource(label: 'intro', content: 'Welcome to Belimbing.', order: 10),
         ],
         toolBindings: ['guide_search'],
     ));
@@ -81,7 +81,7 @@ it('resolves a universal pack for any agent', function (): void {
 
     expect($resolution->hasContent())->toBeTrue()
         ->and($resolution->resolvedPackIds)->toBe([SKILL_CTX_UNIVERSAL_PACK_ID])
-        ->and($resolution->assembledPrompt())->toContain('Welcome to BLB')
+        ->and($resolution->assembledPrompt())->toContain('Welcome to Belimbing')
         ->and($resolution->toolBindings)->toBe(['guide_search']);
 });
 

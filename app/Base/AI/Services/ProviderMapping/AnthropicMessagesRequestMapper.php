@@ -340,7 +340,7 @@ final class AnthropicMessagesRequestMapper implements ProviderRequestMapper
                 'reasoning.budget',
                 null,
                 $budget,
-                'Anthropic enabled thinking requires an explicit budget, so BLB supplied the provider default.',
+                'Anthropic enabled thinking requires an explicit budget, so Belimbing supplied the provider default.',
             );
         }
 

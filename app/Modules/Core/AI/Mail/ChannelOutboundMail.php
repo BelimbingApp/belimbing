@@ -32,7 +32,7 @@ class ChannelOutboundMail extends Mailable
      */
     public function __construct(
         public readonly string $body,
-        public readonly string $emailSubject = 'Message from BLB',
+        public readonly string $emailSubject = 'Message from Belimbing',
         public readonly ?string $fromAddress = null,
         public readonly ?string $fromName = null,
     ) {}
@@ -41,7 +41,7 @@ class ChannelOutboundMail extends Mailable
     {
         return new Envelope(
             from: $this->fromAddress !== null
-                ? new Address($this->fromAddress, $this->fromName ?? config('app.name', 'BLB'))
+                ? new Address($this->fromAddress, $this->fromName ?? config('app.name', 'Belimbing'))
                 : null,
             subject: $this->emailSubject,
         );
