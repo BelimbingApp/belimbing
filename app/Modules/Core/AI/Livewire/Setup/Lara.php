@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Livewire\Setup;
 
 use App\Modules\Core\AI\Livewire\Concerns\HandlesProviderDiagnostics;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesAgentModelSelection;
+use App\Modules\Core\AI\Livewire\Concerns\ManagesExecutionControls;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\LaraTaskRegistry;
 use App\Modules\Core\Company\Models\Company;
@@ -19,6 +20,13 @@ class Lara extends Component
 {
     use HandlesProviderDiagnostics;
     use ManagesAgentModelSelection;
+    use ManagesExecutionControls;
+
+    /** @var array<string, mixed> */
+    public array $primaryExecutionControls = [];
+
+    /** @var array<string, mixed> */
+    public array $backupExecutionControls = [];
 
     public function mount(): void
     {
@@ -30,6 +38,7 @@ class Lara extends Component
 
         if (Employee::laraActivationState() === true) {
             $this->hydrateFromCurrentConfig($resolver, Employee::LARA_ID);
+            $this->hydrateExecutionControlState($resolver);
 
             return;
         }
@@ -37,6 +46,7 @@ class Lara extends Component
         $this->selectedProviderId = $this->defaultProviderId();
 
         $this->hydrateSelectedModel();
+        $this->hydrateExecutionControlState($resolver);
     }
 
     /**
@@ -70,6 +80,14 @@ class Lara extends Component
     }
 
     /**
+     * Auto-save when primary execution controls change.
+     */
+    public function updatedPrimaryExecutionControls(mixed $value = null, ?string $path = null): void
+    {
+        $this->autoSaveIfActivated('primary');
+    }
+
+    /**
      * Keep backup model selection in sync when backup provider changes.
      */
     public function updatedBackupProviderId(): void
@@ -85,6 +103,18 @@ class Lara extends Component
     public function updatedBackupModelId(): void
     {
         $this->clearBackupProviderTestResult();
+        $this->autoSaveIfActivated('backup');
+    }
+
+    /**
+     * Auto-save when backup execution controls change.
+     */
+    public function updatedBackupExecutionControls(mixed $value = null, ?string $path = null): void
+    {
+        if ($this->backupProviderId === null || $this->backupModelId === null) {
+            return;
+        }
+
         $this->autoSaveIfActivated('backup');
     }
 
@@ -146,6 +176,8 @@ class Lara extends Component
         $models = collect();
         $backupModels = collect();
         $taskSummaries = [];
+        $primaryExecutionControlSchema = null;
+        $backupExecutionControlSchema = null;
         $activeSelection = [
             'isUsingDefault' => false,
             'activeProviderName' => null,
@@ -164,6 +196,22 @@ class Lara extends Component
 
         if ($this->backupProviderId) {
             $backupModels = $this->availableBackupModels();
+        }
+
+        if ($this->selectedProviderId !== null && $this->selectedModelId !== null) {
+            $primaryExecutionControlSchema = $this->resolveExecutionControlSchemaForProvider(
+                $this->selectedProviderId,
+                $this->selectedModelId,
+                $this->primaryExecutionControls,
+            );
+        }
+
+        if ($this->backupProviderId !== null && $this->backupModelId !== null) {
+            $backupExecutionControlSchema = $this->resolveExecutionControlSchemaForProvider(
+                $this->backupProviderId,
+                $this->backupModelId,
+                $this->backupExecutionControls,
+            );
         }
 
         if ($laraActivated) {
@@ -203,6 +251,43 @@ class Lara extends Component
             'activeBackupProviderName' => $activeSelection['activeBackupProviderName'],
             'activeBackupModelId' => $activeSelection['activeBackupModelId'],
             'taskSummaries' => $taskSummaries,
+            'primaryExecutionControlSchema' => $primaryExecutionControlSchema,
+            'backupExecutionControlSchema' => $backupExecutionControlSchema,
         ]);
+    }
+
+    private function hydrateExecutionControlState(ConfigResolver $resolver): void
+    {
+        $workspaceConfig = $resolver->readWorkspaceConfig(Employee::LARA_ID);
+        $models = is_array($workspaceConfig['llm']['models'] ?? null) ? array_values($workspaceConfig['llm']['models']) : [];
+
+        $primaryConfig = is_array($models[0]['execution_controls'] ?? null) ? $models[0]['execution_controls'] : null;
+        $backupConfig = is_array($models[1]['execution_controls'] ?? null) ? $models[1]['execution_controls'] : null;
+
+        $this->primaryExecutionControls = $this->hydrateExecutionControlsConfig($primaryConfig);
+        $this->backupExecutionControls = $this->hydrateExecutionControlsConfig($backupConfig);
+    }
+
+    /**
+     * @param  array<string, mixed>  $controls
+     * @return array<string, mixed>|null
+     */
+    private function resolveExecutionControlSchemaForProvider(
+        int $providerId,
+        string $modelId,
+        array $controls,
+    ): ?array {
+        $resolved = app(ConfigResolver::class)->resolveForProvider($providerId, $modelId);
+
+        if ($resolved === null) {
+            return null;
+        }
+
+        return $this->executionControlSchema(
+            providerName: $resolved['provider_name'],
+            model: $resolved['model'],
+            apiType: $resolved['api_type'],
+            config: $controls,
+        );
     }
 }

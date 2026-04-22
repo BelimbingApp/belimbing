@@ -43,6 +43,7 @@
                     $taskReason = $this->taskReasons[$taskKey] ?? '';
                     $taskError = $this->taskRecommendationErrors[$taskKey] ?? null;
                     $taskModels = $modelsByTask[$taskKey] ?? collect();
+                    $executionControlSchema = $executionControlSchemasByTask[$taskKey] ?? null;
                 @endphp
 
                 <x-ui.card>
@@ -97,21 +98,60 @@
                             @endif
                         </div>
                     @endif
+                    @php
+                        $taskTabs = [['id' => 'model', 'label' => __('Model')]];
+                        if (is_array($executionControlSchema)) {
+                            $taskTabs[] = ['id' => 'controls', 'label' => __('Execution Controls')];
+                        }
+                    @endphp
 
-                    @if ($taskMode === 'manual')
-                        <div class="mt-4">
-                            @include('livewire.admin.setup.partials.llm-provider-model-picker', [
-                                'context' => 'task-'.$taskKey,
-                                'providers' => $providers,
-                                'models' => $taskModels,
-                                'selectedProviderId' => $taskProviderId,
-                                'providerBinding' => 'taskProviderIds.'.$taskKey,
-                                'modelBinding' => 'taskModelIds.'.$taskKey,
-                                'providerErrorKey' => 'taskProviderIds.'.$taskKey,
-                                'modelErrorKey' => 'taskModelIds.'.$taskKey,
-                            ])
-                        </div>
-                    @endif
+                    <x-ui.tabs
+                        :tabs="$taskTabs"
+                        default="model"
+                        size="sm"
+                        persistence="query"
+                        :query-key="'task-'.$taskKey.'-tab'"
+                        class="mt-4"
+                    >
+                        <x-ui.tab id="model">
+                            @if ($taskMode === 'manual')
+                                @include('livewire.admin.setup.partials.llm-provider-model-picker', [
+                                    'context' => 'task-'.$taskKey,
+                                    'providers' => $providers,
+                                    'models' => $taskModels,
+                                    'selectedProviderId' => $taskProviderId,
+                                    'providerBinding' => 'taskProviderIds.'.$taskKey,
+                                    'modelBinding' => 'taskModelIds.'.$taskKey,
+                                    'providerErrorKey' => 'taskProviderIds.'.$taskKey,
+                                    'modelErrorKey' => 'taskModelIds.'.$taskKey,
+                                ])
+                            @elseif (is_array($executionControlSchema))
+                                <p class="text-sm text-muted">
+                                    {{ __('This task currently resolves to :provider / :model. Use the Execution Controls tab to edit task-specific runtime behavior.', [
+                                        'provider' => $executionControlSchema['provider_name'] ?? '—',
+                                        'model' => $executionControlSchema['model'] ?? '—',
+                                    ]) }}
+                                </p>
+                            @else
+                                <p class="text-sm text-muted">
+                                    {{ __('Execution controls become available once this task has a concrete provider/model context.') }}
+                                </p>
+                            @endif
+                        </x-ui.tab>
+
+                        @if (is_array($executionControlSchema))
+                            <x-ui.tab id="controls">
+                                @include('livewire.admin.ai.partials.execution-controls', [
+                                    'schema' => $executionControlSchema,
+                                    'statePath' => 'taskExecutionControls.'.$taskKey,
+                                    'subtitle' => __('Editing controls for :provider / :model. These settings stay canonical even when the provider maps them differently on the wire.', [
+                                        'provider' => $executionControlSchema['provider_name'] ?? '—',
+                                        'model' => $executionControlSchema['model'] ?? '—',
+                                    ]),
+                                ])
+                            </x-ui.tab>
+                        @endif
+                    </x-ui.tabs>
 
                     @if ($taskReason !== '' && $taskMode !== 'recommended')
                         <p class="mt-4 text-sm text-muted">{{ $taskReason }}</p>

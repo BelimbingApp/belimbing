@@ -1,14 +1,14 @@
 <?php
 
+use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalRole;
+use App\Base\Authz\Models\Role;
 use App\Modules\Core\AI\Livewire\Setup\Lara;
 use App\Modules\Core\AI\Livewire\TaskModels;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\TaskModelRecommendationService;
-use App\Base\Authz\Enums\PrincipalType;
-use App\Base\Authz\Models\PrincipalRole;
-use App\Base\Authz\Models\Role;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
@@ -206,18 +206,79 @@ test('task model save preserves existing execution controls', function (): void 
 
     $config = app(ConfigResolver::class)->readTaskConfig(Employee::LARA_ID, 'coding');
 
-    expect($config)->toMatchArray([
-        'mode' => 'primary',
-        'execution_controls' => [
-            'limits' => [
-                'max_output_tokens' => 1024,
-            ],
-            'reasoning' => [
-                'mode' => 'auto',
-                'visibility' => 'summary',
-            ],
-        ],
+    expect($config['mode'] ?? null)->toBe('primary')
+        ->and($config['execution_controls']['limits']['max_output_tokens'] ?? null)->toBe(1024)
+        ->and($config['execution_controls']['reasoning']['mode'] ?? null)->toBe('auto')
+        ->and($config['execution_controls']['reasoning']['visibility'] ?? null)->toBe('summary');
+});
+
+test('task models persist task-specific execution controls in primary mode', function (): void {
+    activateLaraForTaskModels();
+    $user = createTaskModelsTestUser();
+    $this->actingAs($user);
+
+    Livewire::test(TaskModels::class)
+        ->set('taskModes.titling', 'primary')
+        ->set('taskExecutionControls.titling.limits.max_output_tokens', 512)
+        ->set('taskExecutionControls.titling.sampling.temperature', 0.2);
+
+    $config = app(ConfigResolver::class)->readTaskConfig(Employee::LARA_ID, 'titling');
+
+    expect($config['mode'] ?? null)->toBe('primary')
+        ->and($config['execution_controls']['limits']['max_output_tokens'] ?? null)->toBe(512)
+        ->and($config['execution_controls']['sampling']['temperature'] ?? null)->toBe(0.2);
+});
+
+test('task models switch execution control surfaces when the selected model family changes', function (): void {
+    activateLaraForTaskModels();
+    $user = createTaskModelsTestUser();
+    $this->actingAs($user);
+
+    $anthropicProvider = AiProvider::query()->create([
+        'company_id' => Company::LICENSEE_ID,
+        'name' => 'anthropic',
+        'display_name' => 'Anthropic',
+        'base_url' => 'https://anthropic.example.test',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'anthropic-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 2,
     ]);
+
+    $moonshotProvider = AiProvider::query()->create([
+        'company_id' => Company::LICENSEE_ID,
+        'name' => 'moonshotai',
+        'display_name' => 'Moonshot',
+        'base_url' => 'https://moonshot.example.test',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'moonshot-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 3,
+    ]);
+
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $anthropicProvider->id,
+        'model_id' => 'claude-opus-4-6',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $moonshotProvider->id,
+        'model_id' => 'kimi-k2.5',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    Livewire::test(TaskModels::class)
+        ->set('taskModes.coding', 'manual')
+        ->set('taskProviderIds.coding', $anthropicProvider->id)
+        ->assertSee('Reasoning effort')
+        ->set('taskProviderIds.coding', $moonshotProvider->id)
+        ->assertSee('Provider-enforced value')
+        ->assertSee('This model family also enforces top-p 0.95');
 });
 
 function createTaskModelsTestUser(): User

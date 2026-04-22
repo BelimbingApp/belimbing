@@ -286,6 +286,7 @@ trait ManagesAgentModelSelection
             $this->buildModelConfigEntry(
                 providerName: $provider->name,
                 modelId: $this->selectedModelId,
+                executionControls: $this->normalizeExecutionControlsConfig($this->primaryExecutionControls ?? []),
                 existingEntry: is_array($existingModels[0] ?? null) ? $existingModels[0] : null,
             ),
         ];
@@ -300,6 +301,7 @@ trait ManagesAgentModelSelection
             $models[] = $this->buildModelConfigEntry(
                 providerName: $backupProvider->name,
                 modelId: $this->backupModelId,
+                executionControls: $this->normalizeExecutionControlsConfig($this->backupExecutionControls ?? []),
                 existingEntry: is_array($existingModels[1] ?? null) ? $existingModels[1] : null,
             );
         }
@@ -313,20 +315,21 @@ trait ManagesAgentModelSelection
     /**
      * Preserve canonical runtime overrides while the Lara setup page edits model identity.
      *
+     * @param  array<string, mixed>  $executionControls
      * @param  array<string, mixed>|null  $existingEntry
      * @return array<string, mixed>
      */
-    private function buildModelConfigEntry(string $providerName, ?string $modelId, ?array $existingEntry): array
-    {
+    private function buildModelConfigEntry(
+        string $providerName,
+        ?string $modelId,
+        array $executionControls,
+        ?array $existingEntry,
+    ): array {
         $entry = [
             'provider' => $providerName,
             'model' => $modelId,
+            'execution_controls' => $executionControls,
         ];
-
-        $executionControls = $existingEntry['execution_controls'] ?? null;
-        if (is_array($executionControls)) {
-            $entry['execution_controls'] = $executionControls;
-        }
 
         $timeout = $existingEntry['timeout'] ?? null;
         if (is_int($timeout) || is_numeric($timeout)) {

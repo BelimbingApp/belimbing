@@ -5,9 +5,11 @@
 
 namespace App\Modules\Core\AI\Livewire;
 
+use App\Base\AI\Enums\AiApiType;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\Enums\TaskModelSelectionMode;
+use App\Modules\Core\AI\Livewire\Concerns\ManagesExecutionControls;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -21,6 +23,8 @@ use Livewire\Component;
 
 class TaskModels extends Component implements ProvidesLaraPageContext
 {
+    use ManagesExecutionControls;
+
     /** @var array<string, string> */
     public array $taskModes = [];
 
@@ -35,6 +39,9 @@ class TaskModels extends Component implements ProvidesLaraPageContext
 
     /** @var array<string, string> */
     public array $taskRecommendationErrors = [];
+
+    /** @var array<string, array<string, mixed>> */
+    public array $taskExecutionControls = [];
 
     public function mount(): void
     {
@@ -87,6 +94,17 @@ class TaskModels extends Component implements ProvidesLaraPageContext
         }
     }
 
+    public function updatedTaskExecutionControls(mixed $value, string $taskPath): void
+    {
+        if (! $this->laraActivated()) {
+            return;
+        }
+
+        $taskKey = explode('.', $taskPath, 2)[0];
+
+        $this->saveTaskConfig($taskKey);
+    }
+
     public function recommendTask(string $taskKey): void
     {
         $this->clearTaskRecommendationError($taskKey);
@@ -119,12 +137,19 @@ class TaskModels extends Component implements ProvidesLaraPageContext
         $laraActivated = $this->laraActivated();
         $providers = $laraActivated ? $this->availableProviders() : collect();
         $modelsByTask = [];
+        $executionControlSchemasByTask = [];
+        $currentPrimary = $laraActivated
+            ? app(ConfigResolver::class)->resolvePrimaryWithDefaultFallback(Employee::LARA_ID)
+            : null;
 
         foreach ($registry->all() as $task) {
             $providerId = $this->taskProviderIds[$task->key] ?? null;
             $modelsByTask[$task->key] = $providerId !== null
                 ? $this->modelsForProvider($providerId)
                 : collect();
+            $executionControlSchemasByTask[$task->key] = $laraActivated
+                ? $this->resolveTaskExecutionControlSchema($task->key, $currentPrimary)
+                : null;
         }
 
         return view('livewire.admin.ai.task-models', [
@@ -132,9 +157,8 @@ class TaskModels extends Component implements ProvidesLaraPageContext
             'tasks' => $registry->all(),
             'providers' => $providers,
             'modelsByTask' => $modelsByTask,
-            'currentPrimary' => $laraActivated
-                ? app(ConfigResolver::class)->resolvePrimaryWithDefaultFallback(Employee::LARA_ID)
-                : null,
+            'executionControlSchemasByTask' => $executionControlSchemasByTask,
+            'currentPrimary' => $currentPrimary,
         ]);
     }
 
@@ -155,6 +179,7 @@ class TaskModels extends Component implements ProvidesLaraPageContext
             $this->taskProviderIds[$task->key] = $this->providerIdForName($config['provider'] ?? null);
             $this->taskModelIds[$task->key] = is_string($config['model'] ?? null) ? $config['model'] : null;
             $this->taskReasons[$task->key] = is_string($config['reason'] ?? null) ? $config['reason'] : '';
+            $this->taskExecutionControls[$task->key] = $this->hydrateExecutionControlsConfig($config['execution_controls'] ?? null);
         }
     }
 
@@ -165,9 +190,11 @@ class TaskModels extends Component implements ProvidesLaraPageContext
         }
 
         $resolver = app(ConfigResolver::class);
-        $existingConfig = $resolver->readTaskConfig(Employee::LARA_ID, $taskKey) ?? [];
         $mode = $this->taskModes[$taskKey] ?? TaskModelSelectionMode::Recommended->value;
-        $payload = $this->carryForwardTaskExecutionControls(['mode' => $mode], $existingConfig);
+        $payload = [
+            'mode' => $mode,
+            'execution_controls' => $this->normalizeExecutionControlsConfig($this->taskExecutionControls[$taskKey] ?? []),
+        ];
 
         if ($mode === TaskModelSelectionMode::Primary->value) {
             $resolver->writeTaskConfig(Employee::LARA_ID, $taskKey, $payload);
@@ -220,24 +247,6 @@ class TaskModels extends Component implements ProvidesLaraPageContext
             : __('Recommended model saved: :provider/:model', ['provider' => $provider->name, 'model' => $modelId]);
 
         $this->dispatch("task-{$taskKey}-saved", message: $message);
-    }
-
-    /**
-     * Preserve task execution intent while the current UI edits only model-routing fields.
-     *
-     * @param  array<string, mixed>  $payload
-     * @param  array<string, mixed>  $existingConfig
-     * @return array<string, mixed>
-     */
-    private function carryForwardTaskExecutionControls(array $payload, array $existingConfig): array
-    {
-        $executionControls = $existingConfig['execution_controls'] ?? null;
-
-        if (is_array($executionControls)) {
-            $payload['execution_controls'] = $executionControls;
-        }
-
-        return $payload;
     }
 
     private function availableProviders(): Collection
@@ -317,6 +326,49 @@ class TaskModels extends Component implements ProvidesLaraPageContext
     private function clearTaskRecommendationError(string $taskKey): void
     {
         unset($this->taskRecommendationErrors[$taskKey]);
+    }
+
+    /**
+     * @param  array{provider_name: ?string, model: string, api_type: AiApiType}|null  $currentPrimary
+     * @return array<string, mixed>|null
+     */
+    private function resolveTaskExecutionControlSchema(string $taskKey, ?array $currentPrimary): ?array
+    {
+        $controls = $this->taskExecutionControls[$taskKey] ?? $this->hydrateExecutionControlsConfig(null);
+        $mode = $this->taskModes[$taskKey] ?? TaskModelSelectionMode::Recommended->value;
+
+        if ($mode === TaskModelSelectionMode::Primary->value) {
+            if ($currentPrimary === null) {
+                return null;
+            }
+
+            return $this->executionControlSchema(
+                providerName: $currentPrimary['provider_name'],
+                model: $currentPrimary['model'],
+                apiType: $currentPrimary['api_type'],
+                config: $controls,
+            );
+        }
+
+        $providerId = $this->taskProviderIds[$taskKey] ?? null;
+        $modelId = $this->taskModelIds[$taskKey] ?? null;
+
+        if ($providerId === null || $modelId === null) {
+            return null;
+        }
+
+        $resolved = app(ConfigResolver::class)->resolveForProvider($providerId, $modelId);
+
+        if ($resolved === null) {
+            return null;
+        }
+
+        return $this->executionControlSchema(
+            providerName: $resolved['provider_name'],
+            model: $resolved['model'],
+            apiType: $resolved['api_type'],
+            config: $controls,
+        );
     }
 
     private function laraActivated(): bool

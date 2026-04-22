@@ -1,7 +1,7 @@
 # Provider Execution Controls
 
 **Status:** In Progress
-**Last Updated:** 2026-04-19
+**Last Updated:** 2026-04-22
 **Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/DTO/ChatRequest.php`, `app/Base/AI/DTO/ExecutionControls.php`, `app/Base/AI/DTO/ProviderRequestMapping.php`, `app/Base/AI/Enums/AiApiType.php`, `app/Base/AI/Services/LlmClient.php`, `app/Base/AI/Services/LlmClientSupport.php`, `app/Base/AI/Services/Protocols/LlmProtocolClientRegistry.php`, `app/Base/AI/Services/Protocols/ChatCompletionsProtocolClient.php`, `app/Base/AI/Services/Protocols/ResponsesProtocolClient.php`, `app/Base/AI/Services/Protocols/AnthropicMessagesProtocolClient.php`, `app/Base/AI/Services/ProviderMapping/ProviderCapabilityRegistry.php`, `app/Base/AI/Services/ProviderMapping/ProviderRequestMapperRegistry.php`, `app/Base/AI/Services/ProviderMapping/OpenAiChatCompletionsRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/OpenAiResponsesRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/AnthropicMessagesRequestMapper.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Services/AgentRuntime.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/AgenticToolLoopStreamReader.php`, `docs/plans/thinking-content-streaming.md`, `https://platform.kimi.ai/docs/guide/kimi-k2-5-quickstart`, `https://platform.kimi.ai/docs/guide/use-kimi-api-to-complete-tool-calls`, `https://platform.openai.com/docs/guides/reasoning-best-practices`, `https://platform.openai.com/docs/guides/responses-vs-chat-completions`, `https://platform.claude.com/docs/en/build-with-claude/extended-thinking`, `https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`, `https://platform.claude.com/docs/en/api/streaming`, `https://platform.claude.com/docs/en/api/complete`
 
 ## Problem Essence
@@ -74,6 +74,8 @@ Core AI should persist execution controls alongside model selection in Lara work
 ### Capability-driven UI
 
 The long-term UI should ask Base AI which controls are relevant for the currently selected provider and model. The page should render only applicable controls, show fixed values as read-only facts when useful, and avoid provider-specific Blade branching. This is not required in the first migration step, but the data shape must make it possible.
+
+The shipped first slice now exposes capability-driven execution controls on Lara's primary and backup model selectors plus the Task Models page. Those surfaces consume one server-side control schema keyed by provider, model, and API family instead of branching in Blade by vendor name.
 
 ## Provider Notes
 
@@ -196,11 +198,11 @@ Goal: make runtime config and orchestration use the new contract instead of dire
 
 Goal: let Lara and future runtimes present provider/model controls without hardcoded vendor forms.
 
-- [ ] Define the server-side shape the UI should consume for supported controls, defaults, and editability
-- [ ] Decide which surfaces should expose execution controls first: Lara primary model config, task models, or provider diagnostics
-- [ ] Render only relevant controls for the selected provider/model and show fixed values read-only where appropriate
-- [ ] Ensure saved values remain canonical in config even when the provider enforces a different wire value
-- [ ] Add Livewire coverage for control visibility, persistence, and model-family switching
+- [x] Define the server-side shape the UI should consume for supported controls, defaults, and editability
+- [x] Decide which surfaces should expose execution controls first: Lara primary model config, task models, or provider diagnostics
+- [x] Render only relevant controls for the selected provider/model and show fixed values read-only where appropriate
+- [x] Ensure saved values remain canonical in config even when the provider enforces a different wire value
+- [x] Add Livewire coverage for control visibility, persistence, and model-family switching
 
 ### Phase 5 — Migrate and simplify
 

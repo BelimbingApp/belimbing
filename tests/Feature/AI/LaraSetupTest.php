@@ -191,3 +191,126 @@ test('lara setup preserves execution controls and timeout when the model changes
         ->and($workspaceConfig['llm']['models'][0]['execution_controls']['reasoning']['visibility'] ?? null)->toBe('summary')
         ->and($workspaceConfig['llm']['models'][0]['timeout'] ?? null)->toBe(120);
 });
+
+test('lara activation persists edited execution controls for reasoning-capable models', function (): void {
+    Company::query()->find(Company::LICENSEE_ID)
+        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+
+    Employee::provisionLara();
+
+    $provider = AiProvider::query()->create([
+        'company_id' => Company::LICENSEE_ID,
+        'name' => 'openai',
+        'display_name' => 'OpenAI',
+        'base_url' => 'https://openai.example.test',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'openai-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 1,
+    ]);
+
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $provider->id,
+        'model_id' => 'gpt-5.4',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    Livewire::test(Lara::class)
+        ->set('selectedProviderId', $provider->id)
+        ->set('selectedModelId', 'gpt-5.4')
+        ->set('primaryExecutionControls.limits.max_output_tokens', 3072)
+        ->set('primaryExecutionControls.reasoning.visibility', 'summary')
+        ->set('primaryExecutionControls.reasoning.effort', 'high')
+        ->set('primaryExecutionControls.reasoning.budget', 1536)
+        ->set('primaryExecutionControls.tools.preserve_reasoning_context', true)
+        ->call('activateLara');
+
+    $workspaceConfig = app(ConfigResolver::class)->readWorkspaceConfig(Employee::LARA_ID);
+
+    expect($workspaceConfig)->not->toBeNull()
+        ->and($workspaceConfig['llm']['models'][0]['execution_controls']['limits']['max_output_tokens'] ?? null)->toBe(3072)
+        ->and($workspaceConfig['llm']['models'][0]['execution_controls']['reasoning']['visibility'] ?? null)->toBe('summary')
+        ->and($workspaceConfig['llm']['models'][0]['execution_controls']['reasoning']['effort'] ?? null)->toBe('high')
+        ->and($workspaceConfig['llm']['models'][0]['execution_controls']['reasoning']['budget'] ?? null)->toBe(1536)
+        ->and($workspaceConfig['llm']['models'][0]['execution_controls']['tools']['preserve_reasoning_context'] ?? null)->toBeTrue();
+});
+
+test('lara setup shows provider-enforced values but keeps canonical execution controls when switching model families', function (): void {
+    Company::query()->find(Company::LICENSEE_ID)
+        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+
+    Employee::provisionLara();
+
+    $openAiProvider = AiProvider::query()->create([
+        'company_id' => Company::LICENSEE_ID,
+        'name' => 'openai',
+        'display_name' => 'OpenAI',
+        'base_url' => 'https://openai.example.test',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'openai-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 1,
+    ]);
+
+    $moonshotProvider = AiProvider::query()->create([
+        'company_id' => Company::LICENSEE_ID,
+        'name' => 'moonshotai',
+        'display_name' => 'Moonshot',
+        'base_url' => 'https://moonshot.example.test',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'moonshot-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 2,
+    ]);
+
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $openAiProvider->id,
+        'model_id' => 'gpt-5.4',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $moonshotProvider->id,
+        'model_id' => 'kimi-k2.5',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    app(ConfigResolver::class)->writeWorkspaceConfig(Employee::LARA_ID, [
+        'llm' => [
+            'models' => [[
+                'provider' => 'openai',
+                'model' => 'gpt-5.4',
+                'execution_controls' => [
+                    'sampling' => [
+                        'temperature' => 0.3,
+                    ],
+                    'reasoning' => [
+                        'mode' => 'enabled',
+                        'visibility' => 'summary',
+                    ],
+                ],
+            ]],
+        ],
+    ]);
+
+    Livewire::test(Lara::class)
+        ->assertSee('Reasoning visibility')
+        ->set('selectedProviderId', $moonshotProvider->id)
+        ->assertSee('Provider-enforced value')
+        ->assertSee('This model family also enforces top-p 0.95')
+        ->call('activateLara');
+
+    $workspaceConfig = app(ConfigResolver::class)->readWorkspaceConfig(Employee::LARA_ID);
+
+    expect($workspaceConfig)->not->toBeNull()
+        ->and($workspaceConfig['llm']['models'][0]['provider'] ?? null)->toBe('moonshotai')
+        ->and($workspaceConfig['llm']['models'][0]['model'] ?? null)->toBe('kimi-k2.5')
+        ->and($workspaceConfig['llm']['models'][0]['execution_controls']['sampling']['temperature'] ?? null)->toBe(0.3)
+        ->and($workspaceConfig['llm']['models'][0]['execution_controls']['reasoning']['visibility'] ?? null)->toBe('summary');
+});

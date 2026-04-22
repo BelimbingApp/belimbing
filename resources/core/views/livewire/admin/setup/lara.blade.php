@@ -60,19 +60,60 @@
             </x-ui.card>
 
             <x-ui.card>
-                <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-2">{{ __('Primary Model') }}</h3>
+                @php
+                    $selectedPrimaryProvider = $providers->firstWhere('id', $selectedProviderId);
+                    $selectedPrimaryLabel = $selectedPrimaryProvider !== null && $selectedModelId !== null
+                        ? ($selectedPrimaryProvider->name ?? '—') . '/' . $selectedModelId
+                        : null;
+                @endphp
+                <div class="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Primary Model') }}</h3>
+                    @if ($selectedPrimaryLabel !== null)
+                        <p class="text-sm font-medium text-ink font-mono">{{ $selectedPrimaryLabel }}</p>
+                    @endif
+                </div>
                 <p class="text-xs text-muted mb-1">{{ __('Select a provider and model for Lara. Frontier models (Claude Opus, GPT-5 class) are recommended for orchestration and reasoning.') }}</p>
+                @php
+                    $primaryTabs = [['id' => 'model', 'label' => __('Model')]];
+                    if (is_array($primaryExecutionControlSchema)) {
+                        $primaryTabs[] = ['id' => 'controls', 'label' => __('Execution Controls')];
+                    }
+                @endphp
 
-                @include('livewire.admin.setup.partials.llm-provider-model-picker', [
-                    'context' => 'lara-change',
-                    'providers' => $providers,
-                    'models' => $models,
-                    'selectedProviderId' => $selectedProviderId,
-                    'providerBinding' => 'selectedProviderId',
-                    'modelBinding' => 'selectedModelId',
-                ])
+                <x-ui.tabs
+                    :tabs="$primaryTabs"
+                    default="model"
+                    size="sm"
+                    persistence="query"
+                    query-key="lara-primary-tab"
+                    class="mt-4"
+                >
+                    <x-ui.tab id="model" class="space-y-4">
+                        @include('livewire.admin.setup.partials.llm-provider-model-picker', [
+                            'context' => 'lara-change',
+                            'providers' => $providers,
+                            'models' => $models,
+                            'selectedProviderId' => $selectedProviderId,
+                            'providerBinding' => 'selectedProviderId',
+                            'modelBinding' => 'selectedModelId',
+                        ])
 
-                @include('livewire.admin.setup.partials.provider-diagnostics')
+                        @include('livewire.admin.setup.partials.provider-diagnostics')
+                    </x-ui.tab>
+
+                    @if (is_array($primaryExecutionControlSchema))
+                        <x-ui.tab id="controls">
+                            @include('livewire.admin.ai.partials.execution-controls', [
+                                'schema' => $primaryExecutionControlSchema,
+                                'statePath' => 'primaryExecutionControls',
+                                'subtitle' => __('Editing controls for :provider / :model. Provider-enforced wire values are shown as facts without overwriting your saved intent.', [
+                                    'provider' => $primaryExecutionControlSchema['provider_name'] ?? '—',
+                                    'model' => $primaryExecutionControlSchema['model'] ?? '—',
+                                ]),
+                            ])
+                        </x-ui.tab>
+                    @endif
+                </x-ui.tabs>
 
                 <x-action-message on="primary-saved" class="text-xs text-status-success" />
             </x-ui.card>
@@ -88,22 +129,52 @@
                     @endif
                 </div>
                 <p class="text-xs text-muted mb-1">{{ __('If the primary model fails, the system will automatically retry with this model.') }}</p>
+                @php
+                    $backupTabs = [['id' => 'model', 'label' => __('Model')]];
+                    if (is_array($backupExecutionControlSchema)) {
+                        $backupTabs[] = ['id' => 'controls', 'label' => __('Execution Controls')];
+                    }
+                @endphp
 
-                @include('livewire.admin.setup.partials.llm-provider-model-picker', [
-                    'context' => 'lara-backup',
-                    'providers' => $providers,
-                    'models' => $backupModels,
-                    'selectedProviderId' => $backupProviderId,
-                    'providerBinding' => 'backupProviderId',
-                    'modelBinding' => 'backupModelId',
-                ])
+                <x-ui.tabs
+                    :tabs="$backupTabs"
+                    default="model"
+                    size="sm"
+                    persistence="query"
+                    query-key="lara-backup-tab"
+                    class="mt-4"
+                >
+                    <x-ui.tab id="model" class="space-y-4">
+                        @include('livewire.admin.setup.partials.llm-provider-model-picker', [
+                            'context' => 'lara-backup',
+                            'providers' => $providers,
+                            'models' => $backupModels,
+                            'selectedProviderId' => $backupProviderId,
+                            'providerBinding' => 'backupProviderId',
+                            'modelBinding' => 'backupModelId',
+                        ])
 
-                @include('livewire.admin.setup.partials.provider-diagnostics', [
-                    'testAction' => 'testBackupProvider',
-                    'testProviderId' => $backupProviderId,
-                    'testModelId' => $backupModelId,
-                    'testResult' => $this->backupProviderTestResult,
-                ])
+                        @include('livewire.admin.setup.partials.provider-diagnostics', [
+                            'testAction' => 'testBackupProvider',
+                            'testProviderId' => $backupProviderId,
+                            'testModelId' => $backupModelId,
+                            'testResult' => $this->backupProviderTestResult,
+                        ])
+                    </x-ui.tab>
+
+                    @if (is_array($backupExecutionControlSchema))
+                        <x-ui.tab id="controls">
+                            @include('livewire.admin.ai.partials.execution-controls', [
+                                'schema' => $backupExecutionControlSchema,
+                                'statePath' => 'backupExecutionControls',
+                                'subtitle' => __('Editing controls for :provider / :model. These controls apply only when Lara falls back to the backup model.', [
+                                    'provider' => $backupExecutionControlSchema['provider_name'] ?? '—',
+                                    'model' => $backupExecutionControlSchema['model'] ?? '—',
+                                ]),
+                            ])
+                        </x-ui.tab>
+                    @endif
+                </x-ui.tabs>
 
                 <x-action-message on="backup-saved" class="text-xs text-status-success" />
             </x-ui.card>
@@ -152,17 +223,47 @@
                 <x-ui.card>
                     <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Activate Lara') }}</h3>
                     <p class="text-xs text-muted mb-1">{{ __('Select an AI provider and model for Lara. Frontier models (Claude Opus, GPT-5 class) are recommended for the best experience with orchestration and reasoning.') }}</p>
+                    @php
+                        $activationTabs = [['id' => 'model', 'label' => __('Model')]];
+                        if (is_array($primaryExecutionControlSchema)) {
+                            $activationTabs[] = ['id' => 'controls', 'label' => __('Execution Controls')];
+                        }
+                    @endphp
 
-                    @include('livewire.admin.setup.partials.llm-provider-model-picker', [
-                        'context' => 'lara-activate',
-                        'providers' => $providers,
-                        'models' => $models,
-                        'selectedProviderId' => $selectedProviderId,
-                        'providerBinding' => 'selectedProviderId',
-                        'modelBinding' => 'selectedModelId',
-                    ])
+                    <x-ui.tabs
+                        :tabs="$activationTabs"
+                        default="model"
+                        size="sm"
+                        persistence="query"
+                        query-key="lara-activation-tab"
+                        class="mt-4"
+                    >
+                        <x-ui.tab id="model" class="space-y-4">
+                            @include('livewire.admin.setup.partials.llm-provider-model-picker', [
+                                'context' => 'lara-activate',
+                                'providers' => $providers,
+                                'models' => $models,
+                                'selectedProviderId' => $selectedProviderId,
+                                'providerBinding' => 'selectedProviderId',
+                                'modelBinding' => 'selectedModelId',
+                            ])
 
-                    @include('livewire.admin.setup.partials.provider-diagnostics')
+                            @include('livewire.admin.setup.partials.provider-diagnostics')
+                        </x-ui.tab>
+
+                        @if (is_array($primaryExecutionControlSchema))
+                            <x-ui.tab id="controls">
+                                @include('livewire.admin.ai.partials.execution-controls', [
+                                    'schema' => $primaryExecutionControlSchema,
+                                    'statePath' => 'primaryExecutionControls',
+                                    'subtitle' => __('Editing controls for :provider / :model. These settings will be stored before Lara is activated.', [
+                                        'provider' => $primaryExecutionControlSchema['provider_name'] ?? '—',
+                                        'model' => $primaryExecutionControlSchema['model'] ?? '—',
+                                    ]),
+                                ])
+                            </x-ui.tab>
+                        @endif
+                    </x-ui.tabs>
 
                     <div class="flex items-center gap-4">
                         <x-ui.button wire:click="activateLara" variant="primary">
