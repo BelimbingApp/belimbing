@@ -77,6 +77,8 @@ it('uses a stored manual locale when present', function (): void {
 });
 
 it('infers and persists an unconfirmed locale from the licensee address country', function (): void {
+    $this->settings->set(LOCALE_CONFIRMED_AT_SETTINGS_KEY, '2026-04-01T10:00:00Z');
+
     seedLicenseeAddressCountry('MY', 'ms-MY,en-MY', 'MYR');
 
     $context = freshLocaleContext();
@@ -86,7 +88,8 @@ it('infers and persists an unconfirmed locale from the licensee address country'
         ->and($context->requiresConfirmation())->toBeTrue()
         ->and($this->settings->get(LOCALE_SETTINGS_KEY))->toBe('en-MY')
         ->and($this->settings->get(LOCALE_SOURCE_SETTINGS_KEY))->toBe(LocaleSource::LICENSEE_ADDRESS->value)
-        ->and($this->settings->get(LOCALE_INFERRED_COUNTRY_SETTINGS_KEY))->toBe('MY');
+        ->and($this->settings->get(LOCALE_INFERRED_COUNTRY_SETTINGS_KEY))->toBe('MY')
+        ->and($this->settings->get(LOCALE_CONFIRMED_AT_SETTINGS_KEY))->toBeNull();
 });
 
 it('falls back to the configured app locale when no licensee locale can be inferred', function (): void {

@@ -154,6 +154,23 @@ Latest Phase 4 result:
 - `AddressUiTest.php` was tightened so address creation now asserts persisted label, line, locality, postcode, country normalization, and verification status
 - the address tightening first exposed a form-state gotcha: changing `countryIso` resets dependent geo fields, so the test was adjusted to follow the real interaction order before assessing persistence
 - the final address tightening was validated by temporarily breaking locality persistence in `Addresses\\Create` and confirming the focused test failed before restoring production code
+- the small Base unit slice reviewed `CapabilityRegistryTest.php`, `ActorTest.php`, `DatabaseSettingsServiceTest.php`, and `DatabaseExceptionContractsTest.php` as `keep`
+- `AuthorizeCapabilityMiddlewareTest.php` was tightened so the allowed path now asserts the exact capability, route context, and actor passed into the authorization boundary
+- the middleware denial test was tightened so it now asserts the concrete 403 abort and that downstream handlers do not run
+- `ApplicationLocaleContextTest.php` was tightened so inferred locale bootstrap now proves a stale confirmation timestamp is cleared when the source switches to licensee-address inference
+- those unit-slice tightenings were validated by temporarily changing the middleware denial status to 401 and by temporarily removing the inferred-locale confirmation cleanup in `ApplicationLocaleContext`, then confirming the focused tests failed before restoring production code
+- the remaining Base support/date-time/menu slice reviewed `DateTimeDisplayServiceTest.php`, `PinMetadataNormalizerMergePinIconsTest.php`, `AppPathTest.php`, `JsonTest.php`, and `StrTest.php` as `keep`
+- `FileTest.php` was tightened to use an isolated `storage/framework/testing/...` root instead of an ad hoc storage path
+- that filesystem-isolation tightening was validated by temporarily removing parent-directory creation in `App\\Base\\Support\\File::put()` and confirming the focused test failed before restoring production code
+- the Foundation unit slice reviewed `BlbExceptionContractsTest.php` as `keep`
+- `ProviderRegistryTest.php` was tightened so it now protects the public provider-resolution contract: priorities first, app providers last, and duplicate providers removed
+- that provider-registry tightening was validated by temporarily removing de-duplication in `ProviderRegistry::resolve()` and confirming the focused test failed before restoring production code
+- the remaining user/timezone slice reviewed `PasswordUpdateTest.php` and `UserTest.php` as `keep`
+- `TimezoneCycleTest.php` was tightened to cover the employee-scope branch so timezone mode persists to the most specific scope instead of leaking into company scope
+- that timezone-scope tightening was validated by temporarily forcing `TimezoneController::resolveScope()` to prefer company scope and confirming the focused test failed before restoring production code
+- the final non-AI leftover slice deleted `ExampleTest.php` as dead starter coverage with no BLB value
+- the test-infrastructure slice kept the real shared helpers in `tests/Pest.php` but removed the unused stock `toBeOne()` expectation and surplus boilerplate comments
+- that infrastructure cleanup was validated by confirming `toBeOne()` had no call sites and by rerunning helper-dependent feature tests after the `tests/Pest.php` change
 
 ### Phase 5 — Add CI Guardrails
 

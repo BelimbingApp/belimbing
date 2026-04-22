@@ -303,9 +303,9 @@ function renderInventoryReport(array $summary, array $inventory, string $project
     $lines[] = '# Test Suite Audit Inventory';
     $lines[] = '';
     $lines[] = '**Agent:** Codex';
-    $lines[] = '**Status:** Phase 2 inventory snapshot';
+    $lines[] = '**Status:** Inventory and progress snapshot';
     $lines[] = '**Last Updated:** '.date('Y-m-d');
-    $lines[] = '**Sources:** `scripts/test-suite-audit-inventory.php`, `tests/`, attempted `php artisan test --profile` on 2026-04-21';
+    $lines[] = '**Sources:** `scripts/test-suite-audit-inventory.php`, `tests/`, `docs/plans/test-suite-audit.md`, `docs/plans/ai-test-suite-audit.md`, attempted `php artisan test --profile` on 2026-04-21';
     $lines[] = '';
     $lines[] = '## Problem Essence';
     $lines[] = '';
@@ -313,7 +313,40 @@ function renderInventoryReport(array $summary, array $inventory, string $project
     $lines[] = '';
     $lines[] = '## Desired Outcome';
     $lines[] = '';
-    $lines[] = 'This report gives BLB a ranked starting point for manual review. The signals below are heuristics, not verdicts; they identify likely audit candidates and concentration areas so human review can decide keep, tighten, merge, or delete.';
+    $lines[] = 'This report gives BLB both a ranked starting point and a compact view of the remaining endgame. The signals below are heuristics, not verdicts; they identify likely audit candidates and concentration areas so human review can decide keep, tighten, merge, or delete.';
+    $lines[] = '';
+    $lines[] = '## Audit Progress Snapshot';
+    $lines[] = '';
+    $lines[] = '### Completed Or Mature Slices';
+    $lines[] = '';
+
+    foreach (completedOrMatureSlices() as $line) {
+        $lines[] = '- '.$line;
+    }
+
+    $lines[] = '';
+    $lines[] = '### Current Checkpoint';
+    $lines[] = '';
+
+    foreach (currentCheckpointLines() as $line) {
+        $lines[] = '- '.$line;
+    }
+
+    $lines[] = '';
+    $lines[] = '### Next Recommended Slices';
+    $lines[] = '';
+
+    foreach (nextRecommendedSlices() as $line) {
+        $lines[] = '- '.$line;
+    }
+
+    $lines[] = '';
+    $lines[] = '### Remaining Buckets After That';
+    $lines[] = '';
+
+    foreach (remainingBucketsAfterThat() as $line) {
+        $lines[] = '- '.$line;
+    }
     $lines[] = '';
     $lines[] = '## Summary';
     $lines[] = '';
@@ -376,11 +409,70 @@ function renderInventoryReport(array $summary, array $inventory, string $project
     $lines[] = '- `happy-path-http` flags files that fake HTTP but show no obvious error-path assertions.';
     $lines[] = '- `filesystem-sensitive` marks tests that create and clean up temporary storage paths; these are not bad by themselves, but they are worth checking against the runtime-storage rule in `tests/AGENTS.md`.';
     $lines[] = '';
-    $lines[] = '## First Recommendations';
+    $lines[] = '## Updated Read Of The Inventory';
     $lines[] = '';
-    $lines[] = '- Start the pilot audit in `Modules/Core/AI`; it dominates the example count and contains both mock-heavy units and filesystem-sensitive tests.';
-    $lines[] = '- Review redirect-only and smoke-or-markup files early; they are cheap delete or merge candidates.';
-    $lines[] = '- Treat the skipped `LlmClientToolCallingTest` file as its own audit topic because it already signals test-suite friction and missing trust in CI.';
+    $lines[] = '- The original ranking did its job for prioritization, but it is no longer the full story because many of the top-ranked files are already audited.';
+    $lines[] = '- Cheap-candidate signals should continue to guide ordering, not decisions.';
+    $lines[] = '- Outside AI, the remaining high-confidence audit work is effectively exhausted; the endgame now points mostly back to Base/AI once that worktree is safe to touch.';
 
     return implode(PHP_EOL, $lines).PHP_EOL;
+}
+
+/**
+ * @return list<string>
+ */
+function completedOrMatureSlices(): array
+{
+    return [
+        '`Modules/Core/AI` companion audit: complete at this checkpoint; see [ai-test-suite-audit.md](/home/kiat/repo/laravel/blb/docs/plans/ai-test-suite-audit.md:1)',
+        'Auth and Settings cheap-candidate slice: reviewed with real tightenings in password reset and password confirmation',
+        'Authz and System cheap-candidate slice: `ImpersonationTest.php`, `RoleUiTest.php`, and `LocalizationUiTest.php` reviewed; `RoleUiTest.php` tightened',
+        'Company feature slice: `CompanyUiTest.php`, `CompanyRelationshipTest.php`, and `ExternalAccessTest.php` tightened; `CompanyTest.php` and `CompanyTimezoneTest.php` kept',
+        'Quality cheap-candidate slice: `QualityWorkflowUiTest.php` reviewed as `keep`',
+        'User feature slice: `UserUiTest.php` and `PagePinningTest.php` reviewed; both kept with targeted tightenings',
+        'Remaining auth and system feature slices: `RegistrationTest.php` tightened; `TransportTestUiTest.php` reviewed as `keep`',
+        'Database feature slice: reviewed as `keep`',
+        'Smaller leftover feature sweep: `AddressUiTest.php` tightened; audit, foundation, and workflow feature files reviewed as `keep`',
+        'Small Base unit slice: authz middleware and locale bootstrap tightened; authz registry, actor, database settings, and database exception contracts reviewed as `keep`',
+        'Remaining Base support/date-time/menu slice: `FileTest.php` tightened for storage isolation; date-time, menu, and support helper tests reviewed as `keep`',
+        'Foundation unit slice: `ProviderRegistryTest.php` tightened; BLB exception contract test reviewed as `keep`',
+        'Remaining user/timezone slice: `TimezoneCycleTest.php` tightened for employee-scope persistence; `PasswordUpdateTest.php` and `UserTest.php` reviewed as `keep`',
+        'Final non-AI leftovers: `ExampleTest.php` deleted; `tests/Pest.php` cleaned of unused stock scaffolding while retaining the shared helpers in active use',
+        'Phase 5 guardrails: changed-test linting, PR review prompt, and scheduled slow-test plus mutation-style reporting are in place',
+    ];
+}
+
+/**
+ * @return list<string>
+ */
+function currentCheckpointLines(): array
+{
+    return [
+        'The audit is past the pilot stage and no longer blocked on process design',
+        'Cheap-candidate heuristics have been useful for ranking, but have produced multiple false positives',
+        'Outside AI, the remaining high-confidence audit work is effectively exhausted; most non-AI feature, Base/helper, and infrastructure slices are now reviewed',
+    ];
+}
+
+/**
+ * @return list<string>
+ */
+function nextRecommendedSlices(): array
+{
+    return [
+        'Base/AI unit slice: `LlmClientToolCallingTest.php`, provider/model catalog tests, and related service files',
+        'Remaining unit/service sweep outside AI: none obvious from the current inventory; revisit only if a fresh read surfaces a non-AI cluster that still looks materially under-audited',
+    ];
+}
+
+/**
+ * @return list<string>
+ */
+function remainingBucketsAfterThat(): array
+{
+    return [
+        'Feature modules not yet audited in this program: none of the remaining feature-only buckets are still unreviewed; the endgame is now mostly unit/service slices',
+        'Non-AI unit/service clusters that still look promising: none are obvious from the current inventory snapshot; the endgame now points mostly back to Base/AI once that worktree is safe to touch',
+        'Revisit Phase 5 later to decide whether any scheduled guardrail is mature enough to become PR-blocking',
+    ];
 }

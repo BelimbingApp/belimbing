@@ -3,6 +3,7 @@
 use App\Base\DateTime\Enums\TimezoneMode;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
+use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 
 const TZ_SET_SETTINGS_KEY = 'ui.timezone.mode';
@@ -59,6 +60,24 @@ it('persists mode in settings at company scope', function (): void {
     $stored = $settings->get(TZ_SET_SETTINGS_KEY, null, Scope::company(1));
 
     expect($stored)->toBe(TimezoneMode::LOCAL->value);
+});
+
+it('persists mode in settings at employee scope when the user has an employee id', function (): void {
+    $employee = Employee::factory()->create(['company_id' => 1]);
+    $user = User::factory()->create([
+        'company_id' => 1,
+        'employee_id' => $employee->id,
+    ]);
+    $settings = app(SettingsService::class);
+
+    $this->actingAs($user)
+        ->postJson(route('timezone.set'), ['mode' => 'utc'])
+        ->assertOk();
+
+    expect($settings->get(TZ_SET_SETTINGS_KEY, null, Scope::employee($employee->id, 1)))
+        ->toBe(TimezoneMode::UTC->value)
+        ->and($settings->get(TZ_SET_SETTINGS_KEY, null, Scope::company(1)))
+        ->toBeNull();
 });
 
 it('rejects invalid mode values', function (): void {

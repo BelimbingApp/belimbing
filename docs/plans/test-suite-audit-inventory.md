@@ -26,38 +26,42 @@ This report gives BLB both a ranked starting point and a compact view of the rem
 - Remaining auth and system feature slices: `RegistrationTest.php` tightened; `TransportTestUiTest.php` reviewed as `keep`
 - Database feature slice: reviewed as `keep`
 - Smaller leftover feature sweep: `AddressUiTest.php` tightened; audit, foundation, and workflow feature files reviewed as `keep`
+- Small Base unit slice: authz middleware and locale bootstrap tightened; authz registry, actor, database settings, and database exception contracts reviewed as `keep`
+- Remaining Base support/date-time/menu slice: `FileTest.php` tightened for storage isolation; date-time, menu, and support helper tests reviewed as `keep`
+- Foundation unit slice: `ProviderRegistryTest.php` tightened; BLB exception contract test reviewed as `keep`
+- Remaining user/timezone slice: `TimezoneCycleTest.php` tightened for employee-scope persistence; `PasswordUpdateTest.php` and `UserTest.php` reviewed as `keep`
+- Final non-AI leftovers: `ExampleTest.php` deleted; `tests/Pest.php` cleaned of unused stock scaffolding while retaining the shared helpers in active use
 - Phase 5 guardrails: changed-test linting, PR review prompt, and scheduled slow-test plus mutation-style reporting are in place
 
 ### Current Checkpoint
 
 - The audit is past the pilot stage and no longer blocked on process design
 - Cheap-candidate heuristics have been useful for ranking, but have produced multiple false positives
-- The highest-confidence remaining work is now in untouched modules and smaller non-AI unit/service clusters rather than in the already-reviewed heuristic bucket
+- Outside AI, the remaining high-confidence audit work is effectively exhausted; most non-AI feature, Base/helper, and infrastructure slices are now reviewed
 
 ### Next Recommended Slices
 
-- Database feature slice: `DatabaseTablesShowTest.php`, `MigrateCommandTest.php`, `QueryTest.php`, `TableRegistryReconciliationTest.php`
 - Base/AI unit slice: `LlmClientToolCallingTest.php`, provider/model catalog tests, and related service files
-- Remaining unit/service sweep outside AI: Base/Authz, Base/Settings, Base/Database, Base/Foundation, Base/Locale
+- Remaining unit/service sweep outside AI: none obvious from the current inventory; revisit only if a fresh read surfaces a non-AI cluster that still looks materially under-audited
 
 ### Remaining Buckets After That
 
 - Feature modules not yet audited in this program: none of the remaining feature-only buckets are still unreviewed; the endgame is now mostly unit/service slices
-- Non-AI unit/service clusters that still look promising: Base/AI, Base/Authz, Base/Settings, Base/Database, Base/Foundation, Base/Locale
+- Non-AI unit/service clusters that still look promising: none are obvious from the current inventory snapshot; the endgame now points mostly back to Base/AI once that worktree is safe to touch
 - Revisit Phase 5 later to decide whether any scheduled guardrail is mature enough to become PR-blocking
 
 ## Summary
 
-- PHP files scanned: 172
-- `it()` / `test()` examples detected: 1542
-- Files with Mockery signals: 33
-- Files with `Http::fake()`: 8
-- Files with DB refresh traits: 37
+- PHP files scanned: 181
+- `it()` / `test()` examples detected: 1589
+- Files with Mockery signals: 35
+- Files with `Http::fake()`: 11
+- Files with DB refresh traits: 38
 - Files with filesystem-isolation signals: 23
-- Redirect-only candidates: 9
-- Smoke-or-markup candidates: 5
-- Mock-heavy candidates: 18
-- Happy-path HTTP candidates: 1
+- Redirect-only candidates: 10
+- Smoke-or-markup candidates: 4
+- Mock-heavy candidates: 20
+- Happy-path HTTP candidates: 3
 
 Runtime note: `php artisan test --profile` did not return a clean final profile in this environment, so runtime is not ranked per file here. Treat runtime as a scheduled or CI-backed follow-up signal, not a blocker for the first manual audit pass.
 
@@ -65,8 +69,8 @@ Runtime note: `php artisan test --profile` did not return a clean final profile 
 
 | Suite | Files |
 | --- | ---: |
-| Unit | 113 |
-| Feature | 49 |
+| Unit | 120 |
+| Feature | 51 |
 | Support | 7 |
 | Bootstrap | 3 |
 
@@ -74,26 +78,26 @@ Runtime note: `php artisan test --profile` did not return a clean final profile 
 
 | Area | Files | Examples |
 | --- | ---: | ---: |
-| Modules/Core/AI | 104 | 1097 |
+| Modules/Core/AI | 110 | 1139 |
 | Authz | 4 | 65 |
 | Company | 4 | 41 |
 | Base/Support | 4 | 34 |
 | AI | 6 | 31 |
+| Base/AI | 9 | 27 |
+| Base/DateTime | 2 | 26 |
 | User | 2 | 26 |
-| Base/DateTime | 2 | 25 |
 | Database | 4 | 24 |
 | Base/Settings | 1 | 24 |
 | Auth | 7 | 23 |
 | Workflow | 1 | 23 |
-| Base/AI | 5 | 23 |
 
 ## Ranked Audit Candidates
 
 | Score | File | Area | Examples | Signals |
 | ---: | --- | --- | ---: | --- |
 | 14 | [AgenticRuntimeTest.php](/home/kiat/repo/laravel/blb/tests/Unit/Modules/Core/AI/Services/AgenticRuntimeTest.php) | Modules/Core/AI | 29 | mock-heavy, filesystem-sensitive, large-example-count |
-| 13 | [ToolCallingTest.php](/home/kiat/repo/laravel/blb/tests/Unit/Modules/Core/AI/Services/ToolCallingTest.php) | Modules/Core/AI | 37 | mock-heavy, filesystem-sensitive, large-example-count |
 | 9 | [BrowserToolTest.php](/home/kiat/repo/laravel/blb/tests/Unit/Modules/Core/AI/Tools/BrowserToolTest.php) | Modules/Core/AI | 43 | mock-heavy, large-example-count |
+| 9 | [ToolCallingTest.php](/home/kiat/repo/laravel/blb/tests/Unit/Modules/Core/AI/Services/ToolCallingTest.php) | Modules/Core/AI | 37 | mock-heavy, large-example-count |
 | 9 | [BrowserSessionManagerTest.php](/home/kiat/repo/laravel/blb/tests/Unit/Modules/Core/AI/Services/Browser/BrowserSessionManagerTest.php) | Modules/Core/AI | 20 | mock-heavy, large-example-count |
 | 9 | [HealthAndPresenceServiceTest.php](/home/kiat/repo/laravel/blb/tests/Unit/Modules/Core/AI/Services/ControlPlane/HealthAndPresenceServiceTest.php) | Modules/Core/AI | 16 | mock-heavy, db-refresh |
 | 9 | [LifecycleControlServiceTest.php](/home/kiat/repo/laravel/blb/tests/Unit/Modules/Core/AI/Services/ControlPlane/LifecycleControlServiceTest.php) | Modules/Core/AI | 16 | mock-heavy, db-refresh |
@@ -105,7 +109,7 @@ Runtime note: `php artisan test --profile` did not return a clean final profile 
 | 8 | [LocalizationUiTest.php](/home/kiat/repo/laravel/blb/tests/Feature/System/LocalizationUiTest.php) | System | 11 | smoke-or-markup, db-refresh |
 | 8 | [PasswordResetTest.php](/home/kiat/repo/laravel/blb/tests/Feature/Auth/PasswordResetTest.php) | Auth | 8 | redirect-only |
 | 8 | [ProfileUpdateTest.php](/home/kiat/repo/laravel/blb/tests/Feature/Settings/ProfileUpdateTest.php) | Settings | 8 | redirect-only |
-| 8 | [ToolReadinessServiceTest.php](/home/kiat/repo/laravel/blb/tests/Unit/Modules/Core/AI/Services/ToolReadinessServiceTest.php) | Modules/Core/AI | 7 | mock-heavy, db-refresh |
+| 8 | [ToolReadinessServiceTest.php](/home/kiat/repo/laravel/blb/tests/Unit/Modules/Core/AI/Services/ToolReadinessServiceTest.php) | Modules/Core/AI | 8 | mock-heavy, db-refresh |
 | 8 | [ImpersonationTest.php](/home/kiat/repo/laravel/blb/tests/Feature/Authz/ImpersonationTest.php) | Authz | 6 | redirect-only |
 | 8 | [CompanyUiTest.php](/home/kiat/repo/laravel/blb/tests/Feature/Company/CompanyUiTest.php) | Company | 6 | redirect-only |
 | 8 | [AuthenticationTest.php](/home/kiat/repo/laravel/blb/tests/Feature/Auth/AuthenticationTest.php) | Auth | 5 | redirect-only |
@@ -120,14 +124,8 @@ Runtime note: `php artisan test --profile` did not return a clean final profile 
 - `happy-path-http` flags files that fake HTTP but show no obvious error-path assertions.
 - `filesystem-sensitive` marks tests that create and clean up temporary storage paths; these are not bad by themselves, but they are worth checking against the runtime-storage rule in `tests/AGENTS.md`.
 
-## First Recommendations
-
-- Start the pilot audit in `Modules/Core/AI`; it dominates the example count and contains both mock-heavy units and filesystem-sensitive tests.
-- Review redirect-only and smoke-or-markup files early; they are cheap delete or merge candidates.
-- Treat the skipped `LlmClientToolCallingTest` file as its own audit topic because it already signals test-suite friction and missing trust in CI.
-
 ## Updated Read Of The Inventory
 
 - The original ranking did its job for prioritization, but it is no longer the full story because many of the top-ranked files are already audited.
 - Cheap-candidate signals should continue to guide ordering, not decisions.
-- The endgame is now visible as a finite set of module slices rather than an undifferentiated list of 1000+ tests.
+- Outside AI, the remaining high-confidence audit work is effectively exhausted; the endgame now points mostly back to Base/AI once that worktree is safe to touch.

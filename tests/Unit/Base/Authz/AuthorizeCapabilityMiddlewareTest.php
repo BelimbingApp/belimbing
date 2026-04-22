@@ -21,6 +21,11 @@ uses(TestCase::class);
 it('allows request when capability is authorized', function (): void {
     $service = new class implements AuthorizationService
     {
+        /**
+         * @var array{actor: Actor, capability: string, context: array<string, mixed>}|null
+         */
+        public ?array $authorizeCall = null;
+
         public function can(Actor $actor, string $capability, ?ResourceContext $resource = null, array $context = []): AuthorizationDecision
         {
             return AuthorizationDecision::allow(['test']);
@@ -28,7 +33,11 @@ it('allows request when capability is authorized', function (): void {
 
         public function authorize(Actor $actor, string $capability, ?ResourceContext $resource = null, array $context = []): void
         {
-            // This test double models the successful can() path without side effects.
+            $this->authorizeCall = [
+                'actor' => $actor,
+                'capability' => $capability,
+                'context' => $context,
+            ];
         }
 
         public function filterAllowed(Actor $actor, string $capability, iterable $resources, array $context = []): Collection
@@ -45,7 +54,12 @@ it('allows request when capability is authorized', function (): void {
 
     $response = $middleware->handle($request, fn () => new Response('ok', 200), 'core.user.list');
 
-    expect($response->getStatusCode())->toBe(200);
+    expect($response->getStatusCode())->toBe(200)
+        ->and($service->authorizeCall)->not->toBeNull()
+        ->and($service->authorizeCall['capability'])->toBe('core.user.list')
+        ->and($service->authorizeCall['context'])->toBe(['route' => 'admin.users.index'])
+        ->and($service->authorizeCall['actor']->id)->toBe(1)
+        ->and($service->authorizeCall['actor']->companyId)->toBe(10);
 });
 
 it('aborts with 403 when capability is denied', function (): void {
@@ -74,8 +88,20 @@ it('aborts with 403 when capability is denied', function (): void {
     $request = Request::create('/admin/users', 'GET');
     $request->setUserResolver(fn () => new FakeAuthenticatable(1, ['company_id' => 10]));
 
-    expect(fn () => $middleware->handle($request, fn () => new Response('ok', 200), 'core.user.list'))
-        ->toThrow(HttpException::class);
+    $nextCalled = false;
+
+    try {
+        $middleware->handle($request, function () use (&$nextCalled): Response {
+            $nextCalled = true;
+
+            return new Response('ok', 200);
+        }, 'core.user.list');
+
+        $this->fail('Expected denied authorization to abort.');
+    } catch (HttpException $exception) {
+        expect($exception->getStatusCode())->toBe(403)
+            ->and($nextCalled)->toBeFalse();
+    }
 });
 
 it('registers authz middleware on user routes', function (): void {

@@ -5,8 +5,13 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+function supportFileTestRoot(): string
+{
+    return storage_path('framework/testing/support-file');
+}
+
 afterEach(function (): void {
-    $directory = storage_path('temp/tests/support-file');
+    $directory = supportFileTestRoot();
 
     if (is_dir($directory)) {
         deleteDirectoryRecursive($directory);
@@ -14,7 +19,7 @@ afterEach(function (): void {
 });
 
 it('creates missing parent directories when writing a file', function (): void {
-    $path = storage_path('temp/tests/support-file/nested/config.json');
+    $path = supportFileTestRoot().'/nested/config.json';
 
     $bytes = File::put($path, '{"ok":true}');
 
@@ -24,7 +29,7 @@ it('creates missing parent directories when writing a file', function (): void {
 });
 
 it('appends file content when append flags are provided', function (): void {
-    $path = storage_path('temp/tests/support-file/session/transcript.jsonl');
+    $path = supportFileTestRoot().'/session/transcript.jsonl';
 
     File::put($path, "first\n");
     File::put($path, "second\n", FILE_APPEND | LOCK_EX);

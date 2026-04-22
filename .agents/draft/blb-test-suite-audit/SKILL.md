@@ -52,9 +52,21 @@ move into `.agents/skills/`.
 - Runtime-storage violations are real here: watch for writes under
   `storage/app/ai/workspace/`, `storage/app/ai/wire-logs/`,
   `storage/app/browser-artifacts/`, and similar default runtime paths.
+- For filesystem helpers and support utilities, prefer test roots under
+  `storage/framework/testing/` instead of ad hoc `storage/temp/...` paths.
 - Shared form components may reset dependent fields when a parent selector
   changes. Follow the real interaction order in tests before claiming a
   persistence bug.
+- Middleware denial tests should assert the exact abort status and that
+  downstream handlers do not run. "Throws some HTTP exception" is usually too
+  weak to protect the boundary.
+- When scope resolution has a most-specific branch and a fallback branch, add
+  tests for both. Company-only coverage will miss employee-scope regressions.
+- If an existing test reaches a private helper by reflection, look for a small
+  public-contract assertion too when practical so the file protects behavior,
+  not only implementation shape.
+- Delete stock starter tests and unused global Pest helpers when they are still
+  hanging around. They add CI cost and noise without protecting BLB behavior.
 - Count-only scope assertions are often weak. Prefer asserting the exact
   returned records and excluded records.
 - Mock-heavy files are not automatically weak; many AI and authz boundaries are
@@ -80,6 +92,11 @@ move into `.agents/skills/`.
 - For password create/update flows, assert `Hash::check(...)` against the stored
   hash instead of treating component success as proof.
 - Assert session or event side effects, not just component success.
+- For middleware and boundary guards, assert the concrete status code and the
+  context handed to the boundary service when that context is part of the
+  contract.
+- For scope-aware settings or preference writes, assert the value lands in the
+  most specific intended scope and does not leak into broader fallback scopes.
 - Assert exact included and excluded records for scopes and filters.
 - For toggle/delete flows, assert which record survives or is removed, not just
   the remaining count.
