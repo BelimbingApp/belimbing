@@ -97,53 +97,53 @@ function inspectFile(string $file): array
         ];
     }
 
-    $rules = [
+    $rules = array_merge(
         [
-            'severity' => 'error',
-            'message' => 'Do not point ai.workspace_path into storage/app/. Use storage/framework/testing/... instead.',
-            'pattern' => '/config\(\)->set\(\s*[\'"]ai\.workspace_path[\'"]\s*,\s*storage_path\(\s*[\'"]app\//',
+            [
+                'severity' => 'error',
+                'message' => 'Do not point ai.workspace_path into storage/app/. Use storage/framework/testing/... instead.',
+                'pattern' => '/config\(\)->set\(\s*[\'"]ai\.workspace_path[\'"]\s*,\s*storage_path\(\s*[\'"]app\//',
+            ],
+            [
+                'severity' => 'error',
+                'message' => 'Do not point ai.workspace_path into storage/app/. Use storage/framework/testing/... instead.',
+                'pattern' => '/config\(\s*\[\s*[\'"]ai\.workspace_path[\'"]\s*=>\s*storage_path\(\s*[\'"]app\//',
+            ],
         ],
+        array_map(
+            static fn (string $path, string $message): array => [
+                'severity' => 'error',
+                'message' => $message,
+                'pattern' => sprintf('/storage_path\\(\\s*[\\\'"]app\\/%s/', preg_quote($path, '/')),
+            ],
+            ['ai/workspace/', 'ai/wire-logs/', 'browser-artifacts/'],
+            [
+                'Tests must not touch the real AI workspace under storage/app/ai/workspace/.',
+                'Tests must not touch the real AI wire-log directory under storage/app/ai/wire-logs/.',
+                'Tests must not touch the default browser artifact directory under storage/app/browser-artifacts/.',
+            ],
+        ),
+        array_map(
+            static fn (string $path, string $message): array => [
+                'severity' => 'error',
+                'message' => $message,
+                'pattern' => sprintf('/[\\\'"]storage\\/app\\/%s/', preg_quote($path, '/')),
+            ],
+            ['ai/workspace/', 'ai/wire-logs/', 'browser-artifacts/'],
+            [
+                'Tests must not use a real runtime workspace path under storage/app/ai/workspace/.',
+                'Tests must not use a real runtime wire-log path under storage/app/ai/wire-logs/.',
+                'Tests must not use the default browser artifact path under storage/app/browser-artifacts/.',
+            ],
+        ),
         [
-            'severity' => 'error',
-            'message' => 'Do not point ai.workspace_path into storage/app/. Use storage/framework/testing/... instead.',
-            'pattern' => '/config\(\s*\[\s*[\'"]ai\.workspace_path[\'"]\s*=>\s*storage_path\(\s*[\'"]app\//',
+            [
+                'severity' => 'warning',
+                'message' => 'Literal storage/app/ paths in tests are suspicious. Prefer storage/framework/testing/... or a test-specific redirected path.',
+                'pattern' => '/[\'"]storage\/app\/(?!testing\/)/',
+            ],
         ],
-        [
-            'severity' => 'error',
-            'message' => 'Tests must not touch the real AI workspace under storage/app/ai/workspace/.',
-            'pattern' => '/storage_path\(\s*[\'"]app\/ai\/workspace\//',
-        ],
-        [
-            'severity' => 'error',
-            'message' => 'Tests must not touch the real AI wire-log directory under storage/app/ai/wire-logs/.',
-            'pattern' => '/storage_path\(\s*[\'"]app\/ai\/wire-logs\//',
-        ],
-        [
-            'severity' => 'error',
-            'message' => 'Tests must not touch the default browser artifact directory under storage/app/browser-artifacts/.',
-            'pattern' => '/storage_path\(\s*[\'"]app\/browser-artifacts\//',
-        ],
-        [
-            'severity' => 'error',
-            'message' => 'Tests must not use a real runtime workspace path under storage/app/ai/workspace/.',
-            'pattern' => '/[\'"]storage\/app\/ai\/workspace\//',
-        ],
-        [
-            'severity' => 'error',
-            'message' => 'Tests must not use a real runtime wire-log path under storage/app/ai/wire-logs/.',
-            'pattern' => '/[\'"]storage\/app\/ai\/wire-logs\//',
-        ],
-        [
-            'severity' => 'error',
-            'message' => 'Tests must not use the default browser artifact path under storage/app/browser-artifacts/.',
-            'pattern' => '/[\'"]storage\/app\/browser-artifacts\//',
-        ],
-        [
-            'severity' => 'warning',
-            'message' => 'Literal storage/app/ paths in tests are suspicious. Prefer storage/framework/testing/... or a test-specific redirected path.',
-            'pattern' => '/[\'"]storage\/app\/(?!testing\/)/',
-        ],
-    ];
+    );
 
     $findings = [];
 
