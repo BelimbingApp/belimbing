@@ -10,6 +10,7 @@ use App\Base\AI\Services\LlmClient;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Modules\Core\AI\DTO\Message;
+use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgenticToolLoopStreamReader;
 use App\Modules\Core\AI\Services\AgentRuntime;
@@ -157,9 +158,14 @@ trait MakesRuntimeResponses
             $responseFactory,
             new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
             $runRecorder,
-            new AgenticToolLoopStreamReader($llmClient, \Mockery::mock(WireLogger::class)->shouldIgnoreMissing()),
+            new AgenticToolLoopStreamReader(
+                $llmClient,
+                \Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
+                app(AgenticExecutionControlResolver::class),
+            ),
             app(RuntimeSessionContext::class),
             \Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
+            app(AgenticExecutionControlResolver::class),
         );
     }
 

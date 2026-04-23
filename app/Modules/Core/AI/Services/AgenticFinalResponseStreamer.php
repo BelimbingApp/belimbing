@@ -10,8 +10,6 @@ use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
-use App\Base\AI\Enums\ReasoningVisibility;
-use App\Base\AI\Enums\ToolChoiceMode;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
@@ -30,6 +28,7 @@ final class AgenticFinalResponseStreamer
         private readonly RunRecorder $runRecorder,
         private readonly RuntimeResponseFactory $responseFactory,
         private readonly WireLogger $wireLogger,
+        private readonly AgenticExecutionControlResolver $executionControls,
     ) {}
 
     /**
@@ -53,18 +52,13 @@ final class AgenticFinalResponseStreamer
         array $streamState,
     ): \Generator {
         $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
-        $executionControls = $streamState['tools'] !== []
-            ? $config['execution_controls']->withToolChoice(ToolChoiceMode::Auto)
-            : $config['execution_controls']->withToolChoice(null);
-
-        if ($apiType === AiApiType::OpenAiResponses) {
-            $executionControls = $executionControls
-                ->withReasoningVisibility(ReasoningVisibility::Summary)
-                ->withReasoningContextPreservation(true);
-        } elseif ($apiType === AiApiType::AnthropicMessages) {
-            $executionControls = $executionControls
-                ->withReasoningContextPreservation(true);
-        }
+        $executionControls = $this->executionControls->resolve(
+            $config['execution_controls'],
+            $config['provider_name'] ?? null,
+            $config['model'],
+            $apiType,
+            $streamState['tools'] !== [],
+        );
 
         $stream = $this->llmClient->chatStream(new ChatRequest(
             baseUrl: $credentials['base_url'],

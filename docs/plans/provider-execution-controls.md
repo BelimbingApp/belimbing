@@ -1,12 +1,12 @@
 # Provider Execution Controls
 
-**Status:** In Progress
+**Status:** Complete
 **Last Updated:** 2026-04-22
 **Sources:** `AGENTS.md`, `docs/plans/AGENTS.md`, `app/Base/AI/DTO/ChatRequest.php`, `app/Base/AI/DTO/ExecutionControls.php`, `app/Base/AI/DTO/ProviderRequestMapping.php`, `app/Base/AI/Enums/AiApiType.php`, `app/Base/AI/Services/LlmClient.php`, `app/Base/AI/Services/LlmClientSupport.php`, `app/Base/AI/Services/Protocols/LlmProtocolClientRegistry.php`, `app/Base/AI/Services/Protocols/ChatCompletionsProtocolClient.php`, `app/Base/AI/Services/Protocols/ResponsesProtocolClient.php`, `app/Base/AI/Services/Protocols/AnthropicMessagesProtocolClient.php`, `app/Base/AI/Services/ProviderMapping/ProviderCapabilityRegistry.php`, `app/Base/AI/Services/ProviderMapping/ProviderRequestMapperRegistry.php`, `app/Base/AI/Services/ProviderMapping/OpenAiChatCompletionsRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/OpenAiResponsesRequestMapper.php`, `app/Base/AI/Services/ProviderMapping/AnthropicMessagesRequestMapper.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Services/AgentRuntime.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/AgenticToolLoopStreamReader.php`, `docs/plans/thinking-content-streaming.md`, `https://platform.kimi.ai/docs/guide/kimi-k2-5-quickstart`, `https://platform.kimi.ai/docs/guide/use-kimi-api-to-complete-tool-calls`, `https://platform.openai.com/docs/guides/reasoning-best-practices`, `https://platform.openai.com/docs/guides/responses-vs-chat-completions`, `https://platform.claude.com/docs/en/build-with-claude/extended-thinking`, `https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking`, `https://platform.claude.com/docs/en/api/streaming`, `https://platform.claude.com/docs/en/api/complete`
 
 ## Problem Essence
 
-BLB started with ad hoc top-level request fields such as `temperature` and `reasoningSummary`, while provider-specific behavior was patched later in transport and normalizer code. That shape did not scale to providers whose reasoning, sampling, and tool-loop controls differ by protocol and by model family. The current implementation has replaced that scalar contract with canonical execution controls for the OpenAI-compatible and Responses paths, but Anthropic-native support and capability-driven UI are still open.
+BLB started with ad hoc top-level request fields such as `temperature` and `reasoningSummary`, while provider-specific behavior was patched later in transport and normalizer code. That shape did not scale to providers whose reasoning, sampling, and tool-loop controls differ by protocol and by model family. The current implementation now routes all supported providers through one canonical execution-controls contract, provider capabilities, and request mappers.
 
 ## Desired Outcome
 
@@ -208,6 +208,6 @@ Goal: let Lara and future runtimes present provider/model controls without hardc
 
 Goal: remove the temporary compatibility layer once the new contract is the only one in use.
 
-- [ ] Remove any remaining provider-specific scalar growth from `ChatRequest` and adjacent runtime DTOs
-- [ ] Update docs to describe the canonical contract as the supported extension point for new providers
-- [ ] Audit provider integrations for any remaining transport-level policy leakage and move it behind the registry/mapper seam
+- [x] Remove any remaining provider-specific scalar growth from `ChatRequest` and adjacent runtime DTOs
+- [x] Update docs to describe the canonical contract as the supported extension point for new providers
+- [x] Audit provider integrations for any remaining transport-level policy leakage and move it behind the registry/mapper seam

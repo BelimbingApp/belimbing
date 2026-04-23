@@ -36,6 +36,7 @@ app/Base/AI/
   - transport execution
   - payload decoding
   - response mapping
+- Provider extensions must follow the canonical `execution_controls` contract; see `docs/architecture/ai/agent-model.md`.
 - In Node-facing or OpenAI-compatible code, rethrow unexpected errors instead of swallowing them in broad catches.
 
 ## Data Sources

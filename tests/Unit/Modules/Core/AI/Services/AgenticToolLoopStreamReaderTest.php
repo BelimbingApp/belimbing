@@ -8,7 +8,10 @@ use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Enums\ReasoningVisibility;
+use App\Base\AI\Enums\ToolChoiceMode;
 use App\Base\AI\Services\LlmClient;
+use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
 use App\Modules\Core\AI\Services\AgenticToolLoopStreamReader;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use Illuminate\Foundation\Testing\TestCase;
@@ -21,7 +24,11 @@ it('captures reasoning_content deltas for follow-up tool loop requests', functio
     $llmClient = Mockery::mock(LlmClient::class);
     $llmClient->shouldReceive('chatStream')
         ->once()
-        ->with(Mockery::type(ChatRequest::class))
+        ->with(Mockery::on(function (ChatRequest $request): bool {
+            return $request->executionControls->tools->choice === ToolChoiceMode::Auto
+                && $request->executionControls->reasoning->visibility === ReasoningVisibility::None
+                && $request->executionControls->tools->preserveReasoningContext === false;
+        }))
         ->andReturn((function (): Generator {
             yield [
                 'type' => 'thinking_delta',
@@ -49,7 +56,11 @@ it('captures reasoning_content deltas for follow-up tool loop requests', functio
             ];
         })());
 
-    $reader = new AgenticToolLoopStreamReader($llmClient, Mockery::mock(WireLogger::class)->shouldIgnoreMissing());
+    $reader = new AgenticToolLoopStreamReader(
+        $llmClient,
+        Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
+        app(AgenticExecutionControlResolver::class),
+    );
     $toolLoopState = [
         'apiMessages' => [
             ['role' => 'user', 'content' => 'Echo world'],
@@ -117,7 +128,11 @@ it('returns the runtime error when the iteration stream fails', function (): voi
             ];
         })());
 
-    $reader = new AgenticToolLoopStreamReader($llmClient, Mockery::mock(WireLogger::class)->shouldIgnoreMissing());
+    $reader = new AgenticToolLoopStreamReader(
+        $llmClient,
+        Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
+        app(AgenticExecutionControlResolver::class),
+    );
     $toolLoopState = [
         'apiMessages' => [
             ['role' => 'user', 'content' => 'Retry later'],

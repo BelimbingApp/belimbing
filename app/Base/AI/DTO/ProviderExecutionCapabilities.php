@@ -31,5 +31,7 @@ final readonly class ProviderExecutionCapabilities
         public bool $supportsAdaptiveReasoning = false,
         public ?int $defaultReasoningBudget = null,
         public ?string $interleavedThinkingBetaHeader = null,
+        public ?ReasoningVisibility $agenticToolLoopReasoningVisibility = null,
+        public bool $preserveReasoningContextInAgenticToolLoops = false,
     ) {}
 }

@@ -22,6 +22,8 @@ final class ProviderCapabilityRegistry
                 supportedReasoningEffort: [ReasoningEffort::Low, ReasoningEffort::Medium, ReasoningEffort::High],
                 supportsReasoningBudget: true,
                 supportsReasoningContextPreservation: true,
+                agenticToolLoopReasoningVisibility: ReasoningVisibility::Summary,
+                preserveReasoningContextInAgenticToolLoops: true,
             );
         }
 
@@ -38,6 +40,7 @@ final class ProviderCapabilityRegistry
                 supportsAdaptiveReasoning: $this->supportsAnthropicAdaptiveThinking($model),
                 defaultReasoningBudget: 2048,
                 interleavedThinkingBetaHeader: 'interleaved-thinking-2025-05-14',
+                preserveReasoningContextInAgenticToolLoops: true,
             );
         }
 

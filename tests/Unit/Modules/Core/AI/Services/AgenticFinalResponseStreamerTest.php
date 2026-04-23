@@ -6,8 +6,11 @@
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
+use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Enums\ReasoningVisibility;
 use App\Base\AI\Services\LlmClient;
+use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
 use App\Modules\Core\AI\Services\AgenticFinalResponseStreamer;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
@@ -20,7 +23,12 @@ it('prepends client actions when the final stream ends without content deltas', 
     $llmClient = Mockery::mock(LlmClient::class);
     $llmClient->shouldReceive('chatStream')
         ->once()
-        ->with(Mockery::type(ChatRequest::class))
+        ->with(Mockery::on(function (ChatRequest $request): bool {
+            return $request->apiType === AiApiType::OpenAiResponses
+                && $request->executionControls->tools->choice === null
+                && $request->executionControls->reasoning->visibility === ReasoningVisibility::Summary
+                && $request->executionControls->tools->preserveReasoningContext === true;
+        }))
         ->andReturn((function (): Generator {
             yield [
                 'type' => 'done',
@@ -43,12 +51,13 @@ it('prepends client actions when the final stream ends without content deltas', 
         $runRecorder,
         app(RuntimeResponseFactory::class),
         Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
+        app(AgenticExecutionControlResolver::class),
     );
 
     $events = iterator_to_array($streamer->streamFinalResponse(
         'run_123',
         [
-            'api_type' => null,
+            'api_type' => AiApiType::OpenAiResponses,
             'model' => 'gpt-4.1',
             'execution_controls' => ExecutionControls::defaults(maxOutputTokens: 512, temperature: 0.3),
             'timeout' => 60,
@@ -107,6 +116,7 @@ it('emits an error event and records failure when the final stream returns a run
         $runRecorder,
         app(RuntimeResponseFactory::class),
         Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
+        app(AgenticExecutionControlResolver::class),
     );
 
     $events = iterator_to_array($streamer->streamFinalResponse(
@@ -168,6 +178,7 @@ it('emits an empty-response error when the final stream completes without conten
         $runRecorder,
         app(RuntimeResponseFactory::class),
         Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
+        app(AgenticExecutionControlResolver::class),
     );
 
     $events = iterator_to_array($streamer->streamFinalResponse(

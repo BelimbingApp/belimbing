@@ -560,6 +560,7 @@ workspace/{employee_id}/
 - `provider`: references `ai_providers.name` within the agent's company.
 - `model`: the specific model within that provider.
 - `execution_controls`: canonical BLB runtime controls persisted in provider-agnostic form; omitted fields fall back to global `config('ai.llm.execution_controls')` defaults or, for tasks, the resolved chat model entry.
+- New provider support should extend Base AI capability and request-mapping seams against this canonical `execution_controls` contract instead of adding provider-branded config keys or request DTO fields.
 
 ### 15.3 Config Resolution Order
 

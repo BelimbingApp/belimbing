@@ -67,13 +67,13 @@ We should render all three. Reasoning summaries and preambles both go into think
 
 Infrastructure for thinking deltas through the full event pipeline. Only the final streaming response captures content.
 
-- [x] `ChatRequest.reasoningSummary` parameter
-- [x] `LlmClient.buildResponsesPayload()` includes `reasoning.summary` when set
+- [x] Canonical execution controls carry reasoning visibility for Responses requests instead of a dedicated `ChatRequest.reasoningSummary` field
+- [x] Responses request mapping emits `reasoning.summary` when canonical execution controls request summary visibility
 - [x] `LlmResponsesDecoder` handles `response.reasoning_summary_text.delta` SSE events
 - [x] `TurnEventType::AssistantThinkingDelta` enum case
 - [x] `TurnEventPublisher.thinkingDelta()` method
 - [x] `TurnStreamBridge` maps `thinking_delta` phase to publisher call
-- [x] `AgenticFinalResponseStreamer` forwards `thinking_delta` events, passes `reasoningSummary: 'auto'`
+- [x] `AgenticFinalResponseStreamer` forwards `thinking_delta` events while the request mapper derives `reasoning.summary: 'auto'` from canonical execution controls
 - [x] `ChatRunPersister` accumulates deltas, deferred flush
 - [x] `MessageManager.appendThinking()` accepts content string
 - [x] Thinking Blade component and stream entry template render content
@@ -105,7 +105,7 @@ Every LLM call in the streaming agentic loop streams its response. Reasoning sum
 - [x] Emit `{'event': 'status', 'data': {'phase': 'thinking', ...}}` at the start of every iteration (not just iteration 0), so each iteration produces a `assistant.thinking_started` boundary for replay segmentation
 - [x] Implement a streaming iteration method in `AgenticRuntime` that consumes `chatStream()`, yields `thinking_delta` events (both reasoning summary and commentary) to the outer generator, accumulates `tool_call_delta` and `content_delta` events internally, and returns the accumulated result (commentary, content, tool_calls, usage) when the stream completes
 - [x] Replace the `chatWithRetry()` call in the `while (true)` loop with this streaming method
-- [x] Ensure `reasoningSummary: 'auto'` is passed for Responses API calls at every iteration
+- [x] Ensure Responses API iterations request summary visibility through canonical execution controls at every iteration
 - [x] Preserve the `appendAssistantToolCallMessage()` flow — tool calls must still be appended to `apiMessages` for context continuity; add optional `?string $phase` parameter
 - [x] Preserve `phase` on assistant messages — when appending preamble content to `apiMessages`, set `phase: 'commentary'`; when appending final answer, set `phase: 'final_answer'`. Only `source: 'commentary'` thinking deltas contribute to the appended content — reasoning summaries are excluded from `apiMessages`
 - [x] `LlmClient::convertToResponsesInputWithInstructions()` — preserve `phase` field on assistant messages when converting to Responses API input format

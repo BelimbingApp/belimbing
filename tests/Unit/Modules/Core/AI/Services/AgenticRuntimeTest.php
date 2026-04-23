@@ -15,6 +15,7 @@ use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Enums\TurnPhase;
+use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgenticToolLoopStreamReader;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
@@ -316,9 +317,10 @@ describe('AgenticRuntime (sync)', function () {
             new RuntimeResponseFactory,
             new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
             Mockery::mock(RunRecorder::class)->shouldIgnoreMissing(),
-            new AgenticToolLoopStreamReader($llmClient, $wireLogger),
+            new AgenticToolLoopStreamReader($llmClient, $wireLogger, app(AgenticExecutionControlResolver::class)),
             app(RuntimeSessionContext::class),
             $wireLogger,
+            app(AgenticExecutionControlResolver::class),
         );
 
         $result = $runtime->run(
