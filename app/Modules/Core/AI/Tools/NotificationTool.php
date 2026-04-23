@@ -102,7 +102,7 @@ class NotificationTool extends AbstractTool
         return [
             'display_name' => 'Notification',
             'summary' => 'Send notifications to Belimbing users via internal channels.',
-            'explanation' => 'Sends notifications via Laravel\'s notification system (database, email). '
+            'explanation' => 'Sends notifications via Laravel\'s notification system (database channel only). '
                 .'Targeted at internal Belimbing notifications — not an external messaging platform.',
             'setup_requirements' => [
                 'Notification channels configured',
@@ -128,7 +128,11 @@ class NotificationTool extends AbstractTool
             throw new ToolArgumentException('user_id must be a positive integer or the string "all".');
         }
 
-        $channel = $this->requireEnum($arguments, 'channel', self::CHANNELS, 'database');
+        $channelArg = $arguments['channel'] ?? 'database';
+        if (! is_string($channelArg) || ! in_array($channelArg, self::CHANNELS, true)) {
+            throw new ToolArgumentException('"channel" must be one of: '.implode(', ', self::CHANNELS).'.');
+        }
+        $channel = $channelArg;
         $subject = $this->requireString($arguments, 'subject');
         $body = $this->requireString($arguments, 'body');
 

@@ -73,15 +73,16 @@ describe('input validation', function () {
             ->and((string) $result)->toContain('exceed');
     });
 
-    it('rejects invalid channel', function () {
+    it('rejects invalid channel', function (string $badChannel) {
         $result = $this->tool->execute([
             'user_id' => 1,
             'subject' => 'Test',
             'body' => NOTIFICATION_TEST_BODY,
-            'channel' => 'sms',
+            'channel' => $badChannel,
         ]);
-        expect((string) $result)->toContain('Error');
-    });
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('channel');
+    })->with(['sms', 'broadcast']);
 
     it('defaults channel to database', function () {
         $schema = $this->tool->parametersSchema();
@@ -155,28 +156,6 @@ describe('notification sending', function () {
 
         $data = $this->decodeToolResult($result);
         expect($data['channel'])->toBe('database');
-    });
-
-    it('sends via broadcast channel', function () {
-        $user = User::factory()->create();
-        Notification::fake();
-
-        $result = $this->tool->execute([
-            'user_id' => $user->id,
-            'channel' => 'broadcast',
-            'subject' => 'Broadcast Notification',
-            'body' => 'Sent via broadcast',
-        ]);
-
-        $notifications = Notification::sentNotifications();
-        $userKey = get_class($user);
-        $sentTypes = $notifications[$userKey][$user->getKey()];
-        $firstType = array_key_first($sentTypes);
-        $notification = $sentTypes[$firstType][0]['notification'];
-        expect($notification->via($user))->toBe(['broadcast']);
-
-        $data = $this->decodeToolResult($result);
-        expect($data['channel'])->toBe('broadcast');
     });
 
     it('returns success with correct structure', function () {
