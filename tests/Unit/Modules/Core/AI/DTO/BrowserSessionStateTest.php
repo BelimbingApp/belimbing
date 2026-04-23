@@ -17,7 +17,8 @@ describe('BrowserSessionState', function () {
 
         $state = new BrowserSessionState(
             sessionId: 'bs_test',
-            employeeId: 1,
+            agentEmployeeId: 1,
+            actingForUserId: 10,
             companyId: 2,
             status: BrowserSessionStatus::Ready,
             headless: false,
@@ -41,7 +42,8 @@ describe('BrowserSessionState', function () {
     it('converts to array', function () {
         $state = new BrowserSessionState(
             sessionId: 'bs_arr',
-            employeeId: 1,
+            agentEmployeeId: 1,
+            actingForUserId: null,
             companyId: 2,
             status: BrowserSessionStatus::Busy,
             headless: true,
@@ -58,6 +60,8 @@ describe('BrowserSessionState', function () {
         $array = $state->toArray();
 
         expect($array['session_id'])->toBe('bs_arr')
+            ->and($array['agent_employee_id'])->toBe(1)
+            ->and($array['acting_for_user_id'])->toBeNull()
             ->and($array['status'])->toBe('busy')
             ->and($array['headless'])->toBeTrue()
             ->and($array['tabs'])->toBe([])
@@ -72,7 +76,8 @@ describe('BrowserSessionState', function () {
 
         $state = new BrowserSessionState(
             sessionId: 'bs_tabs',
-            employeeId: 1,
+            agentEmployeeId: 1,
+            actingForUserId: null,
             companyId: 1,
             status: BrowserSessionStatus::Ready,
             headless: true,

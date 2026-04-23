@@ -17,6 +17,8 @@ abstract class BrowserToolTestCase extends TestCase
 
     public const BROWSER_TOOL_TEST_EMPLOYEE_ID = 701;
 
+    public const BROWSER_TOOL_TEST_USER_ID = 703;
+
     public const BROWSER_TOOL_TEST_COMPANY_ID = 702;
 
     /**
@@ -26,6 +28,7 @@ abstract class BrowserToolTestCase extends TestCase
     {
         return array_merge([
             '_employee_id' => self::BROWSER_TOOL_TEST_EMPLOYEE_ID,
+            '_acting_for_user_id' => self::BROWSER_TOOL_TEST_USER_ID,
             '_company_id' => self::BROWSER_TOOL_TEST_COMPANY_ID,
         ], $arguments);
     }

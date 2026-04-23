@@ -25,7 +25,8 @@ function makeAdapterSession(BrowserSessionStatus $status, array $attrs = []): Br
 {
     $session = new BrowserSession;
     $session->id = $attrs['id'] ?? 'bs_adapter_test';
-    $session->employee_id = $attrs['employee_id'] ?? 1;
+    $session->agent_employee_id = $attrs['agent_employee_id'] ?? 1;
+    $session->acting_for_user_id = $attrs['acting_for_user_id'] ?? 10;
     $session->company_id = $attrs['company_id'] ?? 1;
     $session->status = $status;
     $session->headless = $attrs['headless'] ?? true;

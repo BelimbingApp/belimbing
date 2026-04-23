@@ -6,8 +6,10 @@
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\Services\KnowledgeNavigator;
+use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Base\Foundation\Providers\ProviderRegistry;
 use App\Modules\Core\AI\Models\AiProvider;
+use Illuminate\Contracts\Auth\Authenticatable;
 
 class LaraContextProvider
 {
@@ -87,7 +89,17 @@ class LaraContextProvider
 
     private function authenticatedCompanyId(): ?int
     {
-        $id = auth()->user()?->employee?->company_id;
+        $user = auth()->user();
+
+        if ($user instanceof CompanyScoped) {
+            return $user->getCompanyId();
+        }
+
+        if (! $user instanceof Authenticatable || ! method_exists($user, 'getAttribute')) {
+            return null;
+        }
+
+        $id = $user->getAttribute('company_id');
 
         return is_int($id) ? $id : null;
     }

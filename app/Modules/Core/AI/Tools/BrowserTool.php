@@ -239,16 +239,17 @@ class BrowserTool extends AbstractActionTool
 
         if ($context === null) {
             return ToolResult::error(
-                'Browser automation requires a valid employee and company execution context. '
-                .'This run did not provide one, and no authenticated employee context could be resolved.',
+                'Browser automation requires a valid agent and company execution context. '
+                .'This run did not provide one, and no authenticated user or agent context could be resolved.',
                 'browser_context_error',
             );
         }
 
         try {
             $session = $this->sessionManager->open(
-                employeeId: $context['employee_id'],
+                agentEmployeeId: $context['agent_employee_id'],
                 companyId: $context['company_id'],
+                actingForUserId: $context['acting_for_user_id'],
                 headless: $headless,
             );
             $this->activeSessionId = $session->id;
@@ -501,12 +502,12 @@ class BrowserTool extends AbstractActionTool
      * Resolve browser execution context from tool arguments or auth state.
      *
      * Priority order:
-     *  1. Synthetic tool context injected by the runtime (_employee_id/_company_id)
+     *  1. Synthetic tool context injected by the runtime
      *  2. Authenticated user's linked employee + company
      *  3. Lara system agent for authenticated users with a valid company scope
      *
      * @param  array<string, mixed>  $arguments
-     * @return array{employee_id: int, company_id: int}|null
+     * @return array{agent_employee_id: int, acting_for_user_id: int|null, company_id: int}|null
      */
     private function resolveExecutionContext(array $arguments): ?array
     {
@@ -521,16 +522,18 @@ class BrowserTool extends AbstractActionTool
 
     /**
      * @param  array<string, mixed>  $arguments
-     * @return array{employee_id: int, company_id: int}|null
+     * @return array{agent_employee_id: int, acting_for_user_id: int|null, company_id: int}|null
      */
     private function resolveSyntheticExecutionContext(array $arguments): ?array
     {
-        $employeeId = isset($arguments['_employee_id']) ? (int) $arguments['_employee_id'] : null;
+        $agentEmployeeId = isset($arguments['_employee_id']) ? (int) $arguments['_employee_id'] : null;
         $companyId = isset($arguments['_company_id']) ? (int) $arguments['_company_id'] : null;
+        $actingForUserId = isset($arguments['_acting_for_user_id']) ? (int) $arguments['_acting_for_user_id'] : null;
 
-        if ($employeeId !== null && $employeeId > 0 && $companyId !== null && $companyId > 0) {
+        if ($agentEmployeeId !== null && $agentEmployeeId > 0 && $companyId !== null && $companyId > 0) {
             return [
-                'employee_id' => $employeeId,
+                'agent_employee_id' => $agentEmployeeId,
+                'acting_for_user_id' => $actingForUserId !== null && $actingForUserId > 0 ? $actingForUserId : $this->authenticatedUserId(),
                 'company_id' => $companyId,
             ];
         }
@@ -539,7 +542,7 @@ class BrowserTool extends AbstractActionTool
     }
 
     /**
-     * @return array{employee_id: int, company_id: int}|null
+     * @return array{agent_employee_id: int, acting_for_user_id: int|null, company_id: int}|null
      */
     private function resolveExecutionContextFromAuthenticatedUser(): ?array
     {
@@ -554,7 +557,8 @@ class BrowserTool extends AbstractActionTool
 
         if ($linkedEmployeeId !== null && $linkedEmployeeId > 0 && $linkedCompanyId !== null && $linkedCompanyId > 0) {
             return [
-                'employee_id' => $linkedEmployeeId,
+                'agent_employee_id' => $linkedEmployeeId,
+                'acting_for_user_id' => (int) $user->getAuthIdentifier(),
                 'company_id' => $linkedCompanyId,
             ];
         }
@@ -570,9 +574,17 @@ class BrowserTool extends AbstractActionTool
         }
 
         return [
-            'employee_id' => (int) $lara->id,
+            'agent_employee_id' => (int) $lara->id,
+            'acting_for_user_id' => (int) $user->getAuthIdentifier(),
             'company_id' => (int) $lara->company_id,
         ];
+    }
+
+    private function authenticatedUserId(): ?int
+    {
+        $id = auth()->id();
+
+        return is_int($id) ? $id : null;
     }
 
     // ─── Runner integration ─────────────────────────────────────────

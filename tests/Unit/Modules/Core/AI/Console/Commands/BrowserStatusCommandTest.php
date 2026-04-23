@@ -19,7 +19,8 @@ function makeSessionState(array $overrides = []): BrowserSessionState
 {
     return new BrowserSessionState(
         sessionId: $overrides['sessionId'] ?? 'bs_test_cmd',
-        employeeId: $overrides['employeeId'] ?? 1,
+        agentEmployeeId: $overrides['agentEmployeeId'] ?? 1,
+        actingForUserId: $overrides['actingForUserId'] ?? 10,
         companyId: $overrides['companyId'] ?? 1,
         status: $overrides['status'] ?? BrowserSessionStatus::Ready,
         headless: $overrides['headless'] ?? true,

@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Models;
 use App\Modules\Core\AI\Enums\BrowserSessionStatus;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,7 +22,8 @@ use Illuminate\Support\Carbon;
  * bound to a running Playwright process managed by the runtime adapter.
  *
  * @property string $id
- * @property int $employee_id
+ * @property int $agent_employee_id
+ * @property int|null $acting_for_user_id
  * @property int $company_id
  * @property BrowserSessionStatus $status
  * @property bool $headless
@@ -35,7 +37,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $expires_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
- * @property-read Employee $employee
+ * @property-read Employee $agentEmployee
+ * @property-read User|null $actingForUser
  * @property-read Company $company
  * @property-read \Illuminate\Database\Eloquent\Collection<int, BrowserArtifact> $artifacts
  */
@@ -49,7 +52,8 @@ class BrowserSession extends Model
 
     protected $fillable = [
         'id',
-        'employee_id',
+        'agent_employee_id',
+        'acting_for_user_id',
         'company_id',
         'status',
         'headless',
@@ -81,9 +85,14 @@ class BrowserSession extends Model
 
     // ─── Relationships ──────────────────────────────────────────────
 
-    public function employee(): BelongsTo
+    public function agentEmployee(): BelongsTo
     {
-        return $this->belongsTo(Employee::class);
+        return $this->belongsTo(Employee::class, 'agent_employee_id');
+    }
+
+    public function actingForUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'acting_for_user_id');
     }
 
     public function company(): BelongsTo
