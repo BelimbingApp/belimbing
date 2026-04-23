@@ -16,7 +16,7 @@ Goal 1 complete. Goal 2 in progress — see `docs/plans/thinking-content-streami
 
 ## Transport Design
 
-Lara uses direct HTTP streaming for fresh turns plus persisted-event replay for resume and gap-fill. Reverb is not part of the Lara runtime path.
+Lara uses direct HTTP streaming for fresh turns plus persisted-event replay for resume and gap-fill.
 
 The real-time transport is decoupled from runtime and UI event semantics so it can be swapped without redesigning core chat behavior.
 

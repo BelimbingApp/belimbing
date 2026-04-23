@@ -31,8 +31,8 @@ sudo lsof -i :5432
 # Option 1: Stop the conflicting service
 sudo systemctl stop <service-name>
 
-# BLB auto-assigns free Laravel, Vite, and Reverb ports during ./scripts/start-app.sh
-# Only pin APP_PORT, VITE_PORT, or REVERB_SERVER_PORT in .env when you need a fixed override
+# BLB auto-assigns free Laravel and Vite ports during ./scripts/start-app.sh
+# Only pin APP_PORT or VITE_PORT in .env when you need a fixed override
 # Database and Redis port conflicts still need normal .env or service changes
 ```
 

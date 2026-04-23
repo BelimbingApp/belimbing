@@ -18,7 +18,7 @@ For shared-host installs, BLB supports one ingress architecture:
 
 - A system Caddy daemon owns public ingress on `:80` and `:443`.
 - BLB runs FrankenPHP locally through Octane on a high, non-privileged loopback port.
-- BLB's embedded Caddy continues to serve PHP, static files, Vite proxying, and Reverb proxying for this project only.
+- BLB's embedded Caddy continues to serve PHP, static files, and Vite proxying for this project only.
 - The system Caddy proxies the BLB frontend and backend hostnames to BLB's local FrankenPHP listener.
 - `start-app.sh` and `stop-app.sh` never start, stop, enable, or reload the system Caddy service.
 
@@ -58,7 +58,7 @@ The port model should be explicit:
 
 - System Caddy owns public `:80` and `:443`.
 - BLB's local FrankenPHP listener uses a loopback-only high port.
-- Vite and Reverb continue to use separate internal high ports.
+- Vite continues to use a separate internal high port.
 - The public BLB URLs remain domain-based and do not expose the app-local port in the normal workflow.
 
 This keeps ingress ownership clear and avoids accidental port conflicts or misleading documentation that treats the app-local listener as if it were the public HTTPS port.
@@ -91,7 +91,7 @@ Some current setup and trust flows still reflect older assumptions where "Caddy 
 
 ### The Repository Caddyfile Remains Internal To BLB
 
-The repository `Caddyfile` should continue to define BLB's internal routing, worker, Vite, and Reverb behavior. Shared ingress mode should only change how the app-local listener is exposed, not split BLB's internal routing logic across multiple places.
+The repository `Caddyfile` should continue to define BLB's internal routing, worker, and Vite behavior. Shared ingress mode should only change how the app-local listener is exposed, not split BLB's internal routing logic across multiple places.
 
 ### Failure Modes Must Be Actionable
 
@@ -113,7 +113,7 @@ Goal: lock the architecture and port contract before changing startup behavior.
 - [x] Update this plan if implementation work reveals a better ingress boundary or a missing constraint.
 - [x] Document the shared-ingress contract in prose in the relevant setup/development docs.
 - [x] State clearly that multi-site support means system Caddy owns public ingress and BLB owns only app-local processes.
-- [x] Define the exact listener expectations for BLB local FrankenPHP, Vite, and Reverb.
+- [x] Define the exact listener expectations for BLB local FrankenPHP and Vite.
 - [x] Define the setup-mode split between direct local mode and shared-ingress mode.
 - [x] Define idempotent setup behavior for fresh machines versus already-provisioned machines.
 

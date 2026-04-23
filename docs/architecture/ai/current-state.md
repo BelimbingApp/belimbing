@@ -310,7 +310,7 @@ Implementation notes:
 - `ExecutionPolicy::forMode()` resolves timeout tiers for `interactive`, `heavy_foreground`, and `background`
 - timeout retry logic skips same-budget retries once a call has already consumed a material portion of the budget
 - denied tools surface in both the transcript and streaming events, rather than disappearing into internal hook logic
-- the live transport for Lara chat is direct HTTP streaming, not Reverb/Echo
+- the live transport for Lara chat is direct HTTP streaming
 - `ai_chat_turn_events` is the durable source of truth for replay, resume, and ordered recovery
 
 ---

@@ -5,7 +5,6 @@
 
 namespace App\Modules\Core\Geonames\Database\Seeders;
 
-use App\Modules\Core\Geonames\Events\PostcodeImportProgress;
 use App\Modules\Core\Geonames\Database\Seeders\Concerns\DownloadsGeonamesFile;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -15,18 +14,6 @@ use ZipArchive;
 class PostcodeSeeder extends Seeder
 {
     use DownloadsGeonamesFile;
-
-    /**
-     * Broadcast a progress event, silently ignoring failures.
-     */
-    protected function broadcastProgress(string $status, string $message, int $current, int $total, ?string $iso = null): void
-    {
-        try {
-            PostcodeImportProgress::dispatch($status, $message, $current, $total, $iso);
-        } catch (\Throwable $e) {
-            $this->command?->warn("Broadcast failed: {$e->getMessage()}");
-        }
-    }
 
     /**
      * Run the database seeds.
@@ -66,8 +53,6 @@ class PostcodeSeeder extends Seeder
                 $message = "Failed to import postcodes for {$iso}: {$e->getMessage()}";
                 $this->command?->error($message);
 
-                $this->broadcastProgress('failed', $message, $current, $total, $iso);
-
                 $results[$iso] = [
                     'status' => 'failed',
                     'message' => $e->getMessage(),
@@ -89,8 +74,6 @@ class PostcodeSeeder extends Seeder
      */
     protected function importCountry(string $iso, int $current, int $total): array
     {
-        $this->broadcastProgress('downloading', "Downloading postcodes for {$iso}...", $current, $total, $iso);
-
         $filePath = $this->downloadFile($iso);
 
         if (! $filePath) {
@@ -101,15 +84,11 @@ class PostcodeSeeder extends Seeder
             ];
         }
 
-        $this->broadcastProgress('importing', "Importing postcodes for {$iso}...", $current, $total, $iso);
-
         $records = $this->parseFile($filePath, $iso);
 
         if (empty($records)) {
             $message = "No postcode records found for {$iso}.";
             $this->command?->info($message);
-
-            $this->broadcastProgress('completed', $message, $current, $total, $iso);
 
             return [
                 'status' => 'completed',
@@ -131,8 +110,6 @@ class PostcodeSeeder extends Seeder
         $count = count($records);
         $message = "Imported {$count} postcodes for {$iso}.";
         $this->command?->info($message);
-
-        $this->broadcastProgress('completed', $message, $current, $total, $iso);
 
         return [
             'status' => 'completed',

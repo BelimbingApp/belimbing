@@ -77,7 +77,6 @@
             </x-ui.card>
         @endif
 
-        {{-- Fallback: show as soon as Import/Update is clicked (no Echo required) --}}
         <div
             wire:loading.flex
             wire:target="import,update"
@@ -88,49 +87,6 @@
                 <div class="text-sm font-medium">{{ __('Importing...') }}</div>
                 <p class="text-xs mt-1 opacity-75">{{ __('This may take several minutes. Do not close this page.') }}</p>
             </div>
-        </div>
-
-        {{-- Live progress via WebSocket (when Reverb + Echo are configured) --}}
-        <div
-            x-data="{
-                progress: null,
-                init() {
-                    if (window.Echo) {
-                        window.Echo.channel('postcode-import')
-                            .listen('.App\\Modules\\Core\\Geonames\\Events\\PostcodeImportProgress', (e) => {
-                                this.progress = e && (e.status !== undefined ? e : e.payload || e)
-                                if (this.progress && this.progress.status === 'completed' && this.progress.current === this.progress.total) {
-                                    setTimeout(() => {
-                                        this.progress = null
-                                        $wire.$refresh()
-                                    }, 3000)
-                                }
-                            })
-                    }
-                }
-            }"
-            x-show="progress"
-            x-cloak
-            class="flex items-center gap-3 p-4 bg-status-info-subtle border border-status-info-border rounded-2xl text-status-info"
-        >
-            <template x-if="progress && progress.status !== 'failed'">
-                <div class="flex items-center gap-3 w-full">
-                    <x-icon name="heroicon-o-arrow-path" class="w-5 h-5 shrink-0 animate-spin" />
-                    <div class="flex-1">
-                        <div class="text-sm font-medium" x-text="progress?.message"></div>
-                        <div class="mt-1 w-full bg-status-info-border rounded-full h-1.5">
-                            <div class="bg-status-info h-1.5 rounded-full transition-all duration-300" :style="'width: ' + (progress ? Math.round((progress.current / progress.total) * 100) : 0) + '%'"></div>
-                        </div>
-                        <div class="text-xs mt-1 opacity-75" x-text="progress ? progress.current + ' / ' + progress.total + ' countries' : ''"></div>
-                    </div>
-                </div>
-            </template>
-            <template x-if="progress && progress.status === 'failed'">
-                <div class="flex items-center gap-3">
-                    <x-icon name="heroicon-o-exclamation-circle" class="w-5 h-5 shrink-0 text-status-danger" />
-                    <span class="text-sm text-status-danger" x-text="progress?.message"></span>
-                </div>
-            </template>
         </div>
 
         {{-- Country record counts --}}

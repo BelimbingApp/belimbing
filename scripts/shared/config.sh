@@ -99,29 +99,6 @@ get_frontend_port() {
     return 0
 }
 
-# Get Reverb server port for environment (reads from .env or uses default)
-get_reverb_server_port() {
-    local env=$1
-    local project_root=${2:-$PROJECT_ROOT}
-
-    if [[ -n "$project_root" ]]; then
-        local port
-        port=$(get_env_var "REVERB_SERVER_PORT" "" "$project_root/.env")
-        if [[ -n "$port" ]] && [[ "$port" =~ ^[0-9]+$ ]]; then
-            echo "$port"
-            return 0
-        fi
-    fi
-
-    case "$env" in
-        *)
-            echo "8080"
-            ;;
-    esac
-
-    return 0
-}
-
 
 # Get default domains for an environment
 # Returns: frontend_domain|backend_domain

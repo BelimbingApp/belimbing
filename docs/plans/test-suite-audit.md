@@ -148,7 +148,7 @@ Latest Phase 4 result:
 - `PagePinningTest.php` now proves URL-based unpinning removes the intended pin and leaves the correct remaining record, not just a count of one
 - those user-slice tightenings were validated by temporarily breaking password persistence in `Users\\Create` and mis-targeting pin deletion in `PinController`, then confirming the focused tests failed before restoring production code
 - the remaining auth feature slice reviewed `RegistrationTest.php` as a keep with one tightening: it now proves the registered user is actually created with the expected password hash and emits `Registered`
-- the remaining system feature slice reviewed `TransportTestUiTest.php` as `keep`; it already protects authz, SSE transport shape, and Reverb dispatch behavior with concrete assertions
+- the remaining system feature slice reviewed `TransportTestUiTest.php` as `keep`; it already protects authz and SSE transport shape with concrete assertions
 - the registration tightening was validated by temporarily breaking password persistence in `Auth\\Register` and confirming the focused test failed before restoring production code
 - the database feature slice reviewed `DatabaseTablesShowTest.php`, `MigrateCommandTest.php`, `QueryTest.php`, and `TableRegistryReconciliationTest.php` as `keep`; they protect real schema, provisioning, query-safety, sharing, and reconciliation contracts
 - the smaller leftover feature sweep reviewed `AuditableTraitTest.php`, `BlbExceptionRenderingTest.php`, `FrameworkPrimitivesProvisionerTest.php`, and `WorkflowEngineTest.php` as `keep`

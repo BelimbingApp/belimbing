@@ -243,7 +243,7 @@ Laravel processes request and returns response
 Caddy returns response to browser
 ```
 
-In normal local development, `start-app.sh` resolves `${APP_PORT}`, `${VITE_PORT}`, and Reverb's listener port at runtime, then writes the concrete values to `storage/app/.devops/ports.env` before Caddy reloads.
+In normal local development, `start-app.sh` resolves `${APP_PORT}` and `${VITE_PORT}` at runtime, then writes the concrete values to `storage/app/.devops/ports.env` before Caddy reloads.
 
 ---
 

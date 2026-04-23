@@ -336,15 +336,7 @@ get_ports() {
         VITE_PORT=$(next_free_port 5173)
     fi
 
-    # REVERB_SERVER_PORT: .env pin (if available) → free port from preferred or 8080
-    preferred=$(get_env_var "REVERB_SERVER_PORT" "")
-    if [[ -n "$preferred" ]] && [[ "$preferred" =~ ^[0-9]+$ ]]; then
-        REVERB_SERVER_PORT=$(resolve_port "$preferred" 8080)
-    else
-        REVERB_SERVER_PORT=$(next_free_port 8080)
-    fi
-
-    export APP_ENV APP_PORT VITE_PORT REVERB_SERVER_PORT
+    export APP_ENV APP_PORT VITE_PORT
 
     # Write runtime ports so stop-app and cleanup know what to stop
     local runtime_dir="$PROJECT_ROOT/storage/app/.devops"
@@ -352,10 +344,9 @@ get_ports() {
     cat > "$runtime_dir/ports.env" <<EOF
 APP_PORT=$APP_PORT
 VITE_PORT=$VITE_PORT
-REVERB_SERVER_PORT=$REVERB_SERVER_PORT
 EOF
 
-    echo -e "${CYAN}ℹ${NC} Ports: Laravel ${APP_PORT}, Vite ${VITE_PORT}, Reverb ${REVERB_SERVER_PORT}, HTTPS ${HTTPS_PORT}"
+    echo -e "${CYAN}ℹ${NC} Ports: Laravel ${APP_PORT}, Vite ${VITE_PORT}, HTTPS ${HTTPS_PORT}"
     return 0
 }
 
@@ -405,7 +396,7 @@ cleanup() {
     log "[$stop_user] Stopping services"
 
     if [[ -n "${APP_ENV:-}" ]]; then
-        stop_dev_services "$APP_ENV" "$APP_PORT" "$VITE_PORT" "$REVERB_SERVER_PORT"
+        stop_dev_services "$APP_ENV" "$APP_PORT" "$VITE_PORT"
     else
         stop_dev_services "local"
     fi
@@ -473,8 +464,6 @@ export_caddy_env() {
     export APP_PORT="$APP_PORT"
     export VITE_PORT="$VITE_PORT"
     export VITE_HOST="127.0.0.1"
-    export REVERB_SERVER_PORT="$REVERB_SERVER_PORT"
-
     local mkcert_cert="$PROJECT_ROOT/certs/${FRONTEND_DOMAIN}.pem"
     local mkcert_key="$PROJECT_ROOT/certs/${FRONTEND_DOMAIN}-key.pem"
 
@@ -513,15 +502,9 @@ export_caddy_env() {
         export CADDY_SCHEME="http"
 
         if [[ "$BLB_INGRESS_MODE" = "shared" ]] && [[ "$system_caddy_running" = true ]]; then
-            REVERB_HOST="$FRONTEND_DOMAIN"
-            REVERB_PORT="443"
-            REVERB_SCHEME="https"
             PUBLIC_APP_URL="https://${FRONTEND_DOMAIN}"
             PUBLIC_BACKEND_URL="https://${BACKEND_DOMAIN}"
         else
-            REVERB_HOST="$FRONTEND_DOMAIN"
-            REVERB_PORT="$APP_PORT"
-            REVERB_SCHEME="http"
             PUBLIC_APP_URL="http://${FRONTEND_DOMAIN}:${APP_PORT}"
             PUBLIC_BACKEND_URL="http://${BACKEND_DOMAIN}:${APP_PORT}"
         fi
@@ -531,19 +514,13 @@ export_caddy_env() {
         export TLS_DIRECTIVE="${TLS_DIRECTIVE:-tls internal}"
         export CADDY_SCHEME="https"
 
-        REVERB_HOST="$FRONTEND_DOMAIN"
-        REVERB_PORT="443"
-        REVERB_SCHEME="https"
         PUBLIC_APP_URL="https://${FRONTEND_DOMAIN}"
         PUBLIC_BACKEND_URL="https://${BACKEND_DOMAIN}"
     fi
 
-    VITE_REVERB_HOST="$REVERB_HOST"
-    VITE_REVERB_PORT="$REVERB_PORT"
-    VITE_REVERB_SCHEME="$REVERB_SCHEME"
     APP_BIND_HOST=$(caddy_resolve_app_bind_host "${USE_NON_PRIVILEGED_PORT:-0}" "$(get_env_var "APP_BIND_HOST" "")")
 
-    export APP_BIND_HOST REVERB_HOST REVERB_PORT REVERB_SCHEME VITE_REVERB_HOST VITE_REVERB_PORT VITE_REVERB_SCHEME HTTPS_PORT PUBLIC_APP_URL PUBLIC_BACKEND_URL
+    export APP_BIND_HOST HTTPS_PORT PUBLIC_APP_URL PUBLIC_BACKEND_URL
     log "Caddy env exported (TLS_DIRECTIVE=$TLS_DIRECTIVE, ADMIN_PORT=$CADDY_SERVER_ADMIN_PORT, HTTPS_PORT=$HTTPS_PORT, APP_BIND_HOST=$APP_BIND_HOST)"
     return 0
 }
@@ -552,7 +529,7 @@ export_caddy_env() {
 
 # Start development services
 start_services() {
-    echo -e "${GREEN}Starting FrankenPHP (Octane), Vite, queue worker, and Reverb...${NC}"
+    echo -e "${GREEN}Starting FrankenPHP (Octane), Vite, and queue worker...${NC}"
 
     # Create a separate log file for dev services output
     local dev_log_file
@@ -641,12 +618,6 @@ print_runtime_summary() {
     if [[ "${USE_NON_PRIVILEGED_PORT:-0}" = "1" ]]; then
         echo -e "  ${BULLET} FrankenPHP (Octane): http://127.0.0.1:${APP_PORT}"
         echo -e "  ${BULLET} Vite:                http://127.0.0.1:$VITE_PORT"
-        if [[ "$REVERB_SCHEME" = "https" ]]; then
-            echo -e "  ${BULLET} Reverb (public):     wss://${FRONTEND_DOMAIN}/app"
-        else
-            echo -e "  ${BULLET} Reverb (public):     ws://${FRONTEND_DOMAIN}:${APP_PORT}/app"
-        fi
-        echo -e "  ${BULLET} Reverb (internal):   ws://127.0.0.1:$REVERB_SERVER_PORT"
         echo ""
         if [[ "$BLB_INGRESS_MODE" = "shared" ]] && caddy_system_is_running; then
             echo -e "${GREEN}✓ System Caddy is active for shared ingress${NC}"
@@ -656,8 +627,6 @@ print_runtime_summary() {
     else
         echo -e "  ${BULLET} FrankenPHP (Octane): https://${FRONTEND_DOMAIN} (:443, bind ${APP_BIND_HOST})"
         echo -e "  ${BULLET} Vite:                http://127.0.0.1:$VITE_PORT"
-        echo -e "  ${BULLET} Reverb (public):     wss://${FRONTEND_DOMAIN}/app"
-        echo -e "  ${BULLET} Reverb (internal):   ws://127.0.0.1:$REVERB_SERVER_PORT"
     fi
     echo ""
     echo -e "${CYAN}Log file:${NC} ${LOG_FILE}"

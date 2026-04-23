@@ -37,20 +37,17 @@ PORTS_FILE="$PROJECT_ROOT/storage/app/.devops/ports.env"
 if [[ -f "$PORTS_FILE" ]]; then
     APP_PORT=$(grep -E "^APP_PORT=" "$PORTS_FILE" 2>/dev/null | cut -d= -f2 || echo "")
     VITE_PORT=$(grep -E "^VITE_PORT=" "$PORTS_FILE" 2>/dev/null | cut -d= -f2 || echo "")
-    REVERB_SERVER_PORT=$(grep -E "^REVERB_SERVER_PORT=" "$PORTS_FILE" 2>/dev/null | cut -d= -f2 || echo "")
 else
     APP_PORT=$(get_env_var "APP_PORT" "")
     VITE_PORT=$(get_env_var "VITE_PORT" "")
-    REVERB_SERVER_PORT=$(get_env_var "REVERB_SERVER_PORT" "")
 fi
 APP_PORT="${APP_PORT:-8000}"
 VITE_PORT="${VITE_PORT:-5173}"
-REVERB_SERVER_PORT="${REVERB_SERVER_PORT:-8080}"
 
 FRONTEND_DOMAIN=$(get_env_var "FRONTEND_DOMAIN" "")
 
-echo -e "${YELLOW}Stopping ${APP_ENV} environment services (Laravel ${APP_PORT}, Vite ${VITE_PORT}, Reverb ${REVERB_SERVER_PORT})...${NC}"
-stop_dev_services "$APP_ENV" "$APP_PORT" "$VITE_PORT" "$REVERB_SERVER_PORT"
+echo -e "${YELLOW}Stopping ${APP_ENV} environment services (Laravel ${APP_PORT}, Vite ${VITE_PORT})...${NC}"
+stop_dev_services "$APP_ENV" "$APP_PORT" "$VITE_PORT"
 
 rm -f "$PORTS_FILE"
 echo -e "\n${GREEN}✓ Services stopped.${NC}"

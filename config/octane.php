@@ -268,7 +268,6 @@ return [
             'CADDY_SERVER_ADMIN_PORT' => env('CADDY_SERVER_ADMIN_PORT'),
             'VITE_PORT' => env('VITE_PORT'),
             'VITE_HOST' => env('VITE_HOST'),
-            'REVERB_SERVER_PORT' => env('REVERB_SERVER_PORT'),
         ]),
     ],
 

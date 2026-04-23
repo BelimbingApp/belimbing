@@ -155,7 +155,7 @@ We use a single file that adapts via environment variables:
 ```
 
 **Key Points:**
-- `start-app.sh` auto-assigns free internal Laravel, Vite, and Reverb ports when they are not pinned in `.env`
+- `start-app.sh` auto-assigns free internal Laravel and Vite ports when they are not pinned in `.env`
 - Host-based routing keeps external URLs stable while internal ports remain runtime-managed
 - Automatic HTTPS with `tls internal` for `.blb` domains
 - Proper proxy headers for Laravel to detect HTTPS and real client IP
@@ -199,7 +199,7 @@ export default defineConfig({
 ```
 
 **Runtime port behavior:**
-- `VITE_PORT`, `APP_PORT`, and `REVERB_SERVER_PORT` may be pinned for explicit overrides
+- `VITE_PORT` and `APP_PORT` may be pinned for explicit overrides
 - When unset, `./scripts/start-app.sh` chooses free ports automatically and writes them to `storage/app/.devops/ports.env`
 
 ### Phase 2: Service Orchestration
@@ -241,8 +241,7 @@ export APP_ENV=local
 # Resolve free runtime ports when overrides are not pinned in .env
 APP_PORT=$(next_free_port 8000)
 VITE_PORT=$(next_free_port 5173)
-REVERB_SERVER_PORT=$(next_free_port 8080)
-export APP_PORT VITE_PORT REVERB_SERVER_PORT
+export APP_PORT VITE_PORT
 
 # Start all services using concurrently
 echo -e "${GREEN}Starting Laravel server, Vite, queue worker, and log watcher...${NC}"
@@ -374,7 +373,7 @@ Update `composer.json` so the dev workflow consumes runtime-managed ports instea
     "scripts": {
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "bunx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" \"php artisan serve --port=${APP_PORT:-8000}\" \"php artisan queue:listen --tries=1\" \"php artisan reverb:start\" \"bun run dev\" --names=server,queue,reverb,vite"
+            "bunx concurrently -c \"#93c5fd,#c4b5fd,#86efac\" \"php artisan serve --port=${APP_PORT:-8000}\" \"php artisan queue:listen --tries=1\" \"bun run dev\" --names=server,queue,vite"
         ]
     }
 }

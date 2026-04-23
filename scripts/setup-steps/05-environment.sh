@@ -54,18 +54,6 @@ detect_app_debug() {
     return 0
 }
 
-detect_reverb_app_id() {
-    local app_name="${1:-belimbing}"
-    local normalized
-    normalized=$(printf '%s' "$app_name" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-')
-    normalized="${normalized#-}"
-    normalized="${normalized%-}"
-    normalized="${normalized:-belimbing}"
-
-    printf '%s\n' "${normalized}-${APP_ENV}"
-    return 0
-}
-
 # Prepare .env and prompt user for configuration values.
 # When .env already exists, current values are offered as defaults so the user
 # can confirm or override them. When .env is absent, it is created from the
@@ -112,9 +100,6 @@ create_env_file() {
     update_env_file_if_missing "DB_PORT" "5432"
     update_env_file_if_missing "REDIS_HOST" "127.0.0.1"
     update_env_file_if_missing "REDIS_PORT" "6379"
-    update_env_file_if_missing "REVERB_APP_ID" "$(detect_reverb_app_id "$app_name")"
-    update_env_file_if_missing "REVERB_APP_KEY" "$(generate_random_token 24)"
-    update_env_file_if_missing "REVERB_APP_SECRET" "$(generate_random_token 32)"
 
     return 0
 }
