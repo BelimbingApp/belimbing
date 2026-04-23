@@ -2,10 +2,12 @@
     <div class="grid gap-4 xl:grid-cols-2">
         <x-ui.card>
             <div class="space-y-4">
-                <div>
-                    <h2 class="text-sm font-medium text-ink">{{ __('Tabs') }}</h2>
-                    <p class="text-xs text-muted">{{ __('Tabs belong here canonically because they switch between peer sections of the same page context. Cross-reference them from composite pages when surrounding layout matters.') }}</p>
-                </div>
+                <x-ui.catalog-section
+                    :title="__('Tabs')"
+                    component="<code>x-ui.tabs</code>, <code>x-ui.tab</code>"
+                >
+                    {{ __('Tabs belong here canonically because they switch between peer sections of the same page context. Cross-reference them from composite pages when surrounding layout matters.') }}
+                </x-ui.catalog-section>
 
                 <x-ui.tabs
                     :tabs="[
@@ -38,10 +40,12 @@
 
         <x-ui.card>
             <div class="space-y-4">
-                <div>
-                    <h2 class="text-sm font-medium text-ink">{{ __('Page Header and Filters') }}</h2>
-                    <p class="text-xs text-muted">{{ __('The page header should remain the main orientation anchor. Filters and supporting controls sit beneath it without competing for visual priority.') }}</p>
-                </div>
+                <x-ui.catalog-section
+                    :title="__('Page Header and Filters')"
+                    component="<code>x-ui.page-header</code>, <code>x-ui.search-input</code>, <code>x-ui.select</code>"
+                >
+                    {{ __('The page header should remain the main orientation anchor. Filters and supporting controls sit beneath it without competing for visual priority.') }}
+                </x-ui.catalog-section>
 
                 <div class="rounded-2xl border border-border-default bg-surface-page p-4">
                     <x-ui.page-header
@@ -72,10 +76,12 @@
 
     <x-ui.card>
         <div class="space-y-4">
-            <div>
-                <h2 class="text-sm font-medium text-ink">{{ __('Pagination') }}</h2>
-                <p class="text-xs text-muted">{{ __('Dense result sets should paginate by default. Pagination belongs near the records it controls, not isolated from the table.') }}</p>
-            </div>
+            <x-ui.catalog-section
+                :title="__('Pagination')"
+                component="<code>$paginator-&gt;links()</code>"
+            >
+                {{ __('Dense result sets should paginate by default. Pagination belongs near the records it controls, not isolated from the table.') }}
+            </x-ui.catalog-section>
 
             <div class="rounded-2xl border border-border-default bg-surface-card p-4">
                 {{ $demoPaginator->onEachSide(1)->links() }}

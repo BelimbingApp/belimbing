@@ -27,7 +27,7 @@ Livewire view folders in `resources/core/views/livewire/` mirror the sidebar nav
 1. **Component-First** — Reuse `resources/core/views/components/ui/*` (`x-ui.button`, `x-ui.input`, `x-ui.search-input`, etc.). If a UI pattern appears 2+ times, extract or extend an existing `x-ui.*` component. Never duplicate raw markup for controls that already have a component.
 2. **Responsive** — Desktop first; layouts must stay mobile-friendly. Use Tailwind breakpoints (`sm:`, `md:`, `lg:`). Avoid fixed widths that break on narrow viewports.
 3. **Accessible (WCAG 2.1)** — Contrast via semantic tokens. Focus: `focus:ring-2 focus:ring-accent focus:ring-offset-2`. Keyboard navigation for all interactive components. Focus management for modals. `aria-*` and semantic HTML where needed.
-4. **Performant** — Target 60fps / <16ms per frame. Animate only `transform` and `opacity` (never layout properties). Respect `prefers-reduced-motion`. Paginate tables/lists by default. Use `wire:key` in lists. Prefer `wire:model.live.debounce` over unthrottled updates. Use `wire:loading` + skeletons over spinners.
+4. **Performant** — Target 60fps / <16ms per frame. Animate only `transform` and `opacity` (never layout properties). Respect `prefers-reduced-motion`. Paginate tables/lists by default. Use `wire:key` in lists. Prefer `wire:model.live.debounce` over unthrottled updates. For loading states, prefer `wire:loading` with a lightweight skeleton/placeholder (or inline status) over indefinite spinners.
 5. **i18n-Ready** — All user-facing strings must use `__()`, `@lang`, or `trans_choice()`. No hard-coded English in Blade (except temporary scaffolding marked with a TODO). Design for variable-length translations: avoid fixed-width buttons/labels. Never concatenate translated fragments; translate whole sentences with placeholders.
 6. **Deep Components** — Components expose simple props (`variant`, `size`, `disabled`, etc.) and hide Tailwind complexity internally. Callers should not need to remember long class strings. Document component APIs (props/slots) for anything non-trivial.
 7. **Icon Consistency** — Always use `<x-icon>` for icons. Favor **Outline** variants (`heroicon-o-*`, 24x24) for primary UI elements and navigation. Use **Solid/Mini** variants (`heroicon-m-*`, 20x20 or 16x16) only for small inline actions or dense lists where the outline stroke might be too noisy. Never use raw `<svg>` tags for common icons; add them to `components/icon.blade.php` instead. When adding a new icon, search https://blade-ui-kit.com/blade-icons for the SVG path data.
@@ -159,7 +159,7 @@ When a needed primitive doesn't exist, create it in `resources/core/views/compon
 ## Elevating to Modern Sleek
 
 - **Layered depth** — Page: `bg-surface-page`. Cards/panels: `bg-surface-card` with `border-border-default` and `rounded-2xl shadow-sm`. Primary actions: `bg-accent` / `text-accent-on`.
-- **Motion** — Alpine.js for transitions and modals. Hover lift: `hover:-translate-y-0.5 transition-all duration-300`. Loading: skeleton with `animate-pulse` on a surface token. Respect `prefers-reduced-motion`.
+- **Motion** — Alpine.js for transitions and modals. Hover lift: `hover:-translate-y-0.5 transition-all duration-300`. Loading: prefer a lightweight skeleton/placeholder (`animate-pulse` on a surface token) or inline status rather than indefinite spinners. Respect `prefers-reduced-motion`.
 - **White space** — Sidebar: `bg-surface-sidebar`. Consistent 8px grid (`p-4`, `p-8`, `gap-6`).
 
 ## Examples

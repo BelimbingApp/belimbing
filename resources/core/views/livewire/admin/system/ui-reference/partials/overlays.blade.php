@@ -1,10 +1,12 @@
 <div class="space-y-section-gap">
     <x-ui.card>
         <div class="space-y-4">
-            <div>
-                <h2 class="text-sm font-medium text-ink">{{ __('Modal and Confirmation Behavior') }}</h2>
-                <p class="text-xs text-muted">{{ __('Overlays should interrupt cleanly: focused surface, clear dismissal, and actions that explain consequence before commitment.') }}</p>
-            </div>
+            <x-ui.catalog-section
+                :title="__('Modal and Confirmation Behavior')"
+                component="<code>x-ui.modal</code>, <code>x-ui.button</code>, <code>x-ui.alert</code>"
+            >
+                {{ __('Overlays should interrupt cleanly: focused surface, clear dismissal, and actions that explain consequence before commitment.') }}
+            </x-ui.catalog-section>
 
             <div class="flex flex-wrap gap-2">
                 <x-ui.button variant="primary" wire:click="$set('demoModalOpen', true)">{{ __('Open Standard Modal') }}</x-ui.button>

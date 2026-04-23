@@ -5,12 +5,9 @@
         <div class="px-6 py-4 border-b border-border-default">
             <h3 class="text-lg font-semibold text-ink">{{ $title }}</h3>
         </div>
-        <div class="p-card-inner">
-            {{ $slot }}
-        </div>
-    @else
-        <div class="p-card-inner">
-            {{ $slot }}
-        </div>
     @endif
+
+    <div class="p-card-inner">
+        {{ $slot }}
+    </div>
 </div>

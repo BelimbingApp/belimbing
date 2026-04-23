@@ -2,10 +2,12 @@
     <div class="grid gap-4 xl:grid-cols-2">
         <x-ui.card>
             <div class="space-y-4">
-                <div>
-                    <h2 class="text-sm font-medium text-ink">{{ __('Color Roles') }}</h2>
-                    <p class="text-xs text-muted">{{ __('Views should use semantic roles rather than raw palette classes. This page shows the current implemented roles from `tokens.css`.') }}</p>
-                </div>
+                <x-ui.catalog-section
+                    :title="__('Color Roles')"
+                    component="<code>tokens.css</code>"
+                >
+                    {{ __('Views should use semantic roles rather than raw palette classes. This page shows the current implemented roles from `tokens.css`.') }}
+                </x-ui.catalog-section>
 
                 <div class="grid gap-3 sm:grid-cols-2">
                     @foreach ($colorTokens as $token)
@@ -21,10 +23,12 @@
 
         <x-ui.card>
             <div class="space-y-4">
-                <div>
-                    <h2 class="text-sm font-medium text-ink">{{ __('Typography Roles') }}</h2>
-                    <p class="text-xs text-muted">{{ __('The system should read as compact and calm. The examples below show the intended hierarchy and tone.') }}</p>
-                </div>
+                <x-ui.catalog-section
+                    :title="__('Typography Roles')"
+                    component="<code>tokens.css</code>"
+                >
+                    {{ __('The system should read as compact and calm. The examples below show the intended hierarchy and tone.') }}
+                </x-ui.catalog-section>
 
                 <div class="space-y-4">
                     @foreach ($typeSamples as $sample)
@@ -41,10 +45,12 @@
     <div class="grid gap-4 xl:grid-cols-2">
         <x-ui.card>
             <div class="space-y-4">
-                <div>
-                    <h2 class="text-sm font-medium text-ink">{{ __('Spacing Rhythm') }}</h2>
-                    <p class="text-xs text-muted">{{ __('Density is controlled by semantic spacing tokens. Blade should reference the role, not hardcoded utility spacing for standard controls.') }}</p>
-                </div>
+                <x-ui.catalog-section
+                    :title="__('Spacing Rhythm')"
+                    component="<code>tokens.css</code>"
+                >
+                    {{ __('Density is controlled by semantic spacing tokens. Blade should reference the role, not hardcoded utility spacing for standard controls.') }}
+                </x-ui.catalog-section>
 
                 <div class="space-y-3">
                     @foreach ($spacingTokens as $token)
@@ -68,10 +74,12 @@
 
         <x-ui.card>
             <div class="space-y-4">
-                <div>
-                    <h2 class="text-sm font-medium text-ink">{{ __('Shape, Elevation, and Icons') }}</h2>
-                    <p class="text-xs text-muted">{{ __('Cards and controls should separate themselves through radius, border, and restrained shadow. Icons should favor outline variants except in dense inline contexts.') }}</p>
-                </div>
+                <x-ui.catalog-section
+                    :title="__('Shape, Elevation, and Icons')"
+                    component="<code>x-ui.card</code>, <code>x-icon</code>"
+                >
+                    {{ __('Cards and controls should separate themselves through radius, border, and restrained shadow. Icons should favor outline variants except in dense inline contexts.') }}
+                </x-ui.catalog-section>
 
                 <div class="grid gap-3 sm:grid-cols-2">
                     <div class="rounded-2xl border border-border-default bg-surface-card p-card-inner shadow-sm">

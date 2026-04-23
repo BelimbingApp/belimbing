@@ -1,10 +1,12 @@
 <div class="space-y-section-gap">
     <x-ui.card>
         <div class="space-y-4">
-            <div>
-                <h2 class="text-sm font-medium text-ink">{{ __('Index Page Assembly') }}</h2>
-                <p class="text-xs text-muted">{{ __('Composite pages are where drift usually appears. These patterns show how primitives should come together on real admin screens.') }}</p>
-            </div>
+            <x-ui.catalog-section
+                :title="__('Index Page Assembly')"
+                component="<code>x-ui.page-header</code>, <code>x-ui.search-input</code>, <code>x-ui.select</code>, <code>x-ui.badge</code>, <code>x-ui.icon-action</code>"
+            >
+                {{ __('Composite pages are where drift usually appears. These patterns show how primitives should come together on real admin screens.') }}
+            </x-ui.catalog-section>
 
             <div class="rounded-2xl border border-border-default bg-surface-page p-4">
                 <x-ui.page-header
@@ -67,10 +69,12 @@
     <div class="grid gap-4 xl:grid-cols-2">
         <x-ui.card>
             <div class="space-y-4">
-                <div>
-                    <h2 class="text-sm font-medium text-ink">{{ __('Form Page Assembly') }}</h2>
-                    <p class="text-xs text-muted">{{ __('Forms should keep labels, help text, validation, and actions in one calm vertical rhythm.') }}</p>
-                </div>
+                <x-ui.catalog-section
+                    :title="__('Form Page Assembly')"
+                    component="<code>x-ui.input</code>, <code>x-ui.combobox</code>, <code>x-ui.textarea</code>, <code>x-ui.button</code>"
+                >
+                    {{ __('Forms should keep labels, help text, validation, and actions in one calm vertical rhythm.') }}
+                </x-ui.catalog-section>
 
                 <x-ui.input id="ui-reference-form-name" :label="__('Reference Name')" :placeholder="__('Short and specific')" />
                 <x-ui.combobox
@@ -94,10 +98,12 @@
 
         <x-ui.card>
             <div class="space-y-4">
-                <div>
-                    <h2 class="text-sm font-medium text-ink">{{ __('Feedback Flow') }}</h2>
-                    <p class="text-xs text-muted">{{ __('A typical flow combines in-flow guidance, inline validation, and transient flash feedback after action completion.') }}</p>
-                </div>
+                <x-ui.catalog-section
+                    :title="__('Feedback Flow')"
+                    component="<code>x-ui.alert</code>, <code>x-ui.input</code>"
+                >
+                    {{ __('A typical flow combines in-flow guidance, inline validation, and transient flash feedback after action completion.') }}
+                </x-ui.catalog-section>
 
                 <x-ui.alert variant="info">
                     {{ __('Use inline guidance before the user acts, not only after an error occurs.') }}

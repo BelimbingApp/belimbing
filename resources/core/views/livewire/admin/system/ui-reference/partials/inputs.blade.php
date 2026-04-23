@@ -2,10 +2,12 @@
     <div class="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <x-ui.card>
             <div class="space-y-4">
-                <div>
-                    <h2 class="text-sm font-medium text-ink">{{ __('Choice Guidance') }}</h2>
-                    <p class="text-xs text-muted">{{ __('Choose the simplest control that still supports the user task. Searchable controls are not automatically better.') }}</p>
-                </div>
+                <x-ui.catalog-section
+                    :title="__('Choice Guidance')"
+                    component="<code>x-ui.card</code>"
+                >
+                    {{ __('Choose the simplest control that still supports the user task. Searchable controls are not automatically better.') }}
+                </x-ui.catalog-section>
 
                 <div class="grid gap-3 md:grid-cols-3">
                     <div class="rounded-2xl border border-border-default bg-surface-card p-4">
@@ -26,10 +28,12 @@
 
         <x-ui.card>
             <div class="space-y-3">
-                <div>
-                    <h2 class="text-sm font-medium text-ink">{{ __('Live State') }}</h2>
-                    <p class="text-xs text-muted">{{ __('The controls on this page are interactive. Compare the resulting values while you type and switch patterns.') }}</p>
-                </div>
+                <x-ui.catalog-section
+                    :title="__('Live State')"
+                    component="<code>Livewire</code>"
+                >
+                    {{ __('The controls on this page are interactive. Compare the resulting values while you type and switch patterns.') }}
+                </x-ui.catalog-section>
 
                 <dl class="space-y-2 text-sm">
                     <div class="flex items-center justify-between gap-4">
@@ -68,7 +72,10 @@
     <div class="grid gap-4 xl:grid-cols-2">
         <x-ui.card>
             <div class="space-y-4">
-                <h2 class="text-sm font-medium text-ink">{{ __('Text and Long-Form Inputs') }}</h2>
+                <x-ui.catalog-section
+                    :title="__('Text and Long-Form Inputs')"
+                    component="<code>x-ui.input</code>, <code>x-ui.search-input</code>, <code>x-ui.textarea</code>"
+                />
 
                 <x-ui.input
                     id="ui-reference-text-input"
@@ -106,7 +113,10 @@
 
         <x-ui.card>
             <div class="space-y-4">
-                <h2 class="text-sm font-medium text-ink">{{ __('Choice Controls') }}</h2>
+                <x-ui.catalog-section
+                    :title="__('Choice Controls')"
+                    component="<code>x-ui.select</code>, <code>x-ui.combobox</code>, <code>x-ui.checkbox</code>, <code>x-ui.radio</code>"
+                />
 
                 <x-ui.select
                     id="ui-reference-select"
