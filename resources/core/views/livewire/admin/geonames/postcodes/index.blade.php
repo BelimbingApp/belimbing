@@ -77,16 +77,15 @@
             </x-ui.card>
         @endif
 
-        <div
-            wire:loading.flex
-            wire:target="import,update"
-            class="flex items-center gap-3 p-4 bg-status-info-subtle border border-status-info-border rounded-2xl text-status-info"
-        >
-            <x-icon name="heroicon-o-arrow-path" class="w-5 h-5 shrink-0 animate-spin" />
-            <div class="flex-1">
-                <div class="text-sm font-medium">{{ __('Importing...') }}</div>
-                <p class="text-xs mt-1 opacity-75">{{ __('This may take several minutes. Do not close this page.') }}</p>
-            </div>
+        <div wire:loading wire:target="import,update">
+            <x-ui.alert
+                variant="info"
+                :title="__('Importing...')"
+                icon="heroicon-o-arrow-path"
+                icon-class="h-5 w-5 shrink-0 animate-spin"
+            >
+                <p class="text-xs opacity-75">{{ __('This may take several minutes. Do not close this page.') }}</p>
+            </x-ui.alert>
         </div>
 
         {{-- Country record counts --}}

@@ -164,7 +164,7 @@
                     @endif
 
                     <div class="mt-4">
-                        <x-action-message on="task-{{ $taskKey }}-saved" class="text-xs text-status-success" />
+                        <x-ui.action-message on="task-{{ $taskKey }}-saved" class="text-xs text-status-success" />
                     </div>
                 </x-ui.card>
             @endforeach

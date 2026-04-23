@@ -64,9 +64,6 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                 <tr
                                     wire:key="provider-{{ $provider->id }}"
                                     wire:click="toggleProvider({{ $provider->id }})"
-                                    x-data="{ flash: false }"
-                                    x-init="$wire.$on('priority-changed', (detail) => { const id = Array.isArray(detail) ? detail[0] : detail; if (id == {{ $provider->id }}) { flash = true; setTimeout(() => flash = false, 1800) } })"
-                                    :class="flash ? 'bg-accent/10' : ''"
                                     class="hover:bg-surface-subtle/50 transition-colors duration-800 cursor-pointer"
                                 >
                                     <td class="px-table-cell-x py-table-cell-y">
@@ -99,6 +96,11 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                                 </button>
                                             @endif
                                         </div>
+
+                                        <x-ui.action-message
+                                            on="provider-priority-saved-{{ $provider->id }}"
+                                            class="mt-1 text-[11px] text-status-success"
+                                        />
                                     </td>
                                     <td class="hidden md:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-xs text-muted font-mono truncate max-w-[200px]">{{ $provider->base_url }}</td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $provider->models_count }}</td>

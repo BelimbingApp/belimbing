@@ -1,4 +1,9 @@
-@props(['variant' => 'success'])
+@props([
+    'variant' => 'success',
+    'title' => null,
+    'icon' => null,
+    'iconClass' => 'h-5 w-5 shrink-0',
+])
 
 @php
 $config = match($variant) {
@@ -33,9 +38,20 @@ $config = match($variant) {
         'icon' => 'heroicon-o-check-circle',
     ],
 };
+
+$resolvedIcon = $icon ?: $config['icon'];
 @endphp
 
-<div {{ $attributes->class(["flex items-center gap-3 p-4 border rounded-2xl {$config['bg']} {$config['border']} {$config['text']}"]) }}>
-    <x-icon :name="$config['icon']" class="w-5 h-5 shrink-0" />
-    <span class="text-sm">{{ $slot }}</span>
+<div {{ $attributes->class(["flex items-start gap-2.5 p-card-inner border rounded-2xl {$config['bg']} {$config['border']} {$config['text']}"]) }}>
+    <x-icon :name="$resolvedIcon" class="{{ $iconClass }}" />
+
+    <div class="min-w-0 flex-1">
+        @if($title)
+            <div class="text-sm font-medium leading-snug">{{ $title }}</div>
+        @endif
+
+        <div @class(['text-sm leading-snug', 'mt-1' => (bool) $title])>
+            {{ $slot }}
+        </div>
+    </div>
 </div>

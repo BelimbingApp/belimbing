@@ -116,8 +116,11 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.checkbox` | Checkbox inputs |
 | `x-ui.radio` | Radio inputs |
 | `x-ui.alert` | Informational, warning, success, or danger notices |
-| `x-ui.flash` | Transient stacked flash notification message |
-| `x-ui.flash-stack` | Fixed-position flash stack wrapper |
+| `x-ui.banner` | Chrome-level persistent state banner (e.g., impersonation) |
+| `x-ui.inline-status` | Compact status feedback anchored to a control (checks, connectivity) |
+| `x-ui.action-message` | Lightweight transient confirmation near an action (e.g., Save) |
+| `x-ui.flash` | Transient stacked flash notification message (use when needed) |
+| `x-ui.flash-stack` | Fixed-position flash stack wrapper (use when needed) |
 | `x-ui.badge` | Status badges |
 | `x-ui.card` | Card containers |
 | `x-ui.modal` | Modal dialogs |

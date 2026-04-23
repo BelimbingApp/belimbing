@@ -115,7 +115,7 @@
                     @endif
                 </x-ui.tabs>
 
-                <x-action-message on="primary-saved" class="text-xs text-status-success" />
+                <x-ui.action-message on="primary-saved" class="text-xs text-status-success" />
             </x-ui.card>
 
             <x-ui.card>
@@ -176,7 +176,7 @@
                     @endif
                 </x-ui.tabs>
 
-                <x-action-message on="backup-saved" class="text-xs text-status-success" />
+                <x-ui.action-message on="backup-saved" class="text-xs text-status-success" />
             </x-ui.card>
         @elseif (! $licenseeExists)
             <x-ui.alert variant="info">

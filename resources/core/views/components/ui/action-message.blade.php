@@ -13,3 +13,4 @@
     <template x-if="msg"><span x-text="msg"></span></template>
     <template x-if="!msg">{{ $slot->isEmpty() ? __('Saved.') : $slot }}</template>
 </div>
+

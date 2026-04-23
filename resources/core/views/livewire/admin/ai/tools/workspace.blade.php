@@ -109,30 +109,29 @@ use App\Modules\Core\AI\Livewire\Tools\Workspace;
 
                                 @if($tryItIsError)
                                     {{-- Error result with structured display --}}
-                                    <div class="rounded-lg border border-status-danger-border bg-status-danger-subtle p-3 space-y-2">
-                                        <div class="flex items-start gap-2">
-                                            <x-icon name="heroicon-o-exclamation-triangle" class="w-4 h-4 text-status-danger shrink-0 mt-0.5" />
-                                            <pre class="text-xs text-ink whitespace-pre-wrap break-words font-mono flex-1">{{ $tryItResult }}</pre>
+                                    <x-ui.alert variant="danger" class="rounded-lg">
+                                        <div class="space-y-2">
+                                            <pre class="text-xs text-ink whitespace-pre-wrap break-words font-mono">{{ $tryItResult }}</pre>
+
+                                            @if($tryItErrorPayload && isset($tryItErrorPayload['hint']))
+                                                <p class="text-xs text-muted">{{ $tryItErrorPayload['hint'] }}</p>
+                                            @endif
+
+                                            @if($tryItErrorPayload && isset($tryItErrorPayload['action']))
+                                                <div>
+                                                    <x-ui.button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        x-data
+                                                        x-on:click="$dispatch('open-agent-chat', { prompt: {{ json_encode($tryItErrorPayload['action']['suggested_prompt']) }} })"
+                                                    >
+                                                        <x-icon name="heroicon-o-chat-bubble-left-ellipsis" class="w-4 h-4" />
+                                                        {{ $tryItErrorPayload['action']['label'] }}
+                                                    </x-ui.button>
+                                                </div>
+                                            @endif
                                         </div>
-
-                                        @if($tryItErrorPayload && isset($tryItErrorPayload['hint']))
-                                            <p class="text-xs text-muted ml-6">{{ $tryItErrorPayload['hint'] }}</p>
-                                        @endif
-
-                                        @if($tryItErrorPayload && isset($tryItErrorPayload['action']))
-                                            <div class="ml-6">
-                                                <x-ui.button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    x-data
-                                                    x-on:click="$dispatch('open-agent-chat', { prompt: {{ json_encode($tryItErrorPayload['action']['suggested_prompt']) }} })"
-                                                >
-                                                    <x-icon name="heroicon-o-chat-bubble-left-ellipsis" class="w-4 h-4" />
-                                                    {{ $tryItErrorPayload['action']['label'] }}
-                                                </x-ui.button>
-                                            </div>
-                                        @endif
-                                    </div>
+                                    </x-ui.alert>
                                 @else
                                     {{-- Success result --}}
                                     <div class="rounded-lg bg-surface-subtle border border-border-default p-3 max-h-64 overflow-y-auto">
@@ -143,9 +142,10 @@ use App\Modules\Core\AI\Livewire\Tools\Workspace;
                         @endif
 
                         @if($verificationError)
-                            <div class="mt-4 rounded-lg border border-status-warning-border bg-status-warning-subtle p-3" role="alert">
-                                <p class="text-sm font-medium text-status-warning">{{ __('Verification status could not be saved') }}</p>
-                                <p class="text-xs text-muted mt-1">{{ $verificationError }}</p>
+                            <div class="mt-4">
+                                <x-ui.alert variant="warning" :title="__('Verification status could not be saved')" class="rounded-lg">
+                                    <p class="text-xs text-muted">{{ $verificationError }}</p>
+                                </x-ui.alert>
                             </div>
                         @endif
                     </x-ui.card>
@@ -296,9 +296,9 @@ use App\Modules\Core\AI\Livewire\Tools\Workspace;
 
                             @if($configSaved)
                                 @if($configSaveError)
-                                    <div class="rounded-lg border border-status-warning-border bg-status-warning-subtle p-3" role="alert">
-                                        <p class="text-xs text-status-warning">{{ $configSaved }}</p>
-                                    </div>
+                                    <x-ui.alert variant="warning" :title="$configSaved" class="rounded-lg">
+                                        <p class="text-xs opacity-75">{{ __('Please review the configuration fields above and try saving again.') }}</p>
+                                    </x-ui.alert>
                                 @else
                                     <p class="text-xs text-status-success text-center">{{ $configSaved }}</p>
                                 @endif

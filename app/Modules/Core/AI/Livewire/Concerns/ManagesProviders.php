@@ -199,7 +199,7 @@ trait ManagesProviders
 
         if ($above) {
             $provider->swapPriority($above);
-            $this->dispatch('priority-changed', $providerId);
+            $this->dispatch('provider-priority-saved-'.$providerId, message: __('Priority updated.'));
         }
     }
 

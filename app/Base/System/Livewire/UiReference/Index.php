@@ -37,6 +37,11 @@ class Index extends Component
 
     public string $radioValue = 'combobox';
 
+    public function demoActionMessage(): void
+    {
+        $this->dispatch('ui-reference-action-message', message: __('Saved.'));
+    }
+
     public function mount(?string $section = null): void
     {
         $this->section = UiReferenceSection::tryFrom($section ?? UiReferenceSection::default()->value)?->value

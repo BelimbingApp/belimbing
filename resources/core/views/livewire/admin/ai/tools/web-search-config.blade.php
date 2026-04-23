@@ -202,9 +202,9 @@
 
         @if($configSaved)
             @if($configSaveError)
-                <div class="rounded-lg border border-status-warning-border bg-status-warning-subtle p-3" role="alert">
-                    <p class="text-xs text-status-warning">{{ $configSaved }}</p>
-                </div>
+                <x-ui.alert variant="warning" :title="$configSaved">
+                    <p class="text-xs opacity-75">{{ __('Please review the configuration fields above and try saving again.') }}</p>
+                </x-ui.alert>
             @else
                 <p class="text-xs text-status-success text-center">{{ $configSaved }}</p>
             @endif

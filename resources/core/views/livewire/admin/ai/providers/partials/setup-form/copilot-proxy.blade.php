@@ -17,23 +17,28 @@
             <span wire:init="checkBaseUrl" class="hidden" aria-hidden="true"></span>
         @endif
         @if($baseUrlStatus !== null)
-            <div class="mt-1.5 flex items-center gap-1.5">
+            <div class="mt-1.5">
                 @if($baseUrlStatus === 'checking')
-                    <div class="h-3 w-3 animate-spin rounded-full border border-accent border-t-transparent"></div>
-                    <span class="text-xs text-muted">{{ $baseUrlStatusMessage }}</span>
+                    <x-ui.inline-status variant="info">
+                        <x-slot name="icon">
+                            <div class="h-3 w-3 animate-spin rounded-full border border-accent border-t-transparent"></div>
+                        </x-slot>
+                        <span class="text-xs text-muted">{{ $baseUrlStatusMessage }}</span>
+                    </x-ui.inline-status>
                 @elseif($baseUrlStatus === 'online')
-                    <x-icon name="heroicon-o-check-circle" class="h-3.5 w-3.5 text-status-success" />
-                    <span class="text-xs text-status-success">{{ $baseUrlStatusMessage }}</span>
+                    <x-ui.inline-status variant="success" :text="$baseUrlStatusMessage" />
                 @elseif($baseUrlStatus === 'offline')
-                    <x-icon name="heroicon-o-x-circle" class="h-3.5 w-3.5 text-status-error" />
-                    <span class="text-xs text-status-error">{{ $baseUrlStatusMessage }}</span>
-                    <button
-                        type="button"
-                        wire:click="checkBaseUrl"
-                        class="ml-1 rounded text-xs text-accent hover:underline focus:ring-2 focus:ring-accent focus:ring-offset-1"
-                    >
-                        {{ __('Retry') }}
-                    </button>
+                    <x-ui.inline-status variant="danger" :text="$baseUrlStatusMessage">
+                        <x-slot name="action">
+                            <button
+                                type="button"
+                                wire:click="checkBaseUrl"
+                                class="ml-1 rounded text-xs text-accent hover:underline focus:ring-2 focus:ring-accent focus:ring-offset-1"
+                            >
+                                {{ __('Retry') }}
+                            </button>
+                        </x-slot>
+                    </x-ui.inline-status>
                 @endif
             </div>
         @endif
