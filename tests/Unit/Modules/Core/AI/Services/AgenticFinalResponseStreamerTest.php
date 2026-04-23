@@ -19,6 +19,8 @@ use Illuminate\Foundation\Testing\TestCase;
 
 uses(TestCase::class);
 
+const AGENTIC_FINAL_STREAM_BASE_URL = 'https://api.example.test';
+
 it('prepends client actions when the final stream ends without content deltas', function (): void {
     $llmClient = Mockery::mock(LlmClient::class);
     $llmClient->shouldReceive('chatStream')
@@ -65,7 +67,7 @@ it('prepends client actions when the final stream ends without content deltas', 
         ],
         [
             'api_key' => 'test-key',
-            'base_url' => 'https://api.example.test',
+            'base_url' => AGENTIC_FINAL_STREAM_BASE_URL,
         ],
         [
             'api_messages' => [
@@ -130,7 +132,7 @@ it('emits an error event and records failure when the final stream returns a run
         ],
         [
             'api_key' => 'test-key',
-            'base_url' => 'https://api.example.test',
+            'base_url' => AGENTIC_FINAL_STREAM_BASE_URL,
         ],
         [
             'api_messages' => [
@@ -192,7 +194,7 @@ it('emits an empty-response error when the final stream completes without conten
         ],
         [
             'api_key' => 'test-key',
-            'base_url' => 'https://api.example.test',
+            'base_url' => AGENTIC_FINAL_STREAM_BASE_URL,
         ],
         [
             'api_messages' => [

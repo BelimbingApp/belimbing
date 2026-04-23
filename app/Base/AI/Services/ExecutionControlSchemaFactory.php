@@ -17,6 +17,8 @@ use App\Base\AI\Services\ProviderMapping\ProviderCapabilityRegistry;
 
 final class ExecutionControlSchemaFactory
 {
+    private const SYSTEM_DEFAULT = 'System default';
+
     public function __construct(
         private readonly ProviderCapabilityRegistry $capabilities,
     ) {}
@@ -71,10 +73,12 @@ final class ExecutionControlSchemaFactory
                         path: 'limits.max_output_tokens',
                         label: 'Max output tokens',
                         description: 'Upper bound for model output length.',
-                        currentValue: $controls->limits->maxOutputTokens,
-                        defaultValue: $defaults->limits->maxOutputTokens,
-                        min: 1,
-                        step: 1,
+                        options: [
+                            'current_value' => $controls->limits->maxOutputTokens,
+                            'default_value' => $defaults->limits->maxOutputTokens,
+                            'min' => 1,
+                            'step' => 1,
+                        ],
                     ),
                 ],
             ],
@@ -88,14 +92,16 @@ final class ExecutionControlSchemaFactory
                         description: $fixedSampling === null
                             ? 'Controls output randomness for this model.'
                             : 'The provider enforces the applied value shown here for the current reasoning mode.',
-                        currentValue: $controls->sampling->temperature,
-                        defaultValue: $defaults->sampling->temperature,
-                        min: 0,
-                        max: 2,
-                        step: 0.1,
-                        editable: $fixedSampling === null,
-                        displayValue: $fixedSampling?->temperature,
-                        readOnlyReason: $fixedSampling === null ? null : 'Provider-enforced value',
+                        options: [
+                            'current_value' => $controls->sampling->temperature,
+                            'default_value' => $defaults->sampling->temperature,
+                            'min' => 0,
+                            'max' => 2,
+                            'step' => 0.1,
+                            'editable' => $fixedSampling === null,
+                            'display_value' => $fixedSampling?->temperature,
+                            'read_only_reason' => $fixedSampling === null ? null : 'Provider-enforced value',
+                        ],
                     ),
                 ],
             ],
@@ -181,7 +187,7 @@ final class ExecutionControlSchemaFactory
                 currentValue: $controls->reasoning->effort?->value,
                 defaultValue: $defaults->reasoning->effort?->value,
                 options: array_merge(
-                    [['value' => '', 'label' => 'System default']],
+                    [['value' => '', 'label' => self::SYSTEM_DEFAULT]],
                     array_map(
                         fn (ReasoningEffort $effort): array => ['value' => $effort->value, 'label' => ucfirst($effort->value)],
                         $capabilities->supportedReasoningEffort,
@@ -195,10 +201,12 @@ final class ExecutionControlSchemaFactory
                 path: 'reasoning.budget',
                 label: 'Reasoning budget',
                 description: 'Optional token budget for provider-side reasoning work.',
-                currentValue: $controls->reasoning->budget,
-                defaultValue: $capabilities->defaultReasoningBudget,
-                min: 1,
-                step: 1,
+                options: [
+                    'current_value' => $controls->reasoning->budget,
+                    'default_value' => $capabilities->defaultReasoningBudget,
+                    'min' => 1,
+                    'step' => 1,
+                ],
             );
         }
 
@@ -249,35 +257,41 @@ final class ExecutionControlSchemaFactory
     }
 
     /**
+     * @param  array{
+     *     current_value?: int|float|null,
+     *     default_value?: int|float|null,
+     *     min?: ?int,
+     *     max?: ?int,
+     *     step?: int|float|null,
+     *     editable?: bool,
+     *     display_value?: int|float|null,
+     *     read_only_reason?: ?string
+     * }  $options
      * @return array<string, mixed>
      */
     private function numberControl(
         string $path,
         string $label,
         string $description,
-        int|float|null $currentValue,
-        int|float|null $defaultValue,
-        ?int $min = null,
-        ?int $max = null,
-        int|float|null $step = null,
-        bool $editable = true,
-        int|float|null $displayValue = null,
-        ?string $readOnlyReason = null,
+        array $options,
     ): array {
+        $currentValue = $options['current_value'] ?? null;
+        $displayValue = $options['display_value'] ?? $currentValue;
+
         return [
             'path' => $path,
             'type' => 'number',
             'label' => $label,
             'description' => $description,
-            'editable' => $editable,
+            'editable' => $options['editable'] ?? true,
             'current_value' => $currentValue,
-            'default_value' => $defaultValue,
-            'display_value' => $displayValue ?? $currentValue,
-            'display_text' => $this->formatValue($displayValue ?? $currentValue),
-            'read_only_reason' => $readOnlyReason,
-            'min' => $min,
-            'max' => $max,
-            'step' => $step,
+            'default_value' => $options['default_value'] ?? null,
+            'display_value' => $displayValue,
+            'display_text' => $this->formatValue($displayValue),
+            'read_only_reason' => $options['read_only_reason'] ?? null,
+            'min' => $options['min'] ?? null,
+            'max' => $options['max'] ?? null,
+            'step' => $options['step'] ?? null,
         ];
     }
 
@@ -336,7 +350,7 @@ final class ExecutionControlSchemaFactory
     private function labelForOption(array $options, ?string $value): string
     {
         if ($value === null || $value === '') {
-            return 'System default';
+            return self::SYSTEM_DEFAULT;
         }
 
         foreach ($options as $option) {
@@ -369,32 +383,22 @@ final class ExecutionControlSchemaFactory
     private function formatValue(mixed $value): string
     {
         if ($value === null || $value === '') {
-            return 'System default';
+            return self::SYSTEM_DEFAULT;
         }
 
-        if (is_bool($value)) {
-            return $value ? 'Enabled' : 'Disabled';
-        }
-
-        if (is_int($value)) {
-            return (string) $value;
-        }
-
-        if (is_float($value)) {
-            return $this->formatNumber($value);
-        }
-
-        if ($value instanceof ToolChoiceMode) {
-            return ucfirst($value->value);
-        }
-
-        return (string) $value;
+        return match (true) {
+            is_bool($value) => $value ? 'Enabled' : 'Disabled',
+            is_int($value) => (string) $value,
+            is_float($value) => $this->formatNumber($value),
+            $value instanceof ToolChoiceMode => ucfirst($value->value),
+            default => (string) $value,
+        };
     }
 
     private function formatNumber(?float $value): string
     {
         if ($value === null) {
-            return 'System default';
+            return self::SYSTEM_DEFAULT;
         }
 
         return rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');

@@ -26,6 +26,8 @@ final readonly class MutationResult
     ) {}
 }
 
+final class MutationCheckException extends RuntimeException {}
+
 /**
  * @return list<MutationCase>
  */
@@ -66,7 +68,7 @@ function replaceOnce(string $content, string $search, string $replace, string $f
     $count = substr_count($content, $search);
 
     if ($count !== 1) {
-        throw new RuntimeException("Expected to find exactly one mutation target in {$file}; found {$count}.");
+        throw new MutationCheckException("Expected to find exactly one mutation target in {$file}; found {$count}.");
     }
 
     return str_replace($search, $replace, $content);
@@ -94,7 +96,7 @@ function runMutationChecks(): array
         $original = file_get_contents($case->file);
 
         if ($original === false) {
-            throw new RuntimeException("Could not read {$case->file}.");
+            throw new MutationCheckException("Could not read {$case->file}.");
         }
 
         $mutated = replaceOnce($original, $case->search, $case->replace, $case->file);

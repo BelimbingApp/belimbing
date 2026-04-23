@@ -49,31 +49,14 @@ final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
         $reasoningContent = $choice['reasoning_content'] ?? null;
         $hasToolCalls = is_array($toolCalls) && count($toolCalls) > 0;
         $usage = $data['usage'] ?? [];
-
-        if (($content === '' || $content === null) && ! $hasToolCalls) {
-            return [
-                'runtime_error' => AiRuntimeError::fromType(
-                    AiErrorType::EmptyResponse,
-                    "Model \"{$model}\" produced no text content",
-                    'The model may be unavailable for this provider key or endpoint.',
-                    latencyMs: $latencyMs,
-                ),
-                'latency_ms' => $latencyMs,
-            ];
-        }
-
-        $result = [
-            'content' => $content,
-            'usage' => [
-                'prompt_tokens' => $usage['prompt_tokens'] ?? null,
-                'completion_tokens' => $usage['completion_tokens'] ?? null,
-            ],
-            'latency_ms' => $latencyMs,
-        ];
-
-        if ($hasToolCalls) {
-            $result['tool_calls'] = $toolCalls;
-        }
+        $result = $this->chatCompletionsResponseResult(
+            $content,
+            $hasToolCalls,
+            $toolCalls,
+            $usage,
+            $latencyMs,
+            $model,
+        );
 
         if (is_string($reasoningContent) && $reasoningContent !== '') {
             $result['reasoning_content'] = $reasoningContent;
@@ -169,5 +152,46 @@ final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
 
             $finishReason = '__done__';
         }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>|null  $toolCalls
+     * @param  array<string, mixed>  $usage
+     * @return array<string, mixed>
+     */
+    private function chatCompletionsResponseResult(
+        mixed $content,
+        bool $hasToolCalls,
+        ?array $toolCalls,
+        array $usage,
+        int $latencyMs,
+        string $model,
+    ): array {
+        if (($content === '' || $content === null) && ! $hasToolCalls) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::EmptyResponse,
+                    "Model \"{$model}\" produced no text content",
+                    'The model may be unavailable for this provider key or endpoint.',
+                    latencyMs: $latencyMs,
+                ),
+                'latency_ms' => $latencyMs,
+            ];
+        }
+
+        $result = [
+            'content' => $content,
+            'usage' => [
+                'prompt_tokens' => $usage['prompt_tokens'] ?? null,
+                'completion_tokens' => $usage['completion_tokens'] ?? null,
+            ],
+            'latency_ms' => $latencyMs,
+        ];
+
+        if ($hasToolCalls) {
+            $result['tool_calls'] = $toolCalls;
+        }
+
+        return $result;
     }
 }

@@ -5,6 +5,8 @@ use App\Modules\Core\Geonames\Models\Country;
 use App\Modules\Core\User\Models\User;
 use Livewire\Livewire;
 
+const ADDRESS_UI_WAREHOUSE_LINE = '88 River Road';
+
 test('guests are redirected to login from addresses pages', function (): void {
     $this->get(route('admin.addresses.index'))->assertRedirect(route('login'));
     $this->get(route('admin.addresses.create'))->assertRedirect(route('login'));
@@ -42,7 +44,7 @@ test('address can be created from create page component', function (): void {
 
     Livewire::test('admin.addresses.create')
         ->set('label', 'Warehouse')
-        ->set('line1', '88 River Road')
+        ->set('line1', ADDRESS_UI_WAREHOUSE_LINE)
         ->set('countryIso', 'us')
         ->set('locality', 'Boston')
         ->set('postcode', '02110')
@@ -52,7 +54,7 @@ test('address can be created from create page component', function (): void {
 
     $address = Address::query()
         ->where('label', 'Warehouse')
-        ->where('line1', '88 River Road')
+        ->where('line1', ADDRESS_UI_WAREHOUSE_LINE)
         ->latest('id')
         ->first();
 
@@ -61,7 +63,7 @@ test('address can be created from create page component', function (): void {
         ->and($address->label)
         ->toBe('Warehouse')
         ->and($address->line1)
-        ->toBe('88 River Road')
+        ->toBe(ADDRESS_UI_WAREHOUSE_LINE)
         ->and($address->locality)
         ->toBe('Boston')
         ->and($address->postcode)

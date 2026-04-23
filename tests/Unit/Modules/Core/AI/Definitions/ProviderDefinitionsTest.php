@@ -24,6 +24,7 @@ const PDT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
 const PDT_OLLAMA_BASE_URL = 'http://localhost:11434';
 const PDT_COPILOT_PROXY_BASE_URL = 'http://localhost:1337/v1';
 const PDT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
+const PDT_QWEN_BASE_URL = 'https://portal.qwen.ai/v1';
 
 // ── GenericApiKeyDefinition ──
 

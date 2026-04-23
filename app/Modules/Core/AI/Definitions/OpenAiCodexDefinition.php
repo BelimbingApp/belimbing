@@ -104,7 +104,7 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
         $accountId = (string) ($provider->credentials[self::CRED_ACCOUNT_ID] ?? '');
 
         if ($accessToken === '') {
-            throw new \RuntimeException('OpenAI Codex is not connected.');
+            throw new OpenAiCodexRuntimeResolutionException('OpenAI Codex is not connected.');
         }
 
         if ($expiresAt !== '' && $refreshToken !== '' && $this->isExpiredOrNearExpiry($expiresAt, skewSeconds: 60)) {
@@ -115,7 +115,7 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
         }
 
         if ($accountId === '') {
-            throw new \RuntimeException('OpenAI Codex is missing the ChatGPT account ID. Reconnect the provider.');
+            throw new OpenAiCodexRuntimeResolutionException('OpenAI Codex is missing the ChatGPT account ID. Reconnect the provider.');
         }
 
         return new ResolvedProviderConfig(
@@ -167,3 +167,5 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
         return time() >= ($ts - $skewSeconds);
     }
 }
+
+final class OpenAiCodexRuntimeResolutionException extends \RuntimeException {}

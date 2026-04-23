@@ -118,8 +118,7 @@ class ModelDiscoveryService
         array $discovered,
         bool $authoritative = false,
         string $source = 'provider_api',
-    ): array
-    {
+    ): array {
         if ($discovered === []) {
             return ['added' => 0, 'updated' => 0, 'total' => 0, 'deactivated' => 0, 'source' => $source];
         }
@@ -264,21 +263,6 @@ class ModelDiscoveryService
         if ($candidate instanceof AiProviderModel) {
             $candidate->setAsDefault();
         }
-    }
-
-    /**
-     * @param  list<string>  $discoveredIds
-     */
-    private function deactivateMissingModels(AiProvider $provider, array $discoveredIds): int
-    {
-        return AiProviderModel::query()
-            ->where('ai_provider_id', $provider->id)
-            ->whereNotIn('model_id', $discoveredIds)
-            ->where('is_active', true)
-            ->update([
-                'is_active' => false,
-                'is_default' => false,
-            ]);
     }
 
     /**

@@ -79,7 +79,7 @@ final readonly class GenericOAuthDefinition implements ProviderDefinition
 
     public function resolveRuntime(AiProvider $provider): ResolvedProviderConfig
     {
-        throw new \RuntimeException('This provider requires a dedicated OAuth sign-in flow. Belimbing does not implement a generic OAuth runtime for it yet.');
+        throw new GenericOAuthRuntimeResolutionException('This provider requires a dedicated OAuth sign-in flow. Belimbing does not implement a generic OAuth runtime for it yet.');
     }
 
     public function discoverModels(AiProvider $provider): ?array
@@ -87,3 +87,5 @@ final readonly class GenericOAuthDefinition implements ProviderDefinition
         return [];
     }
 }
+
+final class GenericOAuthRuntimeResolutionException extends \RuntimeException {}
