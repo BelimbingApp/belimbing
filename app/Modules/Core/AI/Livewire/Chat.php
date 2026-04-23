@@ -9,6 +9,7 @@ use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Modules\Core\AI\DTO\Message;
+use App\Modules\Core\AI\DTO\Session;
 use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesStreaming;
@@ -144,31 +145,13 @@ class Chat extends Component
         $agentExists = Employee::query()->whereKey($this->employeeId)->exists();
         $agentActivated = $this->isAgentActivated();
 
-        $sessions = [];
-        $messages = [];
-        $sessionUsage = null;
-        $hasPendingDelegations = false;
-        $activeTurnsBySession = [];
-
-        if ($agentActivated) {
-            $sessions = app(SessionManager::class)->list($this->employeeId);
-            $activeTurnsBySession = $this->activeTurnsBySessionForCurrentUser();
-        }
-
-        $sessionFallbackBannerAttempt = null;
-
-        if ($agentActivated && $this->selectedSessionId !== null) {
-            $messageManager = app(MessageManager::class);
-            $messages = $messageManager->read($this->employeeId, $this->selectedSessionId);
-            $sessionUsage = $messageManager->sessionUsage($this->employeeId, $this->selectedSessionId);
-
-            $sessionFallbackBannerAttempt = TranscriptFallbackBannerAttemptResolver::latestFailureAttempt($messages);
-
-            if ($this->employeeId === Employee::LARA_ID && is_int(auth()->id())) {
-                $hasPendingDelegations = app(OperationsDispatchService::class)
-                    ->hasPendingAgentTaskForSession(auth()->id(), $this->selectedSessionId);
-            }
-        }
+        $state = $this->resolveRenderState($agentActivated);
+        $sessions = $state['sessions'];
+        $messages = $state['messages'];
+        $sessionUsage = $state['sessionUsage'];
+        $hasPendingDelegations = $state['hasPendingDelegations'];
+        $activeTurnsBySession = $state['activeTurnsBySession'];
+        $sessionFallbackBannerAttempt = $state['sessionFallbackBannerAttempt'];
 
         $showSessionFallbackBanner = $sessionFallbackBannerAttempt !== null
             && $this->shouldShowSessionFallbackBanner($sessionFallbackBannerAttempt);
@@ -184,9 +167,7 @@ class Chat extends Component
 
         $canAttach = $this->canAttachFiles();
 
-        $quickActions = ($agentActivated && $messages === [])
-            ? app(QuickActionRegistry::class)->forRoute(request()->route()?->getName())
-            : [];
+        $quickActions = $this->quickActions($agentActivated, $messages);
 
         $settingsUrl = $this->settingsUrl();
         $selectedSessionActiveTurn = $this->selectedSessionId !== null
@@ -194,7 +175,109 @@ class Chat extends Component
             : null;
         $activeTurnCount = count($activeTurnsBySession);
 
-        $messagesWithUi = array_map(function (Message $message): Message {
+        $messagesWithUi = $this->mapMessagesWithUi($messages);
+
+        $phaseLabels = $this->phaseLabels();
+
+        return view('livewire.ai.chat', [
+            'agentExists' => $agentExists,
+            'agentActivated' => $agentActivated,
+            'agentIdentity' => $this->agentIdentity(),
+            'sessions' => $sessions,
+            'messages' => $messagesWithUi,
+            'settingsUrl' => $settingsUrl,
+            'canSelectModel' => $this->canSelectModel(),
+            'canAttachFiles' => $canAttach,
+            'availableModels' => $this->canSelectModel() ? $this->availableModels() : [],
+            'currentModel' => $this->resolveCurrentModelLabel(),
+            'sessionUsage' => $sessionUsage,
+            'hasPendingDelegations' => $hasPendingDelegations,
+            'markdown' => $markdown,
+            'quickActions' => $quickActions,
+            'activeTurnsBySession' => $activeTurnsBySession,
+            'selectedSessionActiveTurn' => $selectedSessionActiveTurn,
+            'activeTurnCount' => $activeTurnCount,
+            'hasActiveTurns' => $activeTurnCount > 0,
+            'showSessionFallbackBanner' => $showSessionFallbackBanner,
+            'sessionFallbackBannerAttempt' => $sessionFallbackBannerAttempt,
+            'phaseLabels' => $phaseLabels,
+            'canAccessControlPlane' => $canAccessControlPlane,
+            'sessionTurnTargets' => $sessionTurnTargets,
+            'selectedSessionTurnTarget' => $selectedSessionTurnTarget,
+        ]);
+    }
+
+    /**
+     * @return array{
+     *     sessions: list<Session>,
+     *     messages: list<Message>,
+     *     sessionUsage: mixed,
+     *     hasPendingDelegations: bool,
+     *     activeTurnsBySession: array<string, array{turnId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, status: string}>,
+     *     sessionFallbackBannerAttempt: array<string, mixed>|null
+     * }
+     */
+    private function resolveRenderState(bool $agentActivated): array
+    {
+        $sessions = [];
+        $messages = [];
+        $sessionUsage = null;
+        $hasPendingDelegations = false;
+        $activeTurnsBySession = [];
+        $sessionFallbackBannerAttempt = null;
+
+        if (! $agentActivated) {
+            return compact(
+                'sessions',
+                'messages',
+                'sessionUsage',
+                'hasPendingDelegations',
+                'activeTurnsBySession',
+                'sessionFallbackBannerAttempt',
+            );
+        }
+
+        $sessions = app(SessionManager::class)->list($this->employeeId);
+        $activeTurnsBySession = $this->activeTurnsBySessionForCurrentUser();
+
+        if ($this->selectedSessionId === null) {
+            return compact(
+                'sessions',
+                'messages',
+                'sessionUsage',
+                'hasPendingDelegations',
+                'activeTurnsBySession',
+                'sessionFallbackBannerAttempt',
+            );
+        }
+
+        $messageManager = app(MessageManager::class);
+        $messages = $messageManager->read($this->employeeId, $this->selectedSessionId);
+        $sessionUsage = $messageManager->sessionUsage($this->employeeId, $this->selectedSessionId);
+        $sessionFallbackBannerAttempt = TranscriptFallbackBannerAttemptResolver::latestFailureAttempt($messages);
+
+        if ($this->employeeId === Employee::LARA_ID && is_int(auth()->id())) {
+            $hasPendingDelegations = app(OperationsDispatchService::class)
+                ->hasPendingAgentTaskForSession(auth()->id(), $this->selectedSessionId);
+        }
+
+        return compact(
+            'sessions',
+            'messages',
+            'sessionUsage',
+            'hasPendingDelegations',
+            'activeTurnsBySession',
+            'sessionFallbackBannerAttempt',
+        );
+    }
+
+    /**
+     * @param  list<Message>  $messages
+     * @return list<Message>
+     */
+    private function mapMessagesWithUi(array $messages): array
+    {
+        return array_map(function (Message $message): Message {
             $attachments = $message->getMetaArray('attachments', []);
             if ($attachments === []) {
                 return new Message(
@@ -245,47 +328,36 @@ class Chat extends Component
                 type: $message->type,
             );
         }, $messages);
+    }
 
-        $phaseLabels = array_merge(
-            array_reduce(
-                TurnPhase::cases(),
-                function (array $labels, TurnPhase $phase): array {
-                    $labels[$phase->value] = __($phase->label());
+    /**
+     * @param  list<Message>  $messages
+     * @return list<array<string, mixed>>
+     */
+    private function quickActions(bool $agentActivated, array $messages): array
+    {
+        if (! $agentActivated || $messages !== []) {
+            return [];
+        }
 
-                    return $labels;
-                },
-                [],
-            ),
-            // Not a phase; represents TurnStatus::Booting.
-            ['booting' => __('Starting…')],
-        );
+        return app(QuickActionRegistry::class)->forRoute(request()->route()?->getName());
+    }
 
-        return view('livewire.ai.chat', [
-            'agentExists' => $agentExists,
-            'agentActivated' => $agentActivated,
-            'agentIdentity' => $this->agentIdentity(),
-            'sessions' => $sessions,
-            'messages' => $messagesWithUi,
-            'settingsUrl' => $settingsUrl,
-            'canSelectModel' => $this->canSelectModel(),
-            'canAttachFiles' => $canAttach,
-            'availableModels' => $this->canSelectModel() ? $this->availableModels() : [],
-            'currentModel' => $this->resolveCurrentModelLabel(),
-            'sessionUsage' => $sessionUsage,
-            'hasPendingDelegations' => $hasPendingDelegations,
-            'markdown' => $markdown,
-            'quickActions' => $quickActions,
-            'activeTurnsBySession' => $activeTurnsBySession,
-            'selectedSessionActiveTurn' => $selectedSessionActiveTurn,
-            'activeTurnCount' => $activeTurnCount,
-            'hasActiveTurns' => $activeTurnCount > 0,
-            'showSessionFallbackBanner' => $showSessionFallbackBanner,
-            'sessionFallbackBannerAttempt' => $sessionFallbackBannerAttempt,
-            'phaseLabels' => $phaseLabels,
-            'canAccessControlPlane' => $canAccessControlPlane,
-            'sessionTurnTargets' => $sessionTurnTargets,
-            'selectedSessionTurnTarget' => $selectedSessionTurnTarget,
-        ]);
+    /**
+     * @return array<string, string>
+     */
+    private function phaseLabels(): array
+    {
+        $labels = [];
+
+        foreach (TurnPhase::cases() as $phase) {
+            $labels[$phase->value] = __($phase->label());
+        }
+
+        // Not a phase; represents TurnStatus::Booting.
+        $labels['booting'] = __('Starting…');
+
+        return $labels;
     }
 
     /**
@@ -412,7 +484,7 @@ class Chat extends Component
     }
 
     /**
-     * @param  list<\App\Modules\Core\AI\DTO\Session>  $sessions
+     * @param  list<Session>  $sessions
      * @param  array<string, array{turnId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, status: string}>  $activeTurnsBySession
      * @return array<string, array{turn_id: string, is_active: bool}>
      */

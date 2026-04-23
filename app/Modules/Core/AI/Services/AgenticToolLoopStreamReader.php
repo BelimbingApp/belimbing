@@ -81,52 +81,42 @@ final class AgenticToolLoopStreamReader
         $providerMapping = null;
 
         foreach ($stream as $event) {
-            switch ($event['type']) {
-                case 'thinking_delta':
-                    yield ['event' => 'status', 'data' => [
-                        'phase' => 'thinking_delta',
-                        'delta' => $event['text'],
-                        'run_id' => $runId,
-                    ]];
+            $type = $event['type'] ?? null;
 
-                    if (($event['source'] ?? '') === 'commentary') {
-                        $commentary .= $event['text'];
-                    }
+            if ($type === 'thinking_delta') {
+                yield from $this->handleThinkingDelta($runId, $event, $commentary, $reasoningContent);
 
-                    if (($event['source'] ?? '') === 'reasoning_content') {
-                        $reasoningContent .= $event['text'];
-                    }
-
-                    break;
-
-                case 'content_delta':
-                    $content .= $event['text'];
-                    break;
-
-                case 'tool_call_delta':
-                    $this->accumulateToolCallDelta($event, $toolCalls, $toolCallArgs);
-                    break;
-
-                case 'done':
-                    $usage = $event['usage'] ?? null;
-                    $latencyMs = $event['latency_ms'] ?? 0;
-                    $providerMapping = is_array($event['provider_mapping'] ?? null) ? $event['provider_mapping'] : $providerMapping;
-                    $reasoningBlocks = is_array($event['reasoning_blocks'] ?? null) ? $event['reasoning_blocks'] : $reasoningBlocks;
-                    break;
-
-                case 'error':
-                    return [
-                        'runtime_error' => $event['runtime_error'] ?? AiRuntimeError::fromType(
-                            AiErrorType::ServerError,
-                            $event['message'] ?? 'Streaming iteration failed',
-                            latencyMs: $event['latency_ms'] ?? 0,
-                        ),
-                    ];
-
-                default:
-                    // Unhandled stream event types are ignored — forward-compatible with provider extensions.
-                    break;
+                continue;
             }
+
+            if ($type === 'content_delta') {
+                $content .= (string) ($event['text'] ?? '');
+
+                continue;
+            }
+
+            if ($type === 'tool_call_delta') {
+                $this->accumulateToolCallDelta($event, $toolCalls, $toolCallArgs);
+
+                continue;
+            }
+
+            if ($type === 'done') {
+                $usage = $event['usage'] ?? null;
+                $latencyMs = (int) ($event['latency_ms'] ?? 0);
+                $providerMapping = is_array($event['provider_mapping'] ?? null) ? $event['provider_mapping'] : $providerMapping;
+                $reasoningBlocks = is_array($event['reasoning_blocks'] ?? null) ? $event['reasoning_blocks'] : $reasoningBlocks;
+
+                continue;
+            }
+
+            if ($type === 'error') {
+                return [
+                    'runtime_error' => $this->runtimeErrorFromStreamEvent($event),
+                ];
+            }
+
+            // Unhandled stream event types are ignored — forward-compatible with provider extensions.
         }
 
         foreach ($toolCalls as $index => &$tc) {
@@ -145,6 +135,43 @@ final class AgenticToolLoopStreamReader
             'latency_ms' => $latencyMs,
             'provider_mapping' => $providerMapping,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function handleThinkingDelta(string $runId, array $event, string &$commentary, string &$reasoningContent): \Generator
+    {
+        $text = (string) ($event['text'] ?? '');
+
+        yield ['event' => 'status', 'data' => [
+            'phase' => 'thinking_delta',
+            'delta' => $text,
+            'run_id' => $runId,
+        ]];
+
+        if (($event['source'] ?? '') === 'commentary') {
+            $commentary .= $text;
+        } elseif (($event['source'] ?? '') === 'reasoning_content') {
+            $reasoningContent .= $text;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     */
+    private function runtimeErrorFromStreamEvent(array $event): AiRuntimeError
+    {
+        if ($event['runtime_error'] instanceof AiRuntimeError) {
+            return $event['runtime_error'];
+        }
+
+        return AiRuntimeError::fromType(
+            AiErrorType::ServerError,
+            (string) ($event['message'] ?? 'Streaming iteration failed'),
+            latencyMs: (int) ($event['latency_ms'] ?? 0),
+        );
     }
 
     /**
