@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 
+const LARA_SETUP_OPENAI_BASE_URL = 'https://openai.example.test';
+
 beforeEach(function (): void {
     config()->set('ai.workspace_path', storage_path('framework/testing/lara-setup-'.Str::random(16)));
 });
@@ -88,7 +90,7 @@ test('lara activation works with no task config present', function (): void {
         'company_id' => Company::LICENSEE_ID,
         'name' => 'openai',
         'display_name' => 'OpenAI',
-        'base_url' => 'https://openai.example.test',
+        'base_url' => LARA_SETUP_OPENAI_BASE_URL,
         'auth_type' => 'api_key',
         'credentials' => ['api_key' => 'openai-key'],
         'connection_config' => [],
@@ -125,7 +127,7 @@ test('lara setup preserves execution controls and timeout when the model changes
         'company_id' => Company::LICENSEE_ID,
         'name' => 'openai',
         'display_name' => 'OpenAI',
-        'base_url' => 'https://openai.example.test',
+        'base_url' => LARA_SETUP_OPENAI_BASE_URL,
         'auth_type' => 'api_key',
         'credentials' => ['api_key' => 'openai-key'],
         'connection_config' => [],
@@ -202,7 +204,7 @@ test('lara activation persists edited execution controls for reasoning-capable m
         'company_id' => Company::LICENSEE_ID,
         'name' => 'openai',
         'display_name' => 'OpenAI',
-        'base_url' => 'https://openai.example.test',
+        'base_url' => LARA_SETUP_OPENAI_BASE_URL,
         'auth_type' => 'api_key',
         'credentials' => ['api_key' => 'openai-key'],
         'connection_config' => [],
@@ -247,7 +249,7 @@ test('lara setup shows provider-enforced values but keeps canonical execution co
         'company_id' => Company::LICENSEE_ID,
         'name' => 'openai',
         'display_name' => 'OpenAI',
-        'base_url' => 'https://openai.example.test',
+        'base_url' => LARA_SETUP_OPENAI_BASE_URL,
         'auth_type' => 'api_key',
         'credentials' => ['api_key' => 'openai-key'],
         'connection_config' => [],

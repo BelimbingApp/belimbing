@@ -34,6 +34,8 @@ source "$SCRIPTS_DIR/shared/interactive.sh" 2>/dev/null || true
 # Environment (default to local if not provided, using Laravel standard)
 APP_ENV="${1:-local}"
 
+FRANKENPHP_VERSION_STATE_KEY='FRANKENPHP_VERSION'
+
 extract_frankenphp_version() {
     local version_output=$1
     local extracted
@@ -187,7 +189,7 @@ main() {
         if [[ -z "$existing_semver" ]]; then
             echo -e "${YELLOW}⚠${NC} FrankenPHP is installed, but its version could not be parsed: ${existing_version}"
             echo -e "  Re-run with ${CYAN}--upgrade${NC} if you want BLB to reinstall it."
-            save_to_setup_state 'FRANKENPHP_VERSION' "$existing_version"
+            save_to_setup_state "$FRANKENPHP_VERSION_STATE_KEY" "$existing_version"
             echo ""
             echo -e "${GREEN}✓ FrankenPHP setup complete!${NC}"
             return 0
@@ -216,7 +218,7 @@ main() {
                     echo -e "  Minimum supported by BLB: ${CYAN}${minimum_supported_version}${NC}"
                     echo -e "  Newer release available:  ${CYAN}${latest_semver}${NC}"
 
-                    save_to_setup_state 'FRANKENPHP_VERSION' "$existing_version"
+                    save_to_setup_state "$FRANKENPHP_VERSION_STATE_KEY" "$existing_version"
                     echo ""
                     echo -e "${GREEN}✓ FrankenPHP setup complete!${NC}"
                     return 0
@@ -228,7 +230,7 @@ main() {
             echo -e "${GREEN}✓${NC} FrankenPHP already installed: ${existing_version}"
             echo -e "  Minimum supported by BLB: ${CYAN}${minimum_supported_version}${NC}"
 
-            save_to_setup_state 'FRANKENPHP_VERSION' "$existing_version"
+            save_to_setup_state "$FRANKENPHP_VERSION_STATE_KEY" "$existing_version"
             echo ""
             echo -e "${GREEN}✓ FrankenPHP setup complete!${NC}"
             return 0
@@ -271,7 +273,7 @@ main() {
 
     echo -e "${GREEN}✓${NC} FrankenPHP installed: ${installed_version}"
 
-    save_to_setup_state 'FRANKENPHP_VERSION' "$installed_version"
+    save_to_setup_state "$FRANKENPHP_VERSION_STATE_KEY" "$installed_version"
 
     echo ""
     echo -e "${GREEN}✓ FrankenPHP setup complete!${NC}"

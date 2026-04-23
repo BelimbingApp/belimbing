@@ -21,6 +21,59 @@ uses(TestCase::class);
 
 const AGENTIC_FINAL_STREAM_BASE_URL = 'https://api.example.test';
 
+function makeAgenticFinalResponseStreamer(LlmClient $llmClient, RunRecorder $runRecorder): AgenticFinalResponseStreamer
+{
+    return new AgenticFinalResponseStreamer(
+        $llmClient,
+        $runRecorder,
+        app(RuntimeResponseFactory::class),
+        Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
+        app(AgenticExecutionControlResolver::class),
+    );
+}
+
+/**
+ * @param  array<string, mixed>  $runtimeOverrides
+ * @param  array<string, mixed>  $providerOverrides
+ * @param  array<string, mixed>  $payloadOverrides
+ * @return list<array<string, mixed>>
+ */
+function streamFinalEvents(
+    AgenticFinalResponseStreamer $streamer,
+    string $runId,
+    array $runtimeOverrides = [],
+    array $providerOverrides = [],
+    array $payloadOverrides = [],
+): array {
+    $events = iterator_to_array($streamer->streamFinalResponse(
+        $runId,
+        array_replace([
+            'api_type' => null,
+            'model' => 'gpt-5.4',
+            'execution_controls' => ExecutionControls::defaults(maxOutputTokens: 512, temperature: 0.3),
+            'timeout' => 60,
+            'provider_name' => 'openai',
+        ], $runtimeOverrides),
+        array_replace([
+            'api_key' => 'test-key',
+            'base_url' => AGENTIC_FINAL_STREAM_BASE_URL,
+        ], $providerOverrides),
+        array_replace([
+            'api_messages' => [
+                ['role' => 'user', 'content' => 'Open the dashboard'],
+            ],
+            'tools' => [],
+            'tool_actions' => [],
+            'client_actions' => [],
+            'retry_attempts' => [],
+            'fallback_attempts' => [],
+            'hooks' => [],
+        ], $payloadOverrides),
+    ), false);
+
+    return array_values($events);
+}
+
 it('prepends client actions when the final stream ends without content deltas', function (): void {
     $llmClient = Mockery::mock(LlmClient::class);
     $llmClient->shouldReceive('chatStream')
@@ -48,39 +101,20 @@ it('prepends client actions when the final stream ends without content deltas', 
                 && $meta['tokens']['completion'] === 0;
         }));
 
-    $streamer = new AgenticFinalResponseStreamer(
-        $llmClient,
-        $runRecorder,
-        app(RuntimeResponseFactory::class),
-        Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
-        app(AgenticExecutionControlResolver::class),
-    );
+    $streamer = makeAgenticFinalResponseStreamer($llmClient, $runRecorder);
 
-    $events = iterator_to_array($streamer->streamFinalResponse(
+    $events = streamFinalEvents(
+        $streamer,
         'run_123',
-        [
+        runtimeOverrides: [
             'api_type' => AiApiType::OpenAiResponses,
             'model' => 'gpt-4.1',
-            'execution_controls' => ExecutionControls::defaults(maxOutputTokens: 512, temperature: 0.3),
-            'timeout' => 60,
             'provider_name' => 'test-provider',
         ],
-        [
-            'api_key' => 'test-key',
-            'base_url' => AGENTIC_FINAL_STREAM_BASE_URL,
-        ],
-        [
-            'api_messages' => [
-                ['role' => 'user', 'content' => 'Open the dashboard'],
-            ],
-            'tools' => [],
-            'tool_actions' => [],
+        payloadOverrides: [
             'client_actions' => ['<agent-action>Livewire.navigate(\'/dashboard\')</agent-action>'],
-            'retry_attempts' => [],
-            'fallback_attempts' => [],
-            'hooks' => [],
         ],
-    ), false);
+    );
 
     expect($events)->toHaveCount(1)
         ->and($events[0]['event'])->toBe('done')
@@ -113,39 +147,24 @@ it('emits an error event and records failure when the final stream returns a run
         ->once()
         ->with('run_456', $runtimeError);
 
-    $streamer = new AgenticFinalResponseStreamer(
-        $llmClient,
-        $runRecorder,
-        app(RuntimeResponseFactory::class),
-        Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
-        app(AgenticExecutionControlResolver::class),
-    );
+    $streamer = makeAgenticFinalResponseStreamer($llmClient, $runRecorder);
 
-    $events = iterator_to_array($streamer->streamFinalResponse(
+    $events = streamFinalEvents(
+        $streamer,
         'run_456',
-        [
-            'api_type' => null,
-            'model' => 'gpt-5.4',
-            'execution_controls' => ExecutionControls::defaults(maxOutputTokens: 512, temperature: 0.3),
-            'timeout' => 60,
-            'provider_name' => 'openai',
-        ],
-        [
-            'api_key' => 'test-key',
-            'base_url' => AGENTIC_FINAL_STREAM_BASE_URL,
-        ],
-        [
+        payloadOverrides: [
             'api_messages' => [
                 ['role' => 'user', 'content' => 'Try again'],
             ],
-            'tools' => [],
-            'tool_actions' => [],
-            'client_actions' => [],
-            'retry_attempts' => [['provider' => 'openai', 'model' => 'gpt-5.4', 'error' => 'Too many requests', 'error_type' => 'rate_limit', 'latency_ms' => 51]],
-            'fallback_attempts' => [],
-            'hooks' => [],
+            'retry_attempts' => [[
+                'provider' => 'openai',
+                'model' => 'gpt-5.4',
+                'error' => 'Too many requests',
+                'error_type' => 'rate_limit',
+                'latency_ms' => 51,
+            ]],
         ],
-    ), false);
+    );
 
     expect($events)->toHaveCount(1)
         ->and($events[0]['event'])->toBe('error')
@@ -175,39 +194,17 @@ it('emits an empty-response error when the final stream completes without conten
                 && $error->latencyMs === 24;
         }));
 
-    $streamer = new AgenticFinalResponseStreamer(
-        $llmClient,
-        $runRecorder,
-        app(RuntimeResponseFactory::class),
-        Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
-        app(AgenticExecutionControlResolver::class),
-    );
+    $streamer = makeAgenticFinalResponseStreamer($llmClient, $runRecorder);
 
-    $events = iterator_to_array($streamer->streamFinalResponse(
+    $events = streamFinalEvents(
+        $streamer,
         'run_789',
-        [
-            'api_type' => null,
-            'model' => 'gpt-5.4',
-            'execution_controls' => ExecutionControls::defaults(maxOutputTokens: 512, temperature: 0.3),
-            'timeout' => 60,
-            'provider_name' => 'openai',
-        ],
-        [
-            'api_key' => 'test-key',
-            'base_url' => AGENTIC_FINAL_STREAM_BASE_URL,
-        ],
-        [
+        payloadOverrides: [
             'api_messages' => [
                 ['role' => 'user', 'content' => 'Say nothing'],
             ],
-            'tools' => [],
-            'tool_actions' => [],
-            'client_actions' => [],
-            'retry_attempts' => [],
-            'fallback_attempts' => [],
-            'hooks' => [],
         ],
-    ), false);
+    );
 
     expect($events)->toHaveCount(1)
         ->and($events[0]['event'])->toBe('error')

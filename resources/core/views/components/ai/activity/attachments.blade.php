@@ -116,7 +116,7 @@
                 <div class="rounded-xl overflow-hidden border border-white/10 bg-black/30">
                     <img
                         :src="attachments.filter(a => a.kind === 'image')[imageIndex]?.url"
-                        :alt="(attachments.filter(a => a.kind === 'image')[imageIndex]?.original_name) || @js(__('Preview'))"
+                        :alt="(attachments.filter(a => a.kind === 'image')[imageIndex]?.original_name) || @js(__('Preview attachment'))"
                         class="w-full max-h-[75vh] object-contain bg-black"
                     />
                     <div class="flex items-center justify-between gap-2 p-3 text-xs text-white/80">

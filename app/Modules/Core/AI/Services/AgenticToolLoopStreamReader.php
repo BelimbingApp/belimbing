@@ -82,41 +82,35 @@ final class AgenticToolLoopStreamReader
 
         foreach ($stream as $event) {
             $type = $event['type'] ?? null;
+            switch ($type) {
+                case 'thinking_delta':
+                    yield from $this->handleThinkingDelta($runId, $event, $commentary, $reasoningContent);
+                    break;
 
-            if ($type === 'thinking_delta') {
-                yield from $this->handleThinkingDelta($runId, $event, $commentary, $reasoningContent);
+                case 'content_delta':
+                    $content .= (string) ($event['text'] ?? '');
+                    break;
 
-                continue;
+                case 'tool_call_delta':
+                    $this->accumulateToolCallDelta($event, $toolCalls, $toolCallArgs);
+                    break;
+
+                case 'done':
+                    $usage = $event['usage'] ?? null;
+                    $latencyMs = (int) ($event['latency_ms'] ?? 0);
+                    $providerMapping = is_array($event['provider_mapping'] ?? null) ? $event['provider_mapping'] : $providerMapping;
+                    $reasoningBlocks = is_array($event['reasoning_blocks'] ?? null) ? $event['reasoning_blocks'] : $reasoningBlocks;
+                    break;
+
+                case 'error':
+                    return [
+                        'runtime_error' => $this->runtimeErrorFromStreamEvent($event),
+                    ];
+
+                default:
+                    // Unhandled stream event types are ignored — forward-compatible with provider extensions.
+                    break;
             }
-
-            if ($type === 'content_delta') {
-                $content .= (string) ($event['text'] ?? '');
-
-                continue;
-            }
-
-            if ($type === 'tool_call_delta') {
-                $this->accumulateToolCallDelta($event, $toolCalls, $toolCallArgs);
-
-                continue;
-            }
-
-            if ($type === 'done') {
-                $usage = $event['usage'] ?? null;
-                $latencyMs = (int) ($event['latency_ms'] ?? 0);
-                $providerMapping = is_array($event['provider_mapping'] ?? null) ? $event['provider_mapping'] : $providerMapping;
-                $reasoningBlocks = is_array($event['reasoning_blocks'] ?? null) ? $event['reasoning_blocks'] : $reasoningBlocks;
-
-                continue;
-            }
-
-            if ($type === 'error') {
-                return [
-                    'runtime_error' => $this->runtimeErrorFromStreamEvent($event),
-                ];
-            }
-
-            // Unhandled stream event types are ignored — forward-compatible with provider extensions.
         }
 
         foreach ($toolCalls as $index => &$tc) {
