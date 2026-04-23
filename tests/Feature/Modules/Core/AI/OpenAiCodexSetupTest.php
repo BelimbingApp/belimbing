@@ -20,6 +20,9 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
+const OAI_CODEX_BACKEND_BASE_URL = 'https://chatgpt.com/backend-api';
+const OAI_CODEX_RECONNECT_HINT = 'Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.';
+
 test('openai codex setup surfaces connected auth state and diagnostic action', function (): void {
     $user = createAdminUser();
     config()->set('ai.provider_overlay.openai-codex.curated_models', [
@@ -349,7 +352,7 @@ test('openai codex setup shows reconnect guidance when verification returns a hi
                 errorType: AiErrorType::BadRequest,
                 userMessage: 'OpenAI Codex rejected the ChatGPT backend session.',
                 diagnostic: 'HTTP 400: missing chatgpt-account-id',
-                hint: 'Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.',
+                hint: OAI_CODEX_RECONNECT_HINT,
             ),
         ),
     ));
@@ -358,8 +361,8 @@ test('openai codex setup shows reconnect guidance when verification returns a hi
     Livewire::test(OpenAiCodexSetup::class, ['providerKey' => OpenAiCodexDefinition::KEY])
         ->call('verifyConnection')
         ->assertSet('verificationResult.connected', false)
-        ->assertSet('verificationResult.hint', 'Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.')
-        ->assertSee('Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.');
+        ->assertSet('verificationResult.hint', OAI_CODEX_RECONNECT_HINT)
+        ->assertSee(OAI_CODEX_RECONNECT_HINT);
 });
 
 /**
@@ -371,7 +374,7 @@ function createOpenAiCodexProvider(User $user, array $authState): AiProvider
         'company_id' => $user->company_id,
         'name' => OpenAiCodexDefinition::KEY,
         'display_name' => 'OpenAI Codex',
-        'base_url' => 'https://chatgpt.com/backend-api',
+        'base_url' => OAI_CODEX_BACKEND_BASE_URL,
         'auth_type' => 'oauth',
         'credentials' => [
             OpenAiCodexDefinition::CRED_ACCESS_TOKEN => 'aaa.bbb.ccc',
@@ -406,7 +409,7 @@ function makeCodexProviderTestService(int $providerId, ProviderTestResult $resul
         ->with($providerId, $modelId)
         ->andReturn([
             'api_key' => '',
-            'base_url' => 'https://chatgpt.com/backend-api',
+            'base_url' => OAI_CODEX_BACKEND_BASE_URL,
             'model' => $modelId,
             'execution_controls' => ExecutionControls::defaults(),
             'timeout' => 60,
@@ -418,7 +421,7 @@ function makeCodexProviderTestService(int $providerId, ProviderTestResult $resul
         ->once()
         ->andReturn([
             'api_key' => 'aaa.bbb.ccc',
-            'base_url' => 'https://chatgpt.com/backend-api',
+            'base_url' => OAI_CODEX_BACKEND_BASE_URL,
             'headers' => ['chatgpt-account-id' => 'acct_test'],
         ]);
 

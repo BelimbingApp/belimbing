@@ -501,7 +501,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             // Hook: PreLlmCall — observe or augment before each LLM call
             $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $hookMetadata);
 
-            $result = $this->chatWithRetry($runId, $employeeId, $credentials, $config, $apiMessages, $tools, $retryAttempts);
+            $result = $this->chatWithRetry($runId, $credentials, $config, $apiMessages, $tools, $retryAttempts);
 
             if (isset($result['runtime_error'])) {
                 // On first iteration, this is a pre-commit failure — record for fallback
@@ -570,7 +570,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
      */
     private function chatWithRetry(
         string $runId,
-        int $employeeId,
         array $credentials,
         array $config,
         array $apiMessages,

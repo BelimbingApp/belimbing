@@ -236,37 +236,7 @@ function summarizeInventory(array $inventory): array
         $areaCounts[$row['area']]['examples'] += $row['examples'];
         $exampleCount += $row['examples'];
 
-        if ($row['mock_signals'] > 0) {
-            $signalCounts['files_with_mock_signals']++;
-        }
-
-        if ($row['http_fake'] > 0) {
-            $signalCounts['files_with_http_fake']++;
-        }
-
-        if ($row['refresh_db'] > 0) {
-            $signalCounts['files_with_db_refresh']++;
-        }
-
-        if ($row['filesystem_signals'] > 0) {
-            $signalCounts['files_with_filesystem_signals']++;
-        }
-
-        if (in_array('redirect-only', $row['reasons'], true)) {
-            $signalCounts['redirect_only_candidates']++;
-        }
-
-        if (in_array('smoke-or-markup', $row['reasons'], true)) {
-            $signalCounts['smoke_or_markup_candidates']++;
-        }
-
-        if (in_array('mock-heavy', $row['reasons'], true)) {
-            $signalCounts['mock_heavy_candidates']++;
-        }
-
-        if (in_array('happy-path-http', $row['reasons'], true)) {
-            $signalCounts['happy_path_http_candidates']++;
-        }
+        incrementSignalCounts($signalCounts, $row);
     }
 
     arsort($suiteCounts);
@@ -279,6 +249,24 @@ function summarizeInventory(array $inventory): array
         'area_counts' => $areaCounts,
         'signal_counts' => $signalCounts,
     ];
+}
+
+/**
+ * @param  array<string, int>  $signalCounts
+ * @param  array<string, mixed>  $row
+ */
+function incrementSignalCounts(array &$signalCounts, array $row): void
+{
+    $signalCounts['files_with_mock_signals'] += ($row['mock_signals'] ?? 0) > 0 ? 1 : 0;
+    $signalCounts['files_with_http_fake'] += ($row['http_fake'] ?? 0) > 0 ? 1 : 0;
+    $signalCounts['files_with_db_refresh'] += ($row['refresh_db'] ?? 0) > 0 ? 1 : 0;
+    $signalCounts['files_with_filesystem_signals'] += ($row['filesystem_signals'] ?? 0) > 0 ? 1 : 0;
+
+    $reasons = is_array($row['reasons'] ?? null) ? $row['reasons'] : [];
+    $signalCounts['redirect_only_candidates'] += in_array('redirect-only', $reasons, true) ? 1 : 0;
+    $signalCounts['smoke_or_markup_candidates'] += in_array('smoke-or-markup', $reasons, true) ? 1 : 0;
+    $signalCounts['mock_heavy_candidates'] += in_array('mock-heavy', $reasons, true) ? 1 : 0;
+    $signalCounts['happy_path_http_candidates'] += in_array('happy-path-http', $reasons, true) ? 1 : 0;
 }
 
 /**

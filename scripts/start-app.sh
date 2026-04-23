@@ -41,6 +41,8 @@ USE_NON_PRIVILEGED_PORT=0
 PUBLIC_APP_URL=""
 PUBLIC_BACKEND_URL=""
 
+BLB_INGRESS_MODE_SHARED='shared'
+
 # Logging function
 log() {
     if [[ -n "$LOG_FILE" ]]; then
@@ -319,7 +321,7 @@ get_ports() {
     # mode (or when unpinned) we can auto-find a free port.
     preferred=$(get_env_var "APP_PORT" "")
     if [[ -n "$preferred" ]] && [[ "$preferred" =~ ^[0-9]+$ ]]; then
-        if [[ "$BLB_INGRESS_MODE" = "shared" ]]; then
+        if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]]; then
             APP_PORT="$preferred"
         else
             APP_PORT=$(resolve_port "$preferred" 8000)
@@ -360,7 +362,7 @@ check_and_stop_services() {
         return 0
     fi
 
-    if [[ "$BLB_INGRESS_MODE" = "shared" ]]; then
+    if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]]; then
         echo -e "${YELLOW}⚠${NC} Port ${CYAN}${port}${NC} is busy — reassigning port and updating Caddy..." >&2
         log "Port $port busy; re-running ingress setup to reassign"
 
@@ -495,13 +497,13 @@ export_caddy_env() {
     caddy_admin_port=$(next_free_port 2020)
     export CADDY_SERVER_ADMIN_PORT="$caddy_admin_port"
 
-    if [[ "$BLB_INGRESS_MODE" = "shared" ]] || [[ "$system_caddy_running" = true ]]; then
+    if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]] || [[ "$system_caddy_running" = true ]]; then
         export HTTPS_PORT="$APP_PORT"
         export USE_NON_PRIVILEGED_PORT=1
         export TLS_DIRECTIVE=""
         export CADDY_SCHEME="http"
 
-        if [[ "$BLB_INGRESS_MODE" = "shared" ]] && [[ "$system_caddy_running" = true ]]; then
+        if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]] && [[ "$system_caddy_running" = true ]]; then
             PUBLIC_APP_URL="https://${FRONTEND_DOMAIN}"
             PUBLIC_BACKEND_URL="https://${BACKEND_DOMAIN}"
         else
@@ -550,7 +552,7 @@ start_services() {
 }
 
 print_runtime_guidance() {
-    if [[ "$BLB_INGRESS_MODE" = "shared" ]]; then
+    if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]]; then
         echo ""
         echo -e "${CYAN}ℹ${NC} Shared ingress mode selected. FrankenPHP will listen on ${YELLOW}127.0.0.1:${APP_PORT}${NC}."
         echo ""
@@ -619,7 +621,7 @@ print_runtime_summary() {
         echo -e "  ${BULLET} FrankenPHP (Octane): http://127.0.0.1:${APP_PORT}"
         echo -e "  ${BULLET} Vite:                http://127.0.0.1:$VITE_PORT"
         echo ""
-        if [[ "$BLB_INGRESS_MODE" = "shared" ]] && caddy_system_is_running; then
+        if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]] && caddy_system_is_running; then
             echo -e "${GREEN}✓ System Caddy is active for shared ingress${NC}"
         else
             echo -e "${YELLOW}⚠ Public HTTPS is not being served by BLB directly in this mode${NC}"
