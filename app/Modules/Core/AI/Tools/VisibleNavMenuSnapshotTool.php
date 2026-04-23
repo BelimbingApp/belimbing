@@ -110,35 +110,7 @@ final class VisibleNavMenuSnapshotTool extends AbstractTool
 
         $filter = $this->optionalString($arguments, 'filter');
         $flat = $this->navigableMenuSnapshot->snapshotForUser($user)['flat'];
-
-        $rows = [];
-
-        foreach ($flat as $menuId => $row) {
-            $path = $this->relativePathFromHref(isset($row['href']) && is_string($row['href']) ? $row['href'] : null);
-
-            if ($path === null || ! str_starts_with($path, '/')) {
-                continue;
-            }
-
-            $label = is_string($row['label'] ?? null) ? $row['label'] : '';
-            $route = isset($row['route']) && is_string($row['route']) ? $row['route'] : null;
-
-            if ($filter !== null) {
-                $needle = strtolower($filter);
-                $haystack = strtolower($label.' '.$path);
-
-                if (! str_contains($haystack, $needle)) {
-                    continue;
-                }
-            }
-
-            $rows[] = [
-                'menu_id' => is_string($menuId) ? $menuId : (string) $menuId,
-                'label' => $label,
-                'path' => $path,
-                'route' => $route,
-            ];
-        }
+        $rows = $this->buildRows($flat, $filter);
 
         usort(
             $rows,
@@ -171,6 +143,52 @@ final class VisibleNavMenuSnapshotTool extends AbstractTool
         return ToolResult::success($encoded);
     }
 
+    /**
+     * @param  array<string|int, array<string, mixed>>  $flat
+     * @return list<array{menu_id: string, label: string, path: string, route: ?string}>
+     */
+    private function buildRows(array $flat, ?string $filter): array
+    {
+        $rows = [];
+        $needle = $filter !== null ? strtolower($filter) : null;
+
+        foreach ($flat as $menuId => $row) {
+            $normalizedRow = $this->normalizedRow($menuId, $row, $needle);
+
+            if ($normalizedRow !== null) {
+                $rows[] = $normalizedRow;
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array{menu_id: string, label: string, path: string, route: ?string}|null
+     */
+    private function normalizedRow(string|int $menuId, array $row, ?string $needle): ?array
+    {
+        $path = $this->relativePathFromHref(isset($row['href']) && is_string($row['href']) ? $row['href'] : null);
+
+        if ($path === null || ! str_starts_with($path, '/')) {
+            return null;
+        }
+
+        $label = is_string($row['label'] ?? null) ? $row['label'] : '';
+
+        if ($needle !== null && ! str_contains(strtolower($label.' '.$path), $needle)) {
+            return null;
+        }
+
+        return [
+            'menu_id' => is_string($menuId) ? $menuId : (string) $menuId,
+            'label' => $label,
+            'path' => $path,
+            'route' => isset($row['route']) && is_string($row['route']) ? $row['route'] : null,
+        ];
+    }
+
     private function relativePathFromHref(?string $href): ?string
     {
         if ($href === null) {
@@ -185,14 +203,8 @@ final class VisibleNavMenuSnapshotTool extends AbstractTool
 
         $path = parse_url($trimmed, PHP_URL_PATH);
 
-        if (is_string($path) && $path !== '') {
-            return $path;
-        }
-
-        if (str_starts_with($trimmed, '/')) {
-            return $trimmed;
-        }
-
-        return null;
+        return is_string($path) && $path !== ''
+            ? $path
+            : (str_starts_with($trimmed, '/') ? $trimmed : null);
     }
 }

@@ -39,8 +39,8 @@ abstract class AbstractResponsesProtocolClient extends AbstractLlmProtocolClient
         $hasToolCalls = $toolCalls !== [];
         $usage = $data['usage'] ?? [];
 
-        if ($content === '' && ! $hasToolCalls) {
-            return [
+        $result = $content === '' && ! $hasToolCalls
+            ? [
                 'runtime_error' => AiRuntimeError::fromType(
                     AiErrorType::EmptyResponse,
                     "Model \"{$model}\" produced no text content",
@@ -48,17 +48,15 @@ abstract class AbstractResponsesProtocolClient extends AbstractLlmProtocolClient
                     latencyMs: $latencyMs,
                 ),
                 'latency_ms' => $latencyMs,
+            ]
+            : [
+                'content' => $content,
+                'usage' => [
+                    'prompt_tokens' => $usage['input_tokens'] ?? null,
+                    'completion_tokens' => $usage['output_tokens'] ?? null,
+                ],
+                'latency_ms' => $latencyMs,
             ];
-        }
-
-        $result = [
-            'content' => $content,
-            'usage' => [
-                'prompt_tokens' => $usage['input_tokens'] ?? null,
-                'completion_tokens' => $usage['output_tokens'] ?? null,
-            ],
-            'latency_ms' => $latencyMs,
-        ];
 
         if ($hasToolCalls) {
             $result['tool_calls'] = $toolCalls;
@@ -116,17 +114,13 @@ abstract class AbstractResponsesProtocolClient extends AbstractLlmProtocolClient
         int $startTime,
         bool &$terminal,
     ): Generator {
-        if ($line === '' || str_starts_with($line, ':')) {
-            return;
-        }
-
-        if (str_starts_with($line, 'event: ')) {
+        if ($line !== '' && ! str_starts_with($line, ':') && str_starts_with($line, 'event: ')) {
             $ctx->pendingEventType = substr($line, 7);
 
             return;
         }
 
-        if (! str_starts_with($line, 'data: ')) {
+        if ($line === '' || str_starts_with($line, ':') || ! str_starts_with($line, 'data: ')) {
             return;
         }
 

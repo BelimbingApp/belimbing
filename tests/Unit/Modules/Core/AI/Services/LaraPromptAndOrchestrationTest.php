@@ -165,7 +165,10 @@ it('returns navigation metadata for /go command', function (): void {
             return AuthorizationDecision::allow(['test']);
         }
 
-        public function authorize(Actor $actor, string $capability, ?ResourceContext $resource = null, array $context = []): void {}
+        public function authorize(Actor $actor, string $capability, ?ResourceContext $resource = null, array $context = []): void
+        {
+            // This test only exercises positive route discovery, so the explicit authorize path remains intentionally unused.
+        }
 
         public function filterAllowed(Actor $actor, string $capability, iterable $resources, array $context = []): Collection
         {

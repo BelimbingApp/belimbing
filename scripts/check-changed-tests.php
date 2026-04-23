@@ -150,7 +150,7 @@ function inspectFile(string $file): array
     foreach ($rules as $rule) {
         preg_match_all($rule['pattern'], $content, $matches, PREG_OFFSET_CAPTURE);
 
-        foreach ($matches[0] as [$match, $offset]) {
+        foreach ($matches[0] as [, $offset]) {
             $line = substr_count(substr($content, 0, $offset), "\n") + 1;
             $findings[] = new ChangedTestFinding($rule['severity'], $file, $line, $rule['message']);
         }

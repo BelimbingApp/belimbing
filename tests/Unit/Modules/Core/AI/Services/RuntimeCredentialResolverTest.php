@@ -18,6 +18,7 @@ uses(TestCase::class, RefreshDatabase::class);
 
 const RCR_PROXY_BASE_URL = 'http://localhost:1337/v1';
 const RCR_PROXY_PROVIDER = 'copilot-proxy';
+const RCR_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
 
 function makeResolver(): RuntimeCredentialResolver
 {
