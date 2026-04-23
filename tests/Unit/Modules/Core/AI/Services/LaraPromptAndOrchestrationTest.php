@@ -10,6 +10,7 @@ use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Collection;
 use Tests\Support\CreatesLaraFixtures;
 use Tests\TestCase;
 
@@ -83,7 +84,7 @@ it('appends configured Lara prompt extension as additive guidance', function ():
     $fixture = createLaraOrchestrationFixture($this);
     $this->actingAs($fixture['user']);
 
-    $extensionRelativePath = 'storage/app/testing/lara_extension_test.md';
+    $extensionRelativePath = 'storage/framework/testing/lara_extension_test.md';
     $extensionPath = base_path($extensionRelativePath);
     $extensionDirectory = dirname($extensionPath);
 
@@ -166,7 +167,7 @@ it('returns navigation metadata for /go command', function (): void {
 
         public function authorize(Actor $actor, string $capability, ?ResourceContext $resource = null, array $context = []): void {}
 
-        public function filterAllowed(Actor $actor, string $capability, iterable $resources, array $context = []): \Illuminate\Support\Collection
+        public function filterAllowed(Actor $actor, string $capability, iterable $resources, array $context = []): Collection
         {
             return collect($resources);
         }
@@ -205,7 +206,7 @@ it('queues delegation to the best matched agent', function (): void {
         ->and($result['meta']['orchestration']['selected_agent']['agent_name'])->toBe(CODE_WORKER)
         ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('op_')
         ->and(data_get($dispatch?->meta, 'session_id'))->toBe('20260413-010101');
-})->skip('Temporarily skipped: CI is failing to execute this test without output (exit code 2) on GitHub Actions; needs investigation.');
+});
 
 it('falls back to Lara coding task profile when no delegated agents are available', function (): void {
     $fixture = $this->createLaraFixture();
@@ -220,7 +221,7 @@ it('falls back to Lara coding task profile when no delegated agents are availabl
         ->and($result['meta']['orchestration']['selected_task_profile']['task_key'])->toBe('coding')
         ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('op_')
         ->and(data_get($dispatch?->meta, 'session_id'))->toBe('20260413-020202');
-})->skip('Temporarily skipped: same CI execution issue (exit code 2 with no output) as agent delegation test; needs investigation.');
+});
 
 it('routes research-oriented delegation to Lara research task profile when no delegated agents are available', function (): void {
     $fixture = $this->createLaraFixture();
@@ -233,4 +234,4 @@ it('routes research-oriented delegation to Lara research task profile when no de
         ->and($result['meta']['orchestration']['status'])->toBe('queued')
         ->and($result['meta']['orchestration']['selected_task_profile']['task_key'])->toBe('research')
         ->and($result['meta']['orchestration']['dispatch_id'])->toStartWith('op_');
-})->skip('Temporarily skipped: same CI execution issue (exit code 2 with no output) as other delegation routing tests; needs investigation.');
+});

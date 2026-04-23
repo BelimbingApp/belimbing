@@ -79,6 +79,17 @@ class PolicyEvaluationService
             );
         }
 
+        if ($readinessResult['verdict'] === PolicyVerdict::Degrade->value) {
+            return PolicyDecision::degrade(
+                layer: PolicyLayer::Readiness,
+                reason: $readinessResult['reason'],
+                subject: $subject,
+                action: "use_tool:{$toolName}",
+                context: $context,
+                layerResults: $layerResults,
+            );
+        }
+
         // Layer 4: Data/Network (if URL context is provided)
         if (isset($context['url'])) {
             $networkResult = $this->evaluateNetworkPolicy($context['url']);

@@ -127,6 +127,31 @@ describe('query methods', function () {
             ->and($events[0]->employeeId)->toBe(OTS_EMPLOYEE_ID);
     });
 
+    it('returns agent events newest first', function () {
+        TelemetryEventModel::query()->where('employee_id', OTS_EMPLOYEE_ID)->delete();
+
+        $first = $this->service->record(new TelemetryRecordRequest(
+            eventType: TelemetryEventType::RunStarted,
+            employeeId: OTS_EMPLOYEE_ID,
+        ));
+        $second = $this->service->record(new TelemetryRecordRequest(
+            eventType: TelemetryEventType::RunCompleted,
+            employeeId: OTS_EMPLOYEE_ID,
+        ));
+
+        TelemetryEventModel::query()->whereKey($first->eventId)->update([
+            'occurred_at' => now()->subMinutes(2),
+        ]);
+        TelemetryEventModel::query()->whereKey($second->eventId)->update([
+            'occurred_at' => now()->subMinute(),
+        ]);
+
+        $events = $this->service->forAgent(OTS_EMPLOYEE_ID);
+
+        expect($events[0]->eventId)->toBe($second->eventId)
+            ->and($events[1]->eventId)->toBe($first->eventId);
+    });
+
     it('queries events by type within time window', function () {
         $events = $this->service->byType(TelemetryEventType::RunStarted, minutesBack: 60);
 

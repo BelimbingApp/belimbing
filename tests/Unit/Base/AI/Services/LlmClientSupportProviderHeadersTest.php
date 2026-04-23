@@ -1,7 +1,11 @@
 <?php
 
 use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Services\LlmClientSupport;
+use Tests\TestCase;
+
+uses(TestCase::class);
 
 test('LlmClientSupport merges mapper and runtime provider headers', function (): void {
     $request = new ChatRequest(
@@ -26,4 +30,25 @@ test('LlmClientSupport merges mapper and runtime provider headers', function ():
         'originator' => 'blb',
         'OpenAI-Beta' => 'responses=experimental',
     ]);
+});
+
+test('LlmClientSupport uses x-api-key for anthropic requests instead of bearer auth', function (): void {
+    $request = new ChatRequest(
+        baseUrl: 'https://api.anthropic.com/v1',
+        apiKey: 'anthropic-token',
+        model: 'claude-sonnet-4-6',
+        messages: [['role' => 'user', 'content' => 'hello']],
+        apiType: AiApiType::AnthropicMessages,
+    );
+
+    $http = LlmClientSupport::buildHttp($request, [
+        'anthropic-version' => '2023-06-01',
+    ]);
+
+    $headers = $http->getOptions()['headers'] ?? [];
+
+    expect($headers)->toMatchArray([
+        'x-api-key' => 'anthropic-token',
+        'anthropic-version' => '2023-06-01',
+    ])->and($headers)->not->toHaveKey('Authorization');
 });

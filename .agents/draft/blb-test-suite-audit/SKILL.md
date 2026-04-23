@@ -67,8 +67,19 @@ move into `.agents/skills/`.
   not only implementation shape.
 - Delete stock starter tests and unused global Pest helpers when they are still
   hanging around. They add CI cost and noise without protecting BLB behavior.
+- Recheck blanket `markTestSkipped()` files with vague CI comments before
+  accepting them as necessary. Some turn out to run cleanly and are just dead
+  weight while skipped.
+- When a contract supports `allow`, `deny`, and `degrade`, cover the degrade
+  path explicitly. Allow-or-deny-only tests miss real policy bugs.
+- Unit tests that call Laravel facades should explicitly boot `TestCase`
+  instead of relying on earlier tests in the same process to have initialized
+  the container.
 - Count-only scope assertions are often weak. Prefer asserting the exact
   returned records and excluded records.
+- For filesystem-isolation fixes, respect the production allow/deny policy of
+  the thing under test. `storage/framework/testing/` is preferred in general,
+  but tool path guards may require a different isolated repo-local tmp root.
 - Mock-heavy files are not automatically weak; many AI and authz boundaries are
   legitimately boundary-heavy and still behavior-oriented.
 - Cheap-candidate heuristics such as `redirect-only` and `smoke-or-markup` have

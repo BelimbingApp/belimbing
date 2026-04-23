@@ -7,7 +7,7 @@ use Tests\TestCase;
 
 uses(TestCase::class, AssertsToolBehavior::class);
 
-const EDIT_FILE_TOOL_TEST_DIRECTORY = 'storage/app/testing/edit-file-tool';
+const EDIT_FILE_TOOL_TEST_DIRECTORY = 'tmp/testing/edit-file-tool';
 const EDIT_FILE_TOOL_TEST_FILE = EDIT_FILE_TOOL_TEST_DIRECTORY.'/sample.txt';
 const EDIT_FILE_TOOL_DIRECTORY_TARGET = EDIT_FILE_TOOL_TEST_DIRECTORY.'/existing-directory';
 

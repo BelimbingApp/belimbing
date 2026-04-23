@@ -144,4 +144,22 @@ describe('inspectDispatchRun', function () {
             ->and($result[0]->runId)->toBe(RIS_RUN_ID)
             ->and($result[0]->dispatchId)->toBe(RIS_DISPATCH_ID);
     });
+
+    it('returns dispatch-linked inspections in started_at order', function () {
+        risCreateAiRun(RIS_RUN_ID, [
+            'dispatch_id' => RIS_DISPATCH_ID,
+            'started_at' => now()->subMinutes(5),
+        ]);
+        risCreateAiRun(RIS_RUN_ID_2, [
+            'dispatch_id' => RIS_DISPATCH_ID,
+            'started_at' => now(),
+        ]);
+
+        $service = makeRunInspectionService();
+        $result = $service->inspectDispatchRun(RIS_DISPATCH_ID);
+
+        expect($result)->toHaveCount(2)
+            ->and($result[0]->runId)->toBe(RIS_RUN_ID)
+            ->and($result[1]->runId)->toBe(RIS_RUN_ID_2);
+    });
 });

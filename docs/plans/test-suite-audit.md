@@ -1,7 +1,7 @@
 # Test Suite Audit
 
 **Agent:** Codex
-**Status:** Phases 4-5 In Progress
+**Status:** Audit Complete At Current Scope
 **Last Updated:** 2026-04-22
 **Sources:** `AGENTS.md`, `docs/AGENTS.md`, `docs/plans/AGENTS.md`, `tests/AGENTS.md`, `docs/plans/test-suite-audit-rubric.md`, `docs/plans/test-suite-audit-inventory.md`, `docs/plans/ai-test-suite-audit.md`, `scripts/test-suite-audit-inventory.php`, `scripts/check-changed-tests.php`, `scripts/run-critical-mutation-checks.php`, `.github/workflows/lint.yml`, `.github/workflows/test-audit-report.yml`, `.github/pull_request_template.md`, user discussion on 2026-04-21
 
@@ -111,16 +111,17 @@ Phase 3 outcome:
 
 Goal: apply the proven process to the rest of the suite without losing visibility.
 
-- [ ] Audit remaining modules in priority order based on runtime, churn, and weakness signals
+- [x] Audit remaining modules in priority order based on runtime, churn, and weakness signals
 - [ ] Split this plan into companion per-area build sheets if the checklist becomes hard to use
-- [ ] Keep the plan current with what was deleted, tightened, merged, or deferred
-- [ ] Track residual risks where coverage is intentionally reduced but accepted
-- [ ] Update the draft skill at `.agents/draft/blb-test-suite-audit/` as new audit patterns prove stable enough to keep
+- [x] Keep the plan current with what was deleted, tightened, merged, or deferred
+- [x] Track residual risks where coverage is intentionally reduced but accepted
+- [x] Update the draft skill at `.agents/draft/blb-test-suite-audit/` as new audit patterns prove stable enough to keep
 
 Current Phase 4 focus:
 
-- treat the AI companion audit as complete at this checkpoint and continue through the next non-AI candidates surfaced by the inventory
-- keep using the cheap-candidate slices to separate heuristic false positives from real tighten/delete opportunities before moving deeper into slower modules
+- Phase 4 is complete at this checkpoint
+- outside AI, the audit was already through the endgame
+- the remaining `Base/AI` and `Modules/Core/AI` slices have now been reviewed and verified
 
 Latest Phase 4 result:
 
@@ -171,6 +172,25 @@ Latest Phase 4 result:
 - the final non-AI leftover slice deleted `ExampleTest.php` as dead starter coverage with no BLB value
 - the test-infrastructure slice kept the real shared helpers in `tests/Pest.php` but removed the unused stock `toBeOne()` expectation and surplus boilerplate comments
 - that infrastructure cleanup was validated by confirming `toBeOne()` had no call sites and by rerunning helper-dependent feature tests after the `tests/Pest.php` change
+- the `Base/AI` service slice re-enabled `LlmClientToolCallingTest.php` by removing a blanket skip that no longer reproduced; the file now runs cleanly and is a `keep`
+- `ProviderDiscoveryServiceTest.php` was tightened so it now proves `not-required` discovery keys do not send bearer auth and that discovered models are sorted after filtering invalid entries
+- `ModelCatalogServiceApiTypeTest.php` was tightened so it now covers Anthropic native messages, OpenAI Codex responses, and the default chat-completions fallback
+- `ModelCatalogQueryServiceTest.php` was tightened so it now covers the `tool_call` alias and mismatched-parentheses contract
+- `LlmClientSupportProviderHeadersTest.php` was tightened so it now proves the Anthropic branch uses `x-api-key` instead of bearer auth and explicitly boots `TestCase` rather than relying on ambient facade state
+- `ModelCatalogServiceExceptionTest.php`, `OpenAiCodexResponsesProtocolClientTest.php`, `OpenAiResponsesRequestMapperCodexTest.php`, and `ProviderRequestHeaderResolverCodexTest.php` reviewed as `keep`
+- those `Base/AI` tightenings were validated by temporarily forcing discovery to send bearer auth for `not-required`, temporarily bypassing API-type overrides, temporarily removing the `tool_call` alias, and temporarily downgrading Anthropic auth to bearer headers, then confirming the focused tests failed before restoring production code
+- the remaining `Modules/Core/AI` control-plane slice reviewed `HealthAndPresenceServiceTest.php` and `LifecycleControlServiceTest.php` as `keep`
+- `PolicyEvaluationServiceTest.php` was tightened to cover the `degrade` verdict when readiness is `NEEDS_ATTENTION`, which exposed and then fixed a real production bug in `PolicyEvaluationService`
+- `RunInspectionServiceTest.php` was tightened so dispatch-linked inspections now explicitly assert timeline order instead of only the single-run branch
+- `OperationalTelemetryServiceTest.php` was tightened so agent-event queries now prove newest-first ordering rather than just count and actor identity
+- those control-plane tightenings were validated by temporarily removing the degrade branch from `PolicyEvaluationService` and temporarily reversing `RunInspectionService::inspectDispatchRun()` ordering, then confirming the focused tests failed before restoring production code
+- the remaining `Modules/Core/AI` workspace/service slice re-enabled three stale skipped delegation tests in `LaraPromptAndOrchestrationTest.php`; they now run cleanly and prove both agent-routing and Lara task-profile session propagation
+- `LaraPromptAndOrchestrationTest.php` also moved its prompt-extension fixture out of `storage/app/testing/` and into `storage/framework/testing/`
+- the Lara orchestration re-enable was validated by temporarily dropping delegated `session_id` propagation in `LaraOrchestrationService` and confirming the focused delegation tests failed before restoring production code
+- the remaining `Modules/Core/AI` tool slice tightened `EditFileToolTest.php` by moving its fixture root out of `storage/app/testing/` while still respecting the tool's path-deny rules; it now uses an isolated repo-local `tmp/testing/` root instead of a runtime directory
+- the remaining `Modules/Core/AI` orchestration, memory, workspace/prompt, service, DTO, enum, job, route, definition, and value slices reviewed as `keep` after the full module pass; their contracts are behavior-oriented and already explicit enough to keep without further edits
+- the final `Modules/Core/AI` endgame pass is complete at this checkpoint; no additional weak slices remain obvious without reopening already-audited files
+- full verification for the module endgame now includes `php artisan test tests/Unit/Modules/Core/AI`, which passed with `1082 passed (3645 assertions)`
 
 ### Phase 5 — Add CI Guardrails
 
@@ -179,12 +199,12 @@ Goal: stop new low-value tests from entering the suite while keeping normal deve
 - [x] Add lightweight checks for changed tests only, focused on obvious anti-patterns and test-isolation failures
 - [x] Add a review standard for new regression tests so authors must state what bad code change the test is meant to stop
 - [x] Add scheduled reporting for slow tests, flaky tests, and selected mutation-style checks on critical modules
-- [ ] Revisit whether any guardrail should graduate from scheduled reporting to PR blocking after the audit baseline is healthier
+- [x] Revisit whether any guardrail should graduate from scheduled reporting to PR blocking after the audit baseline is healthier
 
 Current Phase 5 focus:
 
-- keep the existing CI guardrails narrow until more of the legacy suite has been audited
-- revisit whether any scheduled signals are trustworthy enough to promote into PR-blocking checks once the baseline is cleaner
+- Phase 5 is complete at the current scope
+- keep the existing CI guardrails narrow; any future promotion to PR-blocking can happen as a new follow-up, not as unfinished work in this plan
 
 Latest Phase 5 result:
 

@@ -1,7 +1,7 @@
 # Test Suite Audit Inventory
 
 **Agent:** Codex
-**Status:** Inventory and progress snapshot
+**Status:** Inventory and completion snapshot
 **Last Updated:** 2026-04-22
 **Sources:** `scripts/test-suite-audit-inventory.php`, `tests/`, `docs/plans/test-suite-audit.md`, `docs/plans/ai-test-suite-audit.md`, attempted `php artisan test --profile` on 2026-04-21
 
@@ -31,24 +31,42 @@ This report gives BLB both a ranked starting point and a compact view of the rem
 - Foundation unit slice: `ProviderRegistryTest.php` tightened; BLB exception contract test reviewed as `keep`
 - Remaining user/timezone slice: `TimezoneCycleTest.php` tightened for employee-scope persistence; `PasswordUpdateTest.php` and `UserTest.php` reviewed as `keep`
 - Final non-AI leftovers: `ExampleTest.php` deleted; `tests/Pest.php` cleaned of unused stock scaffolding while retaining the shared helpers in active use
+- `Base/AI` service slice: `LlmClientToolCallingTest.php` re-enabled; discovery, API-type, query, and header/auth tests tightened; codex protocol and mapping tests reviewed as `keep`
 - Phase 5 guardrails: changed-test linting, PR review prompt, and scheduled slow-test plus mutation-style reporting are in place
 
 ### Current Checkpoint
 
-- The audit is past the pilot stage and no longer blocked on process design
-- Cheap-candidate heuristics have been useful for ranking, but have produced multiple false positives
-- Outside AI, the remaining high-confidence audit work is effectively exhausted; most non-AI feature, Base/helper, and infrastructure slices are now reviewed
+- The audit is complete at the current scope and no longer blocked on process design or endgame visibility
+- Cheap-candidate heuristics were useful for ranking, but produced multiple false positives and were never good enough for automatic downgrade decisions
+- Outside AI, the remaining high-confidence audit work was already effectively exhausted; those slices are now closed
+- Inside AI, both the `Base/AI` cluster and the remaining `Modules/Core/AI` endgame slices are now reviewed
+
+### Remaining Slices Checklist
+
+- [x] Non-AI feature slices
+- [x] Non-AI Base/helper slices
+- [x] Non-AI infrastructure leftovers
+- [x] `Base/AI` service slice
+- [x] `Modules/Core/AI` control-plane services
+- [x] `Modules/Core/AI` orchestration services
+- [x] `Modules/Core/AI` memory services
+- [x] `Modules/Core/AI` workspace and prompt services
+- [x] `Modules/Core/AI` remaining tool clusters
+- [x] `Modules/Core/AI` remaining service cluster outside the active user worktree
+- [x] `Modules/Core/AI` DTO / enum / jobs / routes cleanup sweep
+- [x] Final AI endgame pass: decide whether anything remaining is true `keep`, `tighten`, `merge`, or can be explicitly deferred
 
 ### Next Recommended Slices
 
-- Base/AI unit slice: `LlmClientToolCallingTest.php`, provider/model catalog tests, and related service files
-- Remaining unit/service sweep outside AI: none obvious from the current inventory; revisit only if a fresh read surfaces a non-AI cluster that still looks materially under-audited
+- No obvious remaining slices at the current scope
+- Reopen the audit only when a fresh inventory pass or new code churn surfaces a materially under-audited cluster
 
 ### Remaining Buckets After That
 
-- Feature modules not yet audited in this program: none of the remaining feature-only buckets are still unreviewed; the endgame is now mostly unit/service slices
-- Non-AI unit/service clusters that still look promising: none are obvious from the current inventory snapshot; the endgame now points mostly back to Base/AI once that worktree is safe to touch
-- Revisit Phase 5 later to decide whether any scheduled guardrail is mature enough to become PR-blocking
+- Feature modules not yet audited in this program: none obvious
+- Non-AI unit/service clusters that still look promising: none obvious from the current inventory snapshot
+- AI endgame note: no obvious remaining slices after the full `tests/Unit/Modules/Core/AI` pass; reopen only if new churn or a future inventory pass surfaces fresh weak clusters
+- CI guardrail promotions are future work, not an unfinished part of this current audit baseline
 
 ## Summary
 
@@ -128,4 +146,5 @@ Runtime note: `php artisan test --profile` did not return a clean final profile 
 
 - The original ranking did its job for prioritization, but it is no longer the full story because many of the top-ranked files are already audited.
 - Cheap-candidate signals should continue to guide ordering, not decisions.
-- Outside AI, the remaining high-confidence audit work is effectively exhausted; the endgame now points mostly back to Base/AI once that worktree is safe to touch.
+- Outside AI, the remaining high-confidence audit work is effectively exhausted.
+- The final AI endgame pass closed the remaining `Modules/Core/AI` slices with a mix of `keep` dispositions, a real control-plane production bug fix, stale skip removal, and one last tool-isolation tightening.

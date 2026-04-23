@@ -111,6 +111,21 @@ describe('evaluateToolUse', function () {
             ->and($decision->reason)->toContain('unconfigured');
     });
 
+    it('degrades tool use when readiness needs attention', function () {
+        $mocks = makePesMocks();
+        $mocks['toolReadiness']->shouldReceive('readiness')
+            ->with(PES_TOOL_NAME)
+            ->andReturn(ToolReadiness::NEEDS_ATTENTION);
+
+        $service = makePesService($mocks);
+        $decision = $service->evaluateToolUse(PES_TOOL_NAME, PES_SUBJECT);
+
+        expect($decision->verdict)->toBe(PolicyVerdict::Degrade)
+            ->and($decision->decidingLayer)->toBe(PolicyLayer::Readiness)
+            ->and($decision->isAllowed())->toBeTrue()
+            ->and($decision->reason)->toContain('needs attention');
+    });
+
     it('denies when URL context fails SSRF guard', function () {
         $mocks = makePesMocks();
         $mocks['toolReadiness']->shouldReceive('readiness')
