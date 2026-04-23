@@ -20,7 +20,8 @@ final readonly class BrowserSessionState
      */
     public function __construct(
         public string $sessionId,
-        public int $employeeId,
+        public int $agentEmployeeId,
+        public ?int $actingForUserId,
         public int $companyId,
         public BrowserSessionStatus $status,
         public bool $headless,
@@ -41,7 +42,8 @@ final readonly class BrowserSessionState
     {
         return [
             'session_id' => $this->sessionId,
-            'employee_id' => $this->employeeId,
+            'agent_employee_id' => $this->agentEmployeeId,
+            'acting_for_user_id' => $this->actingForUserId,
             'company_id' => $this->companyId,
             'status' => $this->status->value,
             'headless' => $this->headless,

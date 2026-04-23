@@ -22,16 +22,23 @@ class BrowserSessionRepository
     /**
      * Create a new browser session record.
      *
-     * @param  int  $employeeId  Agent (employee) that owns the session
+     * @param  int  $agentEmployeeId  Agent (employee) that owns the session
      * @param  int  $companyId  Company scope for isolation
+     * @param  int|null  $actingForUserId  Authenticated user the agent acts for, if any
      * @param  bool  $headless  Whether the session runs headless
      * @param  int  $ttlSeconds  Initial time-to-live in seconds
      */
-    public function create(int $employeeId, int $companyId, bool $headless, int $ttlSeconds): BrowserSession
-    {
+    public function create(
+        int $agentEmployeeId,
+        int $companyId,
+        ?int $actingForUserId,
+        bool $headless,
+        int $ttlSeconds,
+    ): BrowserSession {
         return BrowserSession::query()->create([
             'id' => 'bs_'.Str::ulid()->toBase32(),
-            'employee_id' => $employeeId,
+            'agent_employee_id' => $agentEmployeeId,
+            'acting_for_user_id' => $actingForUserId,
             'company_id' => $companyId,
             'status' => BrowserSessionStatus::Opening,
             'headless' => $headless,
@@ -49,14 +56,18 @@ class BrowserSessionRepository
     }
 
     /**
-     * Find the most recent active session for an employee within a company.
+     * Find the most recent active session for an agent identity within a company.
      *
      * Returns the newest non-terminal session, useful for session reuse.
      */
-    public function findActiveForEmployee(int $employeeId, int $companyId): ?BrowserSession
-    {
+    public function findActiveForIdentity(
+        int $agentEmployeeId,
+        int $companyId,
+        ?int $actingForUserId,
+    ): ?BrowserSession {
         return BrowserSession::query()
-            ->where('employee_id', $employeeId)
+            ->where('agent_employee_id', $agentEmployeeId)
+            ->where('acting_for_user_id', $actingForUserId)
             ->where('company_id', $companyId)
             ->active()
             ->orderByDesc('created_at')

@@ -23,7 +23,7 @@ beforeEach(function () {
 
     // Create a persistent session to own artifacts.
     $fixture = $this->createLaraFixture();
-    $this->session = $this->repository->create($fixture['employee']->id, $fixture['company']->id, true, 300);
+    $this->session = $this->repository->create($fixture['employee']->id, $fixture['company']->id, $fixture['user']->id, true, 300);
     $this->repository->markReady($this->session);
 });
 
@@ -125,7 +125,7 @@ describe('listForSession', function () {
         $this->store->store($this->session->id, BrowserArtifactType::Snapshot, 'mine');
 
         $fixture2 = $this->createLaraFixture();
-        $other = $this->repository->create($fixture2['employee']->id, $fixture2['company']->id, true, 300);
+        $other = $this->repository->create($fixture2['employee']->id, $fixture2['company']->id, $fixture2['user']->id, true, 300);
         $this->store->store($other->id, BrowserArtifactType::Snapshot, 'not mine');
 
         expect($this->store->listForSession($this->session->id))->toHaveCount(1);

@@ -44,7 +44,8 @@ function fakeBrowserSession(array $attrs = []): BrowserSession
 {
     $session = new BrowserSession;
     $session->id = $attrs['id'] ?? 'bs_test123';
-    $session->employee_id = $attrs['employee_id'] ?? 0;
+    $session->agent_employee_id = $attrs['agent_employee_id'] ?? 0;
+    $session->acting_for_user_id = $attrs['acting_for_user_id'] ?? null;
     $session->company_id = $attrs['company_id'] ?? 0;
     $session->status = $attrs['status'] ?? BrowserSessionStatus::Ready;
     $session->headless = $attrs['headless'] ?? true;
@@ -522,7 +523,12 @@ describe('headless mode', function () {
         config()->set('ai.tools.browser.headless', true);
 
         $this->sessionManager->shouldReceive('open')
-            ->with(BrowserToolTestCase::BROWSER_TOOL_TEST_EMPLOYEE_ID, BrowserToolTestCase::BROWSER_TOOL_TEST_COMPANY_ID, true)
+            ->with(
+                BrowserToolTestCase::BROWSER_TOOL_TEST_EMPLOYEE_ID,
+                BrowserToolTestCase::BROWSER_TOOL_TEST_COMPANY_ID,
+                BrowserToolTestCase::BROWSER_TOOL_TEST_USER_ID,
+                true,
+            )
             ->andReturn(fakeBrowserSession());
 
         $this->sessionManager->shouldReceive('executeAction')
@@ -535,7 +541,12 @@ describe('headless mode', function () {
 
     it('opens session with headless=false when explicitly provided', function () {
         $this->sessionManager->shouldReceive('open')
-            ->with(BrowserToolTestCase::BROWSER_TOOL_TEST_EMPLOYEE_ID, BrowserToolTestCase::BROWSER_TOOL_TEST_COMPANY_ID, false)
+            ->with(
+                BrowserToolTestCase::BROWSER_TOOL_TEST_EMPLOYEE_ID,
+                BrowserToolTestCase::BROWSER_TOOL_TEST_COMPANY_ID,
+                BrowserToolTestCase::BROWSER_TOOL_TEST_USER_ID,
+                false,
+            )
             ->andReturn(fakeBrowserSession(['headless' => false]));
 
         $this->sessionManager->shouldReceive('executeAction')

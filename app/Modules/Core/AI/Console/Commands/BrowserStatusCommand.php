@@ -57,7 +57,8 @@ class BrowserStatusCommand extends Command
 
         $this->components->twoColumnDetail('Session ID', $state->sessionId);
         $this->components->twoColumnDetail('Status', $state->status->label().' ('.$state->status->value.')');
-        $this->components->twoColumnDetail('Employee', (string) $state->employeeId);
+        $this->components->twoColumnDetail('Agent Employee', (string) $state->agentEmployeeId);
+        $this->components->twoColumnDetail('Acting User', (string) ($state->actingForUserId ?? self::NONE_LABEL));
         $this->components->twoColumnDetail('Company', (string) $state->companyId);
         $this->components->twoColumnDetail('Headless', $state->headless ? 'Yes' : 'No');
         $this->components->twoColumnDetail('Current URL', $state->currentUrl ?? self::NONE_LABEL);
@@ -92,7 +93,8 @@ class BrowserStatusCommand extends Command
             $rows[] = [
                 $state->sessionId,
                 $state->status->label(),
-                $state->employeeId,
+                $state->agentEmployeeId,
+                $state->actingForUserId ?? '—',
                 $state->headless ? 'H' : 'V',
                 $state->currentUrl ?? '—',
                 $state->lastActivityAt,
@@ -100,7 +102,7 @@ class BrowserStatusCommand extends Command
         }
 
         $this->table(
-            ['Session', 'Status', 'Employee', 'Mode', 'URL', 'Last Activity'],
+            ['Session', 'Status', 'Agent', 'User', 'Mode', 'URL', 'Last Activity'],
             $rows,
         );
 

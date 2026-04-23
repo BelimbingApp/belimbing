@@ -24,7 +24,8 @@ function fakeSession(array $attrs = []): BrowserSession
 {
     $session = new BrowserSession;
     $session->id = $attrs['id'] ?? 'bs_test_mgr';
-    $session->employee_id = $attrs['employee_id'] ?? 1;
+    $session->agent_employee_id = $attrs['agent_employee_id'] ?? 1;
+    $session->acting_for_user_id = $attrs['acting_for_user_id'] ?? 10;
     $session->company_id = $attrs['company_id'] ?? 1;
     $session->status = $attrs['status'] ?? BrowserSessionStatus::Ready;
     $session->headless = $attrs['headless'] ?? true;
@@ -92,22 +93,22 @@ describe('open', function () {
 
     it('reuses an existing active session for the same agent+company', function () {
         $existing = fakeSession();
-        $this->repository->shouldReceive('findActiveForEmployee')->with(1, 1)->andReturn($existing);
+        $this->repository->shouldReceive('findActiveForIdentity')->with(1, 1, 10)->andReturn($existing);
         $this->repository->shouldReceive('touchActivity')->once();
 
-        $result = $this->manager->open(1, 1, true);
+        $result = $this->manager->open(1, 1, 10, true);
 
         expect($result->id)->toBe('bs_test_mgr');
     });
 
     it('creates a new session when none exists', function () {
         $newSession = fakeSession(['id' => 'bs_new']);
-        $this->repository->shouldReceive('findActiveForEmployee')->andReturn(null);
+        $this->repository->shouldReceive('findActiveForIdentity')->with(1, 1, 10)->andReturn(null);
         $this->repository->shouldReceive('countActiveForCompany')->with(1)->andReturn(0);
-        $this->repository->shouldReceive('create')->andReturn($newSession);
+        $this->repository->shouldReceive('create')->with(1, 1, 10, true, 300)->andReturn($newSession);
         $this->repository->shouldReceive('markReady')->once();
 
-        $result = $this->manager->open(1, 1, true);
+        $result = $this->manager->open(1, 1, 10, true);
 
         expect($result->id)->toBe('bs_new');
     });
@@ -115,15 +116,15 @@ describe('open', function () {
     it('throws when browser is not available', function () {
         config()->set('ai.tools.browser.enabled', false);
 
-        expect(fn () => $this->manager->open(1, 1, true))
+        expect(fn () => $this->manager->open(1, 1, 10, true))
             ->toThrow(BrowserSessionException::class, 'not available');
     });
 
     it('throws when concurrency limit reached', function () {
-        $this->repository->shouldReceive('findActiveForEmployee')->andReturn(null);
+        $this->repository->shouldReceive('findActiveForIdentity')->with(1, 1, 10)->andReturn(null);
         $this->repository->shouldReceive('countActiveForCompany')->with(1)->andReturn(3);
 
-        expect(fn () => $this->manager->open(1, 1, true))
+        expect(fn () => $this->manager->open(1, 1, 10, true))
             ->toThrow(BrowserSessionException::class, 'maximum');
     });
 });
@@ -220,6 +221,8 @@ describe('getSessionState', function () {
 
         expect($state)->not()->toBeNull()
             ->and($state->sessionId)->toBe('bs_test_mgr')
+            ->and($state->agentEmployeeId)->toBe(1)
+            ->and($state->actingForUserId)->toBe(10)
             ->and($state->currentUrl)->toBe('https://example.com')
             ->and($state->tabs)->toHaveCount(1)
             ->and($state->lastSnapshotRef)->toBe('2026-01-01');

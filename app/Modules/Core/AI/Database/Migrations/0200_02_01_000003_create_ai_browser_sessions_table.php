@@ -16,7 +16,8 @@ return new class extends Migration
     {
         Schema::create('ai_browser_sessions', function (Blueprint $table): void {
             $table->string('id', 64)->primary();
-            $table->foreignId('employee_id')->constrained('employees');
+            $table->foreignId('agent_employee_id')->constrained('employees');
+            $table->foreignId('acting_for_user_id')->nullable()->constrained('users');
             $table->foreignId('company_id')->constrained('companies');
             $table->string('status', 20)->default('opening');
             $table->boolean('headless')->default(true);
@@ -32,7 +33,9 @@ return new class extends Migration
 
             $table->index('status');
             $table->index(['company_id', 'status']);
-            $table->index(['employee_id', 'status']);
+            $table->index(['agent_employee_id', 'status']);
+            $table->index(['acting_for_user_id', 'status']);
+            $table->index(['agent_employee_id', 'acting_for_user_id', 'company_id', 'status']);
             $table->index('expires_at');
         });
     }

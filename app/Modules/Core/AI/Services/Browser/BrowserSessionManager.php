@@ -29,17 +29,18 @@ class BrowserSessionManager
     /**
      * Open or reuse a browser session for the given agent.
      *
-     * If an active session already exists for this employee+company, it is
+     * If an active session already exists for this agent identity tuple, it is
      * reused. Otherwise a new session is created if the concurrency limit
      * allows. Returns the session on success, or throws on limit/availability.
      *
-     * @param  int  $employeeId  Agent (employee) requesting the session
+     * @param  int  $agentEmployeeId  Agent (employee) requesting the session
      * @param  int  $companyId  Company scope for isolation and limits
+     * @param  int|null  $actingForUserId  Authenticated user the agent acts for, if any
      * @param  bool  $headless  Whether the session should run headless
      *
      * @throws BrowserSessionException If the browser is unavailable or limit is reached
      */
-    public function open(int $employeeId, int $companyId, bool $headless): BrowserSession
+    public function open(int $agentEmployeeId, int $companyId, ?int $actingForUserId, bool $headless): BrowserSession
     {
         if (! $this->isAvailable()) {
             throw new BrowserSessionException(
@@ -47,8 +48,12 @@ class BrowserSessionManager
             );
         }
 
-        // Reuse existing active session for same agent+company.
-        $existing = $this->repository->findActiveForEmployee($employeeId, $companyId);
+        // Reuse existing active session for same agent identity tuple.
+        $existing = $this->repository->findActiveForIdentity(
+            $agentEmployeeId,
+            $companyId,
+            $actingForUserId,
+        );
 
         if ($existing !== null) {
             $this->repository->touchActivity($existing, $this->sessionTtl());
@@ -66,7 +71,13 @@ class BrowserSessionManager
             );
         }
 
-        $session = $this->repository->create($employeeId, $companyId, $headless, $this->sessionTtl());
+        $session = $this->repository->create(
+            $agentEmployeeId,
+            $companyId,
+            $actingForUserId,
+            $headless,
+            $this->sessionTtl(),
+        );
         $this->repository->markReady($session);
 
         return $session;
@@ -207,7 +218,8 @@ class BrowserSessionManager
 
         return new BrowserSessionState(
             sessionId: $session->id,
-            employeeId: $session->employee_id,
+            agentEmployeeId: $session->agent_employee_id,
+            actingForUserId: $session->acting_for_user_id,
             companyId: $session->company_id,
             status: $session->status,
             headless: $session->headless,
