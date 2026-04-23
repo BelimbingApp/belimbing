@@ -13,7 +13,6 @@ use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\User\Models\User;
-use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
@@ -22,8 +21,8 @@ use Illuminate\Support\Facades\Notification as NotificationFacade;
  * Notification sending tool for Agents.
  *
  * Sends notifications to Belimbing users via Laravel's notification system
- * (database or broadcast channels). Supports sending to a specific user
- * by ID or broadcasting to all users in the authenticated user's company.
+ * (database channel). Supports sending to a specific user by ID or
+ * sending to all users in the authenticated user's company.
  *
  * Gated by `ai.tool_notification.execute` authz capability.
  */
@@ -46,7 +45,7 @@ class NotificationTool extends AbstractTool
      *
      * @var list<string>
      */
-    private const CHANNELS = ['database', 'broadcast'];
+    private const CHANNELS = ['database'];
 
     public function name(): string
     {
@@ -56,9 +55,9 @@ class NotificationTool extends AbstractTool
     public function description(): string
     {
         return 'Send a notification to a Belimbing user or all users in the current company. '
-            .'Supports database and broadcast channels. '
+            .'Supports database channel notifications. '
             .'Use this when the user asks to notify someone, send an alert, '
-            .'or broadcast a message to the team.';
+            .'or send a message to the whole team.';
     }
 
     protected function schema(): ToolSchemaBuilder
@@ -70,7 +69,7 @@ class NotificationTool extends AbstractTool
             ])->required()
             ->string(
                 'channel',
-                'Notification channel: "database" (default) or "broadcast".',
+                'Notification channel. Currently only "database" is supported.',
                 enum: self::CHANNELS,
             )
             ->string(
@@ -103,7 +102,7 @@ class NotificationTool extends AbstractTool
         return [
             'display_name' => 'Notification',
             'summary' => 'Send notifications to Belimbing users via internal channels.',
-            'explanation' => 'Sends notifications via Laravel\'s notification system (database, email, broadcast). '
+            'explanation' => 'Sends notifications via Laravel\'s notification system (database, email). '
                 .'Targeted at internal Belimbing notifications — not an external messaging platform.',
             'setup_requirements' => [
                 'Notification channels configured',
@@ -244,13 +243,6 @@ class NotificationTool extends AbstractTool
                 ];
             }
 
-            public function toBroadcast(object $notifiable): BroadcastMessage
-            {
-                return new BroadcastMessage([
-                    'subject' => $this->subject,
-                    'body' => $this->body,
-                ]);
-            }
         };
     }
 

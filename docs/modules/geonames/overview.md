@@ -31,8 +31,6 @@ app/Modules/Core/Geonames/
 │       ├── PostcodeSeeder.php
 │       ├── CitySeeder.php
 │       └── GeonamesSeeder.php
-├── Events/
-│   └── PostcodeImportProgress.php
 ├── Jobs/
 │   └── ImportPostcodes.php
 ├── Models/
@@ -97,10 +95,7 @@ php artisan db:seed --class=CountrySeeder
 2. Livewire dispatches `ImportPostcodes` to the queue.
 3. The UI starts a one-off queue worker in the background with `queue:work --once`.
 4. The job runs `PostcodeSeeder`, which downloads, parses, and imports per country.
-5. Each step broadcasts `PostcodeImportProgress` via Reverb.
-6. Frontend listeners update progress and refresh on completion.
-
-**Progress UI:** A generic importing message is shown immediately. Live per-country progress requires Reverb to be configured and running. See `docs/architecture/broadcasting.md`.
+5. The `wire:loading` block shows a generic progress indicator while the request is in flight.
 
 **Queue worker:** The UI starts a one-off worker after each dispatch so imports can run without requiring a permanently running worker.
 

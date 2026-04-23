@@ -1,10 +1,10 @@
 # FrankenPHP Caddyfile — read by FrankenPHP's embedded Caddy (via Octane).
 # {$VAR:default} placeholders are resolved by Caddy from environment variables at startup.
-# Vite and Reverb remain reverse_proxy because they are separate Node/PHP processes.
+# Vite remains reverse_proxy because it is a separate Node process.
 #
 # Octane passes --caddyfile=Caddyfile so this file is used instead of the
 # default stub. The frankenphp worker block and admin endpoint mirror what
-# the stub provides; the site blocks add TLS, Vite, and Reverb proxying.
+# the stub provides; the site blocks add TLS and Vite proxying.
 {
 	servers {
 		protocols h1 h2 h3
@@ -27,20 +27,6 @@
 	log {
 		output file {$CADDY_LOG_DIR:.caddy/logs}/access.log
 		format console
-	}
-
-	# Reverb WebSocket + broadcast API (Laravel Echo / broadcaster — separate Reverb process)
-	@reverb_ws {
-		path /app/*
-		expression `header({'Connection':'*Upgrade*','Upgrade':'websocket'}) || header({':protocol':'websocket'})`
-	}
-	handle @reverb_ws {
-		reverse_proxy 127.0.0.1:{$REVERB_SERVER_PORT:8080}
-	}
-
-	@reverb_api path /apps/*
-	handle @reverb_api {
-		reverse_proxy 127.0.0.1:{$REVERB_SERVER_PORT:8080}
 	}
 
 	# Vite HMR WebSocket (separate Vite process)

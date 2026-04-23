@@ -12,7 +12,7 @@ BLB uses one core native topology across environments:
 - each BLB instance runs its own FrankenPHP process locally through Octane
 - the BLB instance binds to a high, non-privileged loopback port
 - the system Caddy routes the BLB frontend and backend hostnames to that local listener
-- Vite and Reverb remain separate internal processes behind the same BLB-local routing surface
+- Vite remains a separate internal process behind the same BLB-local routing surface
 
 This is the default and recommended topology because it works for a single BLB instance, multiple BLB instances on one machine, and BLB deployed alongside unrelated sites. The same shape applies in development, staging, and production; the environment differences are intentionally narrow.
 
@@ -60,7 +60,6 @@ Each BLB instance owns its own:
 - FrankenPHP process
 - Octane worker lifecycle
 - queue worker
-- Reverb process
 - Vite process in environments where frontend hot reload is needed
 
 The BLB instance binds FrankenPHP to a loopback-only high port. That port is private infrastructure, not part of the public contract.
@@ -72,7 +71,6 @@ Within the BLB instance, the repository `Caddyfile` remains the single source of
 - PHP request handling through FrankenPHP
 - static file handling
 - Vite proxying
-- Reverb proxying
 
 In shared-ingress mode, that local routing surface serves plain HTTP on the internal listener because public TLS is already handled by the system Caddy layer.
 
@@ -86,9 +84,9 @@ Use `103` only as a narrow, case-by-case optimization for specific HTML navigati
 
 FrankenPHP includes the Mercure hub (Server-Sent Events based real-time messaging), but BLB does **not** use Mercure.
 
-BLB's real-time broadcasting uses **Laravel Reverb** (WebSocket-based, documented in `docs/architecture/broadcasting.md`). Mercure remains available as a future alternative if Reverb's WebSocket model becomes unsuitable for specific use cases (e.g., corporate proxies that block WebSockets, or scenarios requiring SSE's automatic reconnection).
+BLB's real-time communication uses direct SSE and Livewire patterns (documented in `docs/architecture/broadcasting.md`). Mercure remains available as a future option if BLB's real-time needs grow beyond what polling and direct SSE cover.
 
-If Mercure is adopted later, it would be configured in the Caddyfile alongside Reverb, with environment-driven hub credentials and JWT key management.
+If Mercure is adopted later, it would be configured in the Caddyfile, with environment-driven hub credentials and JWT key management.
 
 ## Environment Parity
 

@@ -518,7 +518,7 @@ FrankenPHP embeds Caddy as its HTTP server and runs PHP workers natively — no 
 - Before: `Caddy (TLS, routing) → reverse_proxy → artisan serve (single PHP worker)`
 - After: `FrankenPHP (TLS, routing, N PHP workers)`
 
-Caddy features BLB already uses (TLS, mkcert, Reverb WebSocket proxy, Vite HMR proxy) are preserved because FrankenPHP IS Caddy with a PHP SAPI module.
+Caddy features BLB already uses (TLS, mkcert, Vite HMR proxy) are preserved because FrankenPHP IS Caddy with a PHP SAPI module.
 
 ### Risks
 
@@ -585,11 +585,11 @@ FrankenPHP binary must exist before `octane:install --server=frankenphp` can wor
 
 The current stack has Caddy as a separate process reverse-proxying to `artisan serve`. FrankenPHP IS Caddy with a PHP SAPI, so the `reverse_proxy` to `artisan serve` disappears — replaced by `php_server` / `php` directives that serve Laravel directly.
 
-Vite HMR, Reverb WebSocket, and Vite dev asset proxying remain as `reverse_proxy` blocks because they target separate Node/PHP processes.
+Vite HMR and Vite dev asset proxying remain as `reverse_proxy` blocks because they target separate Node/PHP processes.
 
 - [x] Convert the Laravel Backend `handle` block from `reverse_proxy {$APP_HOST}:{$APP_PORT}` to FrankenPHP `php_server` directive pointing at `public/`.
 - [x] Convert the built assets block similarly — FrankenPHP serves static files from `public/build/` directly via `php_server`.
-- [x] Preserve Vite dev proxy (`@vite_dev`, `@vite_ws`) and Reverb WebSocket proxy (`@reverb_ws`) as `reverse_proxy` blocks — these still target external processes.
+- [x] Preserve Vite dev proxy (`@vite_dev`, `@vite_ws`) as `reverse_proxy` blocks — these still target external processes.
 - [x] Remove `flush_interval -1` from the Laravel blocks (added in 6B) — FrankenPHP serves PHP responses directly, no intermediate buffer to flush.
 - [x] Update the backend domain block (`{$BACKEND_DOMAIN}`) to use `php_server` instead of `reverse_proxy`.
 - [x] Add `{$FRANKENPHP_CONFIG}` global options block for Octane worker injection.
@@ -663,7 +663,7 @@ Requires a running FrankenPHP instance and browser sessions. Perform manually af
 - [ ] Open 3+ simultaneous Lara chat sessions, each streaming a turn.
 - [ ] Confirm all sessions receive progressive SSE events concurrently.
 - [ ] Confirm non-SSE page loads remain responsive while SSE connections are active.
-- [ ] Confirm Reverb WebSocket and Vite HMR still function through FrankenPHP's Caddy routing.
+- [ ] Confirm Vite HMR still functions through FrankenPHP's Caddy routing.
 
 #### 6K — Stabilize SSE under FrankenPHP worker mode ✅
 
@@ -676,7 +676,7 @@ Secondary issue: `queue:listen` has a built-in 60-second child timeout that kill
 - [x] Add `connection_aborted()` check to `ChatStreamController::streamAndEmit()` — stops streaming to disconnected clients, freeing workers sooner.
 - [x] Add `--restart-tries=3 --restart-after=1000` to `concurrently` in `package.json` — auto-restarts crashed processes with 1-second delay.
 
-**Known architectural debt (medium-term):** `ChatStreamController` holds a FrankenPHP worker for the entire LLM call duration (30–300s). This is fundamentally wasteful in worker mode. The medium-term fix is to always dispatch LLM execution via `RunAgentChatJob` (background) and use `TurnEventStreamController` (or Reverb WebSocket) for live tailing only. The background job path already exists and works.
+**Known architectural debt (medium-term):** `ChatStreamController` holds a FrankenPHP worker for the entire LLM call duration (30–300s). This is fundamentally wasteful in worker mode. The medium-term fix is to always dispatch LLM execution via `RunAgentChatJob` (background) and use `TurnEventStreamController` for live tailing only. The background job path already exists and works.
 
 ## Phase 7 — Real-Time Agent Activity UX
 
@@ -736,7 +736,7 @@ Stream tool execution output in real-time so action boxes fill progressively ins
 
 ### Non-goals for Phase 7
 
-- Do not add WebSocket transport (Reverb) in this phase — that's a separate architectural migration.
+- Do not add WebSocket transport in this phase.
 - Do not stream tool *input* (args) incrementally — args are already available at `tool.started`.
 - Do not implement speculative UI (showing predicted tool output before execution).
 
@@ -813,7 +813,7 @@ Make the job produce identical results to what the old inline path produced.
 
 ### Known limitations
 
-**Worker occupancy:** `TurnEventStreamController` still holds a FrankenPHP worker per open SSE connection (sleeping in `usleep` poll loop). This is acceptable at low concurrency (4 workers, typically 1-2 simultaneous chats) but will need to migrate to Reverb WebSocket or short-polling if concurrency grows.
+**Worker occupancy:** `TurnEventStreamController` still holds a FrankenPHP worker per open SSE connection (sleeping in `usleep` poll loop). This is acceptable at low concurrency (4 workers, typically 1-2 simultaneous chats) but will need to migrate to Mercure or short-polling if concurrency grows.
 
 **500ms poll interval:** Events arrive in small batches instead of instantly. For tool/phase events this is fine. For streaming token deltas it's perceptibly bursty but acceptable for now.
 

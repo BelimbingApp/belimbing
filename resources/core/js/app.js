@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-import './echo'
-
 const blbDateTimeOptions = (format, includeSeconds = false) => {
     const timeOptions = includeSeconds
         ? { hour: '2-digit', minute: '2-digit', second: '2-digit' }

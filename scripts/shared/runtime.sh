@@ -246,18 +246,17 @@ launch_browser() {
     return 1
 }
 
-# Stop development services (Laravel, Vite, Reverb, concurrently)
-# Usage: stop_dev_services [environment] [backend_port] [frontend_port] [reverb_port]
+# Stop development services (Laravel, Vite, concurrently)
+# Usage: stop_dev_services [environment] [backend_port] [frontend_port]
 # If ports not provided, will detect from environment
 stop_dev_services() {
     local environment="${1:-local}"
     local backend_port="${2:-}"
     local frontend_port="${3:-}"
-    local reverb_port="${4:-}"
 
     # Get ports if not provided
-    if [[ -z "$backend_port" ]] || [[ -z "$frontend_port" ]] || [[ -z "$reverb_port" ]]; then
-        if command -v get_backend_port >/dev/null 2>&1 && command -v get_frontend_port >/dev/null 2>&1 && command -v get_reverb_server_port >/dev/null 2>&1; then
+    if [[ -z "$backend_port" ]] || [[ -z "$frontend_port" ]]; then
+        if command -v get_backend_port >/dev/null 2>&1 && command -v get_frontend_port >/dev/null 2>&1; then
             local project_root="${PROJECT_ROOT:-}"
             if [[ -z "$project_root" ]]; then
                 # Try to detect project root
@@ -265,7 +264,6 @@ stop_dev_services() {
             fi
             backend_port=$(get_backend_port "$environment" "$project_root" 2>/dev/null || echo "")
             frontend_port=$(get_frontend_port "$environment" "$project_root" 2>/dev/null || echo "")
-            reverb_port=$(get_reverb_server_port "$environment" "$project_root" 2>/dev/null || echo "")
         fi
 
         # Fallback to defaults
@@ -273,27 +271,22 @@ stop_dev_services() {
             local)
                 backend_port="${backend_port:-8000}"
                 frontend_port="${frontend_port:-5173}"
-                reverb_port="${reverb_port:-8080}"
                 ;;
             staging)
                 backend_port="${backend_port:-8001}"
                 frontend_port="${frontend_port:-5174}"
-                reverb_port="${reverb_port:-8080}"
                 ;;
             production)
                 backend_port="${backend_port:-8002}"
                 frontend_port="${frontend_port:-5175}"
-                reverb_port="${reverb_port:-8080}"
                 ;;
             testing)
                 backend_port="${backend_port:-8003}"
                 frontend_port="${frontend_port:-5176}"
-                reverb_port="${reverb_port:-8080}"
                 ;;
             *)
                 backend_port="${backend_port:-8000}"
                 frontend_port="${frontend_port:-5173}"
-                reverb_port="${reverb_port:-8080}"
                 ;;
         esac
     fi
@@ -332,7 +325,6 @@ stop_dev_services() {
 
     stop_port_by_number "$backend_port" "Laravel server"
     stop_port_by_number "$frontend_port" "Vite dev server"
-    stop_port_by_number "$reverb_port" "Reverb server"
 
     # Wait for output to flush
     sleep 0.5

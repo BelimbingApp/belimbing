@@ -91,7 +91,7 @@ cd ~/belimbing # go to the project root
 ./scripts/start-app.sh
 ```
 
-`./scripts/start-app.sh` automatically chooses free internal ports for Laravel, Vite, and Reverb when they are not pinned in `.env`, so multiple local BLB instances can run side-by-side without manual port edits. In `shared` ingress mode, keep `APP_PORT` pinned in `.env` so the generated system Caddy config always points to a stable upstream.
+`./scripts/start-app.sh` automatically chooses free internal ports for Laravel and Vite when they are not pinned in `.env`, so multiple local BLB instances can run side-by-side without manual port edits. In `shared` ingress mode, keep `APP_PORT` pinned in `.env` so the generated system Caddy config always points to a stable upstream.
 
 In `direct` mode, the app is usually available at `https://local.blb.lara`. In `shared` mode, the public URL remains the same, but system Caddy is the process serving `:443` and proxying to BLB's local FrankenPHP listener. To stop the app, press `Ctrl+C` in the terminal. The script will automatically stop the app when you exit the terminal. You can also stop the app manually using the following command:
 
