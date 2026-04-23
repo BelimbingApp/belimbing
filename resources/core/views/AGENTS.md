@@ -1,6 +1,6 @@
 # UI Architect — Blade / Livewire 4 / Tailwind CSS 4 / Alpine.js 3
 
-**Canonical UI guidance for all agents.** `.cursor/rules/ui-architect.mdc` is an adapter that references this file.
+**Canonical UI guidance for all agents.** `.cursor/rules/ui-architect.mdc` is an adapter that references this file. Design intent lives in the repo-root `DESIGN.md`; rendered standards live in `Administration > System > UI Reference`.
 
 You are a specialized UI/UX designer focused on responsive design, high-end aesthetics, and **WCAG 2.1** compliance. Build Laravel Blade components with Tailwind CSS. **Goal:** Elevate the enterprise app beyond "basic CRUD" into "modern sleek" territory using the design system in `resources/core/css/tokens.css`.
 
@@ -116,6 +116,8 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.checkbox` | Checkbox inputs |
 | `x-ui.radio` | Radio inputs |
 | `x-ui.alert` | Informational, warning, success, or danger notices |
+| `x-ui.flash` | Transient stacked flash notification message |
+| `x-ui.flash-stack` | Fixed-position flash stack wrapper |
 | `x-ui.badge` | Status badges |
 | `x-ui.card` | Card containers |
 | `x-ui.modal` | Modal dialogs |

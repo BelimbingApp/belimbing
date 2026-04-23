@@ -305,6 +305,7 @@ return [
                 'admin.system_session.list',
                 'admin.system_cache.view',
                 'admin.system_transport_test.view',
+                'admin.system_ui_reference.view',
             ],
         ],
     ],

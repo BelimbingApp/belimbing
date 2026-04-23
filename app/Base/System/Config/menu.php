@@ -24,6 +24,15 @@ return [
             'position' => 95,
         ],
         [
+            'id' => 'system.ui-reference',
+            'label' => 'UI Reference',
+            'icon' => 'heroicon-o-adjustments-horizontal',
+            'route' => 'admin.system.ui-reference.index',
+            'permission' => 'admin.system_ui_reference.view',
+            'parent' => 'system',
+            'position' => 97,
+        ],
+        [
             'id' => 'system.test-transport',
             'label' => 'TestTransport',
             'icon' => 'heroicon-o-play',

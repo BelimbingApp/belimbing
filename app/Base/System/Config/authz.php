@@ -8,5 +8,6 @@ return [
         'admin.system_info.view',
         'admin.system_localization.manage',
         'admin.system_transport_test.view',
+        'admin.system_ui_reference.view',
     ],
 ];
