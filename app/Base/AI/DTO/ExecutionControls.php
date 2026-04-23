@@ -32,7 +32,7 @@ final class ExecutionControls
         $this->tools = $tools ?? new ToolExecutionControls;
     }
 
-    public static function defaults(
+    public static function defaults(// NOSONAR (parameter count): kept as named-argument-friendly builder API
         int $maxOutputTokens = 2048,
         ?float $temperature = 0.7,
         ?ToolChoiceMode $toolChoice = null,

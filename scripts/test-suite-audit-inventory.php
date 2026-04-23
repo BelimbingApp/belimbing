@@ -3,6 +3,8 @@
 
 declare(strict_types=1);
 
+final class TestSuiteAuditInventoryException extends RuntimeException {}
+
 $projectRoot = realpath(__DIR__.'/..');
 
 if ($projectRoot === false) {
@@ -75,7 +77,7 @@ function analyzeTestFile(string $path, string $projectRoot): array
     $contents = file_get_contents($path);
 
     if ($contents === false) {
-        throw new RuntimeException("Could not read {$path}");
+        throw new TestSuiteAuditInventoryException("Could not read {$path}");
     }
 
     $relativePath = ltrim(str_replace($projectRoot, '', $path), '/');
@@ -177,22 +179,23 @@ function detectSuiteAndArea(string $relativePath): array
     $parts = explode('/', $relativePath);
     array_shift($parts); // tests
 
-    if (count($parts) === 1) {
-        return ['Bootstrap', 'Bootstrap'];
+    $suite = 'Bootstrap';
+    $area = 'Bootstrap';
+
+    if (count($parts) > 1) {
+        $suite = $parts[0] ?? 'Unknown';
+        $areaParts = array_slice($parts, 1);
+
+        if (($areaParts[0] ?? null) === 'Modules') {
+            $area = implode('/', array_slice($areaParts, 0, 3));
+        } elseif (($areaParts[0] ?? null) === 'Base') {
+            $area = implode('/', array_slice($areaParts, 0, 2));
+        } else {
+            $area = $areaParts[0] ?? 'root';
+        }
     }
 
-    $suite = $parts[0] ?? 'Unknown';
-    $areaParts = array_slice($parts, 1);
-
-    if (($areaParts[0] ?? null) === 'Modules') {
-        return [$suite, implode('/', array_slice($areaParts, 0, 3))];
-    }
-
-    if (($areaParts[0] ?? null) === 'Base') {
-        return [$suite, implode('/', array_slice($areaParts, 0, 2))];
-    }
-
-    return [$suite, $areaParts[0] ?? 'root'];
+    return [$suite, $area];
 }
 
 /**

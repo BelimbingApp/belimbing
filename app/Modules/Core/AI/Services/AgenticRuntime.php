@@ -34,7 +34,7 @@ use Illuminate\Support\Str;
  * - Provider fallback before the tool-calling loop commits (first successful LLM call)
  * - No mid-loop fallback: once tool calls start, the provider is locked for consistency
  */
-class AgenticRuntime
+class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted collaborators handle complexity without changing behaviour
 {
     private const ALL_PROVIDER_CONFIGURATIONS_FAILED = 'All provider configurations failed';
 
@@ -73,7 +73,7 @@ class AgenticRuntime
      * @param  list<string>|null  $allowedToolNames  Optional task-profile tool allowlist
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
-    public function run(
+    public function run(// NOSONAR (parameter count): public runtime API keeps explicit optional knobs
         array $messages,
         int $employeeId,
         ?string $systemPrompt = null,
@@ -219,7 +219,7 @@ class AgenticRuntime
      * @param  list<string>|null  $allowedToolNames  Optional task-profile tool allowlist
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
-    public function runStream(
+    public function runStream(// NOSONAR (parameter count): streaming API mirrors run() plus turn correlation
         array $messages,
         int $employeeId,
         ?string $systemPrompt = null,
@@ -286,7 +286,7 @@ class AgenticRuntime
      * @param  list<string>|null  $allowedToolNames
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
-    private function streamWithFallbackConfigs(
+    private function streamWithFallbackConfigs(// NOSONAR (complexity/params): orchestration logic; extracted helpers would change call graph
         string $runId,
         int $employeeId,
         array $configs,
@@ -462,7 +462,7 @@ class AgenticRuntime
      * @param  list<string>|null  $allowedToolNames
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
-    private function runToolCallingLoop(
+    private function runToolCallingLoop(// NOSONAR (parameter count): explicit loop inputs keep side effects obvious
         string $runId,
         int $employeeId,
         array $config,
@@ -577,7 +577,7 @@ class AgenticRuntime
         array $tools,
         array &$retryAttempts,
     ): array {
-        $result = $this->chatWithTools($runId, $employeeId, $credentials, $config, $apiMessages, $tools);
+        $result = $this->chatWithTools($runId, $credentials, $config, $apiMessages, $tools);
 
         if (! isset($result['runtime_error'])) {
             return $result;
@@ -607,7 +607,7 @@ class AgenticRuntime
             'latency_ms' => $runtimeError->latencyMs,
         ];
 
-        return $this->chatWithTools($runId, $employeeId, $credentials, $config, $apiMessages, $tools);
+        return $this->chatWithTools($runId, $credentials, $config, $apiMessages, $tools);
     }
 
     /**
@@ -621,7 +621,6 @@ class AgenticRuntime
      */
     private function chatWithTools(
         string $runId,
-        int $employeeId,
         array $credentials,
         array $config,
         array $apiMessages,
@@ -835,7 +834,7 @@ class AgenticRuntime
      * @param  list<string>|null  $allowedToolNames
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
-    private function runStreamingToolLoop(
+    private function runStreamingToolLoop(// NOSONAR (parameter count): streaming loop keeps explicit state for tracing
         string $runId,
         int $employeeId,
         array $config,
@@ -1364,7 +1363,7 @@ class AgenticRuntime
      * @param  array<string, array<string, mixed>>  $hookMetadata
      * @param  list<string>|null  $allowedToolNames
      */
-    private function executeToolCallsWithHooks(
+    private function executeToolCallsWithHooks(// NOSONAR (parameter count): explicit plumbing; hook calls depend on these inputs
         string $runId,
         int $employeeId,
         array $toolCalls,

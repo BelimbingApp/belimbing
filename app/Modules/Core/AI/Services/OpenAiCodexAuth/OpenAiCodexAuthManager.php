@@ -35,7 +35,7 @@ final class OpenAiCodexAuthManager
 
     private const ORIGINATOR = 'openclaw';
 
-    private const JWT_CLAIM_PATH = 'https://api.openai.com/auth';
+    private const DEFAULT_JWT_CLAIM_PATH = 'https://api.openai.com/auth';
 
     private const CACHE_TTL_SECONDS = 600;
 
@@ -280,7 +280,8 @@ final class OpenAiCodexAuthManager
             throw new OpenAiCodexOAuthException('account_id_failed', 'Failed to decode token payload.');
         }
 
-        $claim = $payload[self::JWT_CLAIM_PATH] ?? null;
+        $claimPath = config('services.openai_codex.jwt_claim_path') ?? self::DEFAULT_JWT_CLAIM_PATH;
+        $claim = $payload[$claimPath] ?? null;
         $accountId = is_array($claim) ? ($claim['chatgpt_account_id'] ?? null) : null;
 
         if (! is_string($accountId) || $accountId === '') {
@@ -308,38 +309,70 @@ final class OpenAiCodexAuthManager
             return [];
         }
 
+        $code = null;
+        $state = null;
+
         if (filter_var($value, FILTER_VALIDATE_URL)) {
-            $query = parse_url($value, PHP_URL_QUERY);
-
-            if (is_string($query) && $query !== '') {
-                parse_str($query, $params);
-
-                return [
-                    'code' => is_string($params['code'] ?? null) ? $params['code'] : null,
-                    'state' => is_string($params['state'] ?? null) ? $params['state'] : null,
-                ];
-            }
+            [$code, $state] = $this->parseCallbackUrl($value);
+        } elseif (str_contains($value, '#')) {
+            [$code, $state] = $this->parseHashSeparatedInput($value);
+        } elseif (str_contains($value, 'code=')) {
+            [$code, $state] = $this->parseQueryStringInput($value);
+        } else {
+            $code = $value;
         }
 
-        if (str_contains($value, '#')) {
-            [$code, $state] = explode('#', $value, 2);
-
-            return [
-                'code' => trim($code),
-                'state' => trim($state),
-            ];
+        $result = [];
+        if (is_string($code) && $code !== '') {
+            $result['code'] = $code;
+        }
+        if (is_string($state) && $state !== '') {
+            $result['state'] = $state;
         }
 
-        if (str_contains($value, 'code=')) {
-            parse_str($value, $params);
+        return $result;
+    }
 
-            return [
-                'code' => is_string($params['code'] ?? null) ? $params['code'] : null,
-                'state' => is_string($params['state'] ?? null) ? $params['state'] : null,
-            ];
+    /**
+     * @return array{0: string|null, 1: string|null}
+     */
+    private function parseCallbackUrl(string $url): array
+    {
+        $query = parse_url($url, PHP_URL_QUERY);
+
+        if (! is_string($query) || $query === '') {
+            return [null, null];
         }
 
-        return ['code' => $value];
+        parse_str($query, $params);
+
+        return [
+            is_string($params['code'] ?? null) ? $params['code'] : null,
+            is_string($params['state'] ?? null) ? $params['state'] : null,
+        ];
+    }
+
+    /**
+     * @return array{0: string|null, 1: string|null}
+     */
+    private function parseHashSeparatedInput(string $value): array
+    {
+        [$code, $state] = explode('#', $value, 2);
+
+        return [trim($code), trim($state)];
+    }
+
+    /**
+     * @return array{0: string|null, 1: string|null}
+     */
+    private function parseQueryStringInput(string $value): array
+    {
+        parse_str($value, $params);
+
+        return [
+            is_string($params['code'] ?? null) ? $params['code'] : null,
+            is_string($params['state'] ?? null) ? $params['state'] : null,
+        ];
     }
 
     private function pkceChallenge(string $verifier): string
