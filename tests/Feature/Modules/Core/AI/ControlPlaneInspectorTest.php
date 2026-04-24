@@ -13,6 +13,8 @@ use Livewire\Livewire;
 
 const CONTROL_PLANE_OVERSIZED_RUN_ID = 'run_control_plane_oversized';
 const CONTROL_PLANE_WINDOWED_RUN_ID = 'run_control_plane_windowed';
+const CONTROL_PLANE_LICENSEE_NAME = 'Test Licensee';
+const CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH = 'app/ai/wire-logs';
 
 afterEach(function (): void {
     File::delete(storage_path('app/ai/wire-logs/'.CONTROL_PLANE_OVERSIZED_RUN_ID.'.jsonl'));
@@ -22,7 +24,7 @@ afterEach(function (): void {
 it('renders a bounded wire-log preview for oversized run logs', function (): void {
     config()->set('ai.wire_logging.enabled', true);
 
-    Company::provisionLicensee('Test Licensee');
+    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
     Employee::provisionLara();
 
     $user = createAdminUser();
@@ -53,9 +55,9 @@ it('renders a bounded wire-log preview for oversized run logs', function (): voi
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    File::ensureDirectoryExists(storage_path('app/ai/wire-logs'));
+    File::ensureDirectoryExists(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH));
     File::put(
-        storage_path('app/ai/wire-logs/'.CONTROL_PLANE_OVERSIZED_RUN_ID.'.jsonl'),
+        storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_OVERSIZED_RUN_ID.'.jsonl'),
         implode("\n", $lines)."\n",
     );
 
@@ -81,7 +83,7 @@ it('renders a bounded wire-log preview for oversized run logs', function (): voi
 it('navigates wire-log windows for large runs', function (): void {
     config()->set('ai.wire_logging.enabled', true);
 
-    Company::provisionLicensee('Test Licensee');
+    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
     Employee::provisionLara();
 
     $user = createAdminUser();
@@ -109,9 +111,9 @@ it('navigates wire-log windows for large runs', function (): void {
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    File::ensureDirectoryExists(storage_path('app/ai/wire-logs'));
+    File::ensureDirectoryExists(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH));
     File::put(
-        storage_path('app/ai/wire-logs/'.CONTROL_PLANE_WINDOWED_RUN_ID.'.jsonl'),
+        storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_WINDOWED_RUN_ID.'.jsonl'),
         implode("\n", $lines)."\n",
     );
 
@@ -140,7 +142,7 @@ it('navigates wire-log windows for large runs', function (): void {
 it('streams oversized raw wire-log entries without loading them through Livewire', function (): void {
     config()->set('ai.wire_logging.enabled', true);
 
-    Company::provisionLicensee('Test Licensee');
+    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
     Employee::provisionLara();
 
     $user = createAdminUser();
@@ -160,9 +162,9 @@ it('streams oversized raw wire-log entries without loading them through Livewire
 
     $rawBody = str_repeat('X', (64 * 1024) + 512);
 
-    File::ensureDirectoryExists(storage_path('app/ai/wire-logs'));
+    File::ensureDirectoryExists(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH));
     File::put(
-        storage_path('app/ai/wire-logs/'.CONTROL_PLANE_OVERSIZED_RUN_ID.'.jsonl'),
+        storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_OVERSIZED_RUN_ID.'.jsonl'),
         json_encode([
             'at' => now()->toIso8601String(),
             'type' => 'llm.response_body',

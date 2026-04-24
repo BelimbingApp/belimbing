@@ -185,27 +185,23 @@ class WireLogger
         ];
     }
 
-    public function streamRawEntry(string $runId, int $entryNumber, callable $write): bool
+    public function streamRawEntry(string $runId, int $entryNumber, ?callable $write = null): bool
     {
-        if ($entryNumber < 1) {
-            return false;
-        }
-
+        $found = false;
         $path = $this->path($runId);
 
-        if (! is_file($path)) {
-            return false;
+        if ($entryNumber < 1 || ! is_file($path)) {
+            return $found;
         }
 
         $handle = @fopen($path, 'rb');
-
-        if ($handle === false) {
-            return false;
-        }
-
         $currentEntry = 0;
 
         try {
+            if ($handle === false) {
+                return $found;
+            }
+
             while (($lineHasContent = $this->streamLineChunks(
                 $handle,
                 $currentEntry + 1 === $entryNumber ? $write : null,
@@ -217,19 +213,22 @@ class WireLogger
                 $currentEntry++;
 
                 if ($currentEntry === $entryNumber) {
-                    return true;
+                    $found = true;
+                    break;
                 }
             }
         } finally {
-            fclose($handle);
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
         }
 
-        return false;
+        return $found;
     }
 
     public function hasEntry(string $runId, int $entryNumber): bool
     {
-        return $this->streamRawEntry($runId, $entryNumber, static function (string $chunk): void {});
+        return $this->streamRawEntry($runId, $entryNumber);
     }
 
     public function path(string $runId): string
@@ -325,11 +324,36 @@ class WireLogger
     {
         $at = $this->extractScalar($line, 'at');
         $type = $this->extractScalar($line, 'type');
-        $payloadTruncated = $lineTruncated;
+        $payload = $this->previewPayload($line, $lineTruncated, $at, $type);
+
+        return [
+            'entry_number' => $entryNumber,
+            'at' => $payload['at'],
+            'type' => $payload['type'],
+            'payload_pretty' => $payload['payload_pretty'],
+            'payload_truncated' => $payload['payload_truncated'],
+            'preview_status' => $payload['preview_status'],
+        ];
+    }
+
+    /**
+     * @return array{
+     *     at: string|null,
+     *     type: string|null,
+     *     payload_pretty: string,
+     *     payload_truncated: bool,
+     *     preview_status: string
+     * }
+     */
+    private function previewPayload(string $line, bool $lineTruncated, ?string $fallbackAt, ?string $fallbackType): array
+    {
         $payloadPretty = __('Payload preview omitted because this wire-log entry exceeds :size.', [
             'size' => number_format(self::PREVIEW_LINE_BYTES / 1024).' KB',
         ]);
+        $payloadTruncated = $lineTruncated;
         $previewStatus = 'line_omitted';
+        $at = $fallbackAt;
+        $type = $fallbackType;
 
         if (! $lineTruncated) {
             $decoded = BlbJson::decodeArray($line);
@@ -366,7 +390,6 @@ class WireLogger
         }
 
         return [
-            'entry_number' => $entryNumber,
             'at' => $at,
             'type' => $type,
             'payload_pretty' => $payloadPretty,
