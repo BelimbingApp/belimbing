@@ -27,17 +27,20 @@
         get shown() {
             return this.showAll ? this.attachments : this.attachments.slice(0, this.visibleLimit);
         },
+        get images() {
+            return this.attachments.filter(a => a.kind === 'image');
+        },
         openImage(i) {
             this.imageIndex = i;
             this.imageOpen = true;
         },
         nextImage() {
-            const images = this.attachments.filter(a => a.kind === 'image');
+            const images = this.images;
             if (images.length === 0) return;
             this.imageIndex = (this.imageIndex + 1) % images.length;
         },
         prevImage() {
-            const images = this.attachments.filter(a => a.kind === 'image');
+            const images = this.images;
             if (images.length === 0) return;
             this.imageIndex = (this.imageIndex - 1 + images.length) % images.length;
         },
@@ -61,7 +64,7 @@
                 <button
                     type="button"
                     class="group relative w-6 h-6 rounded-md overflow-hidden border border-white/20 bg-white/10"
-                    x-on:click="openImage(attachments.filter(a => a.kind === 'image').findIndex(a => a.id === att.id))"
+                    x-on:click="openImage(images.findIndex(a => a.id === att.id))"
                     :title="att.original_name"
                     :aria-label="'Open image attachment: ' + att.original_name"
                 >
@@ -112,19 +115,19 @@
                 <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
             </button>
 
-            <template x-if="attachments.filter(a => a.kind === 'image').length > 0">
+            <template x-if="images.length > 0">
                 <div class="rounded-xl overflow-hidden border border-white/10 bg-black/30">
                     <img
-                        :src="attachments.filter(a => a.kind === 'image')[imageIndex]?.url"
-                        :alt="(attachments.filter(a => a.kind === 'image')[imageIndex]?.original_name) || @js(__('Preview attachment'))"
+                        :src="images[imageIndex]?.url"
+                        :alt="(images[imageIndex]?.original_name) || @js(__('Preview attachment'))"
                         class="w-full max-h-[75vh] object-contain bg-black"
                     />
                     <div class="flex items-center justify-between gap-2 p-3 text-xs text-white/80">
-                        <div class="truncate" x-text="attachments.filter(a => a.kind === 'image')[imageIndex]?.original_name"></div>
+                        <div class="truncate" x-text="images[imageIndex]?.original_name"></div>
                         <div class="flex items-center gap-2 shrink-0">
                             <a
                                 class="underline hover:text-white"
-                                :href="attachments.filter(a => a.kind === 'image')[imageIndex]?.url"
+                                :href="images[imageIndex]?.url"
                                 target="_blank"
                                 rel="noreferrer"
                             >{{ __('Open') }}</a>

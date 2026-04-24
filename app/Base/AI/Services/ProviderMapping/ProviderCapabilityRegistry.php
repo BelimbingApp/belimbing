@@ -55,21 +55,14 @@ final class ProviderCapabilityRegistry
     {
         $id = str_contains($model, '/') ? basename($model) : $model;
 
-        if (str_starts_with($id, 'claude-mythos')) {
-            return true;
+        $supports = str_starts_with($id, 'claude-mythos');
+
+        if (! $supports && preg_match('/^claude-(opus|sonnet)-(\d+)[.-](\d+)/', $id, $matches)) {
+            $major = (int) $matches[2];
+            $minor = (int) $matches[3];
+            $supports = $major > 4 || ($major === 4 && $minor >= 6);
         }
 
-        if (! preg_match('/^claude-(opus|sonnet)-(\d+)[.-](\d+)/', $id, $matches)) {
-            return false;
-        }
-
-        $major = (int) $matches[2];
-        $minor = (int) $matches[3];
-
-        if ($major > 4) {
-            return true;
-        }
-
-        return $major === 4 && $minor >= 6;
+        return $supports;
     }
 }

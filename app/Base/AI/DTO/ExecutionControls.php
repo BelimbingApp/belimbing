@@ -165,11 +165,6 @@ final class ExecutionControls
         );
     }
 
-    private static function floatOrNull(mixed $value): ?float
-    {
-        return $value === null ? null : (float) $value;
-    }
-
     private static function intOrNull(mixed $value): ?int
     {
         return $value === null ? null : (int) $value;
