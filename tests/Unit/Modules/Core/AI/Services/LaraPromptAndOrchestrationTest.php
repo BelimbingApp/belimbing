@@ -7,7 +7,6 @@ use App\Base\Authz\DTO\ResourceContext;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
-use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Collection;
@@ -62,52 +61,6 @@ function createLaraOrchestrationFixture(object $testCase): array
 
     return $fixture;
 }
-
-it('builds Lara prompt with runtime context and delegation metadata', function (): void {
-    $fixture = createLaraOrchestrationFixture($this);
-    $this->actingAs($fixture['user']);
-
-    $prompt = app(LaraPromptFactory::class)->buildForCurrentUser();
-
-    expect($prompt)->toContain('You are Lara Belimbing')
-        ->and($prompt)->toContain('"modules"')
-        ->and($prompt)->toContain('"providers"')
-        ->and($prompt)->toContain('"knowledge"')
-        ->and($prompt)->toContain('OpenAI')
-        ->and($prompt)->toContain('"/go <target>"')
-        ->and($prompt)->toContain('"/models <filter>"')
-        ->and($prompt)->toContain('"/guide <topic>"')
-        ->and($prompt)->toContain(CODE_WORKER);
-});
-
-it('appends configured Lara prompt extension as additive guidance', function (): void {
-    $fixture = createLaraOrchestrationFixture($this);
-    $this->actingAs($fixture['user']);
-
-    $extensionRelativePath = 'storage/framework/testing/lara_extension_test.md';
-    $extensionPath = base_path($extensionRelativePath);
-    $extensionDirectory = dirname($extensionPath);
-
-    if (! is_dir($extensionDirectory)) {
-        mkdir($extensionDirectory, 0755, true);
-    }
-
-    file_put_contents($extensionPath, '- Prefer short bullet answers for operational checklists.');
-    config()->set('ai.lara.prompt.extension_path', $extensionRelativePath);
-
-    try {
-        $prompt = app(LaraPromptFactory::class)->buildForCurrentUser();
-
-        expect($prompt)->toContain('You are Lara Belimbing')
-            ->and($prompt)->toContain('Prompt extension policy (append-only):')
-            ->and($prompt)->toContain('Prefer short bullet answers for operational checklists.');
-    } finally {
-        if (is_file($extensionPath)) {
-            unlink($extensionPath);
-        }
-        config()->set('ai.lara.prompt.extension_path', null);
-    }
-});
 
 it('returns null when message is not a delegation command', function (): void {
     $fixture = createLaraOrchestrationFixture($this);

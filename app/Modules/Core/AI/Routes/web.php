@@ -9,6 +9,7 @@ use App\Modules\Core\AI\Http\Controllers\MessagingWebhookController;
 use App\Modules\Core\AI\Http\Controllers\OpenAiCodexOAuthCallbackController;
 use App\Modules\Core\AI\Http\Controllers\ProviderSetupController;
 use App\Modules\Core\AI\Http\Controllers\TurnEventStreamController;
+use App\Modules\Core\AI\Http\Controllers\WireLogEntryController;
 use App\Modules\Core\AI\Livewire\ControlPlane;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
 use App\Modules\Core\AI\Livewire\RunDetail;
@@ -81,4 +82,10 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('authz:admin.ai_control_plane.view')
         ->name('admin.ai.runs.show')
         ->where('runId', '[a-zA-Z0-9_\-]+');
+
+    Route::get('admin/ai/runs/{runId}/wire-log/{entryNumber}', WireLogEntryController::class)
+        ->middleware('authz:admin.ai_control_plane.view')
+        ->name('admin.ai.runs.wire-log-entry')
+        ->where('runId', '[a-zA-Z0-9_\-]+')
+        ->whereNumber('entryNumber');
 });

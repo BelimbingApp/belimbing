@@ -18,6 +18,8 @@ class WireLogger
 
     private const PREVIEW_PAYLOAD_BYTES = 24 * 1024;
 
+    private const RAW_ENTRY_CHUNK_BYTES = 8 * 1024;
+
     public function enabled(): bool
     {
         return (bool) config('ai.wire_logging.enabled', false);
@@ -82,10 +84,12 @@ class WireLogger
     /**
      * @return array{
      *     entries: list<array{
+     *         entry_number: int,
      *         at: string|null,
      *         type: string|null,
      *         payload_pretty: string,
-     *         payload_truncated: bool
+     *         payload_truncated: bool,
+     *         preview_status: string
      *     }>,
      *     footprint_bytes: int,
      *     total_entries: int,
@@ -134,8 +138,8 @@ class WireLogger
                     continue;
                 }
 
-                $previewEntry = $this->previewEntry($line['line'], $line['truncated']);
                 $totalEntries++;
+                $previewEntry = $this->previewEntry($totalEntries, $line['line'], $line['truncated']);
 
                 $lastEntries[] = $previewEntry;
 
@@ -179,6 +183,52 @@ class WireLogger
             'has_next' => $rangeEnd < $totalEntries,
             'last_offset' => max(0, $totalEntries - $limit),
         ];
+    }
+
+    public function streamRawEntry(string $runId, int $entryNumber, ?callable $write = null): bool
+    {
+        $found = false;
+        $path = $this->path($runId);
+
+        if ($entryNumber < 1 || ! is_file($path)) {
+            return $found;
+        }
+
+        $handle = @fopen($path, 'rb');
+        $currentEntry = 0;
+
+        try {
+            if ($handle === false) {
+                return $found;
+            }
+
+            while (($lineHasContent = $this->streamLineChunks(
+                $handle,
+                $currentEntry + 1 === $entryNumber ? $write : null,
+            )) !== null) {
+                if (! $lineHasContent) {
+                    continue;
+                }
+
+                $currentEntry++;
+
+                if ($currentEntry === $entryNumber) {
+                    $found = true;
+                    break;
+                }
+            }
+        } finally {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+        }
+
+        return $found;
+    }
+
+    public function hasEntry(string $runId, int $entryNumber): bool
+    {
+        return $this->streamRawEntry($runId, $entryNumber);
     }
 
     public function path(string $runId): string
@@ -262,21 +312,48 @@ class WireLogger
 
     /**
      * @return array{
+     *     entry_number: int,
      *     at: string|null,
      *     type: string|null,
      *     payload_pretty: string,
-     *     payload_truncated: bool
+     *     payload_truncated: bool,
+     *     preview_status: string
      * }
      */
-    private function previewEntry(string $line, bool $lineTruncated): array
+    private function previewEntry(int $entryNumber, string $line, bool $lineTruncated): array
     {
         $at = $this->extractScalar($line, 'at');
         $type = $this->extractScalar($line, 'type');
-        $payloadTruncated = $lineTruncated;
+        $payload = $this->previewPayload($line, $lineTruncated, $at, $type);
 
+        return [
+            'entry_number' => $entryNumber,
+            'at' => $payload['at'],
+            'type' => $payload['type'],
+            'payload_pretty' => $payload['payload_pretty'],
+            'payload_truncated' => $payload['payload_truncated'],
+            'preview_status' => $payload['preview_status'],
+        ];
+    }
+
+    /**
+     * @return array{
+     *     at: string|null,
+     *     type: string|null,
+     *     payload_pretty: string,
+     *     payload_truncated: bool,
+     *     preview_status: string
+     * }
+     */
+    private function previewPayload(string $line, bool $lineTruncated, ?string $fallbackAt, ?string $fallbackType): array
+    {
         $payloadPretty = __('Payload preview omitted because this wire-log entry exceeds :size.', [
             'size' => number_format(self::PREVIEW_LINE_BYTES / 1024).' KB',
         ]);
+        $payloadTruncated = $lineTruncated;
+        $previewStatus = 'line_omitted';
+        $at = $fallbackAt;
+        $type = $fallbackType;
 
         if (! $lineTruncated) {
             $decoded = BlbJson::decodeArray($line);
@@ -284,6 +361,7 @@ class WireLogger
             if ($decoded === null) {
                 $payloadPretty = __('Payload preview unavailable because this wire-log entry could not be decoded.');
                 $payloadTruncated = true;
+                $previewStatus = 'decode_error';
             } else {
                 $at = is_string($decoded['at'] ?? null) ? $decoded['at'] : $at;
                 $type = is_string($decoded['type'] ?? null) ? $decoded['type'] : $type;
@@ -298,9 +376,11 @@ class WireLogger
                 if (! is_string($encoded)) {
                     $payloadPretty = __('Payload preview unavailable because this wire-log entry could not be encoded.');
                     $payloadTruncated = true;
+                    $previewStatus = 'encode_error';
                 } else {
                     $payloadPretty = $encoded;
                     $payloadTruncated = strlen($payloadPretty) > self::PREVIEW_PAYLOAD_BYTES;
+                    $previewStatus = $payloadTruncated ? 'payload_truncated' : 'full';
 
                     if ($payloadTruncated) {
                         $payloadPretty = substr($payloadPretty, 0, self::PREVIEW_PAYLOAD_BYTES)."\n…";
@@ -314,7 +394,36 @@ class WireLogger
             'type' => $type,
             'payload_pretty' => $payloadPretty,
             'payload_truncated' => $payloadTruncated,
+            'preview_status' => $previewStatus,
         ];
+    }
+
+    /**
+     * @param  resource  $handle
+     * @param  (callable(string): void)|null  $write
+     */
+    private function streamLineChunks($handle, ?callable $write = null): ?bool
+    {
+        $sawContent = false;
+
+        while (($chunk = fgets($handle, self::RAW_ENTRY_CHUNK_BYTES)) !== false) {
+            $endsWithNewline = str_ends_with($chunk, "\n");
+            $segment = $endsWithNewline ? rtrim($chunk, "\r\n") : $chunk;
+
+            if ($segment !== '') {
+                $sawContent = true;
+
+                if ($write !== null) {
+                    $write($segment);
+                }
+            }
+
+            if ($endsWithNewline) {
+                return $sawContent;
+            }
+        }
+
+        return $sawContent ? true : null;
     }
 
     private function extractScalar(string $line, string $key): ?string

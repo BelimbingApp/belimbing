@@ -4,6 +4,7 @@
 
 /** @var list<array<string, mixed>> $entries */
 /** @var array{footprint_bytes: int, total_entries: int, visible_entries: int, offset: int, limit: int, range_start: int, range_end: int, omitted_before: int, omitted_after: int, has_previous: bool, has_next: bool, last_offset: int}|null $summary */
+/** @var string $runId */
 ?>
 <div
     class="space-y-3"
@@ -30,6 +31,9 @@
                 </p>
                 <p>
                     {{ __('This run retained :size on disk.', ['size' => \Illuminate\Support\Number::fileSize($summary['footprint_bytes'] ?? 0)]) }}
+                </p>
+                <p>
+                    {{ __('Large entries can be opened raw in a separate tab without loading them into the inspector response.') }}
                 </p>
             </div>
 
@@ -72,12 +76,34 @@
         @foreach ($entries as $index => $entry)
             <details class="rounded-2xl border border-border-default bg-surface-card p-card-inner" @if ($index === 0) open @endif>
                 <summary class="flex cursor-pointer flex-col gap-1 text-sm text-ink sm:flex-row sm:items-center sm:justify-between">
-                    <span class="font-medium">{{ $entry['type'] ?? __('Unknown entry') }}</span>
+                    <span class="font-medium">
+                        {{ $entry['type'] ?? __('Unknown entry') }}
+                        <span class="ml-2 text-xs font-normal text-muted">{{ __('#:number', ['number' => $entry['entry_number'] ?? (($summary['offset'] ?? 0) + $index + 1)]) }}</span>
+                    </span>
                     <span class="text-xs text-muted tabular-nums">{{ $entry['at'] ?? '---' }}</span>
                 </summary>
-                @if ($entry['payload_truncated'] ?? false)
-                    <p class="mt-3 text-xs text-warning">{{ __('Preview truncated.') }}</p>
-                @endif
+                <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                    <x-ui.button
+                        as="a"
+                        href="{{ route('admin.ai.runs.wire-log-entry', ['runId' => $runId, 'entryNumber' => $entry['entry_number'] ?? (($summary['offset'] ?? 0) + $index + 1)]) }}"
+                        target="_blank"
+                        rel="noreferrer"
+                        variant="ghost"
+                        size="sm"
+                    >
+                        {{ __('Open Raw') }}
+                    </x-ui.button>
+
+                    @if (($entry['preview_status'] ?? 'full') === 'line_omitted')
+                        <p class="text-warning">
+                            {{ __('This entry is too large for an inline preview here. Open Raw to stream the exact recorded payload.') }}
+                        </p>
+                    @elseif (($entry['preview_status'] ?? 'full') !== 'full')
+                        <p class="text-warning">
+                            {{ __('Preview truncated in the inspector. Open Raw for the exact recorded payload.') }}
+                        </p>
+                    @endif
+                </div>
                 <pre class="mt-3 overflow-x-auto rounded-2xl bg-surface-subtle p-3 text-[11px] text-muted">{{ $entry['payload_pretty'] ?? '{}' }}</pre>
             </details>
         @endforeach

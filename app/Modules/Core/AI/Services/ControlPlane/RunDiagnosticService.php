@@ -41,10 +41,12 @@ class RunDiagnosticService
      *     transcript: list<Message>,
      *     triggering_prompt: Message|null,
      *     wire_log_entries: list<array{
+     *         entry_number: int,
      *         at: string|null,
      *         type: string|null,
      *         payload_pretty: string,
-     *         payload_truncated: bool
+     *         payload_truncated: bool,
+     *         preview_status: string
      *     }>,
      *     wire_log_summary: array{
      *         footprint_bytes: int,
