@@ -11,7 +11,9 @@ use App\Modules\Core\AI\DTO\ControlPlane\HealthSnapshot;
 use App\Modules\Core\AI\DTO\ControlPlane\LifecyclePreview;
 use App\Modules\Core\AI\DTO\ControlPlane\LifecycleRequest as LifecycleRequestDTO;
 use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
+use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Enums\LifecycleAction;
+use App\Modules\Core\AI\Livewire\Concerns\ManagesWireLogWindow;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Services\ControlPlane\HealthAndPresenceService;
@@ -25,6 +27,7 @@ use Livewire\WithPagination;
 
 class ControlPlane extends Component
 {
+    use ManagesWireLogWindow;
     use WithPagination;
 
     public string $activeTab = 'inspector';
@@ -95,6 +98,7 @@ class ControlPlane extends Component
         $this->loadRecentLifecycleRequests();
 
         if ($this->inspectRunId !== '') {
+            $this->resetWireLogWindow();
             $this->inspectRun();
         }
 
@@ -114,7 +118,13 @@ class ControlPlane extends Component
             return;
         }
 
-        if (app(RunDiagnosticService::class)->buildRunView($this->inspectRunId) === null) {
+        $runView = app(RunDiagnosticService::class)->buildRunView(
+            $this->inspectRunId,
+            wireLogOffset: $this->wireLogOffset,
+            wireLogLimit: $this->wireLogLimit,
+        );
+
+        if ($runView === null) {
             $this->inspectionError = __('Run not found.');
 
             return;
@@ -142,6 +152,7 @@ class ControlPlane extends Component
     public function inspectRecentRun(string $runId): void
     {
         $this->inspectRunId = $runId;
+        $this->resetWireLogWindow();
         $this->inspectRun();
     }
 
@@ -297,7 +308,11 @@ class ControlPlane extends Component
             ->through(fn ($run): array => $diagnostics->mapRecentRun($run));
 
         $runView = $this->inspectRunId !== ''
-            ? $diagnostics->buildRunView($this->inspectRunId)
+            ? $diagnostics->buildRunView(
+                $this->inspectRunId,
+                wireLogOffset: $this->wireLogOffset,
+                wireLogLimit: $this->wireLogLimit,
+            )
             : null;
         $turnView = $this->inspectTurnId !== ''
             ? $diagnostics->buildTurnView($this->inspectTurnId)
@@ -389,9 +404,28 @@ class ControlPlane extends Component
     /**
      * @param  array{
      *     inspection: RunInspection,
-     *     transcript: list<\App\Modules\Core\AI\DTO\Message>,
-     *     triggering_prompt: \App\Modules\Core\AI\DTO\Message|null,
-     *     wire_log_entries: list<array<string, mixed>>,
+     *     transcript: list<Message>,
+     *     triggering_prompt: Message|null,
+     *     wire_log_entries: list<array{
+     *         at: string|null,
+     *         type: string|null,
+     *         payload_pretty: string,
+     *         payload_truncated: bool
+     *     }>,
+     *     wire_log_summary: array{
+     *         footprint_bytes: int,
+     *         total_entries: int,
+     *         visible_entries: int,
+     *         offset: int,
+     *         limit: int,
+     *         range_start: int,
+     *         range_end: int,
+     *         omitted_before: int,
+     *         omitted_after: int,
+     *         has_previous: bool,
+     *         has_next: bool,
+     *         last_offset: int
+     *     },
      *     wire_logging_enabled: bool,
      *     turn_id: string|null
      * }|null  $runView
@@ -408,6 +442,7 @@ class ControlPlane extends Component
             'transcript' => $runView['transcript'],
             'triggering_prompt' => $runView['triggering_prompt'],
             'wire_log_entries' => $runView['wire_log_entries'],
+            'wire_log_summary' => $runView['wire_log_summary'],
             'wire_logging_enabled' => $runView['wire_logging_enabled'],
             'turn_id' => $runView['turn_id'],
         ];

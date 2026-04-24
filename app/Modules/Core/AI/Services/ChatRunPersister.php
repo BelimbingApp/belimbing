@@ -117,6 +117,7 @@ class ChatRunPersister
             TurnEventType::RunStarted => $this->materializeRunStarted($payload, $state),
             TurnEventType::AssistantThinkingStarted => $this->materializeThinkingStarted($mm, $employeeId, $sessionId, $state),
             TurnEventType::AssistantThinkingDelta => $this->materializeThinkingDelta($payload, $state),
+            TurnEventType::AssistantIterationCompleted => $this->materializeIterationCompleted($mm, $employeeId, $sessionId, $state),
             TurnEventType::ToolStarted => $this->materializeToolStarted($payload, $state),
             TurnEventType::ToolFinished => $this->materializeToolFinished($mm, $employeeId, $sessionId, $payload, $state),
             TurnEventType::ToolDenied => $this->materializeToolDenied($mm, $employeeId, $sessionId, $payload, $state),
@@ -160,6 +161,18 @@ class ChatRunPersister
     private function materializeThinkingDelta(array $payload, object $state): void
     {
         $state->thinkingContent .= $payload['delta'] ?? '';
+    }
+
+    /**
+     * @param  object{runId: ?string, thinkingPending: bool, thinkingContent: string}  $state
+     */
+    private function materializeIterationCompleted(
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        object $state,
+    ): void {
+        $this->flushPendingThinking($mm, $employeeId, $sessionId, $state);
     }
 
     /**
@@ -227,6 +240,8 @@ class ChatRunPersister
             return;
         }
 
+        $this->flushPendingThinking($mm, $employeeId, $sessionId, $state);
+
         $index = (int) ($payload['tool_call_index'] ?? 0);
         $buffered = $state->pendingToolCalls[$index] ?? null;
         unset($state->pendingToolCalls[$index]);
@@ -262,6 +277,8 @@ class ChatRunPersister
         if ($state->runId === null) {
             return;
         }
+
+        $this->flushPendingThinking($mm, $employeeId, $sessionId, $state);
 
         $mm->appendHookAction(
             $employeeId,

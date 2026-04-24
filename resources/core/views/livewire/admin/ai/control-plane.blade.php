@@ -2,6 +2,7 @@
 
 use App\Modules\Core\AI\Enums\LifecycleAction;
 use App\Modules\Core\AI\Livewire\ControlPlane;
+use Illuminate\Support\Number;
 use Illuminate\Support\Str;
 
 // SPDX-License-Identifier: AGPL-3.0-only
@@ -60,27 +61,30 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
 
                 @if ($runView)
                     <x-ui.card>
-                        <h3 class="mb-4 text-sm font-medium text-ink">{{ __('Run Details') }}</h3>
+                        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                            <h3 class="text-sm font-medium text-ink">{{ __('Run Details') }}</h3>
+                            <x-ui.button as="a" href="#wire-log-panel" variant="ghost" size="sm">
+                                {{ __('Wire Log') }}
+                            </x-ui.button>
+                        </div>
                         @include('livewire.admin.ai.control-plane.partials.run-detail', ['run' => $runView['inspection']])
                     </x-ui.card>
 
-                    <x-ui.card>
-                        <h3 class="mb-4 text-sm font-medium text-ink">{{ __('Activity Transcript') }}</h3>
-                        @include('livewire.admin.ai.control-plane.partials.activity-transcript', [
-                            'transcript' => $runView['transcript'],
-                            'triggeringPrompt' => $runView['triggering_prompt'],
-                        ])
-                    </x-ui.card>
+                    @include('livewire.admin.ai.control-plane.partials.activity-transcript-card', [
+                        'transcript' => $runView['transcript'],
+                        'triggeringPrompt' => $runView['triggering_prompt'],
+                    ])
 
-                    <x-ui.card>
+                    <x-ui.card id="wire-log-panel">
                         <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
                             <h3 class="text-sm font-medium text-ink">{{ __('Wire Log') }}</h3>
                             <p class="text-xs text-muted tabular-nums">
-                                {{ __('Footprint: :size', ['size' => number_format($wireLogDiskUsageBytes / 1024, 1).' KB']) }}
+                                {{ __('Total footprint: :size', ['size' => Number::fileSize($wireLogDiskUsageBytes)]) }}
                             </p>
                         </div>
                         @include('livewire.admin.ai.control-plane.partials.wire-log', [
                             'entries' => $runView['wire_log_entries'],
+                            'summary' => $runView['wire_log_summary'],
                             'wireLoggingEnabled' => $runView['wire_logging_enabled'],
                         ])
                     </x-ui.card>

@@ -883,6 +883,16 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return;
             }
 
+            if (is_string($iterResult['finish_reason'] ?? null) && $iterResult['finish_reason'] !== '') {
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'iteration_completed',
+                    'finish_reason' => $iterResult['finish_reason'],
+                    'iteration' => $iteration,
+                    'tool_call_count' => count($iterResult['tool_calls'] ?? []),
+                    'run_id' => $runId,
+                ]];
+            }
+
             if (($iterResult['tool_calls'] ?? []) === []) {
                 $this->hookCoordinator->postRun($runId, $employeeId, true, $toolLoopState['hookMetadata']);
 

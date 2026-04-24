@@ -78,6 +78,7 @@ final class AgenticToolLoopStreamReader
         $reasoningBlocks = [];
         $usage = null;
         $latencyMs = 0;
+        $finishReason = null;
         $providerMapping = null;
 
         foreach ($stream as $event) {
@@ -98,6 +99,7 @@ final class AgenticToolLoopStreamReader
                 case 'done':
                     $usage = $event['usage'] ?? null;
                     $latencyMs = (int) ($event['latency_ms'] ?? 0);
+                    $finishReason = is_string($event['finish_reason'] ?? null) ? $event['finish_reason'] : $finishReason;
                     $providerMapping = is_array($event['provider_mapping'] ?? null) ? $event['provider_mapping'] : $providerMapping;
                     $reasoningBlocks = is_array($event['reasoning_blocks'] ?? null) ? $event['reasoning_blocks'] : $reasoningBlocks;
                     break;
@@ -127,6 +129,7 @@ final class AgenticToolLoopStreamReader
             'final_content' => $content,
             'usage' => $usage,
             'latency_ms' => $latencyMs,
+            'finish_reason' => $finishReason,
             'provider_mapping' => $providerMapping,
         ];
     }

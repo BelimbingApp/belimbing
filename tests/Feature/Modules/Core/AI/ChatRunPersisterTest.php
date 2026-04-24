@@ -301,6 +301,43 @@ describe('ChatRunPersister materializeFromTurn', function () {
         $persister->materializeFromTurn($turn, $mm, $turn->employee_id, MAT_TEST_SESSION);
     });
 
+    it('flushes thinking before persisting the subsequent tool entry', function () {
+        $turn = createMaterializerTurn();
+        $pub = app(TurnEventPublisher::class);
+
+        $pub->turnStarted($turn);
+        $pub->runStarted($turn, MAT_TEST_RUN_ID);
+        $turn->transitionTo(TurnStatus::Running);
+        $pub->thinkingStarted($turn);
+        $pub->thinkingDelta($turn, 'Need the current page before continuing.');
+        $pub->iterationCompleted($turn, 'tool_calls', 0, 1);
+        $pub->toolStarted($turn, 'active_page_snapshot', '{}', 0);
+        $pub->toolFinished($turn, 'active_page_snapshot', 'success', 'snapshot', 25, 8);
+        $pub->turnCompleted($turn);
+
+        $mm = mockMessageManager();
+
+        $mm->shouldReceive('appendThinking')
+            ->once()
+            ->ordered('transcript')
+            ->with(
+                $turn->employee_id,
+                MAT_TEST_SESSION,
+                MAT_TEST_RUN_ID,
+                'Need the current page before continuing.',
+            );
+
+        $mm->shouldReceive('appendToolUse')
+            ->once()
+            ->ordered('transcript')
+            ->withArgs(fn (...$args) => $args[3]->toolName === 'active_page_snapshot');
+
+        $mm->shouldNotReceive('appendAssistantMessage');
+
+        $persister = new ChatRunPersister;
+        $persister->materializeFromTurn($turn, $mm, $turn->employee_id, MAT_TEST_SESSION);
+    });
+
     it('falls back to streamed output deltas when cancellation happens before a committed block', function () {
         $turn = createMaterializerTurn();
         $pub = app(TurnEventPublisher::class);

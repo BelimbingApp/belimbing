@@ -194,6 +194,54 @@ describe('TurnStreamBridge tool and streaming events', function () {
             ->and($toolStartedEvent->payload['args_summary'])->toBe('ls -la');
     });
 
+    it('maps iteration_completed status to a durable assistant iteration event', function () {
+        $turn = createBridgeTurn();
+        $bridge = app(TurnStreamBridge::class);
+
+        $stream = runtimeStream([
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => [
+                'phase' => 'iteration_completed',
+                'finish_reason' => 'tool_calls',
+                'iteration' => 0,
+                'tool_call_count' => 1,
+                'run_id' => BRIDGE_TEST_RUN_ID,
+            ]],
+            ['event' => 'status', 'data' => [
+                'phase' => 'tool_started',
+                'tool' => 'bash',
+                'args_summary' => 'ls -la',
+                'tool_call_index' => 0,
+                'run_id' => BRIDGE_TEST_RUN_ID,
+            ]],
+            ['event' => 'done', 'data' => ['content' => 'Listed files', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
+        ]);
+
+        iterator_to_array($bridge->wrap($turn, $stream));
+
+        $iterationEvent = ChatTurnEvent::query()
+            ->where('turn_id', $turn->id)
+            ->where('event_type', TurnEventType::AssistantIterationCompleted->value)
+            ->first();
+
+        expect($iterationEvent)->not()->toBeNull()
+            ->and($iterationEvent->payload['finish_reason'])->toBe('tool_calls')
+            ->and($iterationEvent->payload['iteration'])->toBe(0)
+            ->and($iterationEvent->payload['tool_call_count'])->toBe(1);
+
+        $types = turnEventTypes($turn);
+        $normalizedTypes = array_map(
+            static fn ($type) => $type instanceof TurnEventType ? $type->value : $type,
+            $types,
+        );
+        $iterationIndex = array_search(TurnEventType::AssistantIterationCompleted->value, $normalizedTypes, true);
+        $toolStartedIndex = array_search(TurnEventType::ToolStarted->value, $normalizedTypes, true);
+
+        expect($iterationIndex)->toBeInt()
+            ->and($toolStartedIndex)->toBeInt()
+            ->and($iterationIndex)->toBeLessThan($toolStartedIndex);
+    });
+
     it('maps tool_denied to a turn event', function () {
         $turn = createBridgeTurn();
         $bridge = app(TurnStreamBridge::class);

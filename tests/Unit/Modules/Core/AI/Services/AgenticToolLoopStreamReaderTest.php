@@ -111,6 +111,7 @@ it('captures reasoning_content deltas for follow-up tool loop requests', functio
             ];
             yield [
                 'type' => 'done',
+                'finish_reason' => 'tool_calls',
                 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
                 'latency_ms' => 123,
             ];
@@ -145,7 +146,8 @@ it('captures reasoning_content deltas for follow-up tool loop requests', functio
     expect($result['reasoning_content'])->toBe(AGENTIC_STREAM_READER_NEED_TOOL_RESULT)
         ->and($result['tool_calls'][0]['id'])->toBe('call_stream_reasoning_1')
         ->and($result['tool_calls'][0]['function']['arguments'])->toBe('{"input":"world"}')
-        ->and($result['latency_ms'])->toBe(123);
+        ->and($result['latency_ms'])->toBe(123)
+        ->and($result['finish_reason'])->toBe('tool_calls');
 });
 
 it('returns the runtime error when the iteration stream fails', function (): void {

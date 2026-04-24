@@ -189,6 +189,22 @@ class TurnEventPublisher
     }
 
     /**
+     * Emit assistant.iteration_completed when a streamed LLM iteration ends.
+     */
+    public function iterationCompleted(
+        ChatTurn $turn,
+        string $finishReason,
+        ?int $iteration = null,
+        ?int $toolCallCount = null,
+    ): ChatTurnEvent {
+        return $this->publish($turn, TurnEventType::AssistantIterationCompleted, array_filter([
+            'finish_reason' => $finishReason,
+            'iteration' => $iteration,
+            'tool_call_count' => $toolCallCount,
+        ], fn ($v) => $v !== null));
+    }
+
+    /**
      * Emit assistant.output_delta for incremental response text.
      */
     public function outputDelta(ChatTurn $turn, string $delta): ChatTurnEvent

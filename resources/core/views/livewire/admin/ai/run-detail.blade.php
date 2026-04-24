@@ -15,6 +15,9 @@ use Illuminate\Support\Str;
 
     <x-ui.page-header :title="__('Run Detail')" :subtitle="__('Standalone deep link for a single AI run.')">
         <x-slot name="actions">
+            <x-ui.button as="a" href="#wire-log-panel" variant="ghost" size="sm">
+                {{ __('Wire Log') }}
+            </x-ui.button>
             @if ($operationsBreadcrumb && $operationsBreadcrumb['url'])
                 <a
                     href="{{ $operationsBreadcrumb['url'] }}"
@@ -39,18 +42,16 @@ use Illuminate\Support\Str;
             @include('livewire.admin.ai.control-plane.partials.run-detail', ['run' => $runView['inspection']])
         </x-ui.card>
 
-        <x-ui.card>
-            <h3 class="mb-4 text-sm font-medium text-ink">{{ __('Activity Transcript') }}</h3>
-            @include('livewire.admin.ai.control-plane.partials.activity-transcript', [
-                'transcript' => $runView['transcript'],
-                'triggeringPrompt' => $runView['triggering_prompt'],
-            ])
-        </x-ui.card>
+        @include('livewire.admin.ai.control-plane.partials.activity-transcript-card', [
+            'transcript' => $runView['transcript'],
+            'triggeringPrompt' => $runView['triggering_prompt'],
+        ])
 
-        <x-ui.card>
+        <x-ui.card id="wire-log-panel">
             <h3 class="mb-4 text-sm font-medium text-ink">{{ __('Wire Log') }}</h3>
             @include('livewire.admin.ai.control-plane.partials.wire-log', [
                 'entries' => $runView['wire_log_entries'],
+                'summary' => $runView['wire_log_summary'],
                 'wireLoggingEnabled' => $runView['wire_logging_enabled'],
             ])
         </x-ui.card>

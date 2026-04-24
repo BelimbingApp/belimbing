@@ -14,6 +14,7 @@ use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\ChatTurnEvent;
 use App\Modules\Core\Employee\Models\Employee;
 use DateTimeImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -39,12 +40,31 @@ class RunDiagnosticService
      *     inspection: RunInspection,
      *     transcript: list<Message>,
      *     triggering_prompt: Message|null,
-     *     wire_log_entries: list<array<string, mixed>>,
+     *     wire_log_entries: list<array{
+     *         at: string|null,
+     *         type: string|null,
+     *         payload_pretty: string,
+     *         payload_truncated: bool
+     *     }>,
+     *     wire_log_summary: array{
+     *         footprint_bytes: int,
+     *         total_entries: int,
+     *         visible_entries: int,
+     *         offset: int,
+     *         limit: int,
+     *         range_start: int,
+     *         range_end: int,
+     *         omitted_before: int,
+     *         omitted_after: int,
+     *         has_previous: bool,
+     *         has_next: bool,
+     *         last_offset: int
+     *     },
      *     wire_logging_enabled: bool,
      *     turn_id: string|null
      * }|null
      */
-    public function buildRunView(string $runId): ?array
+    public function buildRunView(string $runId, int $wireLogOffset = 0, int $wireLogLimit = 100): ?array
     {
         $run = $this->inspectRun($runId);
 
@@ -52,11 +72,27 @@ class RunDiagnosticService
             return null;
         }
 
+        $wireLogPreview = $this->wireLogger->preview($run->id, $wireLogOffset, $wireLogLimit);
+
         return [
             'inspection' => RunInspection::fromAiRun($run),
             'transcript' => $this->runTranscript($run),
             'triggering_prompt' => $this->triggeringPrompt($run),
-            'wire_log_entries' => $this->wireLogger->read($run->id),
+            'wire_log_entries' => $wireLogPreview['entries'],
+            'wire_log_summary' => [
+                'footprint_bytes' => $wireLogPreview['footprint_bytes'],
+                'total_entries' => $wireLogPreview['total_entries'],
+                'visible_entries' => $wireLogPreview['visible_entries'],
+                'offset' => $wireLogPreview['offset'],
+                'limit' => $wireLogPreview['limit'],
+                'range_start' => $wireLogPreview['range_start'],
+                'range_end' => $wireLogPreview['range_end'],
+                'omitted_before' => $wireLogPreview['omitted_before'],
+                'omitted_after' => $wireLogPreview['omitted_after'],
+                'has_previous' => $wireLogPreview['has_previous'],
+                'has_next' => $wireLogPreview['has_next'],
+                'last_offset' => $wireLogPreview['last_offset'],
+            ],
             'wire_logging_enabled' => $this->wireLogger->enabled(),
             'turn_id' => $run->turn_id,
         ];
@@ -75,7 +111,7 @@ class RunDiagnosticService
             ->all();
     }
 
-    public function recentRunsQuery(string $search = ''): \Illuminate\Database\Eloquent\Builder
+    public function recentRunsQuery(string $search = ''): Builder
     {
         $query = AiRun::query()
             ->with(['employee', 'turn'])
@@ -409,7 +445,6 @@ class RunDiagnosticService
     }
 
     /**
-     * @param  Carbon|null  $previousAt
      * @return array<string, mixed>
      */
     private function mapTimelineEvent(ChatTurnEvent $event, ?Carbon $previousAt, ChatTurn $turn): array

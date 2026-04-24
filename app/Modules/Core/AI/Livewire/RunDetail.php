@@ -8,6 +8,7 @@
 namespace App\Modules\Core\AI\Livewire;
 
 use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
+use App\Modules\Core\AI\Livewire\Concerns\ManagesWireLogWindow;
 use App\Modules\Core\AI\Services\ControlPlane\RunDiagnosticService;
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
@@ -15,20 +16,34 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class RunDetail extends Component
 {
+    use ManagesWireLogWindow;
+
     public string $runId;
 
     public function mount(string $runId): void
     {
         $this->runId = $runId;
+        $this->resetWireLogWindow();
 
-        if (app(RunDiagnosticService::class)->buildRunView($runId) === null) {
+        $runView = app(RunDiagnosticService::class)->buildRunView(
+            $runId,
+            wireLogOffset: $this->wireLogOffset,
+            wireLogLimit: $this->wireLogLimit,
+        );
+
+        if ($runView === null) {
             throw new NotFoundHttpException(__('Run not found.'));
         }
+
     }
 
     public function render(): View
     {
-        $runView = app(RunDiagnosticService::class)->buildRunView($this->runId);
+        $runView = app(RunDiagnosticService::class)->buildRunView(
+            $this->runId,
+            wireLogOffset: $this->wireLogOffset,
+            wireLogLimit: $this->wireLogLimit,
+        );
 
         if ($runView === null) {
             throw new NotFoundHttpException(__('Run not found.'));
@@ -40,6 +55,7 @@ class RunDetail extends Component
                 'transcript' => $runView['transcript'],
                 'triggering_prompt' => $runView['triggering_prompt'],
                 'wire_log_entries' => $runView['wire_log_entries'],
+                'wire_log_summary' => $runView['wire_log_summary'],
                 'wire_logging_enabled' => $runView['wire_logging_enabled'],
                 'turn_id' => $runView['turn_id'],
             ],
