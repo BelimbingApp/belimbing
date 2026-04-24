@@ -35,7 +35,9 @@ final class OpenAiCodexAuthManager
 
     private const ORIGINATOR = 'openclaw';
 
-    private const DEFAULT_JWT_CLAIM_PATH = 'https://api.openai.com/auth';
+    private const DEFAULT_JWT_CLAIM_BASE_URL = 'https://api.openai.com';
+
+    private const DEFAULT_JWT_CLAIM_PATH_SUFFIX = '/auth';
 
     private const CACHE_TTL_SECONDS = 600;
 
@@ -280,7 +282,9 @@ final class OpenAiCodexAuthManager
             throw new OpenAiCodexOAuthException('account_id_failed', 'Failed to decode token payload.');
         }
 
-        $claimPath = config('services.openai_codex.jwt_claim_path') ?? self::DEFAULT_JWT_CLAIM_PATH;
+        $defaultClaimPath = rtrim((string) config('services.openai_codex.jwt_claim_base_url', self::DEFAULT_JWT_CLAIM_BASE_URL), '/')
+            .self::DEFAULT_JWT_CLAIM_PATH_SUFFIX;
+        $claimPath = (string) (config('services.openai_codex.jwt_claim_path') ?? $defaultClaimPath);
         $claim = $payload[$claimPath] ?? null;
         $accountId = is_array($claim) ? ($claim['chatgpt_account_id'] ?? null) : null;
 

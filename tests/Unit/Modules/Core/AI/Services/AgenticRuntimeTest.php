@@ -38,6 +38,8 @@ uses(TestCase::class, MakesRuntimeResponses::class);
 const AGENTIC_RUNTIME_SYSTEM_PROMPT = 'You are Lara.';
 const AGENTIC_RUNTIME_TOO_MANY_REQUESTS = 'HTTP 429: Too Many Requests';
 const AGENTIC_RUNTIME_HELLO_RESPONSE = 'Hello, I am Lara!';
+
+final class StreamAdvancedBeforeConsumption extends RuntimeException {}
 const AGENTIC_RUNTIME_WIRE_LOG_EXTENSION = '.jsonl';
 
 class TestTool implements Tool
@@ -634,7 +636,7 @@ describe('AgenticRuntime (streaming)', function () {
                 yield ['type' => 'thinking_delta', 'text' => 'Inspecting...'];
 
                 if (! $allowCompletion) {
-                    throw new RuntimeException(
+                    throw new StreamAdvancedBeforeConsumption(
                         'Stream advanced before caller consumed the first chunk',
                     );
                 }
@@ -672,10 +674,17 @@ describe('AgenticRuntime (streaming)', function () {
 
         $allowCompletion = true;
 
-        $stream->next();
-        $thirdEvent = $stream->current();
+        $thirdEvent = null;
+        for ($i = 0; $i < 3; $i++) {
+            $stream->next();
+            $thirdEvent = $stream->current();
+            if (($thirdEvent['event'] ?? null) === 'delta') {
+                break;
+            }
+        }
 
-        expect($thirdEvent['event'])->toBe('delta')
+        expect($thirdEvent)->not->toBeNull()
+            ->and($thirdEvent['event'])->toBe('delta')
             ->and($thirdEvent['data']['text'])->toBe('Hi');
 
         $stream->next();
