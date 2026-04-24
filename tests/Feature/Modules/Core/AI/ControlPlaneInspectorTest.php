@@ -15,6 +15,9 @@ const CONTROL_PLANE_OVERSIZED_RUN_ID = 'run_control_plane_oversized';
 const CONTROL_PLANE_WINDOWED_RUN_ID = 'run_control_plane_windowed';
 const CONTROL_PLANE_LICENSEE_NAME = 'Test Licensee';
 const CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH = 'app/ai/wire-logs';
+const CONTROL_PLANE_PROVIDER_NAME = 'test-provider';
+const CONTROL_PLANE_MODEL = 'test-model';
+const CONTROL_PLANE_EXECUTION_MODE = 'streaming';
 
 beforeEach(function (): void {
     $this->originalStoragePath = app()->storagePath();
@@ -37,6 +40,22 @@ afterEach(function (): void {
     }
 });
 
+function createControlPlaneRun(string $runId): void
+{
+    AiRun::unguarded(fn () => AiRun::query()->create([
+        'id' => $runId,
+        'employee_id' => Employee::LARA_ID,
+        'session_id' => 'sess_'.$runId,
+        'source' => 'chat',
+        'execution_mode' => CONTROL_PLANE_EXECUTION_MODE,
+        'status' => AiRunStatus::Succeeded,
+        'provider_name' => CONTROL_PLANE_PROVIDER_NAME,
+        'model' => CONTROL_PLANE_MODEL,
+        'started_at' => now(),
+        'finished_at' => now(),
+    ]));
+}
+
 it('renders a bounded wire-log preview for oversized run logs', function (): void {
     config()->set('ai.wire_logging.enabled', true);
 
@@ -45,18 +64,7 @@ it('renders a bounded wire-log preview for oversized run logs', function (): voi
 
     $user = createAdminUser();
 
-    AiRun::unguarded(fn () => AiRun::query()->create([
-        'id' => CONTROL_PLANE_OVERSIZED_RUN_ID,
-        'employee_id' => Employee::LARA_ID,
-        'session_id' => 'sess_control_plane_oversized',
-        'source' => 'chat',
-        'execution_mode' => 'streaming',
-        'status' => AiRunStatus::Succeeded,
-        'provider_name' => 'test-provider',
-        'model' => 'test-model',
-        'started_at' => now(),
-        'finished_at' => now(),
-    ]));
+    createControlPlaneRun(CONTROL_PLANE_OVERSIZED_RUN_ID);
 
     $lines = [];
 
@@ -104,18 +112,7 @@ it('navigates wire-log windows for large runs', function (): void {
 
     $user = createAdminUser();
 
-    AiRun::unguarded(fn () => AiRun::query()->create([
-        'id' => CONTROL_PLANE_WINDOWED_RUN_ID,
-        'employee_id' => Employee::LARA_ID,
-        'session_id' => 'sess_control_plane_windowed',
-        'source' => 'chat',
-        'execution_mode' => 'streaming',
-        'status' => AiRunStatus::Succeeded,
-        'provider_name' => 'test-provider',
-        'model' => 'test-model',
-        'started_at' => now(),
-        'finished_at' => now(),
-    ]));
+    createControlPlaneRun(CONTROL_PLANE_WINDOWED_RUN_ID);
 
     $lines = [];
 
@@ -163,18 +160,7 @@ it('streams oversized raw wire-log entries without loading them through Livewire
 
     $user = createAdminUser();
 
-    AiRun::unguarded(fn () => AiRun::query()->create([
-        'id' => CONTROL_PLANE_OVERSIZED_RUN_ID,
-        'employee_id' => Employee::LARA_ID,
-        'session_id' => 'sess_control_plane_oversized',
-        'source' => 'chat',
-        'execution_mode' => 'streaming',
-        'status' => AiRunStatus::Succeeded,
-        'provider_name' => 'test-provider',
-        'model' => 'test-model',
-        'started_at' => now(),
-        'finished_at' => now(),
-    ]));
+    createControlPlaneRun(CONTROL_PLANE_OVERSIZED_RUN_ID);
 
     $rawBody = str_repeat('X', (64 * 1024) + 512);
 
