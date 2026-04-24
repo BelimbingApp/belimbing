@@ -104,7 +104,13 @@ class WireLogger
     public function preview(string $runId, int $offset = 0, int $limit = self::PREVIEW_ENTRY_LIMIT): array
     {
         $path = $this->path($runId);
-        $footprintBytes = is_file($path) ? (int) (@filesize($path) ?: 0) : 0;
+        $footprintBytes = 0;
+
+        if (is_file($path)) {
+            $size = @filesize($path);
+            $footprintBytes = $size === false ? 0 : (int) $size;
+        }
+
         $offset = max(0, $offset);
         $limit = max(1, min(self::PREVIEW_ENTRY_LIMIT_MAX, $limit));
 
@@ -266,52 +272,41 @@ class WireLogger
     {
         $at = $this->extractScalar($line, 'at');
         $type = $this->extractScalar($line, 'type');
+        $payloadTruncated = $lineTruncated;
 
-        if ($lineTruncated) {
-            return [
-                'at' => $at,
-                'type' => $type,
-                'payload_pretty' => __('Payload preview omitted because this wire-log entry exceeds :size.', [
-                    'size' => number_format(self::PREVIEW_LINE_BYTES / 1024).' KB',
-                ]),
-                'payload_truncated' => true,
-            ];
-        }
+        $payloadPretty = __('Payload preview omitted because this wire-log entry exceeds :size.', [
+            'size' => number_format(self::PREVIEW_LINE_BYTES / 1024).' KB',
+        ]);
 
-        $decoded = BlbJson::decodeArray($line);
+        if (! $lineTruncated) {
+            $decoded = BlbJson::decodeArray($line);
 
-        if ($decoded === null) {
-            return [
-                'at' => $at,
-                'type' => $type,
-                'payload_pretty' => __('Payload preview unavailable because this wire-log entry could not be decoded.'),
-                'payload_truncated' => true,
-            ];
-        }
+            if ($decoded === null) {
+                $payloadPretty = __('Payload preview unavailable because this wire-log entry could not be decoded.');
+                $payloadTruncated = true;
+            } else {
+                $at = is_string($decoded['at'] ?? null) ? $decoded['at'] : $at;
+                $type = is_string($decoded['type'] ?? null) ? $decoded['type'] : $type;
 
-        $at = is_string($decoded['at'] ?? null) ? $decoded['at'] : $at;
-        $type = is_string($decoded['type'] ?? null) ? $decoded['type'] : $type;
+                unset($decoded['at'], $decoded['type']);
 
-        unset($decoded['at'], $decoded['type']);
+                $encoded = json_encode(
+                    $decoded,
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                );
 
-        $payloadPretty = json_encode(
-            $decoded,
-            JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-        );
+                if (! is_string($encoded)) {
+                    $payloadPretty = __('Payload preview unavailable because this wire-log entry could not be encoded.');
+                    $payloadTruncated = true;
+                } else {
+                    $payloadPretty = $encoded;
+                    $payloadTruncated = strlen($payloadPretty) > self::PREVIEW_PAYLOAD_BYTES;
 
-        if (! is_string($payloadPretty)) {
-            return [
-                'at' => $at,
-                'type' => $type,
-                'payload_pretty' => __('Payload preview unavailable because this wire-log entry could not be encoded.'),
-                'payload_truncated' => true,
-            ];
-        }
-
-        $payloadTruncated = strlen($payloadPretty) > self::PREVIEW_PAYLOAD_BYTES;
-
-        if ($payloadTruncated) {
-            $payloadPretty = substr($payloadPretty, 0, self::PREVIEW_PAYLOAD_BYTES)."\n…";
+                    if ($payloadTruncated) {
+                        $payloadPretty = substr($payloadPretty, 0, self::PREVIEW_PAYLOAD_BYTES)."\n…";
+                    }
+                }
+            }
         }
 
         return [

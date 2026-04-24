@@ -22,15 +22,20 @@ use Livewire\Livewire;
 
 const OAI_CODEX_BACKEND_BASE_URL = 'https://chatgpt.com/backend-api';
 const OAI_CODEX_RECONNECT_HINT = 'Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.';
+const OAI_CODEX_DEFAULT_MODEL = 'gpt-5.4';
+const OAI_CODEX_CURATED_MODELS = [
+    'gpt-5.4',
+    'gpt-5.4-mini',
+    'gpt-5.2',
+];
 
-test('openai codex setup surfaces connected auth state and diagnostic action', function (): void {
-    $user = createAdminUser();
-    config()->set('ai.provider_overlay.openai-codex.curated_models', [
-        'gpt-5.4',
-        'gpt-5.4-mini',
-        'gpt-5.2',
-    ]);
-    $provider = createOpenAiCodexProvider($user, [
+/**
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function connectedCodexAuthState(array $overrides = []): array
+{
+    return array_merge([
         'status' => 'connected',
         'mode' => 'browser_pkce',
         'completed_at' => now()->subMinutes(5)->toIso8601String(),
@@ -38,7 +43,21 @@ test('openai codex setup surfaces connected auth state and diagnostic action', f
         'plan_type' => 'codex_pro',
         'last_error_code' => null,
         'last_error_message' => null,
-    ]);
+    ], $overrides);
+}
+
+/**
+ * @param  array<string, mixed>  $authOverrides
+ */
+function createConnectedOpenAiCodexProvider(User $user, array $authOverrides = []): AiProvider
+{
+    return createOpenAiCodexProvider($user, connectedCodexAuthState($authOverrides));
+}
+
+test('openai codex setup surfaces connected auth state and diagnostic action', function (): void {
+    $user = createAdminUser();
+    config()->set('ai.provider_overlay.openai-codex.curated_models', OAI_CODEX_CURATED_MODELS);
+    $provider = createConnectedOpenAiCodexProvider($user);
     createOpenAiCodexModel($provider, 'gpt-5.1-codex-mini');
 
     $this->actingAs($user);
@@ -55,23 +74,11 @@ test('openai codex setup surfaces connected auth state and diagnostic action', f
 });
 
 test('openai codex setup removes stale models and resets the default to the preferred curated model', function (): void {
-    config()->set('ai.provider_overlay.openai-codex.curated_models', [
-        'gpt-5.4',
-        'gpt-5.4-mini',
-        'gpt-5.2',
-    ]);
-    config()->set('ai.provider_overlay.openai-codex.default_model', 'gpt-5.4');
+    config()->set('ai.provider_overlay.openai-codex.curated_models', OAI_CODEX_CURATED_MODELS);
+    config()->set('ai.provider_overlay.openai-codex.default_model', OAI_CODEX_DEFAULT_MODEL);
 
     $user = createAdminUser();
-    $provider = createOpenAiCodexProvider($user, [
-        'status' => 'connected',
-        'mode' => 'browser_pkce',
-        'completed_at' => now()->subMinutes(5)->toIso8601String(),
-        'last_refresh_at' => now()->subMinute()->toIso8601String(),
-        'plan_type' => 'codex_pro',
-        'last_error_code' => null,
-        'last_error_message' => null,
-    ]);
+    $provider = createConnectedOpenAiCodexProvider($user);
     createOpenAiCodexModel($provider, 'gpt-5.1-codex-mini')->setAsDefault();
 
     $this->actingAs($user);
@@ -93,23 +100,11 @@ test('openai codex setup removes stale models and resets the default to the pref
 });
 
 test('openai codex setup sync message is honest about curated model reconciliation', function (): void {
-    config()->set('ai.provider_overlay.openai-codex.curated_models', [
-        'gpt-5.4',
-        'gpt-5.4-mini',
-        'gpt-5.2',
-    ]);
-    config()->set('ai.provider_overlay.openai-codex.default_model', 'gpt-5.4');
+    config()->set('ai.provider_overlay.openai-codex.curated_models', OAI_CODEX_CURATED_MODELS);
+    config()->set('ai.provider_overlay.openai-codex.default_model', OAI_CODEX_DEFAULT_MODEL);
 
     $user = createAdminUser();
-    $provider = createOpenAiCodexProvider($user, [
-        'status' => 'connected',
-        'mode' => 'browser_pkce',
-        'completed_at' => now()->subMinutes(5)->toIso8601String(),
-        'last_refresh_at' => now()->subMinute()->toIso8601String(),
-        'plan_type' => 'codex_pro',
-        'last_error_code' => null,
-        'last_error_message' => null,
-    ]);
+    $provider = createConnectedOpenAiCodexProvider($user);
     createOpenAiCodexModel($provider, 'gpt-5.1-codex-mini')->setAsDefault();
 
     $this->actingAs($user);
@@ -156,12 +151,9 @@ test('openai codex model sync deletes inactive models not on the curated list', 
 
 test('openai codex setup records successful verification diagnostics', function (): void {
     $user = createAdminUser();
-    config()->set('ai.provider_overlay.openai-codex.curated_models', ['gpt-5.4']);
-    config()->set('ai.provider_overlay.openai-codex.default_model', 'gpt-5.4');
-    $provider = createOpenAiCodexProvider($user, [
-        'status' => 'connected',
-        'mode' => 'browser_pkce',
-        'completed_at' => now()->subMinutes(5)->toIso8601String(),
+    config()->set('ai.provider_overlay.openai-codex.curated_models', [OAI_CODEX_DEFAULT_MODEL]);
+    config()->set('ai.provider_overlay.openai-codex.default_model', OAI_CODEX_DEFAULT_MODEL);
+    $provider = createConnectedOpenAiCodexProvider($user, [
         'last_error_code' => 'stale_error',
         'last_error_message' => 'Old diagnostic',
     ]);
@@ -193,15 +185,9 @@ test('openai codex setup records successful verification diagnostics', function 
 
 test('openai codex setup marks provider expired when verification returns auth error', function (): void {
     $user = createAdminUser();
-    config()->set('ai.provider_overlay.openai-codex.curated_models', ['gpt-5.4']);
-    config()->set('ai.provider_overlay.openai-codex.default_model', 'gpt-5.4');
-    $provider = createOpenAiCodexProvider($user, [
-        'status' => 'connected',
-        'mode' => 'browser_pkce',
-        'completed_at' => now()->subMinutes(5)->toIso8601String(),
-        'last_error_code' => null,
-        'last_error_message' => null,
-    ]);
+    config()->set('ai.provider_overlay.openai-codex.curated_models', [OAI_CODEX_DEFAULT_MODEL]);
+    config()->set('ai.provider_overlay.openai-codex.default_model', OAI_CODEX_DEFAULT_MODEL);
+    $provider = createConnectedOpenAiCodexProvider($user);
     createOpenAiCodexModel($provider, 'gpt-5.1-codex-mini');
 
     app()->instance(ProviderTestService::class, makeCodexProviderTestService(
@@ -331,15 +317,9 @@ test('openai codex setup rejects pasted callback values without state', function
 
 test('openai codex setup shows reconnect guidance when verification returns a hint', function (): void {
     $user = createAdminUser();
-    config()->set('ai.provider_overlay.openai-codex.curated_models', ['gpt-5.4']);
-    config()->set('ai.provider_overlay.openai-codex.default_model', 'gpt-5.4');
-    $provider = createOpenAiCodexProvider($user, [
-        'status' => 'connected',
-        'mode' => 'browser_pkce',
-        'completed_at' => now()->subMinutes(5)->toIso8601String(),
-        'last_error_code' => null,
-        'last_error_message' => null,
-    ]);
+    config()->set('ai.provider_overlay.openai-codex.curated_models', [OAI_CODEX_DEFAULT_MODEL]);
+    config()->set('ai.provider_overlay.openai-codex.default_model', OAI_CODEX_DEFAULT_MODEL);
+    $provider = createConnectedOpenAiCodexProvider($user);
     createOpenAiCodexModel($provider, 'gpt-5.1-codex-mini');
 
     app()->instance(ProviderTestService::class, makeCodexProviderTestService(
