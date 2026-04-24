@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -36,6 +37,12 @@ class AppServiceProvider extends ServiceProvider
                 URL::forceScheme('https');
             }
         }
+
+        // Debug exception page (laravel-exceptions-renderer): use BLB favicon instead of Laravel’s inline default.
+        View::prependNamespace(
+            'laravel-exceptions-renderer',
+            resource_path('core/views/vendor/laravel-exceptions-renderer'),
+        );
 
         $this->registerQueueMonitoring();
         $this->registerCacheWarming();
