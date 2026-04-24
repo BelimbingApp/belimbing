@@ -37,7 +37,7 @@ return [
                 'max_output_tokens' => 8192,
             ],
             'sampling' => [
-                'temperature' => 0.7,
+                'temperature' => null,
             ],
             'reasoning' => [
                 'mode' => 'auto',

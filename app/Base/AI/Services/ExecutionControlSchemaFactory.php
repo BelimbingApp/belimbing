@@ -7,7 +7,6 @@ namespace App\Base\AI\Services;
 
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\DTO\ProviderExecutionCapabilities;
-use App\Base\AI\DTO\SamplingControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\ReasoningEffort;
 use App\Base\AI\Enums\ReasoningMode;
@@ -61,8 +60,6 @@ final class ExecutionControlSchemaFactory
     ): array {
         $defaults = $this->defaultControls();
         $capabilities = $this->capabilities->capabilitiesFor($providerName, $model, $apiType);
-        $fixedSampling = $this->fixedSamplingFor($controls, $capabilities);
-        $notes = [];
 
         $groups = [
             [
@@ -83,29 +80,6 @@ final class ExecutionControlSchemaFactory
                 ],
             ],
             [
-                'key' => 'sampling',
-                'label' => 'Sampling',
-                'controls' => [
-                    $this->numberControl(
-                        path: 'sampling.temperature',
-                        label: 'Temperature',
-                        description: $fixedSampling === null
-                            ? 'Controls output randomness for this model.'
-                            : 'The provider enforces the applied value shown here for the current reasoning mode.',
-                        options: [
-                            'current_value' => $controls->sampling->temperature,
-                            'default_value' => $defaults->sampling->temperature,
-                            'min' => 0,
-                            'max' => 2,
-                            'step' => 0.1,
-                            'editable' => $fixedSampling === null,
-                            'display_value' => $fixedSampling?->temperature,
-                            'read_only_reason' => $fixedSampling === null ? null : 'Provider-enforced value',
-                        ],
-                    ),
-                ],
-            ],
-            [
                 'key' => 'reasoning',
                 'label' => 'Reasoning',
                 'controls' => $this->reasoningControls($controls, $defaults, $capabilities),
@@ -117,16 +91,6 @@ final class ExecutionControlSchemaFactory
             ],
         ];
 
-        if ($fixedSampling !== null) {
-            $notes[] = sprintf(
-                'This model family also enforces top-p %s, candidate count %s, presence penalty %s, and frequency penalty %s in the current reasoning mode.',
-                $this->formatNumber($fixedSampling->topP),
-                $this->formatValue($fixedSampling->candidateCount),
-                $this->formatNumber($fixedSampling->presencePenalty),
-                $this->formatNumber($fixedSampling->frequencyPenalty),
-            );
-        }
-
         return [
             'provider_name' => $providerName,
             'model' => $model,
@@ -135,7 +99,7 @@ final class ExecutionControlSchemaFactory
                 $groups,
                 fn (array $group): bool => $group['controls'] !== []
             )),
-            'notes' => $notes,
+            'notes' => [],
         ];
     }
 
@@ -241,19 +205,8 @@ final class ExecutionControlSchemaFactory
         return $capabilities->supportedReasoningVisibility !== []
             || $capabilities->supportedReasoningEffort !== []
             || $capabilities->supportsReasoningBudget
-            || $capabilities->fixedSamplingWhenReasoningEnabled !== null
-            || $capabilities->fixedSamplingWhenReasoningDisabled !== null
             || $capabilities->supportsNativeReasoningBlocks
             || $capabilities->supportsAdaptiveReasoning;
-    }
-
-    private function fixedSamplingFor(
-        ExecutionControls $controls,
-        ProviderExecutionCapabilities $capabilities,
-    ): ?SamplingControls {
-        return $controls->reasoning->mode === ReasoningMode::Disabled
-            ? $capabilities->fixedSamplingWhenReasoningDisabled
-            : $capabilities->fixedSamplingWhenReasoningEnabled;
     }
 
     /**

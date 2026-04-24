@@ -75,7 +75,6 @@ class TaskModelRecommendationService
             $messages,
             executionControls: ExecutionControls::defaults(
                 maxOutputTokens: 120,
-                temperature: 0.2,
             ),
             timeout: 30,
             providerName: $config['provider_name'] ?? null,

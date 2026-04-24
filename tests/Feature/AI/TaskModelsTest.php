@@ -212,21 +212,20 @@ test('task model save preserves existing execution controls', function (): void 
         ->and($config['execution_controls']['reasoning']['visibility'] ?? null)->toBe('summary');
 });
 
-test('task models persist task-specific execution controls in primary mode', function (): void {
+test('task models persist task-specific execution controls in primary mode without sampling overrides', function (): void {
     activateLaraForTaskModels();
     $user = createTaskModelsTestUser();
     $this->actingAs($user);
 
     Livewire::test(TaskModels::class)
         ->set('taskModes.titling', 'primary')
-        ->set('taskExecutionControls.titling.limits.max_output_tokens', 512)
-        ->set('taskExecutionControls.titling.sampling.temperature', 0.2);
+        ->set('taskExecutionControls.titling.limits.max_output_tokens', 512);
 
     $config = app(ConfigResolver::class)->readTaskConfig(Employee::LARA_ID, 'titling');
 
     expect($config['mode'] ?? null)->toBe('primary')
         ->and($config['execution_controls']['limits']['max_output_tokens'] ?? null)->toBe(512)
-        ->and($config['execution_controls']['sampling']['temperature'] ?? null)->toBe(0.2);
+        ->and($config['execution_controls']['sampling']['temperature'] ?? null)->toBeNull();
 });
 
 test('task models switch execution control surfaces when the selected model family changes', function (): void {
@@ -277,8 +276,7 @@ test('task models switch execution control surfaces when the selected model fami
         ->set('taskProviderIds.coding', $anthropicProvider->id)
         ->assertSee('Reasoning effort')
         ->set('taskProviderIds.coding', $moonshotProvider->id)
-        ->assertSee('Provider-enforced value')
-        ->assertSee('This model family also enforces top-p 0.95');
+        ->assertDontSee('This model family enforces temperature');
 });
 
 function createTaskModelsTestUser(): User

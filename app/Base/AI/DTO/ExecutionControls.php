@@ -34,7 +34,7 @@ final class ExecutionControls
 
     public static function defaults(// NOSONAR (parameter count): kept as named-argument-friendly builder API
         int $maxOutputTokens = 2048,
-        ?float $temperature = 0.7,
+        ?float $temperature = null,
         ?ToolChoiceMode $toolChoice = null,
         ReasoningMode $reasoningMode = ReasoningMode::Auto,
         ReasoningVisibility $reasoningVisibility = ReasoningVisibility::None,
@@ -74,7 +74,6 @@ final class ExecutionControls
     public static function fromConfig(array $config, self $defaults): self
     {
         $limits = is_array($config['limits'] ?? null) ? $config['limits'] : [];
-        $sampling = is_array($config['sampling'] ?? null) ? $config['sampling'] : [];
         $reasoning = is_array($config['reasoning'] ?? null) ? $config['reasoning'] : [];
         $tools = is_array($config['tools'] ?? null) ? $config['tools'] : [];
 
@@ -82,12 +81,13 @@ final class ExecutionControls
             limits: new ExecutionLimitControls(
                 maxOutputTokens: (int) ($limits['max_output_tokens'] ?? $defaults->limits->maxOutputTokens),
             ),
+            // Sampling controls are provider-managed by default; persisted overrides are ignored.
             sampling: new SamplingControls(
-                temperature: self::floatOrNull($sampling['temperature'] ?? $defaults->sampling->temperature),
-                topP: self::floatOrNull($sampling['top_p'] ?? $defaults->sampling->topP),
-                candidateCount: self::intOrNull($sampling['candidate_count'] ?? $defaults->sampling->candidateCount),
-                presencePenalty: self::floatOrNull($sampling['presence_penalty'] ?? $defaults->sampling->presencePenalty),
-                frequencyPenalty: self::floatOrNull($sampling['frequency_penalty'] ?? $defaults->sampling->frequencyPenalty),
+                temperature: $defaults->sampling->temperature,
+                topP: $defaults->sampling->topP,
+                candidateCount: $defaults->sampling->candidateCount,
+                presencePenalty: $defaults->sampling->presencePenalty,
+                frequencyPenalty: $defaults->sampling->frequencyPenalty,
             ),
             reasoning: new ReasoningControls(
                 mode: ReasoningMode::tryFrom((string) ($reasoning['mode'] ?? $defaults->reasoning->mode->value))

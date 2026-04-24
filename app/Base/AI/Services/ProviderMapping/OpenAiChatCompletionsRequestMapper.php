@@ -14,25 +14,17 @@ final class OpenAiChatCompletionsRequestMapper implements ProviderRequestMapper
     use OpenAiRequestMapperHelpers;
 
     public function __construct(
-        private readonly ProviderCapabilityRegistry $capabilities,
         private readonly ProviderRequestHeaderResolver $headers,
     ) {}
 
     public function mapPayload(ChatRequest $request, bool $stream): ProviderRequestMapping
     {
-        $capabilities = $this->capabilities->capabilitiesFor($request->providerName, $request->model, $request->apiType);
-        $adjustments = [];
         $payload = [
             'model' => $request->model,
             'messages' => $request->messages,
             'max_tokens' => $request->executionControls->limits->maxOutputTokens,
-            'temperature' => $request->executionControls->sampling->temperature,
-            'top_p' => $request->executionControls->sampling->topP,
-            'n' => $request->executionControls->sampling->candidateCount,
-            'presence_penalty' => $request->executionControls->sampling->presencePenalty,
-            'frequency_penalty' => $request->executionControls->sampling->frequencyPenalty,
             'stream' => $stream ? true : null,
-            'tools' => $this->normalizeTools($request->tools, $capabilities),
+            'tools' => $this->normalizeTools($request->tools),
             'tool_choice' => $request->executionControls->tools->choice?->value,
         ];
 
@@ -41,12 +33,9 @@ final class OpenAiChatCompletionsRequestMapper implements ProviderRequestMapper
         }
 
         return new ProviderRequestMapping(
-            payload: array_filter(
-                $this->applyFixedSampling($payload, $request, $capabilities, $adjustments),
-                fn ($value) => $value !== null
-            ),
+            payload: array_filter($payload, fn ($value) => $value !== null),
             headers: $this->headers->headersFor($request),
-            controlAdjustments: $adjustments,
+            controlAdjustments: [],
         );
     }
 }

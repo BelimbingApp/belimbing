@@ -35,8 +35,6 @@ final class AnthropicMessagesRequestMapper implements ProviderRequestMapper
             'messages' => $messages,
             'max_tokens' => $request->executionControls->limits->maxOutputTokens,
             'stream' => $stream,
-            'temperature' => $request->executionControls->sampling->temperature,
-            'top_p' => $request->executionControls->sampling->topP,
             'tools' => $request->tools !== null ? $this->convertTools($request->tools) : null,
             'tool_choice' => $this->mapToolChoice($request, $adjustments),
             'thinking' => $this->mapThinking($request, $capabilities, $adjustments),

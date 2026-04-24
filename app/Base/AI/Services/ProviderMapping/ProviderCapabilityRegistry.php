@@ -6,7 +6,6 @@
 namespace App\Base\AI\Services\ProviderMapping;
 
 use App\Base\AI\DTO\ProviderExecutionCapabilities;
-use App\Base\AI\DTO\SamplingControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\ReasoningEffort;
 use App\Base\AI\Enums\ReasoningVisibility;
@@ -44,40 +43,7 @@ final class ProviderCapabilityRegistry
             );
         }
 
-        if ($this->isMoonshotProvider($providerName) && str_contains($model, 'kimi-k2.5')) {
-            return new ProviderExecutionCapabilities(
-                requiresAnyOfToolSchemas: true,
-                fixedSamplingWhenReasoningEnabled: new SamplingControls(
-                    temperature: 1.0,
-                    topP: 0.95,
-                    candidateCount: 1,
-                    presencePenalty: 0.0,
-                    frequencyPenalty: 0.0,
-                ),
-                fixedSamplingWhenReasoningDisabled: new SamplingControls(
-                    temperature: 0.6,
-                    topP: 0.95,
-                    candidateCount: 1,
-                    presencePenalty: 0.0,
-                    frequencyPenalty: 0.0,
-                ),
-                supportedReasoningVisibility: [ReasoningVisibility::None, ReasoningVisibility::Full],
-                supportsReasoningContextPreservation: true,
-            );
-        }
-
-        if ($this->isMoonshotProvider($providerName)) {
-            return new ProviderExecutionCapabilities(
-                requiresAnyOfToolSchemas: true,
-            );
-        }
-
         return new ProviderExecutionCapabilities;
-    }
-
-    private function isMoonshotProvider(?string $providerName): bool
-    {
-        return in_array($providerName, ['moonshotai', 'moonshotai-cn', 'kimi-for-coding'], true);
     }
 
     private function isAnthropicProvider(?string $providerName): bool
@@ -87,8 +53,23 @@ final class ProviderCapabilityRegistry
 
     private function supportsAnthropicAdaptiveThinking(string $model): bool
     {
-        return str_starts_with($model, 'claude-opus-4-6')
-            || str_starts_with($model, 'claude-sonnet-4-6')
-            || str_starts_with($model, 'claude-mythos');
+        $id = str_contains($model, '/') ? basename($model) : $model;
+
+        if (str_starts_with($id, 'claude-mythos')) {
+            return true;
+        }
+
+        if (! preg_match('/^claude-(opus|sonnet)-(\d+)[.-](\d+)/', $id, $matches)) {
+            return false;
+        }
+
+        $major = (int) $matches[2];
+        $minor = (int) $matches[3];
+
+        if ($major > 4) {
+            return true;
+        }
+
+        return $major === 4 && $minor >= 6;
     }
 }

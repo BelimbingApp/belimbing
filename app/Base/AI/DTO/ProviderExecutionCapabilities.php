@@ -12,9 +12,6 @@ use App\Base\AI\Enums\ToolChoiceMode;
 final readonly class ProviderExecutionCapabilities
 {
     public function __construct(
-        public bool $requiresAnyOfToolSchemas = false,
-        public ?SamplingControls $fixedSamplingWhenReasoningEnabled = null,
-        public ?SamplingControls $fixedSamplingWhenReasoningDisabled = null,
         /** @var list<ReasoningVisibility> */
         public array $supportedReasoningVisibility = [],
         /** @var list<ReasoningEffort> */

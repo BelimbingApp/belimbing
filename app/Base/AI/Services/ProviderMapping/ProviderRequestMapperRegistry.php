@@ -20,7 +20,7 @@ final class ProviderRequestMapperRegistry
             AiApiType::OpenAiResponses => new OpenAiResponsesRequestMapper($this->capabilities, $this->headers),
             AiApiType::OpenAiCodexResponses => new OpenAiResponsesRequestMapper($this->capabilities, $this->headers),
             AiApiType::AnthropicMessages => new AnthropicMessagesRequestMapper($this->capabilities),
-            default => new OpenAiChatCompletionsRequestMapper($this->capabilities, $this->headers),
+            default => new OpenAiChatCompletionsRequestMapper($this->headers),
         };
     }
 }

@@ -96,6 +96,40 @@ describe('LlmClient tool calling request payloads', function () {
         });
     });
 
+    it('omits sampling parameters from generic chat completions payloads', function () {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
+                'usage' => [],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'gpt-4',
+            [['role' => 'user', 'content' => 'Hello']],
+            executionControls: ExecutionControls::defaults(
+                temperature: 0.3,
+                topP: 0.8,
+                candidateCount: 2,
+                presencePenalty: 0.1,
+                frequencyPenalty: 0.2,
+            ),
+        ));
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return ! isset($body['temperature'])
+                && ! isset($body['top_p'])
+                && ! isset($body['n'])
+                && ! isset($body['presence_penalty'])
+                && ! isset($body['frequency_penalty']);
+        });
+    });
+
     it('maps GitHub Copilot IDE headers through provider request mapping', function () {
         Http::fake([
             '*/chat/completions' => Http::response([
@@ -122,7 +156,7 @@ describe('LlmClient tool calling request payloads', function () {
         });
     });
 
-    it('forces Moonshot chat completions temperature to one', function () {
+    it('omits sampling for Moonshot chat completions', function () {
         Http::fake([
             '*/chat/completions' => Http::response([
                 'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
@@ -143,11 +177,117 @@ describe('LlmClient tool calling request payloads', function () {
         Http::assertSent(function ($request) {
             $body = $request->data();
 
-            return isset($body['temperature']) && $body['temperature'] === 1.0;
+            return ! isset($body['temperature']);
         });
     });
 
-    it('reports provider mapping adjustments when Moonshot forces sampling values', function () {
+    it('omits sampling for Moonshot kimi-k2.6 chat completions', function () {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
+                'usage' => [],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'moonshotai/kimi-k2.6',
+            [['role' => 'user', 'content' => 'Hello']],
+            executionControls: ExecutionControls::defaults(temperature: 0.3),
+            providerName: 'moonshotai',
+        ));
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return ! isset($body['temperature']);
+        });
+    });
+
+    it('omits sampling for Moonshot kimi-k2.6 when reasoning is disabled', function () {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
+                'usage' => [],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'moonshotai/kimi-k2.6',
+            [['role' => 'user', 'content' => 'Hello']],
+            executionControls: ExecutionControls::defaults(
+                temperature: 0.3,
+                reasoningMode: ReasoningMode::Disabled,
+            ),
+            providerName: 'moonshotai',
+        ));
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return ! isset($body['temperature']);
+        });
+    });
+
+    it('omits sampling for Moonshot kimi-k family chat completions', function () {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
+                'usage' => [],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'moonshotai/kimi-k2.7',
+            [['role' => 'user', 'content' => 'Hello']],
+            executionControls: ExecutionControls::defaults(temperature: 0.3),
+            providerName: 'moonshotai',
+        ));
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return ! isset($body['temperature']);
+        });
+    });
+
+    it('omits sampling for Moonshot kimi-k2.5 when reasoning is disabled', function () {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
+                'usage' => [],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            LLM_TOOL_CALLING_MOONSHOT_MODEL,
+            [['role' => 'user', 'content' => 'Hello']],
+            executionControls: ExecutionControls::defaults(
+                temperature: 0.3,
+                reasoningMode: ReasoningMode::Disabled,
+            ),
+            providerName: 'moonshotai',
+        ));
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return ! isset($body['temperature']);
+        });
+    });
+
+    it('does not report provider mapping adjustments for Moonshot sampling', function () {
         Http::fake([
             '*/chat/completions' => Http::response([
                 'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
@@ -169,12 +309,10 @@ describe('LlmClient tool calling request payloads', function () {
         ));
 
         expect($result['provider_mapping']['control_adjustments'] ?? [])
-            ->toHaveCount(2)
-            ->and($result['provider_mapping']['control_adjustments'][0]['type'] ?? null)->toBe('forced')
-            ->and($result['provider_mapping']['control_adjustments'][0]['control'] ?? null)->toBe('sampling.temperature');
+            ->toBe([]);
     });
 
-    it('does not rewrite Moonshot temperature for non-K2.5 models', function () {
+    it('does not rewrite Moonshot temperature for models outside the Kimi-K family', function () {
         Http::fake([
             '*/chat/completions' => Http::response([
                 'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
@@ -195,11 +333,11 @@ describe('LlmClient tool calling request payloads', function () {
         Http::assertSent(function ($request) {
             $body = $request->data();
 
-            return isset($body['temperature']) && $body['temperature'] === 0.3;
+            return ! isset($body['temperature']);
         });
     });
 
-    it('rewrites Moonshot tool schemas from oneOf to anyOf for non-K2.5 models', function () {
+    it('keeps Moonshot tool schemas unchanged', function () {
         Http::fake([
             '*/chat/completions' => Http::response([
                 'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hi']]],
@@ -240,8 +378,8 @@ describe('LlmClient tool calling request payloads', function () {
             $userIdSchema = $body['tools'][0]['function']['parameters']['properties']['user_id'] ?? null;
 
             return is_array($userIdSchema)
-                && isset($userIdSchema['anyOf'])
-                && ! isset($userIdSchema['oneOf']);
+                && isset($userIdSchema['oneOf'])
+                && ! isset($userIdSchema['anyOf']);
         });
     });
 
@@ -296,6 +434,37 @@ describe('LlmClient tool calling request payloads', function () {
                 && $request->hasHeader('x-api-key', ['anthropic-key'])
                 && $request->hasHeader('anthropic-version', ['2023-06-01'])
                 && $request->hasHeader('anthropic-beta', ['interleaved-thinking-2025-05-14']);
+        });
+    });
+
+    it('omits sampling parameters from anthropic payloads', function () {
+        Http::fake([
+            '*/messages' => Http::response([
+                'content' => [
+                    ['type' => 'text', 'text' => LLM_TOOL_CALLING_GREETING],
+                ],
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]);
+
+        $client = new LlmClient;
+        $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'anthropic-key',
+            'claude-sonnet-4-6',
+            [['role' => 'user', 'content' => 'Hello']],
+            executionControls: ExecutionControls::defaults(
+                temperature: 0.3,
+                topP: 0.8,
+            ),
+            providerName: 'anthropic',
+            apiType: AiApiType::AnthropicMessages,
+        ));
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return ! isset($body['temperature']) && ! isset($body['top_p']);
         });
     });
 });

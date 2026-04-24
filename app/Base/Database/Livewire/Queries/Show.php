@@ -255,7 +255,6 @@ class Show extends Component
                 ],
                 executionControls: ExecutionControls::defaults(
                     maxOutputTokens: 1024,
-                    temperature: 0.1,
                 ),
                 timeout: 30,
                 providerName: $config['provider_name'],

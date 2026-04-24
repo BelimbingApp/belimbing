@@ -5,152 +5,15 @@
 
 namespace App\Base\AI\Services\ProviderMapping;
 
-use App\Base\AI\DTO\ChatRequest;
-use App\Base\AI\DTO\ProviderControlAdjustment;
-use App\Base\AI\DTO\ProviderExecutionCapabilities;
-use App\Base\AI\Enums\ProviderControlAdjustmentType;
-use App\Base\AI\Enums\ReasoningMode;
-
 trait OpenAiRequestMapperHelpers
 {
     /**
      * @param  list<array<string, mixed>>|null  $tools
      * @return list<array<string, mixed>>|null
      */
-    private function normalizeTools(?array $tools, ProviderExecutionCapabilities $capabilities): ?array
+    private function normalizeTools(?array $tools): ?array
     {
-        if ($tools === null) {
-            return null;
-        }
-
-        if (! $capabilities->requiresAnyOfToolSchemas) {
-            return $tools;
-        }
-
-        return array_map(function (array $tool): array {
-            if (! isset($tool['function']['parameters'])) {
-                return $tool;
-            }
-
-            $tool['function']['parameters'] = $this->convertOneOfToAnyOf($tool['function']['parameters']);
-
-            return $tool;
-        }, $tools);
-    }
-
-    private function convertOneOfToAnyOf(mixed $schema): mixed
-    {
-        if (! is_array($schema)) {
-            return $schema;
-        }
-
-        if (isset($schema['oneOf'])) {
-            $schema['anyOf'] = $schema['oneOf'];
-            unset($schema['oneOf']);
-        }
-
-        foreach ($schema as $key => $value) {
-            if (is_array($value)) {
-                $schema[$key] = $this->convertOneOfToAnyOf($value);
-            }
-        }
-
-        return $schema;
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @param  list<ProviderControlAdjustment>  $adjustments
-     * @return array<string, mixed>
-     */
-    private function applyFixedSampling(
-        array $payload,
-        ChatRequest $request,
-        ProviderExecutionCapabilities $capabilities,
-        array &$adjustments,
-    ): array {
-        $fixedSampling = $request->executionControls->reasoning->mode === ReasoningMode::Disabled
-            ? $capabilities->fixedSamplingWhenReasoningDisabled
-            : $capabilities->fixedSamplingWhenReasoningEnabled;
-
-        if ($fixedSampling === null) {
-            return $payload;
-        }
-
-        $payload = $this->applyFixedSamplingValue(
-            $payload,
-            'temperature',
-            'sampling.temperature',
-            $fixedSampling->temperature,
-            'Provider enforces a fixed temperature for this reasoning mode.',
-            $adjustments,
-        );
-        $payload = $this->applyFixedSamplingValue(
-            $payload,
-            'top_p',
-            'sampling.top_p',
-            $fixedSampling->topP,
-            'Provider enforces a fixed top-p value for this reasoning mode.',
-            $adjustments,
-        );
-        $payload = $this->applyFixedSamplingValue(
-            $payload,
-            'n',
-            'sampling.candidate_count',
-            $fixedSampling->candidateCount,
-            'Provider enforces a single candidate for this reasoning mode.',
-            $adjustments,
-        );
-        $payload = $this->applyFixedSamplingValue(
-            $payload,
-            'presence_penalty',
-            'sampling.presence_penalty',
-            $fixedSampling->presencePenalty,
-            'Provider enforces a fixed presence penalty for this reasoning mode.',
-            $adjustments,
-        );
-        $payload = $this->applyFixedSamplingValue(
-            $payload,
-            'frequency_penalty',
-            'sampling.frequency_penalty',
-            $fixedSampling->frequencyPenalty,
-            'Provider enforces a fixed frequency penalty for this reasoning mode.',
-            $adjustments,
-        );
-
-        return $payload;
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @param  list<ProviderControlAdjustment>  $adjustments
-     * @return array<string, mixed>
-     */
-    private function applyFixedSamplingValue(
-        array $payload,
-        string $payloadKey,
-        string $controlPath,
-        mixed $appliedValue,
-        string $message,
-        array &$adjustments,
-    ): array {
-        if (! array_key_exists($payloadKey, $payload) || $payload[$payloadKey] === null) {
-            return $payload;
-        }
-
-        if ($payload[$payloadKey] !== $appliedValue) {
-            $adjustments[] = new ProviderControlAdjustment(
-                ProviderControlAdjustmentType::Forced,
-                $controlPath,
-                $payload[$payloadKey],
-                $appliedValue,
-                $message,
-            );
-        }
-
-        $payload[$payloadKey] = $appliedValue;
-
-        return $payload;
+        return $tools;
     }
 
     /**

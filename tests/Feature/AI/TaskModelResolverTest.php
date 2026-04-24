@@ -288,6 +288,6 @@ test('resolve task overlays task execution controls onto the fallback primary mo
         ->and($resolved['provider_name'])->toBe('openai')
         ->and($resolved['model'])->toBe('gpt-primary')
         ->and($resolved['execution_controls']->limits->maxOutputTokens)->toBe(64)
-        ->and($resolved['execution_controls']->sampling->temperature)->toBe(0.7)
+        ->and($resolved['execution_controls']->sampling->temperature)->toBeNull()
         ->and($resolved['execution_controls']->reasoning->visibility)->toBe(ReasoningVisibility::Summary);
 });

@@ -42,7 +42,6 @@ trait MakesRuntimeResponses
             'model' => $model,
             'execution_controls' => ExecutionControls::defaults(
                 maxOutputTokens: 2048,
-                temperature: 0.7,
             ),
             'timeout' => 60,
             'provider_name' => $provider,

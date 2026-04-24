@@ -232,7 +232,6 @@ trait ManagesChatSessions
             $apiMessages,
             executionControls: ExecutionControls::defaults(
                 maxOutputTokens: 20,
-                temperature: 0.5,
             ),
             timeout: 15,
             providerName: $config['provider_name'] ?? null,

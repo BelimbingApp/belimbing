@@ -239,7 +239,7 @@ test('lara activation persists edited execution controls for reasoning-capable m
         ->and($workspaceConfig['llm']['models'][0]['execution_controls']['tools']['preserve_reasoning_context'] ?? null)->toBeTrue();
 });
 
-test('lara setup shows provider-enforced values but keeps canonical execution controls when switching model families', function (): void {
+test('lara setup keeps canonical execution controls when switching model families', function (): void {
     Company::query()->find(Company::LICENSEE_ID)
         ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
 
@@ -304,8 +304,7 @@ test('lara setup shows provider-enforced values but keeps canonical execution co
     Livewire::test(Lara::class)
         ->assertSee('Reasoning visibility')
         ->set('selectedProviderId', $moonshotProvider->id)
-        ->assertSee('Provider-enforced value')
-        ->assertSee('This model family also enforces top-p 0.95')
+        ->assertDontSee('This model family enforces temperature')
         ->call('activateLara');
 
     $workspaceConfig = app(ConfigResolver::class)->readWorkspaceConfig(Employee::LARA_ID);
@@ -313,6 +312,6 @@ test('lara setup shows provider-enforced values but keeps canonical execution co
     expect($workspaceConfig)->not->toBeNull()
         ->and($workspaceConfig['llm']['models'][0]['provider'] ?? null)->toBe('moonshotai')
         ->and($workspaceConfig['llm']['models'][0]['model'] ?? null)->toBe('kimi-k2.5')
-        ->and($workspaceConfig['llm']['models'][0]['execution_controls']['sampling']['temperature'] ?? null)->toBe(0.3)
+        ->and($workspaceConfig['llm']['models'][0]['execution_controls']['sampling']['temperature'] ?? null)->toBeNull()
         ->and($workspaceConfig['llm']['models'][0]['execution_controls']['reasoning']['visibility'] ?? null)->toBe('summary');
 });
