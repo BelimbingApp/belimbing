@@ -75,36 +75,34 @@
 
         @foreach ($entries as $index => $entry)
             <details class="rounded-2xl border border-border-default bg-surface-card p-card-inner" @if ($index === 0) open @endif>
-                <summary class="flex cursor-pointer flex-col gap-1 text-sm text-ink sm:flex-row sm:items-center sm:justify-between">
-                    <span class="font-medium">
-                        {{ $entry['type'] ?? __('Unknown entry') }}
-                        <span class="ml-2 text-xs font-normal text-muted">{{ __('#:number', ['number' => $entry['entry_number'] ?? (($summary['offset'] ?? 0) + $index + 1)]) }}</span>
+                <summary class="flex cursor-pointer flex-col gap-1 text-sm text-ink sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                    <span class="min-w-0">
+                        <span class="font-medium">
+                            {{ $entry['type'] ?? __('Unknown entry') }}
+                            <span class="ml-2 text-xs font-normal text-muted">{{ __('#:number', ['number' => $entry['entry_number'] ?? (($summary['offset'] ?? 0) + $index + 1)]) }}</span>
+                        </span>
+                        <span class="ml-2 text-xs text-muted">{{ $entry['summary_preview'] ?? '{}' }}</span>
                     </span>
-                    <span class="text-xs text-muted tabular-nums">{{ $entry['at'] ?? '---' }}</span>
+                    <x-ui.datetime :value="$entry['at'] ?? null" class="shrink-0 text-xs text-muted tabular-nums" />
                 </summary>
-                <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                    <x-ui.button
-                        as="a"
-                        href="{{ route('admin.ai.runs.wire-log-entry', ['runId' => $runId, 'entryNumber' => $entry['entry_number'] ?? (($summary['offset'] ?? 0) + $index + 1)]) }}"
-                        target="_blank"
-                        rel="noreferrer"
-                        variant="ghost"
-                        size="sm"
-                    >
-                        {{ __('Open Raw') }}
-                    </x-ui.button>
-
-                    @if (($entry['preview_status'] ?? 'full') === 'line_omitted')
-                        <p class="text-warning">
-                            {{ __('This entry is too large for an inline preview here. Open Raw to stream the exact recorded payload.') }}
-                        </p>
-                    @elseif (($entry['preview_status'] ?? 'full') !== 'full')
-                        <p class="text-warning">
-                            {{ __('Preview truncated in the inspector. Open Raw for the exact recorded payload.') }}
-                        </p>
-                    @endif
-                </div>
-                <pre class="mt-3 overflow-x-auto rounded-2xl bg-surface-subtle p-3 text-[11px] text-muted">{{ $entry['payload_pretty'] ?? '{}' }}</pre>
+                @if (($entry['preview_status'] ?? 'full') === 'line_omitted')
+                    <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                        <p class="text-warning">{{ $entry['payload_pretty'] ?? '{}' }}</p>
+                        <x-ui.button
+                            as="a"
+                            href="{{ route('admin.ai.runs.wire-log-entry', ['runId' => $runId, 'entryNumber' => $entry['entry_number'] ?? (($summary['offset'] ?? 0) + $index + 1)]) }}"
+                            target="_blank"
+                            rel="noreferrer"
+                            variant="ghost"
+                            size="sm"
+                        >
+                            {{ __('Open Raw') }}
+                        </x-ui.button>
+                    </div>
+                @endif
+                @if (($entry['preview_status'] ?? 'full') !== 'line_omitted')
+                    <pre class="mt-3 overflow-x-auto rounded-2xl bg-surface-subtle p-3 text-[11px] text-muted">{{ $entry['payload_pretty'] ?? '{}' }}</pre>
+                @endif
             </details>
         @endforeach
     @endif

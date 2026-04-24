@@ -95,9 +95,11 @@ it('renders a bounded wire-log preview for oversized run logs', function (): voi
         ->assertSee('Showing entries 1-45 of 45 retained wire-log entries.')
         ->assertSee('This run retained')
         ->assertSee('Large entries can be opened raw in a separate tab without loading them into the inspector response.')
+        ->assertSee('llm.response_body')
+        ->assertSee('#1')
+        ->assertSee('{"raw_body":"')
         ->assertSee('Payload preview omitted because this wire-log entry exceeds 64 KB.')
         ->assertSee('Open Raw')
-        ->assertSee('This entry is too large for an inline preview here. Open Raw to stream the exact recorded payload.')
         ->assertSee(route('admin.ai.runs.wire-log-entry', [
             'runId' => CONTROL_PLANE_OVERSIZED_RUN_ID,
             'entryNumber' => 1,
@@ -116,7 +118,25 @@ it('navigates wire-log windows for large runs', function (): void {
 
     $lines = [];
 
-    for ($index = 1; $index <= 245; $index++) {
+    $lines[] = json_encode([
+        'at' => now()->copy()->addSecond()->toIso8601String(),
+        'type' => 'llm.stream_line',
+        'raw_line' => 'data: {"choices":[{"delta":{"reasoning_content":" the"},"finish_reason":null}]}',
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    $lines[] = json_encode([
+        'at' => now()->copy()->addSeconds(2)->toIso8601String(),
+        'type' => 'llm.stream_line',
+        'raw_line' => 'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    $lines[] = json_encode([
+        'at' => now()->copy()->addSeconds(3)->toIso8601String(),
+        'type' => 'llm.stream_line',
+        'raw_line' => '',
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    for ($index = 4; $index <= 245; $index++) {
         $lines[] = json_encode([
             'at' => now()->copy()->addSeconds($index)->toIso8601String(),
             'type' => 'llm.stream_line',
@@ -136,7 +156,10 @@ it('navigates wire-log windows for large runs', function (): void {
         ->call('inspectRun')
         ->assertSet('wireLogLimit', 100)
         ->assertSee('Showing entries 1-100 of 245 retained wire-log entries.')
-        ->assertSee('entry-1')
+        ->assertSee('reasoning_content: " the"')
+        ->assertSee('finish_reason: tool_calls')
+        ->assertSee('[]')
+        ->assertSee('entry-4')
         ->assertSee('entry-100')
         ->set('wireLogLimit', 50)
         ->assertDispatched('wire-log-window-changed')

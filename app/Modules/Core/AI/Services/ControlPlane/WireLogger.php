@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Services\ControlPlane;
 
 use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
+use Illuminate\Support\Str;
 
 class WireLogger
 {
@@ -87,6 +88,7 @@ class WireLogger
      *         entry_number: int,
      *         at: string|null,
      *         type: string|null,
+     *         summary_preview: string,
      *         payload_pretty: string,
      *         payload_truncated: bool,
      *         preview_status: string
@@ -315,6 +317,7 @@ class WireLogger
      *     entry_number: int,
      *     at: string|null,
      *     type: string|null,
+     *     summary_preview: string,
      *     payload_pretty: string,
      *     payload_truncated: bool,
      *     preview_status: string
@@ -330,6 +333,7 @@ class WireLogger
             'entry_number' => $entryNumber,
             'at' => $payload['at'],
             'type' => $payload['type'],
+            'summary_preview' => $payload['summary_preview'],
             'payload_pretty' => $payload['payload_pretty'],
             'payload_truncated' => $payload['payload_truncated'],
             'preview_status' => $payload['preview_status'],
@@ -340,6 +344,7 @@ class WireLogger
      * @return array{
      *     at: string|null,
      *     type: string|null,
+     *     summary_preview: string,
      *     payload_pretty: string,
      *     payload_truncated: bool,
      *     preview_status: string
@@ -354,6 +359,7 @@ class WireLogger
         $previewStatus = 'line_omitted';
         $at = $fallbackAt;
         $type = $fallbackType;
+        $summaryPreview = $this->summaryPreviewFromRawLine($line);
 
         if (! $lineTruncated) {
             $decoded = BlbJson::decodeArray($line);
@@ -367,6 +373,7 @@ class WireLogger
                 $type = is_string($decoded['type'] ?? null) ? $decoded['type'] : $type;
 
                 unset($decoded['at'], $decoded['type']);
+                $summaryPreview = $this->summaryPreviewFromPayload($type, $decoded);
 
                 $encoded = json_encode(
                     $decoded,
@@ -392,10 +399,117 @@ class WireLogger
         return [
             'at' => $at,
             'type' => $type,
+            'summary_preview' => $summaryPreview,
             'payload_pretty' => $payloadPretty,
             'payload_truncated' => $payloadTruncated,
             'preview_status' => $previewStatus,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function summaryPreviewFromPayload(?string $type, array $payload): string
+    {
+        if ($type === 'llm.stream_line') {
+            return $this->streamLineSummaryPreview($payload);
+        }
+
+        $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if (! is_string($encoded) || $encoded === '') {
+            return '{}';
+        }
+
+        return Str::limit($encoded, 120, '...');
+    }
+
+    private function summaryPreviewFromRawLine(string $line): string
+    {
+        $summary = preg_replace('/^{"at":"[^"]*","type":"[^"]*",?/', '{', $line);
+        $summary = is_string($summary) ? $summary : $line;
+
+        return Str::limit($summary, 120, '...');
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function streamLineSummaryPreview(array $payload): string
+    {
+        $rawLine = is_string($payload['raw_line'] ?? null) ? $payload['raw_line'] : '';
+
+        if ($rawLine === '') {
+            return '[]';
+        }
+
+        if ($rawLine === 'data: [DONE]') {
+            return 'finish_reason: [DONE]';
+        }
+
+        if (str_starts_with($rawLine, 'data: ')) {
+            $data = BlbJson::decodeArray(substr($rawLine, 6));
+
+            if (is_array($data)) {
+                $summary = $this->streamChunkSemanticSummary($data);
+
+                if ($summary !== null) {
+                    return $summary;
+                }
+            }
+        }
+
+        return Str::limit($rawLine, 120, '...');
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function streamChunkSemanticSummary(array $data): ?string
+    {
+        $choice = $data['choices'][0] ?? null;
+
+        if (! is_array($choice)) {
+            return null;
+        }
+
+        $delta = is_array($choice['delta'] ?? null) ? $choice['delta'] : [];
+        $finishReason = $choice['finish_reason'] ?? null;
+
+        if (is_string($delta['reasoning_content'] ?? null) && $delta['reasoning_content'] !== '') {
+            return 'reasoning_content: '.$this->quotedPreview($delta['reasoning_content']);
+        }
+
+        if (is_string($delta['content'] ?? null) && $delta['content'] !== '') {
+            return 'content: '.$this->quotedPreview($delta['content']);
+        }
+
+        $toolCallDeltas = $delta['tool_calls'] ?? null;
+
+        if (is_array($toolCallDeltas) && isset($toolCallDeltas[0]) && is_array($toolCallDeltas[0])) {
+            $toolCall = $toolCallDeltas[0];
+            $toolName = $toolCall['function']['name'] ?? null;
+            $argumentsDelta = $toolCall['function']['arguments'] ?? null;
+
+            if (is_string($toolName) && $toolName !== '') {
+                return 'tool_call: '.$toolName;
+            }
+
+            if (is_string($argumentsDelta) && $argumentsDelta !== '') {
+                return 'tool_args: '.$this->quotedPreview($argumentsDelta);
+            }
+        }
+
+        if (is_string($finishReason) && $finishReason !== '') {
+            return 'finish_reason: '.$finishReason;
+        }
+
+        return null;
+    }
+
+    private function quotedPreview(string $value): string
+    {
+        return '"'.Str::limit($value, 72, '...').'"';
     }
 
     /**
