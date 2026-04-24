@@ -53,6 +53,7 @@ use Illuminate\Support\Str;
                 'entries' => $runView['wire_log_entries'],
                 'summary' => $runView['wire_log_summary'],
                 'wireLoggingEnabled' => $runView['wire_logging_enabled'],
+                'runId' => $runId,
             ])
         </x-ui.card>
     </div>

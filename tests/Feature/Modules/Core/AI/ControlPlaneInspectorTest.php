@@ -68,8 +68,14 @@ it('renders a bounded wire-log preview for oversized run logs', function (): voi
         ->assertSee('Wire Log')
         ->assertSee('Showing entries 1-45 of 45 retained wire-log entries.')
         ->assertSee('This run retained')
+        ->assertSee('Large entries can be opened raw in a separate tab without loading them into the inspector response.')
         ->assertSee('Payload preview omitted because this wire-log entry exceeds 64 KB.')
-        ->assertSee('Preview truncated.');
+        ->assertSee('Open Raw')
+        ->assertSee('This entry is too large for an inline preview here. Open Raw to stream the exact recorded payload.')
+        ->assertSee(route('admin.ai.runs.wire-log-entry', [
+            'runId' => CONTROL_PLANE_OVERSIZED_RUN_ID,
+            'entryNumber' => 1,
+        ]));
 });
 
 it('navigates wire-log windows for large runs', function (): void {
@@ -129,4 +135,50 @@ it('navigates wire-log windows for large runs', function (): void {
         ->assertSee('Showing entries 101-150 of 245 retained wire-log entries.')
         ->assertSee('entry-101')
         ->assertSee('entry-150');
+});
+
+it('streams oversized raw wire-log entries without loading them through Livewire', function (): void {
+    config()->set('ai.wire_logging.enabled', true);
+
+    Company::provisionLicensee('Test Licensee');
+    Employee::provisionLara();
+
+    $user = createAdminUser();
+
+    AiRun::unguarded(fn () => AiRun::query()->create([
+        'id' => CONTROL_PLANE_OVERSIZED_RUN_ID,
+        'employee_id' => Employee::LARA_ID,
+        'session_id' => 'sess_control_plane_oversized',
+        'source' => 'chat',
+        'execution_mode' => 'streaming',
+        'status' => AiRunStatus::Succeeded,
+        'provider_name' => 'test-provider',
+        'model' => 'test-model',
+        'started_at' => now(),
+        'finished_at' => now(),
+    ]));
+
+    $rawBody = str_repeat('X', (64 * 1024) + 512);
+
+    File::ensureDirectoryExists(storage_path('app/ai/wire-logs'));
+    File::put(
+        storage_path('app/ai/wire-logs/'.CONTROL_PLANE_OVERSIZED_RUN_ID.'.jsonl'),
+        json_encode([
+            'at' => now()->toIso8601String(),
+            'type' => 'llm.response_body',
+            'raw_body' => $rawBody,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n",
+    );
+
+    $response = $this->actingAs($user)->get(route('admin.ai.runs.wire-log-entry', [
+        'runId' => CONTROL_PLANE_OVERSIZED_RUN_ID,
+        'entryNumber' => 1,
+    ]));
+
+    $response->assertOk();
+    $streamedContent = $response->streamedContent();
+
+    expect($response->headers->get('content-type'))->toStartWith('application/json')
+        ->and($streamedContent)->toContain('"type":"llm.response_body"')
+        ->and($streamedContent)->toContain('"raw_body":"'.substr($rawBody, 0, 128));
 });

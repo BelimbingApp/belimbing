@@ -86,6 +86,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                             'entries' => $runView['wire_log_entries'],
                             'summary' => $runView['wire_log_summary'],
                             'wireLoggingEnabled' => $runView['wire_logging_enabled'],
+                            'runId' => $inspectRunId,
                         ])
                     </x-ui.card>
                 @endif

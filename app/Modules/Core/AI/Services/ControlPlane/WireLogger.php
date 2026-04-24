@@ -18,6 +18,8 @@ class WireLogger
 
     private const PREVIEW_PAYLOAD_BYTES = 24 * 1024;
 
+    private const RAW_ENTRY_CHUNK_BYTES = 8 * 1024;
+
     public function enabled(): bool
     {
         return (bool) config('ai.wire_logging.enabled', false);
@@ -82,10 +84,12 @@ class WireLogger
     /**
      * @return array{
      *     entries: list<array{
+     *         entry_number: int,
      *         at: string|null,
      *         type: string|null,
      *         payload_pretty: string,
-     *         payload_truncated: bool
+     *         payload_truncated: bool,
+     *         preview_status: string
      *     }>,
      *     footprint_bytes: int,
      *     total_entries: int,
@@ -128,8 +132,8 @@ class WireLogger
                     continue;
                 }
 
-                $previewEntry = $this->previewEntry($line['line'], $line['truncated']);
                 $totalEntries++;
+                $previewEntry = $this->previewEntry($totalEntries, $line['line'], $line['truncated']);
 
                 $lastEntries[] = $previewEntry;
 
@@ -173,6 +177,53 @@ class WireLogger
             'has_next' => $rangeEnd < $totalEntries,
             'last_offset' => max(0, $totalEntries - $limit),
         ];
+    }
+
+    public function streamRawEntry(string $runId, int $entryNumber, callable $write): bool
+    {
+        if ($entryNumber < 1) {
+            return false;
+        }
+
+        $path = $this->path($runId);
+
+        if (! is_file($path)) {
+            return false;
+        }
+
+        $handle = @fopen($path, 'rb');
+
+        if ($handle === false) {
+            return false;
+        }
+
+        $currentEntry = 0;
+
+        try {
+            while (($lineHasContent = $this->streamLineChunks(
+                $handle,
+                $currentEntry + 1 === $entryNumber ? $write : null,
+            )) !== null) {
+                if (! $lineHasContent) {
+                    continue;
+                }
+
+                $currentEntry++;
+
+                if ($currentEntry === $entryNumber) {
+                    return true;
+                }
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        return false;
+    }
+
+    public function hasEntry(string $runId, int $entryNumber): bool
+    {
+        return $this->streamRawEntry($runId, $entryNumber, static function (string $chunk): void {});
     }
 
     public function path(string $runId): string
@@ -256,25 +307,29 @@ class WireLogger
 
     /**
      * @return array{
+     *     entry_number: int,
      *     at: string|null,
      *     type: string|null,
      *     payload_pretty: string,
-     *     payload_truncated: bool
+     *     payload_truncated: bool,
+     *     preview_status: string
      * }
      */
-    private function previewEntry(string $line, bool $lineTruncated): array
+    private function previewEntry(int $entryNumber, string $line, bool $lineTruncated): array
     {
         $at = $this->extractScalar($line, 'at');
         $type = $this->extractScalar($line, 'type');
 
         if ($lineTruncated) {
             return [
+                'entry_number' => $entryNumber,
                 'at' => $at,
                 'type' => $type,
                 'payload_pretty' => __('Payload preview omitted because this wire-log entry exceeds :size.', [
                     'size' => number_format(self::PREVIEW_LINE_BYTES / 1024).' KB',
                 ]),
                 'payload_truncated' => true,
+                'preview_status' => 'line_omitted',
             ];
         }
 
@@ -282,10 +337,12 @@ class WireLogger
 
         if ($decoded === null) {
             return [
+                'entry_number' => $entryNumber,
                 'at' => $at,
                 'type' => $type,
                 'payload_pretty' => __('Payload preview unavailable because this wire-log entry could not be decoded.'),
                 'payload_truncated' => true,
+                'preview_status' => 'decode_error',
             ];
         }
 
@@ -301,10 +358,12 @@ class WireLogger
 
         if (! is_string($payloadPretty)) {
             return [
+                'entry_number' => $entryNumber,
                 'at' => $at,
                 'type' => $type,
                 'payload_pretty' => __('Payload preview unavailable because this wire-log entry could not be encoded.'),
                 'payload_truncated' => true,
+                'preview_status' => 'encode_error',
             ];
         }
 
@@ -315,11 +374,41 @@ class WireLogger
         }
 
         return [
+            'entry_number' => $entryNumber,
             'at' => $at,
             'type' => $type,
             'payload_pretty' => $payloadPretty,
             'payload_truncated' => $payloadTruncated,
+            'preview_status' => $payloadTruncated ? 'payload_truncated' : 'full',
         ];
+    }
+
+    /**
+     * @param  resource  $handle
+     * @param  (callable(string): void)|null  $write
+     */
+    private function streamLineChunks($handle, ?callable $write = null): ?bool
+    {
+        $sawContent = false;
+
+        while (($chunk = fgets($handle, self::RAW_ENTRY_CHUNK_BYTES)) !== false) {
+            $endsWithNewline = str_ends_with($chunk, "\n");
+            $segment = $endsWithNewline ? rtrim($chunk, "\r\n") : $chunk;
+
+            if ($segment !== '') {
+                $sawContent = true;
+
+                if ($write !== null) {
+                    $write($segment);
+                }
+            }
+
+            if ($endsWithNewline) {
+                return $sawContent;
+            }
+        }
+
+        return $sawContent ? true : null;
     }
 
     private function extractScalar(string $line, string $key): ?string

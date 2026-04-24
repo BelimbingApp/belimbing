@@ -7,10 +7,7 @@
 ?>
 <div class="space-y-4">
     @if ($triggeringPrompt)
-        <div class="space-y-2 rounded-2xl border border-border-default bg-surface-subtle p-card-inner">
-            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Triggering Prompt') }}</p>
-            <x-ai.activity.user-message :content="$triggeringPrompt->content" :timestamp="$triggeringPrompt->timestamp" />
-        </div>
+        <x-ai.activity.user-message :content="$triggeringPrompt->content" :timestamp="$triggeringPrompt->timestamp" />
     @endif
 
     @if ($transcript !== [])
