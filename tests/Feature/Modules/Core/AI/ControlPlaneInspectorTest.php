@@ -16,9 +16,25 @@ const CONTROL_PLANE_WINDOWED_RUN_ID = 'run_control_plane_windowed';
 const CONTROL_PLANE_LICENSEE_NAME = 'Test Licensee';
 const CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH = 'app/ai/wire-logs';
 
+beforeEach(function (): void {
+    $this->originalStoragePath = app()->storagePath();
+    $this->testingStoragePath = base_path('storage/framework/testing/control-plane-storage-'.bin2hex(random_bytes(4)));
+
+    File::ensureDirectoryExists($this->testingStoragePath);
+    app()->useStoragePath($this->testingStoragePath);
+});
+
 afterEach(function (): void {
-    File::delete(storage_path('app/ai/wire-logs/'.CONTROL_PLANE_OVERSIZED_RUN_ID.'.jsonl'));
-    File::delete(storage_path('app/ai/wire-logs/'.CONTROL_PLANE_WINDOWED_RUN_ID.'.jsonl'));
+    File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_OVERSIZED_RUN_ID.'.jsonl'));
+    File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_WINDOWED_RUN_ID.'.jsonl'));
+
+    if (isset($this->originalStoragePath) && is_string($this->originalStoragePath)) {
+        app()->useStoragePath($this->originalStoragePath);
+    }
+
+    if (isset($this->testingStoragePath) && is_string($this->testingStoragePath)) {
+        File::deleteDirectory($this->testingStoragePath);
+    }
 });
 
 it('renders a bounded wire-log preview for oversized run logs', function (): void {
