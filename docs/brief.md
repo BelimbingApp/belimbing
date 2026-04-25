@@ -4,7 +4,17 @@
 **Purpose:** High-level overview of Belimbing's vision, principles, and approach
 **Audience:** AI Coding Agents, contributors, potential adopters and adoptees, and stakeholders
 **Specific:** Laravel
-**Last Updated:** 2026-04-06
+**Last Updated:** 2026-04-25
+
+---
+
+## Founder's Note
+
+I'm Kiat, an indie developer. Belimbing is where my focus is now.
+
+I want it to be a framework that small businesses can run their operations on, and that indie developers can earn a decent living building on — the shops too small for the ERP industry to bother with, and the builders who would otherwise have to take a salaried job to make rent.
+
+Belimbing is to serve the unserved.
 
 ---
 
