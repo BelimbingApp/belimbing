@@ -12,8 +12,8 @@ Norms: **in-repo** single source of truth; **recommendation-driven** copy; stabl
 
 1. User opens a discussion (problem, goal, constraint).
 2. Agent records a coherent plan when asked—recommendations and tradeoffs stated plainly, not questionnaires or "Decision Needed" dumps.
-3. User reacts; agent updates the doc.
-4. **HALT — Mandatory Pause for Review** — After creating a plan, the agent **must stop and wait for explicit user approval** before proceeding to implementation.
+3. User reacts. **Describe the proposed revision in chat first—short, prose, naming affected sections and any follow-on edits—then wait for approval before editing the file.** Trivial mechanical fixes the user already specified (typos, ticks, broken links) are exempt.
+4. **HALT — Mandatory Pause for Review** — After creating or revising a plan, the agent **must stop and wait for explicit user approval** before proceeding to implementation.
 5. User approves implementation; agent implements and verifies locally.
 6. **Do not** commit or push unless the user asks.
 
