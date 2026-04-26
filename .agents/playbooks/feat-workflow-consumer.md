@@ -17,8 +17,8 @@ Intent: integrate a business module model with the BLB workflow engine for statu
 
 - `app/Base/Workflow/Concerns/HasWorkflowStatus.php`
 - `app/Base/Workflow/DTO/TransitionContext.php`
-- `app/Modules/Business/IT/Database/Seeders/TicketWorkflowSeeder.php`
-- `app/Modules/Business/IT/Livewire/Tickets/Show.php`
+- `app/Modules/Operation/IT/Database/Seeders/TicketWorkflowSeeder.php`
+- `app/Modules/Operation/IT/Livewire/Tickets/Show.php`
 
 ## Reference Shape
 

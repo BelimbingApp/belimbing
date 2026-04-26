@@ -17,10 +17,10 @@ Intent: add a permissioned CRUD feature to a module — route, authz, Livewire c
 
 ## Minimal File Pack
 
-- `app/Modules/Business/IT/Routes/web.php`
-- `app/Modules/Business/IT/Config/authz.php`
-- `app/Modules/Business/IT/Config/menu.php`
-- `app/Modules/Business/IT/Livewire/Tickets/Index.php`
+- `app/Modules/Operation/IT/Routes/web.php`
+- `app/Modules/Operation/IT/Config/authz.php`
+- `app/Modules/Operation/IT/Config/menu.php`
+- `app/Modules/Operation/IT/Livewire/Tickets/Index.php`
 - `resources/core/views/livewire/it/tickets/index.blade.php`
 
 ## Reference Shape

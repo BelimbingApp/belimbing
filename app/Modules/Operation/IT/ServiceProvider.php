@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-namespace App\Modules\Business\IT;
+namespace App\Modules\Operation\IT;
 
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 

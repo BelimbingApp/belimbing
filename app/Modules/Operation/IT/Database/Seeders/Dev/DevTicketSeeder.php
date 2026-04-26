@@ -3,17 +3,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-namespace App\Modules\Business\IT\Database\Seeders\Dev;
+namespace App\Modules\Operation\IT\Database\Seeders\Dev;
 
 use App\Base\Authz\DTO\Actor;
 use App\Base\Database\Seeders\DevSeeder;
 use App\Base\Workflow\DTO\TransitionContext;
 use App\Base\Workflow\Services\WorkflowEngine;
-use App\Modules\Business\IT\Database\Seeders\TicketWorkflowSeeder;
-use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Database\Seeders\Dev\DevUserSeeder;
 use App\Modules\Core\User\Models\User;
+use App\Modules\Operation\IT\Database\Seeders\TicketWorkflowSeeder;
+use App\Modules\Operation\IT\Models\Ticket;
 
 class DevTicketSeeder extends DevSeeder
 {

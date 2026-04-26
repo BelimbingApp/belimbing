@@ -4,7 +4,7 @@ Intent: create a complete business module from scratch by composing atomic playb
 
 ## When To Use
 
-- Building a new module under `app/Modules/Business/{Module}/` or `app/Modules/Core/{Module}/`.
+- Building a new module under `app/Modules/{Layer1}/{Module}/` (`Layer1` is `Core`, `Operation`, or `Commerce`).
 - Module requires the full surface: model, migration, CRUD pages, routes, menu, authz, seeders.
 
 ## Do Not Use When
@@ -14,7 +14,7 @@ Intent: create a complete business module from scratch by composing atomic playb
 
 ## Canonical Reference
 
-The IT Ticket module (`app/Modules/Business/IT/`) is the canonical first business module. Use it as the template for all new business modules.
+The IT Ticket module (`app/Modules/Operation/IT/`) is the canonical first business module. Use it as the template for all new business modules.
 
 ## Module File Manifest
 
@@ -57,16 +57,16 @@ Execute these phases in order. Each phase maps to a playbook for detailed contra
 
 ### Phase 1: Schema & Seeder — `FEAT-MODULE-SCHEMA`
 
-1. Create migration in `Database/Migrations/` with correct prefix (`0300+` for Business modules).
+1. Create migration in `Database/Migrations/` with the correct prefix (`0300_*` for `Operation`, `0310_*` for `Commerce`; see `docs/architecture/database.md`).
 2. Define schema with proper indexes and foreign keys.
 3. Register workflow seeder (if applicable) via `RegistersSeeders` trait.
 4. Create workflow seeder in `Database/Seeders/` (if workflow module) — see `FEAT-WORKFLOW-CONSUMER`.
 5. Create factory in `Database/Factories/`.
 
 **Reference files:**
-- `app/Modules/Business/IT/Database/Migrations/0300_01_01_000000_create_it_tickets_table.php`
-- `app/Modules/Business/IT/Database/Seeders/TicketWorkflowSeeder.php`
-- `app/Modules/Business/IT/Database/Factories/TicketFactory.php`
+- `app/Modules/Operation/IT/Database/Migrations/0300_01_01_000000_create_operation_it_tickets_table.php`
+- `app/Modules/Operation/IT/Database/Seeders/TicketWorkflowSeeder.php`
+- `app/Modules/Operation/IT/Database/Factories/TicketFactory.php`
 
 ### Phase 2: Model — `FEAT-WORKFLOW-CONSUMER` (if workflow) or standalone
 
@@ -76,7 +76,7 @@ Execute these phases in order. Each phase maps to a playbook for detailed contra
 4. Override `newFactory()` to return the module factory.
 
 **Reference file:**
-- `app/Modules/Business/IT/Models/Ticket.php`
+- `app/Modules/Operation/IT/Models/Ticket.php`
 
 ### Phase 3: Feature Pages — `FEAT-MODULE-FEATURE`
 
@@ -91,13 +91,13 @@ Execute these phases in order. Each phase maps to a playbook for detailed contra
 9. Create tests covering authz, CRUD, and search.
 
 **Reference files:**
-- `app/Modules/Business/IT/Config/authz.php`
-- `app/Modules/Business/IT/Config/menu.php`
-- `app/Modules/Business/IT/Routes/web.php`
-- `app/Modules/Business/IT/ServiceProvider.php`
-- `app/Modules/Business/IT/Livewire/Tickets/Index.php`
-- `app/Modules/Business/IT/Livewire/Tickets/Create.php`
-- `app/Modules/Business/IT/Livewire/Tickets/Show.php`
+- `app/Modules/Operation/IT/Config/authz.php`
+- `app/Modules/Operation/IT/Config/menu.php`
+- `app/Modules/Operation/IT/Routes/web.php`
+- `app/Modules/Operation/IT/ServiceProvider.php`
+- `app/Modules/Operation/IT/Livewire/Tickets/Index.php`
+- `app/Modules/Operation/IT/Livewire/Tickets/Create.php`
+- `app/Modules/Operation/IT/Livewire/Tickets/Show.php`
 - `resources/core/views/livewire/it/tickets/index.blade.php`
 - `resources/core/views/livewire/it/tickets/create.blade.php`
 - `resources/core/views/livewire/it/tickets/show.blade.php`
@@ -109,7 +109,7 @@ Execute these phases in order. Each phase maps to a playbook for detailed contra
 3. Create sample data at various lifecycle stages (if workflow, use `WorkflowEngine`).
 
 **Reference file:**
-- `app/Modules/Business/IT/Database/Seeders/Dev/DevTicketSeeder.php`
+- `app/Modules/Operation/IT/Database/Seeders/Dev/DevTicketSeeder.php`
 
 ### Phase 5: Authz Sync & Verify
 
@@ -121,14 +121,14 @@ Execute these phases in order. Each phase maps to a playbook for detailed contra
 
 | Asset | Convention | Example |
 |-------|-----------|---------|
-| Module directory | PascalCase | `app/Modules/Business/IT/` |
-| Table name | snake_case with module prefix | `it_tickets` |
+| Module directory | PascalCase | `app/Modules/Operation/IT/` |
+| Table name | snake_case with module prefix | `operation_it_tickets` |
 | Flow identifier | snake_case | `it_ticket` |
 | Capability keys | `<flow>.<resource>.<action>` | `it_ticket.ticket.create` |
 | Route names | dot-separated lowercase | `it.tickets.index` |
 | URL paths | slash-separated lowercase | `it/tickets` |
 | Menu item IDs | dot-separated lowercase | `it.tickets` |
-| Migration prefix | `0300+` for Business | `0300_01_01_000000_` |
+| Migration prefix | `0300_*` Operation, `0310_*` Commerce | `0300_01_01_000000_` |
 | Livewire namespace | `{module}.{entities}.{page}` | Auto from directory |
 
 ## Auto-Discovery (No Manual Registration Needed)
@@ -146,7 +146,7 @@ These are discovered automatically from glob patterns — do not register manual
 
 ## Required Invariants
 
-- Module path follows `app/Modules/{Core|Business}/{Module}/` — two levels, not three.
+- Module path follows `app/Modules/{Core|Operation|Commerce}/{Module}/` — two levels under `Modules/`, not three.
 - All auto-discovered files use the exact directory names above (PascalCase).
 - No manual provider, route, or Livewire component registration.
 - Authz seeder must be re-run after changing `Config/authz.php`.
@@ -165,7 +165,7 @@ These are discovered automatically from glob patterns — do not register manual
 
 ## Common Pitfalls
 
-- Creating a third directory level (e.g., `Modules/Business/IT/Ticket/`) — keep it flat at the module level.
+- Creating a third directory level (e.g., `Modules/Operation/IT/Ticket/`) — keep it flat at the module level.
 - Manually registering providers, routes, or Livewire components instead of relying on auto-discovery.
 - Forgetting to run the authz seeder after adding capabilities.
 - Placing Blade views inside the module directory instead of `resources/core/views/`.

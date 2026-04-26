@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-namespace App\Modules\Business\IT\Models;
+namespace App\Modules\Operation\IT\Models;
 
 use App\Base\Workflow\Concerns\HasWorkflowStatus;
-use App\Modules\Business\IT\Database\Factories\TicketFactory;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Operation\IT\Database\Factories\TicketFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -44,7 +44,7 @@ class Ticket extends Model
      *
      * @var string
      */
-    protected $table = 'it_tickets';
+    protected $table = 'operation_it_tickets';
 
     /**
      * The attributes that are mass assignable.

@@ -16,7 +16,8 @@ This registry tracks the YYYY_MM_DD prefixes assigned to each module to prevent 
 |-------|------------|---------|----------|
 | Base | `0100` | Framework infrastructure | `app/Base/Database/Migrations/` |
 | Core | `0200` | Core business modules | `app/Modules/Core/{Module}/Database/Migrations/` |
-| Business | `0300-0999` | Business process modules | `app/Modules/Business/{Module}/Database/Migrations/` |
+| Operation | `0300` | Operational modules | `app/Modules/Operation/{Module}/Database/Migrations/` |
+| Commerce | `0310` | Commerce modules | `app/Modules/Commerce/{Module}/Database/Migrations/` |
 | Extensions | `2026+` | Third-party extensions | `extensions/{vendor}/{module}/Database/Migrations/` |
 
 ---

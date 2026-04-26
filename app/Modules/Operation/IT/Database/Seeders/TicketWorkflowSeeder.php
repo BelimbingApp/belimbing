@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-namespace App\Modules\Business\IT\Database\Seeders;
+namespace App\Modules\Operation\IT\Database\Seeders;
 
 use App\Base\Workflow\Models\KanbanColumn;
 use App\Base\Workflow\Models\StatusConfig;
 use App\Base\Workflow\Models\StatusTransition;
 use App\Base\Workflow\Models\Workflow;
-use App\Modules\Business\IT\Models\Ticket;
+use App\Modules\Operation\IT\Models\Ticket;
 use Illuminate\Database\Seeder;
 
 class TicketWorkflowSeeder extends Seeder

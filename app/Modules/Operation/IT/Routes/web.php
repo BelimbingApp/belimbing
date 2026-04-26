@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-use App\Modules\Business\IT\Livewire\Tickets\Create;
-use App\Modules\Business\IT\Livewire\Tickets\Index;
-use App\Modules\Business\IT\Livewire\Tickets\Show;
+use App\Modules\Operation\IT\Livewire\Tickets\Create;
+use App\Modules\Operation\IT\Livewire\Tickets\Index;
+use App\Modules\Operation\IT\Livewire\Tickets\Show;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {

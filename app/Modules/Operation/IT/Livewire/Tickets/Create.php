@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-namespace App\Modules\Business\IT\Livewire\Tickets;
+namespace App\Modules\Operation\IT\Livewire\Tickets;
 
 use App\Base\Authz\DTO\Actor;
-use App\Modules\Business\IT\Services\TicketService;
+use App\Modules\Operation\IT\Services\TicketService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;

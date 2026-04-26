@@ -16,7 +16,7 @@ Intent: add or evolve module database schema and seeding using BLB module-aware 
 ## Minimal File Pack
 
 - `app/Base/Database/Concerns/RegistersSeeders.php`
-- `app/Modules/Business/IT/Database/Migrations/0300_01_01_000000_create_it_tickets_table.php`
+- `app/Modules/Operation/IT/Database/Migrations/0300_01_01_000000_create_operation_it_tickets_table.php`
 
 ## Reference Shape
 

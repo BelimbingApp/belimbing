@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-/** @var \App\Modules\Business\IT\Livewire\Tickets\Index $this */
+/** @var \App\Modules\Operation\IT\Livewire\Tickets\Index $this */
 ?>
 
 <div>

@@ -282,7 +282,7 @@ Where `{process_code}` is the process identifier from `base_workflow.code` and `
 Workflow capabilities are **declared by the module that owns the process**, not by the Workflow module itself. The Workflow module provides the engine; each business module declares its own transition capabilities:
 
 ```php
-// app/Modules/Business/Leave/Config/authz.php
+// app/Modules/Operation/Leave/Config/authz.php
 return [
     'capabilities' => [
         'workflow.leave_application.approve',
@@ -391,7 +391,7 @@ WHERE flow = 'leave_application' AND status = 'approved' AND tat > 172800;
 The first row in a lifecycle has `tat = null` (no previous status to measure from).
 
 **`flow` + `flow_id` instead of polymorphic morphs.**
-Morphs store the full class name (`App\Modules\Business\Leave\Models\LeaveApplication`), which couples the history table to PHP class paths. Using the same `flow` discriminator keeps things decoupled. Queries are simpler: `WHERE flow = 'leave_application' AND flow_id = 42`.
+Morphs store the full class name (`App\Modules\Operation\Leave\Models\LeaveApplication`), which couples the history table to PHP class paths. Using the same `flow` discriminator keeps things decoupled. Queries are simpler: `WHERE flow = 'leave_application' AND flow_id = 42`.
 
 **Actor context is snapshotted, not joined.**
 `actor_role`, `actor_department`, and `actor_company` capture the actor's organizational context *at the moment of transition*. People change roles, move departments, switch companies. The history must reflect who they were *then*, not who they are *now*. Joining to live employee/role tables would silently rewrite history.
@@ -617,17 +617,17 @@ app/Base/Workflow/Contracts/
 ├── TransitionGuard.php
 └── TransitionAction.php
 
-app/Modules/Business/Leave/Workflow/
+app/Modules/Operation/Leave/Workflow/
 ├── Guards/LeaveBalanceGuard.php        ← implements TransitionGuard
 └── Actions/NotifyApplicant.php         ← implements TransitionAction
 
-app/Modules/Business/Logistics/Workflow/
+app/Modules/Operation/Logistics/Workflow/
 ├── Guards/HsCodeVerified.php
 ├── Guards/InventoryReserved.php
 └── Actions/NotifyCustomsAgency.php
 ```
 
-The `guard_class` and `action_class` columns in `base_workflow_status_transitions` store fully qualified class names (e.g., `App\Modules\Business\Leave\Workflow\Guards\LeaveBalanceGuard`). The engine resolves them through Laravel's service container — no registry, no autoloader configuration. The business module is responsible for ensuring its guard/action classes are autoloadable (standard Composer PSR-4).
+The `guard_class` and `action_class` columns in `base_workflow_status_transitions` store fully qualified class names (e.g., `App\Modules\Operation\Leave\Workflow\Guards\LeaveBalanceGuard`). The engine resolves them through Laravel's service container — no registry, no autoloader configuration. The business module is responsible for ensuring its guard/action classes are autoloadable (standard Composer PSR-4).
 
 ---
 

@@ -8,7 +8,6 @@ namespace App\Modules\Core\AI\Services;
 use App\Base\Foundation\Enums\BlbErrorCode;
 use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Workflow\Models\StatusHistory;
-use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\AI\DTO\PromptPackage;
 use App\Modules\Core\AI\DTO\PromptSection;
 use App\Modules\Core\AI\DTO\WorkspaceManifest;
@@ -19,6 +18,7 @@ use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\Workspace\PromptPackageFactory;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceResolver;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceValidator;
+use App\Modules\Operation\IT\Models\Ticket;
 use Illuminate\Database\Eloquent\Model;
 
 /**

@@ -73,7 +73,7 @@ cat vendor/vendor/package-name/database/migrations/*.php | grep "Schema::create"
 - Ensure BLB tables use prefixes to avoid conflicts
 
 **Option B: Build Our Own Module**
-- Create module in `app/Modules/Core/` or `app/Modules/Business/`
+- Create module in `app/Modules/Core/`, `app/Modules/Operation/`, or `app/Modules/Commerce/`
 - Follow BLB table naming conventions
 - Full control and customization
 - Example: Geonames module (we built instead of using package)

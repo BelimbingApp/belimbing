@@ -1,9 +1,9 @@
 # Module Layer1 Operation
 
 **Agent:** GPT-5.5  
-**Status:** Identified  
+**Status:** Complete  
 **Last Updated:** 2026-04-26  
-**Sources:** `docs/architecture/file-structure.md`, `docs/architecture/database.md`, `app/Modules/Business/IT/`, `app/Modules/Commerce/Inventory/`
+**Sources:** `docs/architecture/file-structure.md`, `docs/architecture/database.md`, `app/Modules/Operation/IT/`, `app/Modules/Commerce/Inventory/`
 
 ## Problem Essence
 
@@ -66,7 +66,7 @@ The migration registry row should read conceptually as:
 - Module: `IT`
 - Dependencies: `Company`, `User`
 
-If a new prefix range is reserved for `Operation`, the registry should say so explicitly before any migration files are renamed.
+The `0300` range is retained for `Operation` (decided in Phase 1), so migration filenames stay unchanged.
 
 ## Phases
 
@@ -83,17 +83,22 @@ Goal: document the intended convention before code movement.
 
 Goal: move the implemented IT module to its target Layer1.
 
-- [ ] Move `app/Modules/Business/IT/` to `app/Modules/Operation/IT/`.
-- [ ] Rename PHP namespaces from `App\Modules\Business\IT` to `App\Modules\Operation\IT`.
-- [ ] Update routes, service providers, config references, factories, seeders, and tests that reference the old namespace or path.
-- [ ] Update migration registration metadata so the table registry reports the new module path.
-- [ ] Rename migration files only if the prefix policy changes before production data exists.
+- [x] Move `app/Modules/Business/IT/` to `app/Modules/Operation/IT/`.
+- [x] Rename PHP namespaces from `App\Modules\Business\IT` to `App\Modules\Operation\IT` inside the module (Models, Services, Livewire, ServiceProvider, Routes, Factories, Seeders, Migrations).
+- [x] Update cross-module callers in `app/Modules/Core/AI/Tools/TicketUpdateTool.php` and `app/Modules/Core/AI/Services/AgentTaskPromptFactory.php`.
+- [x] Update tests that import the old namespace: `tests/Feature/Workflow/WorkflowEngineTest.php` and `tests/Unit/Modules/Core/AI/Tools/TicketUpdateToolTest.php`.
+- [x] Confirm provider auto-discovery (`ProviderRegistry::discoverModuleProviders`) picks up the new path; `bootstrap/providers.php` needed no manual change.
+- [x] Migration filename kept under `0300_01_01_*` and renamed to `create_operation_it_tickets_table.php`; the table registry now records `module_path = app/Modules/Operation/IT`.
+- [x] Rename the underlying table from `it_tickets` to `operation_it_tickets` so it matches the `{layer1}_{module}_{entity}` convention in `docs/architecture/database.md`. Required `migrate:fresh` once with the BLB-specific cleanup that removed the orphaned legacy registry row.
+- [x] Remove the now-empty `app/Modules/Business/` directory so `Business` does not linger as a phantom Layer1.
 
 ### Phase 3
 
 Goal: remove stale examples and verify the new convention.
 
-- [ ] Update agent playbooks that use `app/Modules/Business/IT` as the canonical business-module example.
-- [ ] Search for stale `Modules/Business/IT`, `App\Modules\Business\IT`, and `Business/IT` references.
-- [ ] Run the database and IT module tests after the move.
-- [ ] Mark this plan complete once docs, code, and tests agree.
+- [x] Update stale `Business/IT` references in `docs/plans/ham/01-ebay-car-parts-operations.md`. (`docs/modules/workflow/design.md` only used hypothetical `Business/Leave` and `Business/Logistics` examples; updated to `Operation/Leave`/`Operation/Logistics` since `Business` Layer1 was retired.)
+- [x] Update agent playbooks (`feat-new-business-module.md`, `feat-module-schema.md`, `feat-module-feature.md`, `feat-workflow-consumer.md`) to reference `Modules/Operation/IT` and `operation_it_tickets`.
+- [x] Boy-scout: realign other docs that referenced the retired `Business` Layer1 — `docs/Base/Database/migration-registry.md`, `docs/development/agent-context.md`, `docs/installation/package-evaluation.md`, `docs/reference/package-evaluation.md`. Generic "Core vs Business" framing rewritten as "Core vs Application (Operation, Commerce, …)".
+- [x] Update Livewire view docblocks under `resources/core/views/livewire/it/tickets/` to the new namespace.
+- [x] Final search confirmed no residual `Modules/Business`, `App\Modules\Business`, or `Business/IT` references outside this plan doc.
+- [x] `php artisan test` — 1582 passed (5177 assertions). `migrate:fresh --dev --seed` succeeded; registry reports `IT | app/Modules/Operation/IT | 0300_01_01_000000_create_operation_it_tickets_table.php`. Pint applied to touched files.

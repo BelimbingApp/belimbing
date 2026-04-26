@@ -4,7 +4,7 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Base\Database\Concerns\RegistersSeeders;
-use App\Modules\Business\IT\Database\Seeders\TicketWorkflowSeeder;
+use App\Modules\Operation\IT\Database\Seeders\TicketWorkflowSeeder;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -18,7 +18,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('it_tickets', function (Blueprint $table): void {
+        Schema::create('operation_it_tickets', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('company_id')->index()->constrained('companies');
             $table->foreignId('reporter_id')->index()->constrained('employees');
@@ -47,6 +47,6 @@ return new class extends Migration
     public function down(): void
     {
         $this->unregisterSeeder(TicketWorkflowSeeder::class);
-        Schema::dropIfExists('it_tickets');
+        Schema::dropIfExists('operation_it_tickets');
     }
 };

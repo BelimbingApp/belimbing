@@ -13,10 +13,10 @@ use App\Base\Workflow\Services\StatusManager;
 use App\Base\Workflow\Services\TransitionManager;
 use App\Base\Workflow\Services\TransitionValidator;
 use App\Base\Workflow\Services\WorkflowEngine;
-use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
+use App\Modules\Operation\IT\Models\Ticket;
 use Illuminate\Support\Facades\Event;
 
 const WF_TEST_FLOW = 'test_ticket';
@@ -83,7 +83,7 @@ function createTestActor(): Actor
 }
 
 /**
- * Create a Ticket model instance backed by the real it_tickets table.
+ * Create a Ticket model instance backed by the real operation_it_tickets table.
  */
 function createTestTicket(?Actor $actor = null): Ticket
 {

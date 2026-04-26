@@ -3,14 +3,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-namespace App\Modules\Business\IT\Services;
+namespace App\Modules\Operation\IT\Services;
 
 use App\Base\Authz\DTO\Actor;
 use App\Base\Workflow\DTO\TransitionContext;
 use App\Base\Workflow\DTO\TransitionResult;
 use App\Base\Workflow\Models\StatusHistory;
-use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Operation\IT\Models\Ticket;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 

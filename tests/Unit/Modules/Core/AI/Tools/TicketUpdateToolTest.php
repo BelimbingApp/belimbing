@@ -1,11 +1,11 @@
 <?php
 
 use App\Base\Workflow\Models\StatusHistory;
-use App\Modules\Business\IT\Models\Ticket;
 use App\Modules\Core\AI\Tools\TicketUpdateTool;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
+use App\Modules\Operation\IT\Models\Ticket;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\Support\AssertsToolBehavior;
 use Tests\TestCase;

@@ -40,7 +40,7 @@ see `app/Base/Database/AGENTS.md` for the migration guide.
 ### How Adopters Will Use BLB
 
 1. **Fork BLB** repository as their starting point
-2. **Add custom modules** in designated directories (e.g., `app/Modules/Business/Custom/`)
+2. **Add custom modules** in designated directories (e.g., `app/Modules/Operation/Custom/`)
 3. **Pull updates** from upstream BLB via git
 4. **Git-native deployment:** Development → Staging → Production branches
 
@@ -97,21 +97,22 @@ app/Modules/{Layer1}/{Module}/
 ```
 app/Base/{Module}/                    # Framework infrastructure (Layer0/Module)
 app/Modules/Core/{Module}/            # Core modules (Layer0/Layer1/Module)
-app/Modules/Business/{Module}/        # Business modules (Layer0/Layer1/Module)
+app/Modules/Operation/{Module}/       # Operational modules (Layer0/Layer1/Module)
+app/Modules/Commerce/{Module}/        # Commerce modules (Layer0/Layer1/Module)
 ```
 
 **Key Principle:** Stop labeling at Module boundary. Subdirectories within module are implementation details, not architectural layers.
 
-### Core vs Business Modules
+### Core vs Application Modules
 
 **Behavioral Differences:**
 
-| Aspect | Core | Business |
-|--------|------|----------|
+| Aspect | Core | Application (`Operation`, `Commerce`, …) |
+|--------|------|------------------------------------------|
 | **Loading** | First, always present | After core, can be disabled |
-| **Dependencies** | Only `app/Base/` | Can use Core + other Business |
+| **Dependencies** | Only `app/Base/` | Can use Core + other application modules |
 | **Lifecycle** | Cannot uninstall | Can install/uninstall |
-| **Purpose** | Foundational (User, Company, Workflow) | Optional (ERP, CRM, HR, Custom) |
+| **Purpose** | Foundational (User, Company, Workflow) | Optional (IT, Inventory, ERP, CRM, HR, Custom) |
 
 **Directory structure enforces this** - prevents mistakes, enables tooling, reduces cognitive load.
 

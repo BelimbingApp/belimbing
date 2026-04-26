@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-namespace App\Modules\Business\IT\Livewire\Tickets;
+namespace App\Modules\Operation\IT\Livewire\Tickets;
 
 use App\Base\Foundation\Livewire\SearchablePaginatedList;
-use App\Modules\Business\IT\Models\Ticket;
+use App\Modules\Operation\IT\Models\Ticket;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 
