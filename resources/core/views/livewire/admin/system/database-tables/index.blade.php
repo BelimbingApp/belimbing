@@ -42,7 +42,7 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
             <div class="mb-2">
                 <x-ui.search-input
                     wire:model.live.debounce.300ms="search"
-                    placeholder="{{ __('Search by table name or module...') }}"
+                    placeholder="{{ __('Search by table name, module, or migration...') }}"
                 />
             </div>
 
