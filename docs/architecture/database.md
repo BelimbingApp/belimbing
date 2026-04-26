@@ -60,7 +60,7 @@ Table names use owner, module, and entity names to prevent ownership conflicts. 
 | :--- | :--- | :--- |
 | Base modules | `base_{module}_{entity}` | `base_database_tables`, `base_authz_roles` |
 | Core modules | `{entity}` or `{module}_{entity}` when needed for clarity; no `core_` prefix | `companies`, `users`, `geonames_countries` |
-| Application Layer1 modules | `{layer1}_{module}_{entity}` | `commerce_inventory_parts`, `operation_it_tickets` |
+| Application Layer1 modules | `{layer1}_{module}_{entity}` | `commerce_inventory_items`, `operation_it_tickets` |
 | Extensions | `{vendor}_{module}_{entity}` | `sbg_quality_ncr_ext` |
 
 `entity` is the domain object or relation represented by the table. It is not a filesystem layer. Existing tables that predate the finalized Layer1 convention should be renamed during initialization rather than documented as exceptions.

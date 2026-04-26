@@ -44,6 +44,7 @@ return [
         'ai' => 'AI and agent capabilities',
         'messaging' => 'Multi-channel messaging capabilities',
         'admin' => 'Administrative operations',
+        'inventory' => 'Sellable inventory management',
         'it_ticket' => 'IT support ticket management',
         'quality' => 'Quality management (NCR, CAPA, SCAR)',
     ],
