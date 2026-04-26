@@ -2,26 +2,24 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Define the architectural standards for database migrations, seeding, and schema conventions in Belimbing.
-**Last Updated:** 2026-02-08
+**Last Updated:** 2026-04-26
 
 ## Overview
 
-Belimbing (BLB) uses a **module-first database architecture**. Unlike standard Laravel applications where all migrations live in a single directory, BLB distributes database logic (migrations, seeders, factories) into independent modules.
+Belimbing (BLB) uses a **module-first database architecture**. Unlike standard Laravel applications where all migrations live in a single directory, BLB keeps database assets with the module that owns them.
 
 To manage this complexity, the framework enforces:
-1.  **Layered Naming Conventions**: To ensure correct execution order (Base → Core → Business).
+1.  **Layered Naming Conventions**: To ensure correct execution order (Base → Core → Operation/Commerce).
 2.  **Auto-Discovery**: To load migrations dynamically without manual registration.
 3.  **Registry-Based Seeding**: To orchestrate seeding across modules without a monolithic `DatabaseSeeder`.
-
-**Operational detail** (commands, `--module`, `--seed`, `--seeder`, dev workflow, RegistersSeeders trait, discovery paths): **[app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md)** is the single source. This document keeps only the high-level design, naming spec, registry table, and directory layout.
 
 ---
 
 ## 1. Migration Architecture
 
-Migrations are **auto-discovered** from Base and Module directories when migration commands run. Module-specific migration and rollback use the `--module` option (case-sensitive). Laravel core tables in `database/migrations/` are always included.
+Migrations are **auto-discovered** from Base and Module directories when migration commands run. Laravel core tables in `database/migrations/` are always included.
 
-For discovery paths, command list, and `--module` usage examples, see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md) (Key Components, Module Auto-Discovery Paths).
+This document keeps only the high-level design, naming spec, registry table, and directory layout. For operational details — including discovery paths, command behavior, `migrate:fresh --dev --seed` for development, and the RegistersSeeders trait — see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md).
 
 ---
 
@@ -29,21 +27,22 @@ For discovery paths, command list, and `--module` usage examples, see [app/Base/
 
 ### Timestamp Conventions
 
-Migration files use a **two-level hierarchy** in the timestamp to enforce architectural layering. This ensures Base infrastructure always exists before Core business logic.
+Migration filenames use the timestamp prefix to encode execution order. The year-like segment maps to a Layer0 or Layer1 group; the `MM_DD` segment identifies the module within that group.
 
 **Format:** `YYYY_MM_DD_HHMMSS`
 
-| Layer | Year Range | Purpose |
+| Prefix Range | Owner | Purpose |
 | :--- | :--- | :--- |
-| **Laravel Core** | `0001` | Native Laravel tables (jobs, cache, sessions). |
-| **Base** | `0100` | Framework infrastructure (Permissions, Audit, Config). |
-| **Core** | `0200` | Foundational business domains (User, Company, Geonames). |
-| **Business** | `0300+` | User-added business modules (ERP, CRM). |
-| **Extensions** | `2026+` | Vendor extensions (uses real years). |
+| `0001` | Laravel | Native Laravel tables such as jobs, cache, and sessions. |
+| `0100` | Base Layer0 | Framework infrastructure modules. |
+| `0200` | Modules/Core Layer1 | Required business foundations. |
+| `0300` | Modules/Operation Layer1 | Operational modules. |
+| `0310` | Modules/Commerce Layer1 | Commerce modules. |
+| `2026+` | Extensions | Licensee or vendor extensions using real calendar years. |
 
 ### Module Identification (MM_DD)
 
-Within each year (Layer), the `MM_DD` component identifies the specific module.
+Within each prefix range, the `MM_DD` component identifies the module.
 *   **Base (0100):** `0100_01_01` (Database), `0100_01_03` (Events)
 *   **Core (0200):** `0200_01_03` (Geonames), `0200_01_20` (User)
 
@@ -55,27 +54,28 @@ Within each year (Layer), the `MM_DD` component identifies the specific module.
 
 ### Table Naming Conventions
 
-Table names must prevent conflicts between modules and vendors.
+Table names use owner, module, and entity names to prevent ownership conflicts. Core intentionally omits the Layer1 prefix so foundational tables align with Laravel conventions such as `users`.
 
-| Layer | Pattern | Example |
+| Owner | Pattern | Example |
 | :--- | :--- | :--- |
-| **Base** | `base_{module}_{entity}` | `base_permissions_roles` |
-| **Core** | `{module}_{entity}` | `companies`, `users` |
-| **Business** | `{module}_{entity}` | `erp_orders` |
-| **Vendor** | `{vendor}_{module}_{entity}` | `sbg_companies_ext` |
+| Base modules | `base_{module}_{entity}` | `base_database_tables`, `base_authz_roles` |
+| Core modules | `{entity}` or `{module}_{entity}` when needed for clarity; no `core_` prefix | `companies`, `users`, `geonames_countries` |
+| Application Layer1 modules | `{layer1}_{module}_{entity}` | `commerce_inventory_parts`, `operation_it_tickets` |
+| Extensions | `{vendor}_{module}_{entity}` | `sbg_quality_ncr_ext` |
 
-**Rationale:**
--   `base_` prefix explicitly separates framework meta-data from business data.
--   Core/Business modules share the `{module}_` pattern as they are both business domains.
--   Vendor extensions use namespaces to safely extend core tables.
+`entity` is the domain object or relation represented by the table. It is not a filesystem layer. Existing tables that predate the finalized Layer1 convention should be renamed during initialization rather than documented as exceptions.
 
 ---
 
-## 3. Seeding Architecture
+## 3. Registry Architecture
 
-BLB uses a **Seeder Registry** (`base_database_seeders` table). Migrations register seeders via `registerSeeder()` in `up()` and unregister in `down()`. Seeders can also be discovered from module `Database/Seeders/` when `--seed` is used. States: `pending` → `running` → `completed` | `failed` | `skipped`. Completed seeders are skipped on later runs.
+BLB uses database registries to track module-owned database assets.
 
-For the RegistersSeeders trait, code examples, execution flow, dev vs production seeders, and CLI (`migrate --seed`, `--seeder`), see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md) (SeederRegistry, RegistersSeeders, Seeding Behavior, Development vs. Production Seeders, Development Workflow).
+`base_database_tables` records tables created by migrations, including the owning module, module path, migration file, and stability state. This powers migration provenance, stability-aware fresh rebuilds, and the admin database table browser.
+
+`base_database_seeders` records seeders registered by migrations via `registerSeeder()` in `up()` and `unregisterSeeder()` in `down()`. Seeders can also be discovered from module `Database/Seeders/` when seeding runs. States: `pending` → `running` → `completed` | `failed` | `skipped`; completed seeders are skipped on later runs.
+
+For registry implementation details, code examples, execution flow, dev vs production seeders, and CLI, see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md) (Table Registry, SeederRegistry, RegistersSeeders, Seeding Behavior, Development vs. Production Seeders, Development Workflow).
 
 ---
 
@@ -101,47 +101,46 @@ app/Modules/Core/Geonames/
 
 ---
 
-## 6. Migration Registry
+## 5. Migration Registry
 
-This registry tracks the YYYY_MM_DD prefixes assigned to each module to prevent conflicts and document dependencies. Each module must have a unique MM_DD identifier within its architectural layer.
+This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to prevent conflicts and document dependencies. Each module must have a unique `MM_DD` identifier within its owner range.
 
-### Module Registry
+### Base
 
-| Prefix | Layer | Module | Dependencies |
-|--------|-------|--------|--------------|
-| `0001_01_01_*` | Base | Database | None |
-| `0100_01_01_*` | Base | Other module | None |
-| `0100_01_11_*` | Base | Authz | Database |
-| `0100_01_13_*` | Base | Settings | Database |
-| `0100_01_15_*` | Base | Workflow | None |
-| `0100_01_17_*` | Base | Audit | Database |
-| `0200_01_03_*` | Modules/Core | Geonames | None |
-| `0200_01_05_*` | Modules/Core | Address | Geonames |
-| `0200_01_07_*` | Modules/Core | Company | Geonames, Address |
-| `0200_01_09_*` | Modules/Core | Employee | Company, Address |
-| `0200_01_20_*` | Modules/Core | User | Company, Employee |
-| `0200_01_25_*` | Modules/Core | Quality | Company, Employee, User, Workflow |
-| `0200_02_01_*` | Modules/Core | AI | Company, Employee |
-| `0300_01_01_*` | Modules/Business | IT/Ticket | Company, User |
+| Prefix | Module | Dependencies |
+|--------|--------|--------------|
+| `0001_01_01_*` | Database | None |
+| `0100_01_01_*` | Other module | None |
+| `0100_01_11_*` | Authz | Database |
+| `0100_01_13_*` | Settings | Database |
+| `0100_01_15_*` | Workflow | None |
+| `0100_01_17_*` | Audit | Database |
 
-### Business Module Categories (0300+)
+### Core
 
-**Format:** `YYYY_MM_DD_HHMMSS_description.php`
+| Prefix | Module | Dependencies |
+|--------|--------|--------------|
+| `0200_01_03_*` | Geonames | None |
+| `0200_01_05_*` | Address | Geonames |
+| `0200_01_07_*` | Company | Geonames, Address |
+| `0200_01_09_*` | Employee | Company, Address |
+| `0200_01_20_*` | User | Company, Employee |
+| `0200_01_25_*` | Quality | Company, Employee, User, Workflow |
+| `0200_02_01_*` | AI | Company, Employee |
 
-Years are grouped by business domain category (to be determined).
+### Operation
 
-| Year Range | Category | Reserved For | Status |
-|------------|----------|--------------|--------|
-| `03xx` | ERP | Enterprise Resource Planning | 📂 Available |
-| `03xx` | CRM | Customer Relationship Management | 📂 Available |
-| `03xx` | HR | Human Resources | 📂 Available |
-| `03xx` | Finance | Financial Management | 📂 Available |
-| `03xx` | Inventory | Inventory Management | 📂 Available |
-| `03xx` | Manufacturing | Manufacturing/Production | 📂 Available |
-| `03xx` | Logistics | Shipping/Logistics | 📂 Available |
-| `03xx` | Analytics | Business Intelligence | 📂 Available |
-| `03xx` | Marketing | Marketing Automation | 📂 Available |
-| `1000+` | Custom | Custom Business Modules | 📂 Available |
+| Prefix | Module | Dependencies |
+|--------|--------|--------------|
+| `0300_01_01_*` | IT | Company, User |
+
+### Commerce
+
+| Prefix | Module | Dependencies |
+|--------|--------|--------------|
+| `0310_01_01_*` | Inventory | Company |
+
+The registry table is the dependency graph. Do not duplicate module dependencies in a separate diagram; update the table when ownership, prefix, or dependency order changes.
 
 ### Extensions (2026+)
 
@@ -153,69 +152,17 @@ Extensions use real calendar years. The MM_DD can be the actual date or a module
 
 **Discovery:** Loaded via extension service providers (not `ModuleMigrationServiceProvider`)
 
-| Vendor | Module | Year | Example Prefix | Status |
-|--------|--------|------|----------------|--------|
-| (none) | - | 2026+ | `2026_01_15_*` | 📂 Available |
+| Owner | Module | Example Prefix |
+|--------|--------|----------------|
+| `{vendor}` | `{module}` | `2026_01_15_*` |
 
-### Dependency Graph
+### Maintaining The Registry
 
-```bash
-Base Layer (0100)
-  ├─ Database (01_01) → [no dependencies]
-  ├─ Authz (01_11) → [depends on: Database]
-  ├─ Settings (01_13) → [depends on: Database]
-  ├─ Workflow (01_15) → [no dependencies]
-  └─ Audit (01_17) → [depends on: Database]
-
-Core Layer (0200)
-  ├─ Geonames (01_03) → [no dependencies, runs first]
-  ├─ Address (01_05) → [depends on: Geonames]
-  ├─ Company (01_07) → [depends on: Address]
-  ├─ User (01_20) → [depends on: Company]
-  └─ AI (02_01) → [depends on: Company, Employee]
-
-Business Layer (0300+)
-  └─ IT/Ticket (01_01) → [depends on: Company, User]
-```
-
-### Adding New Modules
-
-1. **Choose Layer**
-   - Core business logic → Layer `0200`
-   - Business process → Layer `0300+`
-   - Extension → Real year (e.g., `2026`)
-
-2. **Select MM_DD**
-   - Check this registry for available codes
-   - Consider dependencies (dependent modules need higher MM_DD)
-   - Update this registry with your assignment
-
-3. **Create Migrations**
-   - Use format: `YYYY_MM_DD_HHMMSS_description.php`
-   - Place in `app/Modules/{Layer}/{Module}/Database/Migrations/`
-
-4. **Document**
-   - Add module to this registry
-   - List dependencies
-   - Document which tables are created
-
-### Conflict Resolution
-
-#### If Two Modules Need Same MM_DD
-
-1. Check dependencies - dependent module must have higher MM_DD
-2. If no dependencies, assign first-come-first-served
-3. Update this registry immediately to prevent conflicts
-
-#### If Module Dependencies Change
-
-1. May need to renumber migrations
-2. Use `migrate:fresh --seed` in development (destructive evolution; --seed required)
-3. Update registry with new MM_DD assignment
+When adding a module, choose the owner first, reserve the next `MM_DD` that preserves dependency order, and add the row before creating migrations. If dependencies change during initialization, renumber the affected migrations, update this registry, and rebuild with `migrate:fresh --dev --seed`.
 
 ---
 
-## 7. Related Documentation
+## 6. Related Documentation
 
--   **[app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md)** — Single source for migrate/seeding CLI (`migrate`, `--seed`, `--module`, `--seeder`), RegistersSeeders trait, discovery paths, dev vs production seeders, development workflow, and database portability.
+-   **[app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md)** — Single source for migrate/seeding CLI, RegistersSeeders trait, discovery paths, dev vs production seeders, development workflow, and database portability.
 -   **docs/architecture/file-structure.md** — Full project directory layout.
