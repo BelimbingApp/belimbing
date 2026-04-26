@@ -97,7 +97,8 @@ class Index extends Component
                 ->when($this->search, function ($query, $search): void {
                     $query->where(function ($q) use ($search): void {
                         $q->where('table_name', 'like', '%'.$search.'%')
-                            ->orWhere('module_name', 'like', '%'.$search.'%');
+                            ->orWhere('module_name', 'like', '%'.$search.'%')
+                            ->orWhere('migration_file', 'like', '%'.$search.'%');
                     });
                 })
                 ->orderBy($this->sortBy, $this->sortDir)
