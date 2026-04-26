@@ -143,6 +143,89 @@ ensure_frankenphp_bind_capability() {
     return 0
 }
 
+# pid_belongs_to_project is provided by shared/runtime.sh and used here
+# to scope reclamation to the current $PROJECT_ROOT.
+
+# Best-effort SIGTERM-then-SIGKILL on a process and its descendants.
+# Always succeeds; this is a cleanup helper, not a control-flow predicate.
+kill_process_tree() {
+    local root=$1
+    [[ -n "$root" && "$root" =~ ^[0-9]+$ ]] || return 0
+    local descendants
+    descendants=$(pgrep -P "$root" 2>/dev/null || true)
+    local child
+    for child in $descendants; do
+        kill_process_tree "$child"
+    done
+    if kill -0 "$root" 2>/dev/null; then
+        kill -TERM "$root" 2>/dev/null || true
+        sleep 0.3
+        if kill -0 "$root" 2>/dev/null; then
+            kill -KILL "$root" 2>/dev/null || true
+        fi
+    fi
+    return 0
+}
+
+# Reclaim a stale dev session left behind by an earlier crash of *this*
+# project (e.g. terminal closed without Ctrl+C, kill -9, system reboot).
+# Without this, the next start-app.sh run hits two failure modes:
+#   1. The pinned APP_PORT is busy → ensure_app_port_available reassigns
+#      to a new port and rewrites the Caddy site fragment, but the existing
+#      FrankenPHP keeps the old port and Octane refuses to start with
+#      "FrankenPHP server is already running" → 502 at the public URL.
+#   2. octane-server-state.json points at a still-alive FrankenPHP PID
+#      from the previous run, which makes Octane abort.
+# We only reclaim processes whose cwd matches $PROJECT_ROOT; any other
+# BLB checkout running in parallel is left untouched.
+reclaim_stale_dev_session() {
+    local devops_dir="$PROJECT_ROOT/storage/app/.devops"
+    local stale_pid_file="$devops_dir/start-app.pid"
+    local octane_state="$PROJECT_ROOT/storage/logs/octane-server-state.json"
+    local reclaimed=0
+
+    if [[ -f "$stale_pid_file" ]]; then
+        local stale_pid
+        stale_pid=$(tr -d '[:space:]' < "$stale_pid_file" 2>/dev/null || true)
+        if pid_belongs_to_project "$stale_pid" "$PROJECT_ROOT"; then
+            echo -e "${YELLOW}⚠${NC} Found stale BLB dev session for this project (PID ${stale_pid}) — stopping it"
+            log "Reclaiming stale start-app session PID=$stale_pid"
+            kill_process_tree "$stale_pid"
+            reclaimed=1
+        fi
+        rm -f "$stale_pid_file"
+    fi
+
+    if [[ -f "$octane_state" ]]; then
+        local octane_pid=""
+        if command -v python3 >/dev/null 2>&1; then
+            octane_pid=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("masterProcessId",""))' "$octane_state" 2>/dev/null || true)
+        fi
+        if [[ -z "$octane_pid" ]]; then
+            octane_pid=$(grep -oE '"masterProcessId"[[:space:]]*:[[:space:]]*[0-9]+' "$octane_state" | grep -oE '[0-9]+' | head -n1 || true)
+        fi
+        if pid_belongs_to_project "$octane_pid" "$PROJECT_ROOT"; then
+            echo -e "${YELLOW}⚠${NC} Found stale FrankenPHP master for this project (PID ${octane_pid}) — stopping it"
+            log "Reclaiming stale FrankenPHP master PID=$octane_pid"
+            kill_process_tree "$octane_pid"
+            rm -f "$octane_state"
+            reclaimed=1
+        elif [[ -z "$octane_pid" ]] || ! kill -0 "$octane_pid" 2>/dev/null; then
+            # PID is gone, or unparseable; the state file is misleading garbage.
+            rm -f "$octane_state"
+            log "Removed stale octane-server-state.json (PID '$octane_pid' not alive)"
+        fi
+        # Otherwise the PID is alive but belongs to a different project — leave it.
+    fi
+
+    if [[ "$reclaimed" -eq 1 ]]; then
+        # Give the kernel a moment to release the listening sockets so the
+        # next port probe sees them free.
+        sleep 1
+    fi
+    return 0
+}
+
 # Read and validate APP_ENV
 read_app_env() {
     # Read APP_ENV from .env file, default to 'local' if not found
@@ -352,10 +435,13 @@ EOF
     return 0
 }
 
-# Check if the app port is available.  In shared mode, when the pinned port
-# is busy, re-run the ingress setup step to auto-assign a free port and
-# regenerate the Caddy site fragment so they stay in sync.
-check_and_stop_services() {
+# Ensure the app port is usable.  Does NOT stop anything — by the time we
+# get here, reclaim_stale_dev_session has already cleared our own corpses,
+# so any remaining listener on this port belongs to a foreign process.
+# In shared mode we recover by re-running the ingress setup step to pick a
+# new free port and regenerate the Caddy site fragment so they stay in
+# sync; in direct mode the conflict is fatal.
+ensure_app_port_available() {
     local port=$1
 
     if ! lsof -Pi :"$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
@@ -363,7 +449,7 @@ check_and_stop_services() {
     fi
 
     if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]]; then
-        echo -e "${YELLOW}⚠${NC} Port ${CYAN}${port}${NC} is busy — reassigning port and updating Caddy..." >&2
+        echo -e "${YELLOW}⚠${NC} Port ${CYAN}${port}${NC} is busy (held by a foreign process) — reassigning port and updating Caddy..." >&2
         log "Port $port busy; re-running ingress setup to reassign"
 
         # Re-use the ingress setup step to pick a free port, update .env,
@@ -398,13 +484,16 @@ cleanup() {
     log "[$stop_user] Stopping services"
 
     if [[ -n "${APP_ENV:-}" ]]; then
-        stop_dev_services "$APP_ENV" "$APP_PORT" "$VITE_PORT"
+        stop_dev_services "$APP_ENV" "$APP_PORT" "$VITE_PORT" "$PROJECT_ROOT"
     else
-        stop_dev_services "local"
+        stop_dev_services "local" "" "" "$PROJECT_ROOT"
     fi
 
     [[ -f "$PID_FILE" ]] && rm -f "$PID_FILE"
     rm -f "$PROJECT_ROOT/storage/app/.devops/ports.env"
+    # Octane writes this on start and never removes it on its own; if we
+    # leave it, the next start-app run can mistake it for a live server.
+    rm -f "$PROJECT_ROOT/storage/logs/octane-server-state.json"
 
     log "Services stopped"
 
@@ -447,8 +536,8 @@ wait_for_service() {
         attempt=$((attempt + 1))
     done
 
-    echo -e "${YELLOW}⚠${NC} $service_name may not be fully ready, continuing anyway..."
-    log "WARNING: $service_name may not be fully ready after $max_attempts attempts (elapsed $(( $(now_epoch_s) - start_ts ))s)"
+    echo -e "${RED}✗${NC} $service_name did not respond at $url after ${max_attempts}s" >&2
+    log "ERROR: $service_name not ready after $max_attempts attempts (elapsed $(( $(now_epoch_s) - start_ts ))s)"
     return 1
 }
 
@@ -661,6 +750,9 @@ main() {
     local t_init
     t_init=$(now_epoch_s)
     read_app_env
+    # Reclaim any stale dev session for THIS project before resolving ports,
+    # so a pinned APP_PORT isn't bumped just because our own corpse is on it.
+    reclaim_stale_dev_session
     get_ports
     export_caddy_env
     log "Init completed in $(( $(now_epoch_s) - t_init ))s"
@@ -679,10 +771,11 @@ main() {
 
     print_runtime_guidance
 
-    # Check and stop services if needed
+    # Make sure $APP_PORT is actually usable; in shared mode this may
+    # reassign the port and regenerate the Caddy site fragment.
     local t_ports
     t_ports=$(now_epoch_s)
-    check_and_stop_services "$APP_PORT"
+    ensure_app_port_available "$APP_PORT"
     log "Port availability check completed in $(( $(now_epoch_s) - t_ports ))s"
 
     # Store PID file path for cleanup
@@ -699,9 +792,15 @@ main() {
     log "Dev services started in $(( $(now_epoch_s) - t_start ))s (PID $DEV_PID)"
 
     # Wait for FrankenPHP/Octane to be ready on the actual local listener.
+    # Failure here is fatal: the public Caddy site has already been pointed
+    # at $APP_PORT, so continuing would silently serve 502s to the user.
     local healthcheck_url
     healthcheck_url=$(get_healthcheck_url)
-    wait_for_service "$healthcheck_url" "FrankenPHP (Octane)" || true
+    if ! wait_for_service "$healthcheck_url" "FrankenPHP (Octane)"; then
+        local dev_log
+        dev_log="$(get_logs_dir "$PROJECT_ROOT")/dev-services.log"
+        cleanup 1 "FrankenPHP (Octane) failed to start on ${healthcheck_url}. See: ${dev_log}"
+    fi
     log "Start-app total time so far: $(( $(now_epoch_s) - t0 ))s"
 
     print_runtime_summary

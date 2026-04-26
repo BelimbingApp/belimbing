@@ -23,6 +23,28 @@ if ! command -v detect_os >/dev/null 2>&1; then
     }
 fi
 
+# Predicate: pid is alive AND its working directory is exactly $2.
+# Used to scope process-killing to a single BLB checkout so that, for
+# example, stopping ../sbg/belimbing never touches ../laravel/blb.
+# Linux uses /proc/<pid>/cwd; macOS/BSD fall back to lsof.  When neither
+# resolves a cwd we conservatively return false (better to leave a
+# foreign process alone than risk killing it).
+pid_belongs_to_project() {
+    local pid=$1
+    local project_root=$2
+    [[ -n "$pid" && "$pid" =~ ^[0-9]+$ ]] || return 1
+    [[ -n "$project_root" ]] || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+
+    local cwd=""
+    if [[ -r "/proc/$pid/cwd" ]]; then
+        cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null || true)
+    elif command -v lsof >/dev/null 2>&1; then
+        cwd=$(lsof -p "$pid" -d cwd -Fn 2>/dev/null | awk '/^n/{print substr($0,2); exit}')
+    fi
+    [[ -n "$cwd" && "$cwd" = "$project_root" ]]
+}
+
 # Ensure storage directory structure exists for script runtime files
 # Uses Laravel's standard storage/ directory structure for consistency
 # - storage/app/.devops/: Script runtime files (PIDs, setup state)
@@ -246,22 +268,33 @@ launch_browser() {
     return 1
 }
 
-# Stop development services (Laravel, Vite, concurrently)
-# Usage: stop_dev_services [environment] [backend_port] [frontend_port]
-# If ports not provided, will detect from environment
+# Stop development services (Laravel, Vite, concurrently) for ONE project.
+# Usage: stop_dev_services [environment] [backend_port] [frontend_port] [project_root]
+#
+# project_root scopes the kill: only `concurrently` processes whose cwd
+# equals it are terminated.  Without that scoping, a stop in one BLB
+# checkout would also terminate `concurrently` running in any sibling
+# checkout (the previous behavior killed all concurrently processes
+# system-wide).  The per-port kills are already project-specific because
+# the caller passes the ports observed for *this* project.
+#
+# If project_root is not provided we try $PROJECT_ROOT, then `git
+# rev-parse`, then `pwd`.  If port arguments are not provided we resolve
+# them via get_backend_port / get_frontend_port (when available) or fall
+# back to the env defaults.
 stop_dev_services() {
     local environment="${1:-local}"
     local backend_port="${2:-}"
     local frontend_port="${3:-}"
+    local project_root="${4:-${PROJECT_ROOT:-}}"
+
+    if [[ -z "$project_root" ]]; then
+        project_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+    fi
 
     # Get ports if not provided
     if [[ -z "$backend_port" ]] || [[ -z "$frontend_port" ]]; then
         if command -v get_backend_port >/dev/null 2>&1 && command -v get_frontend_port >/dev/null 2>&1; then
-            local project_root="${PROJECT_ROOT:-}"
-            if [[ -z "$project_root" ]]; then
-                # Try to detect project root
-                project_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-            fi
             backend_port=$(get_backend_port "$environment" "$project_root" 2>/dev/null || echo "")
             frontend_port=$(get_frontend_port "$environment" "$project_root" 2>/dev/null || echo "")
         fi
@@ -291,20 +324,33 @@ stop_dev_services() {
         esac
     fi
 
-    # Stop concurrently processes first (parent manages children)
-    local pids
-    pids=$(pgrep -f "concurrently" 2>/dev/null || true)
-    if [[ -n "$pids" ]]; then
-        echo -e "${CYAN}Stopping concurrently processes...${NC}"
-        echo "$pids" | xargs kill -TERM 2>/dev/null || true
+    # Stop concurrently processes that belong to THIS project only.
+    local candidate_pids candidate
+    local our_pids=()
+    candidate_pids=$(pgrep -f "concurrently" 2>/dev/null || true)
+    for candidate in $candidate_pids; do
+        if pid_belongs_to_project "$candidate" "$project_root"; then
+            our_pids+=("$candidate")
+        fi
+    done
+
+    if [[ ${#our_pids[@]} -gt 0 ]]; then
+        echo -e "${CYAN}Stopping concurrently processes for ${project_root} (${#our_pids[@]} pid(s))...${NC}"
+        kill -TERM "${our_pids[@]}" 2>/dev/null || true
         sleep 1
-        pids=$(pgrep -f "concurrently" 2>/dev/null || true)
-        if [[ -n "$pids" ]]; then
-            echo "$pids" | xargs kill -9 2>/dev/null || true
+        local survivors=()
+        for candidate in "${our_pids[@]}"; do
+            if kill -0 "$candidate" 2>/dev/null; then
+                survivors+=("$candidate")
+            fi
+        done
+        if [[ ${#survivors[@]} -gt 0 ]]; then
+            kill -KILL "${survivors[@]}" 2>/dev/null || true
         fi
     fi
 
-    # Stop processes by port (graceful then force)
+    # Stop processes by port (graceful then force).  Ports were chosen
+    # for this project, so any holder of them is ours by construction.
     stop_port_by_number() {
         local port=$1
         local service_name=$2

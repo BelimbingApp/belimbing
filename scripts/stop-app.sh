@@ -47,7 +47,7 @@ VITE_PORT="${VITE_PORT:-5173}"
 FRONTEND_DOMAIN=$(get_env_var "FRONTEND_DOMAIN" "")
 
 echo -e "${YELLOW}Stopping ${APP_ENV} environment services (Laravel ${APP_PORT}, Vite ${VITE_PORT})...${NC}"
-stop_dev_services "$APP_ENV" "$APP_PORT" "$VITE_PORT"
+stop_dev_services "$APP_ENV" "$APP_PORT" "$VITE_PORT" "$PROJECT_ROOT"
 
 rm -f "$PORTS_FILE"
 echo -e "\n${GREEN}✓ Services stopped.${NC}"
