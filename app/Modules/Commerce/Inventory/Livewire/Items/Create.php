@@ -6,10 +6,11 @@
 namespace App\Modules\Commerce\Inventory\Livewire\Items;
 
 use App\Modules\Commerce\Inventory\Models\Item;
+use App\Modules\Commerce\Inventory\Services\DefaultCurrencyResolver;
+use App\Modules\Commerce\Inventory\Services\InventoryItemService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -27,7 +28,12 @@ class Create extends Component
 
     public string $currencyCode = 'MYR';
 
-    public function store(): void
+    public function mount(DefaultCurrencyResolver $currencyResolver): void
+    {
+        $this->currencyCode = $currencyResolver->forCompany(Auth::user()?->company_id);
+    }
+
+    public function store(InventoryItemService $items): void
     {
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -46,20 +52,11 @@ class Create extends Component
             return;
         }
 
-        Item::query()->create([
-            'company_id' => $companyId,
-            'sku' => $this->generateSku(),
-            'status' => $validated['status'],
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'unit_cost_amount' => $this->parseMoneyAmount($validated['unitCostAmount'] ?? null),
-            'target_price_amount' => $this->parseMoneyAmount($validated['targetPriceAmount'] ?? null),
-            'currency_code' => strtoupper($validated['currencyCode']),
-        ]);
+        $item = $items->create($companyId, $validated);
 
         Session::flash('success', __('Item created successfully.'));
 
-        $this->redirect(route('commerce.inventory.items.index'), navigate: true);
+        $this->redirect(route('commerce.inventory.items.show', $item), navigate: true);
     }
 
     public function render(): View
@@ -67,23 +64,5 @@ class Create extends Component
         return view('livewire.commerce.inventory.items.create', [
             'statuses' => Item::statuses(),
         ]);
-    }
-
-    private function generateSku(): string
-    {
-        do {
-            $sku = 'ITEM-'.Str::upper(Str::random(8));
-        } while (Item::query()->where('sku', $sku)->exists());
-
-        return $sku;
-    }
-
-    private function parseMoneyAmount(?string $amount): ?int
-    {
-        if ($amount === null || trim($amount) === '') {
-            return null;
-        }
-
-        return (int) round(((float) $amount) * 100);
     }
 }

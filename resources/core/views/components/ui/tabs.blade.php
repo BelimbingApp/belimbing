@@ -7,6 +7,9 @@
         default  — ID of the initially active tab (falls back to first tab)
         variant  — Visual style: 'underline' (default) or 'pill'
         size     — Density: 'md' (default) or 'sm'
+        persistence — 'hash' (default), 'query', or 'none'
+        queryKey — query string key when persistence is 'query'
+        wireAction — optional Livewire action called with the selected tab ID
 
     Usage:
         <x-ui.tabs :tabs="[
@@ -26,15 +29,16 @@
         </x-ui.tabs>
 
     ARIA: WAI-ARIA Tabs Pattern (tablist, tab, tabpanel roles, arrow key navigation).
-    URL hash: Active tab is reflected in the URL hash (#tab-id) and restored on page load.
+    URL hash: With default persistence, active tab is reflected in the URL hash (#tab-id) and restored on page load.
 --}}
 @props([
     'tabs' => [],
     'default' => null,
     'variant' => 'underline',
     'size' => 'md',
-    'persistence' => 'hash', // 'hash' (default) or 'query'
+    'persistence' => 'hash', // 'hash' (default), 'query', or 'none'
     'queryKey' => 'tab',
+    'wireAction' => null,
 ])
 
 @php
@@ -85,6 +89,7 @@
         prefix: '{{ $tabsId }}',
         persistence: @js($persistence),
         queryKey: @js($queryKey),
+        wireAction: @js($wireAction),
 
         init() {
             const url = new URL(window.location.href)
@@ -93,7 +98,7 @@
 
             const initial = (this.persistence === 'query')
                 ? queryTab
-                : hash
+                : (this.persistence === 'hash' ? hash : null)
 
             this.activeTab = (initial && this.tabs.includes(initial)) ? initial : this.defaultTab
 
@@ -131,12 +136,17 @@
 
         select(tabId) {
             this.activeTab = tabId
+
+            if (this.wireAction && typeof this.$wire !== 'undefined') {
+                this.$wire[this.wireAction](tabId)
+            }
+
             if (this.persistence === 'query') {
                 const url = new URL(window.location.href)
                 url.searchParams.set(this.queryKey, tabId)
                 url.hash = ''
                 history.replaceState(null, '', url.toString())
-            } else {
+            } else if (this.persistence === 'hash') {
                 history.replaceState(null, '', '#' + tabId)
             }
         },

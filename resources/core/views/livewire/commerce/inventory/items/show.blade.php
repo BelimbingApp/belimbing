@@ -1,8 +1,11 @@
 <?php
+
+use App\Modules\Commerce\Inventory\Livewire\Items\Show;
+
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-/** @var \App\Modules\Commerce\Inventory\Livewire\Items\Show $this */
+/** @var Show $this */
 ?>
 
 <div>
@@ -136,6 +139,69 @@
                         </dl>
                     @endif
                 </x-ui.card>
+
+                <x-ui.card>
+                    <div class="mb-3 flex items-center justify-between">
+                        <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Listing Descriptions') }}</h2>
+                        <x-ui.badge>{{ $item->descriptions->count() }}</x-ui.badge>
+                    </div>
+
+                    @if ($item->descriptions->isEmpty())
+                        <p class="text-sm text-muted">{{ __('No listing copy versions yet.') }}</p>
+                    @else
+                        <div class="space-y-4">
+                            @foreach ($item->descriptions as $description)
+                                <div wire:key="item-description-{{ $description->id }}" class="border-b border-border-default pb-4 last:border-0 last:pb-0">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <h3 class="text-sm font-medium text-ink">{{ $description->title }}</h3>
+                                                <x-ui.badge>{{ __('v:version', ['version' => $description->version]) }}</x-ui.badge>
+                                                @if ($description->is_accepted)
+                                                    <x-ui.badge variant="success">{{ __('Accepted') }}</x-ui.badge>
+                                                @endif
+                                            </div>
+                                            <p class="mt-2 whitespace-pre-wrap text-sm text-muted">{{ $description->body }}</p>
+                                        </div>
+
+                                        @if ($this->canEdit() && ! $description->is_accepted)
+                                            <x-ui.button type="button" variant="outline" size="sm" wire:click="acceptDescription({{ $description->id }})">
+                                                <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                                                {{ __('Accept') }}
+                                            </x-ui.button>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @if ($this->canEdit())
+                        <form wire:submit="addDescription" class="mt-4 space-y-4 border-t border-border-default pt-4">
+                            <x-ui.input
+                                id="item-description-title"
+                                wire:model="descriptionTitle"
+                                label="{{ __('Title') }}"
+                                required
+                                :error="$errors->first('descriptionTitle')"
+                            />
+
+                            <x-ui.textarea
+                                id="item-description-body"
+                                wire:model="descriptionBody"
+                                label="{{ __('Body') }}"
+                                rows="6"
+                                required
+                                :error="$errors->first('descriptionBody')"
+                            />
+
+                            <x-ui.button type="submit" variant="primary">
+                                <x-icon name="heroicon-o-document-plus" class="h-4 w-4" />
+                                {{ __('Add Version') }}
+                            </x-ui.button>
+                        </form>
+                    @endif
+                </x-ui.card>
             </div>
 
             <div class="space-y-6">
@@ -203,11 +269,67 @@
                 </x-ui.card>
 
                 <x-ui.card>
-                    <h2 class="mb-3 text-base font-medium tracking-tight text-ink">{{ __('Next Workbench Surfaces') }}</h2>
-                    <div class="space-y-3 text-sm text-muted">
-                        <p>{{ __('Photos, catalog attributes, Lara drafts, and marketplace listings will attach to this durable item record in later slices.') }}</p>
-                        <p>{{ __('For now, this page gives operators a stable place to review item facts before richer workflows arrive.') }}</p>
+                    <div class="mb-3 flex items-center justify-between">
+                        <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Attributes') }}</h2>
+                        <x-ui.badge>{{ $item->catalogAttributeValues->count() }}</x-ui.badge>
                     </div>
+
+                    @if ($item->catalogAttributeValues->isEmpty())
+                        <p class="text-sm text-muted">{{ __('No attributes captured yet.') }}</p>
+                    @else
+                        <div class="space-y-3">
+                            @foreach ($item->catalogAttributeValues as $value)
+                                <div wire:key="item-attribute-value-{{ $value->id }}" class="flex items-start justify-between gap-3 border-b border-border-default pb-3 last:border-0 last:pb-0">
+                                    <div>
+                                        <div class="text-sm font-medium text-ink">{{ $value->attribute->name }}</div>
+                                        <div class="mt-1 text-sm text-muted">{{ $value->display_value }}</div>
+                                    </div>
+
+                                    @if ($this->canEdit())
+                                        <button
+                                            type="button"
+                                            wire:click="removeAttributeValue({{ $value->id }})"
+                                            class="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-surface-subtle hover:text-status-danger"
+                                            aria-label="{{ __('Remove attribute') }}"
+                                            title="{{ __('Remove') }}"
+                                        >
+                                            <x-icon name="heroicon-o-x-mark" class="h-4 w-4" />
+                                        </button>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @if ($this->canEdit())
+                        <form wire:submit="saveAttributeValue" class="mt-4 space-y-4 border-t border-border-default pt-4">
+                            <x-ui.select id="item-attribute-id" wire:model="selectedAttributeId" label="{{ __('Attribute') }}" :error="$errors->first('selectedAttributeId')">
+                                <option value="">{{ __('Select') }}</option>
+                                @foreach ($availableAttributes as $attribute)
+                                    <option value="{{ $attribute->id }}">{{ $attribute->name }}</option>
+                                @endforeach
+                            </x-ui.select>
+
+                            <x-ui.input
+                                id="item-attribute-value"
+                                wire:model="attributeValue"
+                                label="{{ __('Value') }}"
+                                :error="$errors->first('attributeValue')"
+                            />
+
+                            <div class="flex flex-wrap items-center gap-2">
+                                <x-ui.button type="submit" variant="primary" size="sm" :disabled="$availableAttributes->isEmpty()">
+                                    <x-icon name="heroicon-o-plus" class="h-4 w-4" />
+                                    {{ __('Save') }}
+                                </x-ui.button>
+
+                                <x-ui.button variant="ghost" size="sm" as="a" href="{{ route('commerce.catalog.index') }}" wire:navigate>
+                                    <x-icon name="heroicon-o-tag" class="h-4 w-4" />
+                                    {{ __('Catalog') }}
+                                </x-ui.button>
+                            </div>
+                        </form>
+                    @endif
                 </x-ui.card>
             </div>
         </div>

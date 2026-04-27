@@ -180,6 +180,21 @@ it('navigates wire-log windows for large runs', function (): void {
         ->assertSee('entry-200');
 });
 
+it('tracks manually selected control plane tabs in Livewire state', function (): void {
+    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    Employee::provisionLara();
+
+    $user = createAdminUser();
+
+    Livewire::actingAs($user)
+        ->test(ControlPlane::class)
+        ->assertSet('activeTab', 'inspector')
+        ->call('setActiveTab', 'health')
+        ->assertSet('activeTab', 'health')
+        ->call('setActiveTab', 'unknown')
+        ->assertSet('activeTab', 'inspector');
+});
+
 const CONTROL_PLANE_READABLE_RUN_ID = 'run_control_plane_readable';
 
 it('renders the readable view with reassembled artifacts, anomaly chips, attempt summaries, and copy-as-cURL', function (): void {

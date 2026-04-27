@@ -27,7 +27,7 @@ class ItemPhotoController
 
         app(AuthorizationService::class)->authorize(
             Actor::forUser($user),
-            'inventory.item.view',
+            'commerce.inventory_item.view',
         );
 
         if ((int) $photo->item_id !== (int) $item->id) {

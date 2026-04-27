@@ -2,8 +2,6 @@
 
 use App\Modules\Core\AI\Enums\LifecycleAction;
 use App\Modules\Core\AI\Livewire\ControlPlane;
-use Illuminate\Support\Number;
-use Illuminate\Support\Str;
 
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
@@ -54,6 +52,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
         ]"
         :default="$activeTab"
         persistence="query"
+        wire-action="setActiveTab"
     >
         <x-ui.tab id="inspector">
             <div class="space-y-section-gap">

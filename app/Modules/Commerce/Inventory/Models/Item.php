@@ -5,6 +5,8 @@
 
 namespace App\Modules\Commerce\Inventory\Models;
 
+use App\Modules\Commerce\Catalog\Models\AttributeValue;
+use App\Modules\Commerce\Catalog\Models\Description;
 use App\Modules\Commerce\Inventory\Database\Factories\ItemFactory;
 use App\Modules\Core\Company\Models\Company;
 use Illuminate\Database\Eloquent\Collection;
@@ -31,6 +33,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Company $company
  * @property-read Collection<int, ItemPhoto> $photos
+ * @property-read Collection<int, AttributeValue> $catalogAttributeValues
+ * @property-read Collection<int, Description> $descriptions
  */
 class Item extends Model
 {
@@ -103,5 +107,21 @@ class Item extends Model
     public function photos(): HasMany
     {
         return $this->hasMany(ItemPhoto::class, 'item_id')->orderBy('sort_order');
+    }
+
+    /**
+     * @return HasMany<AttributeValue, $this>
+     */
+    public function catalogAttributeValues(): HasMany
+    {
+        return $this->hasMany(AttributeValue::class, 'item_id');
+    }
+
+    /**
+     * @return HasMany<Description, $this>
+     */
+    public function descriptions(): HasMany
+    {
+        return $this->hasMany(Description::class, 'item_id')->orderByDesc('version');
     }
 }

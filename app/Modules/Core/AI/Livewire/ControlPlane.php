@@ -106,6 +106,11 @@ class ControlPlane extends Component
         }
     }
 
+    public function setActiveTab(string $tab): void
+    {
+        $this->activeTab = $this->resolveTab($tab);
+    }
+
     public function inspectRun(): void
     {
         $this->activeTab = 'inspector';

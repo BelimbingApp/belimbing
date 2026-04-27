@@ -36,6 +36,8 @@ This keeps track of all the migration files and their dependencies.
 | `0200_01_07_*` | Modules/Core | Company | Geonames, Address |
 | `0200_01_09_*` | Modules/Core | Employee | Company, Address |
 | `0200_01_20_*` | Modules/Core | User | Company, Employee |
+| `0310_01_01_*` | Modules/Commerce | Inventory | Company |
+| `0310_01_03_*` | Modules/Commerce | Catalog | Company, Inventory |
 
 ## [Fluid] Business Modules (0300+)
 

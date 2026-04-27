@@ -6,6 +6,7 @@
 namespace App\Modules\Commerce\Inventory\Livewire\Items;
 
 use App\Base\Foundation\Livewire\SearchablePaginatedList;
+use App\Base\Foundation\ValueObjects\Money;
 use App\Modules\Commerce\Inventory\Models\Item;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -35,11 +36,7 @@ class Index extends SearchablePaginatedList
 
     public function formatMoney(?int $amount, string $currencyCode): string
     {
-        if ($amount === null) {
-            return '—';
-        }
-
-        return $currencyCode.' '.number_format($amount / 100, 2);
+        return Money::format($amount, $currencyCode);
     }
 
     protected function query(): EloquentBuilder|QueryBuilder

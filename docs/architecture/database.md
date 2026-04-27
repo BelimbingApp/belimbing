@@ -139,6 +139,7 @@ This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to preven
 | Prefix | Module | Dependencies |
 |--------|--------|--------------|
 | `0310_01_01_*` | Inventory | Company |
+| `0310_01_03_*` | Catalog | Company, Inventory |
 
 The registry table is the dependency graph. Do not duplicate module dependencies in a separate diagram; update the table when ownership, prefix, or dependency order changes.
 

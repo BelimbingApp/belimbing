@@ -11,18 +11,18 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function (): void {
     Route::get('commerce/inventory/items', Index::class)
-        ->middleware('authz:inventory.item.list')
+        ->middleware('authz:commerce.inventory_item.list')
         ->name('commerce.inventory.items.index');
 
     Route::get('commerce/inventory/items/create', Create::class)
-        ->middleware('authz:inventory.item.create')
+        ->middleware('authz:commerce.inventory_item.create')
         ->name('commerce.inventory.items.create');
 
     Route::get('commerce/inventory/items/{item}', Show::class)
-        ->middleware('authz:inventory.item.view')
+        ->middleware('authz:commerce.inventory_item.view')
         ->name('commerce.inventory.items.show');
 
     Route::get('commerce/inventory/items/{item}/photos/{photo}', [ItemPhotoController::class, 'show'])
-        ->middleware('authz:inventory.item.view')
+        ->middleware('authz:commerce.inventory_item.view')
         ->name('commerce.inventory.items.photos.show');
 });

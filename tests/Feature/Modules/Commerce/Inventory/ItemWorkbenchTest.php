@@ -1,9 +1,15 @@
 <?php
 
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\DTO\Scope;
+use App\Modules\Commerce\Catalog\Models\Attribute as CatalogAttribute;
+use App\Modules\Commerce\Catalog\Models\AttributeValue;
+use App\Modules\Commerce\Catalog\Models\Description as CatalogDescription;
 use App\Modules\Commerce\Inventory\Livewire\Items\Create;
 use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Inventory\Models\ItemPhoto;
+use App\Modules\Commerce\Inventory\Services\DefaultCurrencyResolver;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -37,19 +43,25 @@ test('item can be created from the browser workbench component', function (): vo
     $user = createAdminUser();
     $this->actingAs($user);
 
-    Livewire::test(Create::class)
+    app(SettingsService::class)->set(
+        DefaultCurrencyResolver::SETTINGS_KEY,
+        'USD',
+        Scope::company($user->company_id),
+    );
+
+    $component = Livewire::test(Create::class)
         ->set('title', '2008 Honda Civic driver side headlight')
         ->set('description', 'Light scuff on lower-left lens.')
         ->set('status', Item::STATUS_DRAFT)
         ->set('unitCostAmount', '40.00')
         ->set('targetPriceAmount', '120.00')
-        ->set('currencyCode', 'MYR')
-        ->call('store')
-        ->assertRedirect(route('commerce.inventory.items.index'));
+        ->call('store');
 
     $item = Item::query()
         ->where('title', '2008 Honda Civic driver side headlight')
         ->first();
+
+    $component->assertRedirect(route('commerce.inventory.items.show', $item));
 
     expect($item)
         ->not()->toBeNull()
@@ -57,7 +69,7 @@ test('item can be created from the browser workbench component', function (): vo
         ->and($item->status)->toBe(Item::STATUS_DRAFT)
         ->and($item->unit_cost_amount)->toBe(4000)
         ->and($item->target_price_amount)->toBe(12000)
-        ->and($item->currency_code)->toBe('MYR')
+        ->and($item->currency_code)->toBe('USD')
         ->and($item->sku)->toStartWith('ITEM-');
 });
 
@@ -154,4 +166,47 @@ test('item photos can be uploaded and deleted from the detail page component', f
 
     expect(ItemPhoto::query()->whereKey($photo->id)->exists())->toBeFalse();
     Storage::disk('local')->assertMissing($photo->storage_key);
+});
+
+test('item detail page can edit catalog attributes and description versions', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+    ]);
+    $attribute = CatalogAttribute::factory()->create([
+        'company_id' => $user->company_id,
+        'name' => 'OEM Number',
+        'code' => 'oem_number',
+    ]);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->set('selectedAttributeId', $attribute->id)
+        ->set('attributeValue', '33151-SNA-A01')
+        ->call('saveAttributeValue')
+        ->set('descriptionTitle', '2008 Honda Civic Driver Side Headlight')
+        ->set('descriptionBody', 'Used OEM driver side headlight with light scuffing.')
+        ->call('addDescription')
+        ->assertHasNoErrors();
+
+    $value = AttributeValue::query()
+        ->where('item_id', $item->id)
+        ->where('attribute_id', $attribute->id)
+        ->first();
+    $description = CatalogDescription::query()
+        ->where('item_id', $item->id)
+        ->first();
+
+    expect($value)
+        ->not()->toBeNull()
+        ->and($value->display_value)->toBe('33151-SNA-A01')
+        ->and($description)->not()->toBeNull()
+        ->and($description->version)->toBe(1);
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->call('acceptDescription', $description->id)
+        ->assertHasNoErrors();
+
+    expect($description->fresh()->is_accepted)->toBeTrue();
 });

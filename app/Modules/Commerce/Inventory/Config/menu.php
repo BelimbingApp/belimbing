@@ -13,9 +13,9 @@ return [
         [
             'id' => 'commerce.inventory.items',
             'label' => 'Inventory Workbench',
-            'icon' => 'heroicon-o-archive-box',
+            'icon' => 'heroicon-o-queue-list',
             'route' => 'commerce.inventory.items.index',
-            'permission' => 'inventory.item.list',
+            'permission' => 'commerce.inventory_item.list',
             'parent' => 'commerce',
         ],
     ],
