@@ -8,6 +8,7 @@ namespace App\Base\Database\Livewire\DatabaseTables;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\TableInspector;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\Support\Str as BlbStr;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
@@ -30,6 +31,7 @@ class Show extends Component
     private const MAX_RECENT_TABLES = 8;
 
     use ResetsPaginationOnSearch;
+    use TogglesSort;
     use WithPagination;
 
     public string $tableName = '';
@@ -124,14 +126,16 @@ class Show extends Component
      */
     public function sort(string $column): void
     {
-        if ($this->sortColumn === $column) {
-            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            $this->sortColumn = $column;
-            $this->sortDirection = 'asc';
-        }
+        $allowedColumns = collect(app(TableInspector::class)->columns($this->tableName))
+            ->pluck('name')
+            ->all();
 
-        $this->resetPage();
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: $allowedColumns,
+            sortByProperty: 'sortColumn',
+            sortDirProperty: 'sortDirection',
+        );
     }
 
     /**

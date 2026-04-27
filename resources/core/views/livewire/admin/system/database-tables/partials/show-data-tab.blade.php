@@ -67,33 +67,28 @@
                         @php
                             $outgoingFk = collect($foreignKeys['outgoing'])->firstWhere('column', $col['name']);
                         @endphp
-                        <th
-                            wire:click="sort('{{ $col['name'] }}')"
-                            class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider cursor-pointer select-none hover:text-ink transition-colors"
-                            title="{{ $col['type_name'] }}{{ $col['nullable'] ? ', nullable' : '' }}{{ $outgoingFk ? ' → ' . $outgoingFk['foreign_table'] . '.' . $outgoingFk['foreign_column'] : '' }}"
+                        <x-ui.sortable-th
+                            :column="$col['name']"
+                            :sort-by="$this->sortColumn"
+                            :sort-dir="$this->sortDirection"
+                            :label="$col['name']"
+                            :title="$col['type_name']
+                                .($col['nullable'] ? ', nullable' : '')
+                                .($outgoingFk ? ' → '.$outgoingFk['foreign_table'].'.'.$outgoingFk['foreign_column'] : '')"
                         >
-                            <span class="inline-flex items-center gap-1">
-                                {{ $col['name'] }}
-                                @if($outgoingFk)
+                            @if($outgoingFk)
+                                <x-slot:after>
                                     <a
                                         href="{{ route('admin.system.database-tables.show', $outgoingFk['foreign_table']) }}"
                                         wire:navigate
                                         class="text-accent hover:text-accent-hover"
                                         title="{{ __('Go to :table', ['table' => $outgoingFk['foreign_table']]) }}"
-                                        onclick="event.stopPropagation()"
                                     >
                                         <x-icon name="heroicon-o-link" class="w-3 h-3" />
                                     </a>
-                                @endif
-                                @if($this->sortColumn === $col['name'])
-                                    @if($this->sortDirection === 'asc')
-                                        <x-icon name="heroicon-m-chevron-up" class="w-3 h-3" />
-                                    @else
-                                        <x-icon name="heroicon-m-chevron-down" class="w-3 h-3" />
-                                    @endif
-                                @endif
-                            </span>
-                        </th>
+                                </x-slot:after>
+                            @endif
+                        </x-ui.sortable-th>
                     @endforeach
                 </tr>
             </thead>

@@ -5,6 +5,7 @@
 
 namespace App\Base\System\Livewire\UiReference;
 
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\System\Enums\UiReferenceSection;
 use Illuminate\Contracts\View\View;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -13,6 +14,8 @@ use Livewire\Component;
 
 class Index extends Component
 {
+    use TogglesSort;
+
     public string $section = 'foundations';
 
     public bool $demoModalOpen = false;
@@ -43,6 +46,10 @@ class Index extends Component
 
     public string $editInPlaceNotes = 'Click a value to edit it in place. Press Enter to save short text, Escape to cancel, or blur to commit.';
 
+    public string $dataDisplaySortBy = 'workflow';
+
+    public string $dataDisplaySortDir = 'asc';
+
     public function mount(?string $section = null): void
     {
         $this->section = UiReferenceSection::tryFrom($section ?? UiReferenceSection::default()->value)?->value
@@ -56,6 +63,18 @@ class Index extends Component
         }
 
         $this->$field = (string) $value;
+    }
+
+    public function sortDataDisplay(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: ['workflow', 'owner', 'status', 'updated_at'],
+            defaultDir: ['updated_at' => 'desc'],
+            sortByProperty: 'dataDisplaySortBy',
+            sortDirProperty: 'dataDisplaySortDir',
+            resetPage: false,
+        );
     }
 
     public function sectionUrl(UiReferenceSection $section): string
@@ -177,11 +196,35 @@ class Index extends Component
      */
     private function tableRows(): array
     {
-        return [
+        $rows = [
             ['name' => 'Supplier Onboarding', 'owner' => 'Operations', 'status' => 'Active', 'updated_at' => '2026-04-23 09:14:00'],
             ['name' => 'AI Provider Review', 'owner' => 'Platform', 'status' => 'Draft', 'updated_at' => '2026-04-22 16:42:00'],
             ['name' => 'Localization Audit', 'owner' => 'System', 'status' => 'Queued', 'updated_at' => '2026-04-21 11:08:00'],
         ];
+
+        $sortBy = $this->dataDisplaySortBy;
+        $sortDir = $this->dataDisplaySortDir === 'desc' ? -1 : 1;
+
+        usort($rows, static function (array $a, array $b) use ($sortBy, $sortDir): int {
+            $left = match ($sortBy) {
+                'workflow' => $a['name'],
+                'owner' => $a['owner'],
+                'status' => $a['status'],
+                'updated_at' => $a['updated_at'],
+                default => $a['name'],
+            };
+            $right = match ($sortBy) {
+                'workflow' => $b['name'],
+                'owner' => $b['owner'],
+                'status' => $b['status'],
+                'updated_at' => $b['updated_at'],
+                default => $b['name'],
+            };
+
+            return $sortDir * strnatcasecmp($left, $right);
+        });
+
+        return $rows;
     }
 
     private function demoPaginator(): LengthAwarePaginator

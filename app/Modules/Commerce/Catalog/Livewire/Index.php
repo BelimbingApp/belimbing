@@ -8,6 +8,7 @@ namespace App\Modules\Commerce\Catalog\Livewire;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Commerce\Catalog\Models\Attribute;
 use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
@@ -23,6 +24,7 @@ use Livewire\WithPagination;
 class Index extends Component
 {
     use ResetsPaginationOnSearch;
+    use TogglesSort;
     use WithPagination;
 
     public string $tab = 'attributes';
@@ -84,18 +86,11 @@ class Index extends Component
 
     public function sort(string $column): void
     {
-        if (! array_key_exists($column, $this->sortableColumns())) {
-            return;
-        }
-
-        if ($this->sortBy === $column) {
-            $this->sortDir = $this->sortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-            $this->sortBy = $column;
-            $this->sortDir = $this->defaultSortDir($this->tab, $column);
-        }
-
-        $this->resetPage();
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: $this->sortableColumns(),
+            defaultDir: $this->sortableDefaultDirections(),
+        );
     }
 
     public function openCreateModal(?string $tab = null): void
@@ -546,6 +541,17 @@ class Index extends Component
         $column ??= $this->defaultSortBy($tab);
 
         return in_array($column, ['attributes_count', 'product_templates_count'], true) ? 'desc' : 'asc';
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function sortableDefaultDirections(): array
+    {
+        return [
+            'attributes_count' => 'desc',
+            'product_templates_count' => 'desc',
+        ];
     }
 
     /**

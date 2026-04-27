@@ -6,6 +6,7 @@
 namespace App\Modules\Core\Geonames\Livewire\Countries;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Geonames\Database\Seeders\CountrySeeder;
 use App\Modules\Core\Geonames\Models\Country;
 use Illuminate\Contracts\View\View;
@@ -16,6 +17,7 @@ use Livewire\WithPagination;
 class Index extends Component
 {
     use ResetsPaginationOnSearch;
+    use TogglesSort;
     use WithPagination;
 
     public string $search = '';
@@ -37,18 +39,11 @@ class Index extends Component
 
     public function sort(string $column): void
     {
-        if (! array_key_exists($column, self::SORTABLE)) {
-            return;
-        }
-
-        if ($this->sortBy === $column) {
-            $this->sortDir = $this->sortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-            $this->sortBy = $column;
-            $this->sortDir = self::SORT_DEFAULT_DIR[$column] ?? 'asc';
-        }
-
-        $this->resetPage();
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+            defaultDir: self::SORT_DEFAULT_DIR,
+        );
     }
 
     public function with(): array

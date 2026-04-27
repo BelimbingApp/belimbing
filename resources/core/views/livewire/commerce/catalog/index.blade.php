@@ -102,49 +102,41 @@ use App\Modules\Commerce\Catalog\Livewire\Index;
             </div>
 
             <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                @php
-                    $catalogSortIcon = fn (string $column): string => $sortBy === $column
-                        ? ($sortDir === 'asc' ? 'heroicon-m-chevron-up' : 'heroicon-m-chevron-down')
-                        : 'heroicon-m-chevron-up-down';
-                    $catalogSortIconClass = fn (string $column): string => 'h-3 w-3'.($sortBy === $column ? '' : ' opacity-40');
-                    $catalogSortButtonClass = fn (string $column): string => 'inline-flex items-center gap-1 hover:text-ink transition-colors'.($sortBy === $column ? ' text-ink' : '');
-                @endphp
-
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     @if ($tab === 'categories')
                         <thead class="bg-surface-subtle/80">
                             <tr>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('code')" class="{{ $catalogSortButtonClass('code') }}">
-                                        {{ __('Code') }}
-                                        <x-icon :name="$catalogSortIcon('code')" class="{{ $catalogSortIconClass('code') }}" />
-                                    </button>
-                                </th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('name')" class="{{ $catalogSortButtonClass('name') }}">
-                                        {{ __('Name') }}
-                                        <x-icon :name="$catalogSortIcon('name')" class="{{ $catalogSortIconClass('name') }}" />
-                                    </button>
-                                </th>
+                                <x-ui.sortable-th
+                                    column="code"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Code')"
+                                />
+                                <x-ui.sortable-th
+                                    column="name"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Name')"
+                                />
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Description') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('product_templates_count')" class="{{ $catalogSortButtonClass('product_templates_count') }}">
-                                        {{ __('Templates') }}
-                                        <x-icon :name="$catalogSortIcon('product_templates_count')" class="{{ $catalogSortIconClass('product_templates_count') }}" />
-                                    </button>
-                                </th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('attributes_count')" class="{{ $catalogSortButtonClass('attributes_count') }}">
-                                        {{ __('Attributes') }}
-                                        <x-icon :name="$catalogSortIcon('attributes_count')" class="{{ $catalogSortIconClass('attributes_count') }}" />
-                                    </button>
-                                </th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('sort_order')" class="{{ $catalogSortButtonClass('sort_order') }}">
-                                        {{ __('Sort') }}
-                                        <x-icon :name="$catalogSortIcon('sort_order')" class="{{ $catalogSortIconClass('sort_order') }}" />
-                                    </button>
-                                </th>
+                                <x-ui.sortable-th
+                                    column="product_templates_count"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Templates')"
+                                />
+                                <x-ui.sortable-th
+                                    column="attributes_count"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Attributes')"
+                                />
+                                <x-ui.sortable-th
+                                    column="sort_order"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Sort')"
+                                />
                             </tr>
                         </thead>
                         <tbody class="bg-surface-card divide-y divide-border-default">
@@ -198,37 +190,37 @@ use App\Modules\Commerce\Catalog\Livewire\Index;
                     @elseif ($tab === 'templates')
                         <thead class="bg-surface-subtle/80">
                             <tr>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('code')" class="{{ $catalogSortButtonClass('code') }}">
-                                        {{ __('Code') }}
-                                        <x-icon :name="$catalogSortIcon('code')" class="{{ $catalogSortIconClass('code') }}" />
-                                    </button>
-                                </th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('name')" class="{{ $catalogSortButtonClass('name') }}">
-                                        {{ __('Name') }}
-                                        <x-icon :name="$catalogSortIcon('name')" class="{{ $catalogSortIconClass('name') }}" />
-                                    </button>
-                                </th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('category_name')" class="{{ $catalogSortButtonClass('category_name') }}">
-                                        {{ __('Category') }}
-                                        <x-icon :name="$catalogSortIcon('category_name')" class="{{ $catalogSortIconClass('category_name') }}" />
-                                    </button>
-                                </th>
+                                <x-ui.sortable-th
+                                    column="code"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Code')"
+                                />
+                                <x-ui.sortable-th
+                                    column="name"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Name')"
+                                />
+                                <x-ui.sortable-th
+                                    column="category_name"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Category')"
+                                />
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Description') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('is_active')" class="{{ $catalogSortButtonClass('is_active') }}">
-                                        {{ __('Status') }}
-                                        <x-icon :name="$catalogSortIcon('is_active')" class="{{ $catalogSortIconClass('is_active') }}" />
-                                    </button>
-                                </th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('attributes_count')" class="{{ $catalogSortButtonClass('attributes_count') }}">
-                                        {{ __('Attributes') }}
-                                        <x-icon :name="$catalogSortIcon('attributes_count')" class="{{ $catalogSortIconClass('attributes_count') }}" />
-                                    </button>
-                                </th>
+                                <x-ui.sortable-th
+                                    column="is_active"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Status')"
+                                />
+                                <x-ui.sortable-th
+                                    column="attributes_count"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Attributes')"
+                                />
                             </tr>
                         </thead>
                         <tbody class="bg-surface-card divide-y divide-border-default">
@@ -295,49 +287,49 @@ use App\Modules\Commerce\Catalog\Livewire\Index;
                     @else
                         <thead class="bg-surface-subtle/80">
                             <tr>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('code')" class="{{ $catalogSortButtonClass('code') }}">
-                                        {{ __('Code') }}
-                                        <x-icon :name="$catalogSortIcon('code')" class="{{ $catalogSortIconClass('code') }}" />
-                                    </button>
-                                </th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('name')" class="{{ $catalogSortButtonClass('name') }}">
-                                        {{ __('Name') }}
-                                        <x-icon :name="$catalogSortIcon('name')" class="{{ $catalogSortIconClass('name') }}" />
-                                    </button>
-                                </th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('type')" class="{{ $catalogSortButtonClass('type') }}">
-                                        {{ __('Type') }}
-                                        <x-icon :name="$catalogSortIcon('type')" class="{{ $catalogSortIconClass('type') }}" />
-                                    </button>
-                                </th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('category_name')" class="{{ $catalogSortButtonClass('category_name') }}">
-                                        {{ __('Category') }}
-                                        <x-icon :name="$catalogSortIcon('category_name')" class="{{ $catalogSortIconClass('category_name') }}" />
-                                    </button>
-                                </th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('template_name')" class="{{ $catalogSortButtonClass('template_name') }}">
-                                        {{ __('Template') }}
-                                        <x-icon :name="$catalogSortIcon('template_name')" class="{{ $catalogSortIconClass('template_name') }}" />
-                                    </button>
-                                </th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('is_required')" class="{{ $catalogSortButtonClass('is_required') }}">
-                                        {{ __('Required') }}
-                                        <x-icon :name="$catalogSortIcon('is_required')" class="{{ $catalogSortIconClass('is_required') }}" />
-                                    </button>
-                                </th>
+                                <x-ui.sortable-th
+                                    column="code"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Code')"
+                                />
+                                <x-ui.sortable-th
+                                    column="name"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Name')"
+                                />
+                                <x-ui.sortable-th
+                                    column="type"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Type')"
+                                />
+                                <x-ui.sortable-th
+                                    column="category_name"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Category')"
+                                />
+                                <x-ui.sortable-th
+                                    column="template_name"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Template')"
+                                />
+                                <x-ui.sortable-th
+                                    column="is_required"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Required')"
+                                />
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Options') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    <button type="button" wire:click="sort('sort_order')" class="{{ $catalogSortButtonClass('sort_order') }}">
-                                        {{ __('Sort') }}
-                                        <x-icon :name="$catalogSortIcon('sort_order')" class="{{ $catalogSortIconClass('sort_order') }}" />
-                                    </button>
-                                </th>
+                                <x-ui.sortable-th
+                                    column="sort_order"
+                                    :sort-by="$sortBy"
+                                    :sort-dir="$sortDir"
+                                    :label="__('Sort')"
+                                />
                             </tr>
                         </thead>
                         <tbody class="bg-surface-card divide-y divide-border-default">

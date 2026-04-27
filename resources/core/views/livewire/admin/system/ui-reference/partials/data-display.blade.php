@@ -63,19 +63,47 @@
         <div class="space-y-4">
             <x-ui.catalog-section
                 :title="__('Table Pattern')"
-                component="<code>x-ui.datetime</code>, <code>x-ui.badge</code>, <code>x-ui.icon-action</code>"
+                component="<code>x-ui.datetime</code>, <code>x-ui.badge</code>, <code>x-ui.icon-action</code>, <code>x-icon</code>"
             >
-                {{ __('Tables should preserve compact rhythm, clear row hover, tabular values, and aligned supporting actions.') }}
+                {{ __('Tables should preserve compact rhythm, clear row hover, tabular values, aligned supporting actions, and the standard sortable-header affordance when a column can reorder results.') }}
             </x-ui.catalog-section>
+
+            <p class="text-xs text-muted">
+                {!! __('Server-side note: keep the click-to-sort behavior consistent across Livewire tables (toggle direction when clicking the active column, otherwise set the default direction). Prefer the shared :trait concern where practical.', ['trait' => '<code>App/Base/Foundation/Livewire/Concerns/TogglesSort</code>']) !!}
+            </p>
 
             <div class="overflow-x-auto rounded-2xl border border-border-default">
                 <table class="min-w-full divide-y divide-border-default">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Workflow') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Owner') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Updated') }}</th>
+                            <x-ui.sortable-th
+                                column="workflow"
+                                :sort-by="$dataDisplaySortBy"
+                                :sort-dir="$dataDisplaySortDir"
+                                method="sortDataDisplay"
+                                :label="__('Workflow')"
+                            />
+                            <x-ui.sortable-th
+                                column="owner"
+                                :sort-by="$dataDisplaySortBy"
+                                :sort-dir="$dataDisplaySortDir"
+                                method="sortDataDisplay"
+                                :label="__('Owner')"
+                            />
+                            <x-ui.sortable-th
+                                column="status"
+                                :sort-by="$dataDisplaySortBy"
+                                :sort-dir="$dataDisplaySortDir"
+                                method="sortDataDisplay"
+                                :label="__('Status')"
+                            />
+                            <x-ui.sortable-th
+                                column="updated_at"
+                                :sort-by="$dataDisplaySortBy"
+                                :sort-dir="$dataDisplaySortDir"
+                                method="sortDataDisplay"
+                                :label="__('Updated')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Actions') }}</th>
                         </tr>
                     </thead>

@@ -8,6 +8,7 @@ namespace App\Base\Database\Livewire\DatabaseTables;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\TableInspector;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -16,6 +17,7 @@ use Livewire\WithPagination;
 class Index extends Component
 {
     use ResetsPaginationOnSearch;
+    use TogglesSort;
     use WithPagination;
 
     public string $search = '';
@@ -74,20 +76,10 @@ class Index extends Component
      */
     public function sort(string $column): void
     {
-        $allowed = ['table_name', 'module_name', 'migration_file', 'is_stable', 'stabilized_at'];
-
-        if (! in_array($column, $allowed, true)) {
-            return;
-        }
-
-        if ($this->sortBy === $column) {
-            $this->sortDir = $this->sortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-            $this->sortBy = $column;
-            $this->sortDir = 'asc';
-        }
-
-        $this->resetPage();
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: ['table_name', 'module_name', 'migration_file', 'is_stable', 'stabilized_at'],
+        );
     }
 
     public function render(): View

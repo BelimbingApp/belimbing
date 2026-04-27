@@ -2,8 +2,8 @@
 
 **Agent:** Codex
 **Status:** In Progress
-**Last Updated:** 2026-04-23
-**Sources:** `docs/todo/ui-reference-catalog.md`, `resources/core/views/AGENTS.md`, `resources/core/css/tokens.css`, `docs/guides/theming.md`, https://github.com/google-labs-code/design.md
+**Last Updated:** 2026-04-27
+**Sources:** `docs/todo/ui-reference-catalog.md`, `resources/core/views/AGENTS.md`, `resources/core/css/tokens.css`, `docs/guides/theming.md`, `resources/core/views/livewire/admin/system/ui-reference/partials/data-display.blade.php`, https://github.com/google-labs-code/design.md
 
 ## Problem Essence
 
@@ -44,7 +44,7 @@ BLB should have a small set of complementary design references that prevent drif
 
 **Put the catalog in the application, not in hidden developer-only space.** Because the catalog is intended for human review and product ideation, it needs a stable, discoverable home inside `Administration > System`. A dev-only shortcut may still exist, but it should not be the only place where the standard UI can be reviewed.
 
-**Make the catalog interactive where behavior matters.** A static swatch wall is insufficient. Components whose value depends on behavior such as flash notifications, comboboxes, modals, tabs, loading states, validation states, and dismiss interactions should be live so humans can inspect timing, spacing, transitions, hierarchy, and keyboard or mouse behavior.
+**Make the catalog interactive where behavior matters.** A static swatch wall is insufficient. Components whose value depends on behavior such as flash notifications, combo boxes, modals, tabs, loading states, validation states, and dismiss interactions should be live so humans can inspect timing, spacing, transitions, hierarchy, and keyboard or mouse behavior.
 
 **Split the reference into multiple logical pages.** A single page will become noisy and hard to use. The catalog should be organized into a small set of pages grouped by concern, so humans can browse the reference area during feature design and agents can be pointed at the exact page that demonstrates the intended pattern.
 
@@ -129,7 +129,7 @@ Sample intended coverage for each grouping:
 - **Actions:** primary, secondary, ghost, and danger buttons, icon actions, grouped actions, destructive entry points, and loading or disabled action states
 - **Navigation:** tabs as the canonical home, page-header navigation affordances, pagination, filter bars, section switchers, and keyboard-focus treatment for navigation controls
 - **Overlays:** modal dialogs, confirmation dialogs, help panels, focus trapping, dismiss behavior, backdrop treatment, and overlay stacking rules
-- **Data Display:** cards, badges, tables, status treatments, datetime display, dense metadata blocks, row-hover states, and table empty or loading states
+- **Data Display:** cards, badges, tables, sortable table headers, status treatments, datetime display, dense metadata blocks, row-hover states, and table empty or loading states
 - **Composite Patterns:** full admin pages and flows that combine the primitives, such as index pages, forms, detail pages, modal flows, and search-and-select workflows
 
 `DESIGN.md` should stay at the semantic layer:
@@ -182,7 +182,7 @@ If the approach proves useful, BLB may later add a derived artifact such as a to
 - [x] Render semantic color swatches and labels for the implemented BLB token roles
 - [x] Render typography roles and compact-spacing examples that reflect BLB's actual density model
 - [x] Populate the Foundations page with color, type, spacing, shape, elevation, icon, and motion references
-- [x] Populate the primitive pages with examples for buttons, inputs, selects, textareas, search inputs, checkboxes, radios, badges, alerts, cards, tabs, modals, icons, help text, and action groups
+- [x] Populate the primitive pages with examples for buttons, inputs, selects, text areas, search inputs, checkboxes, radios, badges, alerts, cards, tabs, modals, icons, help text, and action groups
 - [x] Make behavior-dependent primitives interactive where that affects understanding of the standard
 - [x] Add short inline annotations before each section explaining when the pattern should be used
 
@@ -190,7 +190,7 @@ If the approach proves useful, BLB may later add a derived artifact such as a to
 
 **Goal:** Show the page-level patterns agents are most likely to compose incorrectly when working from scattered examples, and give humans an ideation surface for feature design.
 
-- [x] Render page headers, tables, pagination, empty states, loading states, and other composite admin patterns through the real app shell
+- [x] Render page headers, tables, sortable table headers, pagination, empty states, loading states, and other composite admin patterns through the real app shell
 - [x] Add a dedicated feedback or messaging page covering flash notification behavior in detail
 - [x] Add a dedicated inputs page that helps humans compare combobox, select, and free-text patterns
 - [x] Treat tabs as canonically documented under Navigation and cross-reference them from Composite Patterns where page context matters
