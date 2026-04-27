@@ -37,7 +37,7 @@
                     <x-icon name="heroicon-o-folder" class="w-5 h-5" />
                     <span class="sr-only">{{ __('Repository') }}</span>
                 </a>
-                <a href="https://laravel.com/docs/starter-kits#livewire" target="_blank" class="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg hover:bg-surface-subtle text-accent transition-colors" title="{{ __('Documentation') }}" aria-label="{{ __('Documentation') }}">
+                <a href="https://github.com/BelimbingApp/belimbing/tree/main/docs" target="_blank" class="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg hover:bg-surface-subtle text-accent transition-colors" title="{{ __('Documentation') }}" aria-label="{{ __('Documentation') }}">
                     <x-icon name="heroicon-o-book-open" class="w-5 h-5" />
                     <span class="sr-only">{{ __('Documentation') }}</span>
                 </a>
@@ -77,7 +77,7 @@
                             </a>
                         </li>
                         <li>
-                            <a href="https://laravel.com/docs/starter-kits#livewire" target="_blank">
+                            <a href="https://github.com/BelimbingApp/belimbing/tree/main/docs" target="_blank">
                                 <x-icon name="heroicon-o-book-open" class="w-5 h-5" />
                                 {{ __('Documentation') }}
                             </a>

@@ -66,7 +66,7 @@
                         </li>
                         <li>
                             <a
-                                href="https://laravel.com/docs/starter-kits#livewire"
+                                href="https://github.com/BelimbingApp/belimbing/tree/main/docs"
                                 target="_blank"
                                 class="nav-link"
                             >
@@ -230,7 +230,7 @@
                         </li>
                         <li>
                             <a
-                                href="https://laravel.com/docs/starter-kits#livewire"
+                                href="https://github.com/BelimbingApp/belimbing/tree/main/docs"
                                 target="_blank"
                                 class="nav-link"
                             >

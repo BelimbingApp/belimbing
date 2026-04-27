@@ -104,7 +104,7 @@ class WebFetchTool extends AbstractTool
             'test_examples' => [
                 [
                     'label' => 'Fetch documentation',
-                    'input' => ['url' => 'https://laravel.com/docs/12.x/installation', 'extract_mode' => 'markdown'],
+                    'input' => ['url' => 'https://github.com/BelimbingApp/belimbing/blob/main/docs/installation/quickstart.md', 'extract_mode' => 'markdown'],
                 ],
                 [
                     'label' => 'Fetch as text',
