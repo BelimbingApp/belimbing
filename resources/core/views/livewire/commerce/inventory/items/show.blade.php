@@ -150,10 +150,11 @@
                     @else
                         <div class="grid grid-cols-2 gap-3">
                             @foreach ($item->photos as $photo)
+                                @php($filename = $photo->filename)
                                 <div wire:key="item-photo-{{ $photo->id }}" class="group relative overflow-hidden rounded-2xl border border-border-default bg-surface-subtle">
                                     <img
                                         src="{{ route('commerce.inventory.items.photos.show', [$item, $photo]) }}"
-                                        alt="{{ $photo->filename }}"
+                                        alt="{{ $filename }}"
                                         class="aspect-square w-full object-cover"
                                         loading="lazy"
                                     />

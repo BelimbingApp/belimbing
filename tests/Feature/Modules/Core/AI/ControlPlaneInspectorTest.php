@@ -15,6 +15,7 @@ const CONTROL_PLANE_OVERSIZED_RUN_ID = 'run_control_plane_oversized';
 const CONTROL_PLANE_WINDOWED_RUN_ID = 'run_control_plane_windowed';
 const CONTROL_PLANE_LICENSEE_NAME = 'Test Licensee';
 const CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH = 'app/ai/wire-logs';
+const CONTROL_PLANE_WIRE_LOG_EXTENSION = '.jsonl';
 const CONTROL_PLANE_PROVIDER_NAME = 'test-provider';
 const CONTROL_PLANE_MODEL = 'test-model';
 const CONTROL_PLANE_EXECUTION_MODE = 'streaming';
@@ -28,8 +29,8 @@ beforeEach(function (): void {
 });
 
 afterEach(function (): void {
-    File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_OVERSIZED_RUN_ID.'.jsonl'));
-    File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_WINDOWED_RUN_ID.'.jsonl'));
+    File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_OVERSIZED_RUN_ID.CONTROL_PLANE_WIRE_LOG_EXTENSION));
+    File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_WINDOWED_RUN_ID.CONTROL_PLANE_WIRE_LOG_EXTENSION));
 
     if (isset($this->originalStoragePath) && is_string($this->originalStoragePath)) {
         app()->useStoragePath($this->originalStoragePath);
@@ -81,7 +82,7 @@ it('renders a bounded wire-log preview for oversized run logs', function (): voi
 
     File::ensureDirectoryExists(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH));
     File::put(
-        storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_OVERSIZED_RUN_ID.'.jsonl'),
+        storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_OVERSIZED_RUN_ID.CONTROL_PLANE_WIRE_LOG_EXTENSION),
         implode("\n", $lines)."\n",
     );
 
@@ -146,7 +147,7 @@ it('navigates wire-log windows for large runs', function (): void {
 
     File::ensureDirectoryExists(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH));
     File::put(
-        storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_WINDOWED_RUN_ID.'.jsonl'),
+        storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_WINDOWED_RUN_ID.CONTROL_PLANE_WIRE_LOG_EXTENSION),
         implode("\n", $lines)."\n",
     );
 
@@ -191,7 +192,7 @@ it('streams oversized raw wire-log entries without loading them through Livewire
 
     File::ensureDirectoryExists(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH));
     File::put(
-        storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_OVERSIZED_RUN_ID.'.jsonl'),
+        storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_OVERSIZED_RUN_ID.CONTROL_PLANE_WIRE_LOG_EXTENSION),
         json_encode([
             'at' => now()->toIso8601String(),
             'type' => 'llm.response_body',

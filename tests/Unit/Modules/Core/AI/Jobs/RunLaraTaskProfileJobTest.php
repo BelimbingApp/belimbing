@@ -2,7 +2,6 @@
 
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
-use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\LaraTaskExecutionProfile;
 use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Enums\OperationStatus;
@@ -64,16 +63,9 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
     $runtime = Mockery::mock(AgenticRuntime::class);
     $runtime->shouldReceive('run')
         ->once()
-        ->withArgs(function (
-            array $messages,
-            int $employeeId,
-            string $systemPrompt,
-            ?string $modelOverride,
-            ?ExecutionPolicy $policy,
-            ?string $sessionId,
-            array $configOverride,
-            array $allowedToolNames,
-        ): bool {
+        ->withArgs(function (...$args): bool {
+            [$messages, $employeeId, $systemPrompt, $modelOverride, $policy, $sessionId, $configOverride, $allowedToolNames] = $args;
+
             expect($policy)->not->toBeNull()
                 ->and($policy->mode)->toBe(ExecutionMode::Background);
 
@@ -168,16 +160,9 @@ it('runs the Lara research task profile with the resolved research model', funct
     $runtime = Mockery::mock(AgenticRuntime::class);
     $runtime->shouldReceive('run')
         ->once()
-        ->withArgs(function (
-            array $messages,
-            int $employeeId,
-            string $systemPrompt,
-            ?string $modelOverride,
-            ?ExecutionPolicy $policy,
-            ?string $sessionId,
-            array $configOverride,
-            array $allowedToolNames,
-        ): bool {
+        ->withArgs(function (...$args): bool {
+            [$messages, $employeeId, $systemPrompt, $modelOverride, $policy, $sessionId, $configOverride, $allowedToolNames] = $args;
+
             expect($policy)->not->toBeNull()
                 ->and($policy->mode)->toBe(ExecutionMode::Background);
 

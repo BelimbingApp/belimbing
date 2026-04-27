@@ -15,6 +15,7 @@ final class TurnStreamBridgeTestStreamFailure extends RuntimeException {}
 
 const BRIDGE_TEST_SESSION = 'sess_bridge_test';
 const BRIDGE_TEST_RUN_ID = 'run_bridge_test1';
+const BRIDGE_TEST_LIST_ARGS = 'ls -la';
 
 /**
  * Create a ChatTurn in queued state for bridge testing.
@@ -160,7 +161,7 @@ describe('TurnStreamBridge tool and streaming events', function () {
             ['event' => 'status', 'data' => [
                 'phase' => 'tool_started',
                 'tool' => 'bash',
-                'args_summary' => 'ls -la',
+                'args_summary' => BRIDGE_TEST_LIST_ARGS,
                 'tool_call_index' => 0,
                 'run_id' => BRIDGE_TEST_RUN_ID,
             ]],
@@ -191,7 +192,7 @@ describe('TurnStreamBridge tool and streaming events', function () {
             ->first();
 
         expect($toolStartedEvent)->not()->toBeNull()
-            ->and($toolStartedEvent->payload['args_summary'])->toBe('ls -la');
+            ->and($toolStartedEvent->payload['args_summary'])->toBe(BRIDGE_TEST_LIST_ARGS);
     });
 
     it('maps iteration_completed status to a durable assistant iteration event', function () {
@@ -210,7 +211,7 @@ describe('TurnStreamBridge tool and streaming events', function () {
             ['event' => 'status', 'data' => [
                 'phase' => 'tool_started',
                 'tool' => 'bash',
-                'args_summary' => 'ls -la',
+                'args_summary' => BRIDGE_TEST_LIST_ARGS,
                 'tool_call_index' => 0,
                 'run_id' => BRIDGE_TEST_RUN_ID,
             ]],
@@ -241,6 +242,9 @@ describe('TurnStreamBridge tool and streaming events', function () {
             ->and($toolStartedIndex)->toBeInt()
             ->and($iterationIndex)->toBeLessThan($toolStartedIndex);
     });
+});
+
+describe('TurnStreamBridge output and sequencing events', function () {
 
     it('maps tool_denied to a turn event', function () {
         $turn = createBridgeTurn();

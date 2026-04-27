@@ -435,6 +435,9 @@ describe('AgenticRuntime (sync)', function () {
 
         expect($result['content'])->toContain('executed:echo_tool:world');
     });
+});
+
+describe('AgenticRuntime (sync context and errors)', function () {
 
     it('exposes the active chat session to tool execution and clears it afterwards', function () {
         $llmClient = Mockery::mock(LlmClient::class);
@@ -506,6 +509,9 @@ describe('AgenticRuntime (sync)', function () {
         expect($result['meta']['error_type'])->toBe('auth_error');
         expect($result['meta']['retry_attempts'])->toBe([]);
     });
+});
+
+describe('AgenticRuntime (sync fallback)', function () {
 
     it('retries once on retryable error then returns error if retry also fails', function () {
         $llmClient = Mockery::mock(LlmClient::class);
@@ -693,6 +699,9 @@ describe('AgenticRuntime (streaming)', function () {
         expect($doneEvent['event'])->toBe('done')
             ->and($doneEvent['data']['meta']['latency_ms'])->toBe(200);
     });
+});
+
+describe('AgenticRuntime (streaming fallback boundaries)', function () {
 
     it('does not fall back in stream mode after the provider already emitted output', function () {
         $llmClient = Mockery::mock(LlmClient::class);

@@ -165,7 +165,7 @@ test('provider resolution uses runtime config instead of persisted provider cred
 test('runtime resolution uses persisted codex provider credentials when provider_id is supplied', function (): void {
     $provider = createRcrProvider(
         OpenAiCodexDefinition::KEY,
-        'https://chatgpt.com/backend-api',
+        RCR_CODEX_BASE_URL,
         authType: AuthType::OAuth,
     );
 
@@ -193,7 +193,7 @@ test('runtime resolution uses persisted codex provider credentials when provider
 
     expect($result)
         ->toHaveKey('api_key', 'aaa.bbb.ccc')
-        ->toHaveKey('base_url', 'https://chatgpt.com/backend-api')
+        ->toHaveKey('base_url', RCR_CODEX_BASE_URL)
         ->toHaveKey('headers', ['chatgpt-account-id' => 'acct_test'])
         ->not->toHaveKey('runtime_error');
 });
@@ -201,7 +201,7 @@ test('runtime resolution uses persisted codex provider credentials when provider
 test('codex runtime resolution fails when account id is missing', function (): void {
     $provider = createRcrProvider(
         OpenAiCodexDefinition::KEY,
-        'https://chatgpt.com/backend-api',
+        RCR_CODEX_BASE_URL,
         authType: AuthType::OAuth,
     );
 
@@ -221,7 +221,7 @@ test('codex runtime resolution fails when account id is missing', function (): v
 
     $result = makeResolver()->resolve([
         'api_key' => '',
-        'base_url' => 'https://chatgpt.com/backend-api',
+        'base_url' => RCR_CODEX_BASE_URL,
         'provider_name' => OpenAiCodexDefinition::KEY,
         'provider_id' => $provider->id,
     ]);
@@ -236,7 +236,7 @@ test('codex runtime resolution fails when account id is missing', function (): v
 test('expiring codex credentials that fail refresh mark the provider expired', function (): void {
     $provider = createRcrProvider(
         OpenAiCodexDefinition::KEY,
-        'https://chatgpt.com/backend-api',
+        RCR_CODEX_BASE_URL,
         authType: AuthType::OAuth,
     );
 
@@ -265,7 +265,7 @@ test('expiring codex credentials that fail refresh mark the provider expired', f
 
     $result = makeResolver()->resolve([
         'api_key' => '',
-        'base_url' => 'https://chatgpt.com/backend-api',
+        'base_url' => RCR_CODEX_BASE_URL,
         'provider_name' => OpenAiCodexDefinition::KEY,
         'provider_id' => $provider->id,
     ]);

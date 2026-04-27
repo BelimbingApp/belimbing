@@ -7,7 +7,6 @@ namespace App\Modules\Core\AI\Services\ControlPlane;
 
 use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
-use Illuminate\Support\Str;
 
 class WireLogger
 {
@@ -112,12 +111,7 @@ class WireLogger
     public function preview(string $runId, int $offset = 0, int $limit = self::PREVIEW_ENTRY_LIMIT): array
     {
         $path = $this->path($runId);
-        $footprintBytes = 0;
-
-        if (is_file($path)) {
-            $size = @filesize($path);
-            $footprintBytes = $size === false ? 0 : (int) $size;
-        }
+        $footprintBytes = $this->fileFootprintBytes($path);
 
         $offset = max(0, $offset);
         $limit = max(1, min(self::PREVIEW_ENTRY_LIMIT_MAX, $limit));
@@ -126,67 +120,18 @@ class WireLogger
             return $this->emptyPreview($footprintBytes, $offset, $limit);
         }
 
-        $handle = @fopen($path, 'rb');
-
-        if ($handle === false) {
+        $window = $this->readPreviewWindow($path, $offset, $limit);
+        if ($window === null) {
             return $this->emptyPreview($footprintBytes, $offset, $limit);
         }
 
-        $entries = [];
-        $lastEntries = [];
-        $totalEntries = 0;
-
-        try {
-            while (($line = $this->readPreviewLine($handle)) !== null) {
-                if ($line['line'] === '') {
-                    continue;
-                }
-
-                $totalEntries++;
-                $previewEntry = $this->previewEntry($totalEntries, $line['line'], $line['truncated']);
-
-                $lastEntries[] = $previewEntry;
-
-                if (count($lastEntries) > $limit) {
-                    array_shift($lastEntries);
-                }
-
-                if ($totalEntries <= $offset || count($entries) >= $limit) {
-                    continue;
-                }
-
-                $entries[] = $previewEntry;
-            }
-        } finally {
-            fclose($handle);
-        }
-
-        $effectiveOffset = $offset;
-
-        if ($totalEntries > 0 && $effectiveOffset >= $totalEntries) {
-            $effectiveOffset = max(0, $totalEntries - $limit);
-            $entries = $lastEntries;
-        }
-
-        $visibleEntries = count($entries);
-        $rangeStart = $visibleEntries > 0 ? $effectiveOffset + 1 : 0;
-        $rangeEnd = $visibleEntries > 0 ? $effectiveOffset + $visibleEntries : 0;
-
-        return [
-            'entries' => $entries,
-            'footprint_bytes' => $footprintBytes,
-            'total_entries' => $totalEntries,
-            'visible_entries' => $visibleEntries,
-            'offset' => $effectiveOffset,
-            'limit' => $limit,
-            'range_start' => $rangeStart,
-            'range_end' => $rangeEnd,
-            'omitted_before' => $rangeStart > 0 ? $rangeStart - 1 : 0,
-            'omitted_after' => max(0, $totalEntries - $rangeEnd),
-            'has_previous' => $effectiveOffset > 0,
-            'has_next' => $rangeEnd < $totalEntries,
-            'last_offset' => max(0, $totalEntries - $limit),
-        ];
+        return $this->previewResult(
+            $window['entries'],
+            footprintBytes: $footprintBytes,
+            totalEntries: $window['total_entries'],
+            effectiveOffset: $window['effective_offset'],
+            limit: $limit,
+        );
     }
 
     public function streamRawEntry(string $runId, int $entryNumber, ?callable $write = null): bool
@@ -282,6 +227,103 @@ class WireLogger
         return $deleted;
     }
 
+    private function fileFootprintBytes(string $path): int
+    {
+        if (! is_file($path)) {
+            return 0;
+        }
+
+        $size = @filesize($path);
+
+        return $size === false ? 0 : (int) $size;
+    }
+
+    /**
+     * @return array{
+     *     entries: list<array<string, mixed>>,
+     *     total_entries: int,
+     *     effective_offset: int
+     * }|null
+     */
+    private function readPreviewWindow(string $path, int $offset, int $limit): ?array
+    {
+        $handle = @fopen($path, 'rb');
+
+        if ($handle === false) {
+            return null;
+        }
+
+        $entries = [];
+        $lastEntries = [];
+        $totalEntries = 0;
+        $previewer = new WireLogEntryPreviewer;
+
+        try {
+            while (($line = $this->readPreviewLine($handle)) !== null) {
+                if ($line['line'] === '') {
+                    continue;
+                }
+
+                $totalEntries++;
+                $previewEntry = $previewer->previewEntry($totalEntries, $line['line'], $line['truncated']);
+                $lastEntries[] = $previewEntry;
+
+                if (count($lastEntries) > $limit) {
+                    array_shift($lastEntries);
+                }
+
+                if ($totalEntries <= $offset || count($entries) >= $limit) {
+                    continue;
+                }
+
+                $entries[] = $previewEntry;
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        if ($totalEntries > 0 && $offset >= $totalEntries) {
+            return [
+                'entries' => $lastEntries,
+                'total_entries' => $totalEntries,
+                'effective_offset' => max(0, $totalEntries - $limit),
+            ];
+        }
+
+        return [
+            'entries' => $entries,
+            'total_entries' => $totalEntries,
+            'effective_offset' => $offset,
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $entries
+     * @return array<string, mixed>
+     */
+    private function previewResult(array $entries, int $footprintBytes, int $totalEntries, int $effectiveOffset, int $limit): array
+    {
+        $visibleEntries = count($entries);
+        $rangeStart = $visibleEntries > 0 ? $effectiveOffset + 1 : 0;
+        $rangeEnd = $visibleEntries > 0 ? $effectiveOffset + $visibleEntries : 0;
+
+        return [
+            'entries' => $entries,
+            'footprint_bytes' => $footprintBytes,
+            'total_entries' => $totalEntries,
+            'visible_entries' => $visibleEntries,
+            'offset' => $effectiveOffset,
+            'limit' => $limit,
+            'range_start' => $rangeStart,
+            'range_end' => $rangeEnd,
+            'omitted_before' => $rangeStart > 0 ? $rangeStart - 1 : 0,
+            'omitted_after' => max(0, $totalEntries - $rangeEnd),
+            'has_previous' => $effectiveOffset > 0,
+            'has_next' => $rangeEnd < $totalEntries,
+            'last_offset' => max(0, $totalEntries - $limit),
+        ];
+    }
+
     /**
      * @param  resource  $handle
      * @return array{line: string, truncated: bool}|null
@@ -315,214 +357,6 @@ class WireLogger
     }
 
     /**
-     * @return array{
-     *     entry_number: int,
-     *     at: string|null,
-     *     type: string|null,
-     *     summary_preview: string,
-     *     payload_pretty: string,
-     *     payload_truncated: bool,
-     *     preview_status: string,
-     *     raw_line: string,
-     *     decoded_payload: array<string, mixed>|null
-     * }
-     */
-    private function previewEntry(int $entryNumber, string $line, bool $lineTruncated): array
-    {
-        $at = $this->extractScalar($line, 'at');
-        $type = $this->extractScalar($line, 'type');
-        $payload = $this->previewPayload($line, $lineTruncated, $at, $type);
-
-        return [
-            'entry_number' => $entryNumber,
-            'at' => $payload['at'],
-            'type' => $payload['type'],
-            'summary_preview' => $payload['summary_preview'],
-            'payload_pretty' => $payload['payload_pretty'],
-            'payload_truncated' => $payload['payload_truncated'],
-            'preview_status' => $payload['preview_status'],
-            'raw_line' => $line,
-            'decoded_payload' => $payload['decoded_payload'],
-        ];
-    }
-
-    /**
-     * @return array{
-     *     at: string|null,
-     *     type: string|null,
-     *     summary_preview: string,
-     *     payload_pretty: string,
-     *     payload_truncated: bool,
-     *     preview_status: string,
-     *     decoded_payload: array<string, mixed>|null
-     * }
-     */
-    private function previewPayload(string $line, bool $lineTruncated, ?string $fallbackAt, ?string $fallbackType): array
-    {
-        $payloadPretty = __('Payload preview omitted because this wire-log entry exceeds :size.', [
-            'size' => number_format(self::PREVIEW_LINE_BYTES / 1024).' KB',
-        ]);
-        $payloadTruncated = $lineTruncated;
-        $previewStatus = 'line_omitted';
-        $at = $fallbackAt;
-        $type = $fallbackType;
-        $summaryPreview = $this->summaryPreviewFromRawLine($line);
-        $decodedPayload = null;
-
-        if (! $lineTruncated) {
-            $decoded = BlbJson::decodeArray($line);
-            $decodedPayload = $decoded;
-
-            if ($decoded === null) {
-                $payloadPretty = __('Payload preview unavailable because this wire-log entry could not be decoded.');
-                $payloadTruncated = true;
-                $previewStatus = 'decode_error';
-            } else {
-                $at = is_string($decoded['at'] ?? null) ? $decoded['at'] : $at;
-                $type = is_string($decoded['type'] ?? null) ? $decoded['type'] : $type;
-
-                unset($decoded['at'], $decoded['type']);
-                $summaryPreview = $this->summaryPreviewFromPayload($type, $decoded);
-
-                $encoded = json_encode(
-                    $decoded,
-                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-                );
-
-                if (! is_string($encoded)) {
-                    $payloadPretty = __('Payload preview unavailable because this wire-log entry could not be encoded.');
-                    $payloadTruncated = true;
-                    $previewStatus = 'encode_error';
-                } else {
-                    $payloadPretty = $encoded;
-                    $payloadTruncated = strlen($payloadPretty) > self::PREVIEW_PAYLOAD_BYTES;
-                    $previewStatus = $payloadTruncated ? 'payload_truncated' : 'full';
-
-                    if ($payloadTruncated) {
-                        $payloadPretty = substr($payloadPretty, 0, self::PREVIEW_PAYLOAD_BYTES)."\n…";
-                    }
-                }
-            }
-        }
-
-        return [
-            'at' => $at,
-            'type' => $type,
-            'summary_preview' => $summaryPreview,
-            'payload_pretty' => $payloadPretty,
-            'payload_truncated' => $payloadTruncated,
-            'preview_status' => $previewStatus,
-            'decoded_payload' => $decodedPayload,
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function summaryPreviewFromPayload(?string $type, array $payload): string
-    {
-        if ($type === 'llm.stream_line') {
-            return $this->streamLineSummaryPreview($payload);
-        }
-
-        $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-        if (! is_string($encoded) || $encoded === '') {
-            return '{}';
-        }
-
-        return Str::limit($encoded, 120, '...');
-    }
-
-    private function summaryPreviewFromRawLine(string $line): string
-    {
-        $summary = preg_replace('/^{"at":"[^"]*","type":"[^"]*",?/', '{', $line);
-        $summary = is_string($summary) ? $summary : $line;
-
-        return Str::limit($summary, 120, '...');
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function streamLineSummaryPreview(array $payload): string
-    {
-        $rawLine = is_string($payload['raw_line'] ?? null) ? $payload['raw_line'] : '';
-
-        if ($rawLine === '') {
-            return '[]';
-        }
-
-        if ($rawLine === 'data: [DONE]') {
-            return 'finish_reason: [DONE]';
-        }
-
-        if (str_starts_with($rawLine, 'data: ')) {
-            $data = BlbJson::decodeArray(substr($rawLine, 6));
-
-            if (is_array($data)) {
-                $summary = $this->streamChunkSemanticSummary($data);
-
-                if ($summary !== null) {
-                    return $summary;
-                }
-            }
-        }
-
-        return Str::limit($rawLine, 120, '...');
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    private function streamChunkSemanticSummary(array $data): ?string
-    {
-        $choice = $data['choices'][0] ?? null;
-
-        if (! is_array($choice)) {
-            return null;
-        }
-
-        $delta = is_array($choice['delta'] ?? null) ? $choice['delta'] : [];
-        $finishReason = $choice['finish_reason'] ?? null;
-
-        if (is_string($delta['reasoning_content'] ?? null) && $delta['reasoning_content'] !== '') {
-            return 'reasoning_content: '.$this->quotedPreview($delta['reasoning_content']);
-        }
-
-        if (is_string($delta['content'] ?? null) && $delta['content'] !== '') {
-            return 'content: '.$this->quotedPreview($delta['content']);
-        }
-
-        $toolCallDeltas = $delta['tool_calls'] ?? null;
-
-        if (is_array($toolCallDeltas) && isset($toolCallDeltas[0]) && is_array($toolCallDeltas[0])) {
-            $toolCall = $toolCallDeltas[0];
-            $toolName = $toolCall['function']['name'] ?? null;
-            $argumentsDelta = $toolCall['function']['arguments'] ?? null;
-
-            if (is_string($toolName) && $toolName !== '') {
-                return 'tool_call: '.$toolName;
-            }
-
-            if (is_string($argumentsDelta) && $argumentsDelta !== '') {
-                return 'tool_args: '.$this->quotedPreview($argumentsDelta);
-            }
-        }
-
-        if (is_string($finishReason) && $finishReason !== '') {
-            return 'finish_reason: '.$finishReason;
-        }
-
-        return null;
-    }
-
-    private function quotedPreview(string $value): string
-    {
-        return '"'.Str::limit($value, 72, '...').'"';
-    }
-
-    /**
      * @param  resource  $handle
      * @param  (callable(string): void)|null  $write
      */
@@ -548,17 +382,6 @@ class WireLogger
         }
 
         return $sawContent ? true : null;
-    }
-
-    private function extractScalar(string $line, string $key): ?string
-    {
-        if (! preg_match('/"'.preg_quote($key, '/').'":"((?:[^"\\\\]|\\\\.)*)"/', $line, $matches)) {
-            return null;
-        }
-
-        $decoded = json_decode('"'.$matches[1].'"');
-
-        return is_string($decoded) ? $decoded : null;
     }
 
     /**
