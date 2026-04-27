@@ -9,6 +9,7 @@ enum UiReferenceSection: string
 {
     case Foundations = 'foundations';
     case Inputs = 'inputs';
+    case InteractionPatterns = 'interaction-patterns';
     case Feedback = 'feedback';
     case Actions = 'actions';
     case Navigation = 'navigation';
@@ -21,6 +22,7 @@ enum UiReferenceSection: string
         return match ($this) {
             self::Foundations => 'Foundations',
             self::Inputs => 'Inputs',
+            self::InteractionPatterns => 'Interaction Patterns',
             self::Feedback => 'Feedback',
             self::Actions => 'Actions',
             self::Navigation => 'Navigation',
@@ -35,6 +37,7 @@ enum UiReferenceSection: string
         return match ($this) {
             self::Foundations => 'Tokens, type, spacing, shape, elevation, and icon language.',
             self::Inputs => 'Text entry, selection controls, and comparison guidance.',
+            self::InteractionPatterns => 'Field-level editing, progressive disclosure, and keyboard behavior.',
             self::Feedback => 'Alerts, flash behavior, validation, loading, and empty states.',
             self::Actions => 'Buttons, icon actions, destructive entry points, and emphasis.',
             self::Navigation => 'Tabs, page headers, filters, and movement through content.',
@@ -49,6 +52,7 @@ enum UiReferenceSection: string
         return match ($this) {
             self::Foundations => 'heroicon-o-adjustments-horizontal',
             self::Inputs => 'heroicon-o-document-text',
+            self::InteractionPatterns => 'heroicon-o-cursor-arrow-rays',
             self::Feedback => 'heroicon-o-exclamation-circle',
             self::Actions => 'heroicon-o-plus-circle',
             self::Navigation => 'heroicon-o-rectangle-group',

@@ -31,72 +31,23 @@
             <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('User Details') }}</h3>
 
             <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div x-data="{ editing: false, val: '{{ addslashes($user->name) }}' }">
-                    <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Name') }}</dt>
-                    <dd class="text-sm text-ink">
-                        <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                            <span x-text="val || '-'"></span>
-                            <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <input
-                            x-show="editing"
-                            x-ref="input"
-                            x-model="val"
-                            @keydown.enter="editing = false; $wire.saveField('name', val)"
-                            @keydown.escape="editing = false; val = '{{ addslashes($user->name) }}'"
-                            @blur="editing = false; $wire.saveField('name', val)"
-                            type="text"
-                            class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                        />
-                    </dd>
-                </div>
-                <div x-data="{ editing: false, val: '{{ addslashes($user->email) }}' }">
-                    <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Email') }}</dt>
-                    <dd class="text-sm text-ink">
-                        <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                            <span x-text="val || '-'"></span>
-                            <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <input
-                            x-show="editing"
-                            x-ref="input"
-                            x-model="val"
-                            @keydown.enter="editing = false; $wire.saveField('email', val)"
-                            @keydown.escape="editing = false; val = '{{ addslashes($user->email) }}'"
-                            @blur="editing = false; $wire.saveField('email', val)"
-                            type="email"
-                            class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                        />
-                    </dd>
-                </div>
-                <div x-data="{ editing: false, val: '{{ $user->company_id ?? '' }}' }">
-                    <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Company') }}</dt>
-                    <dd class="text-sm text-ink">
-                        <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                            <span>
-                                @if($user->company)
-                                    {{ $user->company->name }}
-                                @else
-                                    <span class="text-muted">{{ __('None') }}</span>
-                                @endif
-                            </span>
-                            <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <select
-                            x-show="editing"
-                            x-model="val"
-                            @change="editing = false; $wire.saveCompany(val ? parseInt(val, 10) : null)"
-                            @keydown.escape="editing = false; val = '{{ $user->company_id ?? '' }}'"
-                            @blur="editing = false"
-                            class="px-2 py-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                        >
-                            <option value="">{{ __('None') }}</option>
-                            @foreach($companies as $company)
-                                <option value="{{ $company->id }}">{{ $company->name }}</option>
-                            @endforeach
-                        </select>
-                    </dd>
-                </div>
+                <x-ui.edit-in-place.text :label="__('Name')" :value="$user->name" field="name" save-method="saveField" />
+                <x-ui.edit-in-place.text :label="__('Email')" :value="$user->email" field="email" save-method="saveField" type="email" />
+                <x-ui.edit-in-place.select
+                    :label="__('Company')"
+                    :value="$user->company_id"
+                    save-method="saveCompany"
+                    save-value="val ? parseInt(val, 10) : null"
+                >
+                    <x-slot name="read">
+                        <span class="text-sm text-ink">{{ $user->company?->name ?? __('None') }}</span>
+                    </x-slot>
+
+                    <option value="">{{ __('None') }}</option>
+                    @foreach($companies as $company)
+                        <option value="{{ $company->id }}">{{ $company->name }}</option>
+                    @endforeach
+                </x-ui.edit-in-place.select>
                 <div>
                     <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Email Verified') }}</dt>
                     <dd class="mt-0.5 text-sm text-ink">

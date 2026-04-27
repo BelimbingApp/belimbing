@@ -44,7 +44,6 @@
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Unit Cost') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Target Price') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Created') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">
@@ -67,26 +66,10 @@
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm text-muted tabular-nums">{{ $this->formatMoney($item->unit_cost_amount, $item->currency_code) }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm text-muted tabular-nums">{{ $this->formatMoney($item->target_price_amount, $item->currency_code) }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $item->created_at?->diffForHumans() }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
-                                    <x-ui.icon-action-group>
-                                        <x-ui.icon-action
-                                            icon="heroicon-o-eye"
-                                            :label="__('View item')"
-                                            :href="route('commerce.inventory.items.show', $item)"
-                                            wire:navigate
-                                        />
-                                        <x-ui.icon-action
-                                            icon="heroicon-o-pencil-square"
-                                            :label="__('Edit item')"
-                                            :href="route('commerce.inventory.items.edit', $item)"
-                                            wire:navigate
-                                        />
-                                    </x-ui.icon-action-group>
-                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No items found. Create the first item to begin the workbench.') }}</td>
+                                <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No items found. Create the first item to begin the workbench.') }}</td>
                             </tr>
                         @endforelse
                     </tbody>

@@ -37,10 +37,25 @@ class Index extends Component
 
     public string $radioValue = 'combobox';
 
+    public string $editInPlaceTitle = 'Driver side mirror assembly';
+
+    public string $editInPlaceStatus = 'review';
+
+    public string $editInPlaceNotes = 'Click a value to edit it in place. Press Enter to save short text, Escape to cancel, or blur to commit.';
+
     public function mount(?string $section = null): void
     {
         $this->section = UiReferenceSection::tryFrom($section ?? UiReferenceSection::default()->value)?->value
             ?? UiReferenceSection::default()->value;
+    }
+
+    public function saveReferenceField(string $field, mixed $value): void
+    {
+        if (! in_array($field, ['editInPlaceTitle', 'editInPlaceStatus', 'editInPlaceNotes'], true)) {
+            return;
+        }
+
+        $this->$field = (string) $value;
     }
 
     public function sectionUrl(UiReferenceSection $section): string

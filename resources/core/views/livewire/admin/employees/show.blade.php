@@ -19,139 +19,15 @@
             <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Employee Details') }}</h3>
 
                 <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div x-data="{ editing: false, val: '{{ addslashes($employee->full_name) }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Full Name') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('full_name', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($employee->full_name) }}'"
-                                @blur="editing = false; $wire.saveField('full_name', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ addslashes($employee->short_name ?? '') }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Short Name') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('short_name', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($employee->short_name ?? '') }}'"
-                                @blur="editing = false; $wire.saveField('short_name', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ addslashes($employee->employee_number) }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Employee Number') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span class="font-mono" x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('employee_number', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($employee->employee_number) }}'"
-                                @blur="editing = false; $wire.saveField('employee_number', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm font-mono border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
+                    <x-ui.edit-in-place.text :label="__('Full Name')" :value="$employee->full_name" field="full_name" />
+                    <x-ui.edit-in-place.text :label="__('Short Name')" :value="$employee->short_name" field="short_name" />
+                    <x-ui.edit-in-place.text :label="__('Employee Number')" :value="$employee->employee_number" field="employee_number" monospace />
                     @if($employee->isAgent())
-                    <div x-data="{ editing: false, val: '{{ addslashes($employee->job_description ?? '') }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Job Description') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input?.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <textarea
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @blur="editing = false; $wire.saveField('job_description', val)"
-                                rows="2"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            ></textarea>
-                        </dd>
-                    </div>
+                        <x-ui.edit-in-place.textarea :label="__('Job Description')" :value="$employee->job_description" field="job_description" rows="2" />
                     @endif
-                    <div x-data="{ editing: false, val: '{{ addslashes($employee->designation ?? '') }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Designation') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('designation', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($employee->designation ?? '') }}'"
-                                @blur="editing = false; $wire.saveField('designation', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ addslashes($employee->email ?? '') }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Email') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('email', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($employee->email ?? '') }}'"
-                                @blur="editing = false; $wire.saveField('email', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ addslashes($employee->mobile_number ?? '') }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Mobile Number') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('mobile_number', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($employee->mobile_number ?? '') }}'"
-                                @blur="editing = false; $wire.saveField('mobile_number', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
+                    <x-ui.edit-in-place.text :label="__('Designation')" :value="$employee->designation" field="designation" />
+                    <x-ui.edit-in-place.text :label="__('Email')" :value="$employee->email" field="email" type="email" />
+                    <x-ui.edit-in-place.text :label="__('Mobile Number')" :value="$employee->mobile_number" field="mobile_number" />
                 </dl>
         </x-ui.card>
 
@@ -163,151 +39,92 @@
                         <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Company') }}</dt>
                         <dd class="text-sm text-ink px-1 -mx-1 py-0.5">{{ $employee->company?->name ?? '-' }}</dd>
                     </div>
-                    <div x-data="{ editing: false, val: '{{ $employee->department_id ?? '' }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Department') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span>
-                                    @if($employee->department)
-                                        {{ $employee->department->type->name ?? '-' }}
-                                    @else
-                                        <span class="text-muted">{{ __('None') }}</span>
-                                    @endif
-                                </span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <select
-                                x-show="editing"
-                                x-model="val"
-                                @change="editing = false; $wire.saveDepartment(val ? parseInt(val, 10) : null)"
-                                @keydown.escape="editing = false; val = '{{ $employee->department_id ?? '' }}'"
-                                @blur="editing = false"
-                                class="px-2 py-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            >
-                                <option value="">{{ __('None') }}</option>
-                                @foreach($departments as $dept)
-                                    <option value="{{ $dept->id }}">{{ $dept->type->name }}</option>
-                                @endforeach
-                            </select>
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ $employee->supervisor_id ?? '' }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Supervisor') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span>
-                                    @if($employee->supervisor)
-                                        {{ $employee->supervisor->full_name }}
-                                    @else
-                                        <span class="text-muted">{{ __('None') }}</span>
-                                    @endif
-                                </span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <select
-                                x-show="editing"
-                                x-model="val"
-                                @change="editing = false; $wire.saveSupervisor(val ? parseInt(val, 10) : null)"
-                                @keydown.escape="editing = false; val = '{{ $employee->supervisor_id ?? '' }}'"
-                                @blur="editing = false"
-                                class="px-2 py-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            >
-                                <option value="">{{ __('None') }}</option>
-                                @foreach($supervisors as $sup)
-                                    <option value="{{ $sup->id }}">{{ $sup->full_name }}</option>
-                                @endforeach
-                            </select>
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ $employee->employee_type ?? '' }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Employee Type') }}</dt>
-                        <dd class="mt-0.5">
-                            <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                @if($employee->isAgent())
-                                    <x-ui.badge variant="info">{{ __('Agent') }}</x-ui.badge>
-                                @else
-                                    <span class="text-sm text-ink">{{ $employee->employee_type ? ucwords(str_replace('_', ' ', $employee->employee_type)) : '-' }}</span>
-                                @endif
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <select
-                                x-show="editing"
-                                x-model="val"
-                                @change="editing = false; $wire.saveEmployeeType(val)"
-                                @keydown.escape="editing = false; val = '{{ $employee->employee_type ?? '' }}'"
-                                @blur="editing = false"
-                                class="px-2 py-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            >
-                                <optgroup label="{{ __('Human') }}">
-                                    @foreach($employeeTypes->where('code', '!=', 'agent') as $type)
-                                        <option value="{{ $type->code }}">{{ $type->label }}</option>
-                                    @endforeach
-                                </optgroup>
-                                <optgroup label="{{ __('Agent') }}">
-                                    @foreach($employeeTypes->where('code', 'agent') as $type)
-                                        <option value="{{ $type->code }}">{{ $type->label }}</option>
-                                    @endforeach
-                                </optgroup>
-                            </select>
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ $employee->status }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Status') }}</dt>
-                        <dd class="mt-0.5">
-                            <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer">
-                                <x-ui.badge :variant="match($employee->status) {
-                                    'active' => 'success',
-                                    'terminated' => 'danger',
-                                    'probation' => 'warning',
-                                    default => 'default',
-                                }">{{ ucfirst($employee->status) }}</x-ui.badge>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <select
-                                x-show="editing"
-                                x-model="val"
-                                @change="editing = false; $wire.saveStatus(val)"
-                                @keydown.escape="editing = false; val = '{{ $employee->status }}'"
-                                @blur="editing = false"
-                                class="px-2 py-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            >
-                                <option value="pending">{{ __('Pending') }}</option>
-                                <option value="probation">{{ __('Probation') }}</option>
-                                <option value="active">{{ __('Active') }}</option>
-                                <option value="inactive">{{ __('Inactive') }}</option>
-                                <option value="terminated">{{ __('Terminated') }}</option>
-                            </select>
-                        </dd>
-                    </div>
+                    <x-ui.edit-in-place.select
+                        :label="__('Department')"
+                        :value="$employee->department_id"
+                        save-method="saveDepartment"
+                        save-value="val ? parseInt(val, 10) : null"
+                    >
+                        <x-slot name="read">
+                            <span class="text-sm text-ink">{{ $employee->department?->type->name ?? __('None') }}</span>
+                        </x-slot>
+
+                        <option value="">{{ __('None') }}</option>
+                        @foreach($departments as $dept)
+                            <option value="{{ $dept->id }}">{{ $dept->type->name }}</option>
+                        @endforeach
+                    </x-ui.edit-in-place.select>
+                    <x-ui.edit-in-place.select
+                        :label="__('Supervisor')"
+                        :value="$employee->supervisor_id"
+                        save-method="saveSupervisor"
+                        save-value="val ? parseInt(val, 10) : null"
+                    >
+                        <x-slot name="read">
+                            <span class="text-sm text-ink">{{ $employee->supervisor?->full_name ?? __('None') }}</span>
+                        </x-slot>
+
+                        <option value="">{{ __('None') }}</option>
+                        @foreach($supervisors as $sup)
+                            <option value="{{ $sup->id }}">{{ $sup->full_name }}</option>
+                        @endforeach
+                    </x-ui.edit-in-place.select>
+                    <x-ui.edit-in-place.select :label="__('Employee Type')" :value="$employee->employee_type" save-method="saveEmployeeType">
+                        <x-slot name="read">
+                            @if($employee->isAgent())
+                                <x-ui.badge variant="info">{{ __('Agent') }}</x-ui.badge>
+                            @else
+                                <span class="text-sm text-ink">{{ $employee->employee_type ? ucwords(str_replace('_', ' ', $employee->employee_type)) : '-' }}</span>
+                            @endif
+                        </x-slot>
+
+                        <optgroup label="{{ __('Human') }}">
+                            @foreach($employeeTypes->where('code', '!=', 'agent') as $type)
+                                <option value="{{ $type->code }}">{{ $type->label }}</option>
+                            @endforeach
+                        </optgroup>
+                        <optgroup label="{{ __('Agent') }}">
+                            @foreach($employeeTypes->where('code', 'agent') as $type)
+                                <option value="{{ $type->code }}">{{ $type->label }}</option>
+                            @endforeach
+                        </optgroup>
+                    </x-ui.edit-in-place.select>
+                    <x-ui.edit-in-place.select :label="__('Status')" :value="$employee->status" save-method="saveStatus">
+                        <x-slot name="read">
+                            <x-ui.badge :variant="match($employee->status) {
+                                'active' => 'success',
+                                'terminated' => 'danger',
+                                'probation' => 'warning',
+                                default => 'default',
+                            }">{{ ucfirst($employee->status) }}</x-ui.badge>
+                        </x-slot>
+
+                        <option value="pending">{{ __('Pending') }}</option>
+                        <option value="probation">{{ __('Probation') }}</option>
+                        <option value="active">{{ __('Active') }}</option>
+                        <option value="inactive">{{ __('Inactive') }}</option>
+                        <option value="terminated">{{ __('Terminated') }}</option>
+                    </x-ui.edit-in-place.select>
                     @if(!$employee->isAgent())
-                    <div x-data="{ editing: false, val: '{{ $employee->user_id ?? '' }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('User') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span>
-                                    @if($employee->user)
-                                        <a href="{{ route('admin.users.show', $employee->user) }}" wire:navigate class="text-accent hover:underline" @click.stop>{{ $employee->user->name }}</a>
-                                    @else
-                                        <span class="text-muted">{{ __('None') }}</span>
-                                    @endif
-                                </span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <select
-                                x-show="editing"
-                                x-model="val"
-                                @change="editing = false; $wire.saveUser(val ? parseInt(val, 10) : null)"
-                                @keydown.escape="editing = false; val = '{{ $employee->user_id ?? '' }}'"
-                                @blur="editing = false"
-                                class="px-2 py-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            >
-                                <option value="">{{ __('None') }}</option>
-                                @foreach($users as $u)
-                                    <option value="{{ $u->id }}">{{ $u->name }}</option>
-                                @endforeach
-                            </select>
-                        </dd>
-                    </div>
+                    <x-ui.edit-in-place.select
+                        :label="__('User')"
+                        :value="$employee->user_id"
+                        save-method="saveUser"
+                        save-value="val ? parseInt(val, 10) : null"
+                    >
+                        <x-slot name="read">
+                            @if($employee->user)
+                                <a href="{{ route('admin.users.show', $employee->user) }}" wire:navigate class="text-sm text-accent hover:underline" @click.stop>{{ $employee->user->name }}</a>
+                            @else
+                                <span class="text-sm text-muted">{{ __('None') }}</span>
+                            @endif
+                        </x-slot>
+
+                        <option value="">{{ __('None') }}</option>
+                        @foreach($users as $u)
+                            <option value="{{ $u->id }}">{{ $u->name }}</option>
+                        @endforeach
+                    </x-ui.edit-in-place.select>
                     @endif
                     <div>
                         <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Employment Start') }}</dt>

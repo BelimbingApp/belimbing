@@ -35,25 +35,7 @@
 
             <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 @if (! $role->is_system && $canEdit)
-                    <div x-data="{ editing: false, val: @js($role->name) }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Name') }}</dt>
-                        <dd class="mt-0.5 text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('name', val)"
-                                @keydown.escape="editing = false; val = @js($role->name)"
-                                @blur="editing = false; $wire.saveField('name', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
+                    <x-ui.edit-in-place.text :label="__('Name')" :value="$role->name" field="name" save-method="saveField" />
                 @else
                     <div>
                         <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Name') }}</dt>
@@ -75,28 +57,20 @@
                     </dd>
                 </div>
                 @if (! $role->is_system && $canEdit && ! $hasAssignedUsers)
-                    <div x-data="{ editing: false, val: @js((string) ($role->company_id ?? '')) }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Scope') }}</dt>
-                        <dd class="mt-0.5 text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span>{{ $role->company?->name ?? __('Global') }}</span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <select
-                                x-show="editing"
-                                x-model="val"
-                                @change="editing = false; $wire.saveScope(val)"
-                                @keydown.escape="editing = false; val = @js((string) ($role->company_id ?? ''))"
-                                @blur="editing = false"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            >
-                                <option value="">{{ __('Global (all companies)') }}</option>
-                                @foreach ($licenseeCompanies as $company)
-                                    <option value="{{ $company->id }}">{{ $company->name }}</option>
-                                @endforeach
-                            </select>
-                        </dd>
-                    </div>
+                    <x-ui.edit-in-place.select
+                        :label="__('Scope')"
+                        :value="$role->company_id"
+                        save-method="saveScope"
+                    >
+                        <x-slot name="read">
+                            <span class="text-sm text-ink">{{ $role->company?->name ?? __('Global') }}</span>
+                        </x-slot>
+
+                        <option value="">{{ __('Global (all companies)') }}</option>
+                        @foreach ($licenseeCompanies as $company)
+                            <option value="{{ $company->id }}">{{ $company->name }}</option>
+                        @endforeach
+                    </x-ui.edit-in-place.select>
                 @else
                     <div>
                         <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Scope') }}</dt>
@@ -109,25 +83,14 @@
                     </div>
                 @endif
                 @if (! $role->is_system && $canEdit)
-                    <div x-data="{ editing: false, val: @js($role->description ?? '') }" class="md:col-span-2">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Description') }}</dt>
-                        <dd class="mt-0.5 text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '—'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('description', val)"
-                                @keydown.escape="editing = false; val = @js($role->description ?? '')"
-                                @blur="editing = false; $wire.saveField('description', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
+                    <x-ui.edit-in-place.text
+                        class="md:col-span-2"
+                        :label="__('Description')"
+                        :value="$role->description"
+                        field="description"
+                        save-method="saveField"
+                        empty="—"
+                    />
                 @else
                     <div>
                         <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Description') }}</dt>

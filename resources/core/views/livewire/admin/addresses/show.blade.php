@@ -37,101 +37,11 @@
             <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Address Details') }}</h3>
 
             <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div x-data="{ editing: false, val: '{{ addslashes($address->label ?? '') }}' }">
-                    <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Label') }}</dt>
-                    <dd class="text-sm text-ink">
-                        <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                            <span x-text="val || '-'"></span>
-                            <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <input
-                            x-show="editing"
-                            x-ref="input"
-                            x-model="val"
-                            @keydown.enter="editing = false; $wire.saveField('label', val)"
-                            @keydown.escape="editing = false; val = '{{ addslashes($address->label ?? '') }}'"
-                            @blur="editing = false; $wire.saveField('label', val)"
-                            type="text"
-                            class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                        />
-                    </dd>
-                </div>
-                <div x-data="{ editing: false, val: '{{ addslashes($address->phone ?? '') }}' }">
-                    <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Phone') }}</dt>
-                    <dd class="text-sm text-ink">
-                        <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                            <span x-text="val || '-'"></span>
-                            <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <input
-                            x-show="editing"
-                            x-ref="input"
-                            x-model="val"
-                            @keydown.enter="editing = false; $wire.saveField('phone', val)"
-                            @keydown.escape="editing = false; val = '{{ addslashes($address->phone ?? '') }}'"
-                            @blur="editing = false; $wire.saveField('phone', val)"
-                            type="text"
-                            class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                        />
-                    </dd>
-                </div>
-                <div x-data="{ editing: false, val: '{{ addslashes($address->line1 ?? '') }}' }">
-                    <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Address Line 1') }}</dt>
-                    <dd class="text-sm text-ink">
-                        <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                            <span x-text="val || '-'"></span>
-                            <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <input
-                            x-show="editing"
-                            x-ref="input"
-                            x-model="val"
-                            @keydown.enter="editing = false; $wire.saveField('line1', val)"
-                            @keydown.escape="editing = false; val = '{{ addslashes($address->line1 ?? '') }}'"
-                            @blur="editing = false; $wire.saveField('line1', val)"
-                            type="text"
-                            class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                        />
-                    </dd>
-                </div>
-                <div x-data="{ editing: false, val: '{{ addslashes($address->line2 ?? '') }}' }">
-                    <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Address Line 2') }}</dt>
-                    <dd class="text-sm text-ink">
-                        <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                            <span x-text="val || '-'"></span>
-                            <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <input
-                            x-show="editing"
-                            x-ref="input"
-                            x-model="val"
-                            @keydown.enter="editing = false; $wire.saveField('line2', val)"
-                            @keydown.escape="editing = false; val = '{{ addslashes($address->line2 ?? '') }}'"
-                            @blur="editing = false; $wire.saveField('line2', val)"
-                            type="text"
-                            class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                        />
-                    </dd>
-                </div>
-                <div x-data="{ editing: false, val: '{{ addslashes($address->line3 ?? '') }}' }">
-                    <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Address Line 3') }}</dt>
-                    <dd class="text-sm text-ink">
-                        <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                            <span x-text="val || '-'"></span>
-                            <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <input
-                            x-show="editing"
-                            x-ref="input"
-                            x-model="val"
-                            @keydown.enter="editing = false; $wire.saveField('line3', val)"
-                            @keydown.escape="editing = false; val = '{{ addslashes($address->line3 ?? '') }}'"
-                            @blur="editing = false; $wire.saveField('line3', val)"
-                            type="text"
-                            class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                        />
-                    </dd>
-                </div>
+                <x-ui.edit-in-place.text :label="__('Label')" :value="$address->label" field="label" />
+                <x-ui.edit-in-place.text :label="__('Phone')" :value="$address->phone" field="phone" />
+                <x-ui.edit-in-place.text :label="__('Address Line 1')" :value="$address->line1" field="line1" />
+                <x-ui.edit-in-place.text :label="__('Address Line 2')" :value="$address->line2" field="line2" />
+                <x-ui.edit-in-place.text :label="__('Address Line 3')" :value="$address->line3" field="line3" />
                 <div>
                     <x-ui.combobox
                         wire:model.live="countryIso"
@@ -173,31 +83,19 @@
                         search-url="{{ route('admin.addresses.cities.search') }}?country={{ $countryIso ?? '' }}&admin1={{ $admin1Code ?? '' }}"
                     />
                 </div>
-                <div x-data="{ editing: false, val: '{{ $address->verificationStatus }}' }">
-                    <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Verification Status') }}</dt>
-                    <dd class="mt-0.5">
-                        <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer">
-                            <x-ui.badge :variant="match($address->verificationStatus) {
-                                'verified' => 'success',
-                                'suggested' => 'warning',
-                                default => 'default',
-                            }">{{ ucfirst($address->verificationStatus) }}</x-ui.badge>
-                            <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <select
-                            x-show="editing"
-                            x-model="val"
-                            @change="editing = false; $wire.saveVerificationStatus(val)"
-                            @keydown.escape="editing = false; val = '{{ $address->verificationStatus }}'"
-                            @blur="editing = false"
-                            class="px-2 py-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                        >
-                            <option value="unverified">{{ __('Unverified') }}</option>
-                            <option value="suggested">{{ __('Suggested') }}</option>
-                            <option value="verified">{{ __('Verified') }}</option>
-                        </select>
-                    </dd>
-                </div>
+                <x-ui.edit-in-place.select :label="__('Verification Status')" :value="$address->verificationStatus" save-method="saveVerificationStatus">
+                    <x-slot name="read">
+                        <x-ui.badge :variant="match($address->verificationStatus) {
+                            'verified' => 'success',
+                            'suggested' => 'warning',
+                            default => 'default',
+                        }">{{ ucfirst($address->verificationStatus) }}</x-ui.badge>
+                    </x-slot>
+
+                    <option value="unverified">{{ __('Unverified') }}</option>
+                    <option value="suggested">{{ __('Suggested') }}</option>
+                    <option value="verified">{{ __('Verified') }}</option>
+                </x-ui.edit-in-place.select>
             </dl>
         </x-ui.card>
 
@@ -206,45 +104,8 @@
             <p class="text-xs text-muted mb-4">{{ __('Tracks where this address came from and how it was processed — useful for auditing data quality and imports.') }}</p>
 
             <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div x-data="{ editing: false, val: '{{ addslashes($address->source ?? '') }}' }">
-                    <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Source') }}</dt>
-                    <dd class="text-sm text-ink">
-                        <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                            <span x-text="val || '-'"></span>
-                            <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <input
-                            x-show="editing"
-                            x-ref="input"
-                            x-model="val"
-                            @keydown.enter="editing = false; $wire.saveField('source', val)"
-                            @keydown.escape="editing = false; val = '{{ addslashes($address->source ?? '') }}'"
-                            @blur="editing = false; $wire.saveField('source', val)"
-                            type="text"
-                            placeholder="{{ __('manual, scan, paste, import_api') }}"
-                            class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                        />
-                    </dd>
-                </div>
-                <div x-data="{ editing: false, val: '{{ addslashes($address->sourceRef ?? '') }}' }">
-                    <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Source Reference') }}</dt>
-                    <dd class="text-sm text-ink">
-                        <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                            <span x-text="val || '-'"></span>
-                            <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                        <input
-                            x-show="editing"
-                            x-ref="input"
-                            x-model="val"
-                            @keydown.enter="editing = false; $wire.saveField('sourceRef', val)"
-                            @keydown.escape="editing = false; val = '{{ addslashes($address->sourceRef ?? '') }}'"
-                            @blur="editing = false; $wire.saveField('sourceRef', val)"
-                            type="text"
-                            class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                        />
-                    </dd>
-                </div>
+                <x-ui.edit-in-place.text :label="__('Source')" :value="$address->source" field="source" />
+                <x-ui.edit-in-place.text :label="__('Source Reference')" :value="$address->sourceRef" field="sourceRef" />
                 <div>
                     <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Parser Version') }}</dt>
                     <dd class="text-sm text-ink">{{ $address->parserVersion ?: '-' }}</dd>

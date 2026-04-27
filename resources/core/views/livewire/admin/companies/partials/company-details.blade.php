@@ -2,245 +2,80 @@
             <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Company Details') }}</h3>
 
                 <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div x-data="{ editing: false, val: '{{ addslashes($company->name) }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Name') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('name', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($company->name) }}'"
-                                @blur="editing = false; $wire.saveField('name', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ addslashes($company->code ?? '') }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Code') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span class="font-mono" x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('code', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($company->code ?? '') }}'"
-                                @blur="editing = false; $wire.saveField('code', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm font-mono border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ addslashes($company->legal_name ?? '') }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Legal Name') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('legal_name', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($company->legal_name ?? '') }}'"
-                                @blur="editing = false; $wire.saveField('legal_name', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ $company->status }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Status') }}</dt>
-                        <dd class="mt-0.5">
-                            <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer">
-                                <x-ui.badge :variant="match($company->status) {
-                                    'active' => 'success',
-                                    'suspended' => 'danger',
-                                    'pending' => 'warning',
-                                    default => 'default',
-                                }">{{ ucfirst($company->status) }}</x-ui.badge>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <select
-                                x-show="editing"
-                                x-model="val"
-                                @change="editing = false; $wire.saveStatus(val)"
-                                @keydown.escape="editing = false; val = '{{ $company->status }}'"
-                                @blur="editing = false"
-                                class="px-2 py-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            >
-                                <option value="active">{{ __('Active') }}</option>
-                                <option value="suspended">{{ __('Suspended') }}</option>
-                                <option value="pending">{{ __('Pending') }}</option>
-                                <option value="archived">{{ __('Archived') }}</option>
-                            </select>
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ $company->legal_entity_type_id ?? '' }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Legal Entity Type') }}</dt>
-                        <dd class="mt-0.5">
-                            <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span class="text-sm text-ink">{{ $company->legalEntityType?->name ?? '-' }}</span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <select
-                                x-show="editing"
-                                x-model="val"
-                                @change="editing = false; $wire.saveField('legal_entity_type_id', val || null)"
-                                @keydown.escape="editing = false; val = '{{ $company->legal_entity_type_id ?? '' }}'"
-                                @blur="editing = false"
-                                class="px-2 py-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            >
-                                <option value="">{{ __('None') }}</option>
-                                @foreach($legalEntityTypes as $type)
-                                    <option value="{{ $type->id }}">{{ $type->name }}</option>
-                                @endforeach
-                            </select>
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ addslashes($company->registration_number ?? '') }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Registration Number') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('registration_number', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($company->registration_number ?? '') }}'"
-                                @blur="editing = false; $wire.saveField('registration_number', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ addslashes($company->tax_id ?? '') }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Tax ID') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('tax_id', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($company->tax_id ?? '') }}'"
-                                @blur="editing = false; $wire.saveField('tax_id', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ $company->jurisdiction ?? '' }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Jurisdiction') }}</dt>
-                        <dd class="mt-0.5">
-                            <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span class="text-sm text-ink">
-                                    @if($company->jurisdiction)
-                                        {{ $countries->firstWhere('iso', $company->jurisdiction)?->country ?? $company->jurisdiction }}
-                                        <span class="text-muted">({{ $company->jurisdiction }})</span>
-                                    @else
-                                        -
-                                    @endif
-                                </span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <select
-                                x-show="editing"
-                                x-model="val"
-                                @change="editing = false; $wire.saveField('jurisdiction', val || null)"
-                                @keydown.escape="editing = false; val = '{{ $company->jurisdiction ?? '' }}'"
-                                @blur="editing = false"
-                                class="px-2 py-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            >
-                                <option value="">{{ __('None') }}</option>
-                                @foreach($countries as $country)
-                                    <option value="{{ $country->iso }}">{{ $country->country }} ({{ $country->iso }})</option>
-                                @endforeach
-                            </select>
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ addslashes($company->email ?? '') }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Email') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('email', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($company->email ?? '') }}'"
-                                @blur="editing = false; $wire.saveField('email', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ addslashes($company->website ?? '') }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Website') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span x-text="val || '-'"></span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <input
-                                x-show="editing"
-                                x-ref="input"
-                                x-model="val"
-                                @keydown.enter="editing = false; $wire.saveField('website', val)"
-                                @keydown.escape="editing = false; val = '{{ addslashes($company->website ?? '') }}'"
-                                @blur="editing = false; $wire.saveField('website', val)"
-                                type="text"
-                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            />
-                        </dd>
-                    </div>
-                    <div x-data="{ editing: false, val: '{{ $company->parent_id ?? '' }}' }">
-                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Parent Company') }}</dt>
-                        <dd class="text-sm text-ink">
-                            <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                <span>
-                                    @if($company->parent)
-                                        {{ $company->parent->name }}
-                                    @else
-                                        <span class="text-muted">{{ __('None') }}</span>
-                                    @endif
-                                </span>
-                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                            <select
-                                x-show="editing"
-                                x-model="val"
-                                @change="editing = false; $wire.saveParent(val ? parseInt(val, 10) : null)"
-                                @keydown.escape="editing = false; val = '{{ $company->parent_id ?? '' }}'"
-                                @blur="editing = false"
-                                class="px-2 py-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                            >
-                                <option value="">{{ __('None') }}</option>
-                                @foreach($parentCompanies as $parentCompany)
-                                    <option value="{{ $parentCompany->id }}">{{ $parentCompany->name }}</option>
-                                @endforeach
-                            </select>
-                        </dd>
-                    </div>
+                    <x-ui.edit-in-place.text :label="__('Name')" :value="$company->name" field="name" />
+                    <x-ui.edit-in-place.text :label="__('Code')" :value="$company->code" field="code" monospace />
+                    <x-ui.edit-in-place.text :label="__('Legal Name')" :value="$company->legal_name" field="legal_name" />
+                    <x-ui.edit-in-place.select :label="__('Status')" :value="$company->status" save-method="saveStatus">
+                        <x-slot name="read">
+                            <x-ui.badge :variant="match($company->status) {
+                                'active' => 'success',
+                                'suspended' => 'danger',
+                                'pending' => 'warning',
+                                default => 'default',
+                            }">{{ ucfirst($company->status) }}</x-ui.badge>
+                        </x-slot>
+
+                        <option value="active">{{ __('Active') }}</option>
+                        <option value="suspended">{{ __('Suspended') }}</option>
+                        <option value="pending">{{ __('Pending') }}</option>
+                        <option value="archived">{{ __('Archived') }}</option>
+                    </x-ui.edit-in-place.select>
+                    <x-ui.edit-in-place.select
+                        :label="__('Legal Entity Type')"
+                        :value="$company->legal_entity_type_id"
+                        field="legal_entity_type_id"
+                        save-value="val || null"
+                    >
+                        <x-slot name="read">
+                            <span class="text-sm text-ink">{{ $company->legalEntityType?->name ?? '-' }}</span>
+                        </x-slot>
+
+                        <option value="">{{ __('None') }}</option>
+                        @foreach($legalEntityTypes as $type)
+                            <option value="{{ $type->id }}">{{ $type->name }}</option>
+                        @endforeach
+                    </x-ui.edit-in-place.select>
+                    <x-ui.edit-in-place.text :label="__('Registration Number')" :value="$company->registration_number" field="registration_number" />
+                    <x-ui.edit-in-place.text :label="__('Tax ID')" :value="$company->tax_id" field="tax_id" />
+                    <x-ui.edit-in-place.select
+                        :label="__('Jurisdiction')"
+                        :value="$company->jurisdiction"
+                        field="jurisdiction"
+                        save-value="val || null"
+                    >
+                        <x-slot name="read">
+                            <span class="text-sm text-ink">
+                                @if($company->jurisdiction)
+                                    {{ $countries->firstWhere('iso', $company->jurisdiction)?->country ?? $company->jurisdiction }}
+                                    <span class="text-muted">({{ $company->jurisdiction }})</span>
+                                @else
+                                    -
+                                @endif
+                            </span>
+                        </x-slot>
+
+                        <option value="">{{ __('None') }}</option>
+                        @foreach($countries as $country)
+                            <option value="{{ $country->iso }}">{{ $country->country }} ({{ $country->iso }})</option>
+                        @endforeach
+                    </x-ui.edit-in-place.select>
+                    <x-ui.edit-in-place.text :label="__('Email')" :value="$company->email" field="email" type="email" />
+                    <x-ui.edit-in-place.text :label="__('Website')" :value="$company->website" field="website" type="url" />
+                    <x-ui.edit-in-place.select
+                        :label="__('Parent Company')"
+                        :value="$company->parent_id"
+                        save-method="saveParent"
+                        save-value="val ? parseInt(val, 10) : null"
+                    >
+                        <x-slot name="read">
+                            <span class="text-sm text-ink">{{ $company->parent?->name ?? __('None') }}</span>
+                        </x-slot>
+
+                        <option value="">{{ __('None') }}</option>
+                        @foreach($parentCompanies as $parentCompany)
+                            <option value="{{ $parentCompany->id }}">{{ $parentCompany->name }}</option>
+                        @endforeach
+                    </x-ui.edit-in-place.select>
                 </dl>
 
                 <dl class="mt-4" x-data="{ adding: false, newItem: '' }">

@@ -38,6 +38,10 @@
                     @include('livewire.admin.system.ui-reference.partials.inputs')
                     @break
 
+                @case(\App\Base\System\Enums\UiReferenceSection::InteractionPatterns)
+                    @include('livewire.admin.system.ui-reference.partials.interaction-patterns')
+                    @break
+
                 @case(\App\Base\System\Enums\UiReferenceSection::Feedback)
                     @include('livewire.admin.system.ui-reference.partials.feedback')
                     @break

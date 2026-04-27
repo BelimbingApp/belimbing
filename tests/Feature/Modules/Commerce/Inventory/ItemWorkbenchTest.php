@@ -1,7 +1,7 @@
 <?php
 
 use App\Modules\Commerce\Inventory\Livewire\Items\Create;
-use App\Modules\Commerce\Inventory\Livewire\Items\Edit;
+use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 use App\Modules\Commerce\Inventory\Models\Item;
 use Livewire\Livewire;
 
@@ -11,7 +11,6 @@ test('guests are redirected to login from inventory item pages', function (): vo
     $this->get(route('commerce.inventory.items.index'))->assertRedirect(route('login'));
     $this->get(route('commerce.inventory.items.create'))->assertRedirect(route('login'));
     $this->get(route('commerce.inventory.items.show', $item))->assertRedirect(route('login'));
-    $this->get(route('commerce.inventory.items.edit', $item))->assertRedirect(route('login'));
 });
 
 test('authenticated users can view the inventory workbench', function (): void {
@@ -28,8 +27,7 @@ test('authenticated users can view the inventory workbench', function (): void {
         ->assertOk()
         ->assertSee('Inventory Workbench')
         ->assertSee('ITEM-TEST123')
-        ->assertSee('Driver side headlight assembly')
-        ->assertSee(route('commerce.inventory.items.show', Item::query()->where('sku', 'ITEM-TEST123')->first()));
+        ->assertSee('Driver side headlight assembly');
 });
 
 test('item can be created from the browser workbench component', function (): void {
@@ -79,11 +77,11 @@ test('authenticated users can view an inventory item detail page', function (): 
         ->assertSee('ITEM-SHOW123')
         ->assertSee('Mirrorless camera body')
         ->assertSee('Includes battery and charger.')
-        ->assertSee('MYR 950.00')
-        ->assertSee('MYR 1,450.00');
+        ->assertSee('950.00')
+        ->assertSee('1450.00');
 });
 
-test('item can be updated from the browser workbench component', function (): void {
+test('item facts can be updated directly from the detail page component', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
 
@@ -97,15 +95,13 @@ test('item can be updated from the browser workbench component', function (): vo
         'currency_code' => 'MYR',
     ]);
 
-    Livewire::test(Edit::class, ['item' => $item])
-        ->set('title', 'Edited inventory item')
-        ->set('description', 'Updated condition notes.')
-        ->set('status', Item::STATUS_READY)
-        ->set('unitCostAmount', '45.50')
-        ->set('targetPriceAmount', '130.00')
-        ->set('currencyCode', 'MYR')
-        ->call('save')
-        ->assertRedirect(route('commerce.inventory.items.show', $item));
+    Livewire::test(Show::class, ['item' => $item])
+        ->call('saveField', 'title', 'Edited inventory item')
+        ->call('saveField', 'description', 'Updated condition notes.')
+        ->call('saveField', 'status', Item::STATUS_READY)
+        ->call('saveMoneyField', 'unit_cost_amount', '45.50')
+        ->call('saveMoneyField', 'target_price_amount', '130.00')
+        ->call('saveField', 'currency_code', 'myr');
 
     $item->refresh();
 
@@ -117,7 +113,7 @@ test('item can be updated from the browser workbench component', function (): vo
         ->and($item->currency_code)->toBe('MYR');
 });
 
-test('users cannot view or edit inventory items from another company', function (): void {
+test('users cannot view inventory items from another company', function (): void {
     $user = createAdminUser();
     $otherUser = createAdminUser();
 
@@ -127,9 +123,5 @@ test('users cannot view or edit inventory items from another company', function 
 
     $this->actingAs($user)
         ->get(route('commerce.inventory.items.show', $item))
-        ->assertNotFound();
-
-    $this->actingAs($user)
-        ->get(route('commerce.inventory.items.edit', $item))
         ->assertNotFound();
 });
