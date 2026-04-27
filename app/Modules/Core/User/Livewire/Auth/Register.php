@@ -8,6 +8,7 @@ namespace App\Modules\Core\User\Livewire\Auth;
 use App\Modules\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Auth\Events\Registered;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Attributes\Layout;
@@ -47,7 +48,7 @@ class Register extends Component
         $this->redirectIntended(route('dashboard', absolute: false), navigate: true);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.auth.register');
     }

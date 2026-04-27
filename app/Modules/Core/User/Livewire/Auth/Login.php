@@ -6,6 +6,7 @@
 namespace App\Modules\Core\User\Livewire\Auth;
 
 use Illuminate\Auth\Events\Lockout;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
@@ -76,7 +77,7 @@ class Login extends Component
         return Str::transliterate(Str::lower($this->email).'|'.request()->ip());
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.auth.login');
     }

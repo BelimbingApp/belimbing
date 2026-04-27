@@ -84,6 +84,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                         </div>
                         @include('livewire.admin.ai.control-plane.partials.wire-log', [
                             'entries' => $runView['wire_log_entries'],
+                            'readable' => $runView['wire_log_readable'],
                             'summary' => $runView['wire_log_summary'],
                             'wireLoggingEnabled' => $runView['wire_logging_enabled'],
                             'runId' => $inspectRunId,

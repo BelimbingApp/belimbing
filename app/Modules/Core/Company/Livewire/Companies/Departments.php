@@ -8,6 +8,7 @@ namespace App\Modules\Core\Company\Livewire\Companies;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\Department;
 use App\Modules\Core\Company\Models\DepartmentType;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -65,7 +66,7 @@ class Departments extends Component
         Session::flash('success', __('Department deleted.'));
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $existingTypeIds = Department::query()
             ->where('company_id', $this->company->id)

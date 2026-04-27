@@ -6,6 +6,7 @@
 namespace App\Modules\Core\Geonames\Database\Seeders\Concerns;
 
 use App\Modules\Core\Geonames\Services\GeonamesDownloader;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 
 trait DownloadsGeonamesFile
@@ -13,10 +14,9 @@ trait DownloadsGeonamesFile
     /**
      * Download a file from geonames.org with ETag/TTL and error reporting.
      *
-     * @param  string  $url
      * @param  string  $filename  (e.g. 'countryInfo.txt')
-     * @param  \Illuminate\Console\Command|null  $command
-     * @return string|null  Returns file path or null on failure
+     * @param  Command|null  $command
+     * @return string|null Returns file path or null on failure
      */
     protected function downloadGeonamesFile(string $url, string $filename, $command = null): ?string
     {
@@ -32,6 +32,7 @@ trait DownloadsGeonamesFile
 
         if (! $result['success']) {
             $command?->error('Failed to download '.$filename.': '.($result['status'] ?? 'unknown'));
+
             return null;
         }
 

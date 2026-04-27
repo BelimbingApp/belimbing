@@ -90,7 +90,7 @@ final readonly class AiRuntimeError
     /**
      * Return an array safe for structured logging (no secrets).
      *
-     * @return  array{error_type: string, user_message: string, diagnostic: string, hint: ?string, http_status: ?int, latency_ms: int, retryable: bool}
+     * @return array{error_type: string, user_message: string, diagnostic: string, hint: ?string, http_status: ?int, latency_ms: int, retryable: bool}
      */
     public function toLogContext(): array
     {

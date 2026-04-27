@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\Company\Models;
 
+use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Address\Models\Addressable;
 use App\Modules\Core\Company\Database\Factories\CompanyFactory;
@@ -17,7 +18,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
-use App\Base\Support\Str as BlbStr;
 
 class Company extends Model
 {

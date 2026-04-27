@@ -6,6 +6,7 @@
 namespace App\Base\Schedule\Livewire\ScheduledTasks;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 
 class Index extends Component
@@ -22,7 +23,7 @@ class Index extends Component
         return trim($command, "'\"");
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $schedule = app(Schedule::class);
         $events = $schedule->events();

@@ -55,6 +55,7 @@ class RunDetail extends Component
                 'transcript' => $runView['transcript'],
                 'triggering_prompt' => $runView['triggering_prompt'],
                 'wire_log_entries' => $runView['wire_log_entries'],
+                'wire_log_readable' => $runView['wire_log_readable'],
                 'wire_log_summary' => $runView['wire_log_summary'],
                 'wire_logging_enabled' => $runView['wire_logging_enabled'],
                 'turn_id' => $runView['turn_id'],

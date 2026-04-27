@@ -7,12 +7,12 @@ namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
-use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Base\AI\Tools\AbstractActionTool;
 use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
+use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Modules\Core\AI\Models\ScheduleDefinition;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionService;

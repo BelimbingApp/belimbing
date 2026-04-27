@@ -9,6 +9,7 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Modules\Core\Employee\Models\EmployeeType;
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -34,7 +35,7 @@ class Index extends Component
         session()->flash('success', __('Employee type deleted.'));
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $authUser = auth()->user();
         $authActor = Actor::forUser($authUser);

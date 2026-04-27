@@ -8,6 +8,7 @@ namespace App\Base\Audit\Services;
 use App\Base\Audit\Models\AuditAction;
 use App\Base\Audit\Models\AuditMutation;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Database\Eloquent\Model;
 use Throwable;
 
 /**
@@ -80,7 +81,7 @@ class AuditBuffer
      * Batch-insert entries for a single table.
      *
      * @param  array<int, array<string, mixed>>  $entries
-     * @param  class-string<\Illuminate\Database\Eloquent\Model>  $model
+     * @param  class-string<Model>  $model
      */
     private function flushTable(array &$entries, string $model, string $type): void
     {

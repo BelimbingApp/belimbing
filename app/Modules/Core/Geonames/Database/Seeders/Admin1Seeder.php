@@ -3,13 +3,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-
 namespace App\Modules\Core\Geonames\Database\Seeders;
 
+use App\Modules\Core\Geonames\Database\Seeders\Concerns\DownloadsGeonamesFile;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
-use App\Modules\Core\Geonames\Database\Seeders\Concerns\DownloadsGeonamesFile;
 
 class Admin1Seeder extends Seeder
 {
@@ -31,6 +30,7 @@ class Admin1Seeder extends Seeder
 
         if (empty($records)) {
             $this->command?->info('No admin1 records to import.');
+
             return;
         }
 

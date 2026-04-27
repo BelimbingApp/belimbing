@@ -64,8 +64,6 @@ final readonly class ProviderField
 
     /**
      * Mark this field as required on the given operations (returns a new instance).
-     *
-     * @param  ProviderOperation  ...$operations
      */
     public function requiredOn(ProviderOperation ...$operations): self
     {

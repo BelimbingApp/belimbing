@@ -5,7 +5,9 @@ use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\DTO\ResourceContext;
 use App\Base\Authz\Enums\AuthorizationReasonCode;
+use App\Base\Authz\Exceptions\AuthorizationDeniedException;
 use App\Modules\Core\AI\Services\LaraNavigationRouter;
+use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Collection;
 use Tests\Support\CreatesLaraFixtures;
@@ -33,7 +35,7 @@ function makeAuthorizationService(bool $allowed): AuthorizationService
         public function authorize(Actor $actor, string $capability, ?ResourceContext $resource = null, array $context = []): void
         {
             if (! $this->allowed) {
-                throw new \App\Base\Authz\Exceptions\AuthorizationDeniedException(
+                throw new AuthorizationDeniedException(
                     AuthorizationDecision::deny(AuthorizationReasonCode::DENIED_MISSING_CAPABILITY, ['test'])
                 );
             }
@@ -155,7 +157,7 @@ it('orchestration service delegates explicit /go to router', function (): void {
 
     $this->app->instance(AuthorizationService::class, makeAuthorizationService(true));
 
-    $service = app(\App\Modules\Core\AI\Services\LaraOrchestrationService::class);
+    $service = app(LaraOrchestrationService::class);
     $result = $service->dispatchFromMessage('/go providers');
 
     expect($result)->not->toBeNull()
@@ -167,7 +169,7 @@ it('orchestration returns null for natural language navigation (deferred to LLM)
     $fixture = $this->createLaraFixture();
     $this->actingAs($fixture['user']);
 
-    $service = app(\App\Modules\Core\AI\Services\LaraOrchestrationService::class);
+    $service = app(LaraOrchestrationService::class);
     $result = $service->dispatchFromMessage('open the dashboard');
 
     expect($result)->toBeNull();

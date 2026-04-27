@@ -7,16 +7,17 @@ namespace App\Modules\Core\Address\Database\Factories;
 
 use App\Modules\Core\Address\Models\Address;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Model;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Modules\Core\Address\Models\Address>
+ * @extends Factory<Address>
  */
 class AddressFactory extends Factory
 {
     /**
      * The name of the factory's corresponding model.
      *
-     * @var class-string<\Illuminate\Database\Eloquent\Model>
+     * @var class-string<Model>
      */
     protected $model = Address::class;
 

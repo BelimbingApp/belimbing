@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\User\Livewire\Auth;
 
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
@@ -38,7 +39,7 @@ class ConfirmPassword extends Component
         $this->redirectIntended(default: route('dashboard', absolute: false), navigate: true);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.auth.confirm-password');
     }

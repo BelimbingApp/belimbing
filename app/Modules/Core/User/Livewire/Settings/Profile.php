@@ -6,6 +6,7 @@
 namespace App\Modules\Core\User\Livewire\Settings;
 
 use App\Modules\Core\User\Models\User;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
@@ -75,7 +76,7 @@ class Profile extends Component
         Session::flash('status', 'verification-link-sent');
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.profile.profile');
     }

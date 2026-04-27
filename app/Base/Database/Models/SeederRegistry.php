@@ -9,6 +9,8 @@ use App\Base\Support\AppPath;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
 
 /**
  * Seeder Registry Model
@@ -28,10 +30,10 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $module_path Module path (e.g., 'app/Modules/Core/Geonames')
  * @property string|null $migration_file Migration file that registered this seeder
  * @property string $status Current execution status
- * @property \Illuminate\Support\Carbon|null $ran_at Timestamp when seeder completed
+ * @property Carbon|null $ran_at Timestamp when seeder completed
  * @property string|null $error_message Error message if seeder failed
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  */
 class SeederRegistry extends Model
 {
@@ -213,7 +215,7 @@ class SeederRegistry extends Model
             return;
         }
 
-        if (! class_exists($fqcn) || ! is_subclass_of($fqcn, \Illuminate\Database\Seeder::class)) {
+        if (! class_exists($fqcn) || ! is_subclass_of($fqcn, Seeder::class)) {
             return;
         }
 

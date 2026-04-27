@@ -6,6 +6,7 @@
 namespace App\Base\Cache\Livewire\CacheManagement;
 
 use App\Base\Menu\MenuRegistry;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
 
@@ -23,7 +24,7 @@ class Index extends Component
         session()->flash('success', __('Menu cache cleared successfully.'));
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $driver = config('cache.default');
         $storeConfig = config('cache.stores.'.$driver, []);

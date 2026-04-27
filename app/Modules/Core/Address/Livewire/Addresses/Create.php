@@ -7,6 +7,7 @@ namespace App\Modules\Core\Address\Livewire\Addresses;
 
 use App\Modules\Core\Address\Livewire\AbstractAddressForm;
 use App\Modules\Core\Address\Models\Address;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 
 class Create extends AbstractAddressForm
@@ -90,7 +91,7 @@ class Create extends AbstractAddressForm
         ];
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.addresses.create', $this->with());
     }

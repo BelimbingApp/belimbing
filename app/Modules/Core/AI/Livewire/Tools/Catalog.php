@@ -9,6 +9,7 @@ namespace App\Modules\Core\AI\Livewire\Tools;
 
 use App\Base\AI\Enums\ToolCategory;
 use App\Modules\Core\AI\Services\ToolReadinessService;
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 
 class Catalog extends Component
@@ -33,7 +34,7 @@ class Catalog extends Component
         }
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $readinessService = app(ToolReadinessService::class);
         $snapshots = $readinessService->allSnapshots();

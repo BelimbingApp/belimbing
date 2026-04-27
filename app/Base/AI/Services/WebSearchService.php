@@ -7,6 +7,7 @@ namespace App\Base\AI\Services;
 
 use App\Base\Support\Str as BlbStr;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -111,7 +112,7 @@ class WebSearchService
     }
 
     /**
-     * @return array{response?: \Illuminate\Http\Client\Response, error?: string}
+     * @return array{response?: Response, error?: string}
      */
     private function sendParallelRequest(string $apiKey, string $query, int $count, int $timeoutSeconds): array
     {
@@ -136,7 +137,7 @@ class WebSearchService
 
     /**
      * @param  array{q: string, count: int, freshness?: string}  $params
-     * @return array{response?: \Illuminate\Http\Client\Response, error?: string}
+     * @return array{response?: Response, error?: string}
      */
     private function sendBraveRequest(string $apiKey, array $params, int $timeoutSeconds): array
     {
@@ -177,7 +178,7 @@ class WebSearchService
     /**
      * Build a descriptive error string from a failed HTTP response.
      */
-    private function describeFailure(\Illuminate\Http\Client\Response $response): string
+    private function describeFailure(Response $response): string
     {
         $status = $response->status();
         $body = $response->json('error.message')

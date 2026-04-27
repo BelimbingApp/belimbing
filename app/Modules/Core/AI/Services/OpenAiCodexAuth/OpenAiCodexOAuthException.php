@@ -15,4 +15,3 @@ final class OpenAiCodexOAuthException extends \RuntimeException
         parent::__construct($message, 0, $previous);
     }
 }
-

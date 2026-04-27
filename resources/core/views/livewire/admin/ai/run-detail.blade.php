@@ -51,6 +51,7 @@ use Illuminate\Support\Str;
             <h3 class="mb-4 text-sm font-medium text-ink">{{ __('Wire Log') }}</h3>
             @include('livewire.admin.ai.control-plane.partials.wire-log', [
                 'entries' => $runView['wire_log_entries'],
+                'readable' => $runView['wire_log_readable'],
                 'summary' => $runView['wire_log_summary'],
                 'wireLoggingEnabled' => $runView['wire_logging_enabled'],
                 'runId' => $runId,

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
+use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\CompanyRelationship;
 use App\Modules\Core\Company\Models\RelationshipType;
@@ -141,7 +142,7 @@ test('company status transitions work correctly', function (): void {
 test('company full address formats correctly', function (): void {
     $company = Company::factory()->create();
 
-    $address = \App\Modules\Core\Address\Models\Address::create([
+    $address = Address::create([
         'line1' => '123 Main St',
         'line2' => 'Suite 100',
         'locality' => 'Springfield',

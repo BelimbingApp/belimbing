@@ -8,7 +8,7 @@
 ?>
 <div
     class="space-y-3"
-    x-data
+    x-data="{ mode: 'readable' }"
     x-on:wire-log-window-changed.window="$nextTick(() => document.getElementById('wire-log-panel')?.scrollIntoView({ block: 'start' }))"
 >
     @if (! $wireLoggingEnabled)
@@ -28,6 +28,9 @@
                         'end' => $summary['range_end'] ?? 0,
                         'total' => $summary['total_entries'] ?? count($entries),
                     ]) }}
+                    <span class="ml-1 text-muted" title="{{ __('Computed from this window only') }}">
+                        <x-icon name="heroicon-m-information-circle" class="inline size-3.5" />
+                    </span>
                 </p>
                 <p>
                     {{ __('This run retained :size on disk.', ['size' => \Illuminate\Support\Number::fileSize($summary['footprint_bytes'] ?? 0)]) }}
@@ -37,7 +40,28 @@
                 </p>
             </div>
 
-            <div class="grid gap-3 md:grid-cols-[8rem_10rem_auto]">
+            <div class="grid gap-3 md:grid-cols-[auto_8rem_10rem_auto]">
+                <div class="flex items-end">
+                    <div class="flex rounded-lg bg-surface-card p-1 shadow-sm ring-1 ring-border-default/50">
+                        <button
+                            type="button"
+                            @click="mode = 'readable'"
+                            :class="mode === 'readable' ? 'bg-surface-subtle text-ink shadow-sm ring-1 ring-border-default/50' : 'text-muted hover:text-ink'"
+                            class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
+                        >
+                            {{ __('Readable') }}
+                        </button>
+                        <button
+                            type="button"
+                            @click="mode = 'raw'"
+                            :class="mode === 'raw' ? 'bg-surface-subtle text-ink shadow-sm ring-1 ring-border-default/50' : 'text-muted hover:text-ink'"
+                            class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
+                        >
+                            {{ __('Raw Entries') }}
+                        </button>
+                    </div>
+                </div>
+
                 <x-ui.select id="wire-log-limit" wire:model.live="wireLogLimit" :label="__('Entries')">
                     @foreach ([25, 50, 100, 250] as $limitOption)
                         <option value="{{ $limitOption }}">{{ $limitOption }}</option>
@@ -73,7 +97,15 @@
             </div>
         </div>
 
-        @foreach ($entries as $index => $entry)
+        <div x-show="mode === 'readable'" x-cloak>
+            @include('livewire.admin.ai.control-plane.partials.wire-log-readable', [
+                'readable' => $readable,
+                'runId' => $runId,
+            ])
+        </div>
+
+        <div x-show="mode === 'raw'" x-cloak class="space-y-3">
+            @foreach ($entries as $index => $entry)
             <details class="rounded-2xl border border-border-default bg-surface-card p-card-inner" @if ($index === 0) open @endif>
                 <summary class="flex cursor-pointer flex-col gap-1 text-sm text-ink sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                     <span class="min-w-0">
@@ -105,5 +137,6 @@
                 @endif
             </details>
         @endforeach
+        </div>
     @endif
 </div>

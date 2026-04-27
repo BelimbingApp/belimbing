@@ -5,15 +5,18 @@
 
 namespace App\Base\Database\Concerns;
 
+use Illuminate\Database\Console\Migrations\BaseCommand;
+use Illuminate\Database\Migrations\Migrator;
+
 /**
  * Trait for interacting with module-aware migrations.
  *
  * This trait is intended to be used by Laravel migration commands that extend
  * \Illuminate\Database\Console\Migrations\BaseCommand or its subclasses.
  *
- * @mixin \Illuminate\Database\Console\Migrations\BaseCommand
+ * @mixin BaseCommand
  *
- * @property \Illuminate\Database\Migrations\Migrator $migrator
+ * @property Migrator $migrator
  */
 trait InteractsWithModuleMigrations
 {

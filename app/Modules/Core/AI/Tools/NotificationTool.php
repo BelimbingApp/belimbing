@@ -13,6 +13,7 @@ use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
@@ -166,11 +167,11 @@ class NotificationTool extends AbstractTool
      * Resolve target users from the user_id argument.
      *
      * @param  int|string  $userId  User ID or "all"
-     * @return \Illuminate\Database\Eloquent\Collection<int, User>|array<int, User>
+     * @return Collection<int, User>|array<int, User>
      *
      * @throws NotificationToolRecipientException If the user cannot be resolved
      */
-    private function resolveRecipients(int|string $userId): \Illuminate\Database\Eloquent\Collection|array
+    private function resolveRecipients(int|string $userId): Collection|array
     {
         if ($userId === 'all') {
             return $this->resolveAllCompanyUsers();
@@ -188,11 +189,11 @@ class NotificationTool extends AbstractTool
     /**
      * Resolve all users in the authenticated user's company.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, User>
+     * @return Collection<int, User>
      *
      * @throws NotificationToolRecipientException If no auth user or no company
      */
-    private function resolveAllCompanyUsers(): \Illuminate\Database\Eloquent\Collection
+    private function resolveAllCompanyUsers(): Collection
     {
         $authUser = Auth::user();
 
@@ -246,7 +247,6 @@ class NotificationTool extends AbstractTool
                     'body' => $this->body,
                 ];
             }
-
         };
     }
 

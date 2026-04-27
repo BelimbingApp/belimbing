@@ -5,12 +5,14 @@
 
 namespace App\Base\System\Livewire\Info;
 
+use Illuminate\Contracts\View\View;
+use Illuminate\Foundation\Application;
 use Illuminate\Support\Number;
 use Livewire\Component;
 
 class Index extends Component
 {
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.system.info.index', [
             'php' => [
@@ -23,7 +25,7 @@ class Index extends Component
                 'post_max_size' => ini_get('post_max_size'),
             ],
             'laravel' => [
-                'version' => \Illuminate\Foundation\Application::VERSION,
+                'version' => Application::VERSION,
                 'environment' => app()->environment(),
                 'debug' => config('app.debug'),
                 'url' => config('app.url'),

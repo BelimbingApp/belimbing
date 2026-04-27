@@ -6,6 +6,7 @@
 namespace App\Base\Authz\Livewire\Capabilities;
 
 use App\Base\Authz\Capability\CapabilityKey;
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 
 class Index extends Component
@@ -61,7 +62,7 @@ class Index extends Component
         return 'Unknown';
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $moduleMap = $this->buildCapabilityModuleMap();
 

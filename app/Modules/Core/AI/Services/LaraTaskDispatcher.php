@@ -13,8 +13,8 @@ use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\Orchestration\AgentCapabilityCatalog;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Auth\Access\AuthorizationException;
-use InvalidArgumentException;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 /**
  * Dispatches tasks to AI agents via Laravel queues.

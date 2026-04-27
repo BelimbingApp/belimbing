@@ -7,7 +7,9 @@ namespace App\Base\Database\Console\Commands;
 
 use App\Base\Database\Concerns\GuardsGlobalReset;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Console\Migrations\RefreshCommand as IlluminateRefreshCommand;
+use Illuminate\Database\Events\DatabaseRefreshed;
 use Symfony\Component\Console\Input\InputOption;
 
 class RefreshCommand extends IlluminateRefreshCommand
@@ -69,9 +71,9 @@ class RefreshCommand extends IlluminateRefreshCommand
             '--dev' => $this->option('dev'),
         ]));
 
-        if ($this->laravel->bound(\Illuminate\Contracts\Events\Dispatcher::class)) {
-            $this->laravel[\Illuminate\Contracts\Events\Dispatcher::class]->dispatch(
-                new \Illuminate\Database\Events\DatabaseRefreshed($database, $this->needsSeeding())
+        if ($this->laravel->bound(Dispatcher::class)) {
+            $this->laravel[Dispatcher::class]->dispatch(
+                new DatabaseRefreshed($database, $this->needsSeeding())
             );
         }
 

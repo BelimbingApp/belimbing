@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\User\Livewire\Auth;
 
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Password;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -28,7 +29,7 @@ class ForgotPassword extends Component
         session()->flash('status', __('A reset link will be sent if the account exists.'));
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.auth.forgot-password');
     }

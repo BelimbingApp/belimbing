@@ -8,6 +8,7 @@ namespace App\Base\Database\Livewire\Queries;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Modules\Core\User\Models\Query;
 use App\Modules\Core\User\Models\UserPin;
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -76,7 +77,7 @@ class Index extends Component
         ]);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.system.database-queries.index', [
             'views' => Query::query()

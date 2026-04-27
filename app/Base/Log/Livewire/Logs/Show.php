@@ -5,6 +5,7 @@
 
 namespace App\Base\Log\Livewire\Logs;
 
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\File;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -13,6 +14,7 @@ use SplFileObject;
 class Show extends Component
 {
     private const DEFAULT_CHUNK_SIZE = 100;
+
     private const MAX_CHUNK_SIZE = 1000;
 
     public string $filename = '';
@@ -125,7 +127,7 @@ class Show extends Component
         $this->redirect(route('admin.system.logs.index'), navigate: true);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $logLines = [];
         $totalLines = 0;
@@ -275,6 +277,7 @@ class Show extends Component
 
             if ($this->search !== '' && stripos($line, $this->search) === false) {
                 $file->next();
+
                 continue;
             }
 

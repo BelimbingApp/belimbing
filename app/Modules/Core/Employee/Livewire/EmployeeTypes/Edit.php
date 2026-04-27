@@ -6,6 +6,7 @@
 namespace App\Modules\Core\Employee\Livewire\EmployeeTypes;
 
 use App\Modules\Core\Employee\Models\EmployeeType;
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 
 class Edit extends Component
@@ -35,7 +36,7 @@ class Edit extends Component
         $this->redirect(route('admin.employee-types.index'), navigate: true);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.employee-types.edit');
     }

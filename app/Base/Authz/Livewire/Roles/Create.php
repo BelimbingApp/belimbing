@@ -7,6 +7,7 @@ namespace App\Base\Authz\Livewire\Roles;
 
 use App\Base\Authz\Models\Role;
 use App\Modules\Core\Company\Models\Company;
+use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -56,7 +57,7 @@ class Create extends Component
         $this->redirect(route('admin.roles.show', $role), navigate: true);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.roles.create', [
             'companies' => Company::query()

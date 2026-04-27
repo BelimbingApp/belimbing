@@ -5,12 +5,13 @@
 
 namespace App\Base\Log\Livewire\Logs;
 
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\File;
 use Livewire\Component;
 
 class Index extends Component
 {
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $logPath = storage_path('logs');
         $files = collect(File::files($logPath))

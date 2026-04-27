@@ -6,6 +6,7 @@
 namespace App\Modules\Core\User\Livewire\Settings;
 
 use App\Modules\Core\User\Actions\Logout;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -29,7 +30,7 @@ class DeleteUserForm extends Component
         $this->redirect('/', navigate: true);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.profile.delete-user-form');
     }

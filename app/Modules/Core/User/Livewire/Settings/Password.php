@@ -6,6 +6,7 @@
 namespace App\Modules\Core\User\Livewire\Settings;
 
 use App\Modules\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -46,7 +47,7 @@ class Password extends Component
         $this->dispatch('password-updated');
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.profile.password');
     }

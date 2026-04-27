@@ -7,6 +7,7 @@ namespace App\Modules\Core\Company\Livewire\Companies;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Core\Company\Models\LegalEntityType;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -81,7 +82,7 @@ class LegalEntityTypes extends Component
         Session::flash('success', __('Legal entity type deleted.'));
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.companies.legal-entity-types', [
             'types' => LegalEntityType::query()

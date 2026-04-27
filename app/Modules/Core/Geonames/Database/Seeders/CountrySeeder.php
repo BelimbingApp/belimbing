@@ -3,13 +3,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-
 namespace App\Modules\Core\Geonames\Database\Seeders;
 
+use App\Modules\Core\Geonames\Database\Seeders\Concerns\DownloadsGeonamesFile;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
-use App\Modules\Core\Geonames\Database\Seeders\Concerns\DownloadsGeonamesFile;
 
 class CountrySeeder extends Seeder
 {
@@ -38,6 +37,7 @@ class CountrySeeder extends Seeder
 
             if (empty($line) || str_starts_with($line, '#')) {
                 $skipped++;
+
                 continue;
             }
 
@@ -46,6 +46,7 @@ class CountrySeeder extends Seeder
 
             if (count($parts) < 17) {
                 $skipped++;
+
                 continue;
             }
 

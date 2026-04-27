@@ -7,6 +7,7 @@ namespace App\Modules\Core\User\Livewire\Auth;
 
 use App\Modules\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Session;
@@ -78,7 +79,7 @@ class ResetPassword extends Component
         $this->redirectRoute('login', navigate: true);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.auth.reset-password');
     }

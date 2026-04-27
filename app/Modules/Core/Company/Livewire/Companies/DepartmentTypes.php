@@ -7,6 +7,7 @@ namespace App\Modules\Core\Company\Livewire\Companies;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Core\Company\Models\DepartmentType;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -87,7 +88,7 @@ class DepartmentTypes extends Component
         Session::flash('success', __('Department type deleted.'));
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.companies.department-types', [
             'types' => DepartmentType::query()

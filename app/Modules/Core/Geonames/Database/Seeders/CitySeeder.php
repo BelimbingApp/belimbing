@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-
 namespace App\Modules\Core\Geonames\Database\Seeders;
 
 use App\Modules\Core\Geonames\Database\Seeders\Concerns\DownloadsGeonamesFile;

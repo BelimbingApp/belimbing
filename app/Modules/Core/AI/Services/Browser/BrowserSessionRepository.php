@@ -7,7 +7,7 @@ namespace App\Modules\Core\AI\Services\Browser;
 
 use App\Modules\Core\AI\Enums\BrowserSessionStatus;
 use App\Modules\Core\AI\Models\BrowserSession;
-use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 
 /**
@@ -201,9 +201,9 @@ class BrowserSessionRepository
     /**
      * Find all sessions that are past their expiry time but not yet terminal.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, BrowserSession>
+     * @return Collection<int, BrowserSession>
      */
-    public function findStaleSessions(): \Illuminate\Database\Eloquent\Collection
+    public function findStaleSessions(): Collection
     {
         return BrowserSession::query()->stale()->get();
     }
@@ -211,9 +211,9 @@ class BrowserSessionRepository
     /**
      * Get all active sessions for a company (for operator visibility).
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, BrowserSession>
+     * @return Collection<int, BrowserSession>
      */
-    public function getActiveSessionsForCompany(int $companyId): \Illuminate\Database\Eloquent\Collection
+    public function getActiveSessionsForCompany(int $companyId): Collection
     {
         return BrowserSession::query()
             ->where('company_id', $companyId)

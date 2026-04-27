@@ -25,6 +25,7 @@ class RunDiagnosticService
 
     public function __construct(
         private readonly WireLogger $wireLogger,
+        private readonly WireLogReadableFormatter $wireLogFormatter,
         private readonly DateTimeDisplayService $dateTimeDisplay,
     ) {}
 
@@ -46,8 +47,11 @@ class RunDiagnosticService
      *         type: string|null,
      *         payload_pretty: string,
      *         payload_truncated: bool,
-     *         preview_status: string
+     *         preview_status: string,
+     *         raw_line: string,
+     *         decoded_payload: array<string, mixed>|null
      *     }>,
+     *     wire_log_readable: array<string, mixed>,
      *     wire_log_summary: array{
      *         footprint_bytes: int,
      *         total_entries: int,
@@ -81,6 +85,7 @@ class RunDiagnosticService
             'transcript' => $this->runTranscript($run),
             'triggering_prompt' => $this->triggeringPrompt($run),
             'wire_log_entries' => $wireLogPreview['entries'],
+            'wire_log_readable' => $this->wireLogFormatter->format($wireLogPreview['entries']),
             'wire_log_summary' => [
                 'footprint_bytes' => $wireLogPreview['footprint_bytes'],
                 'total_entries' => $wireLogPreview['total_entries'],

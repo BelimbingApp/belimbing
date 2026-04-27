@@ -8,16 +8,17 @@ namespace App\Modules\Core\Company\Database\Factories;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\LegalEntityType;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Model;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Modules\Core\Company\Models\Company>
+ * @extends Factory<Company>
  */
 class CompanyFactory extends Factory
 {
     /**
      * The name of the factory's corresponding model.
      *
-     * @var class-string<\Illuminate\Database\Eloquent\Model>
+     * @var class-string<Model>
      */
     protected $model = Company::class;
 

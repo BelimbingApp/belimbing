@@ -9,6 +9,7 @@ use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Modules\Core\Geonames\Database\Seeders\Admin1Seeder;
 use App\Modules\Core\Geonames\Models\Admin1;
 use App\Modules\Core\Geonames\Models\Country;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
@@ -79,7 +80,7 @@ class Index extends Component
         Session::flash('success', __('Admin1 divisions updated from Geonames.'));
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.geonames.admin1.index', $this->with());
     }

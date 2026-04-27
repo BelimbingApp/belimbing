@@ -11,6 +11,7 @@ use App\Modules\Core\Company\Models\Department;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\Employee\Models\EmployeeType;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -109,7 +110,7 @@ class Create extends Component
         ];
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.employees.create', [
             'companies' => Company::query()

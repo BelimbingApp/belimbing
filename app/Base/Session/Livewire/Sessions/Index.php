@@ -6,6 +6,7 @@
 namespace App\Base\Session\Livewire\Sessions;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -26,7 +27,7 @@ class Index extends Component
         DB::table('sessions')->where('id', $sessionId)->delete();
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $currentSessionId = session()->getId();
 

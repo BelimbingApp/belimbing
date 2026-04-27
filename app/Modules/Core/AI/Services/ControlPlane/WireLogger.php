@@ -91,7 +91,9 @@ class WireLogger
      *         summary_preview: string,
      *         payload_pretty: string,
      *         payload_truncated: bool,
-     *         preview_status: string
+     *         preview_status: string,
+     *         raw_line: string,
+     *         decoded_payload: array<string, mixed>|null
      *     }>,
      *     footprint_bytes: int,
      *     total_entries: int,
@@ -320,7 +322,9 @@ class WireLogger
      *     summary_preview: string,
      *     payload_pretty: string,
      *     payload_truncated: bool,
-     *     preview_status: string
+     *     preview_status: string,
+     *     raw_line: string,
+     *     decoded_payload: array<string, mixed>|null
      * }
      */
     private function previewEntry(int $entryNumber, string $line, bool $lineTruncated): array
@@ -337,6 +341,8 @@ class WireLogger
             'payload_pretty' => $payload['payload_pretty'],
             'payload_truncated' => $payload['payload_truncated'],
             'preview_status' => $payload['preview_status'],
+            'raw_line' => $line,
+            'decoded_payload' => $payload['decoded_payload'],
         ];
     }
 
@@ -347,7 +353,8 @@ class WireLogger
      *     summary_preview: string,
      *     payload_pretty: string,
      *     payload_truncated: bool,
-     *     preview_status: string
+     *     preview_status: string,
+     *     decoded_payload: array<string, mixed>|null
      * }
      */
     private function previewPayload(string $line, bool $lineTruncated, ?string $fallbackAt, ?string $fallbackType): array
@@ -360,9 +367,11 @@ class WireLogger
         $at = $fallbackAt;
         $type = $fallbackType;
         $summaryPreview = $this->summaryPreviewFromRawLine($line);
+        $decodedPayload = null;
 
         if (! $lineTruncated) {
             $decoded = BlbJson::decodeArray($line);
+            $decodedPayload = $decoded;
 
             if ($decoded === null) {
                 $payloadPretty = __('Payload preview unavailable because this wire-log entry could not be decoded.');
@@ -403,6 +412,7 @@ class WireLogger
             'payload_pretty' => $payloadPretty,
             'payload_truncated' => $payloadTruncated,
             'preview_status' => $previewStatus,
+            'decoded_payload' => $decodedPayload,
         ];
     }
 

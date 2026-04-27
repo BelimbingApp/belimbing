@@ -6,6 +6,7 @@
 namespace App\Modules\Core\Company\Livewire\Setup;
 
 use App\Modules\Core\Company\Models\Company;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Session;
@@ -133,7 +134,7 @@ class Licensee extends Component
         $this->redirect(route('admin.companies.show', Company::LICENSEE_ID), navigate: true);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.setup.licensee', [
             'companies' => Company::query()->orderBy('name')->get(['id', 'name', 'legal_name', 'status']),

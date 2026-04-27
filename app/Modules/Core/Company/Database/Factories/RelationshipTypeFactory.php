@@ -7,16 +7,17 @@ namespace App\Modules\Core\Company\Database\Factories;
 
 use App\Modules\Core\Company\Models\RelationshipType;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Model;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Modules\Core\Company\Models\RelationshipType>
+ * @extends Factory<RelationshipType>
  */
 class RelationshipTypeFactory extends Factory
 {
     /**
      * The name of the factory's corresponding model.
      *
-     * @var class-string<\Illuminate\Database\Eloquent\Model>
+     * @var class-string<Model>
      */
     protected $model = RelationshipType::class;
 

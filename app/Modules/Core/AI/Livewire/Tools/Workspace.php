@@ -17,6 +17,7 @@ use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ToolMetadataRegistry;
 use App\Modules\Core\AI\Services\ToolReadinessService;
 use App\Modules\Core\AI\Tools\WebSearchTool;
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 
 class Workspace extends Component
@@ -242,7 +243,7 @@ class Workspace extends Component
         }
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $metadataRegistry = app(ToolMetadataRegistry::class);
         $readinessService = app(ToolReadinessService::class);

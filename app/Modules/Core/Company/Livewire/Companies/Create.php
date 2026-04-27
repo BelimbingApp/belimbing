@@ -9,6 +9,7 @@ use App\Base\Foundation\Livewire\Concerns\DecodesJsonFields;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\LegalEntityType;
 use App\Modules\Core\Geonames\Models\Country;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -70,7 +71,7 @@ class Create extends Component
         $this->redirect(route('admin.companies.index'), navigate: true);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.companies.create', [
             'parentCompanies' => Company::query()

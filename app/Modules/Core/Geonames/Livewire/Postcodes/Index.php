@@ -9,6 +9,7 @@ use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Modules\Core\Geonames\Database\Seeders\PostcodeSeeder;
 use App\Modules\Core\Geonames\Models\Country;
 use App\Modules\Core\Geonames\Models\Postcode;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
@@ -121,7 +122,7 @@ class Index extends Component
         $this->showCountryPicker = ! $this->showCountryPicker;
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.geonames.postcodes.index', $this->with());
     }

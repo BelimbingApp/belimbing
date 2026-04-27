@@ -7,6 +7,7 @@ namespace App\Modules\Core\Address\Livewire\Addresses;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Modules\Core\Address\Models\Address;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
@@ -64,7 +65,7 @@ class Index extends Component
         Session::flash('success', __('Address deleted successfully.'));
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.addresses.index', $this->with());
     }

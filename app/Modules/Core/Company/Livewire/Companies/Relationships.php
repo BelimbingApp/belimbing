@@ -8,6 +8,7 @@ namespace App\Modules\Core\Company\Livewire\Companies;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\CompanyRelationship;
 use App\Modules\Core\Company\Models\RelationshipType;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -91,7 +92,7 @@ class Relationships extends Component
         Session::flash('success', __('Relationship deleted.'));
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         $outgoing = CompanyRelationship::query()
             ->where('company_id', $this->company->id)

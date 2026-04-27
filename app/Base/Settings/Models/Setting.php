@@ -9,6 +9,7 @@ use App\Base\Settings\DTO\Scope;
 use Illuminate\Database\Eloquent\Attributes\Scope as ScopeAttribute;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 /**
  * Setting model for the base_settings table.
@@ -21,8 +22,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property bool $is_encrypted
  * @property string|null $scope_type
  * @property int|null $scope_id
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  */
 class Setting extends Model
 {

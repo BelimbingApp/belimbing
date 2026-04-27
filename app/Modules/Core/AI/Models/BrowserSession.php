@@ -9,6 +9,8 @@ use App\Modules\Core\AI\Enums\BrowserSessionStatus;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -40,7 +42,7 @@ use Illuminate\Support\Carbon;
  * @property-read Employee $agentEmployee
  * @property-read User|null $actingForUser
  * @property-read Company $company
- * @property-read \Illuminate\Database\Eloquent\Collection<int, BrowserArtifact> $artifacts
+ * @property-read Collection<int, BrowserArtifact> $artifacts
  */
 class BrowserSession extends Model
 {
@@ -136,10 +138,10 @@ class BrowserSession extends Model
     /**
      * Scope to non-terminal (live) sessions.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<self>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<self>
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeActive(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    public function scopeActive(Builder $query): Builder
     {
         return $query->whereNotIn('status', [
             BrowserSessionStatus::Expired->value,
@@ -151,10 +153,10 @@ class BrowserSession extends Model
     /**
      * Scope to sessions past their expiry time but not yet marked expired.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<self>  $query
-     * @return \Illuminate\Database\Eloquent\Builder<self>
+     * @param  Builder<self>  $query
+     * @return Builder<self>
      */
-    public function scopeStale(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    public function scopeStale(Builder $query): Builder
     {
         return $query->active()
             ->whereNotNull('expires_at')

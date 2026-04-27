@@ -7,6 +7,7 @@
 
 namespace App\Modules\Core\AI\Livewire;
 
+use Illuminate\Contracts\View\View;
 use Livewire\Component;
 
 class Tools extends Component
@@ -14,7 +15,7 @@ class Tools extends Component
     /** @var string|null null = catalog view, tool name = workspace view */
     public ?string $toolName = null;
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.ai.tools');
     }

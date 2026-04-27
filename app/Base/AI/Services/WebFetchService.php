@@ -6,6 +6,7 @@
 namespace App\Base\AI\Services;
 
 use App\Base\Support\Str as BlbStr;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -54,7 +55,7 @@ class WebFetchService
             return $result;
         }
 
-        /** @var \Illuminate\Http\Client\Response $response */
+        /** @var Response $response */
         $response = $result['response'];
         $body = $response->body();
 
@@ -84,7 +85,7 @@ class WebFetchService
     }
 
     /**
-     * @return array{response?: \Illuminate\Http\Client\Response, request_error?: string, http_status?: int}
+     * @return array{response?: Response, request_error?: string, http_status?: int}
      */
     private function requestContent(string $url, int $timeoutSeconds): array
     {

@@ -8,6 +8,7 @@ namespace App\Modules\Core\User\Livewire\Users;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
@@ -85,7 +86,7 @@ class Edit extends Component
         $this->redirect(route('admin.users.index'), navigate: true);
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.users.edit', [
             'companies' => Company::query()->orderBy('name')->get(['id', 'name']),

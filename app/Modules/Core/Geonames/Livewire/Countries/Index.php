@@ -8,6 +8,7 @@ namespace App\Modules\Core\Geonames\Livewire\Countries;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Modules\Core\Geonames\Database\Seeders\CountrySeeder;
 use App\Modules\Core\Geonames\Models\Country;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -78,7 +79,7 @@ class Index extends Component
         Session::flash('success', __('Countries updated from Geonames.'));
     }
 
-    public function render(): \Illuminate\Contracts\View\View
+    public function render(): View
     {
         return view('livewire.admin.geonames.countries.index', $this->with());
     }

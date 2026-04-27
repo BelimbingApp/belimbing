@@ -156,6 +156,8 @@ it('navigates wire-log windows for large runs', function (): void {
         ->call('inspectRun')
         ->assertSet('wireLogLimit', 100)
         ->assertSee('Showing entries 1-100 of 245 retained wire-log entries.')
+        ->assertSee('Computed from this window only')
+        ->assertSee('Transport Overview')
         ->assertSee('reasoning_content: " the"')
         ->assertSee('finish_reason: tool_calls')
         ->assertSee('[]')
