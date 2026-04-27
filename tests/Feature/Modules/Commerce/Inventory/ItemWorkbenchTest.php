@@ -3,6 +3,9 @@
 use App\Modules\Commerce\Inventory\Livewire\Items\Create;
 use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 use App\Modules\Commerce\Inventory\Models\Item;
+use App\Modules\Commerce\Inventory\Models\ItemPhoto;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 test('guests are redirected to login from inventory item pages', function (): void {
@@ -124,4 +127,31 @@ test('users cannot view inventory items from another company', function (): void
     $this->actingAs($user)
         ->get(route('commerce.inventory.items.show', $item))
         ->assertNotFound();
+});
+
+test('item photos can be uploaded and deleted from the detail page component', function (): void {
+    Storage::fake('local');
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+    ]);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->set('photoFiles', [UploadedFile::fake()->create('front.jpg', 64, 'image/jpeg')])
+        ->call('uploadPhotos')
+        ->assertHasNoErrors();
+
+    $photo = ItemPhoto::query()->where('item_id', $item->id)->first();
+    expect($photo)->not()->toBeNull();
+
+    Storage::disk('local')->assertExists($photo->storage_key);
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->call('deletePhoto', $photo->id);
+
+    expect(ItemPhoto::query()->whereKey($photo->id)->exists())->toBeFalse();
+    Storage::disk('local')->assertMissing($photo->storage_key);
 });

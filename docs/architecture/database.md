@@ -42,7 +42,7 @@ Migration filenames use the timestamp prefix to encode execution order. The year
 
 ### Module Identification (MM_DD)
 
-Within each prefix range, the `MM_DD` component identifies the module.
+Within each prefix range, the `MM_DD` component identifies the module. Additional migrations for the **same** module reuse that `YYYY_MM_DD` prefix and differ only in the trailing **`HHMMSS`** segment (for example `000000`, then `000001`) — do not advance `MM_DD` as if it were a calendar day.
 *   **Base (0100):** `0100_01_01` (Database), `0100_01_03` (Events)
 *   **Core (0200):** `0200_01_03` (Geonames), `0200_01_20` (User)
 

@@ -140,6 +140,68 @@
 
             <div class="space-y-6">
                 <x-ui.card>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Photos') }}</h2>
+                        <x-ui.badge>{{ $item->photos->count() }}</x-ui.badge>
+                    </div>
+
+                    @if ($item->photos->isEmpty())
+                        <p class="text-sm text-muted">{{ __('No photos yet.') }}</p>
+                    @else
+                        <div class="grid grid-cols-2 gap-3">
+                            @foreach ($item->photos as $photo)
+                                <div wire:key="item-photo-{{ $photo->id }}" class="group relative overflow-hidden rounded-2xl border border-border-default bg-surface-subtle">
+                                    <img
+                                        src="{{ route('commerce.inventory.items.photos.show', [$item, $photo]) }}"
+                                        alt="{{ $photo->filename }}"
+                                        class="aspect-square w-full object-cover"
+                                        loading="lazy"
+                                    />
+
+                                    @if ($this->canEdit())
+                                        <button
+                                            type="button"
+                                            wire:click="deletePhoto({{ $photo->id }})"
+                                            wire:confirm="{{ __('Remove this photo?') }}"
+                                            class="absolute right-2 top-2 inline-flex items-center justify-center rounded-full bg-surface-card/90 p-1.5 text-muted opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-status-danger"
+                                            aria-label="{{ __('Remove photo') }}"
+                                            title="{{ __('Remove') }}"
+                                        >
+                                            <x-icon name="heroicon-o-trash" class="h-4 w-4" />
+                                        </button>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @if ($this->canEdit())
+                        <form wire:submit="uploadPhotos" class="mt-4 flex flex-col gap-3">
+                            <div>
+                                <label for="item-photos" class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Add photos') }}</label>
+                                <input
+                                    id="item-photos"
+                                    type="file"
+                                    multiple
+                                    accept="image/*"
+                                    wire:model="photoFiles"
+                                    class="mt-1 block w-full text-sm text-ink file:mr-4 file:rounded file:border-0 file:bg-surface-subtle file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-surface-subtle/80"
+                                />
+                                @error('photoFiles') <p class="mt-1 text-sm text-status-danger">{{ $message }}</p> @enderror
+                                @error('photoFiles.*') <p class="mt-1 text-sm text-status-danger">{{ $message }}</p> @enderror
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <x-ui.button type="submit" variant="outline" size="sm" :disabled="empty($photoFiles)">
+                                    <x-icon name="heroicon-o-arrow-up-tray" class="h-4 w-4" />
+                                    {{ __('Upload') }}
+                                </x-ui.button>
+                            </div>
+                        </form>
+                    @endif
+                </x-ui.card>
+
+                <x-ui.card>
                     <h2 class="mb-3 text-base font-medium tracking-tight text-ink">{{ __('Next Workbench Surfaces') }}</h2>
                     <div class="space-y-3 text-sm text-muted">
                         <p>{{ __('Photos, catalog attributes, Lara drafts, and marketplace listings will attach to this durable item record in later slices.') }}</p>

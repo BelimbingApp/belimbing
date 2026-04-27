@@ -7,9 +7,11 @@ namespace App\Modules\Commerce\Inventory\Models;
 
 use App\Modules\Commerce\Inventory\Database\Factories\ItemFactory;
 use App\Modules\Core\Company\Models\Company;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -28,6 +30,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Company $company
+ * @property-read Collection<int, ItemPhoto> $photos
  */
 class Item extends Model
 {
@@ -92,5 +95,13 @@ class Item extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * @return HasMany<ItemPhoto, $this>
+     */
+    public function photos(): HasMany
+    {
+        return $this->hasMany(ItemPhoto::class, 'item_id')->orderBy('sort_order');
     }
 }

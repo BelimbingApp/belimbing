@@ -9,16 +9,26 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Modules\Commerce\Inventory\Models\Item;
+use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 class Show extends Component
 {
     use SavesValidatedFields;
+    use WithFileUploads;
 
     public Item $item;
+
+    /**
+     * @var array<int, mixed>
+     */
+    public array $photoFiles = [];
 
     public function mount(Item $item): void
     {
@@ -26,7 +36,7 @@ class Show extends Component
             abort(404);
         }
 
-        $this->item = $item;
+        $this->item = $item->load('photos');
     }
 
     public function saveField(string $field, mixed $value): void
@@ -50,6 +60,70 @@ class Show extends Component
         );
 
         $this->item->refresh();
+    }
+
+    public function uploadPhotos(): void
+    {
+        $this->authorizeUpdate();
+
+        $this->validate([
+            'photoFiles' => ['required', 'array', 'min:1', 'max:12'],
+            'photoFiles.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+        ]);
+
+        DB::transaction(function (): void {
+            $maxSort = (int) $this->item->photos()->max('sort_order');
+            $sort = $maxSort;
+
+            foreach ($this->photoFiles as $file) {
+                if (! $file) {
+                    continue;
+                }
+
+                $sort++;
+
+                // Capture metadata before store(): store() moves the file off Livewire's temp disk,
+                // and getSize()/getMimeType() may otherwise stat the removed livewire-tmp path.
+                $filename = $file->getClientOriginalName();
+                $mimeType = $file->getMimeType();
+                $fileSize = $file->getSize();
+
+                $storageKey = $file->store(
+                    'commerce/inventory/item-photos/'.$this->item->id,
+                    ['disk' => 'local'],
+                );
+
+                ItemPhoto::query()->create([
+                    'item_id' => $this->item->id,
+                    'filename' => $filename,
+                    'storage_key' => $storageKey,
+                    'mime_type' => $mimeType,
+                    'file_size' => $fileSize,
+                    'sort_order' => $sort,
+                ]);
+            }
+        });
+
+        $this->photoFiles = [];
+        $this->item->load('photos');
+    }
+
+    public function deletePhoto(int $photoId): void
+    {
+        $this->authorizeUpdate();
+
+        $photo = $this->item->photos->firstWhere('id', $photoId);
+        if (! $photo instanceof ItemPhoto) {
+            return;
+        }
+
+        DB::transaction(function () use ($photo): void {
+            $storageKey = $photo->storage_key;
+            $photo->delete();
+            Storage::disk('local')->delete($storageKey);
+        });
+
+        $this->item->load('photos');
     }
 
     public function saveMoneyField(string $field, mixed $value): void
