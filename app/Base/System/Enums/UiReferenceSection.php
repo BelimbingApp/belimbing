@@ -52,7 +52,7 @@ enum UiReferenceSection: string
         return match ($this) {
             self::Foundations => 'heroicon-o-adjustments-horizontal',
             self::Inputs => 'heroicon-o-document-text',
-            self::InteractionPatterns => 'heroicon-o-cursor-arrow-rays',
+            self::InteractionPatterns => 'heroicon-o-puzzle-piece',
             self::Feedback => 'heroicon-o-exclamation-circle',
             self::Actions => 'heroicon-o-plus-circle',
             self::Navigation => 'heroicon-o-rectangle-group',

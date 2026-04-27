@@ -85,7 +85,7 @@ class QuickActionRegistry
             $actions[] = [
                 'label' => $action,
                 'prompt' => 'Help me '.Str::lower($action),
-                'icon' => 'heroicon-o-cursor-arrow-rays',
+                'icon' => 'heroicon-o-bolt',
             ];
         }
 
