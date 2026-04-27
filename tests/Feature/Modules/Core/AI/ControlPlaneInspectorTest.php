@@ -158,7 +158,6 @@ it('navigates wire-log windows for large runs', function (): void {
         ->assertSet('wireLogLimit', 100)
         ->assertSee('Showing entries 1-100 of 245 retained wire-log entries.')
         ->assertSee('Computed from this window only')
-        ->assertSee('Transport Overview')
         ->assertSee('reasoning_content: " the"')
         ->assertSee('finish_reason: tool_calls')
         ->assertSee('[]')
@@ -176,6 +175,111 @@ it('navigates wire-log windows for large runs', function (): void {
         ->assertSee('Showing entries 101-150 of 245 retained wire-log entries.')
         ->assertSee('entry-101')
         ->assertSee('entry-150');
+});
+
+const CONTROL_PLANE_READABLE_RUN_ID = 'run_control_plane_readable';
+
+it('renders the readable view with reassembled artifacts, anomaly chips, attempt summaries, and copy-as-cURL', function (): void {
+    config()->set('ai.wire_logging.enabled', true);
+
+    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    Employee::provisionLara();
+
+    $user = createAdminUser();
+
+    createControlPlaneRun(CONTROL_PLANE_READABLE_RUN_ID);
+
+    $writeAt = fn (int $seconds, string $type, array $payload): string => json_encode(
+        array_merge(['at' => now()->copy()->addSeconds($seconds)->toIso8601String(), 'type' => $type], $payload),
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+    );
+
+    $sse = fn (array $delta, ?string $finishReason = null): string => 'data: '.json_encode([
+        'choices' => [[
+            'index' => 0,
+            'delta' => $delta,
+            'finish_reason' => $finishReason,
+        ]],
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    $lines = [
+        $writeAt(0, 'llm.request', [
+            'endpoint' => '/v1/chat/completions',
+            'stream' => true,
+            'request' => [
+                'base_url' => 'https://api.openai.com',
+                'api_key' => '[redacted]',
+                'model' => 'gpt-4o',
+                'messages' => [['role' => 'user', 'content' => 'hi']],
+                'tools' => [],
+                'provider_name' => 'openai',
+                'execution_controls' => [],
+                'timeout' => 30,
+                'api_type' => 'chat',
+            ],
+            'mapped' => [
+                'payload' => ['model' => 'gpt-4o', 'messages' => [['role' => 'user', 'content' => 'hi']], 'stream' => true],
+                'headers' => ['Authorization' => '[redacted]', 'Content-Type' => 'application/json'],
+                'meta' => [],
+            ],
+        ]),
+        $writeAt(1, 'llm.response_status', ['status_code' => 503, 'stream' => true]),
+        $writeAt(1, 'llm.error', ['stage' => 'response', 'message' => 'rate limited', 'context' => []]),
+        $writeAt(2, 'llm.request', [
+            'endpoint' => '/v1/messages',
+            'stream' => true,
+            'request' => [
+                'base_url' => 'https://api.anthropic.com',
+                'api_key' => '[redacted]',
+                'model' => 'claude-opus-4',
+                'messages' => [['role' => 'user', 'content' => 'hi']],
+                'tools' => [],
+                'provider_name' => 'anthropic',
+                'execution_controls' => [],
+                'timeout' => 30,
+                'api_type' => 'chat',
+            ],
+            'mapped' => [
+                'payload' => ['model' => 'claude-opus-4'],
+                'headers' => ['Authorization' => '[redacted]'],
+                'meta' => [],
+            ],
+        ]),
+        $writeAt(3, 'llm.response_status', ['status_code' => 200, 'stream' => true]),
+        $writeAt(4, 'llm.stream_line', ['raw_line' => $sse(['content' => 'Hello, '])]),
+        $writeAt(5, 'llm.stream_line', ['raw_line' => $sse(['content' => 'world!'])]),
+        $writeAt(6, 'llm.stream_line', ['raw_line' => $sse(['tool_calls' => [['index' => 0, 'function' => ['name' => 'lookup_user', 'arguments' => '{"id":42}']]]])]),
+        $writeAt(7, 'llm.stream_line', ['raw_line' => $sse([], 'tool_calls')]),
+        $writeAt(7, 'llm.complete', ['context' => []]),
+    ];
+
+    File::ensureDirectoryExists(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH));
+    File::put(
+        storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_READABLE_RUN_ID.'.jsonl'),
+        implode("\n", $lines)."\n",
+    );
+
+    $response = $this->actingAs($user)->get(route('admin.ai.control-plane', [
+        'tab' => 'inspector',
+        'runId' => CONTROL_PLANE_READABLE_RUN_ID,
+    ]));
+
+    $response->assertOk()
+        ->assertSee('Anomaly signals')
+        ->assertSee('HTTP 503')
+        ->assertSee('Attempt 1')
+        ->assertSee('openai')
+        ->assertSee('claude-opus-4')
+        ->assertSee('Copy as cURL')
+        ->assertSee('Bearer $API_KEY', escape: false)
+        ->assertSee('Reassembled content')
+        ->assertSee('Hello, world!')
+        ->assertSee('lookup_user')
+        ->assertSee('valid JSON')
+        ->assertSee('id="wire-log-entry-1"', escape: false)
+        ->assertSee('id="wire-log-entry-6"', escape: false);
+
+    File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_READABLE_RUN_ID.'.jsonl'));
 });
 
 it('streams oversized raw wire-log entries without loading them through Livewire', function (): void {

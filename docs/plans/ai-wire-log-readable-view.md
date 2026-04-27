@@ -1,5 +1,5 @@
 Agent: Codex, Claude
-Status: Identified
+Status: Phase 1 Implemented
 Last Updated: 2026-04-27
 Sources: `docs/plans/ai-control-plane-debuggability.md`; `resources/core/views/livewire/admin/ai/control-plane/partials/wire-log.blade.php`; `app/Modules/Core/AI/Services/ControlPlane/WireLogger.php`; `tests/Feature/Modules/Core/AI/ControlPlaneInspectorTest.php`
 
@@ -139,17 +139,17 @@ A future **Transcript** mode is worth considering once chips exist: one fragment
 
 Goal: create a reviewable first version that proves the presentation model in the browser.
 
-- [ ] Add a server-side semantic formatter for the currently loaded wire-log window.
-- [ ] Add a Readable/Raw Entries mode switch inside the Wire Log panel.
-- [ ] Render grouped stream blocks with semantic chips for `llm.stream_line`.
-- [ ] Produce reassembled artifacts (assistant content, reasoning block, per-tool-call assembled args with JSON parse indicator) at the top of each grouped stream block, with back-links to constituent `entry_number`s.
-- [ ] Render the transport overview as a sticky triage strip (status, finish reason, error count, headline counts, TTFB / TT-first-content / TT-first-reasoning / TT-first-tool-call, window-scoped rate stats).
-- [ ] Surface anomaly signals: unknown delta keys, decode errors, truncated entries, non-2xx response status, finish reason ≠ stop.
-- [ ] Segment the readable view by attempt when multiple `llm.request` / `llm.response_*` cycles are present, with a one-line summary per attempt.
-- [ ] Add operator affordances: copy-as-cURL replay for the outbound `ChatRequest`, copy reassembled assistant content, copy reassembled tool-args JSON, fragment permalinks by `entry_number`.
-- [ ] Show the "Showing entries N–M of T" banner inside the readable view and grey out window-scoped aggregates with explicit tooltips.
-- [ ] Preserve the existing raw-entry accordion as the Raw Entries mode.
-- [ ] Add focused feature coverage for readable stream fragments, reassembled artifacts, anomaly chips, and raw drill-down anchors.
+- [x] Add a server-side semantic formatter for the currently loaded wire-log window. (`WireLogReadableFormatter`)
+- [x] Add a Readable/Raw Entries mode switch inside the Wire Log panel.
+- [x] Render grouped stream blocks with semantic chips for `llm.stream_line`.
+- [x] Produce reassembled artifacts (assistant content, reasoning block, per-tool-call assembled args with JSON parse indicator) at the top of each grouped stream block, with back-links to constituent `entry_number`s.
+- [x] Render the transport overview as a sticky triage strip (status, finish reason, error count, headline counts, TTFB / TT-first-content / TT-first-reasoning / TT-first-tool-call, window-scoped rate stats).
+- [x] Surface anomaly signals: unknown delta keys, decode errors, truncated entries, non-2xx response status, finish reason ≠ stop.
+- [x] Segment the readable view by attempt when multiple `llm.request` / `llm.response_*` cycles are present, with a one-line summary per attempt.
+- [x] Add operator affordances: copy-as-cURL replay for the outbound `ChatRequest`, copy reassembled assistant content, copy reassembled tool-args JSON, fragment permalinks by `entry_number`.
+- [x] Show the "Showing entries N–M of T" banner inside the readable view and grey out window-scoped aggregates with explicit tooltips.
+- [x] Preserve the existing raw-entry accordion as the Raw Entries mode.
+- [x] Add focused feature coverage for readable stream fragments, reassembled artifacts, anomaly chips, and raw drill-down anchors. (`WireLogReadableFormatterTest` unit suite + new `ControlPlaneInspectorTest` readable-view feature case)
 - [ ] Verify the control-plane inspector page manually with a retained run containing stream lines, fallback attempts, and tool calls.
 
 ### Phase 2
