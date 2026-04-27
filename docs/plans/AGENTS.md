@@ -33,7 +33,7 @@ Skipping plan updates creates a false source of truth: the checklist and design 
 
 **Title:** the **filename** (and path under `docs/plans/`). Optional lone `#` matching the filename if your renderer needs it—no filler “Plan” / “Notes” sections.
 
-**Preamble** (substantive plans): compact block with **Agent** (identity that authored the plan), **Status** (e.g. Identified, In Progress, Blocked, Complete, or phase label), **Last Updated** (`YYYY-MM-DD` when narrative or status meaningfully changes), **Sources** (issues, ADRs, parent plans, paths—or `None`). Preamble = compass; do not paste the whole **Phases** section there.
+**Preamble** (substantive plans): compact block with **Agent** (in `{agent-name}/{model-code}`), **Status** (e.g. Identified, In Progress, Blocked, Complete, or phase label), **Last Updated** (`YYYY-MM-DD` when narrative or status meaningfully changes), **Sources** (issues, ADRs, parent plans, paths—or `None`). Preamble = compass; do not paste the whole **Phases** section there.
 
 **Body** (order when sections exist; early drafts may stop after the first two):
 
