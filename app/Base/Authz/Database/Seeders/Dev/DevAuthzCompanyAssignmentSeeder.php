@@ -48,7 +48,7 @@ class DevAuthzCompanyAssignmentSeeder extends DevSeeder
      */
     private function grantDevAdminFullAccess($systemRoles): void
     {
-        $licensee = Company::query()->find(Company::LICENSEE_ID);
+        $licensee = $this->licenseeCompany();
 
         if ($licensee === null) {
             return;

@@ -33,7 +33,7 @@ class DevTicketSeeder extends DevSeeder
     {
         (new TicketWorkflowSeeder)->run();
 
-        $company = Company::query()->where('id', Company::LICENSEE_ID)->first();
+        $company = $this->licenseeCompany();
 
         if (! $company) {
             return;

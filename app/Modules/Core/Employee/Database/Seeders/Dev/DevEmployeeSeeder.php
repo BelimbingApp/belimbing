@@ -27,7 +27,7 @@ class DevEmployeeSeeder extends DevSeeder
      */
     protected function seed(): void
     {
-        $licensee = Company::query()->find(Company::LICENSEE_ID);
+        $licensee = $this->licenseeCompany();
         if ($licensee) {
             $this->seedLicenseeEmployee($licensee);
         }

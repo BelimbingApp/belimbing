@@ -42,7 +42,7 @@ class DevNcrSeeder extends DevSeeder
         (new NcrWorkflowSeeder)->run();
         (new ScarWorkflowSeeder)->run();
 
-        $company = Company::query()->where('id', Company::LICENSEE_ID)->first();
+        $company = $this->licenseeCompany();
 
         if (! $company) {
             return;

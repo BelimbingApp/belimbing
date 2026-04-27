@@ -8,22 +8,16 @@ namespace App\Modules\Commerce\Inventory\Database\Seeders\Dev;
 use App\Base\Database\Seeders\DevSeeder;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Core\Company\Database\Seeders\Dev\DevCompanyAddressSeeder;
-use App\Modules\Core\Company\Models\Company;
 
 class DevInventoryItemSeeder extends DevSeeder
 {
-    private const string DEMO_COMPANY_NAME = 'Stellar Industries Sdn Bhd';
-
     protected array $dependencies = [
         DevCompanyAddressSeeder::class,
     ];
 
     protected function seed(): void
     {
-        $company = Company::query()
-            ->where('name', self::DEMO_COMPANY_NAME)
-            ->first()
-            ?? Company::query()->find(Company::LICENSEE_ID);
+        $company = $this->licenseeCompany();
 
         if ($company === null) {
             return;

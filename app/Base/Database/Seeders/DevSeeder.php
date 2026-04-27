@@ -6,6 +6,7 @@
 namespace App\Base\Database\Seeders;
 
 use App\Base\Database\Exceptions\DevSeederProductionEnvironmentException;
+use App\Modules\Core\Company\Models\Company;
 use Illuminate\Database\Seeder;
 
 abstract class DevSeeder extends Seeder
@@ -35,6 +36,14 @@ abstract class DevSeeder extends Seeder
      * Implement in concrete dev seeders.
      */
     abstract protected function seed(): void;
+
+    /**
+     * Resolve the tenant that dev seeders should target by default.
+     */
+    protected function licenseeCompany(): ?Company
+    {
+        return Company::query()->find(Company::LICENSEE_ID);
+    }
 
     /**
      * Prevent dev seeders from running in production.
