@@ -10,11 +10,11 @@ $durationLabel = isset($block['duration_ms']) && $block['duration_ms'] !== null
     ? number_format($block['duration_ms'] / 1000, 2).'s'
     : '---';
 ?>
-<div
+<details
     id="wire-log-entry-{{ $block['first_entry_number'] }}"
-    class="rounded-xl border border-border-default/60 bg-surface-subtle/40 p-3"
+    class="rounded-xl border border-border-default/60 bg-surface-subtle/40"
 >
-    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border-default/40 pb-2">
+    <summary class="flex cursor-pointer flex-wrap items-center justify-between gap-2 p-3 text-sm text-ink">
         <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
             <x-ui.badge variant="info">
                 {{ __(':count chunks', ['count' => Number::format($block['chunk_count'])]) }}
@@ -32,10 +32,10 @@ $durationLabel = isset($block['duration_ms']) && $block['duration_ms'] !== null
                 </x-ui.badge>
             @endif
         </div>
-    </div>
+    </summary>
 
     @if ($block['reassembled_content'] !== '' || $block['reassembled_reasoning'] !== '' || ! empty($block['tool_calls']))
-        <div class="mt-3 space-y-2">
+        <div class="mx-3 mb-3 space-y-2 border-t border-border-default/40 pt-3">
             @if ($block['reassembled_content'] !== '')
                 <div class="rounded-lg border border-border-default/60 bg-surface-card p-3">
                     <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">
@@ -50,7 +50,7 @@ $durationLabel = isset($block['duration_ms']) && $block['duration_ms'] !== null
                             @click="navigator.clipboard.writeText($refs.content.textContent); copied = true; setTimeout(() => copied = false, 1500);"
                             class="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md border border-border-default bg-surface-subtle px-1.5 py-0.5 text-[11px] text-ink shadow-sm hover:bg-surface-card"
                         >
-                            <x-icon name="heroicon-m-clipboard" class="size-3" />
+                            <x-icon name="heroicon-o-clipboard-document-list" class="size-3" />
                             <span x-show="!copied">{{ __('Copy') }}</span>
                             <span x-show="copied" x-cloak class="text-status-success">{{ __('Copied!') }}</span>
                         </button>
@@ -73,7 +73,7 @@ $durationLabel = isset($block['duration_ms']) && $block['duration_ms'] !== null
                             @click="navigator.clipboard.writeText($refs.reasoning.textContent); copied = true; setTimeout(() => copied = false, 1500);"
                             class="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md border border-border-default bg-surface-subtle px-1.5 py-0.5 text-[11px] text-ink shadow-sm hover:bg-surface-card"
                         >
-                            <x-icon name="heroicon-m-clipboard" class="size-3" />
+                            <x-icon name="heroicon-o-clipboard-document-list" class="size-3" />
                             <span x-show="!copied">{{ __('Copy') }}</span>
                             <span x-show="copied" x-cloak class="text-status-success">{{ __('Copied!') }}</span>
                         </button>
@@ -103,7 +103,7 @@ $durationLabel = isset($block['duration_ms']) && $block['duration_ms'] !== null
                                 @click="navigator.clipboard.writeText($refs.args.textContent); copied = true; setTimeout(() => copied = false, 1500);"
                                 class="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md border border-border-default bg-surface-subtle px-1.5 py-0.5 text-[11px] text-ink shadow-sm hover:bg-surface-card"
                             >
-                                <x-icon name="heroicon-m-clipboard" class="size-3" />
+                                <x-icon name="heroicon-o-clipboard-document-list" class="size-3" />
                                 <span x-show="!copied">{{ __('Copy args') }}</span>
                                 <span x-show="copied" x-cloak class="text-status-success">{{ __('Copied!') }}</span>
                             </button>
@@ -115,9 +115,14 @@ $durationLabel = isset($block['duration_ms']) && $block['duration_ms'] !== null
         </div>
     @endif
 
-    <details class="mt-3">
-        <summary class="cursor-pointer text-[11px] text-accent hover:underline">{{ __(':count fragments', ['count' => count($block['fragments'])]) }}</summary>
-        <div class="mt-2 flex flex-wrap gap-1">
+    <div class="{{ $block['reassembled_content'] !== '' || $block['reassembled_reasoning'] !== '' || ! empty($block['tool_calls']) ? 'mx-3 mb-3' : 'mx-3 mb-3 border-t border-border-default/40 pt-3' }}">
+        <p class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
+            {{ __('Fragments') }}
+            <span class="ml-1 font-normal lowercase text-muted/80">
+                ({{ Number::format(count($block['fragments'])) }})
+            </span>
+        </p>
+        <div class="flex flex-wrap gap-1">
             @foreach ($block['fragments'] as $fragment)
                 @include('livewire.admin.ai.control-plane.partials.wire-log-readable.fragment', [
                     'fragment' => $fragment,
@@ -125,5 +130,5 @@ $durationLabel = isset($block['duration_ms']) && $block['duration_ms'] !== null
                 ])
             @endforeach
         </div>
-    </details>
-</div>
+    </div>
+</details>

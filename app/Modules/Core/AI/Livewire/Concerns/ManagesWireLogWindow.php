@@ -5,6 +5,8 @@
 
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
+use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
+
 trait ManagesWireLogWindow
 {
     public int $wireLogOffset = 0;
@@ -73,9 +75,22 @@ trait ManagesWireLogWindow
         $this->wireLogStartEntry = (string) ($this->wireLogOffset + 1);
     }
 
+    /**
+     * Allowed page sizes for the wire-log inspector (must stay in sync with the Blade select and {@see WireLogger::preview} limit clamp).
+     *
+     * @return int One of 100, 250, 500, or 1000.
+     */
     private function normalizeWireLogLimit(int $limit): int
     {
-        return max(25, min(250, $limit));
+        $sizes = [100, 250, 500, 1000];
+
+        foreach ($sizes as $size) {
+            if ($limit <= $size) {
+                return $size;
+            }
+        }
+
+        return $sizes[array_key_last($sizes)];
     }
 
     private function notifyWireLogWindowChanged(): void

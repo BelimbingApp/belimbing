@@ -10,8 +10,35 @@ $anomalies = $readable['anomalies'] ?? [];
 ?>
 <div
     class="space-y-3"
-    x-data="{ mode: 'readable' }"
+    x-data="{
+        mode: 'readable',
+        focusEntry(entryNumber) {
+            if (!entryNumber) return;
+
+            const id = 'wire-log-entry-' + entryNumber;
+            const el = document.getElementById(id);
+
+            // Ensure the anchor updates for shareability / refresh.
+            if (window.location.hash !== '#' + id) {
+                window.location.hash = id;
+            }
+
+            if (el && el.tagName && el.tagName.toLowerCase() === 'details') {
+                el.open = true;
+            }
+
+            // Ask Alpine-powered fragments to open their inline payload panel.
+            window.dispatchEvent(new CustomEvent('wire-log-open-entry', { detail: { entryNumber } }));
+
+            // Scroll after DOM updates.
+            this.$nextTick(() => {
+                const target = document.getElementById(id);
+                target?.scrollIntoView({ block: 'center' });
+            });
+        },
+    }"
     x-on:wire-log-window-changed.window="$nextTick(() => document.getElementById('wire-log-panel')?.scrollIntoView({ block: 'start' }))"
+    x-on:wire-log-focus-entry.window="focusEntry($event.detail.entryNumber)"
 >
     @if (! $wireLoggingEnabled)
         <x-ui.alert variant="info">
@@ -66,7 +93,7 @@ $anomalies = $readable['anomalies'] ?? [];
                     </div>
 
                     <x-ui.select id="wire-log-limit" wire:model.live="wireLogLimit" :label="__('Entries')">
-                        @foreach ([25, 50, 100, 250] as $limitOption)
+                        @foreach ([100, 250, 500, 1000] as $limitOption)
                             <option value="{{ $limitOption }}">{{ $limitOption }}</option>
                         @endforeach
                     </x-ui.select>

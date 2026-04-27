@@ -31,7 +31,7 @@ $replay = $attempt['replay'] ?? null;
                     @click="navigator.clipboard.writeText($refs.curl.textContent.trim()); copied = true; setTimeout(() => copied = false, 1500);"
                     class="absolute right-5 top-1 inline-flex items-center gap-1 rounded-md border border-border-default bg-surface-card px-1.5 py-0.5 text-[11px] text-ink shadow-sm hover:bg-surface-subtle"
                 >
-                    <x-icon name="heroicon-m-clipboard" class="size-3" />
+                    <x-icon name="heroicon-o-clipboard-document-list" class="size-3" />
                     <span x-show="!copied">{{ __('Copy') }}</span>
                     <span x-show="copied" x-cloak class="text-status-success">{{ __('Copied!') }}</span>
                 </button>

@@ -163,18 +163,21 @@ it('navigates wire-log windows for large runs', function (): void {
         ->assertSee('[]')
         ->assertSee('entry-4')
         ->assertSee('entry-100')
-        ->set('wireLogLimit', 50)
+        ->set('wireLogLimit', 250)
         ->assertDispatched('wire-log-window-changed')
-        ->call('lastWireLogEntries', 195)
+        ->assertSee('Showing entries 1-245 of 245 retained wire-log entries.')
+        ->set('wireLogLimit', 100)
         ->assertDispatched('wire-log-window-changed')
-        ->assertSee('Showing entries 196-245 of 245 retained wire-log entries.')
+        ->call('lastWireLogEntries', 145)
+        ->assertDispatched('wire-log-window-changed')
+        ->assertSee('Showing entries 146-245 of 245 retained wire-log entries.')
         ->assertSee('entry-245')
         ->set('wireLogStartEntry', '101')
         ->call('jumpToWireLogEntry', 245)
         ->assertDispatched('wire-log-window-changed')
-        ->assertSee('Showing entries 101-150 of 245 retained wire-log entries.')
+        ->assertSee('Showing entries 101-200 of 245 retained wire-log entries.')
         ->assertSee('entry-101')
-        ->assertSee('entry-150');
+        ->assertSee('entry-200');
 });
 
 const CONTROL_PLANE_READABLE_RUN_ID = 'run_control_plane_readable';

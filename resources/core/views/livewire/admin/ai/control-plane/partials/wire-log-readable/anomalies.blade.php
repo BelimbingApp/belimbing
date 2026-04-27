@@ -20,10 +20,11 @@
                         <span class="text-muted">
                             ({{ __('entries:') }}
                             @foreach (array_slice($anomaly['entry_numbers'], 0, 5) as $entryNumber)
-                                <a
-                                    href="#wire-log-entry-{{ $entryNumber }}"
+                                <button
+                                    type="button"
                                     class="text-accent hover:underline"
-                                >#{{ $entryNumber }}</a>{{ ! $loop->last ? ', ' : '' }}
+                                    @click.prevent="window.dispatchEvent(new CustomEvent('wire-log-focus-entry', { detail: { entryNumber: {{ (int) $entryNumber }} } }))"
+                                >#{{ $entryNumber }}</button>{{ ! $loop->last ? ', ' : '' }}
                             @endforeach
                             @if (count($anomaly['entry_numbers']) > 5)
                                 +{{ count($anomaly['entry_numbers']) - 5 }} {{ __('more') }}

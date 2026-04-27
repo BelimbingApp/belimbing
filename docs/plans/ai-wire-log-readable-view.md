@@ -141,7 +141,7 @@ Goal: create a reviewable first version that proves the presentation model in th
 
 - [x] Add a server-side semantic formatter for the currently loaded wire-log window. (`WireLogReadableFormatter`)
 - [x] Add a Readable/Raw Entries mode switch inside the Wire Log panel.
-- [x] Render grouped stream blocks with semantic chips for `llm.stream_line`.
+- [x] Render grouped stream blocks with semantic chips for `llm.stream_line`; the stream block summary row itself expands to show fragments, matching the raw-style click behavior used by transport events.
 - [x] Produce reassembled artifacts (assistant content, reasoning block, per-tool-call assembled args with JSON parse indicator) at the top of each grouped stream block, with back-links to constituent `entry_number`s.
 - [x] Render the transport overview as a sticky triage strip (status, finish reason, error count, headline counts, TTFB / TT-first-content / TT-first-reasoning / TT-first-tool-call, window-scoped rate stats).
 - [x] Surface anomaly signals: unknown delta keys, decode errors, truncated entries, non-2xx response status, finish reason ≠ stop.

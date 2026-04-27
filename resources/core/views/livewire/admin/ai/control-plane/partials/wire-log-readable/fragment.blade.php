@@ -58,7 +58,30 @@ $rawLine = $fragment['raw_line'] ?? '';
     </span>
 @endif
 
-<div x-data="{ open: false }" class="inline-flex flex-col">
+<div
+    id="wire-log-entry-{{ $entryNumber }}"
+    x-data="{
+        open: false,
+        init() {
+            const desired = '#wire-log-entry-{{ $entryNumber }}';
+            if (window.location.hash === desired) {
+                this.open = true;
+            }
+            window.addEventListener('hashchange', () => {
+                if (window.location.hash === desired) {
+                    this.open = true;
+                }
+            });
+            window.addEventListener('wire-log-open-entry', (e) => {
+                if (e?.detail?.entryNumber === {{ (int) $entryNumber }}) {
+                    this.open = true;
+                }
+            });
+        },
+    }"
+    x-init="init()"
+    class="inline-flex flex-col"
+>
     <button
         type="button"
         @click="open = !open"
@@ -89,7 +112,7 @@ $rawLine = $fragment['raw_line'] ?? '';
             rel="noreferrer"
             class="mt-1 inline-flex items-center gap-1 text-accent hover:underline"
         >
-            <x-icon name="heroicon-m-arrow-top-right-on-square" class="size-3" />
+            <x-icon name="heroicon-o-arrow-top-right-on-square" class="size-3" />
             {{ __('Open raw entry') }}
         </a>
     </div>

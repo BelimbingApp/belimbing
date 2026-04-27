@@ -12,7 +12,11 @@ class WireLogger
 {
     private const PREVIEW_ENTRY_LIMIT = 100;
 
-    private const PREVIEW_ENTRY_LIMIT_MAX = 250;
+    /**
+     * Hard cap for how many decoded preview rows are retained in memory while scanning the JSONL.
+     * Larger windows load faster operator workflows but increase peak RAM (roughly proportional to this cap).
+     */
+    private const PREVIEW_ENTRY_LIMIT_MAX = 1000;
 
     private const PREVIEW_LINE_BYTES = 64 * 1024;
 

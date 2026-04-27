@@ -51,7 +51,7 @@ $payloadPretty = $event['payload_pretty'] ?? '';
                 rel="noreferrer"
                 class="ml-auto inline-flex items-center gap-1 rounded-md border border-border-default bg-surface-subtle px-2 py-0.5 text-ink hover:bg-surface-card"
             >
-                <x-icon name="heroicon-m-arrow-top-right-on-square" class="size-3" />
+                <x-icon name="heroicon-o-arrow-top-right-on-square" class="size-3" />
                 {{ __('Open raw entry') }}
             </a>
         </div>
