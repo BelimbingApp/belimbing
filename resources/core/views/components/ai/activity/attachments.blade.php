@@ -30,6 +30,9 @@
         get images() {
             return this.attachments.filter(a => a.kind === 'image');
         },
+        get currentAttachmentName() {
+            return this.images[this.imageIndex]?.original_name || @js(__('Preview attachment'));
+        },
         openImage(i) {
             this.imageIndex = i;
             this.imageOpen = true;
@@ -119,7 +122,7 @@
                 <div class="rounded-xl overflow-hidden border border-white/10 bg-black/30">
                     <img
                         :src="images[imageIndex]?.url"
-                        :alt="(images[imageIndex]?.original_name) || @js(__('Preview attachment'))"
+                        :alt="currentAttachmentName"
                         class="w-full max-h-[75vh] object-contain bg-black"
                     />
                     <div class="flex items-center justify-between gap-2 p-3 text-xs text-white/80">

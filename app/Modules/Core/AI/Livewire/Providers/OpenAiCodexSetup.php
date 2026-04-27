@@ -8,6 +8,7 @@ namespace App\Modules\Core\AI\Livewire\Providers;
 use App\Base\AI\Enums\AiErrorType;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Enums\ProviderOperation;
+use App\Modules\Core\AI\Livewire\Providers\Concerns\ConfiguresOpenAiCodexSetupView;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
@@ -26,6 +27,8 @@ use Illuminate\Support\Facades\Auth;
  */
 final class OpenAiCodexSetup extends ProviderSetup
 {
+    use ConfiguresOpenAiCodexSetupView;
+
     public ?int $providerId = null;
 
     public string $oauthRedirectUri = '';
@@ -141,66 +144,11 @@ final class OpenAiCodexSetup extends ProviderSetup
         $this->syncStateFromProvider($provider->fresh());
     }
 
-    protected function tryAutoConnect(): void
-    {
-        // OAuth provider: never auto-connect based on base_url; login flow is explicit.
-    }
-
-    /**
-     * Override: codex credentials are managed by OAuth, not pasted into apiKey.
-     *
-     * @return array<string, mixed>
-     */
-    protected function gatherInput(): array
-    {
-        return [
-            'base_url' => $this->baseUrl,
-        ];
-    }
-
-    protected function mapFieldToProperty(string $fieldKey): string
-    {
-        return match ($fieldKey) {
-            'base_url' => 'baseUrl',
-            default => parent::mapFieldToProperty($fieldKey),
-        };
-    }
-
     public function render(): View
     {
         $this->syncStateFromProvider($this->loadProvider());
 
         return parent::render();
-    }
-
-    public function providerConnectionDescription(): ?string
-    {
-        return __('Codex subscription — browser sign-in is required. Belimbing listens on localhost:1455 during sign-in and depends on an undocumented external contract that may break without notice.');
-    }
-
-    public function providerHeaderSubtitle(): ?string
-    {
-        return __('Connect with browser OAuth. Belimbing listens for the callback automatically when possible.');
-    }
-
-    public function providerHeaderHelpPartial(): ?string
-    {
-        return 'livewire.admin.ai.providers.partials.setup-help.openai-codex';
-    }
-
-    public function providerConnectedActionsPartial(): ?string
-    {
-        return 'livewire.admin.ai.providers.partials.connected-actions.openai-codex';
-    }
-
-    public function providerStatusPanelPartial(): ?string
-    {
-        return 'livewire.admin.ai.providers.partials.setup-status.openai-codex';
-    }
-
-    public function providerCredentialsFormPartial(): ?string
-    {
-        return 'livewire.admin.ai.providers.partials.setup-form.openai-codex';
     }
 
     private function loadProvider(): ?AiProvider

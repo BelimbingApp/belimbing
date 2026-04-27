@@ -10,6 +10,7 @@ use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Enums\TurnStatus;
 use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\ChatTurnEvent;
+use App\Modules\Core\AI\Services\Concerns\PublishesRecoveryEvents;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -33,6 +34,8 @@ use Illuminate\Support\Facades\DB;
  */
 class TurnEventPublisher
 {
+    use PublishesRecoveryEvents;
+
     /**
      * Publish a single event to a turn's event stream.
      *
@@ -307,29 +310,6 @@ class TurnEventPublisher
     {
         return $this->publish($turn, TurnEventType::Heartbeat, [
             'elapsed_ms' => $elapsedMs,
-        ]);
-    }
-
-    // ── Recovery ─────────────────────────────────────────────────────
-
-    /**
-     * Emit recovery.attempted when a retry or recovery starts.
-     */
-    public function recoveryAttempted(ChatTurn $turn, int $attempt, ?string $reason = null): ChatTurnEvent
-    {
-        return $this->publish($turn, TurnEventType::RecoveryAttempted, [
-            'attempt' => $attempt,
-            'reason' => $reason,
-        ]);
-    }
-
-    /**
-     * Emit recovery.succeeded when recovery resolves the issue.
-     */
-    public function recoverySucceeded(ChatTurn $turn, int $attempt): ChatTurnEvent
-    {
-        return $this->publish($turn, TurnEventType::RecoverySucceeded, [
-            'attempt' => $attempt,
         ]);
     }
 }

@@ -16,14 +16,17 @@
 @php
     $value = $value ?? '';
     $inputMode = $inputmode ?? null;
+    $inputId = $attributes->get('id') ?? 'edit-in-place-text-'.str()->uuid();
 @endphp
 
-<div
-    {{ $attributes }}
+<dl
+    {{ $attributes->except('id') }}
     x-data="{ editing: false, val: @js((string) $value), original: @js((string) $value) }"
 >
     @if ($label)
-        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ $label }}</dt>
+        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">
+            <label for="{{ $inputId }}">{{ $label }}</label>
+        </dt>
     @endif
 
     <dd class="text-sm text-ink">
@@ -46,6 +49,7 @@
         </button>
 
         <input
+            id="{{ $inputId }}"
             x-show="editing"
             x-ref="input"
             x-model="val"
@@ -55,7 +59,6 @@
             type="{{ $type }}"
             @if ($inputMode) inputmode="{{ $inputMode }}" @endif
             @if ($maxlength) maxlength="{{ $maxlength }}" @endif
-            @if ($label) aria-label="{{ $label }}" @endif
             @class([
                 'w-full px-1 py-0.5 -mx-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent',
                 'font-mono' => $monospace,
@@ -67,4 +70,4 @@
             <p class="mt-1 text-sm text-status-danger">{{ $error }}</p>
         @endif
     </dd>
-</div>
+</dl>

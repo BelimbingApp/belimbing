@@ -221,6 +221,9 @@ describe('ChatRunPersister materializeFromTurn', function () {
         $persister = new ChatRunPersister;
         $persister->materializeFromTurn($turn, $mm, $turn->employee_id, MAT_TEST_SESSION);
     });
+});
+
+describe('ChatRunPersister materializeFromTurn tool transcripts', function () {
 
     it('materializes tool denied as hook action', function () {
         $turn = createMaterializerTurn();

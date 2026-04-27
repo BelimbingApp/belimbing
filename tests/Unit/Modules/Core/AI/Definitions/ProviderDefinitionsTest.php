@@ -137,21 +137,21 @@ test('GenericLocalDefinition accepts optional api_key', function (): void {
 // ── GenericOAuthDefinition ──
 
 test('GenericOAuthDefinition has OAuth auth type and no generic runtime path', function (): void {
-    $def = new GenericOAuthDefinition('qwen-portal', 'https://portal.qwen.ai/v1');
+    $def = new GenericOAuthDefinition('qwen-portal', PDT_QWEN_BASE_URL);
 
     expect($def->authType())->toBe(AuthType::OAuth)
-        ->and($def->defaultBaseUrl())->toBe('https://portal.qwen.ai/v1');
+        ->and($def->defaultBaseUrl())->toBe(PDT_QWEN_BASE_URL);
 });
 
 test('GenericOAuthDefinition validates and normalizes create input without credentials', function (): void {
     $def = new GenericOAuthDefinition('qwen-portal');
 
     $result = $def->validateAndNormalize([
-        'base_url' => 'https://portal.qwen.ai/v1',
+        'base_url' => PDT_QWEN_BASE_URL,
     ], ProviderOperation::Create);
 
     expect($result)
-        ->toHaveKey('base_url', 'https://portal.qwen.ai/v1')
+        ->toHaveKey('base_url', PDT_QWEN_BASE_URL)
         ->toHaveKey('auth_type', AuthType::OAuth)
         ->toHaveKey('connection_config')
         ->not->toHaveKey('credentials');
@@ -159,7 +159,7 @@ test('GenericOAuthDefinition validates and normalizes create input without crede
 
 test('GenericOAuthDefinition refuses runtime resolution without a dedicated flow', function (): void {
     $provider = new AiProvider;
-    $provider->base_url = 'https://portal.qwen.ai/v1';
+    $provider->base_url = PDT_QWEN_BASE_URL;
 
     $def = new GenericOAuthDefinition('qwen-portal');
 

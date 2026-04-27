@@ -83,36 +83,30 @@ final class AgenticToolLoopStreamReader
 
         foreach ($stream as $event) {
             $type = $event['type'] ?? null;
-            switch ($type) {
-                case 'thinking_delta':
-                    yield from $this->handleThinkingDelta($runId, $event, $commentary, $reasoningContent);
-                    break;
 
-                case 'content_delta':
-                    $content .= (string) ($event['text'] ?? '');
-                    break;
+            if ($type === 'thinking_delta') {
+                yield from $this->handleThinkingDelta($runId, $event, $commentary, $reasoningContent);
 
-                case 'tool_call_delta':
-                    $this->accumulateToolCallDelta($event, $toolCalls, $toolCallArgs);
-                    break;
-
-                case 'done':
-                    $usage = $event['usage'] ?? null;
-                    $latencyMs = (int) ($event['latency_ms'] ?? 0);
-                    $finishReason = is_string($event['finish_reason'] ?? null) ? $event['finish_reason'] : $finishReason;
-                    $providerMapping = is_array($event['provider_mapping'] ?? null) ? $event['provider_mapping'] : $providerMapping;
-                    $reasoningBlocks = is_array($event['reasoning_blocks'] ?? null) ? $event['reasoning_blocks'] : $reasoningBlocks;
-                    break;
-
-                case 'error':
-                    return [
-                        'runtime_error' => $this->runtimeErrorFromStreamEvent($event),
-                    ];
-
-                default:
-                    // Unhandled stream event types are ignored — forward-compatible with provider extensions.
-                    break;
+                continue;
             }
+
+            if ($type === 'error') {
+                return [
+                    'runtime_error' => $this->runtimeErrorFromStreamEvent($event),
+                ];
+            }
+
+            $this->accumulateStreamEvent(
+                $event,
+                $content,
+                $toolCalls,
+                $toolCallArgs,
+                $usage,
+                $latencyMs,
+                $finishReason,
+                $providerMapping,
+                $reasoningBlocks,
+            );
         }
 
         foreach ($toolCalls as $index => &$tc) {
@@ -169,6 +163,48 @@ final class AgenticToolLoopStreamReader
             (string) ($event['message'] ?? 'Streaming iteration failed'),
             latencyMs: (int) ($event['latency_ms'] ?? 0),
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     * @param  array<int, array<string, mixed>>  $toolCalls
+     * @param  array<int, string>  $toolCallArgs
+     * @param  array<string, mixed>|null  $usage
+     * @param  array<string, mixed>|null  $providerMapping
+     * @param  array<int, array<string, mixed>>  $reasoningBlocks
+     */
+    private function accumulateStreamEvent(
+        array $event,
+        string &$content,
+        array &$toolCalls,
+        array &$toolCallArgs,
+        ?array &$usage,
+        int &$latencyMs,
+        ?string &$finishReason,
+        ?array &$providerMapping,
+        array &$reasoningBlocks,
+    ): void {
+        switch ($event['type'] ?? null) {
+            case 'content_delta':
+                $content .= (string) ($event['text'] ?? '');
+                break;
+
+            case 'tool_call_delta':
+                $this->accumulateToolCallDelta($event, $toolCalls, $toolCallArgs);
+                break;
+
+            case 'done':
+                $usage = is_array($event['usage'] ?? null) ? $event['usage'] : null;
+                $latencyMs = (int) ($event['latency_ms'] ?? 0);
+                $finishReason = is_string($event['finish_reason'] ?? null) ? $event['finish_reason'] : $finishReason;
+                $providerMapping = is_array($event['provider_mapping'] ?? null) ? $event['provider_mapping'] : $providerMapping;
+                $reasoningBlocks = is_array($event['reasoning_blocks'] ?? null) ? $event['reasoning_blocks'] : $reasoningBlocks;
+                break;
+
+            default:
+                // Unhandled stream event types are ignored — forward-compatible with provider extensions.
+                break;
+        }
     }
 
     /**

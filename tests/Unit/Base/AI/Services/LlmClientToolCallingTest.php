@@ -229,6 +229,9 @@ describe('LlmClient tool calling request payloads', function () {
             return ! isset($body['temperature']);
         });
     });
+});
+
+describe('LlmClient Moonshot and Anthropic tool payloads', function () {
 
     it('keeps Moonshot tool schemas unchanged', function () {
         fakeChatCompletionText();
@@ -425,6 +428,9 @@ describe('LlmClient tool calling response parsing', function () {
             ->and($result['runtime_error']->errorType)->toBe(AiErrorType::HtmlResponse)
             ->and($result['runtime_error']->hint)->toContain('base URL points to the API endpoint');
     });
+});
+
+describe('LlmClient reasoning and Anthropic response parsing', function () {
 
     it('preserves reasoning_content from chat completions responses', function () {
         Http::fake([
