@@ -133,7 +133,8 @@ Each phase ends with something Ham can use. Phases 0–2 are framework work that
 - [ ] `app/Modules/Commerce/Inventory`: formalize lifecycle transitions beyond the initial status field when marketplace/photo/AI flows need them.
 - [ ] `app/Modules/Commerce/Catalog`: `ProductTemplate`, `Category`, generic `Attribute`/`AttributeValue`, versioned `Description`.
 - [x] Operator UX first slice (desktop-first): Inventory Workbench lists items, filters by search, and creates the durable item record with unit cost/target price/status/notes.
-- [ ] Operator UX next slices: attribute editor, photo grid, description editor, and edit/show surfaces.
+- [x] Operator UX next slices: show/edit item surfaces for reviewing and correcting the durable item record.
+- [ ] Operator UX next slices: attribute editor, photo grid, and description editor.
 
 ### Phase 2 — eBay adapter, read-only (framework)
 

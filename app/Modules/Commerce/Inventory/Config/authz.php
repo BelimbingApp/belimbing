@@ -7,5 +7,7 @@ return [
     'capabilities' => [
         'inventory.item.create',
         'inventory.item.list',
+        'inventory.item.update',
+        'inventory.item.view',
     ],
 ];
