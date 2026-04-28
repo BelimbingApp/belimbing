@@ -19,6 +19,7 @@ const CONTROL_PLANE_WIRE_LOG_EXTENSION = '.jsonl';
 const CONTROL_PLANE_PROVIDER_NAME = 'test-provider';
 const CONTROL_PLANE_MODEL = 'test-model';
 const CONTROL_PLANE_EXECUTION_MODE = 'streaming';
+const CONTROL_PLANE_REDACTED_VALUE = '[redacted]';
 
 beforeEach(function (): void {
     $this->originalStoragePath = app()->storagePath();
@@ -226,7 +227,7 @@ it('renders the readable view with reassembled artifacts, anomaly chips, attempt
             'stream' => true,
             'request' => [
                 'base_url' => 'https://api.openai.com',
-                'api_key' => '[redacted]',
+                'api_key' => CONTROL_PLANE_REDACTED_VALUE,
                 'model' => 'gpt-4o',
                 'messages' => [['role' => 'user', 'content' => 'hi']],
                 'tools' => [],
@@ -237,7 +238,7 @@ it('renders the readable view with reassembled artifacts, anomaly chips, attempt
             ],
             'mapped' => [
                 'payload' => ['model' => 'gpt-4o', 'messages' => [['role' => 'user', 'content' => 'hi']], 'stream' => true],
-                'headers' => ['Authorization' => '[redacted]', 'Content-Type' => 'application/json'],
+                'headers' => ['Authorization' => CONTROL_PLANE_REDACTED_VALUE, 'Content-Type' => 'application/json'],
                 'meta' => [],
             ],
         ]),
@@ -248,7 +249,7 @@ it('renders the readable view with reassembled artifacts, anomaly chips, attempt
             'stream' => true,
             'request' => [
                 'base_url' => 'https://api.anthropic.com',
-                'api_key' => '[redacted]',
+                'api_key' => CONTROL_PLANE_REDACTED_VALUE,
                 'model' => 'claude-opus-4',
                 'messages' => [['role' => 'user', 'content' => 'hi']],
                 'tools' => [],
@@ -259,7 +260,7 @@ it('renders the readable view with reassembled artifacts, anomaly chips, attempt
             ],
             'mapped' => [
                 'payload' => ['model' => 'claude-opus-4'],
-                'headers' => ['Authorization' => '[redacted]'],
+                'headers' => ['Authorization' => CONTROL_PLANE_REDACTED_VALUE],
                 'meta' => [],
             ],
         ]),

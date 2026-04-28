@@ -9,24 +9,28 @@ use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Models\Item;
 use Livewire\Livewire;
 
+const CATALOG_TEST_CATEGORY_NAME = 'Auto Lighting';
+const CATALOG_TEST_TEMPLATE_NAME = 'Headlight Assembly';
+const CATALOG_TEST_ATTRIBUTE_NAME = 'OEM Number';
+
 test('catalog primitives can describe an inventory item', function (): void {
     $item = Item::factory()->create();
     $category = Category::factory()->create([
         'company_id' => $item->company_id,
         'code' => 'auto-lighting',
-        'name' => 'Auto Lighting',
+        'name' => CATALOG_TEST_CATEGORY_NAME,
     ]);
     $template = ProductTemplate::factory()
         ->forCategory($category)
         ->create([
             'code' => 'headlight-assembly',
-            'name' => 'Headlight Assembly',
+            'name' => CATALOG_TEST_TEMPLATE_NAME,
         ]);
     $attribute = Attribute::factory()
         ->forProductTemplate($template)
         ->create([
             'code' => 'oem_number',
-            'name' => 'OEM Number',
+            'name' => CATALOG_TEST_ATTRIBUTE_NAME,
         ]);
 
     $value = AttributeValue::factory()->create([
@@ -59,7 +63,7 @@ test('catalog workbench can create categories templates and attributes', functio
         ->assertSee('Catalog Workbench');
 
     Livewire::test(Index::class)
-        ->set('categoryName', 'Auto Lighting')
+        ->set('categoryName', CATALOG_TEST_CATEGORY_NAME)
         ->set('categoryCode', 'auto-lighting')
         ->call('createCategory')
         ->assertHasNoErrors();
@@ -70,7 +74,7 @@ test('catalog workbench can create categories templates and attributes', functio
 
     Livewire::test(Index::class)
         ->set('templateCategoryId', $category->id)
-        ->set('templateName', 'Headlight Assembly')
+        ->set('templateName', CATALOG_TEST_TEMPLATE_NAME)
         ->set('templateCode', 'headlight-assembly')
         ->call('createTemplate')
         ->assertHasNoErrors();
@@ -84,7 +88,7 @@ test('catalog workbench can create categories templates and attributes', functio
     Livewire::test(Index::class)
         ->set('attributeCategoryId', $category->id)
         ->set('attributeProductTemplateId', $template->id)
-        ->set('attributeName', 'OEM Number')
+        ->set('attributeName', CATALOG_TEST_ATTRIBUTE_NAME)
         ->set('attributeCode', 'oem_number')
         ->set('attributeType', Attribute::TYPE_TEXT)
         ->call('createAttribute')
@@ -104,7 +108,7 @@ test('catalog workbench supports searching and inline editing catalog rows', fun
     $category = Category::factory()->create([
         'company_id' => $user->company_id,
         'code' => 'auto-lighting',
-        'name' => 'Auto Lighting',
+        'name' => CATALOG_TEST_CATEGORY_NAME,
     ]);
     $replacementCategory = Category::factory()->create([
         'company_id' => $user->company_id,
@@ -115,7 +119,7 @@ test('catalog workbench supports searching and inline editing catalog rows', fun
         ->forCategory($category)
         ->create([
             'code' => 'headlight-assembly',
-            'name' => 'Headlight Assembly',
+            'name' => CATALOG_TEST_TEMPLATE_NAME,
             'is_active' => true,
         ]);
     $attribute = Attribute::factory()
@@ -123,7 +127,7 @@ test('catalog workbench supports searching and inline editing catalog rows', fun
         ->create([
             'category_id' => $category->id,
             'code' => 'oem_number',
-            'name' => 'OEM Number',
+            'name' => CATALOG_TEST_ATTRIBUTE_NAME,
             'type' => Attribute::TYPE_TEXT,
             'options' => null,
             'is_required' => false,
@@ -135,10 +139,10 @@ test('catalog workbench supports searching and inline editing catalog rows', fun
     ]);
 
     Livewire::test(Index::class)
-        ->assertSee('OEM Number')
+        ->assertSee(CATALOG_TEST_ATTRIBUTE_NAME)
         ->set('search', 'paint')
         ->assertSee('Paint Code')
-        ->assertDontSee('OEM Number')
+        ->assertDontSee(CATALOG_TEST_ATTRIBUTE_NAME)
         ->call('sort', 'name')
         ->assertSet('sortBy', 'name')
         ->assertSet('sortDir', 'asc')

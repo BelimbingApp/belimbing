@@ -26,6 +26,10 @@ class WireLogReadableFormatter
     /** Maximum consecutive empty deltas before they collapse into a heartbeat run. */
     private const EMPTY_RUN_COLLAPSE = 2;
 
+    private const SSE_DATA_PREFIX = 'data: ';
+
+    private const SSE_DONE_LINE = 'data: [DONE]';
+
     /** Recognized keys inside an OpenAI-style streaming `delta` object. */
     private const KNOWN_DELTA_KEYS = [
         'role',
@@ -319,7 +323,8 @@ class WireLogReadableFormatter
         $request = is_array($decoded['request'] ?? null) ? $decoded['request'] : [];
         $messages = is_array($request['messages'] ?? null) ? $request['messages'] : [];
         $tools = is_array($request['tools'] ?? null) ? $request['tools'] : [];
-        $model = is_string($request['model'] ?? null) ? $request['model'] : (is_string($decoded['model'] ?? null) ? $decoded['model'] : '?');
+        $model = is_string($request['model'] ?? null) ? $request['model'] : null;
+        $model ??= is_string($decoded['model'] ?? null) ? $decoded['model'] : '?';
         $provider = is_string($request['provider_name'] ?? null) ? $request['provider_name'] : '?';
 
         return __(':provider / :model — :messages messages, :tools tools', [
@@ -571,7 +576,7 @@ class WireLogReadableFormatter
             ]);
         }
 
-        if ($rawLine === '' || $rawLine === 'data: ') {
+        if ($rawLine === '' || $rawLine === self::SSE_DATA_PREFIX) {
             return array_merge($base, [
                 'kind' => 'empty',
                 'text' => '',
@@ -581,7 +586,7 @@ class WireLogReadableFormatter
             ]);
         }
 
-        if ($rawLine === 'data: [DONE]') {
+        if ($rawLine === self::SSE_DONE_LINE) {
             return array_merge($base, [
                 'kind' => 'done',
                 'text' => '[DONE]',
@@ -591,7 +596,7 @@ class WireLogReadableFormatter
             ]);
         }
 
-        if (! str_starts_with($rawLine, 'data: ')) {
+        if (! str_starts_with($rawLine, self::SSE_DATA_PREFIX)) {
             return array_merge($base, [
                 'kind' => 'raw',
                 'text' => Str::limit($rawLine, 160, '…'),
@@ -601,7 +606,7 @@ class WireLogReadableFormatter
             ]);
         }
 
-        $payload = BlbJson::decodeArray(substr($rawLine, 6));
+        $payload = BlbJson::decodeArray(substr($rawLine, strlen(self::SSE_DATA_PREFIX)));
 
         if (! is_array($payload)) {
             return array_merge($base, [
@@ -1038,11 +1043,11 @@ class WireLogReadableFormatter
             $decoded = is_array($entry['decoded_payload'] ?? null) ? $entry['decoded_payload'] : null;
             $rawLine = is_string($decoded['raw_line'] ?? null) ? $decoded['raw_line'] : '';
 
-            if (! str_starts_with($rawLine, 'data: ') || $rawLine === 'data: [DONE]') {
+            if (! str_starts_with($rawLine, self::SSE_DATA_PREFIX) || $rawLine === self::SSE_DONE_LINE) {
                 continue;
             }
 
-            $payload = BlbJson::decodeArray(substr($rawLine, 6));
+            $payload = BlbJson::decodeArray(substr($rawLine, strlen(self::SSE_DATA_PREFIX)));
 
             if (! is_array($payload)) {
                 continue;
@@ -1297,11 +1302,11 @@ class WireLogReadableFormatter
             $decoded = is_array($entry['decoded_payload'] ?? null) ? $entry['decoded_payload'] : null;
             $rawLine = is_string($decoded['raw_line'] ?? null) ? $decoded['raw_line'] : '';
 
-            if (! str_starts_with($rawLine, 'data: ') || $rawLine === 'data: [DONE]') {
+            if (! str_starts_with($rawLine, self::SSE_DATA_PREFIX) || $rawLine === self::SSE_DONE_LINE) {
                 continue;
             }
 
-            $payload = BlbJson::decodeArray(substr($rawLine, 6));
+            $payload = BlbJson::decodeArray(substr($rawLine, strlen(self::SSE_DATA_PREFIX)));
 
             if (! is_array($payload)) {
                 continue;
@@ -1429,11 +1434,7 @@ class WireLogReadableFormatter
         $duration = $durationMs !== null ? number_format($durationMs / 1000, 1).'s' : '?';
 
         $tail = match ($outcome) {
-            'failed' => $errorMessage !== null && $errorMessage !== ''
-                ? __('failed: :error after :duration', ['error' => Str::limit($errorMessage, 80), 'duration' => $duration])
-                : ($statusCode !== null
-                    ? __('HTTP :status after :duration', ['status' => $statusCode, 'duration' => $duration])
-                    : __('failed after :duration', ['duration' => $duration])),
+            'failed' => $this->failedAttemptTail($errorMessage, $statusCode, $duration),
             'succeeded' => $finishReason !== null && $finishReason !== ''
                 ? __('streamed :duration, finish=:reason', ['duration' => $duration, 'reason' => $finishReason])
                 : __('completed in :duration', ['duration' => $duration]),
@@ -1445,5 +1446,24 @@ class WireLogReadableFormatter
             'head' => $head,
             'tail' => $tail,
         ]);
+    }
+
+    private function failedAttemptTail(?string $errorMessage, ?int $statusCode, string $duration): string
+    {
+        if ($errorMessage !== null && $errorMessage !== '') {
+            return __('failed: :error after :duration', [
+                'error' => Str::limit($errorMessage, 80),
+                'duration' => $duration,
+            ]);
+        }
+
+        if ($statusCode !== null) {
+            return __('HTTP :status after :duration', [
+                'status' => $statusCode,
+                'duration' => $duration,
+            ]);
+        }
+
+        return __('failed after :duration', ['duration' => $duration]);
     }
 }

@@ -9,6 +9,10 @@ use Illuminate\Foundation\Testing\TestCase;
 
 uses(TestCase::class);
 
+const WLRF_CHAT_ENDPOINT = '/v1/chat';
+const WLRF_SECOND_AT = '2026-04-27T12:00:01+00:00';
+const WLRF_DONE_AT = '2026-04-27T12:00:05+00:00';
+
 /**
  * Build a wire-log entry shape matching what {@see WireLogger::preview()} returns.
  *
@@ -121,7 +125,7 @@ it('records unknown delta keys as an anomaly signal with source entry numbers', 
 
 it('flags non-2xx response status as an http_error anomaly', function (): void {
     $entries = [
-        wlrfEntry(1, 'llm.request', ['endpoint' => '/v1/chat', 'request' => ['provider_name' => 'openai', 'model' => 'gpt-4o', 'base_url' => 'https://api.example.com', 'messages' => [], 'tools' => []]]),
+        wlrfEntry(1, 'llm.request', ['endpoint' => WLRF_CHAT_ENDPOINT, 'request' => ['provider_name' => 'openai', 'model' => 'gpt-4o', 'base_url' => 'https://api.example.com', 'messages' => [], 'tools' => []]]),
         wlrfEntry(2, 'llm.response_status', ['status_code' => 503, 'stream' => false]),
         wlrfEntry(3, 'llm.error', ['stage' => 'response', 'message' => 'Service Unavailable']),
     ];
@@ -136,13 +140,13 @@ it('flags non-2xx response status as an http_error anomaly', function (): void {
 it('segments multiple llm.request cycles into separate attempts with summaries', function (): void {
     $entries = [
         wlrfEntry(1, 'llm.request', [
-            'endpoint' => '/v1/chat',
+            'endpoint' => WLRF_CHAT_ENDPOINT,
             'stream' => true,
             'request' => ['provider_name' => 'openai', 'model' => 'gpt-4o', 'base_url' => 'https://api.openai.com', 'messages' => [], 'tools' => []],
             'mapped' => ['payload' => ['model' => 'gpt-4o'], 'headers' => ['Authorization' => 'Bearer secret']],
         ], at: '2026-04-27T12:00:00+00:00'),
-        wlrfEntry(2, 'llm.response_status', ['status_code' => 503, 'stream' => true], at: '2026-04-27T12:00:01+00:00'),
-        wlrfEntry(3, 'llm.error', ['stage' => 'response', 'message' => 'rate limited'], at: '2026-04-27T12:00:01+00:00'),
+        wlrfEntry(2, 'llm.response_status', ['status_code' => 503, 'stream' => true], at: WLRF_SECOND_AT),
+        wlrfEntry(3, 'llm.error', ['stage' => 'response', 'message' => 'rate limited'], at: WLRF_SECOND_AT),
         wlrfEntry(4, 'llm.request', [
             'endpoint' => '/v1/messages',
             'stream' => true,
@@ -151,8 +155,8 @@ it('segments multiple llm.request cycles into separate attempts with summaries',
         ], at: '2026-04-27T12:00:02+00:00'),
         wlrfEntry(5, 'llm.response_status', ['status_code' => 200, 'stream' => true], at: '2026-04-27T12:00:03+00:00'),
         wlrfStreamChunk(6, ['content' => 'ok'], at: '2026-04-27T12:00:04+00:00'),
-        wlrfStreamChunk(7, [], finishReason: 'stop', at: '2026-04-27T12:00:05+00:00'),
-        wlrfEntry(8, 'llm.complete', ['context' => []], at: '2026-04-27T12:00:05+00:00'),
+        wlrfStreamChunk(7, [], finishReason: 'stop', at: WLRF_DONE_AT),
+        wlrfEntry(8, 'llm.complete', ['context' => []], at: WLRF_DONE_AT),
     ];
 
     $result = (new WireLogReadableFormatter)->format($entries);
@@ -194,12 +198,12 @@ it('builds a copy-as-cURL replay payload for the outbound request with a placeho
 
 it('computes timing markers from the loaded window', function (): void {
     $entries = [
-        wlrfEntry(1, 'llm.request', ['endpoint' => '/v1/chat', 'request' => ['provider_name' => 'p', 'model' => 'm', 'base_url' => 'https://x', 'messages' => [], 'tools' => []]], at: '2026-04-27T12:00:00+00:00'),
-        wlrfEntry(2, 'llm.response_status', ['status_code' => 200], at: '2026-04-27T12:00:01+00:00'),
+        wlrfEntry(1, 'llm.request', ['endpoint' => WLRF_CHAT_ENDPOINT, 'request' => ['provider_name' => 'p', 'model' => 'm', 'base_url' => 'https://x', 'messages' => [], 'tools' => []]], at: '2026-04-27T12:00:00+00:00'),
+        wlrfEntry(2, 'llm.response_status', ['status_code' => 200], at: WLRF_SECOND_AT),
         wlrfStreamChunk(3, ['reasoning_content' => 'thinking…'], at: '2026-04-27T12:00:02+00:00'),
         wlrfStreamChunk(4, ['content' => 'reply'], at: '2026-04-27T12:00:03+00:00'),
         wlrfStreamChunk(5, ['tool_calls' => [['index' => 0, 'function' => ['name' => 'do_thing']]]], at: '2026-04-27T12:00:04+00:00'),
-        wlrfStreamChunk(6, [], finishReason: 'tool_calls', at: '2026-04-27T12:00:05+00:00'),
+        wlrfStreamChunk(6, [], finishReason: 'tool_calls', at: WLRF_DONE_AT),
     ];
 
     $result = (new WireLogReadableFormatter)->format($entries);
