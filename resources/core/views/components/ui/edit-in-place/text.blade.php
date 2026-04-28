@@ -83,9 +83,9 @@
             x-show="editing"
             x-ref="input"
             x-model="val"
-            @keydown.enter.prevent="editing = false; original = val; $wire.{{ $saveMethod }}(@js($field), val)"
+            @keydown.enter.prevent="editing = false; if (val !== original) { original = val; $wire.{{ $saveMethod }}(@js($field), val) }"
             @keydown.escape="editing = false; val = original"
-            @blur="if (editing) { editing = false; original = val; $wire.{{ $saveMethod }}(@js($field), val) }"
+            @blur="if (editing) { editing = false; if (val !== original) { original = val; $wire.{{ $saveMethod }}(@js($field), val) } }"
             type="{{ $type }}"
             @if ($inputMode) inputmode="{{ $inputMode }}" @endif
             @if ($maxlength) maxlength="{{ $maxlength }}" @endif

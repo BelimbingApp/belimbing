@@ -55,6 +55,10 @@ class Show extends Component
     {
         $this->authorizeUpdate();
 
+        if ($field === 'sku') {
+            $value = strtoupper(trim((string) $value));
+        }
+
         $this->saveValidatedField(
             $this->item,
             $field,
@@ -63,6 +67,10 @@ class Show extends Component
             function ($model, string $field, mixed $validatedValue): void {
                 if ($field === 'currency_code') {
                     $model->currency_code = strtoupper($validatedValue);
+                }
+
+                if ($field === 'sku') {
+                    $model->sku = strtoupper($validatedValue);
                 }
 
                 if ($field === 'notes' && trim((string) $validatedValue) === '') {
@@ -113,6 +121,15 @@ class Show extends Component
         $items->deletePhoto($photo);
 
         $this->item->load('photos');
+    }
+
+    public function updatedSelectedAttributeId(mixed $value): void
+    {
+        if ($value === null || $value === '' || (int) $value === 0) {
+            $this->selectedAttributeId = null;
+            $this->attributeValue = '';
+            $this->resetValidation(['selectedAttributeId', 'attributeValue']);
+        }
     }
 
     public function saveAttributeValue(): void
@@ -205,6 +222,56 @@ class Show extends Component
         $this->item->load('descriptions.createdByUser');
     }
 
+    public function saveDescriptionField(string $field, mixed $value): void
+    {
+        $this->authorizeUpdate();
+
+        $parts = explode('.', $field);
+        if (count($parts) !== 3 || $parts[0] !== 'descriptions') {
+            return;
+        }
+
+        $descriptionId = (int) $parts[1];
+        $column = $parts[2];
+
+        if (! in_array($column, ['title', 'body'], true)) {
+            return;
+        }
+
+        $description = $this->item->descriptions->firstWhere('id', $descriptionId);
+        if (! $description instanceof CatalogDescription) {
+            return;
+        }
+
+        $key = 'descriptions.'.$descriptionId.'.'.$column;
+
+        $rules = match ($column) {
+            'title' => ['required', 'string', 'max:255'],
+            'body' => ['required', 'string', 'max:10000'],
+            default => ['nullable'],
+        };
+
+        $validated = validator([$key => $value], [$key => $rules])->validate();
+        $validatedValue = $validated[$key] ?? null;
+
+        $description->update([$column => $validatedValue]);
+
+        $this->item->load('descriptions.createdByUser');
+    }
+
+    public function deleteDescription(int $descriptionId): void
+    {
+        $this->authorizeUpdate();
+
+        $description = $this->item->descriptions->firstWhere('id', $descriptionId);
+        if (! $description instanceof CatalogDescription) {
+            return;
+        }
+
+        $description->delete();
+        $this->item->load('descriptions.createdByUser');
+    }
+
     public function saveMoneyField(string $field, mixed $value): void
     {
         $this->authorizeUpdate();
@@ -230,6 +297,14 @@ class Show extends Component
     public function fieldRules(): array
     {
         return [
+            'sku' => [
+                'required',
+                'string',
+                'max:64',
+                Rule::unique(Item::class, 'sku')
+                    ->where('company_id', $this->item->company_id)
+                    ->ignore($this->item),
+            ],
             'title' => ['required', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:5000'],
             'status' => ['required', Rule::in(Item::statuses())],

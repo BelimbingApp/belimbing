@@ -24,6 +24,27 @@
 
         <x-ui.card>
             <form wire:submit="store" class="space-y-6">
+                <div>
+                    <x-ui.input
+                        id="inventory-item-sku"
+                        wire:model.live.debounce.300ms="sku"
+                        label="{{ __('SKU') }}"
+                        type="text"
+                        uppercase
+                        maxlength="64"
+                        required
+                        placeholder="{{ __('e.g., HAM-HEADLIGHT-0001') }}"
+                        :help="$skuAvailable === null ? __('Seller-controlled item code, required and unique within the operating company.') : null"
+                        :error="$errors->first('sku')"
+                    />
+
+                    @if ($skuAvailable === true)
+                        <p class="mt-1 text-sm text-status-success">{{ __('SKU is available for this company.') }}</p>
+                    @elseif ($skuAvailable === false)
+                        <p class="mt-1 text-sm text-status-danger">{{ __('SKU is already used by this company.') }}</p>
+                    @endif
+                </div>
+
                 <x-ui.input
                     id="inventory-item-title"
                     wire:model="title"
@@ -31,11 +52,18 @@
                     type="text"
                     required
                     placeholder="{{ __('e.g., 2008 Honda Civic driver side headlight') }}"
+                    :help="__('Buyer-facing item name used as the listing title when the item is published.')"
                     :error="$errors->first('title')"
                 />
 
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <x-ui.select id="inventory-item-status" wire:model="status" label="{{ __('Status') }}" :error="$errors->first('status')">
+                    <x-ui.select
+                        id="inventory-item-status"
+                        wire:model="status"
+                        label="{{ __('Status') }}"
+                        :help="__('Lifecycle stage from draft through ready, listed, sold, and archived.')"
+                        :error="$errors->first('status')"
+                    >
                         @foreach ($statuses as $statusOption)
                             <option value="{{ $statusOption }}">{{ __(Illuminate\Support\Str::headline($statusOption)) }}</option>
                         @endforeach
@@ -48,6 +76,7 @@
                         type="text"
                         inputmode="decimal"
                         placeholder="{{ __('40.00') }}"
+                        :help="__('Private acquisition cost. Used later to calculate gross margin.')"
                         :error="$errors->first('unitCostAmount')"
                     />
 
@@ -58,6 +87,7 @@
                         type="text"
                         inputmode="decimal"
                         placeholder="{{ __('120.00') }}"
+                        :help="__('Intended selling price and default listing price until a real sale is recorded.')"
                         :error="$errors->first('targetPriceAmount')"
                     />
 
@@ -68,6 +98,7 @@
                         type="text"
                         maxlength="3"
                         required
+                        :help="__('Applies to this item cost and target price. Snapshotted so later defaults do not rewrite history.')"
                         :error="$errors->first('currencyCode')"
                     />
                 </div>
@@ -78,6 +109,7 @@
                     label="{{ __('Notes') }}"
                     rows="5"
                     placeholder="{{ __('Condition, fitment, defects, identifiers, variant notes...') }}"
+                    :help="__('Private working notes. Never published to buyers or sent to a marketplace.')"
                     :error="$errors->first('notes')"
                 />
 

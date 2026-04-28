@@ -50,6 +50,7 @@ test('item can be created from the browser workbench component', function (): vo
     );
 
     $component = Livewire::test(Create::class)
+        ->set('sku', 'HAM-HEADLIGHT-0001')
         ->set('title', '2008 Honda Civic driver side headlight')
         ->set('notes', 'Light scuff on lower-left lens.')
         ->set('status', Item::STATUS_DRAFT)
@@ -70,7 +71,38 @@ test('item can be created from the browser workbench component', function (): vo
         ->and($item->unit_cost_amount)->toBe(4000)
         ->and($item->target_price_amount)->toBe(12000)
         ->and($item->currency_code)->toBe('USD')
-        ->and($item->sku)->toStartWith('ITEM-');
+        ->and($item->sku)->toBe('HAM-HEADLIGHT-0001');
+});
+
+test('item sku must be unique within a company', function (): void {
+    $user = createAdminUser();
+    $otherUser = createAdminUser();
+    $this->actingAs($user);
+
+    Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'HAM-DUPLICATE',
+    ]);
+    Item::factory()->create([
+        'company_id' => $otherUser->company_id,
+        'sku' => 'HAM-DUPLICATE',
+    ]);
+
+    Livewire::test(Create::class)
+        ->set('sku', 'HAM-DUPLICATE')
+        ->set('title', 'Duplicate SKU in same company')
+        ->set('status', Item::STATUS_DRAFT)
+        ->set('currencyCode', 'MYR')
+        ->call('store')
+        ->assertHasErrors(['sku' => 'unique']);
+
+    Livewire::test(Create::class)
+        ->set('sku', 'HAM-UNIQUE')
+        ->set('title', 'Unique SKU in same company')
+        ->set('status', Item::STATUS_DRAFT)
+        ->set('currencyCode', 'MYR')
+        ->call('store')
+        ->assertHasNoErrors();
 });
 
 test('authenticated users can view an inventory item detail page', function (): void {
@@ -111,6 +143,7 @@ test('item facts can be updated directly from the detail page component', functi
     ]);
 
     Livewire::test(Show::class, ['item' => $item])
+        ->call('saveField', 'sku', 'ITEM-EDIT456')
         ->call('saveField', 'title', 'Edited inventory item')
         ->call('saveField', 'notes', 'Updated condition notes.')
         ->call('saveField', 'status', Item::STATUS_READY)
@@ -120,7 +153,8 @@ test('item facts can be updated directly from the detail page component', functi
 
     $item->refresh();
 
-    expect($item->title)->toBe('Edited inventory item')
+    expect($item->sku)->toBe('ITEM-EDIT456')
+        ->and($item->title)->toBe('Edited inventory item')
         ->and($item->notes)->toBe('Updated condition notes.')
         ->and($item->status)->toBe(Item::STATUS_READY)
         ->and($item->unit_cost_amount)->toBe(4550)

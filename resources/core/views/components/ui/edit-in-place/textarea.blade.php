@@ -70,7 +70,7 @@
             x-ref="input"
             x-model="val"
             @keydown.escape="editing = false; val = original"
-            @blur="if (editing) { editing = false; original = val; $wire.{{ $saveMethod }}(@js($field), val) }"
+            @blur="if (editing) { editing = false; if (val !== original) { original = val; $wire.{{ $saveMethod }}(@js($field), val) } }"
             rows="{{ $rows }}"
             class="w-full px-1 py-0.5 -mx-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
         ></textarea>

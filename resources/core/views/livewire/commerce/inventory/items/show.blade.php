@@ -13,53 +13,6 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
     <div class="space-y-section-gap">
         <x-ui.page-header :title="$item->title" :subtitle="$item->sku">
-            <x-slot name="help">
-                <p>{{ __('This page is the durable record for one sellable item. Some fields are private to you; others are buyer-facing and end up on marketplace listings. Hover the cues below if anything is unclear.') }}</p>
-
-                <dl class="mt-3 space-y-2">
-                    <div>
-                        <dt class="font-medium text-ink">{{ __('SKU') }}</dt>
-                        <dd>{{ __('Stable BLB-internal identifier generated when the item is created. It does not change and is independent of any eBay item ID.') }}</dd>
-                    </div>
-                    <div>
-                        <dt class="font-medium text-ink">{{ __('Title') }}</dt>
-                        <dd>{{ __('Buyer-facing item name. Used as the listing title when the item is published; aim for the same words a buyer would search.') }}</dd>
-                    </div>
-                    <div>
-                        <dt class="font-medium text-ink">{{ __('Status') }}</dt>
-                        <dd>{{ __('Lifecycle stage: Draft (still being prepared) → Ready (cleared for publishing) → Listed (live on a marketplace) → Sold (durable record kept after listing ends) → Archived (no longer relevant).') }}</dd>
-                    </div>
-                    <div>
-                        <dt class="font-medium text-ink">{{ __('Unit Cost') }}</dt>
-                        <dd>{{ __('What this item cost you to acquire, in minor currency units (cents). Private to you. Used to compute gross margin in Insights.') }}</dd>
-                    </div>
-                    <div>
-                        <dt class="font-medium text-ink">{{ __('Target Price') }}</dt>
-                        <dd>{{ __('Your intended selling price. Buyer-facing — used as the default price when the item is published to a marketplace, and as the basis for the listed amount in reports until a real Sale is recorded.') }}</dd>
-                    </div>
-                    <div>
-                        <dt class="font-medium text-ink">{{ __('Currency') }}</dt>
-                        <dd>{{ __('Applies to both Unit Cost and Target Price on this item. Snapshotted per item so changing the company default later does not rewrite historical records.') }}</dd>
-                    </div>
-                    <div>
-                        <dt class="font-medium text-ink">{{ __('Notes') }}</dt>
-                        <dd>{{ __('Your private working surface — quick observations, condition jottings, fitment hints to remember. Never published to buyers and never sent to a marketplace.') }}</dd>
-                    </div>
-                    <div>
-                        <dt class="font-medium text-ink">{{ __('Photos') }}</dt>
-                        <dd>{{ __('Raw photos you upload from your phone or desktop. Later phases will produce cleaned (background-removed) versions as derived assets so the originals are never overwritten.') }}</dd>
-                    </div>
-                    <div>
-                        <dt class="font-medium text-ink">{{ __('Attributes') }}</dt>
-                        <dd>{{ __('Structured fields beyond the built-in ones (Title, Notes, Unit Cost, Target Price, Photos). Examples: Year, Make, Model, OEM #, Interchange #, Condition Grade. Define new attribute types in the Catalog Workbench, then enter values for this item here. Attribute values are buyer-facing — they map to marketplace item specifics when the item is published.') }}</dd>
-                    </div>
-                    <div>
-                        <dt class="font-medium text-ink">{{ __('Listing Descriptions') }}</dt>
-                        <dd>{{ __('Buyer-facing description copy for marketplace listings. This is separate from your private Notes above. Each entry is a version: every time you (or Lara) drafts a new description, a new numbered version is added so previous drafts are kept for comparison. Use "Add Version" to write a new draft manually — useful when you want to revise listing copy without losing the prior wording. Click "Accept" on whichever version should be the one that gets published; only one version is the accepted (published) one at a time.') }}</dd>
-                    </div>
-                </dl>
-            </x-slot>
-
             <x-slot name="actions">
                 <x-ui.button variant="ghost" as="a" href="{{ route('commerce.inventory.items.index') }}" wire:navigate>
                     <x-icon name="heroicon-o-arrow-left" class="w-4 h-4" />
@@ -77,19 +30,23 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                 <x-ui.card>
                     @if ($this->canEdit())
                         <dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                            <div>
-                                <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('SKU') }}</dt>
-                                <dd class="text-sm text-ink">
-                                    <span class="font-mono">{{ $item->sku }}</span>
-                                    <p class="mt-1 text-xs text-muted">{{ __('SKU is generated by BLB and cannot be changed.') }}</p>
-                                </dd>
-                            </div>
+                            <x-ui.edit-in-place.text
+                                :label="__('SKU')"
+                                :value="$item->sku"
+                                field="sku"
+                                save-method="saveField"
+                                maxlength="64"
+                                monospace
+                                :help="__('Seller-controlled item code, required and unique within the operating company.')"
+                                :error="$errors->first('sku')"
+                            />
 
                             <x-ui.edit-in-place.text
                                 :label="__('Title')"
                                 :value="$item->title"
                                 field="title"
                                 save-method="saveField"
+                                :help="__('Buyer-facing item name used as the listing title when the item is published.')"
                                 :error="$errors->first('title')"
                             />
 
@@ -98,6 +55,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 :value="$item->status"
                                 field="status"
                                 save-method="saveField"
+                                :help="__('Lifecycle stage from draft through ready, listed, sold, and archived.')"
                                 :error="$errors->first('status')"
                             >
                                 <x-slot name="read">
@@ -117,6 +75,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 save-method="saveMoneyField"
                                 inputmode="decimal"
                                 tabular
+                                :help="__('Private acquisition cost. Used later to calculate gross margin.')"
                                 :error="$errors->first('unit_cost_amount')"
                             />
 
@@ -128,6 +87,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 save-method="saveMoneyField"
                                 inputmode="decimal"
                                 tabular
+                                :help="__('Intended selling price and default listing price until a real sale is recorded.')"
                                 :error="$errors->first('target_price_amount')"
                             />
 
@@ -138,6 +98,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 save-method="saveField"
                                 maxlength="3"
                                 monospace
+                                :help="__('Applies to this item cost and target price. Snapshotted so later defaults do not rewrite history.')"
                                 :error="$errors->first('currency_code')"
                             />
 
@@ -155,6 +116,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 save-method="saveField"
                                 :empty="__('No notes captured yet.')"
                                 rows="5"
+                                :help="__('Private working notes. Never published to buyers or sent to a marketplace.')"
                                 :error="$errors->first('notes')"
                             />
                         </dl>
@@ -188,9 +150,35 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                 </x-ui.card>
 
                 <x-ui.card>
-                    <div class="mb-3 flex items-center justify-between">
-                        <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Listing Descriptions') }}</h2>
-                        <x-ui.badge>{{ $item->descriptions->count() }}</x-ui.badge>
+                    <div x-data="{ helpOpen: false }">
+                        <div class="mb-3 flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-2">
+                                <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Listing Descriptions') }}</h2>
+                                <x-ui.help @click="helpOpen = !helpOpen" ::aria-expanded="helpOpen" />
+                            </div>
+                            <x-ui.badge>{{ $item->descriptions->count() }}</x-ui.badge>
+                        </div>
+
+                        <div
+                            x-cloak
+                            x-show="helpOpen"
+                            x-transition:enter="transition-all ease-out duration-200 motion-reduce:duration-0"
+                            x-transition:enter-start="max-h-0 opacity-0"
+                            x-transition:enter-end="max-h-96 opacity-100"
+                            x-transition:leave="transition-all ease-in duration-150 motion-reduce:duration-0"
+                            x-transition:leave-start="max-h-96 opacity-100"
+                            x-transition:leave-end="max-h-0 opacity-0"
+                            class="mb-3 overflow-hidden rounded-2xl border border-border-default bg-surface-card text-sm text-muted shadow-sm"
+                            @click="helpOpen = false"
+                            role="note"
+                            aria-label="{{ __('Click to dismiss') }}"
+                        >
+                            <div class="p-4 space-y-2">
+                                <p>{{ __('Buyer-facing copy intended for a marketplace listing (not internal notes).') }}</p>
+                                <p>{{ __('Each time you add a description, it is saved as a new version (v1, v2, …) so older drafts remain visible.') }}</p>
+                                <p>{{ __('Accept marks the one version approved to use right now (only one can be accepted at a time).') }}</p>
+                            </div>
+                        </div>
                     </div>
 
                     @if ($item->descriptions->isEmpty())
@@ -199,23 +187,63 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                         <div class="space-y-4">
                             @foreach ($item->descriptions as $description)
                                 <div wire:key="item-description-{{ $description->id }}" class="border-b border-border-default pb-4 last:border-0 last:pb-0">
-                                    <div class="flex items-start justify-between gap-3">
-                                        <div>
+                                    <div class="flex flex-col gap-3">
+                                        <div class="flex flex-wrap items-center justify-between gap-3">
                                             <div class="flex flex-wrap items-center gap-2">
-                                                <h3 class="text-sm font-medium text-ink">{{ $description->title }}</h3>
                                                 <x-ui.badge>{{ __('v:version', ['version' => $description->version]) }}</x-ui.badge>
                                                 @if ($description->is_accepted)
                                                     <x-ui.badge variant="success">{{ __('Accepted') }}</x-ui.badge>
                                                 @endif
                                             </div>
-                                            <p class="mt-2 whitespace-pre-wrap text-sm text-muted">{{ $description->body }}</p>
+
+                                            @if ($this->canEdit())
+                                                <div class="flex items-center gap-2">
+                                                    @if (! $description->is_accepted)
+                                                        <x-ui.button type="button" variant="outline" size="sm" wire:click="acceptDescription({{ $description->id }})">
+                                                            <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                                                            {{ __('Accept') }}
+                                                        </x-ui.button>
+                                                    @endif
+
+                                                    <x-ui.button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        wire:click="deleteDescription({{ $description->id }})"
+                                                        wire:confirm="{{ __('Delete this version?') }}"
+                                                        aria-label="{{ __('Delete version') }}"
+                                                        title="{{ __('Delete') }}"
+                                                    >
+                                                        <x-icon name="heroicon-o-trash" class="h-4 w-4" />
+                                                    </x-ui.button>
+                                                </div>
+                                            @endif
                                         </div>
 
-                                        @if ($this->canEdit() && ! $description->is_accepted)
-                                            <x-ui.button type="button" variant="outline" size="sm" wire:click="acceptDescription({{ $description->id }})">
-                                                <x-icon name="heroicon-o-check" class="h-4 w-4" />
-                                                {{ __('Accept') }}
-                                            </x-ui.button>
+                                        @if ($this->canEdit())
+                                            <div class="space-y-2">
+                                                <x-ui.edit-in-place.text
+                                                    :value="$description->title"
+                                                    field="{{ 'descriptions.' . $description->id . '.title' }}"
+                                                    save-method="saveDescriptionField"
+                                                    :empty="__('Untitled')"
+                                                    :error="$errors->first('descriptions.' . $description->id . '.title')"
+                                                />
+
+                                                <x-ui.edit-in-place.textarea
+                                                    :value="$description->body"
+                                                    field="{{ 'descriptions.' . $description->id . '.body' }}"
+                                                    save-method="saveDescriptionField"
+                                                    rows="6"
+                                                    :empty="__('Empty description')"
+                                                    :error="$errors->first('descriptions.' . $description->id . '.body')"
+                                                />
+                                            </div>
+                                        @else
+                                            <div>
+                                                <h3 class="text-sm font-medium text-ink">{{ $description->title }}</h3>
+                                                <p class="mt-2 whitespace-pre-wrap text-sm text-muted">{{ $description->body }}</p>
+                                            </div>
                                         @endif
                                     </div>
                                 </div>
@@ -230,6 +258,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 wire:model="descriptionTitle"
                                 label="{{ __('Title') }}"
                                 required
+                                :help="__('Short label for this description version.')"
                                 :error="$errors->first('descriptionTitle')"
                             />
 
@@ -239,6 +268,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 label="{{ __('Body') }}"
                                 rows="6"
                                 required
+                                :help="__('Buyer-facing listing copy. Each saved draft becomes a new version.')"
                                 :error="$errors->first('descriptionBody')"
                             />
 
@@ -253,10 +283,52 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
             <div class="space-y-6">
                 <x-ui.card>
-                    <div class="flex items-center justify-between mb-3">
-                        <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Photos') }}</h2>
-                        <x-ui.badge>{{ $item->photos->count() }}</x-ui.badge>
-                    </div>
+                    <div
+                        x-data="{ dragging: false, dragDepth: 0, autoUploadOnFinish: false }"
+                        class="relative"
+                        @dragenter.prevent.stop="
+                            dragDepth++;
+                            dragging = true;
+                        "
+                        @dragover.prevent.stop="dragging = true"
+                        @dragleave.prevent.stop="
+                            dragDepth = Math.max(0, dragDepth - 1);
+                            if (dragDepth === 0) dragging = false;
+                        "
+                        x-on:livewire-upload-finish.window="
+                            if (!autoUploadOnFinish) return;
+                            autoUploadOnFinish = false;
+                            $wire.uploadPhotos();
+                        "
+                        x-on:livewire-upload-error.window="autoUploadOnFinish = false"
+                        @drop.prevent.stop="
+                            dragDepth = 0;
+                            dragging = false;
+                            const dt = $event.dataTransfer;
+                            if (!dt || !dt.files || dt.files.length === 0) return;
+                            $refs.photoInput.files = dt.files;
+                            $refs.photoInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            autoUploadOnFinish = true;
+                        "
+                    >
+                        <div
+                            x-cloak
+                            x-show="dragging"
+                            class="absolute inset-0 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent/70 bg-surface-card/80"
+                        >
+                            <div class="text-center px-6">
+                                <div class="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-surface-subtle text-muted">
+                                    <x-icon name="heroicon-o-arrow-up-tray" class="h-5 w-5" />
+                                </div>
+                                <p class="text-sm font-medium text-ink">{{ __('Drop photos to add them') }}</p>
+                                <p class="mt-1 text-xs text-muted">{{ __('Images only. Multiple files supported.') }}</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between mb-3">
+                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Photos') }}</h2>
+                            <x-ui.badge>{{ $item->photos->count() }}</x-ui.badge>
+                        </div>
 
                     @if ($item->photos->isEmpty())
                         <p class="text-sm text-muted">{{ __('No photos yet.') }}</p>
@@ -293,26 +365,28 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                         <form wire:submit="uploadPhotos" class="mt-4 flex flex-col gap-3">
                             <div>
                                 <label for="item-photos" class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Add photos') }}</label>
+
                                 <input
+                                    x-ref="photoInput"
                                     id="item-photos"
                                     type="file"
                                     multiple
                                     accept="image/*"
                                     wire:model="photoFiles"
+                                    x-on:change="if ($event.target.files && $event.target.files.length > 0) autoUploadOnFinish = true"
                                     class="mt-1 block w-full text-sm text-ink file:mr-4 file:rounded file:border-0 file:bg-surface-subtle file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-surface-subtle/80"
                                 />
+
                                 @error('photoFiles') <p class="mt-1 text-sm text-status-danger">{{ $message }}</p> @enderror
                                 @error('photoFiles.*') <p class="mt-1 text-sm text-status-danger">{{ $message }}</p> @enderror
+                                @if (! $errors->has('photoFiles') && ! $errors->has('photoFiles.*'))
+                                    <x-ui.field-help :hint="__('Raw photos from phone or desktop. Cleaned versions will be stored later as derived assets.')" />
+                                @endif
                             </div>
 
-                            <div class="flex items-center gap-2">
-                                <x-ui.button type="submit" variant="outline" size="sm" :disabled="empty($photoFiles)">
-                                    <x-icon name="heroicon-o-arrow-up-tray" class="h-4 w-4" />
-                                    {{ __('Upload') }}
-                                </x-ui.button>
-                            </div>
                         </form>
                     @endif
+                    </div>
                 </x-ui.card>
 
                 <x-ui.card>
@@ -350,31 +424,42 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                     @if ($this->canEdit())
                         <form wire:submit="saveAttributeValue" class="mt-4 space-y-4 border-t border-border-default pt-4">
-                            <x-ui.select id="item-attribute-id" wire:model="selectedAttributeId" label="{{ __('Attribute') }}" :error="$errors->first('selectedAttributeId')">
-                                <option value="">{{ __('Select') }}</option>
+                            <x-ui.select
+                                id="item-attribute-id"
+                                wire:model="selectedAttributeId"
+                                label="{{ __('Attribute') }}"
+                                :help="__('Structured buyer-facing fact such as OEM number, interchange number, or condition grade.')"
+                                :error="$errors->first('selectedAttributeId')"
+                            >
+                                <option value="">{{ __('Select...') }}</option>
                                 @foreach ($availableAttributes as $attribute)
                                     <option value="{{ $attribute->id }}">{{ $attribute->name }}</option>
                                 @endforeach
                             </x-ui.select>
 
-                            <x-ui.input
-                                id="item-attribute-value"
-                                wire:model="attributeValue"
-                                label="{{ __('Value') }}"
-                                :error="$errors->first('attributeValue')"
-                            />
+                            @if ($selectedAttributeId)
+                                <x-ui.input
+                                    id="item-attribute-value"
+                                    wire:model="attributeValue"
+                                    label="{{ __('Value') }}"
+                                    :help="__('The value for the selected attribute. These values map to marketplace item specifics later.')"
+                                    :error="$errors->first('attributeValue')"
+                                />
 
-                            <div class="flex flex-wrap items-center gap-2">
-                                <x-ui.button type="submit" variant="primary" size="sm" :disabled="$availableAttributes->isEmpty()">
-                                    <x-icon name="heroicon-o-plus" class="h-4 w-4" />
-                                    {{ __('Save') }}
-                                </x-ui.button>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <x-ui.button type="submit" variant="primary" size="sm">
+                                        <x-icon name="heroicon-o-plus" class="h-4 w-4" />
+                                        {{ __('Save') }}
+                                    </x-ui.button>
 
-                                <x-ui.button variant="ghost" size="sm" as="a" href="{{ route('commerce.catalog.index') }}" wire:navigate>
-                                    <x-icon name="heroicon-o-tag" class="h-4 w-4" />
-                                    {{ __('Catalog') }}
-                                </x-ui.button>
-                            </div>
+                                    <x-ui.button variant="ghost" size="sm" as="a" href="{{ route('commerce.catalog.index') }}" wire:navigate>
+                                        <x-icon name="heroicon-o-tag" class="h-4 w-4" />
+                                        {{ __('Catalog') }}
+                                    </x-ui.button>
+                                </div>
+                            @else
+                                <x-ui.field-help :hint="__('Select an attribute first, then enter its value.')"/>
+                            @endif
                         </form>
                     @endif
                 </x-ui.card>

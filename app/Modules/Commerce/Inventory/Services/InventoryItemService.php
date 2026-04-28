@@ -12,14 +12,13 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class InventoryItemService
 {
     private const string PHOTO_DISK = 'local';
 
     /**
-     * @param  array{title: string, notes?: string|null, status: string, unitCostAmount?: string|null, targetPriceAmount?: string|null, currencyCode: string}  $data
+     * @param  array{sku: string, title: string, notes?: string|null, status: string, unitCostAmount?: string|null, targetPriceAmount?: string|null, currencyCode: string}  $data
      */
     public function create(int $companyId, array $data): Item
     {
@@ -27,7 +26,7 @@ class InventoryItemService
 
         return Item::query()->create([
             'company_id' => $companyId,
-            'sku' => $this->generateSku(),
+            'sku' => strtoupper($data['sku']),
             'status' => $data['status'],
             'title' => $data['title'],
             'notes' => $data['notes'] ?? null,
@@ -69,14 +68,5 @@ class InventoryItemService
             $photo->delete();
             Storage::disk(self::PHOTO_DISK)->delete($storageKey);
         });
-    }
-
-    private function generateSku(): string
-    {
-        do {
-            $sku = 'ITEM-'.Str::upper(Str::random(8));
-        } while (Item::query()->where('sku', $sku)->exists());
-
-        return $sku;
     }
 }

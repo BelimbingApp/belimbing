@@ -17,7 +17,7 @@ return new class extends Migration
         Schema::create('commerce_inventory_items', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('company_id')->index()->constrained('companies');
-            $table->string('sku')->unique();
+            $table->string('sku');
             $table->string('status')->default('draft')->index();
             $table->string('title');
             $table->text('notes')->nullable();
@@ -28,6 +28,7 @@ return new class extends Migration
 
             $table->index(['company_id', 'status']);
             $table->index(['company_id', 'created_at']);
+            $table->unique(['company_id', 'sku']);
         });
     }
 
