@@ -53,7 +53,7 @@ class Index extends SearchablePaginatedList
         $query->where(function (EloquentBuilder $builder) use ($search): void {
             $builder->where('sku', 'like', '%'.$search.'%')
                 ->orWhere('title', 'like', '%'.$search.'%')
-                ->orWhere('description', 'like', '%'.$search.'%')
+                ->orWhere('notes', 'like', '%'.$search.'%')
                 ->orWhere('status', 'like', '%'.$search.'%');
         });
     }

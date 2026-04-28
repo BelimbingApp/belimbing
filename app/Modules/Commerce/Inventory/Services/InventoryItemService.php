@@ -19,7 +19,7 @@ class InventoryItemService
     private const string PHOTO_DISK = 'local';
 
     /**
-     * @param  array{title: string, description?: string|null, status: string, unitCostAmount?: string|null, targetPriceAmount?: string|null, currencyCode: string}  $data
+     * @param  array{title: string, notes?: string|null, status: string, unitCostAmount?: string|null, targetPriceAmount?: string|null, currencyCode: string}  $data
      */
     public function create(int $companyId, array $data): Item
     {
@@ -30,7 +30,7 @@ class InventoryItemService
             'sku' => $this->generateSku(),
             'status' => $data['status'],
             'title' => $data['title'],
-            'description' => $data['description'] ?? null,
+            'notes' => $data['notes'] ?? null,
             'unit_cost_amount' => Money::fromDecimalString($data['unitCostAmount'] ?? null, $currencyCode)?->minorAmount,
             'target_price_amount' => Money::fromDecimalString($data['targetPriceAmount'] ?? null, $currencyCode)?->minorAmount,
             'currency_code' => $currencyCode,

@@ -13,6 +13,53 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
     <div class="space-y-section-gap">
         <x-ui.page-header :title="$item->title" :subtitle="$item->sku">
+            <x-slot name="help">
+                <p>{{ __('This page is the durable record for one sellable item. Some fields are private to you; others are buyer-facing and end up on marketplace listings. Hover the cues below if anything is unclear.') }}</p>
+
+                <dl class="mt-3 space-y-2">
+                    <div>
+                        <dt class="font-medium text-ink">{{ __('SKU') }}</dt>
+                        <dd>{{ __('Stable BLB-internal identifier generated when the item is created. It does not change and is independent of any eBay item ID.') }}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-medium text-ink">{{ __('Title') }}</dt>
+                        <dd>{{ __('Buyer-facing item name. Used as the listing title when the item is published; aim for the same words a buyer would search.') }}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-medium text-ink">{{ __('Status') }}</dt>
+                        <dd>{{ __('Lifecycle stage: Draft (still being prepared) → Ready (cleared for publishing) → Listed (live on a marketplace) → Sold (durable record kept after listing ends) → Archived (no longer relevant).') }}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-medium text-ink">{{ __('Unit Cost') }}</dt>
+                        <dd>{{ __('What this item cost you to acquire, in minor currency units (cents). Private to you. Used to compute gross margin in Insights.') }}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-medium text-ink">{{ __('Target Price') }}</dt>
+                        <dd>{{ __('Your intended selling price. Buyer-facing — used as the default price when the item is published to a marketplace, and as the basis for the listed amount in reports until a real Sale is recorded.') }}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-medium text-ink">{{ __('Currency') }}</dt>
+                        <dd>{{ __('Applies to both Unit Cost and Target Price on this item. Snapshotted per item so changing the company default later does not rewrite historical records.') }}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-medium text-ink">{{ __('Notes') }}</dt>
+                        <dd>{{ __('Your private working surface — quick observations, condition jottings, fitment hints to remember. Never published to buyers and never sent to a marketplace.') }}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-medium text-ink">{{ __('Photos') }}</dt>
+                        <dd>{{ __('Raw photos you upload from your phone or desktop. Later phases will produce cleaned (background-removed) versions as derived assets so the originals are never overwritten.') }}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-medium text-ink">{{ __('Attributes') }}</dt>
+                        <dd>{{ __('Structured fields beyond the built-in ones (Title, Notes, Unit Cost, Target Price, Photos). Examples: Year, Make, Model, OEM #, Interchange #, Condition Grade. Define new attribute types in the Catalog Workbench, then enter values for this item here. Attribute values are buyer-facing — they map to marketplace item specifics when the item is published.') }}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-medium text-ink">{{ __('Listing Descriptions') }}</dt>
+                        <dd>{{ __('Buyer-facing description copy for marketplace listings. This is separate from your private Notes above. Each entry is a version: every time you (or Lara) drafts a new description, a new numbered version is added so previous drafts are kept for comparison. Use "Add Version" to write a new draft manually — useful when you want to revise listing copy without losing the prior wording. Click "Accept" on whichever version should be the one that gets published; only one version is the accepted (published) one at a time.') }}</dd>
+                    </div>
+                </dl>
+            </x-slot>
+
             <x-slot name="actions">
                 <x-ui.button variant="ghost" as="a" href="{{ route('commerce.inventory.items.index') }}" wire:navigate>
                     <x-icon name="heroicon-o-arrow-left" class="w-4 h-4" />
@@ -102,13 +149,13 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                         <dl class="mt-4 border-t border-border-default pt-4">
                             <x-ui.edit-in-place.textarea
-                                :label="__('Description Notes')"
-                                :value="$item->description"
-                                field="description"
+                                :label="__('Notes')"
+                                :value="$item->notes"
+                                field="notes"
                                 save-method="saveField"
                                 :empty="__('No notes captured yet.')"
                                 rows="5"
-                                :error="$errors->first('description')"
+                                :error="$errors->first('notes')"
                             />
                         </dl>
                     @else
@@ -134,8 +181,8 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                         </dl>
 
                         <dl class="mt-4 border-t border-border-default pt-4">
-                            <dt class="mb-1 text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Description Notes') }}</dt>
-                            <dd class="text-sm text-ink whitespace-pre-wrap">{{ $item->description ?: __('No notes captured yet.') }}</dd>
+                            <dt class="mb-1 text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Notes') }}</dt>
+                            <dd class="text-sm text-ink whitespace-pre-wrap">{{ $item->notes ?: __('No notes captured yet.') }}</dd>
                         </dl>
                     @endif
                 </x-ui.card>

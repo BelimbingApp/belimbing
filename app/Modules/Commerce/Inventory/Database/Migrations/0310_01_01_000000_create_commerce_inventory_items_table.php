@@ -20,11 +20,10 @@ return new class extends Migration
             $table->string('sku')->unique();
             $table->string('status')->default('draft')->index();
             $table->string('title');
-            $table->text('description')->nullable();
+            $table->text('notes')->nullable();
             $table->unsignedBigInteger('unit_cost_amount')->nullable();
             $table->unsignedBigInteger('target_price_amount')->nullable();
             $table->char('currency_code', 3)->default('MYR');
-            $table->json('attributes')->nullable();
             $table->timestamps();
 
             $table->index(['company_id', 'status']);

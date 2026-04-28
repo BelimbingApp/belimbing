@@ -1,8 +1,8 @@
 # ham/01-ebay-car-parts-operations
 
-**Agent:** Amp
+**Agent:** Amp, Codex
 **Status:** In Progress — Phase 1 browser workbench
-**Last Updated:** 2026-04-27
+**Last Updated:** 2026-04-28
 **Sources:**
 - User context: Ham, BLB early adopter, LA-based one-person eBay car-parts seller (~2,000 active listings), undergoing cancer treatment, on a tight budget. Today uses PhotoRoom (paid SaaS) for background removal and a Windows desktop for writing/photo editing/eBay work. BLB itself is AGPLv3 and the project sponsor (Kiat) is supporting Ham pro bono.
 - `docs/brief.md` — BLB vision: "serve the unserved," AI-native, DIY-enabling
@@ -69,7 +69,7 @@ The decision rubric: if a second adopter selling, say, used cameras would also w
 
 ## Top-Level Components
 
-1. **Inventory** (`app/Modules/Commerce/Inventory`) — `Item`, `ItemPhoto`, lifecycle (`draft → ready → listed → sold → archived`), internal SKU. Sales-by-construction: this module's tables only hold sellable items. A future maintenance or raw-materials domain is a separate module, not a flag in this one. Deliberately thin: no bins, no movements ledger, no warehouse model. The first slices have landed with `Item`, `commerce_inventory_items`, internal SKU generation, a browser-visible Inventory Workbench, detail editing, and local item-photo upload/delete.
+1. **Inventory** (`app/Modules/Commerce/Inventory`) — `Item`, `ItemPhoto`, lifecycle (`draft → ready → listed → sold → archived`), internal SKU. Sales-by-construction: this module's tables only hold sellable items. A future maintenance or raw-materials domain is a separate module, not a flag in this one. Deliberately thin: no bins, no movements ledger, no warehouse model. `Item` carries a free-form `notes` text field as the operator's private working surface (jot-it-down on the bench); buyer-facing listing copy lives in versioned `Description` rows in `Catalog`, never on `Item`. The first slices have landed with `Item`, `commerce_inventory_items`, internal SKU generation, a browser-visible Inventory Workbench, detail editing, and local item-photo upload/delete.
 2. **Catalog** (`app/Modules/Commerce/Catalog`) — `ProductTemplate`, `Category`, `Attribute`, `AttributeValue`, `Description` (versioned). The mechanism for "what is this sellable item"; the car-parts vocabulary is seeded by Ham's extension. Maintenance categories or BOMs belong in their own module's catalog, not here. The data skeleton, browser Catalog Workbench, generic dev seeder, and scalable search/paginated inline-edit catalog tables have landed; richer template/category assignment on inventory items remains future work.
 3. **Marketplace** (`app/Modules/Commerce/Marketplace` + `.../Ebay`) — channel contract + eBay adapter. Read-first: pulls Ham's existing eBay listings and orders so BLB has a populated ledger from day one without him doing data entry.
 4. **Sales** (`app/Modules/Commerce/Sales`) — `Order`, `OrderLine`, `Sale` (the durable "this item was sold for this much on this date through this channel" record), `Fee`. Driven by Marketplace adapters.
@@ -131,7 +131,7 @@ Each phase ends with something Ham can use. Phases 0–2 are framework work that
 - [x] `app/Modules/Commerce/Inventory`: first `Item` slice — `commerce_inventory_items`, lifecycle status field, internal SKU generator, company scoping, `unit_cost_amount`, `target_price_amount`, `currency_code` with MYR fallback, generic dev seeder, list/create Workbench, and no location/bin/movement tables.
 - [x] `app/Modules/Commerce/Inventory`: load Create Item default currency from company `base_settings` (`commerce.default_currency_code`), falling back to MYR.
 - [ ] Ham onboarding/settings: set Ham's company default currency to USD through UX/settings once his install exists.
-- [x] `app/Modules/Commerce/Inventory`: add `ItemPhoto` and the photo grid/upload surface.
+- [x] `app/Modules/Commerce/Inventory`: add `ItemPhoto` and the photo grid/upload surface. Currently uses raw `'local'` storage with no derived-asset linkage — the Phase 0 media subsystem (storage abstraction, signed URLs, derived-asset model) is still the upstream prerequisite before Phase 4's `photo-cleanup` task can attach cleaned children to originals.
 - [ ] `app/Modules/Commerce/Inventory`: formalize lifecycle transitions beyond the initial status field when marketplace/photo/AI flows need them.
 - [x] `app/Modules/Commerce/Catalog`: `ProductTemplate`, `Category`, generic `Attribute`/`AttributeValue`, versioned `Description`, and generic dev seeder.
 - [x] Operator UX first slice (desktop-first): Inventory Workbench lists items, filters by search, and creates the durable item record with unit cost/target price/status/notes.

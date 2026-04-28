@@ -51,7 +51,7 @@ test('item can be created from the browser workbench component', function (): vo
 
     $component = Livewire::test(Create::class)
         ->set('title', '2008 Honda Civic driver side headlight')
-        ->set('description', 'Light scuff on lower-left lens.')
+        ->set('notes', 'Light scuff on lower-left lens.')
         ->set('status', Item::STATUS_DRAFT)
         ->set('unitCostAmount', '40.00')
         ->set('targetPriceAmount', '120.00')
@@ -80,7 +80,7 @@ test('authenticated users can view an inventory item detail page', function (): 
         'company_id' => $user->company_id,
         'sku' => 'ITEM-SHOW123',
         'title' => 'Mirrorless camera body',
-        'description' => 'Includes battery and charger.',
+        'notes' => 'Includes battery and charger.',
         'unit_cost_amount' => 95000,
         'target_price_amount' => 145000,
         'currency_code' => 'MYR',
@@ -112,7 +112,7 @@ test('item facts can be updated directly from the detail page component', functi
 
     Livewire::test(Show::class, ['item' => $item])
         ->call('saveField', 'title', 'Edited inventory item')
-        ->call('saveField', 'description', 'Updated condition notes.')
+        ->call('saveField', 'notes', 'Updated condition notes.')
         ->call('saveField', 'status', Item::STATUS_READY)
         ->call('saveMoneyField', 'unit_cost_amount', '45.50')
         ->call('saveMoneyField', 'target_price_amount', '130.00')
@@ -121,7 +121,7 @@ test('item facts can be updated directly from the detail page component', functi
     $item->refresh();
 
     expect($item->title)->toBe('Edited inventory item')
-        ->and($item->description)->toBe('Updated condition notes.')
+        ->and($item->notes)->toBe('Updated condition notes.')
         ->and($item->status)->toBe(Item::STATUS_READY)
         ->and($item->unit_cost_amount)->toBe(4550)
         ->and($item->target_price_amount)->toBe(13000)

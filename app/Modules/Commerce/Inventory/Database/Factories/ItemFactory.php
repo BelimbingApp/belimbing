@@ -38,11 +38,10 @@ class ItemFactory extends Factory
             'sku' => 'ITEM-'.fake()->unique()->bothify('####??'),
             'status' => fake()->randomElement(Item::statuses()),
             'title' => $title,
-            'description' => fake()->optional()->paragraph(),
+            'notes' => fake()->optional()->paragraph(),
             'unit_cost_amount' => fake()->optional()->numberBetween(1000, 15000),
             'target_price_amount' => fake()->optional()->numberBetween(2500, 35000),
             'currency_code' => 'MYR',
-            'attributes' => null,
         ];
     }
 }

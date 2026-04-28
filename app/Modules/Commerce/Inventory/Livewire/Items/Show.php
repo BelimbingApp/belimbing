@@ -65,8 +65,8 @@ class Show extends Component
                     $model->currency_code = strtoupper($validatedValue);
                 }
 
-                if ($field === 'description' && trim((string) $validatedValue) === '') {
-                    $model->description = null;
+                if ($field === 'notes' && trim((string) $validatedValue) === '') {
+                    $model->notes = null;
                 }
             },
         );
@@ -231,7 +231,7 @@ class Show extends Component
     {
         return [
             'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:5000'],
+            'notes' => ['nullable', 'string', 'max:5000'],
             'status' => ['required', Rule::in(Item::statuses())],
             'currency_code' => ['required', 'string', 'size:3'],
         ];

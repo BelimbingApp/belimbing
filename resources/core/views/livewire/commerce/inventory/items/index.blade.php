@@ -30,7 +30,7 @@
             <div class="mb-2">
                 <x-ui.search-input
                     wire:model.live.debounce.300ms="search"
-                    placeholder="{{ __('Search by SKU, title, description, or status...') }}"
+                    placeholder="{{ __('Search by SKU, title, notes, or status...') }}"
                 />
             </div>
 
@@ -56,8 +56,8 @@
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y">
                                     <div class="text-sm font-medium text-ink">{{ $item->title }}</div>
-                                    @if ($item->description)
-                                        <div class="mt-1 max-w-xl truncate text-xs text-muted">{{ $item->description }}</div>
+                                    @if ($item->notes)
+                                        <div class="mt-1 max-w-xl truncate text-xs text-muted">{{ $item->notes }}</div>
                                     @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">

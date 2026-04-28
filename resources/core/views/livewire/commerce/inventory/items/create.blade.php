@@ -73,12 +73,12 @@
                 </div>
 
                 <x-ui.textarea
-                    id="inventory-item-description"
-                    wire:model="description"
-                    label="{{ __('Description Notes') }}"
+                    id="inventory-item-notes"
+                    wire:model="notes"
+                    label="{{ __('Notes') }}"
                     rows="5"
                     placeholder="{{ __('Condition, fitment, defects, identifiers, variant notes...') }}"
-                    :error="$errors->first('description')"
+                    :error="$errors->first('notes')"
                 />
 
                 <div class="rounded-2xl border border-dashed border-border-default bg-surface-subtle p-card-inner">

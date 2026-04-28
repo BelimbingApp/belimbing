@@ -18,7 +18,7 @@ class Create extends Component
 {
     public string $title = '';
 
-    public ?string $description = null;
+    public ?string $notes = null;
 
     public string $status = Item::STATUS_DRAFT;
 
@@ -37,7 +37,7 @@ class Create extends Component
     {
         $validated = $this->validate([
             'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:5000'],
+            'notes' => ['nullable', 'string', 'max:5000'],
             'status' => ['required', Rule::in(Item::statuses())],
             'unitCostAmount' => ['nullable', 'regex:/^\d{1,7}(\.\d{1,2})?$/'],
             'targetPriceAmount' => ['nullable', 'regex:/^\d{1,7}(\.\d{1,2})?$/'],

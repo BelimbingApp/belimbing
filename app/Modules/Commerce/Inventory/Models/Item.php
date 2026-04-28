@@ -24,11 +24,10 @@ use Illuminate\Support\Carbon;
  * @property string $sku
  * @property string $status
  * @property string $title
- * @property string|null $description
+ * @property string|null $notes
  * @property int|null $unit_cost_amount
  * @property int|null $target_price_amount
  * @property string $currency_code
- * @property array<string, mixed>|null $attributes
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Company $company
@@ -60,22 +59,11 @@ class Item extends Model
         'sku',
         'status',
         'title',
-        'description',
+        'notes',
         'unit_cost_amount',
         'target_price_amount',
         'currency_code',
-        'attributes',
     ];
-
-    /**
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'attributes' => 'array',
-        ];
-    }
 
     /**
      * @return list<string>

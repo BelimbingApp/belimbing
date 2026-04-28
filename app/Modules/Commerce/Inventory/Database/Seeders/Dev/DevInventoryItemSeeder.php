@@ -37,7 +37,7 @@ class DevInventoryItemSeeder extends DevSeeder
     }
 
     /**
-     * @return array<int, array{sku: string, status: string, title: string, description: string, unit_cost_amount: int, target_price_amount: int}>
+     * @return array<int, array{sku: string, status: string, title: string, notes: string, unit_cost_amount: int, target_price_amount: int}>
      */
     private function items(): array
     {
@@ -46,7 +46,7 @@ class DevInventoryItemSeeder extends DevSeeder
                 'sku' => 'ITEM-DEMO-HEADLIGHT',
                 'status' => Item::STATUS_DRAFT,
                 'title' => '2008 Honda Civic driver side headlight',
-                'description' => 'Generic commerce item seeded from Ham-shaped workflow: condition notes, identifiers, and pricing are captured before photos and AI drafts.',
+                'notes' => 'Generic commerce item seeded from Ham-shaped workflow: condition notes, identifiers, and pricing are captured before photos and AI drafts.',
                 'unit_cost_amount' => 18000,
                 'target_price_amount' => 52000,
             ],
@@ -54,7 +54,7 @@ class DevInventoryItemSeeder extends DevSeeder
                 'sku' => 'ITEM-DEMO-CAMERA',
                 'status' => Item::STATUS_READY,
                 'title' => 'Mirrorless camera body with battery',
-                'description' => 'Used electronics example showing the same Inventory Workbench can represent non-auto goods.',
+                'notes' => 'Used electronics example showing the same Inventory Workbench can represent non-auto goods.',
                 'unit_cost_amount' => 95000,
                 'target_price_amount' => 145000,
             ],
@@ -62,7 +62,7 @@ class DevInventoryItemSeeder extends DevSeeder
                 'sku' => 'ITEM-DEMO-JACKET',
                 'status' => Item::STATUS_LISTED,
                 'title' => 'Vintage denim jacket, medium',
-                'description' => 'Apparel example for catalog attributes such as size, condition, and measurements.',
+                'notes' => 'Apparel example for catalog attributes such as size, condition, and measurements.',
                 'unit_cost_amount' => 4500,
                 'target_price_amount' => 12900,
             ],
