@@ -15,11 +15,14 @@ use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Authz\Services\EffectivePermissions;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Company\Models\ExternalAccess;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
@@ -29,9 +32,35 @@ class Show extends Component
 {
     use ChecksCapabilityAuthorization;
     use SavesValidatedFields;
+    use TogglesSort;
     use ValidatesPasswordConfirmation;
 
     public User $user;
+
+    public string $employeesSortBy = 'employee_number';
+
+    public string $employeesSortDir = 'asc';
+
+    public string $externalAccessesSortBy = 'company';
+
+    public string $externalAccessesSortDir = 'asc';
+
+    private const EMPLOYEE_SORTABLE = [
+        'employee_number' => true,
+        'company' => true,
+        'department' => true,
+        'designation' => true,
+        'status' => true,
+        'employment_start' => true,
+    ];
+
+    private const EXTERNAL_ACCESS_SORTABLE = [
+        'company' => true,
+        'permissions' => true,
+        'access_status' => true,
+        'granted_at' => true,
+        'expires_at' => true,
+    ];
 
     public string $password = '';
 
@@ -61,9 +90,46 @@ class Show extends Component
             'company',
             'externalAccesses.company',
             'employee.company',
-            'employee.department',
+            'employee.department.type',
         ]);
         $this->newEmpCompanyId = $user->company_id;
+    }
+
+    public function sortEmployees(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::EMPLOYEE_SORTABLE,
+            defaultDir: [
+                'employee_number' => 'asc',
+                'company' => 'asc',
+                'department' => 'asc',
+                'designation' => 'asc',
+                'status' => 'asc',
+                'employment_start' => 'asc',
+            ],
+            sortByProperty: 'employeesSortBy',
+            sortDirProperty: 'employeesSortDir',
+            resetPage: false,
+        );
+    }
+
+    public function sortUserExternalAccesses(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::EXTERNAL_ACCESS_SORTABLE,
+            defaultDir: [
+                'company' => 'asc',
+                'permissions' => 'asc',
+                'access_status' => 'asc',
+                'granted_at' => 'asc',
+                'expires_at' => 'asc',
+            ],
+            sortByProperty: 'externalAccessesSortBy',
+            sortDirProperty: 'externalAccessesSortDir',
+            resetPage: false,
+        );
     }
 
     /**
@@ -254,7 +320,7 @@ class Show extends Component
         }
 
         $this->user->update(['employee_id' => $employeeId]);
-        $this->user->load('employee.company', 'employee.department');
+        $this->user->load('employee.company', 'employee.department.type');
         $this->linkEmployeeId = null;
     }
 
@@ -272,7 +338,7 @@ class Show extends Component
         }
 
         $this->user->update(['employee_id' => null]);
-        $this->user->load('employee.company', 'employee.department');
+        $this->user->load('employee.company', 'employee.department.type');
     }
 
     /**
@@ -302,7 +368,7 @@ class Show extends Component
         ]);
 
         $this->user->update(['employee_id' => $employee->id]);
-        $this->user->load('employee.company', 'employee.department');
+        $this->user->load('employee.company', 'employee.department.type');
         $this->showAddEmployeeModal = false;
         $this->reset([
             'newEmpCompanyId', 'newEmpEmployeeNumber', 'newEmpFullName',
@@ -393,7 +459,17 @@ class Show extends Component
             $availableCapabilities[$domain][] = $cap;
         }
 
+        $this->user->loadMissing(['externalAccesses.company', 'employee.company', 'employee.department.type']);
+
+        $employees = collect($this->user->employee ? [$this->user->employee] : []);
+        $sortedEmployees = $this->sortEmployeesCollection($employees);
+        $sortedExternalAccesses = $this->sortUserExternalAccessesCollection(
+            collect($this->user->externalAccesses),
+        );
+
         return view('livewire.admin.users.show', [
+            'sortedEmployees' => $sortedEmployees,
+            'sortedExternalAccesses' => $sortedExternalAccesses,
             'companies' => Company::query()->orderBy('name')->get(['id', 'name']),
             'assignedRoles' => $assignedRoles,
             'availableRoles' => $availableRoles,
@@ -409,5 +485,115 @@ class Show extends Component
                 ->orderBy('full_name')
                 ->get(['id', 'full_name', 'employee_number', 'company_id']),
         ]);
+    }
+
+    /**
+     * @param  Collection<int, Employee>  $employees
+     * @return Collection<int, Employee>
+     */
+    private function sortEmployeesCollection(Collection $employees): Collection
+    {
+        $dir = $this->employeesSortDir === 'desc' ? -1 : 1;
+
+        return $employees
+            ->sort(function (Employee $a, Employee $b) use ($dir): int {
+                $deptLabel = function (Employee $e): string {
+                    return (string) ($e->department?->type?->name ?? '');
+                };
+
+                $start = function (Employee $e): string {
+                    $v = $e->employment_start;
+
+                    if ($v instanceof \DateTimeInterface) {
+                        return $v->format('Y-m-d');
+                    }
+
+                    return (string) ($v ?? '');
+                };
+
+                $primary = match ($this->employeesSortBy) {
+                    'employee_number' => $dir * strcmp((string) ($a->employee_number ?? ''), (string) ($b->employee_number ?? '')),
+                    'company' => $dir * strcmp(
+                        (string) ($a->company?->name ?? ''),
+                        (string) ($b->company?->name ?? ''),
+                    ),
+                    'department' => $dir * strcmp($deptLabel($a), $deptLabel($b)),
+                    'designation' => $dir * strcmp((string) ($a->designation ?? ''), (string) ($b->designation ?? '')),
+                    'status' => $dir * strcmp((string) $a->status, (string) $b->status),
+                    'employment_start' => $dir * strcmp($start($a), $start($b)),
+                    default => $dir * strcmp((string) ($a->employee_number ?? ''), (string) ($b->employee_number ?? '')),
+                };
+
+                if ($primary !== 0) {
+                    return $primary;
+                }
+
+                return $a->id <=> $b->id;
+            })
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, ExternalAccess>  $accesses
+     * @return Collection<int, ExternalAccess>
+     */
+    private function sortUserExternalAccessesCollection(Collection $accesses): Collection
+    {
+        $dir = $this->externalAccessesSortDir === 'desc' ? -1 : 1;
+
+        return $accesses
+            ->sort(function (ExternalAccess $a, ExternalAccess $b) use ($dir): int {
+                $permsKey = function (ExternalAccess $access): string {
+                    $p = $access->permissions;
+                    $p = is_array($p) ? $p : [];
+                    sort($p);
+
+                    return implode(',', $p);
+                };
+
+                $statusRank = function (ExternalAccess $access): int {
+                    if ($access->isValid()) {
+                        return 0;
+                    }
+                    if ($access->isPending()) {
+                        return 1;
+                    }
+                    if ($access->hasExpired()) {
+                        return 2;
+                    }
+
+                    return 3;
+                };
+
+                $ts = function (?\DateTimeInterface $dt): string {
+                    if ($dt === null) {
+                        return '';
+                    }
+
+                    return (string) $dt->getTimestamp();
+                };
+
+                $primary = match ($this->externalAccessesSortBy) {
+                    'company' => $dir * strcmp(
+                        (string) ($a->company?->name ?? ''),
+                        (string) ($b->company?->name ?? ''),
+                    ),
+                    'permissions' => $dir * strcmp($permsKey($a), $permsKey($b)),
+                    'access_status' => $dir * ($statusRank($a) <=> $statusRank($b)),
+                    'granted_at' => $dir * strcmp($ts($a->access_granted_at), $ts($b->access_granted_at)),
+                    'expires_at' => $dir * strcmp($ts($a->access_expires_at), $ts($b->access_expires_at)),
+                    default => $dir * strcmp(
+                        (string) ($a->company?->name ?? ''),
+                        (string) ($b->company?->name ?? ''),
+                    ),
+                };
+
+                if ($primary !== 0) {
+                    return $primary;
+                }
+
+                return $a->id <=> $b->id;
+            })
+            ->values();
     }
 }

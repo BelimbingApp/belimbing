@@ -59,13 +59,55 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('SCAR No') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('NCR') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Supplier') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Product') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Owner') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Created') }}</th>
+                            <x-ui.sortable-th
+                                column="scar_no"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('scar_no')"
+                                :label="__('SCAR No')"
+                            />
+                            <x-ui.sortable-th
+                                column="ncr_no"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('ncr_no')"
+                                :label="__('NCR')"
+                            />
+                            <x-ui.sortable-th
+                                column="supplier_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('supplier_name')"
+                                :label="__('Supplier')"
+                            />
+                            <x-ui.sortable-th
+                                column="product_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('product_name')"
+                                :label="__('Product')"
+                            />
+                            <x-ui.sortable-th
+                                column="status"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('status')"
+                                :label="__('Status')"
+                            />
+                            <x-ui.sortable-th
+                                column="owner_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('owner_name')"
+                                :label="__('Owner')"
+                            />
+                            <x-ui.sortable-th
+                                column="created_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('created_at')"
+                                :label="__('Created')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

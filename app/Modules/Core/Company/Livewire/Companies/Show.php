@@ -6,24 +6,77 @@
 namespace App\Modules\Core\Company\Livewire\Companies;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Modules\Core\Address\Livewire\AbstractAddressForm;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Company\Livewire\Concerns\ManagesCompanyTimezone;
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Company\Models\CompanyRelationship;
+use App\Modules\Core\Company\Models\Department;
+use App\Modules\Core\Company\Models\ExternalAccess;
 use App\Modules\Core\Company\Models\LegalEntityType;
 use App\Modules\Core\Geonames\Models\Country;
 use DateTimeZone;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Session;
 
 class Show extends AbstractAddressForm
 {
     use ManagesCompanyTimezone;
     use SavesValidatedFields;
+    use TogglesSort;
 
     public Company $company;
+
+    public string $childrenSortBy = 'name';
+
+    public string $childrenSortDir = 'asc';
+
+    public string $departmentsSortBy = 'department_type';
+
+    public string $departmentsSortDir = 'asc';
+
+    public string $relationshipsSortBy = 'company_name';
+
+    public string $relationshipsSortDir = 'asc';
+
+    public string $externalAccessesSortBy = 'user';
+
+    public string $externalAccessesSortDir = 'asc';
+
+    private const CHILD_SORTABLE = [
+        'name' => true,
+        'status' => true,
+        'legal_entity_type' => true,
+        'jurisdiction' => true,
+    ];
+
+    private const DEPARTMENT_SORTABLE = [
+        'department_type' => true,
+        'category' => true,
+        'status' => true,
+        'head' => true,
+    ];
+
+    private const RELATIONSHIP_SORTABLE = [
+        'company_name' => true,
+        'relationship_type' => true,
+        'direction' => true,
+        'effective_from' => true,
+        'effective_to' => true,
+        'is_active' => true,
+    ];
+
+    private const EXTERNAL_ACCESS_SORTABLE = [
+        'user' => true,
+        'permissions' => true,
+        'access_status' => true,
+        'granted_at' => true,
+        'expires_at' => true,
+    ];
 
     public int $attachAddressId = 0;
 
@@ -63,6 +116,7 @@ class Show extends AbstractAddressForm
             'addresses',
             'children.legalEntityType',
             'departments.type',
+            'departments.head',
             'relationships.type',
             'relationships.relatedCompany',
             'inverseRelationships.type',
@@ -72,6 +126,77 @@ class Show extends AbstractAddressForm
 
         $this->companyTimezone = app(SettingsService::class)
             ->get('ui.timezone.default', '', Scope::company($company->id)) ?: '';
+    }
+
+    public function sortChildren(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::CHILD_SORTABLE,
+            defaultDir: [
+                'name' => 'asc',
+                'status' => 'asc',
+                'legal_entity_type' => 'asc',
+                'jurisdiction' => 'asc',
+            ],
+            sortByProperty: 'childrenSortBy',
+            sortDirProperty: 'childrenSortDir',
+            resetPage: false,
+        );
+    }
+
+    public function sortDepartments(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::DEPARTMENT_SORTABLE,
+            defaultDir: [
+                'department_type' => 'asc',
+                'category' => 'asc',
+                'status' => 'asc',
+                'head' => 'asc',
+            ],
+            sortByProperty: 'departmentsSortBy',
+            sortDirProperty: 'departmentsSortDir',
+            resetPage: false,
+        );
+    }
+
+    public function sortRelationships(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::RELATIONSHIP_SORTABLE,
+            defaultDir: [
+                'company_name' => 'asc',
+                'relationship_type' => 'asc',
+                'direction' => 'asc',
+                'effective_from' => 'asc',
+                'effective_to' => 'asc',
+                'is_active' => 'desc',
+            ],
+            sortByProperty: 'relationshipsSortBy',
+            sortDirProperty: 'relationshipsSortDir',
+            resetPage: false,
+        );
+    }
+
+    public function sortExternalAccesses(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::EXTERNAL_ACCESS_SORTABLE,
+            defaultDir: [
+                'user' => 'asc',
+                'permissions' => 'asc',
+                'access_status' => 'asc',
+                'granted_at' => 'asc',
+                'expires_at' => 'asc',
+            ],
+            sortByProperty: 'externalAccessesSortBy',
+            sortDirProperty: 'externalAccessesSortDir',
+            resetPage: false,
+        );
     }
 
     public function saveField(string $field, mixed $value): void
@@ -257,7 +382,22 @@ class Show extends AbstractAddressForm
         $addresses = $this->company->addresses()->get();
         $linkedIds = $addresses->pluck('id')->toArray();
 
+        $this->company->loadMissing([
+            'children.legalEntityType',
+            'departments.type',
+            'departments.head',
+            'relationships.type',
+            'relationships.relatedCompany',
+            'inverseRelationships.type',
+            'inverseRelationships.company',
+            'externalAccesses.user',
+        ]);
+
         return view('livewire.admin.companies.show', [
+            'sortedChildren' => $this->sortChildrenCollection(collect($this->company->children)),
+            'sortedDepartments' => $this->sortDepartmentsCollection(collect($this->company->departments)),
+            'sortedRelationships' => $this->sortRelationshipsCollection($this->allRelationshipRows()),
+            'sortedExternalAccesses' => $this->sortExternalAccessesCollection(collect($this->company->externalAccesses)),
             'addresses' => $addresses,
             'availableAddresses' => Address::query()
                 ->whereNotIn('id', $linkedIds)
@@ -370,5 +510,218 @@ class Show extends AbstractAddressForm
         }
 
         Session::flash('success', __('Address updated.'));
+    }
+
+    /**
+     * @param  Collection<int, Company>  $children
+     * @return Collection<int, Company>
+     */
+    private function sortChildrenCollection(Collection $children): Collection
+    {
+        $dir = $this->childrenSortDir === 'desc' ? -1 : 1;
+
+        return $children
+            ->sort(function (Company $a, Company $b) use ($dir): int {
+                $primary = match ($this->childrenSortBy) {
+                    'name' => $dir * strcmp((string) $a->name, (string) $b->name),
+                    'status' => $dir * strcmp((string) $a->status, (string) $b->status),
+                    'legal_entity_type' => $dir * strcmp(
+                        (string) ($a->legalEntityType?->name ?? ''),
+                        (string) ($b->legalEntityType?->name ?? ''),
+                    ),
+                    'jurisdiction' => $dir * strcmp(
+                        strtoupper((string) ($a->jurisdiction ?? '')),
+                        strtoupper((string) ($b->jurisdiction ?? '')),
+                    ),
+                    default => $dir * strcmp((string) $a->name, (string) $b->name),
+                };
+
+                if ($primary !== 0) {
+                    return $primary;
+                }
+
+                return $a->id <=> $b->id;
+            })
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, Department>  $departments
+     * @return Collection<int, Department>
+     */
+    private function sortDepartmentsCollection(Collection $departments): Collection
+    {
+        $dir = $this->departmentsSortDir === 'desc' ? -1 : 1;
+
+        return $departments
+            ->sort(function (Department $a, Department $b) use ($dir): int {
+                $headName = function (Department $dept): string {
+                    $head = $dept->head;
+
+                    if ($head === null) {
+                        return '';
+                    }
+
+                    return $head->displayName();
+                };
+
+                $primary = match ($this->departmentsSortBy) {
+                    'department_type' => $dir * strcmp(
+                        (string) ($a->type?->name ?? ''),
+                        (string) ($b->type?->name ?? ''),
+                    ),
+                    'category' => $dir * strcmp(
+                        (string) ($a->type?->category ?? ''),
+                        (string) ($b->type?->category ?? ''),
+                    ),
+                    'status' => $dir * strcmp((string) $a->status, (string) $b->status),
+                    'head' => $dir * strcmp($headName($a), $headName($b)),
+                    default => $dir * strcmp((string) ($a->type?->name ?? ''), (string) ($b->type?->name ?? '')),
+                };
+
+                if ($primary !== 0) {
+                    return $primary;
+                }
+
+                return $a->id <=> $b->id;
+            })
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, object>
+     */
+    private function allRelationshipRows(): Collection
+    {
+        $outgoing = $this->company->relationships->map(fn (CompanyRelationship $r) => (object) [
+            'id' => $r->id,
+            'direction_key' => 'outgoing',
+            'company' => $r->relatedCompany,
+            'type' => $r->type,
+            'direction' => __('Outgoing'),
+            'effective_from' => $r->effective_from,
+            'effective_to' => $r->effective_to,
+            'is_active' => $r->isActive(),
+        ]);
+
+        $incoming = $this->company->inverseRelationships->map(fn (CompanyRelationship $r) => (object) [
+            'id' => $r->id,
+            'direction_key' => 'incoming',
+            'company' => $r->company,
+            'type' => $r->type,
+            'direction' => __('Incoming'),
+            'effective_from' => $r->effective_from,
+            'effective_to' => $r->effective_to,
+            'is_active' => $r->isActive(),
+        ]);
+
+        return $outgoing->concat($incoming)->filter(fn (object $row): bool => $row->company !== null);
+    }
+
+    /**
+     * @param  Collection<int, object>  $rows
+     * @return Collection<int, object>
+     */
+    private function sortRelationshipsCollection(Collection $rows): Collection
+    {
+        $dir = $this->relationshipsSortDir === 'desc' ? -1 : 1;
+
+        return $rows
+            ->sort(function (object $a, object $b) use ($dir): int {
+                $dateKey = function (mixed $v): string {
+                    if ($v instanceof \DateTimeInterface) {
+                        return $v->format('Y-m-d');
+                    }
+
+                    return (string) ($v ?? '');
+                };
+
+                $primary = match ($this->relationshipsSortBy) {
+                    'company_name' => $dir * strcmp((string) $a->company->name, (string) $b->company->name),
+                    'relationship_type' => $dir * strcmp(
+                        (string) ($a->type?->name ?? ''),
+                        (string) ($b->type?->name ?? ''),
+                    ),
+                    'direction' => $dir * strcmp((string) $a->direction_key, (string) $b->direction_key),
+                    'effective_from' => $dir * strcmp($dateKey($a->effective_from), $dateKey($b->effective_from)),
+                    'effective_to' => $dir * strcmp($dateKey($a->effective_to), $dateKey($b->effective_to)),
+                    'is_active' => $dir * (((int) (bool) $a->is_active) <=> ((int) (bool) $b->is_active)),
+                    default => $dir * strcmp((string) $a->company->name, (string) $b->company->name),
+                };
+
+                if ($primary !== 0) {
+                    return $primary;
+                }
+
+                $tie = strcmp((string) $a->direction_key, (string) $b->direction_key);
+
+                if ($tie !== 0) {
+                    return $tie;
+                }
+
+                return $a->id <=> $b->id;
+            })
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, ExternalAccess>  $accesses
+     * @return Collection<int, ExternalAccess>
+     */
+    private function sortExternalAccessesCollection(Collection $accesses): Collection
+    {
+        $dir = $this->externalAccessesSortDir === 'desc' ? -1 : 1;
+
+        return $accesses
+            ->sort(function (ExternalAccess $a, ExternalAccess $b) use ($dir): int {
+                $permsKey = function (ExternalAccess $access): string {
+                    $p = $access->permissions;
+                    $p = is_array($p) ? $p : [];
+                    sort($p);
+
+                    return implode(',', $p);
+                };
+
+                $statusRank = function (ExternalAccess $access): int {
+                    if ($access->isValid()) {
+                        return 0;
+                    }
+                    if ($access->isPending()) {
+                        return 1;
+                    }
+                    if ($access->hasExpired()) {
+                        return 2;
+                    }
+
+                    return 3;
+                };
+
+                $ts = function (?\DateTimeInterface $dt): string {
+                    if ($dt === null) {
+                        return '';
+                    }
+
+                    return (string) $dt->getTimestamp();
+                };
+
+                $primary = match ($this->externalAccessesSortBy) {
+                    'user' => $dir * strcmp(
+                        (string) ($a->user?->name ?? ''),
+                        (string) ($b->user?->name ?? ''),
+                    ),
+                    'permissions' => $dir * strcmp($permsKey($a), $permsKey($b)),
+                    'access_status' => $dir * ($statusRank($a) <=> $statusRank($b)),
+                    'granted_at' => $dir * strcmp($ts($a->access_granted_at), $ts($b->access_granted_at)),
+                    'expires_at' => $dir * strcmp($ts($a->access_expires_at), $ts($b->access_expires_at)),
+                    default => $dir * strcmp((string) ($a->user?->name ?? ''), (string) ($b->user?->name ?? '')),
+                };
+
+                if ($primary !== 0) {
+                    return $primary;
+                }
+
+                return $a->id <=> $b->id;
+            })
+            ->values();
     }
 }

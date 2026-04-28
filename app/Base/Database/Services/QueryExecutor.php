@@ -58,11 +58,13 @@ class QueryExecutor
      * @param  string  $sql  The SELECT query to execute
      * @param  int  $page  Current page number (1-based)
      * @param  int  $perPage  Rows per page (max 1000)
+     * @param  string|null  $orderBy  When set, must be a column name returned by the query (validated before use)
+     * @param  string  $orderDir  asc or desc
      * @return array{columns: list<string>, rows: list<array<string, mixed>>, total: int, per_page: int, current_page: int, last_page: int}
      *
      * @throws BlbQueryException
      */
-    public function execute(string $sql, int $page = 1, int $perPage = 25): array
+    public function execute(string $sql, int $page = 1, int $perPage = 25, ?string $orderBy = null, string $orderDir = 'asc'): array
     {
         $this->validate($sql);
 
@@ -72,14 +74,22 @@ class QueryExecutor
         $connection = DB::connection(self::CONNECTION);
 
         try {
-            return $connection->transaction(function () use ($connection, $sql, $page, $perPage): array {
+            return $connection->transaction(function () use ($connection, $sql, $page, $perPage, $orderBy, $orderDir): array {
                 $this->applyReadOnly($connection);
                 $this->applyTimeout($connection);
+
+                $columnsWhitelist = $this->extractColumnsFromEmpty($connection, $sql);
+                $orderClause = '';
+                if ($orderBy !== null && $orderBy !== '' && in_array($orderBy, $columnsWhitelist, true)) {
+                    $dir = strtoupper($orderDir) === 'DESC' ? 'DESC' : 'ASC';
+                    $quoted = $connection->getQueryGrammar()->wrap($orderBy);
+                    $orderClause = ' ORDER BY '.$quoted.' '.$dir;
+                }
 
                 $total = $this->countResults($connection, $sql);
 
                 $offset = ($page - 1) * $perPage;
-                $paginatedSql = "SELECT * FROM ({$sql}) AS __blb_view LIMIT {$perPage} OFFSET {$offset}";
+                $paginatedSql = "SELECT * FROM ({$sql}) AS __blb_view{$orderClause} LIMIT {$perPage} OFFSET {$offset}";
                 $rows = $connection->select($paginatedSql);
 
                 $rows = array_map(fn (object $row): array => (array) $row, $rows);

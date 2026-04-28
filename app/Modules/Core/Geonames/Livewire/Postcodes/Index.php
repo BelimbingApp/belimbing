@@ -6,10 +6,12 @@
 namespace App\Modules\Core\Geonames\Livewire\Postcodes;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Geonames\Database\Seeders\PostcodeSeeder;
 use App\Modules\Core\Geonames\Models\Country;
 use App\Modules\Core\Geonames\Models\Postcode;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
@@ -18,6 +20,7 @@ use Livewire\WithPagination;
 class Index extends Component
 {
     use ResetsPaginationOnSearch;
+    use TogglesSort;
     use WithPagination;
 
     public string $search = '';
@@ -27,12 +30,67 @@ class Index extends Component
 
     public bool $showCountryPicker = false;
 
+    public string $summarySortBy = 'country_name';
+
+    public string $summarySortDir = 'asc';
+
+    public string $sortBy = 'country_name';
+
+    public string $sortDir = 'asc';
+
+    private const SORTABLE = [
+        'country_name' => 'country_name',
+        'postcode' => 'geonames_postcodes.postcode',
+        'place_name' => 'geonames_postcodes.place_name',
+        'admin1Code' => 'geonames_postcodes.admin1Code',
+        'updated_at' => 'geonames_postcodes.updated_at',
+    ];
+
+    private const SUMMARY_SORTABLE = [
+        'country_name' => true,
+        'country_iso' => true,
+        'record_count' => true,
+    ];
+
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+            defaultDir: [
+                'country_name' => 'asc',
+                'postcode' => 'asc',
+                'place_name' => 'asc',
+                'admin1Code' => 'asc',
+                'updated_at' => 'desc',
+            ],
+        );
+    }
+
+    public function sortSummary(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SUMMARY_SORTABLE,
+            defaultDir: [
+                'country_name' => 'asc',
+                'country_iso' => 'asc',
+                'record_count' => 'desc',
+            ],
+            sortByProperty: 'summarySortBy',
+            sortDirProperty: 'summarySortDir',
+            resetPage: false,
+        );
+    }
+
     public function with(): array
     {
+        $sortColumn = self::SORTABLE[$this->sortBy] ?? 'country_name';
+
         $query = Postcode::query()
             ->withCountryName()
-            ->orderBy('country_name')
-            ->orderBy('postcode');
+            ->orderBy($sortColumn, $this->sortDir)
+            ->orderByDesc('geonames_postcodes.id');
 
         if ($this->search) {
             $query->where(function ($q) {
@@ -62,9 +120,9 @@ class Index extends Component
                 ->selectRaw('geonames_countries.country as country_name')
                 ->selectRaw('count(*) as record_count')
                 ->groupBy('geonames_postcodes.country_iso', 'geonames_countries.country')
-                ->orderBy('geonames_countries.country')
-                ->orderBy('geonames_postcodes.country_iso')
                 ->get();
+
+            $countryRecordCounts = $this->sortPostcodeCountrySummary($countryRecordCounts);
         }
 
         return [
@@ -125,5 +183,38 @@ class Index extends Component
     public function render(): View
     {
         return view('livewire.admin.geonames.postcodes.index', $this->with());
+    }
+
+    /**
+     * @param  Collection<int, object{country_iso: string, country_name: ?string, record_count: int|string}>  $rows
+     * @return Collection<int, object{country_iso: string, country_name: ?string, record_count: int|string}>
+     */
+    private function sortPostcodeCountrySummary(Collection $rows): Collection
+    {
+        $dir = $this->summarySortDir === 'desc' ? -1 : 1;
+
+        return $rows
+            ->sort(function (object $a, object $b) use ($dir): int {
+                $nameA = (string) ($a->country_name ?? $a->country_iso);
+                $nameB = (string) ($b->country_name ?? $b->country_iso);
+                $isoA = (string) $a->country_iso;
+                $isoB = (string) $b->country_iso;
+                $countA = (int) $a->record_count;
+                $countB = (int) $b->record_count;
+
+                $primary = match ($this->summarySortBy) {
+                    'country_name' => $dir * strcmp($nameA, $nameB),
+                    'country_iso' => $dir * strcmp($isoA, $isoB),
+                    'record_count' => $dir * ($countA <=> $countB),
+                    default => $dir * strcmp($nameA, $nameB),
+                };
+
+                if ($primary !== 0) {
+                    return $primary;
+                }
+
+                return strcmp($isoA, $isoB);
+            })
+            ->values();
     }
 }

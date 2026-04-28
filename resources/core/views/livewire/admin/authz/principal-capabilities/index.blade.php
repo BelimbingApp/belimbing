@@ -16,12 +16,48 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Principal') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Type') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Capability') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Access') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Company') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Granted At') }}</th>
+                            <x-ui.sortable-th
+                                column="principal_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('principal_name')"
+                                :label="__('Principal')"
+                            />
+                            <x-ui.sortable-th
+                                column="principal_type"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('principal_type')"
+                                :label="__('Type')"
+                            />
+                            <x-ui.sortable-th
+                                column="capability_key"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('capability_key')"
+                                :label="__('Capability')"
+                            />
+                            <x-ui.sortable-th
+                                column="is_allowed"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('is_allowed')"
+                                :label="__('Access')"
+                            />
+                            <x-ui.sortable-th
+                                column="company_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('company_name')"
+                                :label="__('Company')"
+                            />
+                            <x-ui.sortable-th
+                                column="created_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('created_at')"
+                                :label="__('Granted At')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

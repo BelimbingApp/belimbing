@@ -134,13 +134,55 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Entity Type') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Kind') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Primary') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Priority') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Valid From') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Valid To') }}</th>
+                            <x-ui.sortable-th
+                                column="type"
+                                :sort-by="$linkedSortBy"
+                                :sort-dir="$linkedSortDir"
+                                action="sortLinked('type')"
+                                :label="__('Entity Type')"
+                            />
+                            <x-ui.sortable-th
+                                column="name"
+                                :sort-by="$linkedSortBy"
+                                :sort-dir="$linkedSortDir"
+                                action="sortLinked('name')"
+                                :label="__('Name')"
+                            />
+                            <x-ui.sortable-th
+                                column="kind"
+                                :sort-by="$linkedSortBy"
+                                :sort-dir="$linkedSortDir"
+                                action="sortLinked('kind')"
+                                :label="__('Kind')"
+                            />
+                            <x-ui.sortable-th
+                                column="is_primary"
+                                :sort-by="$linkedSortBy"
+                                :sort-dir="$linkedSortDir"
+                                action="sortLinked('is_primary')"
+                                :label="__('Primary')"
+                            />
+                            <x-ui.sortable-th
+                                column="priority"
+                                :sort-by="$linkedSortBy"
+                                :sort-dir="$linkedSortDir"
+                                action="sortLinked('priority')"
+                                :label="__('Priority')"
+                            />
+                            <x-ui.sortable-th
+                                column="valid_from"
+                                :sort-by="$linkedSortBy"
+                                :sort-dir="$linkedSortDir"
+                                action="sortLinked('valid_from')"
+                                :label="__('Valid From')"
+                            />
+                            <x-ui.sortable-th
+                                column="valid_to"
+                                :sort-by="$linkedSortBy"
+                                :sort-dir="$linkedSortDir"
+                                action="sortLinked('valid_to')"
+                                :label="__('Valid To')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

@@ -13,6 +13,7 @@ use App\Base\AI\Services\LlmClient;
 use App\Base\Database\Exceptions\BlbQueryException;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\QueryExecutor;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\User\Models\Query;
 use App\Modules\Core\User\Models\User;
 use App\Modules\Core\User\Models\UserPin;
@@ -33,6 +34,7 @@ use Livewire\WithPagination;
 class Show extends Component
 {
     use ResolvesAvailableModels;
+    use TogglesSort;
     use WithPagination;
 
     public ?Query $query = null;
@@ -60,6 +62,20 @@ class Show extends Component
     public string $shareSearch = '';
 
     public string $shareSuccess = '';
+
+    /**
+     * Result grid sort: column name from the last successful result set, or empty when none.
+     */
+    public string $resultSortBy = '';
+
+    public string $resultSortDir = 'asc';
+
+    /**
+     * Column names from the last query execution (used to validate sort requests).
+     *
+     * @var list<string>
+     */
+    public array $resolvedResultColumns = [];
 
     /**
      * Initialize the component.
@@ -356,6 +372,25 @@ class Show extends Component
     }
 
     /**
+     * Toggle sort for the ad-hoc SQL result grid (server-side ORDER BY on the wrapped query).
+     */
+    public function sortResults(string $column): void
+    {
+        if (! in_array($column, $this->resolvedResultColumns, true)) {
+            return;
+        }
+
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: array_fill_keys($this->resolvedResultColumns, true),
+            defaultDir: [],
+            sortByProperty: 'resultSortBy',
+            sortDirProperty: 'resultSortDir',
+            resetPage: true,
+        );
+    }
+
+    /**
      * Get users that this query can be shared with.
      *
      * @return list<array{id: int, name: string, email: string}>
@@ -401,7 +436,14 @@ class Show extends Component
         if ($hasSql) {
             try {
                 $executor = app(QueryExecutor::class);
-                $result = $executor->execute($this->query->sql_query, $this->getPage());
+                $orderBy = $this->resultSortBy !== '' ? $this->resultSortBy : null;
+                $result = $executor->execute(
+                    $this->query->sql_query,
+                    $this->getPage(),
+                    25,
+                    $orderBy,
+                    $this->resultSortDir,
+                );
 
                 $columns = $result['columns'];
                 $rows = $result['rows'];
@@ -409,9 +451,17 @@ class Show extends Component
                 $perPage = $result['per_page'];
                 $currentPage = $result['current_page'];
                 $lastPage = $result['last_page'];
+                $this->resolvedResultColumns = $columns;
+
+                if ($this->resultSortBy !== '' && ! in_array($this->resultSortBy, $columns, true)) {
+                    $this->resultSortBy = '';
+                    $this->resultSortDir = 'asc';
+                }
+
                 $this->error = '';
             } catch (BlbQueryException $e) {
                 $this->error = $e->getMessage();
+                $this->resolvedResultColumns = [];
             }
         }
 

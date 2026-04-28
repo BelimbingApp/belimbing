@@ -24,11 +24,41 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Capability') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Domain') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Resource') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Action') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Module') }}</th>
+                            <x-ui.sortable-th
+                                column="key"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('key')"
+                                :label="__('Capability')"
+                            />
+                            <x-ui.sortable-th
+                                column="domain"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('domain')"
+                                :label="__('Domain')"
+                            />
+                            <x-ui.sortable-th
+                                column="resource"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('resource')"
+                                :label="__('Resource')"
+                            />
+                            <x-ui.sortable-th
+                                column="action"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('action')"
+                                :label="__('Action')"
+                            />
+                            <x-ui.sortable-th
+                                column="module"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('module')"
+                                :label="__('Module')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

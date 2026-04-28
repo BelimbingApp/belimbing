@@ -354,7 +354,7 @@
             <div class="flex items-center justify-between mb-1">
                 <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">
                     {{ __('Employee Records') }}
-                    <x-ui.badge>{{ $user->employee ? 1 : 0 }}</x-ui.badge>
+                    <x-ui.badge>{{ $sortedEmployees->count() }}</x-ui.badge>
                 </h3>
                 @if($canManageRoles)
                     <x-ui.button variant="primary" size="sm" wire:click="$set('showAddEmployeeModal', true)">
@@ -369,17 +369,53 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Employee No.') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Company') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Department') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Designation') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Employment Start') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                            <x-ui.sortable-th
+                                column="employee_number"
+                                :sort-by="$employeesSortBy"
+                                :sort-dir="$employeesSortDir"
+                                action="sortEmployees('employee_number')"
+                                :label="__('Employee No.')"
+                            />
+                            <x-ui.sortable-th
+                                column="company"
+                                :sort-by="$employeesSortBy"
+                                :sort-dir="$employeesSortDir"
+                                action="sortEmployees('company')"
+                                :label="__('Company')"
+                            />
+                            <x-ui.sortable-th
+                                column="department"
+                                :sort-by="$employeesSortBy"
+                                :sort-dir="$employeesSortDir"
+                                action="sortEmployees('department')"
+                                :label="__('Department')"
+                            />
+                            <x-ui.sortable-th
+                                column="designation"
+                                :sort-by="$employeesSortBy"
+                                :sort-dir="$employeesSortDir"
+                                action="sortEmployees('designation')"
+                                :label="__('Designation')"
+                            />
+                            <x-ui.sortable-th
+                                column="status"
+                                :sort-by="$employeesSortBy"
+                                :sort-dir="$employeesSortDir"
+                                action="sortEmployees('status')"
+                                :label="__('Status')"
+                            />
+                            <x-ui.sortable-th
+                                column="employment_start"
+                                :sort-by="$employeesSortBy"
+                                :sort-dir="$employeesSortDir"
+                                action="sortEmployees('employment_start')"
+                                :label="__('Employment Start')"
+                            />
+                            <th scope="col" class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">
-                        @forelse($user->employee ? [$user->employee] : [] as $employee)
+                        @forelse($sortedEmployees as $employee)
                             <tr wire:key="employee-{{ $employee->id }}" class="hover:bg-surface-subtle/50 transition-colors">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">
                                     <a href="{{ route('admin.employees.show', $employee) }}" wire:navigate class="text-accent hover:underline">{{ $employee->employee_number ?? '—' }}</a>
@@ -391,7 +427,7 @@
                                         —
                                     @endif
                                 </td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $employee->department?->name ?? '—' }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $employee->department?->type?->name ?? '—' }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $employee->designation ?? '—' }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <x-ui.badge :variant="match($employee->status) {
@@ -481,7 +517,7 @@
         <x-ui.card>
             <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">
                 {{ __('External Accesses') }}
-                <x-ui.badge>{{ $user->externalAccesses->count() }}</x-ui.badge>
+                <x-ui.badge>{{ $sortedExternalAccesses->count() }}</x-ui.badge>
             </h3>
             <p class="text-xs text-muted mt-0.5 mb-4">{{ __('Portal access granted to this user by other companies. Allows customers or suppliers to view orders, invoices, and other shared data.') }}</p>
 
@@ -489,15 +525,45 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Granting Company') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Permissions') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Granted At') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Expires At') }}</th>
+                            <x-ui.sortable-th
+                                column="company"
+                                :sort-by="$externalAccessesSortBy"
+                                :sort-dir="$externalAccessesSortDir"
+                                action="sortUserExternalAccesses('company')"
+                                :label="__('Granting Company')"
+                            />
+                            <x-ui.sortable-th
+                                column="permissions"
+                                :sort-by="$externalAccessesSortBy"
+                                :sort-dir="$externalAccessesSortDir"
+                                action="sortUserExternalAccesses('permissions')"
+                                :label="__('Permissions')"
+                            />
+                            <x-ui.sortable-th
+                                column="access_status"
+                                :sort-by="$externalAccessesSortBy"
+                                :sort-dir="$externalAccessesSortDir"
+                                action="sortUserExternalAccesses('access_status')"
+                                :label="__('Status')"
+                            />
+                            <x-ui.sortable-th
+                                column="granted_at"
+                                :sort-by="$externalAccessesSortBy"
+                                :sort-dir="$externalAccessesSortDir"
+                                action="sortUserExternalAccesses('granted_at')"
+                                :label="__('Granted At')"
+                            />
+                            <x-ui.sortable-th
+                                column="expires_at"
+                                :sort-by="$externalAccessesSortBy"
+                                :sort-dir="$externalAccessesSortDir"
+                                action="sortUserExternalAccesses('expires_at')"
+                                :label="__('Expires At')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">
-                        @forelse($user->externalAccesses as $access)
+                        @forelse($sortedExternalAccesses as $access)
                             <tr wire:key="access-{{ $access->id }}" class="hover:bg-surface-subtle/50 transition-colors">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
                                     @if ($access->company)

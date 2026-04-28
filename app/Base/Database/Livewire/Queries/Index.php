@@ -6,18 +6,46 @@
 namespace App\Base\Database\Livewire\Queries;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\User\Models\Query;
 use App\Modules\Core\User\Models\UserPin;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 class Index extends Component
 {
     use ResetsPaginationOnSearch;
+    use TogglesSort;
     use WithPagination;
 
     public string $search = '';
+
+    public string $sortBy = 'updated_at';
+
+    public string $sortDir = 'desc';
+
+    private const SORTABLE = [
+        'name' => 'user_database_queries.name',
+        'description' => 'user_database_queries.description',
+        'created_at' => 'user_database_queries.created_at',
+        'updated_at' => 'user_database_queries.updated_at',
+    ];
+
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+            defaultDir: [
+                'name' => 'asc',
+                'description' => 'asc',
+                'created_at' => 'desc',
+                'updated_at' => 'desc',
+            ],
+        );
+    }
 
     /**
      * Redirect to the Show page in "new" mode without persisting a record.
@@ -79,16 +107,19 @@ class Index extends Component
 
     public function render(): View
     {
+        $sortColumn = self::SORTABLE[$this->sortBy] ?? 'user_database_queries.updated_at';
+
         return view('livewire.admin.system.database-queries.index', [
             'views' => Query::query()
                 ->where('user_id', auth()->id())
-                ->when($this->search, function ($q, $search): void {
-                    $q->where(function ($q) use ($search): void {
-                        $q->where('name', 'like', '%'.$search.'%')
-                            ->orWhere('description', 'like', '%'.$search.'%');
+                ->when($this->search, function (Builder $q, $search): void {
+                    $q->where(function (Builder $inner) use ($search): void {
+                        $inner->where('user_database_queries.name', 'like', '%'.$search.'%')
+                            ->orWhere('user_database_queries.description', 'like', '%'.$search.'%');
                     });
                 })
-                ->orderByDesc('updated_at')
+                ->orderBy($sortColumn, $this->sortDir)
+                ->orderByDesc('user_database_queries.id')
                 ->paginate(25),
         ]);
     }

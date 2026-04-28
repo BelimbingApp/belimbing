@@ -20,10 +20,34 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('User') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('IP Address') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('User Agent') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Last Activity') }}</th>
+                            <x-ui.sortable-th
+                                column="user_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('user_name')"
+                                :label="__('User')"
+                            />
+                            <x-ui.sortable-th
+                                column="ip_address"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('ip_address')"
+                                :label="__('IP Address')"
+                            />
+                            <x-ui.sortable-th
+                                column="user_agent"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('user_agent')"
+                                :label="__('User Agent')"
+                            />
+                            <x-ui.sortable-th
+                                column="last_activity"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('last_activity')"
+                                :label="__('Last Activity')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
@@ -47,8 +71,10 @@
                                             size="sm"
                                             wire:click="terminate('{{ $s->id }}')"
                                             wire:confirm="{{ __('Are you sure you want to terminate this session?') }}"
+                                            :title="__('Terminate session')"
                                         >
-                                            {{ __('Terminate') }}
+                                            <x-icon name="heroicon-o-x-circle" class="w-4 h-4" />
+                                            <span class="sr-only">{{ __('Terminate') }}</span>
                                         </x-ui.button>
                                     @endif
                                 </td>

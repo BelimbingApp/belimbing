@@ -6,6 +6,7 @@
 namespace App\Modules\Core\Employee\Livewire\Employees;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageSnapshot;
@@ -19,12 +20,14 @@ use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\Employee\Models\EmployeeType;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 
 class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPageSnapshot
 {
     use SavesValidatedFields;
+    use TogglesSort;
 
     public Employee $employee;
 
@@ -38,6 +41,31 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public bool $showAttachModal = false;
 
+    public string $subordinatesSortBy = 'full_name';
+
+    public string $subordinatesSortDir = 'asc';
+
+    public string $addressesSortBy = 'label';
+
+    public string $addressesSortDir = 'asc';
+
+    private const SUBORDINATE_SORTABLE = [
+        'full_name' => true,
+        'designation' => true,
+        'status' => true,
+        'department' => true,
+    ];
+
+    private const ADDRESS_SORTABLE = [
+        'label' => true,
+        'line1' => true,
+        'kind' => true,
+        'is_primary' => true,
+        'priority' => true,
+        'valid_from' => true,
+        'valid_to' => true,
+    ];
+
     public function mount(Employee $employee): void
     {
         $this->employee = $employee->load([
@@ -45,9 +73,46 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
             'department.type',
             'supervisor',
             'user',
-            'subordinates',
+            'subordinates.department.type',
             'addresses',
         ]);
+    }
+
+    public function sortSubordinates(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SUBORDINATE_SORTABLE,
+            defaultDir: [
+                'full_name' => 'asc',
+                'designation' => 'asc',
+                'status' => 'asc',
+                'department' => 'asc',
+            ],
+            sortByProperty: 'subordinatesSortBy',
+            sortDirProperty: 'subordinatesSortDir',
+            resetPage: false,
+        );
+    }
+
+    public function sortAddresses(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::ADDRESS_SORTABLE,
+            defaultDir: [
+                'label' => 'asc',
+                'line1' => 'asc',
+                'kind' => 'asc',
+                'is_primary' => 'desc',
+                'priority' => 'asc',
+                'valid_from' => 'asc',
+                'valid_to' => 'asc',
+            ],
+            sortByProperty: 'addressesSortBy',
+            sortDirProperty: 'addressesSortDir',
+            resetPage: false,
+        );
     }
 
     public function saveField(string $field, mixed $value): void
@@ -119,7 +184,7 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
         $target->supervisor_id = $this->employee->id;
         $target->save();
-        $this->employee->load('subordinates');
+        $this->employee->load('subordinates.department.type');
     }
 
     public function removeSubordinate(int $employeeId): void
@@ -135,7 +200,7 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
         $target->supervisor_id = null;
         $target->save();
-        $this->employee->load('subordinates');
+        $this->employee->load('subordinates.department.type');
     }
 
     public function attachAddress(): void
@@ -192,7 +257,11 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function render(): View
     {
+        $this->employee->loadMissing('subordinates.department.type');
+
         return view('livewire.admin.employees.show', [
+            'sortedSubordinates' => $this->sortSubordinatesCollection($this->employee->subordinates),
+            'sortedAddresses' => $this->sortAddressesCollection($this->employee->addresses),
             'departments' => Department::query()
                 ->where('company_id', $this->employee->company_id)
                 ->with('type')
@@ -220,6 +289,72 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
                 ->orderBy('label')
                 ->get(['id', 'label', 'line1', 'locality', 'country_iso']),
         ]);
+    }
+
+    /**
+     * @param  iterable<int, Employee>  $subordinates
+     */
+    private function sortSubordinatesCollection(iterable $subordinates): Collection
+    {
+        $dir = $this->subordinatesSortDir === 'desc' ? -1 : 1;
+
+        return collect($subordinates)
+            ->sort(function (Employee $a, Employee $b) use ($dir): int {
+                $deptA = (string) ($a->department?->type?->name ?? '');
+                $deptB = (string) ($b->department?->type?->name ?? '');
+
+                $primary = match ($this->subordinatesSortBy) {
+                    'full_name' => $dir * strcmp((string) $a->full_name, (string) $b->full_name),
+                    'designation' => $dir * strcmp((string) ($a->designation ?? ''), (string) ($b->designation ?? '')),
+                    'status' => $dir * strcmp((string) $a->status, (string) $b->status),
+                    'department' => $dir * strcmp($deptA, $deptB),
+                    default => $dir * strcmp((string) $a->full_name, (string) $b->full_name),
+                };
+
+                if ($primary !== 0) {
+                    return $primary;
+                }
+
+                return $a->id <=> $b->id;
+            })
+            ->values();
+    }
+
+    /**
+     * @param  iterable<int, Address>  $addresses
+     */
+    private function sortAddressesCollection(iterable $addresses): Collection
+    {
+        $dir = $this->addressesSortDir === 'desc' ? -1 : 1;
+
+        return collect($addresses)
+            ->sort(function (Address $a, Address $b) use ($dir): int {
+                $kindKey = function (Address $address): string {
+                    $kinds = $address->pivot->kind ?? [];
+                    $kinds = is_array($kinds) ? $kinds : [];
+                    sort($kinds);
+
+                    return implode(',', $kinds);
+                };
+
+                $primary = match ($this->addressesSortBy) {
+                    'label' => $dir * strcmp((string) ($a->label ?? ''), (string) ($b->label ?? '')),
+                    'line1' => $dir * strcmp((string) ($a->line1 ?? ''), (string) ($b->line1 ?? '')),
+                    'kind' => $dir * strcmp($kindKey($a), $kindKey($b)),
+                    'is_primary' => $dir * (((int) ($a->pivot->is_primary ?? false)) <=> ((int) ($b->pivot->is_primary ?? false))),
+                    'priority' => $dir * (((int) ($a->pivot->priority ?? 0)) <=> ((int) ($b->pivot->priority ?? 0))),
+                    'valid_from' => $dir * strcmp((string) ($a->pivot->valid_from ?? ''), (string) ($b->pivot->valid_from ?? '')),
+                    'valid_to' => $dir * strcmp((string) ($a->pivot->valid_to ?? ''), (string) ($b->pivot->valid_to ?? '')),
+                    default => $dir * strcmp((string) ($a->label ?? ''), (string) ($b->label ?? '')),
+                };
+
+                if ($primary !== 0) {
+                    return $primary;
+                }
+
+                return $a->id <=> $b->id;
+            })
+            ->values();
     }
 
     public function pageContext(): PageContext

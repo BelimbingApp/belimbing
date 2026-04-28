@@ -31,12 +31,42 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Occurred At') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actor') }}</th>
+                            <x-ui.sortable-th
+                                column="occurred_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('occurred_at')"
+                                :label="__('Occurred At')"
+                            />
+                            <x-ui.sortable-th
+                                column="actor_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('actor_name')"
+                                :label="__('Actor')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Role') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Event') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('IP') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('URL') }}</th>
+                            <x-ui.sortable-th
+                                column="event"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('event')"
+                                :label="__('Event')"
+                            />
+                            <x-ui.sortable-th
+                                column="ip_address"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('ip_address')"
+                                :label="__('IP')"
+                            />
+                            <x-ui.sortable-th
+                                column="url"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('url')"
+                                :label="__('URL')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Payload') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-center text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Retain') }}</th>
                         </tr>

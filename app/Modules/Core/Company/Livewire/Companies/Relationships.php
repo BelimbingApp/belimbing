@@ -5,17 +5,18 @@
 
 namespace App\Modules\Core\Company\Livewire\Companies;
 
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\CompanyRelationship;
 use App\Modules\Core\Company\Models\RelationshipType;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
-use Livewire\WithPagination;
 
 class Relationships extends Component
 {
-    use WithPagination;
+    use TogglesSort;
 
     public Company $company;
 
@@ -37,9 +38,39 @@ class Relationships extends Component
 
     public ?string $editEffectiveTo = null;
 
+    public string $sortBy = 'other';
+
+    public string $sortDir = 'asc';
+
+    private const SORTABLE = [
+        'other' => true,
+        'type' => true,
+        'direction' => true,
+        'effective_from' => true,
+        'effective_to' => true,
+        'active' => true,
+    ];
+
     public function mount(Company $company): void
     {
         $this->company = $company;
+    }
+
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+            defaultDir: [
+                'other' => 'asc',
+                'type' => 'asc',
+                'direction' => 'asc',
+                'effective_from' => 'asc',
+                'effective_to' => 'asc',
+                'active' => 'desc',
+            ],
+            resetPage: false,
+        );
     }
 
     public function createRelationship(): void
@@ -106,8 +137,12 @@ class Relationships extends Component
             ->get()
             ->map(fn ($r) => (object) ['relationship' => $r, 'direction' => 'incoming', 'other' => $r->company]);
 
+        $allRelationships = $outgoing->merge($incoming);
+
+        $sorted = $this->sortRelationshipsCollection($allRelationships);
+
         return view('livewire.admin.companies.relationships', [
-            'allRelationships' => $outgoing->merge($incoming),
+            'allRelationships' => $sorted,
             'availableCompanies' => Company::query()
                 ->where('id', '!=', $this->company->id)
                 ->orderBy('name')
@@ -117,5 +152,34 @@ class Relationships extends Component
                 ->orderBy('name')
                 ->get(),
         ]);
+    }
+
+    /**
+     * @param  Collection<int, object{relationship: CompanyRelationship, direction: string, other: Company}>  $rows
+     * @return Collection<int, object{relationship: CompanyRelationship, direction: string, other: Company}>
+     */
+    private function sortRelationshipsCollection(Collection $rows): Collection
+    {
+        $dir = $this->sortDir === 'desc' ? -1 : 1;
+
+        $cmp = function (object $a, object $b) use ($dir): int {
+            $primary = match ($this->sortBy) {
+                'other' => $dir * strcmp((string) $a->other->name, (string) $b->other->name),
+                'type' => $dir * strcmp((string) $a->relationship->type->name, (string) $b->relationship->type->name),
+                'direction' => $dir * strcmp((string) $a->direction, (string) $b->direction),
+                'effective_from' => $dir * ($a->relationship->effective_from?->getTimestamp() <=> $b->relationship->effective_from?->getTimestamp()),
+                'effective_to' => $dir * ($a->relationship->effective_to?->getTimestamp() <=> $b->relationship->effective_to?->getTimestamp()),
+                'active' => $dir * ((int) $a->relationship->isActive() <=> (int) $b->relationship->isActive()),
+                default => $dir * strcmp((string) $a->other->name, (string) $b->other->name),
+            };
+
+            if ($primary !== 0) {
+                return $primary;
+            }
+
+            return $a->relationship->id <=> $b->relationship->id;
+        };
+
+        return $rows->sort($cmp)->values();
     }
 }

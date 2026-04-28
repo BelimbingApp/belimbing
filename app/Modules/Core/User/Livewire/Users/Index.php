@@ -9,8 +9,10 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Exceptions\AuthorizationDeniedException;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -18,9 +20,35 @@ use Livewire\WithPagination;
 class Index extends Component
 {
     use ResetsPaginationOnSearch;
+    use TogglesSort;
     use WithPagination;
 
     public string $search = '';
+
+    public string $sortBy = 'name';
+
+    public string $sortDir = 'asc';
+
+    private const SORTABLE = [
+        'name' => 'users.name',
+        'email' => 'users.email',
+        'company_name' => 'companies.name',
+        'created_at' => 'users.created_at',
+    ];
+
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+            defaultDir: [
+                'name' => 'asc',
+                'email' => 'asc',
+                'company_name' => 'asc',
+                'created_at' => 'desc',
+            ],
+        );
+    }
 
     public function delete(int $userId): void
     {
@@ -58,16 +86,21 @@ class Index extends Component
             ->can($actor, 'core.user.delete')
             ->allowed;
 
+        $sortColumn = self::SORTABLE[$this->sortBy] ?? 'users.name';
+
         return view('livewire.admin.users.index', [
             'users' => User::query()
+                ->select('users.*')
                 ->with('company')
+                ->leftJoin('companies', 'users.company_id', '=', 'companies.id')
                 ->when($this->search, function ($query, $search): void {
-                    $query->where(function ($q) use ($search): void {
-                        $q->where('name', 'like', '%'.$search.'%')
-                            ->orWhere('email', 'like', '%'.$search.'%');
+                    $query->where(function (Builder $q) use ($search): void {
+                        $q->where('users.name', 'like', '%'.$search.'%')
+                            ->orWhere('users.email', 'like', '%'.$search.'%');
                     });
                 })
-                ->latest()
+                ->orderBy($sortColumn, $this->sortDir)
+                ->orderByDesc('users.id')
                 ->paginate(10),
             'canDelete' => $canDelete,
         ]);

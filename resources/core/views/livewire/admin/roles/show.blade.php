@@ -197,11 +197,29 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Email') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Company') }}</th>
+                            <x-ui.sortable-th
+                                column="name"
+                                :sort-by="$assignedUsersSortBy"
+                                :sort-dir="$assignedUsersSortDir"
+                                action="sortAssignedUsers('name')"
+                                :label="__('Name')"
+                            />
+                            <x-ui.sortable-th
+                                column="email"
+                                :sort-by="$assignedUsersSortBy"
+                                :sort-dir="$assignedUsersSortDir"
+                                action="sortAssignedUsers('email')"
+                                :label="__('Email')"
+                            />
+                            <x-ui.sortable-th
+                                column="company"
+                                :sort-by="$assignedUsersSortBy"
+                                :sort-dir="$assignedUsersSortDir"
+                                action="sortAssignedUsers('company')"
+                                :label="__('Company')"
+                            />
                             @if ($canEdit)
-                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                                <th scope="col" class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                             @endif
                         </tr>
                     </thead>

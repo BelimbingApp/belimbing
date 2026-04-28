@@ -28,10 +28,28 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Code') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
+                            <x-ui.sortable-th
+                                column="code"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('code')"
+                                :label="__('Code')"
+                            />
+                            <x-ui.sortable-th
+                                column="name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('name')"
+                                :label="__('Name')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Description') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
+                            <x-ui.sortable-th
+                                column="is_active"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('is_active')"
+                                :label="__('Status')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
                     </thead>
@@ -94,9 +112,10 @@
                                         size="sm"
                                         wire:click="deleteType({{ $type->id }})"
                                         wire:confirm="{{ __('Are you sure you want to delete this legal entity type?') }}"
+                                        :title="__('Delete legal entity type')"
                                     >
                                         <x-icon name="heroicon-o-trash" class="w-4 h-4" />
-                                        {{ __('Delete') }}
+                                        <span class="sr-only">{{ __('Delete') }}</span>
                                     </x-ui.button>
                                 </td>
                             </tr>

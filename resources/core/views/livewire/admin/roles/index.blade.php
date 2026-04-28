@@ -25,12 +25,48 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Code') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Type') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Scope') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Capabilities') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Assigned Users') }}</th>
+                            <x-ui.sortable-th
+                                column="name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('name')"
+                                :label="__('Name')"
+                            />
+                            <x-ui.sortable-th
+                                column="code"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('code')"
+                                :label="__('Code')"
+                            />
+                            <x-ui.sortable-th
+                                column="is_system"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('is_system')"
+                                :label="__('Type')"
+                            />
+                            <x-ui.sortable-th
+                                column="company_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('company_name')"
+                                :label="__('Scope')"
+                            />
+                            <x-ui.sortable-th
+                                column="capabilities_count"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('capabilities_count')"
+                                :label="__('Capabilities')"
+                            />
+                            <x-ui.sortable-th
+                                column="principal_roles_count"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('principal_roles_count')"
+                                :label="__('Assigned Users')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

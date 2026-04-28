@@ -12,11 +12,41 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Command') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Schedule') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Description') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Timezone') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Flags') }}</th>
+                            <x-ui.sortable-th
+                                column="command"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('command')"
+                                :label="__('Command')"
+                            />
+                            <x-ui.sortable-th
+                                column="expression"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('expression')"
+                                :label="__('Schedule')"
+                            />
+                            <x-ui.sortable-th
+                                column="description"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('description')"
+                                :label="__('Description')"
+                            />
+                            <x-ui.sortable-th
+                                column="timezone"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('timezone')"
+                                :label="__('Timezone')"
+                            />
+                            <x-ui.sortable-th
+                                column="flags"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('flags')"
+                                :label="__('Flags')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

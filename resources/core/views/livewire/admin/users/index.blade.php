@@ -37,10 +37,34 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Email') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Company') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Created') }}</th>
+                            <x-ui.sortable-th
+                                column="name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('name')"
+                                :label="__('Name')"
+                            />
+                            <x-ui.sortable-th
+                                column="email"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('email')"
+                                :label="__('Email')"
+                            />
+                            <x-ui.sortable-th
+                                column="company_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('company_name')"
+                                :label="__('Company')"
+                            />
+                            <x-ui.sortable-th
+                                column="created_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('created_at')"
+                                :label="__('Created')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
                     </thead>
@@ -74,7 +98,7 @@
                                                 :title="$user->id === auth()->id() ? __('You cannot impersonate yourself') : (session('impersonation.original_user_id') ? __('Cannot impersonate while impersonating') : __('Impersonate this user'))"
                                             >
                                                 <x-icon name="heroicon-o-impersonate" class="w-4 h-4" />
-                                                {{ __('Impersonate') }}
+                                                <span class="sr-only">{{ __('Impersonate') }}</span>
                                             </x-ui.button>
                                         </form>
                                         <x-ui.button
@@ -83,10 +107,10 @@
                                             wire:click="delete({{ $user->id }})"
                                             wire:confirm="{{ __('Are you sure you want to delete this user?') }}"
                                             :disabled="!$canDelete || $user->id === auth()->id()"
-                                            :title="!$canDelete ? __('You do not have permission to delete users') : ($user->id === auth()->id() ? __('You cannot delete your own account') : null)"
+                                            :title="!$canDelete ? __('You do not have permission to delete users') : ($user->id === auth()->id() ? __('You cannot delete your own account') : __('Delete user'))"
                                         >
                                             <x-icon name="heroicon-o-trash" class="w-4 h-4" />
-                                            {{ __('Delete') }}
+                                            <span class="sr-only">{{ __('Delete') }}</span>
                                         </x-ui.button>
                                     </div>
                                 </td>

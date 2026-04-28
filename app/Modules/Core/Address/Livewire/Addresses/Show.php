@@ -6,18 +6,21 @@
 namespace App\Modules\Core\Address\Livewire\Addresses;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\Address\Livewire\AbstractAddressForm;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Services\CompanyTimezoneResolver;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Url;
 
 class Show extends AbstractAddressForm
 {
     use SavesValidatedFields;
+    use TogglesSort;
 
     public Address $address;
 
@@ -29,6 +32,20 @@ class Show extends AbstractAddressForm
     public ?string $suggestedTimezoneOld = null;
 
     public bool $timezoneWasAutoApplied = false;
+
+    public string $linkedSortBy = 'type';
+
+    public string $linkedSortDir = 'asc';
+
+    private const LINKED_SORTABLE = [
+        'type' => true,
+        'name' => true,
+        'kind' => true,
+        'is_primary' => true,
+        'priority' => true,
+        'valid_from' => true,
+        'valid_to' => true,
+    ];
 
     public function mount(Address $address): void
     {
@@ -52,6 +69,26 @@ class Show extends AbstractAddressForm
                 $this->companyContextId = null;
             }
         }
+    }
+
+    public function sortLinked(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::LINKED_SORTABLE,
+            defaultDir: [
+                'type' => 'asc',
+                'name' => 'asc',
+                'kind' => 'asc',
+                'is_primary' => 'desc',
+                'priority' => 'asc',
+                'valid_from' => 'asc',
+                'valid_to' => 'asc',
+            ],
+            sortByProperty: 'linkedSortBy',
+            sortDirProperty: 'linkedSortDir',
+            resetPage: false,
+        );
     }
 
     public function saveField(string $field, mixed $value): void
@@ -233,6 +270,8 @@ class Show extends AbstractAddressForm
             ];
         })->filter(fn ($e) => $e->model !== null);
 
+        $entities = $this->sortLinkedEntities($entities);
+
         return [
             'linkedEntities' => $entities,
             'countryOptions' => $this->loadCountryOptionsForCombobox(),
@@ -242,5 +281,60 @@ class Show extends AbstractAddressForm
     public function render(): View
     {
         return view('livewire.admin.addresses.show', $this->with());
+    }
+
+    /**
+     * @param  Collection<int, object{model: mixed, type: string, kind: array<int, string>, is_primary: mixed, priority: mixed, valid_from: mixed, valid_to: mixed}>  $entities
+     * @return Collection<int, object{model: mixed, type: string, kind: array<int, string>, is_primary: mixed, priority: mixed, valid_from: mixed, valid_to: mixed}>
+     */
+    private function sortLinkedEntities(Collection $entities): Collection
+    {
+        $dir = $this->linkedSortDir === 'desc' ? -1 : 1;
+
+        return $entities
+            ->sort(function (object $a, object $b) use ($dir): int {
+                $nameA = $this->linkedEntitySortName($a);
+                $nameB = $this->linkedEntitySortName($b);
+                $kindKey = function (object $entity): string {
+                    $kinds = $entity->kind;
+                    $kinds = is_array($kinds) ? $kinds : [];
+                    sort($kinds);
+
+                    return implode(',', $kinds);
+                };
+
+                $primary = match ($this->linkedSortBy) {
+                    'type' => $dir * strcmp((string) $a->type, (string) $b->type),
+                    'name' => $dir * strcmp($nameA, $nameB),
+                    'kind' => $dir * strcmp($kindKey($a), $kindKey($b)),
+                    'is_primary' => $dir * (((int) (bool) $a->is_primary) <=> ((int) (bool) $b->is_primary)),
+                    'priority' => $dir * (((int) ($a->priority ?? 0)) <=> ((int) ($b->priority ?? 0))),
+                    'valid_from' => $dir * strcmp((string) ($a->valid_from ?? ''), (string) ($b->valid_from ?? '')),
+                    'valid_to' => $dir * strcmp((string) ($a->valid_to ?? ''), (string) ($b->valid_to ?? '')),
+                    default => $dir * strcmp((string) $a->type, (string) $b->type),
+                };
+
+                if ($primary !== 0) {
+                    return $primary;
+                }
+
+                return ($a->model->id ?? 0) <=> ($b->model->id ?? 0);
+            })
+            ->values();
+    }
+
+    private function linkedEntitySortName(object $entity): string
+    {
+        $model = $entity->model;
+
+        if ($entity->type === 'Company') {
+            return (string) ($model->name ?? '');
+        }
+
+        if ($entity->type === 'Employee') {
+            return (string) ($model->full_name ?? '');
+        }
+
+        return (string) ($model->name ?? (string) $model->id);
     }
 }

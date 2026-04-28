@@ -42,11 +42,42 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Country') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Code') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Alt Name') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider min-w-22">{{ __('Updated') }}</th>
+                            <x-ui.sortable-th
+                                column="country_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('country_name')"
+                                :label="__('Country')"
+                            />
+                            <x-ui.sortable-th
+                                column="code"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('code')"
+                                :label="__('Code')"
+                            />
+                            <x-ui.sortable-th
+                                column="name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('name')"
+                                :label="__('Name')"
+                            />
+                            <x-ui.sortable-th
+                                column="alt_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('alt_name')"
+                                :label="__('Alt Name')"
+                            />
+                            <x-ui.sortable-th
+                                column="updated_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('updated_at')"
+                                :label="__('Updated')"
+                                class="min-w-22"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

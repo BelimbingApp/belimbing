@@ -6,6 +6,7 @@
 namespace App\Modules\Core\Company\Livewire\Companies;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\DepartmentType;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
@@ -16,6 +17,7 @@ use Livewire\WithPagination;
 class DepartmentTypes extends Component
 {
     use SavesValidatedFields;
+    use TogglesSort;
     use WithPagination;
 
     public bool $showCreateModal = false;
@@ -29,6 +31,31 @@ class DepartmentTypes extends Component
     public ?string $createDescription = null;
 
     public bool $createIsActive = true;
+
+    public string $sortBy = 'category';
+
+    public string $sortDir = 'asc';
+
+    private const SORTABLE = [
+        'code' => 'code',
+        'name' => 'name',
+        'category' => 'category',
+        'is_active' => 'is_active',
+    ];
+
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+            defaultDir: [
+                'code' => 'asc',
+                'name' => 'asc',
+                'category' => 'asc',
+                'is_active' => 'desc',
+            ],
+        );
+    }
 
     public function createType(): void
     {
@@ -90,10 +117,12 @@ class DepartmentTypes extends Component
 
     public function render(): View
     {
+        $sortColumn = self::SORTABLE[$this->sortBy] ?? 'category';
+
         return view('livewire.admin.companies.department-types', [
             'types' => DepartmentType::query()
-                ->orderBy('category')
-                ->orderBy('name')
+                ->orderBy($sortColumn, $this->sortDir)
+                ->orderByDesc('id')
                 ->paginate(15),
         ]);
     }

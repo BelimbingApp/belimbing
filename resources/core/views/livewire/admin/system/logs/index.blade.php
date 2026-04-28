@@ -14,9 +14,27 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('File') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Size') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Last Modified') }}</th>
+                            <x-ui.sortable-th
+                                column="filename"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('filename')"
+                                :label="__('File')"
+                            />
+                            <x-ui.sortable-th
+                                column="size"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('size')"
+                                :label="__('Size')"
+                            />
+                            <x-ui.sortable-th
+                                column="modified_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('modified_at')"
+                                :label="__('Last Modified')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

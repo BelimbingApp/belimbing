@@ -20,6 +20,32 @@ class Index extends SearchablePaginatedList
 
     public string $search = '';
 
+    protected function sortableColumns(): array
+    {
+        return [
+            'id' => 'operation_it_tickets.id',
+            'title' => 'operation_it_tickets.title',
+            'reporter_name' => 'reporter_employee.full_name',
+            'priority' => 'operation_it_tickets.priority',
+            'status' => 'operation_it_tickets.status',
+            'category' => 'operation_it_tickets.category',
+            'created_at' => 'operation_it_tickets.created_at',
+        ];
+    }
+
+    protected function defaultSortDirections(): array
+    {
+        return [
+            'id' => 'desc',
+            'title' => 'asc',
+            'reporter_name' => 'asc',
+            'priority' => 'desc',
+            'status' => 'asc',
+            'category' => 'asc',
+            'created_at' => 'desc',
+        ];
+    }
+
     public function priorityVariant(string $priority): string
     {
         return match ($priority) {
@@ -48,7 +74,10 @@ class Index extends SearchablePaginatedList
 
     protected function query(): EloquentBuilder|QueryBuilder
     {
-        return Ticket::query()->with('reporter', 'assignee');
+        return Ticket::query()
+            ->select('operation_it_tickets.*')
+            ->leftJoin('employees as reporter_employee', 'operation_it_tickets.reporter_id', '=', 'reporter_employee.id')
+            ->with('reporter', 'assignee');
     }
 
     protected function applySearch(EloquentBuilder|QueryBuilder $query, string $search): void

@@ -35,10 +35,34 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Description') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Created') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Updated') }}</th>
+                            <x-ui.sortable-th
+                                column="name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('name')"
+                                :label="__('Name')"
+                            />
+                            <x-ui.sortable-th
+                                column="description"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('description')"
+                                :label="__('Description')"
+                            />
+                            <x-ui.sortable-th
+                                column="created_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('created_at')"
+                                :label="__('Created')"
+                            />
+                            <x-ui.sortable-th
+                                column="updated_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('updated_at')"
+                                :label="__('Updated')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
                     </thead>

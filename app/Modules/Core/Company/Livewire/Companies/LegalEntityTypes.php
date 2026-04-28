@@ -6,6 +6,7 @@
 namespace App\Modules\Core\Company\Livewire\Companies;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\LegalEntityType;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
@@ -16,6 +17,7 @@ use Livewire\WithPagination;
 class LegalEntityTypes extends Component
 {
     use SavesValidatedFields;
+    use TogglesSort;
     use WithPagination;
 
     public bool $showCreateModal = false;
@@ -27,6 +29,29 @@ class LegalEntityTypes extends Component
     public ?string $createDescription = null;
 
     public bool $createIsActive = true;
+
+    public string $sortBy = 'name';
+
+    public string $sortDir = 'asc';
+
+    private const SORTABLE = [
+        'code' => 'code',
+        'name' => 'name',
+        'is_active' => 'is_active',
+    ];
+
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+            defaultDir: [
+                'code' => 'asc',
+                'name' => 'asc',
+                'is_active' => 'desc',
+            ],
+        );
+    }
 
     public function createType(): void
     {
@@ -84,9 +109,12 @@ class LegalEntityTypes extends Component
 
     public function render(): View
     {
+        $sortColumn = self::SORTABLE[$this->sortBy] ?? 'name';
+
         return view('livewire.admin.companies.legal-entity-types', [
             'types' => LegalEntityType::query()
-                ->orderBy('name')
+                ->orderBy($sortColumn, $this->sortDir)
+                ->orderByDesc('id')
                 ->paginate(15),
         ]);
     }

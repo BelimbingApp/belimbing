@@ -54,13 +54,55 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('#') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Code') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Label') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Kanban') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('PIC') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Notify') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Active') }}</th>
+                            <x-ui.sortable-th
+                                column="position"
+                                :sort-by="$statusesSortBy"
+                                :sort-dir="$statusesSortDir"
+                                action="sortStatuses('position')"
+                                :label="__('Position')"
+                            />
+                            <x-ui.sortable-th
+                                column="code"
+                                :sort-by="$statusesSortBy"
+                                :sort-dir="$statusesSortDir"
+                                action="sortStatuses('code')"
+                                :label="__('Code')"
+                            />
+                            <x-ui.sortable-th
+                                column="label"
+                                :sort-by="$statusesSortBy"
+                                :sort-dir="$statusesSortDir"
+                                action="sortStatuses('label')"
+                                :label="__('Label')"
+                            />
+                            <x-ui.sortable-th
+                                column="kanban_code"
+                                :sort-by="$statusesSortBy"
+                                :sort-dir="$statusesSortDir"
+                                action="sortStatuses('kanban_code')"
+                                :label="__('Kanban')"
+                            />
+                            <x-ui.sortable-th
+                                column="pic"
+                                :sort-by="$statusesSortBy"
+                                :sort-dir="$statusesSortDir"
+                                action="sortStatuses('pic')"
+                                :label="__('PIC')"
+                            />
+                            <x-ui.sortable-th
+                                column="notify"
+                                :sort-by="$statusesSortBy"
+                                :sort-dir="$statusesSortDir"
+                                action="sortStatuses('notify')"
+                                :label="__('Notify')"
+                            />
+                            <x-ui.sortable-th
+                                column="is_active"
+                                :sort-by="$statusesSortBy"
+                                :sort-dir="$statusesSortDir"
+                                action="sortStatuses('is_active')"
+                                :label="__('Active')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">
@@ -172,14 +214,62 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('From') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('To') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Label') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Capability') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Guard') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Action') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('SLA') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Active') }}</th>
+                            <x-ui.sortable-th
+                                column="from_code"
+                                :sort-by="$transitionsSortBy"
+                                :sort-dir="$transitionsSortDir"
+                                action="sortTransitions('from_code')"
+                                :label="__('From')"
+                            />
+                            <x-ui.sortable-th
+                                column="to_code"
+                                :sort-by="$transitionsSortBy"
+                                :sort-dir="$transitionsSortDir"
+                                action="sortTransitions('to_code')"
+                                :label="__('To')"
+                            />
+                            <x-ui.sortable-th
+                                column="label"
+                                :sort-by="$transitionsSortBy"
+                                :sort-dir="$transitionsSortDir"
+                                action="sortTransitions('label')"
+                                :label="__('Label')"
+                            />
+                            <x-ui.sortable-th
+                                column="capability"
+                                :sort-by="$transitionsSortBy"
+                                :sort-dir="$transitionsSortDir"
+                                action="sortTransitions('capability')"
+                                :label="__('Capability')"
+                            />
+                            <x-ui.sortable-th
+                                column="guard"
+                                :sort-by="$transitionsSortBy"
+                                :sort-dir="$transitionsSortDir"
+                                action="sortTransitions('guard')"
+                                :label="__('Guard')"
+                            />
+                            <x-ui.sortable-th
+                                column="action"
+                                :sort-by="$transitionsSortBy"
+                                :sort-dir="$transitionsSortDir"
+                                action="sortTransitions('action')"
+                                :label="__('Action')"
+                            />
+                            <x-ui.sortable-th
+                                column="sla_seconds"
+                                :sort-by="$transitionsSortBy"
+                                :sort-dir="$transitionsSortDir"
+                                action="sortTransitions('sla_seconds')"
+                                :label="__('SLA')"
+                            />
+                            <x-ui.sortable-th
+                                column="is_active"
+                                :sort-by="$transitionsSortBy"
+                                :sort-dir="$transitionsSortDir"
+                                action="sortTransitions('is_active')"
+                                :label="__('Active')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">
@@ -219,10 +309,34 @@
                     <table class="min-w-full divide-y divide-border-default text-sm">
                         <thead class="bg-surface-subtle/80">
                             <tr>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('#') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Code') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Label') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('WIP Limit') }}</th>
+                                <x-ui.sortable-th
+                                    column="position"
+                                    :sort-by="$kanbanColumnsSortBy"
+                                    :sort-dir="$kanbanColumnsSortDir"
+                                    action="sortKanbanColumns('position')"
+                                    :label="__('Position')"
+                                />
+                                <x-ui.sortable-th
+                                    column="code"
+                                    :sort-by="$kanbanColumnsSortBy"
+                                    :sort-dir="$kanbanColumnsSortDir"
+                                    action="sortKanbanColumns('code')"
+                                    :label="__('Code')"
+                                />
+                                <x-ui.sortable-th
+                                    column="label"
+                                    :sort-by="$kanbanColumnsSortBy"
+                                    :sort-dir="$kanbanColumnsSortDir"
+                                    action="sortKanbanColumns('label')"
+                                    :label="__('Label')"
+                                />
+                                <x-ui.sortable-th
+                                    column="wip_limit"
+                                    :sort-by="$kanbanColumnsSortBy"
+                                    :sort-dir="$kanbanColumnsSortDir"
+                                    action="sortKanbanColumns('wip_limit')"
+                                    :label="__('WIP Limit')"
+                                />
                             </tr>
                         </thead>
                         <tbody class="bg-surface-card divide-y divide-border-default">

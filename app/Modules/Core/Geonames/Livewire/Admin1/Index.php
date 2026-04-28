@@ -6,6 +6,7 @@
 namespace App\Modules\Core\Geonames\Livewire\Admin1;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Geonames\Database\Seeders\Admin1Seeder;
 use App\Modules\Core\Geonames\Models\Admin1;
 use App\Modules\Core\Geonames\Models\Country;
@@ -18,23 +19,53 @@ use Livewire\WithPagination;
 class Index extends Component
 {
     use ResetsPaginationOnSearch;
+    use TogglesSort;
     use WithPagination;
 
     public string $search = '';
 
     public string $filterCountryIso = '';
 
+    public string $sortBy = 'country_name';
+
+    public string $sortDir = 'asc';
+
+    private const SORTABLE = [
+        'country_name' => 'country_name',
+        'code' => 'geonames_admin1.code',
+        'name' => 'geonames_admin1.name',
+        'alt_name' => 'geonames_admin1.alt_name',
+        'updated_at' => 'geonames_admin1.updated_at',
+    ];
+
     public function updatedFilterCountryIso(): void
     {
         $this->resetPage();
     }
 
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+            defaultDir: [
+                'country_name' => 'asc',
+                'code' => 'asc',
+                'name' => 'asc',
+                'alt_name' => 'asc',
+                'updated_at' => 'desc',
+            ],
+        );
+    }
+
     public function with(): array
     {
+        $sortColumn = self::SORTABLE[$this->sortBy] ?? 'country_name';
+
         $query = Admin1::query()
             ->withCountryName()
-            ->orderBy('country_name')
-            ->orderBy('name');
+            ->orderBy($sortColumn, $this->sortDir)
+            ->orderByDesc('geonames_admin1.id');
 
         if ($this->search) {
             $query->where(function ($q) {

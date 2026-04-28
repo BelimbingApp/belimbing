@@ -28,12 +28,48 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Related Company') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Type') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Direction') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Effective From') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Effective To') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Active?') }}</th>
+                            <x-ui.sortable-th
+                                column="other"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('other')"
+                                :label="__('Related Company')"
+                            />
+                            <x-ui.sortable-th
+                                column="type"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('type')"
+                                :label="__('Type')"
+                            />
+                            <x-ui.sortable-th
+                                column="direction"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('direction')"
+                                :label="__('Direction')"
+                            />
+                            <x-ui.sortable-th
+                                column="effective_from"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('effective_from')"
+                                :label="__('Effective From')"
+                            />
+                            <x-ui.sortable-th
+                                column="effective_to"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('effective_to')"
+                                :label="__('Effective To')"
+                            />
+                            <x-ui.sortable-th
+                                column="active"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('active')"
+                                :label="__('Active?')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
                     </thead>
@@ -64,19 +100,22 @@
                                     <div class="flex items-center justify-end gap-2">
                                         <button
                                             wire:click="editRelationship({{ $item->relationship->id }})"
+                                            type="button"
+                                            title="{{ __('Edit relationship dates') }}"
                                             class="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg text-accent hover:bg-surface-subtle transition-colors"
                                         >
                                             <x-icon name="heroicon-o-pencil" class="w-4 h-4" />
-                                            {{ __('Edit') }}
+                                            <span class="sr-only">{{ __('Edit') }}</span>
                                         </button>
                                         <x-ui.button
                                             variant="danger-ghost"
                                             size="sm"
                                             wire:click="deleteRelationship({{ $item->relationship->id }})"
                                             wire:confirm="{{ __('Are you sure you want to delete this relationship?') }}"
+                                            :title="__('Delete relationship')"
                                         >
                                             <x-icon name="heroicon-o-trash" class="w-4 h-4" />
-                                            {{ __('Delete') }}
+                                            <span class="sr-only">{{ __('Delete') }}</span>
                                         </x-ui.button>
                                     </div>
                                 </td>

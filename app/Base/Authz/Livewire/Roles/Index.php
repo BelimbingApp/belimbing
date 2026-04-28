@@ -9,6 +9,7 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Models\Role;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Modules\Core\AI\DTO\PageContext;
 use Illuminate\Contracts\View\View;
@@ -18,9 +19,31 @@ use Livewire\WithPagination;
 class Index extends Component implements ProvidesLaraPageContext
 {
     use ResetsPaginationOnSearch;
+    use TogglesSort;
     use WithPagination;
 
     public string $search = '';
+
+    public string $sortBy = 'name';
+
+    public string $sortDir = 'asc';
+
+    private const SORTABLE = [
+        'name' => 'base_authz_roles.name',
+        'code' => 'base_authz_roles.code',
+        'is_system' => 'base_authz_roles.is_system',
+        'company_name' => 'companies.name',
+        'capabilities_count' => 'capabilities_count',
+        'principal_roles_count' => 'principal_roles_count',
+    ];
+
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+        );
+    }
 
     public function render(): View
     {
@@ -32,20 +55,24 @@ class Index extends Component implements ProvidesLaraPageContext
             ->can($authActor, 'admin.role.create')
             ->allowed;
 
+        $sortColumn = self::SORTABLE[$this->sortBy] ?? 'base_authz_roles.name';
+
         return view('livewire.admin.roles.index', [
             'canCreate' => $canCreate,
             'roles' => Role::query()
+                ->select('base_authz_roles.*')
                 ->with('company')
+                ->leftJoin('companies', 'base_authz_roles.company_id', '=', 'companies.id')
                 ->withCount('capabilities', 'principalRoles')
                 ->when($this->search, function ($query, $search): void {
                     $query->where(function ($q) use ($search): void {
-                        $q->where('name', 'like', '%'.$search.'%')
-                            ->orWhere('code', 'like', '%'.$search.'%')
-                            ->orWhere('description', 'like', '%'.$search.'%');
+                        $q->where('base_authz_roles.name', 'like', '%'.$search.'%')
+                            ->orWhere('base_authz_roles.code', 'like', '%'.$search.'%')
+                            ->orWhere('base_authz_roles.description', 'like', '%'.$search.'%');
                     });
                 })
-                ->orderByDesc('is_system')
-                ->orderBy('name')
+                ->orderBy($sortColumn, $this->sortDir)
+                ->orderByDesc('base_authz_roles.id')
                 ->paginate(10),
         ]);
     }

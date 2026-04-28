@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\Company\Livewire\Companies;
 
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\Department;
 use App\Modules\Core\Company\Models\DepartmentType;
@@ -15,6 +16,7 @@ use Livewire\WithPagination;
 
 class Departments extends Component
 {
+    use TogglesSort;
     use WithPagination;
 
     public Company $company;
@@ -25,9 +27,32 @@ class Departments extends Component
 
     public string $createStatus = 'active';
 
+    public string $sortBy = 'type_name';
+
+    public string $sortDir = 'asc';
+
+    private const SORTABLE = [
+        'type_name' => 'company_department_types.name',
+        'category' => 'company_department_types.category',
+        'status' => 'company_departments.status',
+    ];
+
     public function mount(Company $company): void
     {
         $this->company = $company;
+    }
+
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+            defaultDir: [
+                'type_name' => 'asc',
+                'category' => 'asc',
+                'status' => 'asc',
+            ],
+        );
     }
 
     public function createDepartment(): void
@@ -73,10 +98,16 @@ class Departments extends Component
             ->pluck('department_type_id')
             ->toArray();
 
+        $sortColumn = self::SORTABLE[$this->sortBy] ?? 'company_department_types.name';
+
         return view('livewire.admin.companies.departments', [
             'departments' => Department::query()
-                ->where('company_id', $this->company->id)
+                ->select('company_departments.*')
+                ->where('company_departments.company_id', $this->company->id)
+                ->leftJoin('company_department_types', 'company_departments.department_type_id', '=', 'company_department_types.id')
                 ->with('type')
+                ->orderBy($sortColumn, $this->sortDir)
+                ->orderByDesc('company_departments.id')
                 ->paginate(15),
             'availableTypes' => DepartmentType::query()
                 ->active()

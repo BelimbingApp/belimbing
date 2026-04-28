@@ -6,6 +6,7 @@
 namespace App\Modules\Core\Address\Livewire\Addresses;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Address\Models\Address;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
@@ -16,12 +17,33 @@ use Livewire\WithPagination;
 class Index extends Component
 {
     use ResetsPaginationOnSearch;
+    use TogglesSort;
     use WithPagination;
 
     public string $search = '';
 
+    public string $sortBy = 'label';
+
+    public string $sortDir = 'asc';
+
+    private const SORTABLE = [
+        'label' => 'label',
+        'country_iso' => 'country_iso',
+        'verificationStatus' => 'verificationStatus',
+    ];
+
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+        );
+    }
+
     public function with(): array
     {
+        $sortColumn = self::SORTABLE[$this->sortBy] ?? 'label';
+
         return [
             'addresses' => Address::query()
                 ->when($this->search, function ($query, $search): void {
@@ -32,7 +54,8 @@ class Index extends Component
                         ->orWhere('postcode', 'like', '%'.$search.'%')
                         ->orWhere('country_iso', 'like', '%'.$search.'%');
                 })
-                ->latest()
+                ->orderBy($sortColumn, $this->sortDir)
+                ->orderByDesc('created_at')
                 ->paginate(15),
         ];
     }

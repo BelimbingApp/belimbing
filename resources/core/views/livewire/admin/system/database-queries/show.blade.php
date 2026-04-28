@@ -300,9 +300,13 @@
                     <thead class="bg-surface-subtle/80">
                         <tr>
                             @foreach($columns as $col)
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                    {{ $col }}
-                                </th>
+                                <x-ui.sortable-th
+                                    :column="$col"
+                                    :sort-by="$resultSortBy"
+                                    :sort-dir="$resultSortDir"
+                                    :action="'sortResults('.\Illuminate\Support\Js::from($col).')'"
+                                    :label="$col"
+                                />
                             @endforeach
                         </tr>
                     </thead>

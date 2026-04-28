@@ -41,25 +41,58 @@
                     </colgroup>
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('ISO') }}</th>
+                            <x-ui.sortable-th
+                                column="iso"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('iso')"
+                                :label="__('ISO')"
+                            />
                             <x-ui.sortable-th
                                 column="country"
                                 :sort-by="$sortBy"
                                 :sort-dir="$sortDir"
+                                action="sort('country')"
                                 :label="__('Country')"
                             />
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Capital') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Phone') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Currency') }}</th>
+                            <x-ui.sortable-th
+                                column="capital"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('capital')"
+                                :label="__('Capital')"
+                            />
+                            <x-ui.sortable-th
+                                column="phone"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('phone')"
+                                :label="__('Phone')"
+                            />
+                            <x-ui.sortable-th
+                                column="currency_code"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('currency_code')"
+                                :label="__('Currency')"
+                            />
                             <x-ui.sortable-th
                                 column="population"
                                 :sort-by="$sortBy"
                                 :sort-dir="$sortDir"
+                                action="sort('population')"
                                 align="right"
                                 :label="__('Population')"
                                 class="pr-3"
                             />
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider pl-3">{{ __('Updated') }}</th>
+                            <x-ui.sortable-th
+                                column="updated_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('updated_at')"
+                                :label="__('Updated')"
+                                class="pl-3"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

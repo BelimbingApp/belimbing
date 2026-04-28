@@ -7,25 +7,58 @@ namespace App\Base\Authz\Livewire\PrincipalCapabilities;
 
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalCapability;
-use App\Base\Foundation\Livewire\SearchablePaginatedList;
-use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
-use Illuminate\Database\Query\Builder as QueryBuilder;
+use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Contracts\View\View;
+use Livewire\Component;
+use Livewire\WithPagination;
 
-class Index extends SearchablePaginatedList
+class Index extends Component
 {
-    protected const string VIEW_NAME = 'livewire.admin.authz.principal-capabilities.index';
+    use ResetsPaginationOnSearch;
+    use TogglesSort;
+    use WithPagination;
 
-    protected const string VIEW_DATA_KEY = 'capabilities';
+    public string $search = '';
 
-    protected const string SORT_COLUMN = 'base_authz_principal_capabilities.created_at';
+    public string $sortBy = 'created_at';
 
-    protected const array SEARCH_COLUMNS = [
-        'capability_key',
-        'users.name',
-        'users.email',
+    public string $sortDir = 'desc';
+
+    private const SORTABLE = [
+        'principal_name' => 'users.name',
+        'principal_type' => 'base_authz_principal_capabilities.principal_type',
+        'capability_key' => 'base_authz_principal_capabilities.capability_key',
+        'is_allowed' => 'base_authz_principal_capabilities.is_allowed',
+        'company_name' => 'companies.name',
+        'created_at' => 'base_authz_principal_capabilities.created_at',
     ];
 
-    protected function query(): EloquentBuilder|QueryBuilder
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+            defaultDir: [
+                'created_at' => 'desc',
+            ],
+        );
+    }
+
+    public function render(): View
+    {
+        $sortColumn = self::SORTABLE[$this->sortBy] ?? 'base_authz_principal_capabilities.created_at';
+
+        return view('livewire.admin.authz.principal-capabilities.index', [
+            'capabilities' => $this->capabilities($sortColumn),
+        ]);
+    }
+
+    /**
+     * @return LengthAwarePaginator<int, PrincipalCapability>
+     */
+    private function capabilities(string $sortColumn): LengthAwarePaginator
     {
         return PrincipalCapability::query()
             ->leftJoin('users', function ($join): void {
@@ -38,6 +71,16 @@ class Index extends SearchablePaginatedList
                 'users.name as principal_name',
                 'users.email as principal_email',
                 'companies.name as company_name'
-            );
+            )
+            ->when($this->search, function ($query, $search): void {
+                $query->where(function ($builder) use ($search): void {
+                    $builder->where('base_authz_principal_capabilities.capability_key', 'like', '%'.$search.'%')
+                        ->orWhere('users.name', 'like', '%'.$search.'%')
+                        ->orWhere('users.email', 'like', '%'.$search.'%');
+                });
+            })
+            ->orderBy($sortColumn, $this->sortDir)
+            ->orderByDesc('base_authz_principal_capabilities.id')
+            ->paginate(25);
     }
 }

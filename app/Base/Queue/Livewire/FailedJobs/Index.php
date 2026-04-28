@@ -21,6 +21,26 @@ class Index extends TableSearchablePaginatedList
 
     protected const array SEARCH_COLUMNS = ['queue', 'uuid', 'exception'];
 
+    protected function sortableColumns(): array
+    {
+        return [
+            'id' => 'failed_jobs.id',
+            'queue' => 'failed_jobs.queue',
+            'exception' => 'failed_jobs.exception',
+            'failed_at' => 'failed_jobs.failed_at',
+        ];
+    }
+
+    protected function defaultSortDirections(): array
+    {
+        return [
+            'id' => 'desc',
+            'queue' => 'asc',
+            'exception' => 'asc',
+            'failed_at' => 'desc',
+        ];
+    }
+
     public function retryJob(string $uuid): void
     {
         Artisan::call('queue:retry', ['id' => [$uuid]]);

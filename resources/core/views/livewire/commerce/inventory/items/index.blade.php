@@ -38,12 +38,50 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('SKU') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Title') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Unit Cost') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Target Price') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Created') }}</th>
+                            <x-ui.sortable-th
+                                column="sku"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('sku')"
+                                :label="__('SKU')"
+                            />
+                            <x-ui.sortable-th
+                                column="title"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('title')"
+                                :label="__('Title')"
+                            />
+                            <x-ui.sortable-th
+                                column="status"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('status')"
+                                :label="__('Status')"
+                            />
+                            <x-ui.sortable-th
+                                column="unit_cost_amount"
+                                align="right"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('unit_cost_amount')"
+                                :label="__('Unit Cost')"
+                            />
+                            <x-ui.sortable-th
+                                column="target_price_amount"
+                                align="right"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('target_price_amount')"
+                                :label="__('Target Price')"
+                            />
+                            <x-ui.sortable-th
+                                column="created_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('created_at')"
+                                :label="__('Created')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

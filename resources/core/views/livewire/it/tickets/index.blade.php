@@ -38,13 +38,55 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('#') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Title') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Reporter') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Priority') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Category') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Created') }}</th>
+                            <x-ui.sortable-th
+                                column="id"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('id')"
+                                :label="'#'"
+                            />
+                            <x-ui.sortable-th
+                                column="title"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('title')"
+                                :label="__('Title')"
+                            />
+                            <x-ui.sortable-th
+                                column="reporter_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('reporter_name')"
+                                :label="__('Reporter')"
+                            />
+                            <x-ui.sortable-th
+                                column="priority"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('priority')"
+                                :label="__('Priority')"
+                            />
+                            <x-ui.sortable-th
+                                column="status"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('status')"
+                                :label="__('Status')"
+                            />
+                            <x-ui.sortable-th
+                                column="category"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('category')"
+                                :label="__('Category')"
+                            />
+                            <x-ui.sortable-th
+                                column="created_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('created_at')"
+                                :label="__('Created')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

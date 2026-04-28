@@ -97,16 +97,39 @@
                     <table class="min-w-full divide-y divide-border-default text-sm">
                         <thead class="bg-surface-subtle/80">
                             <tr>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Country') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Records') }}</th>
+                                <x-ui.sortable-th
+                                    column="country_name"
+                                    :sort-by="$summarySortBy"
+                                    :sort-dir="$summarySortDir"
+                                    action="sortSummary('country_name')"
+                                    :label="__('Country')"
+                                />
+                                <x-ui.sortable-th
+                                    column="country_iso"
+                                    :sort-by="$summarySortBy"
+                                    :sort-dir="$summarySortDir"
+                                    action="sortSummary('country_iso')"
+                                    :label="__('ISO')"
+                                    class="w-24"
+                                />
+                                <x-ui.sortable-th
+                                    column="record_count"
+                                    align="right"
+                                    :sort-by="$summarySortBy"
+                                    :sort-dir="$summarySortDir"
+                                    action="sortSummary('record_count')"
+                                    :label="__('Records')"
+                                />
                             </tr>
                         </thead>
                         <tbody class="bg-surface-card divide-y divide-border-default">
                             @foreach ($countryRecordCounts as $row)
                                 <tr class="hover:bg-surface-subtle/50 transition-colors">
-                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm">
-                                        <span class="font-mono text-xs text-muted">{{ $row->country_iso }}</span>
-                                        <span class="ml-1 text-ink">{{ $row->country_name ?? $row->country_iso }}</span>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink">
+                                        {{ $row->country_name ?? $row->country_iso }}
+                                    </td>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-mono text-xs text-muted tabular-nums">
+                                        {{ $row->country_iso }}
                                     </td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right font-medium text-ink tabular-nums">{{ app(\App\Base\Locale\Contracts\NumberDisplayService::class)->formatInteger($row->record_count) }}</td>
                                 </tr>
@@ -129,11 +152,41 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Country') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Postcode') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Place Name') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Admin1 Code') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Updated') }}</th>
+                            <x-ui.sortable-th
+                                column="country_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('country_name')"
+                                :label="__('Country')"
+                            />
+                            <x-ui.sortable-th
+                                column="postcode"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('postcode')"
+                                :label="__('Postcode')"
+                            />
+                            <x-ui.sortable-th
+                                column="place_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('place_name')"
+                                :label="__('Place Name')"
+                            />
+                            <x-ui.sortable-th
+                                column="admin1Code"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('admin1Code')"
+                                :label="__('Admin1 Code')"
+                            />
+                            <x-ui.sortable-th
+                                column="updated_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('updated_at')"
+                                :label="__('Updated')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

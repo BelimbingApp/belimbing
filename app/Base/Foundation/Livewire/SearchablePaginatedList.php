@@ -6,6 +6,7 @@
 namespace App\Base\Foundation\Livewire;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -15,6 +16,7 @@ use Livewire\WithPagination;
 abstract class SearchablePaginatedList extends Component
 {
     use ResetsPaginationOnSearch;
+    use TogglesSort;
     use WithPagination;
 
     protected const string VIEW_NAME = '';
@@ -29,6 +31,18 @@ abstract class SearchablePaginatedList extends Component
     protected const array SEARCH_COLUMNS = [];
 
     public string $search = '';
+
+    public string $sortBy = '';
+
+    public string $sortDir = 'asc';
+
+    public function mount(): void
+    {
+        if ($this->sortBy === '') {
+            $this->sortBy = $this->defaultSortBy();
+            $this->sortDir = $this->defaultSortDir();
+        }
+    }
 
     final public function render(): View
     {
@@ -48,7 +62,44 @@ abstract class SearchablePaginatedList extends Component
         ));
     }
 
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: $this->sortableColumns(),
+            defaultDir: $this->defaultSortDirections(),
+        );
+    }
+
     abstract protected function query(): EloquentBuilder|QueryBuilder;
+
+    /**
+     * Map UI sort keys to SQL order expressions (typically qualified column names).
+     *
+     * @return array<string, string>
+     */
+    protected function sortableColumns(): array
+    {
+        return [];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function defaultSortDirections(): array
+    {
+        return [];
+    }
+
+    protected function defaultSortBy(): string
+    {
+        return static::SORT_COLUMN;
+    }
+
+    protected function defaultSortDir(): string
+    {
+        return 'desc';
+    }
 
     protected function viewName(): string
     {
@@ -78,7 +129,33 @@ abstract class SearchablePaginatedList extends Component
 
     protected function sortQuery(EloquentBuilder|QueryBuilder $query): void
     {
-        $query->orderByDesc(static::SORT_COLUMN);
+        $sortable = $this->sortableColumns();
+
+        if ($sortable === []) {
+            if (static::SORT_COLUMN !== '') {
+                $query->orderByDesc(static::SORT_COLUMN);
+            }
+
+            return;
+        }
+
+        $sortColumn = $sortable[$this->sortBy] ?? null;
+
+        if (! is_string($sortColumn) || $sortColumn === '') {
+            if (static::SORT_COLUMN !== '') {
+                $query->orderByDesc(static::SORT_COLUMN);
+            }
+
+            return;
+        }
+
+        $query->orderBy($sortColumn, $this->sortDir);
+
+        $idColumn = $query instanceof EloquentBuilder
+            ? $query->getModel()->getQualifiedKeyName()
+            : 'id';
+
+        $query->orderByDesc($idColumn);
     }
 
     protected function perPage(): int

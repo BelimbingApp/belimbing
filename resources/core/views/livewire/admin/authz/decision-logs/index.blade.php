@@ -23,12 +23,48 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Occurred At') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actor') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Capability') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Result') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Reason') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Resource') }}</th>
+                            <x-ui.sortable-th
+                                column="occurred_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('occurred_at')"
+                                :label="__('Occurred At')"
+                            />
+                            <x-ui.sortable-th
+                                column="actor_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('actor_name')"
+                                :label="__('Actor')"
+                            />
+                            <x-ui.sortable-th
+                                column="capability"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('capability')"
+                                :label="__('Capability')"
+                            />
+                            <x-ui.sortable-th
+                                column="allowed"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('allowed')"
+                                :label="__('Result')"
+                            />
+                            <x-ui.sortable-th
+                                column="reason_code"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('reason_code')"
+                                :label="__('Reason')"
+                            />
+                            <x-ui.sortable-th
+                                column="resource"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('resource')"
+                                :label="__('Resource')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

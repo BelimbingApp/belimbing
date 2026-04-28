@@ -43,12 +43,36 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Employee') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Company') }}</th>
+                            <x-ui.sortable-th
+                                column="full_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('full_name')"
+                                :label="__('Employee')"
+                            />
+                            <x-ui.sortable-th
+                                column="company_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('company_name')"
+                                :label="__('Company')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Department') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Designation') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Type') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
+                            <x-ui.sortable-th
+                                column="employee_type_label"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('employee_type_label')"
+                                :label="__('Type')"
+                            />
+                            <x-ui.sortable-th
+                                column="status"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('status')"
+                                :label="__('Status')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
                     </thead>
@@ -85,9 +109,10 @@
                                             size="sm"
                                             wire:click="delete({{ $employee->id }})"
                                             wire:confirm="{{ __('Are you sure you want to delete this employee?') }}"
+                                            :title="__('Delete employee')"
                                         >
                                             <x-icon name="heroicon-o-trash" class="w-4 h-4" />
-                                            {{ __('Delete') }}
+                                            <span class="sr-only">{{ __('Delete') }}</span>
                                         </x-ui.button>
                                     </div>
                                 </td>

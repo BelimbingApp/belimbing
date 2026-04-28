@@ -26,11 +26,41 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Progress') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Failed') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Created At') }}</th>
+                            <x-ui.sortable-th
+                                column="name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('name')"
+                                :label="__('Name')"
+                            />
+                            <x-ui.sortable-th
+                                column="total_jobs"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('total_jobs')"
+                                :label="__('Progress')"
+                            />
+                            <x-ui.sortable-th
+                                column="failed_jobs"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('failed_jobs')"
+                                :label="__('Failed')"
+                            />
+                            <x-ui.sortable-th
+                                column="cancelled_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('cancelled_at')"
+                                :label="__('Status')"
+                            />
+                            <x-ui.sortable-th
+                                column="created_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('created_at')"
+                                :label="__('Created At')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider"></th>
                         </tr>
                     </thead>
@@ -61,9 +91,10 @@
                                             size="sm"
                                             wire:click="cancelBatch('{{ $batch->id }}')"
                                             wire:confirm="{{ __('Are you sure you want to cancel this batch?') }}"
+                                            :title="__('Cancel batch')"
                                         >
                                             <x-icon name="heroicon-o-x-circle" class="w-4 h-4" />
-                                            {{ __('Cancel') }}
+                                            <span class="sr-only">{{ __('Cancel') }}</span>
                                         </x-ui.button>
                                     @endif
                                 </td>

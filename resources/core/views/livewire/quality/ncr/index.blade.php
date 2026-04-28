@@ -63,13 +63,55 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('NCR No') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Title') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Kind') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Severity') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Reporter') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Created') }}</th>
+                            <x-ui.sortable-th
+                                column="ncr_no"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('ncr_no')"
+                                :label="__('NCR No')"
+                            />
+                            <x-ui.sortable-th
+                                column="title"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('title')"
+                                :label="__('Title')"
+                            />
+                            <x-ui.sortable-th
+                                column="ncr_kind"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('ncr_kind')"
+                                :label="__('Kind')"
+                            />
+                            <x-ui.sortable-th
+                                column="severity"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('severity')"
+                                :label="__('Severity')"
+                            />
+                            <x-ui.sortable-th
+                                column="status"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('status')"
+                                :label="__('Status')"
+                            />
+                            <x-ui.sortable-th
+                                column="reported_by_name"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('reported_by_name')"
+                                :label="__('Reporter')"
+                            />
+                            <x-ui.sortable-th
+                                column="created_at"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('created_at')"
+                                :label="__('Created')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

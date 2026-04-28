@@ -22,6 +22,30 @@ class Index extends SearchablePaginatedList
 
     public string $search = '';
 
+    protected function sortableColumns(): array
+    {
+        return [
+            'sku' => 'commerce_inventory_items.sku',
+            'title' => 'commerce_inventory_items.title',
+            'status' => 'commerce_inventory_items.status',
+            'unit_cost_amount' => 'commerce_inventory_items.unit_cost_amount',
+            'target_price_amount' => 'commerce_inventory_items.target_price_amount',
+            'created_at' => 'commerce_inventory_items.created_at',
+        ];
+    }
+
+    protected function defaultSortDirections(): array
+    {
+        return [
+            'sku' => 'asc',
+            'title' => 'asc',
+            'status' => 'asc',
+            'unit_cost_amount' => 'asc',
+            'target_price_amount' => 'asc',
+            'created_at' => 'desc',
+        ];
+    }
+
     public function statusVariant(string $status): string
     {
         return match ($status) {

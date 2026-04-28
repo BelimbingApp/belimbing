@@ -172,15 +172,39 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Designation') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Department') }}</th>
+                            <x-ui.sortable-th
+                                column="full_name"
+                                :sort-by="$subordinatesSortBy"
+                                :sort-dir="$subordinatesSortDir"
+                                action="sortSubordinates('full_name')"
+                                :label="__('Name')"
+                            />
+                            <x-ui.sortable-th
+                                column="designation"
+                                :sort-by="$subordinatesSortBy"
+                                :sort-dir="$subordinatesSortDir"
+                                action="sortSubordinates('designation')"
+                                :label="__('Designation')"
+                            />
+                            <x-ui.sortable-th
+                                column="status"
+                                :sort-by="$subordinatesSortBy"
+                                :sort-dir="$subordinatesSortDir"
+                                action="sortSubordinates('status')"
+                                :label="__('Status')"
+                            />
+                            <x-ui.sortable-th
+                                column="department"
+                                :sort-by="$subordinatesSortBy"
+                                :sort-dir="$subordinatesSortDir"
+                                action="sortSubordinates('department')"
+                                :label="__('Department')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">
-                        @forelse($employee->subordinates as $sub)
+                        @forelse($sortedSubordinates as $sub)
                             <tr wire:key="sub-{{ $sub->id }}" class="hover:bg-surface-subtle/50 transition-colors">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-medium">
                                     <a href="{{ route('admin.employees.show', $sub) }}" wire:navigate class="text-accent hover:underline">{{ $sub->displayName() }}</a>
@@ -201,9 +225,10 @@
                                         size="sm"
                                         wire:click="removeSubordinate({{ $sub->id }})"
                                         wire:confirm="{{ __('Remove this employee as subordinate?') }}"
+                                        :title="__('Remove subordinate')"
                                     >
                                         <x-icon name="heroicon-o-x-mark" class="w-4 h-4" />
-                                        {{ __('Remove') }}
+                                        <span class="sr-only">{{ __('Remove') }}</span>
                                     </x-ui.button>
                                 </td>
                             </tr>
@@ -233,18 +258,60 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Label') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Address') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Kind') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Primary') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Priority') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Valid From') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Valid To') }}</th>
+                            <x-ui.sortable-th
+                                column="label"
+                                :sort-by="$addressesSortBy"
+                                :sort-dir="$addressesSortDir"
+                                action="sortAddresses('label')"
+                                :label="__('Label')"
+                            />
+                            <x-ui.sortable-th
+                                column="line1"
+                                :sort-by="$addressesSortBy"
+                                :sort-dir="$addressesSortDir"
+                                action="sortAddresses('line1')"
+                                :label="__('Address')"
+                            />
+                            <x-ui.sortable-th
+                                column="kind"
+                                :sort-by="$addressesSortBy"
+                                :sort-dir="$addressesSortDir"
+                                action="sortAddresses('kind')"
+                                :label="__('Kind')"
+                            />
+                            <x-ui.sortable-th
+                                column="is_primary"
+                                :sort-by="$addressesSortBy"
+                                :sort-dir="$addressesSortDir"
+                                action="sortAddresses('is_primary')"
+                                :label="__('Primary')"
+                            />
+                            <x-ui.sortable-th
+                                column="priority"
+                                :sort-by="$addressesSortBy"
+                                :sort-dir="$addressesSortDir"
+                                action="sortAddresses('priority')"
+                                :label="__('Priority')"
+                            />
+                            <x-ui.sortable-th
+                                column="valid_from"
+                                :sort-by="$addressesSortBy"
+                                :sort-dir="$addressesSortDir"
+                                action="sortAddresses('valid_from')"
+                                :label="__('Valid From')"
+                            />
+                            <x-ui.sortable-th
+                                column="valid_to"
+                                :sort-by="$addressesSortBy"
+                                :sort-dir="$addressesSortDir"
+                                action="sortAddresses('valid_to')"
+                                :label="__('Valid To')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">
-                        @forelse($employee->addresses as $address)
+                        @forelse($sortedAddresses as $address)
                             <tr wire:key="address-{{ $address->id }}" class="hover:bg-surface-subtle/50 transition-colors">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-medium">
                                     <a href="{{ route('admin.addresses.show', $address) }}" wire:navigate class="text-accent hover:underline">{{ $address->label ?? '-' }}</a>

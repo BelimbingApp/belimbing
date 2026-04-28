@@ -28,13 +28,19 @@ class Index extends Component
 
     /** Allowed sort columns mapped to their DB column names. */
     private const SORTABLE = [
-        'country' => 'country',
-        'population' => 'population',
+        'iso' => 'geonames_countries.iso',
+        'country' => 'geonames_countries.country',
+        'capital' => 'geonames_countries.capital',
+        'phone' => 'geonames_countries.phone',
+        'currency_code' => 'geonames_countries.currency_code',
+        'population' => 'geonames_countries.population',
+        'updated_at' => 'geonames_countries.updated_at',
     ];
 
     /** Default sort direction per column (omitted = 'asc'). */
     private const SORT_DEFAULT_DIR = [
         'population' => 'desc',
+        'updated_at' => 'desc',
     ];
 
     public function sort(string $column): void
@@ -48,15 +54,18 @@ class Index extends Component
 
     public function with(): array
     {
-        $dbColumn = self::SORTABLE[$this->sortBy] ?? 'country';
+        $dbColumn = self::SORTABLE[$this->sortBy] ?? 'geonames_countries.country';
 
         return [
             'countries' => Country::query()
                 ->when($this->search, function ($query, $search) {
-                    $query->where('country', 'ilike', '%'.$search.'%')
-                        ->orWhere('iso', 'ilike', '%'.$search.'%');
+                    $query->where(function ($q) use ($search): void {
+                        $q->where('geonames_countries.country', 'ilike', '%'.$search.'%')
+                            ->orWhere('geonames_countries.iso', 'ilike', '%'.$search.'%');
+                    });
                 })
                 ->orderBy($dbColumn, $this->sortDir)
+                ->orderBy('geonames_countries.iso')
                 ->paginate(20),
         ];
     }

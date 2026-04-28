@@ -36,11 +36,29 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Label') }}</th>
+                            <x-ui.sortable-th
+                                column="label"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('label')"
+                                :label="__('Label')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Address') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Locality') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Country') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
+                            <x-ui.sortable-th
+                                column="country_iso"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('country_iso')"
+                                :label="__('Country')"
+                            />
+                            <x-ui.sortable-th
+                                column="verificationStatus"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('verificationStatus')"
+                                :label="__('Status')"
+                            />
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
                     </thead>
@@ -73,7 +91,7 @@
                                             wire:confirm="{{ __('Are you sure you want to delete this address?') }}"
                                         >
                                             <x-icon name="heroicon-o-trash" class="w-4 h-4" />
-                                            {{ __('Delete') }}
+                                            <span class="sr-only">{{ __('Delete') }}</span>
                                         </x-ui.button>
                                     </div>
                                 </td>

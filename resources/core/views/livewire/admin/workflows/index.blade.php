@@ -23,13 +23,55 @@
                 <table class="min-w-full divide-y divide-border-default text-sm">
                     <thead class="bg-surface-subtle/80">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Label') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Code') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Module') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Statuses') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Transitions') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Kanban') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Active') }}</th>
+                            <x-ui.sortable-th
+                                column="label"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('label')"
+                                :label="__('Label')"
+                            />
+                            <x-ui.sortable-th
+                                column="code"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('code')"
+                                :label="__('Code')"
+                            />
+                            <x-ui.sortable-th
+                                column="module"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('module')"
+                                :label="__('Module')"
+                            />
+                            <x-ui.sortable-th
+                                column="status_configs_count"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('status_configs_count')"
+                                :label="__('Statuses')"
+                            />
+                            <x-ui.sortable-th
+                                column="transitions_count"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('transitions_count')"
+                                :label="__('Transitions')"
+                            />
+                            <x-ui.sortable-th
+                                column="kanban_columns_count"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('kanban_columns_count')"
+                                :label="__('Kanban')"
+                            />
+                            <x-ui.sortable-th
+                                column="is_active"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('is_active')"
+                                :label="__('Active')"
+                            />
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">

@@ -14,11 +14,13 @@ use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Authz\Models\RoleCapability;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 
@@ -26,8 +28,19 @@ class Show extends Component implements ProvidesLaraPageContext
 {
     use ChecksCapabilityAuthorization;
     use SavesValidatedFields;
+    use TogglesSort;
 
     public Role $role;
+
+    public string $assignedUsersSortBy = 'name';
+
+    public string $assignedUsersSortDir = 'asc';
+
+    private const ASSIGNED_USER_SORTABLE = [
+        'name' => true,
+        'email' => true,
+        'company' => true,
+    ];
 
     public array $selectedCapabilities = [];
 
@@ -36,6 +49,22 @@ class Show extends Component implements ProvidesLaraPageContext
     public function mount(Role $role): void
     {
         $this->role = $role->load('capabilities');
+    }
+
+    public function sortAssignedUsers(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::ASSIGNED_USER_SORTABLE,
+            defaultDir: [
+                'name' => 'asc',
+                'email' => 'asc',
+                'company' => 'asc',
+            ],
+            sortByProperty: 'assignedUsersSortBy',
+            sortDirProperty: 'assignedUsersSortDir',
+            resetPage: false,
+        );
     }
 
     /**
@@ -274,19 +303,20 @@ class Show extends Component implements ProvidesLaraPageContext
 
         $assignedUserIds = $assignedPrincipalRoles->pluck('principal_id')->all();
 
-        $assignedUsers = User::query()
-            ->whereIn('id', $assignedUserIds)
-            ->with('company')
-            ->orderBy('name')
-            ->get()
-            ->map(function (User $user) use ($assignedPrincipalRoles) {
-                $user->pivot_id = $assignedPrincipalRoles
-                    ->where('principal_id', $user->id)
-                    ->first()
-                    ?->id;
+        $assignedUsers = $this->sortAssignedUsersCollection(
+            User::query()
+                ->whereIn('id', $assignedUserIds)
+                ->with('company')
+                ->get()
+                ->map(function (User $user) use ($assignedPrincipalRoles) {
+                    $user->pivot_id = $assignedPrincipalRoles
+                        ->where('principal_id', $user->id)
+                        ->first()
+                        ?->id;
 
-                return $user;
-            });
+                    return $user;
+                })
+        );
 
         $availableUsers = $canEdit
             ? User::query()
@@ -331,5 +361,34 @@ class Show extends Component implements ProvidesLaraPageContext
                 ? ['View capabilities', 'View assigned users']
                 : ['Edit role', 'Assign capabilities', 'Assign users', 'Delete role'],
         );
+    }
+
+    /**
+     * @param  Collection<int, User>  $users
+     * @return Collection<int, User>
+     */
+    private function sortAssignedUsersCollection(Collection $users): Collection
+    {
+        $dir = $this->assignedUsersSortDir === 'desc' ? -1 : 1;
+
+        return $users
+            ->sort(function (User $a, User $b) use ($dir): int {
+                $primary = match ($this->assignedUsersSortBy) {
+                    'name' => $dir * strcmp((string) $a->name, (string) $b->name),
+                    'email' => $dir * strcmp((string) $a->email, (string) $b->email),
+                    'company' => $dir * strcmp(
+                        (string) ($a->company?->name ?? ''),
+                        (string) ($b->company?->name ?? ''),
+                    ),
+                    default => $dir * strcmp((string) $a->name, (string) $b->name),
+                };
+
+                if ($primary !== 0) {
+                    return $primary;
+                }
+
+                return $a->id <=> $b->id;
+            })
+            ->values();
     }
 }
