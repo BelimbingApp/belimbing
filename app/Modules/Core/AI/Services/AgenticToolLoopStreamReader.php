@@ -70,22 +70,24 @@ final class AgenticToolLoopStreamReader
             providerHeaders: $credentials['headers'] ?? [],
         ));
 
-        $content = '';
-        $commentary = '';
-        $reasoningContent = '';
-        $toolCalls = [];
-        $toolCallArgs = [];
-        $reasoningBlocks = [];
-        $usage = null;
-        $latencyMs = 0;
-        $finishReason = null;
-        $providerMapping = null;
+        $streamState = [
+            'content' => '',
+            'commentary' => '',
+            'reasoning_content' => '',
+            'tool_calls' => [],
+            'tool_call_args' => [],
+            'reasoning_blocks' => [],
+            'usage' => null,
+            'latency_ms' => 0,
+            'finish_reason' => null,
+            'provider_mapping' => null,
+        ];
 
         foreach ($stream as $event) {
             $type = $event['type'] ?? null;
 
             if ($type === 'thinking_delta') {
-                yield from $this->handleThinkingDelta($runId, $event, $commentary, $reasoningContent);
+                yield from $this->handleThinkingDelta($runId, $event, $streamState['commentary'], $streamState['reasoning_content']);
 
                 continue;
             }
@@ -96,35 +98,25 @@ final class AgenticToolLoopStreamReader
                 ];
             }
 
-            $this->accumulateStreamEvent(
-                $event,
-                $content,
-                $toolCalls,
-                $toolCallArgs,
-                $usage,
-                $latencyMs,
-                $finishReason,
-                $providerMapping,
-                $reasoningBlocks,
-            );
+            $this->accumulateStreamEvent($event, $streamState);
         }
 
-        foreach ($toolCalls as $index => &$tc) {
-            $tc['function']['arguments'] = $toolCallArgs[$index] ?? '{}';
+        foreach ($streamState['tool_calls'] as $index => &$tc) {
+            $tc['function']['arguments'] = $streamState['tool_call_args'][$index] ?? '{}';
         }
         unset($tc);
 
         return [
-            'content' => $commentary !== '' ? $commentary : $content,
-            'tool_calls' => array_values($toolCalls),
-            'commentary' => $commentary,
-            'reasoning_content' => $reasoningContent,
-            'reasoning_blocks' => $reasoningBlocks,
-            'final_content' => $content,
-            'usage' => $usage,
-            'latency_ms' => $latencyMs,
-            'finish_reason' => $finishReason,
-            'provider_mapping' => $providerMapping,
+            'content' => $streamState['commentary'] !== '' ? $streamState['commentary'] : $streamState['content'],
+            'tool_calls' => array_values($streamState['tool_calls']),
+            'commentary' => $streamState['commentary'],
+            'reasoning_content' => $streamState['reasoning_content'],
+            'reasoning_blocks' => $streamState['reasoning_blocks'],
+            'final_content' => $streamState['content'],
+            'usage' => $streamState['usage'],
+            'latency_ms' => $streamState['latency_ms'],
+            'finish_reason' => $streamState['finish_reason'],
+            'provider_mapping' => $streamState['provider_mapping'],
         ];
     }
 
@@ -167,38 +159,34 @@ final class AgenticToolLoopStreamReader
 
     /**
      * @param  array<string, mixed>  $event
-     * @param  array<int, array<string, mixed>>  $toolCalls
-     * @param  array<int, string>  $toolCallArgs
-     * @param  array<string, mixed>|null  $usage
-     * @param  array<string, mixed>|null  $providerMapping
-     * @param  array<int, array<string, mixed>>  $reasoningBlocks
+     * @param  array{
+     *     content: string,
+     *     tool_calls: array<int, array<string, mixed>>,
+     *     tool_call_args: array<int, string>,
+     *     usage: array<string, mixed>|null,
+     *     latency_ms: int,
+     *     finish_reason: string|null,
+     *     provider_mapping: array<string, mixed>|null,
+     *     reasoning_blocks: array<int, array<string, mixed>>
+     * }  $streamState
      */
-    private function accumulateStreamEvent(
-        array $event,
-        string &$content,
-        array &$toolCalls,
-        array &$toolCallArgs,
-        ?array &$usage,
-        int &$latencyMs,
-        ?string &$finishReason,
-        ?array &$providerMapping,
-        array &$reasoningBlocks,
-    ): void {
+    private function accumulateStreamEvent(array $event, array &$streamState): void
+    {
         switch ($event['type'] ?? null) {
             case 'content_delta':
-                $content .= (string) ($event['text'] ?? '');
+                $streamState['content'] .= (string) ($event['text'] ?? '');
                 break;
 
             case 'tool_call_delta':
-                $this->accumulateToolCallDelta($event, $toolCalls, $toolCallArgs);
+                $this->accumulateToolCallDelta($event, $streamState['tool_calls'], $streamState['tool_call_args']);
                 break;
 
             case 'done':
-                $usage = is_array($event['usage'] ?? null) ? $event['usage'] : null;
-                $latencyMs = (int) ($event['latency_ms'] ?? 0);
-                $finishReason = is_string($event['finish_reason'] ?? null) ? $event['finish_reason'] : $finishReason;
-                $providerMapping = is_array($event['provider_mapping'] ?? null) ? $event['provider_mapping'] : $providerMapping;
-                $reasoningBlocks = is_array($event['reasoning_blocks'] ?? null) ? $event['reasoning_blocks'] : $reasoningBlocks;
+                $streamState['usage'] = is_array($event['usage'] ?? null) ? $event['usage'] : null;
+                $streamState['latency_ms'] = (int) ($event['latency_ms'] ?? 0);
+                $streamState['finish_reason'] = is_string($event['finish_reason'] ?? null) ? $event['finish_reason'] : $streamState['finish_reason'];
+                $streamState['provider_mapping'] = is_array($event['provider_mapping'] ?? null) ? $event['provider_mapping'] : $streamState['provider_mapping'];
+                $streamState['reasoning_blocks'] = is_array($event['reasoning_blocks'] ?? null) ? $event['reasoning_blocks'] : $streamState['reasoning_blocks'];
                 break;
 
             default:

@@ -20,8 +20,6 @@ class WireLogger
 
     private const PREVIEW_LINE_BYTES = 64 * 1024;
 
-    private const PREVIEW_PAYLOAD_BYTES = 24 * 1024;
-
     private const RAW_ENTRY_CHUNK_BYTES = 8 * 1024;
 
     public function enabled(): bool
