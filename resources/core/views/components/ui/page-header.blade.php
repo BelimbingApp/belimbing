@@ -66,18 +66,20 @@
         <div
             x-cloak
             x-show="helpOpen"
-            x-transition:enter="transition cubic-bezier(0.34, 1.56, 0.64, 1) duration-300 motion-reduce:duration-0"
-            x-transition:enter-start="opacity-0 translate-y-2 scale-95 blur-sm"
-            x-transition:enter-end="opacity-100 translate-y-0 scale-100 blur-0"
-            x-transition:leave="transition ease-in duration-200 motion-reduce:duration-0"
-            x-transition:leave-start="opacity-100 scale-100 blur-0"
-            x-transition:leave-end="opacity-0 scale-95 blur-sm"
-            class="mt-3 rounded-2xl border border-border-default bg-surface-card p-4 text-sm text-muted cursor-pointer shadow-lg shadow-black/[0.02] active:scale-[0.99] transition-transform"
+            x-transition:enter="transition-all ease-out duration-200 motion-reduce:duration-0"
+            x-transition:enter-start="max-h-0 opacity-0"
+            x-transition:enter-end="max-h-96 opacity-100"
+            x-transition:leave="transition-all ease-in duration-150 motion-reduce:duration-0"
+            x-transition:leave-start="max-h-96 opacity-100"
+            x-transition:leave-end="max-h-0 opacity-0"
+            class="mt-3 overflow-hidden rounded-2xl border border-border-default bg-surface-card text-sm text-muted shadow-lg shadow-black/[0.02]"
             @click="helpOpen = false"
             role="note"
             aria-label="{{ __('Click to dismiss') }}"
         >
-            {{ $help }}
+            <div class="p-4">
+                {{ $help }}
+            </div>
         </div>
     @endif
 </div>

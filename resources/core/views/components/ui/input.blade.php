@@ -4,6 +4,7 @@
     'required' => false,
     'type' => 'text',
     'id' => 'input-' . \Illuminate\Support\Str::random(8),
+    'help' => null,
 ])
 
 <div class="space-y-1">
@@ -19,7 +20,7 @@
     <input
         id="{{ $id }}"
         type="{{ $type }}"
-        {{ $attributes->except(['label', 'error', 'required', 'id'])->class([
+        {{ $attributes->except(['label', 'error', 'required', 'id', 'help'])->class([
             'w-full px-input-x py-input-y text-sm border rounded-2xl transition-colors',
             'border-border-input',
             'bg-surface-card',
@@ -33,5 +34,7 @@
 
     @if($error)
         <p class="text-sm text-status-danger">{{ $error }}</p>
+    @elseif($help)
+        <x-ui.field-help :hint="$help" />
     @endif
 </div>

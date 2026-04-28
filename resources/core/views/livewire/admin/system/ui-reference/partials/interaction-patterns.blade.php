@@ -32,7 +32,7 @@
                     :title="__('Detail Facts Example')"
                     component="<code>x-ui.edit-in-place.*</code>"
                 >
-                    {{ __('This mirrors Company, Address, and Inventory detail pages: compact facts, direct field edits, and page-owned Livewire save methods.') }}
+                    {{ __('This mirrors Company, Address, and Inventory detail pages: compact facts, direct field edits, and page-owned Livewire save methods. Edit-in-place help opens a quiet line below the label so the value row remains readable.') }}
                 </x-ui.catalog-section>
 
                 <dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -41,6 +41,7 @@
                         :value="$editInPlaceTitle"
                         field="editInPlaceTitle"
                         save-method="saveReferenceField"
+                        :help="__('Use help beside the label for edit-in-place fields. It keeps the value line clean while preserving local context.')"
                     />
 
                     <x-ui.edit-in-place.select
@@ -48,6 +49,7 @@
                         :value="$editInPlaceStatus"
                         field="editInPlaceStatus"
                         save-method="saveReferenceField"
+                        :help="__('Status controls describe workflow state. Keep the help short because the badge should remain the visual focus.')"
                     >
                         <x-slot name="read">
                             <x-ui.badge :variant="match($editInPlaceStatus) {
@@ -74,6 +76,7 @@
                         field="editInPlaceNotes"
                         save-method="saveReferenceField"
                         :empty="__('No notes captured yet.')"
+                        :help="__('Private notes can be longer, so help stays on the label instead of adding another line below the value.')"
                         rows="5"
                     />
                 </dl>

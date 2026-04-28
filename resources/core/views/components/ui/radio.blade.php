@@ -2,13 +2,15 @@
     'label' => null,
     'error' => null,
     'id' => 'radio-' . \Illuminate\Support\Str::random(8),
+    'help' => null,
 ])
 
-<div class="flex items-center gap-2">
+<div>
+    <div class="flex items-center gap-2">
     <input
         id="{{ $id }}"
         type="radio"
-        {{ $attributes->except(['id'])->class([
+        {{ $attributes->except(['id', 'help'])->class([
             'w-4 h-4 rounded-full border transition-colors',
             'border-border-input',
             'bg-surface-card',
@@ -23,8 +25,13 @@
             {{ $label }}
         </label>
     @endif
+    </div>
 
     @if($error)
         <p class="text-sm text-status-danger">{{ $error }}</p>
+    @elseif($help)
+        <div class="pl-6 leading-none">
+            <x-ui.field-help :hint="$help" />
+        </div>
     @endif
 </div>

@@ -3,6 +3,7 @@
     'error' => null,
     'id' => 'select-' . \Illuminate\Support\Str::random(8),
     'name' => null,
+    'help' => null,
 ])
 
 <div class="space-y-1">
@@ -16,7 +17,7 @@
         <select
             id="{{ $id }}"
             @if($name) name="{{ $name }}" @endif
-            {{ $attributes->except(['label', 'error', 'id'])->class([
+            {{ $attributes->except(['label', 'error', 'id', 'help'])->class([
                 'w-full pl-input-x pr-10 py-input-y text-sm appearance-none',
                 'border border-border-input rounded-2xl',
                 'bg-surface-card text-ink',
@@ -35,5 +36,7 @@
 
     @if($error)
         <p class="text-sm text-status-danger">{{ $error }}</p>
+    @elseif($help)
+        <x-ui.field-help :hint="$help" />
     @endif
 </div>
