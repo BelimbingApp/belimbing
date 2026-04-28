@@ -255,6 +255,21 @@ function runAgenticConversation(
         ->run([test()->makeMessage('user', $userMessage)], 1, $systemPrompt, null, $policy, null, null, $allowedToolNames);
 }
 
+/**
+ * @param  list<array<string, mixed>>  $events
+ */
+function assertBackupFallbackStreamSucceeded(array $events): void
+{
+    $doneEvent = collect($events)->firstWhere('event', 'done');
+
+    expect($doneEvent)->not->toBeNull()
+        ->and($doneEvent['data']['content'] ?? '')->toBe('Success from backup!')
+        ->and($doneEvent['data']['meta']['model'] ?? '')->toBe('gpt-4-backup')
+        ->and($doneEvent['data']['meta']['fallback_attempts'] ?? [])->toHaveCount(1)
+        ->and($doneEvent['data']['meta']['fallback_attempts'][0]['provider'] ?? '')->toBe('primary-provider')
+        ->and($doneEvent['data']['meta']['fallback_attempts'][0]['error_type'] ?? '')->toBe('rate_limit');
+}
+
 describe('AgenticRuntime (sync)', function () {
     it('returns direct response when LLM produces no tool calls', function () {
         $llmClient = Mockery::mock(LlmClient::class);
@@ -338,6 +353,9 @@ describe('AgenticRuntime (sync)', function () {
         File::deleteDirectory($workspacePath);
         File::deleteDirectory($wireLogPath);
     });
+});
+
+describe('AgenticRuntime (sync tool loop)', function () {
 
     it('omits disallowed tools from the LLM request', function () {
         $llmClient = Mockery::mock(LlmClient::class);
@@ -613,24 +631,7 @@ describe('AgenticRuntime (streaming)', function () {
             AGENTIC_RUNTIME_SYSTEM_PROMPT,
         ));
 
-        // Find the final done event
-        $doneEvent = null;
-        $errorEvents = [];
-        foreach ($events as $event) {
-            if ($event['event'] === 'done') {
-                $doneEvent = $event;
-            }
-            if ($event['event'] === 'error') {
-                $errorEvents[] = $event;
-            }
-        }
-
-        expect($doneEvent)->not->toBeNull()
-            ->and($doneEvent['data']['content'] ?? '')->toBe('Success from backup!')
-            ->and($doneEvent['data']['meta']['model'] ?? '')->toBe('gpt-4-backup')
-            ->and($doneEvent['data']['meta']['fallback_attempts'] ?? [])->toHaveCount(1)
-            ->and($doneEvent['data']['meta']['fallback_attempts'][0]['provider'] ?? '')->toBe('primary-provider')
-            ->and($doneEvent['data']['meta']['fallback_attempts'][0]['error_type'] ?? '')->toBe('rate_limit');
+        assertBackupFallbackStreamSucceeded($events);
     });
 
     it('yields stream events before the full provider stream completes', function () {

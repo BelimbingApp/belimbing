@@ -274,7 +274,7 @@ it('renders the readable view with reassembled artifacts, anomaly chips, attempt
 
     File::ensureDirectoryExists(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH));
     File::put(
-        storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_READABLE_RUN_ID.'.jsonl'),
+        storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_READABLE_RUN_ID.CONTROL_PLANE_WIRE_LOG_EXTENSION),
         implode("\n", $lines)."\n",
     );
 
@@ -298,7 +298,7 @@ it('renders the readable view with reassembled artifacts, anomaly chips, attempt
         ->assertSee('id="wire-log-entry-1"', escape: false)
         ->assertSee('id="wire-log-entry-6"', escape: false);
 
-    File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_READABLE_RUN_ID.'.jsonl'));
+    File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_READABLE_RUN_ID.CONTROL_PLANE_WIRE_LOG_EXTENSION));
 });
 
 it('streams oversized raw wire-log entries without loading them through Livewire', function (): void {

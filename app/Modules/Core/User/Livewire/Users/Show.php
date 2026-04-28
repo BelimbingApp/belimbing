@@ -16,8 +16,8 @@ use App\Base\Authz\Models\Role;
 use App\Base\Authz\Services\EffectivePermissions;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Modules\Core\Company\Livewire\Concerns\SortsExternalAccesses;
 use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Company\Models\ExternalAccess;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use App\Modules\Core\User\Models\User;
@@ -32,6 +32,7 @@ class Show extends Component
 {
     use ChecksCapabilityAuthorization;
     use SavesValidatedFields;
+    use SortsExternalAccesses;
     use TogglesSort;
     use ValidatesPasswordConfirmation;
 
@@ -463,8 +464,11 @@ class Show extends Component
 
         $employees = collect($this->user->employee ? [$this->user->employee] : []);
         $sortedEmployees = $this->sortEmployeesCollection($employees);
-        $sortedExternalAccesses = $this->sortUserExternalAccessesCollection(
+        $sortedExternalAccesses = $this->sortExternalAccessesByColumn(
             collect($this->user->externalAccesses),
+            $this->externalAccessesSortBy,
+            $this->externalAccessesSortDir,
+            'company',
         );
 
         return view('livewire.admin.users.show', [
@@ -522,70 +526,6 @@ class Show extends Component
                     'status' => $dir * strcmp((string) $a->status, (string) $b->status),
                     'employment_start' => $dir * strcmp($start($a), $start($b)),
                     default => $dir * strcmp((string) ($a->employee_number ?? ''), (string) ($b->employee_number ?? '')),
-                };
-
-                if ($primary !== 0) {
-                    return $primary;
-                }
-
-                return $a->id <=> $b->id;
-            })
-            ->values();
-    }
-
-    /**
-     * @param  Collection<int, ExternalAccess>  $accesses
-     * @return Collection<int, ExternalAccess>
-     */
-    private function sortUserExternalAccessesCollection(Collection $accesses): Collection
-    {
-        $dir = $this->externalAccessesSortDir === 'desc' ? -1 : 1;
-
-        return $accesses
-            ->sort(function (ExternalAccess $a, ExternalAccess $b) use ($dir): int {
-                $permsKey = function (ExternalAccess $access): string {
-                    $p = $access->permissions;
-                    $p = is_array($p) ? $p : [];
-                    sort($p);
-
-                    return implode(',', $p);
-                };
-
-                $statusRank = function (ExternalAccess $access): int {
-                    if ($access->isValid()) {
-                        return 0;
-                    }
-                    if ($access->isPending()) {
-                        return 1;
-                    }
-                    if ($access->hasExpired()) {
-                        return 2;
-                    }
-
-                    return 3;
-                };
-
-                $ts = function (?\DateTimeInterface $dt): string {
-                    if ($dt === null) {
-                        return '';
-                    }
-
-                    return (string) $dt->getTimestamp();
-                };
-
-                $primary = match ($this->externalAccessesSortBy) {
-                    'company' => $dir * strcmp(
-                        (string) ($a->company?->name ?? ''),
-                        (string) ($b->company?->name ?? ''),
-                    ),
-                    'permissions' => $dir * strcmp($permsKey($a), $permsKey($b)),
-                    'access_status' => $dir * ($statusRank($a) <=> $statusRank($b)),
-                    'granted_at' => $dir * strcmp($ts($a->access_granted_at), $ts($b->access_granted_at)),
-                    'expires_at' => $dir * strcmp($ts($a->access_expires_at), $ts($b->access_expires_at)),
-                    default => $dir * strcmp(
-                        (string) ($a->company?->name ?? ''),
-                        (string) ($b->company?->name ?? ''),
-                    ),
                 };
 
                 if ($primary !== 0) {

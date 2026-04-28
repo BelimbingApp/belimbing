@@ -139,6 +139,9 @@ describe('LlmClient tool calling request payloads', function () {
                 && ! isset($body['frequency_penalty']);
         });
     });
+});
+
+describe('LlmClient provider-specific request payloads', function () {
 
     it('maps GitHub Copilot IDE headers through provider request mapping', function () {
         fakeChatCompletionText();
