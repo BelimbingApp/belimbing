@@ -103,6 +103,8 @@ move into `.agents/skills/`.
 - For password create/update flows, assert `Hash::check(...)` against the stored
   hash instead of treating component success as proof.
 - Assert session or event side effects, not just component success.
+- For OAuth and callback flows, assert durable pending-state cleanup and the
+  flashed user state, not just the redirect and stored tokens.
 - For middleware and boundary guards, assert the concrete status code and the
   context handed to the boundary service when that context is part of the
   contract.

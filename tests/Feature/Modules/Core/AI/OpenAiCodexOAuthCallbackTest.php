@@ -54,15 +54,18 @@ test('openai codex oauth callback persists credentials and marks provider connec
         ]),
     ]);
 
-    $this->actingAs($user)
+    $response = $this->actingAs($user)
         ->get(route('admin.ai.providers.openai-codex.callback', ['code' => 'code-1', 'state' => $state]))
         ->assertRedirect(route('admin.ai.providers.setup', ['providerKey' => OpenAiCodexDefinition::KEY]));
+
+    $response->assertSessionHas('success', 'OpenAI Codex connected.');
 
     $provider = $provider->fresh();
 
     expect($provider->credentials)->toHaveKey(OpenAiCodexDefinition::CRED_ACCESS_TOKEN)
         ->and($provider->credentials[OpenAiCodexDefinition::CRED_REFRESH_TOKEN])->toBe('refresh-1')
-        ->and($provider->credentials[OpenAiCodexDefinition::CRED_ACCOUNT_ID])->toBe('acct_abc123');
+        ->and($provider->credentials[OpenAiCodexDefinition::CRED_ACCOUNT_ID])->toBe('acct_abc123')
+        ->and(Cache::get('openai_codex_oauth:'.$state))->toBeNull();
 
     $auth = $provider->connection_config[OpenAiCodexDefinition::AUTH_STATE_KEY] ?? [];
     expect($auth['status'] ?? null)->toBe('connected');
@@ -73,5 +76,6 @@ test('openai codex oauth callback fails when state is missing', function (): voi
 
     $this->actingAs($user)
         ->get(route('admin.ai.providers.openai-codex.callback', ['code' => 'code-1']))
-        ->assertRedirect(route('admin.ai.providers.setup', ['providerKey' => OpenAiCodexDefinition::KEY]));
+        ->assertRedirect(route('admin.ai.providers.setup', ['providerKey' => OpenAiCodexDefinition::KEY]))
+        ->assertSessionHas('error', 'OpenAI Codex sign-in failed: Missing authorization code or state.');
 });

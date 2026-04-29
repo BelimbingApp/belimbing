@@ -295,6 +295,56 @@ test('openai codex setup completes pasted localhost callback URLs', function ():
         ->and($provider->credentials[OpenAiCodexDefinition::CRED_ACCOUNT_ID] ?? null)->toBe('acct_manual');
 });
 
+test('openai codex setup completes hash-separated callback values', function (): void {
+    $user = createAdminUser();
+    $provider = createOpenAiCodexProvider($user, [
+        'status' => 'pending',
+        'mode' => 'browser_pkce',
+        'started_at' => now()->subMinute()->toIso8601String(),
+        'completed_at' => null,
+        'last_error_code' => null,
+        'last_error_message' => null,
+    ]);
+    $provider->update(['credentials' => []]);
+
+    $state = 'state-hash';
+    Cache::put('openai_codex_oauth:'.$state, [
+        'provider_id' => $provider->id,
+        'company_id' => $user->company_id,
+        'verifier' => 'verifier-xyz',
+        'redirect_uri' => app(OpenAiCodexAuthManager::class)->redirectUri(),
+    ], 600);
+
+    $payload = base64_encode(json_encode([
+        'https://api.openai.com/auth' => [
+            'chatgpt_account_id' => 'acct_hash',
+        ],
+    ], JSON_THROW_ON_ERROR));
+    $payload = rtrim(strtr($payload, '+/', '-_'), '=');
+    $accessToken = 'aaa.'.$payload.'.zzz';
+
+    Http::fake([
+        'https://auth.openai.com/oauth/token' => Http::response([
+            'access_token' => $accessToken,
+            'refresh_token' => 'refresh-hash',
+            'expires_in' => 3600,
+        ]),
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(OpenAiCodexSetup::class, ['providerKey' => OpenAiCodexDefinition::KEY])
+        ->set('manualRedirectInput', 'code-1#'.$state)
+        ->call('completeOauthLogin')
+        ->assertSet('connectedProviderId', $provider->id)
+        ->assertSet('authState.status', 'connected')
+        ->assertSet('manualCompletionError', null);
+
+    $provider->refresh();
+    expect($provider->credentials[OpenAiCodexDefinition::CRED_REFRESH_TOKEN] ?? null)->toBe('refresh-hash')
+        ->and($provider->credentials[OpenAiCodexDefinition::CRED_ACCOUNT_ID] ?? null)->toBe('acct_hash');
+});
+
 test('openai codex setup rejects pasted callback values without state', function (): void {
     $user = createAdminUser();
     createOpenAiCodexProvider($user, [

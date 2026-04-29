@@ -1,8 +1,8 @@
 # Test Suite Audit Inventory
 
 **Agent:** Codex
-**Status:** Inventory and completion snapshot
-**Last Updated:** 2026-04-22
+**Status:** Inventory and reopened-slice snapshot
+**Last Updated:** 2026-04-29
 **Sources:** `scripts/test-suite-audit-inventory.php`, `tests/`, `docs/plans/test-suite-audit.md`, `docs/plans/ai-test-suite-audit.md`, attempted `php artisan test --profile` on 2026-04-21
 
 ## Problem Essence
@@ -32,14 +32,15 @@ This report gives BLB both a ranked starting point and a compact view of the rem
 - Remaining user/timezone slice: `TimezoneCycleTest.php` tightened for employee-scope persistence; `PasswordUpdateTest.php` and `UserTest.php` reviewed as `keep`
 - Final non-AI leftovers: `ExampleTest.php` deleted; `tests/Pest.php` cleaned of unused stock scaffolding while retaining the shared helpers in active use
 - `Base/AI` service slice: `LlmClientToolCallingTest.php` re-enabled; discovery, API-type, query, and header/auth tests tightened; codex protocol and mapping tests reviewed as `keep`
+- Reopened `Feature/Modules/Core/AI` Codex auth/setup slice: `OpenAiCodexOAuthCallbackTest.php` and `OpenAiCodexSetupTest.php` tightened
 - Phase 5 guardrails: changed-test linting, PR review prompt, and scheduled slow-test plus mutation-style reporting are in place
 
 ### Current Checkpoint
 
-- The audit is complete at the current scope and no longer blocked on process design or endgame visibility
+- The original audit baseline is complete, but the program is now reopened for newer `tests/Feature/Modules/Core/AI` files that landed outside the earlier cutoff
 - Cheap-candidate heuristics were useful for ranking, but produced multiple false positives and were never good enough for automatic downgrade decisions
 - Outside AI, the remaining high-confidence audit work was already effectively exhausted; those slices are now closed
-- Inside AI, both the `Base/AI` cluster and the remaining `Modules/Core/AI` endgame slices are now reviewed
+- Inside AI, both the `Base/AI` cluster and the remaining `Modules/Core/AI` unit/service endgame slices are now reviewed; the remaining work is the reopened feature cluster only
 
 ### Remaining Slices Checklist
 
@@ -55,17 +56,22 @@ This report gives BLB both a ranked starting point and a compact view of the rem
 - [x] `Modules/Core/AI` remaining service cluster outside the active user worktree
 - [x] `Modules/Core/AI` DTO / enum / jobs / routes cleanup sweep
 - [x] Final AI endgame pass: decide whether anything remaining is true `keep`, `tighten`, `merge`, or can be explicitly deferred
+- [x] `Feature/Modules/Core/AI` OpenAI Codex auth/setup slice
+- [ ] `Feature/Modules/Core/AI` control-plane and result/message view slice
+- [ ] `Feature/Modules/Core/AI` chat lifecycle and attachment slice
+- [ ] `Feature/Modules/Core/AI` turn streaming and publisher slice
 
 ### Next Recommended Slices
 
-- No obvious remaining slices at the current scope
-- Reopen the audit only when a fresh inventory pass or new code churn surfaces a materially under-audited cluster
+- `Feature/Modules/Core/AI` control-plane and result/message view slice
+- `Feature/Modules/Core/AI` chat lifecycle and attachment slice
+- `Feature/Modules/Core/AI` turn streaming and publisher slice
 
 ### Remaining Buckets After That
 
-- Feature modules not yet audited in this program: none obvious
+- Feature modules not yet audited in this program: only the reopened `Feature/Modules/Core/AI` cluster above
 - Non-AI unit/service clusters that still look promising: none obvious from the current inventory snapshot
-- AI endgame note: no obvious remaining slices after the full `tests/Unit/Modules/Core/AI` pass; reopen only if new churn or a future inventory pass surfaces fresh weak clusters
+- AI endgame note: the unit/service endgame is closed; remaining AI work is limited to the post-baseline feature cluster
 - CI guardrail promotions are future work, not an unfinished part of this current audit baseline
 
 ## Summary

@@ -1,8 +1,8 @@
 # Test Suite Audit
 
 **Agent:** Codex
-**Status:** Audit Complete At Current Scope
-**Last Updated:** 2026-04-22
+**Status:** Reopened For Post-Baseline AI Feature Slices
+**Last Updated:** 2026-04-29
 **Sources:** `AGENTS.md`, `docs/AGENTS.md`, `docs/plans/AGENTS.md`, `tests/AGENTS.md`, `docs/plans/test-suite-audit-rubric.md`, `docs/plans/test-suite-audit-inventory.md`, `docs/plans/ai-test-suite-audit.md`, `scripts/test-suite-audit-inventory.php`, `scripts/check-changed-tests.php`, `scripts/run-critical-mutation-checks.php`, `.github/workflows/lint.yml`, `.github/workflows/test-audit-report.yml`, `.github/pull_request_template.md`, user discussion on 2026-04-21
 
 ## Problem Essence
@@ -119,13 +119,18 @@ Goal: apply the proven process to the rest of the suite without losing visibilit
 
 Current Phase 4 focus:
 
-- Phase 4 is complete at this checkpoint
-- outside AI, the audit was already through the endgame
-- the remaining `Base/AI` and `Modules/Core/AI` slices have now been reviewed and verified
+- the original audit baseline is complete, but the plan is reopened for newer `tests/Feature/Modules/Core/AI` files that landed outside the earlier cutoff
+- outside this reopened AI feature cluster, the audit is still through the endgame
+- current work should stay slice-based inside `Feature/Modules/Core/AI` rather than pretending the whole program is globally finished again
 
 Latest Phase 4 result:
 
 - the expansion pass is still finding real defects, not just documentation churn
+- the reopened `Feature/Modules/Core/AI` Codex auth/setup slice produced two valid tightenings rather than a pure `keep`
+- `OpenAiCodexOAuthCallbackTest.php` was tightened so callback success now proves the pending OAuth cache entry is cleared and the user-facing success flash is set, while the missing-state branch now proves the flashed error message instead of only the redirect
+- that callback tightening was validated by temporarily removing `OpenAiCodexAuthManager::completeAuthorization()` cache cleanup and confirming the focused feature test failed before restoring production code
+- `OpenAiCodexSetupTest.php` was tightened so the manual completion flow now proves the hash-separated `code#state` input format that `OpenAiCodexAuthManager` explicitly claims to support
+- that manual-input tightening was validated by temporarily removing the `#` parsing branch in `OpenAiCodexAuthManager::parseAuthorizationInput()` and confirming the focused feature test failed before restoring production code
 - one tightened streaming test exposed a production bug in `AgenticFinalResponseStreamer`, which is now fixed and covered
 - the AI-specific companion sheet is now marked complete because the recorded AI slices are done and active audit work has moved into other modules
 - a cheap-candidate auth/settings slice showed the redirect-only heuristic needs human review, not automatic downgrades
