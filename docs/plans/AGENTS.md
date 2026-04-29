@@ -15,7 +15,7 @@ Norms: **in-repo** single source of truth; **recommendation-driven** copy; stabl
 3. User reacts. **Describe the proposed revision in chat first—short, prose, naming affected sections and any follow-on edits—then wait for approval before editing the file.** Trivial mechanical fixes the user already specified (typos, ticks, broken links) are exempt.
 4. **HALT — Mandatory Pause for Review** — After creating or revising a plan, the agent **must stop and wait for explicit user approval** before proceeding to implementation.
 5. User approves implementation; agent implements and verifies locally.
-6. **Do not** commit or push unless the user asks.
+6. **Do not** commit or push unless the user asks. When asked to commit, add agent as co-author and specify the model used to the commit message.
 
 Hidden session/tool-only plans are fine as scratch **only** if the same execution truth is **mirrored** into this file. Anyone opening the plan should see design, current phase, done vs. open work (via **Phases** checklists), and what changed.
 
@@ -23,7 +23,7 @@ Hidden session/tool-only plans are fine as scratch **only** if the same executio
 
 Work that implements or fixes something described in a plan must **update that plan** so the file stays accurate—**not** only the code.
 
-- **Tick or adjust checklists** — Mark **Phases** items done (`- [x]`) when finished; add or split rows if scope shifted; remove tasks that were dropped so unchecked lines stay honest.
+- **Tick or adjust checklists** — Mark **Phases** items done (`- [x]`) when finished; suffix each completed line with `{agent-name}/{model-code}` so completions stay attributable when multiple agents ship different rows. Add or split rows if scope shifted; remove tasks that were dropped so unchecked lines stay honest.
 - **Refresh narrative when reality diverges** — If the shipped fix differs from **Design Decisions** or **Desired Outcome** (tradeoff, bug revealed a better approach, partial delivery), edit those sections in **prose** so the next reader sees what actually shipped and why. Do not paste patches or full-file code; describe contracts and behavior in words.
 - **Update the preamble** — Bump **Last Updated** when the story or status meaningfully changes; set **Status** (e.g. In Progress → Complete) when the plan is fully delivered or superseded.
 
@@ -33,7 +33,7 @@ Skipping plan updates creates a false source of truth: the checklist and design 
 
 **Title:** the **filename** (and path under `docs/plans/`). Optional lone `#` matching the filename if your renderer needs it—no filler “Plan” / “Notes” sections.
 
-**Preamble** (substantive plans): compact block with **Agent** (in `{agent-name}/{model-code}`), **Status** (e.g. Identified, In Progress, Blocked, Complete, or phase label), **Last Updated** (`YYYY-MM-DD` when narrative or status meaningfully changes), **Sources** (issues, ADRs, parent plans, paths—or `None`). Preamble = compass; do not paste the whole **Phases** section there.
+**Preamble** (substantive plans): compact block with **Status** (e.g. Identified, In Progress, Blocked, Complete, or phase label), **Last Updated** (`YYYY-MM-DD` when narrative or status meaningfully changes), **Sources** (issues, ADRs, parent plans, paths—or `None`), and **Agents** (a summary list of contributors in `{agent-name}/{model-code}` form). Keep this field current as agents participate; it summarizes collaborators.
 
 **Body** (order when sections exist; early drafts may stop after the first two):
 
