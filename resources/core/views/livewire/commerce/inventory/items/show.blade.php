@@ -150,6 +150,71 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                 </x-ui.card>
 
                 <x-ui.card>
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Catalog Fit') }}</h2>
+                            <p class="mt-1 text-sm text-muted">{{ __('Pick the reusable category and template that decide which structured fields apply to this item.') }}</p>
+                        </div>
+                        <div class="flex flex-wrap justify-end gap-2">
+                            <x-ui.badge>{{ $item->category?->name ?? __('No category') }}</x-ui.badge>
+                            <x-ui.badge>{{ $item->productTemplate?->name ?? __('No template') }}</x-ui.badge>
+                        </div>
+                    </div>
+
+                    @if ($this->canEdit())
+                        <form wire:submit="saveCatalogAssignment" class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+                            <x-ui.select
+                                id="item-catalog-category"
+                                wire:model.live="catalogCategoryId"
+                                label="{{ __('Category') }}"
+                                :help="__('Broad reusable group for this sellable item.')"
+                                :error="$errors->first('catalogCategoryId')"
+                            >
+                                <option value="">{{ __('No category') }}</option>
+                                @foreach ($categories as $category)
+                                    <option value="{{ $category->id }}">{{ $category->name }}</option>
+                                @endforeach
+                            </x-ui.select>
+
+                            <x-ui.select
+                                id="item-catalog-template"
+                                wire:model.live="catalogProductTemplateId"
+                                label="{{ __('Template') }}"
+                                :help="__('Repeatable item type. Choosing a categorized template also selects its category.')"
+                                :error="$errors->first('catalogProductTemplateId')"
+                            >
+                                <option value="">{{ __('No template') }}</option>
+                                @foreach ($productTemplates as $template)
+                                    @continue($catalogCategoryId !== null && $template->category_id !== null && $template->category_id !== (int) $catalogCategoryId)
+                                    <option value="{{ $template->id }}">
+                                        {{ $template->name }}
+                                        @if ($template->category)
+                                            {{ __('(:category)', ['category' => $template->category->name]) }}
+                                        @endif
+                                    </option>
+                                @endforeach
+                            </x-ui.select>
+
+                            <x-ui.button type="submit" variant="primary">
+                                <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                                {{ __('Save Fit') }}
+                            </x-ui.button>
+                        </form>
+                    @else
+                        <dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div>
+                                <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Category') }}</dt>
+                                <dd class="mt-1 text-sm text-ink">{{ $item->category?->name ?? __('No category') }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Template') }}</dt>
+                                <dd class="mt-1 text-sm text-ink">{{ $item->productTemplate?->name ?? __('No template') }}</dd>
+                            </div>
+                        </dl>
+                    @endif
+                </x-ui.card>
+
+                <x-ui.card>
                     <div x-data="{ helpOpen: false }">
                         <div class="mb-3 flex items-center justify-between gap-3">
                             <div class="flex items-center gap-2">
@@ -433,7 +498,14 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                             >
                                 <option value="">{{ __('Select...') }}</option>
                                 @foreach ($availableAttributes as $attribute)
-                                    <option value="{{ $attribute->id }}">{{ $attribute->name }}</option>
+                                    <option value="{{ $attribute->id }}">
+                                        {{ $attribute->name }}
+                                        @if ($attribute->productTemplate)
+                                            {{ __('(:template)', ['template' => $attribute->productTemplate->name]) }}
+                                        @elseif ($attribute->category)
+                                            {{ __('(:category)', ['category' => $attribute->category->name]) }}
+                                        @endif
+                                    </option>
                                 @endforeach
                             </x-ui.select>
 
@@ -458,7 +530,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     </x-ui.button>
                                 </div>
                             @else
-                                <x-ui.field-help :hint="__('Select an attribute first, then enter its value.')"/>
+                                <x-ui.field-help :hint="$availableAttributes->isEmpty() ? __('No applicable attributes exist for this item fit yet. Add global, category, or template attributes in Catalog.') : __('Select an attribute first, then enter its value.')"/>
                             @endif
                         </form>
                     @endif

@@ -6,7 +6,9 @@
 namespace App\Modules\Commerce\Inventory\Models;
 
 use App\Modules\Commerce\Catalog\Models\AttributeValue;
+use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Catalog\Models\Description;
+use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Database\Factories\ItemFactory;
 use App\Modules\Core\Company\Models\Company;
 use Illuminate\Database\Eloquent\Collection;
@@ -21,6 +23,8 @@ use Illuminate\Support\Carbon;
  *
  * @property int $id
  * @property int $company_id
+ * @property int|null $category_id
+ * @property int|null $product_template_id
  * @property string $sku
  * @property string $status
  * @property string $title
@@ -31,6 +35,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Company $company
+ * @property-read Category|null $category
+ * @property-read ProductTemplate|null $productTemplate
  * @property-read Collection<int, ItemPhoto> $photos
  * @property-read Collection<int, AttributeValue> $catalogAttributeValues
  * @property-read Collection<int, Description> $descriptions
@@ -56,6 +62,8 @@ class Item extends Model
      */
     protected $fillable = [
         'company_id',
+        'category_id',
+        'product_template_id',
         'sku',
         'status',
         'title',
@@ -87,6 +95,22 @@ class Item extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * @return BelongsTo<Category, $this>
+     */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * @return BelongsTo<ProductTemplate, $this>
+     */
+    public function productTemplate(): BelongsTo
+    {
+        return $this->belongsTo(ProductTemplate::class);
     }
 
     /**

@@ -25,4 +25,17 @@ return [
     */
     'cache_prefix' => 'blb:settings',
 
+    /*
+    |--------------------------------------------------------------------------
+    | Operator-Editable Settings
+    |--------------------------------------------------------------------------
+    |
+    | Base Settings owns storage, scope resolution, encryption, discovery, and
+    | generic rendering. Domain settings are declared by their owning modules in
+    | Config/settings.php and discovered into this registry at boot.
+    |
+    */
+    'editable' => [
+    ],
+
 ];

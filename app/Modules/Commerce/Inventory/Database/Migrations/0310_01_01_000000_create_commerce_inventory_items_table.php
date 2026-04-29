@@ -17,6 +17,8 @@ return new class extends Migration
         Schema::create('commerce_inventory_items', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('company_id')->index()->constrained('companies');
+            $table->unsignedBigInteger('category_id')->nullable();
+            $table->unsignedBigInteger('product_template_id')->nullable();
             $table->string('sku');
             $table->string('status')->default('draft')->index();
             $table->string('title');
@@ -26,6 +28,8 @@ return new class extends Migration
             $table->char('currency_code', 3)->default('MYR');
             $table->timestamps();
 
+            $table->index(['company_id', 'category_id']);
+            $table->index(['company_id', 'product_template_id']);
             $table->index(['company_id', 'status']);
             $table->index(['company_id', 'created_at']);
             $table->unique(['company_id', 'sku']);

@@ -35,6 +35,8 @@ class ItemFactory extends Factory
 
         return [
             'company_id' => Company::factory(),
+            'category_id' => null,
+            'product_template_id' => null,
             'sku' => 'ITEM-'.fake()->unique()->bothify('####??'),
             'status' => fake()->randomElement(Item::statuses()),
             'title' => $title,

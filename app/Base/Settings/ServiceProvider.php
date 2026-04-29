@@ -23,4 +23,37 @@ class ServiceProvider extends BaseServiceProvider
 
         $this->app->singleton(SettingsService::class, DatabaseSettingsService::class);
     }
+
+    public function boot(): void
+    {
+        $editable = config('settings.editable', []);
+
+        foreach ($this->discoverSettingsConfigFiles() as $file) {
+            $config = require $file;
+
+            if (! is_array($config)) {
+                continue;
+            }
+
+            $editable = array_replace($editable, $config['editable'] ?? []);
+        }
+
+        config(['settings.editable' => $editable]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function discoverSettingsConfigFiles(): array
+    {
+        $files = array_merge(
+            glob(app_path('Base/*/Config/settings.php')) ?: [],
+            glob(app_path('Modules/*/*/Config/settings.php')) ?: [],
+            glob(base_path('extensions/*/*/Config/settings.php')) ?: [],
+        );
+
+        sort($files);
+
+        return array_values(array_unique($files));
+    }
 }

@@ -115,6 +115,7 @@ This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to preven
 | `0100_01_13_*` | Settings | Database |
 | `0100_01_15_*` | Workflow | None |
 | `0100_01_17_*` | Audit | Database |
+| `0100_01_19_*` | Integration | Database, Settings |
 
 ### Core
 
@@ -140,6 +141,7 @@ This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to preven
 |--------|--------|--------------|
 | `0310_01_01_*` | Inventory | Company |
 | `0310_01_03_*` | Catalog | Company, Inventory |
+| `0310_01_05_*` | Marketplace | Company, Inventory, Integration |
 
 The registry table is the dependency graph. Do not duplicate module dependencies in a separate diagram; update the table when ownership, prefix, or dependency order changes.
 

@@ -4,7 +4,9 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Modules\Commerce\Catalog\Models\Attribute as CatalogAttribute;
 use App\Modules\Commerce\Catalog\Models\AttributeValue;
+use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Catalog\Models\Description as CatalogDescription;
+use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Livewire\Items\Create;
 use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 use App\Modules\Commerce\Inventory\Models\Item;
@@ -243,4 +245,87 @@ test('item detail page can edit catalog attributes and description versions', fu
         ->assertHasNoErrors();
 
     expect($description->fresh()->is_accepted)->toBeTrue();
+});
+
+test('item detail page assigns catalog fit and filters applicable attributes', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+    ]);
+    $category = Category::factory()->create([
+        'company_id' => $user->company_id,
+        'name' => 'Auto Lighting',
+    ]);
+    $otherCategory = Category::factory()->create([
+        'company_id' => $user->company_id,
+        'name' => 'Body Panels',
+    ]);
+    $template = ProductTemplate::factory()
+        ->forCategory($category)
+        ->create([
+            'name' => 'Headlight Assembly',
+        ]);
+    $otherTemplate = ProductTemplate::factory()
+        ->forCategory($otherCategory)
+        ->create([
+            'name' => 'Door Shell',
+        ]);
+
+    $globalAttribute = CatalogAttribute::factory()->create([
+        'company_id' => $user->company_id,
+        'name' => 'Condition Grade',
+    ]);
+    $categoryAttribute = CatalogAttribute::factory()
+        ->forCategory($category)
+        ->create([
+            'name' => 'OEM Number',
+        ]);
+    $templateAttribute = CatalogAttribute::factory()
+        ->forProductTemplate($template)
+        ->create([
+            'name' => 'Interchange Number',
+        ]);
+    $otherAttribute = CatalogAttribute::factory()
+        ->forProductTemplate($otherTemplate)
+        ->create([
+            'name' => 'Paint Code',
+        ]);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->set('catalogProductTemplateId', $template->id)
+        ->assertSet('catalogCategoryId', $category->id)
+        ->call('saveCatalogAssignment')
+        ->assertHasNoErrors()
+        ->assertSee('Condition Grade')
+        ->assertSee('OEM Number')
+        ->assertSee('Interchange Number')
+        ->assertDontSee('Paint Code')
+        ->set('selectedAttributeId', $otherAttribute->id)
+        ->set('attributeValue', 'NH-731P')
+        ->call('saveAttributeValue')
+        ->assertHasErrors(['selectedAttributeId'])
+        ->set('selectedAttributeId', $templateAttribute->id)
+        ->set('attributeValue', 'HO2502124')
+        ->call('saveAttributeValue')
+        ->assertHasNoErrors();
+
+    $item->refresh();
+
+    expect($item->category_id)->toBe($category->id)
+        ->and($item->product_template_id)->toBe($template->id)
+        ->and(AttributeValue::query()
+            ->where('item_id', $item->id)
+            ->where('attribute_id', $templateAttribute->id)
+            ->where('display_value', 'HO2502124')
+            ->exists())->toBeTrue()
+        ->and(AttributeValue::query()
+            ->where('item_id', $item->id)
+            ->where('attribute_id', $globalAttribute->id)
+            ->exists())->toBeFalse()
+        ->and(AttributeValue::query()
+            ->where('item_id', $item->id)
+            ->where('attribute_id', $categoryAttribute->id)
+            ->exists())->toBeFalse();
 });

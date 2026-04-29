@@ -18,7 +18,7 @@ class InventoryItemService
     private const string PHOTO_DISK = 'local';
 
     /**
-     * @param  array{sku: string, title: string, notes?: string|null, status: string, unitCostAmount?: string|null, targetPriceAmount?: string|null, currencyCode: string}  $data
+     * @param  array{sku: string, title: string, notes?: string|null, status: string, unitCostAmount?: string|null, targetPriceAmount?: string|null, currencyCode: string, categoryId?: int|null, productTemplateId?: int|null}  $data
      */
     public function create(int $companyId, array $data): Item
     {
@@ -26,6 +26,8 @@ class InventoryItemService
 
         return Item::query()->create([
             'company_id' => $companyId,
+            'category_id' => $data['categoryId'] ?? null,
+            'product_template_id' => $data['productTemplateId'] ?? null,
             'sku' => strtoupper($data['sku']),
             'status' => $data['status'],
             'title' => $data['title'],

@@ -11,11 +11,14 @@ use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\ValueObjects\Money;
 use App\Modules\Commerce\Catalog\Models\Attribute as CatalogAttribute;
 use App\Modules\Commerce\Catalog\Models\AttributeValue;
+use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Catalog\Models\Description as CatalogDescription;
+use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use App\Modules\Commerce\Inventory\Services\InventoryItemService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -42,13 +45,19 @@ class Show extends Component
 
     public string $descriptionBody = '';
 
+    public ?int $catalogCategoryId = null;
+
+    public ?int $catalogProductTemplateId = null;
+
     public function mount(Item $item): void
     {
         if ($item->company_id !== Auth::user()?->company_id) {
             abort(404);
         }
 
-        $this->item = $item->load('photos', 'catalogAttributeValues.attribute', 'descriptions.createdByUser');
+        $this->item = $item->load('category', 'productTemplate', 'photos', 'catalogAttributeValues.attribute', 'descriptions.createdByUser');
+        $this->catalogCategoryId = $this->item->category_id;
+        $this->catalogProductTemplateId = $this->item->product_template_id;
     }
 
     public function saveField(string $field, mixed $value): void
@@ -132,6 +141,80 @@ class Show extends Component
         }
     }
 
+    public function updatedCatalogCategoryId(mixed $value): void
+    {
+        if ($value === null || $value === '' || (int) $value === 0) {
+            $this->catalogCategoryId = null;
+        }
+
+        $template = $this->selectedProductTemplate();
+
+        if ($template instanceof ProductTemplate
+            && $template->category_id !== null
+            && $this->catalogCategoryId !== null
+            && $template->category_id !== $this->catalogCategoryId) {
+            $this->catalogProductTemplateId = null;
+        }
+    }
+
+    public function updatedCatalogProductTemplateId(mixed $value): void
+    {
+        if ($value === null || $value === '' || (int) $value === 0) {
+            $this->catalogProductTemplateId = null;
+
+            return;
+        }
+
+        $template = $this->selectedProductTemplate();
+
+        if ($template instanceof ProductTemplate && $template->category_id !== null) {
+            $this->catalogCategoryId = $template->category_id;
+        }
+    }
+
+    public function saveCatalogAssignment(): void
+    {
+        $this->authorizeUpdate();
+
+        $companyId = Auth::user()?->company_id;
+
+        $validated = $this->validate([
+            'catalogCategoryId' => ['nullable', 'integer', Rule::exists(Category::class, 'id')->where('company_id', $companyId)],
+            'catalogProductTemplateId' => ['nullable', 'integer', Rule::exists(ProductTemplate::class, 'id')->where('company_id', $companyId)],
+        ]);
+
+        $categoryId = $validated['catalogCategoryId'] ?? null;
+        $templateId = $validated['catalogProductTemplateId'] ?? null;
+        $template = null;
+
+        if ($templateId !== null) {
+            $template = ProductTemplate::query()
+                ->where('company_id', $companyId)
+                ->findOrFail($templateId);
+
+            if ($template->category_id !== null && $categoryId !== null && $template->category_id !== $categoryId) {
+                $this->addError('catalogProductTemplateId', __('The selected template belongs to a different category.'));
+
+                return;
+            }
+
+            $categoryId ??= $template->category_id;
+        }
+
+        $this->item->update([
+            'category_id' => $categoryId,
+            'product_template_id' => $template?->id,
+        ]);
+
+        $this->item->load('category', 'productTemplate');
+        $this->catalogCategoryId = $this->item->category_id;
+        $this->catalogProductTemplateId = $this->item->product_template_id;
+        $this->selectedAttributeId = null;
+        $this->attributeValue = '';
+
+        session()->flash('success', __('Catalog fit updated.'));
+    }
+
     public function saveAttributeValue(): void
     {
         $this->authorizeUpdate();
@@ -142,13 +225,12 @@ class Show extends Component
             'selectedAttributeId' => [
                 'required',
                 'integer',
-                Rule::exists(CatalogAttribute::class, 'id')->where('company_id', $companyId),
+                Rule::in($this->applicableAttributeQuery($companyId)->pluck('id')->all()),
             ],
             'attributeValue' => ['required', 'string', 'max:1000'],
         ]);
 
-        $attribute = CatalogAttribute::query()
-            ->where('company_id', $companyId)
+        $attribute = $this->applicableAttributeQuery($companyId)
             ->findOrFail($validated['selectedAttributeId']);
 
         AttributeValue::query()->updateOrCreate(
@@ -340,10 +422,15 @@ class Show extends Component
     {
         return view('livewire.commerce.inventory.items.show', [
             'statuses' => Item::statuses(),
-            'availableAttributes' => CatalogAttribute::query()
+            'availableAttributes' => $this->applicableAttributeQuery(Auth::user()?->company_id)->get(),
+            'categories' => Category::query()
                 ->where('company_id', Auth::user()?->company_id)
-                ->with(['category', 'productTemplate'])
                 ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
+            'productTemplates' => ProductTemplate::query()
+                ->where('company_id', Auth::user()?->company_id)
+                ->with('category')
                 ->orderBy('name')
                 ->get(),
         ]);
@@ -360,5 +447,57 @@ class Show extends Component
             Actor::forUser(Auth::user()),
             'commerce.inventory_item.update',
         );
+    }
+
+    /**
+     * @return Builder<CatalogAttribute>
+     */
+    private function applicableAttributeQuery(?int $companyId): Builder
+    {
+        return $this->constrainApplicableAttributeQuery(
+            CatalogAttribute::query()->where('company_id', $companyId),
+        )
+            ->with(['category', 'productTemplate'])
+            ->orderBy('sort_order')
+            ->orderBy('name');
+    }
+
+    /**
+     * @param  Builder<CatalogAttribute>  $query
+     * @return Builder<CatalogAttribute>
+     */
+    private function constrainApplicableAttributeQuery(Builder $query): Builder
+    {
+        $categoryId = $this->item->category_id;
+        $templateId = $this->item->product_template_id;
+
+        return $query->where(function (Builder $query) use ($categoryId, $templateId): void {
+            $query->where(function (Builder $query): void {
+                $query->whereNull('category_id')
+                    ->whereNull('product_template_id');
+            });
+
+            if ($categoryId !== null) {
+                $query->orWhere(function (Builder $query) use ($categoryId): void {
+                    $query->where('category_id', $categoryId)
+                        ->whereNull('product_template_id');
+                });
+            }
+
+            if ($templateId !== null) {
+                $query->orWhere('product_template_id', $templateId);
+            }
+        });
+    }
+
+    private function selectedProductTemplate(): ?ProductTemplate
+    {
+        if ($this->catalogProductTemplateId === null) {
+            return null;
+        }
+
+        return ProductTemplate::query()
+            ->where('company_id', Auth::user()?->company_id)
+            ->find($this->catalogProductTemplateId);
     }
 }
