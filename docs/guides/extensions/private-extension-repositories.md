@@ -52,7 +52,7 @@ mkdir -p extensions/ham/auto-parts
 cd extensions/ham/auto-parts
 
 git init -b main
-git remote add origin <private-ham-auto-parts-repo-url>
+git remote add origin <private-blb-ham-auto-parts-repo-url>
 ```
 
 The remote name should be `origin` inside the nested repo. It must point to the
