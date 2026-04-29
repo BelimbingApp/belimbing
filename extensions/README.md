@@ -48,7 +48,8 @@ php artisan test extensions/sb-group/quality/Tests
 
 **Guides:**
 
-- [Licensee Development Guide](docs/guides/licensee-development-guide.md) — fork model, directory boundaries, decision rubric
-- [Database Migrations](docs/guides/extensions/database-migrations.md) — table naming, migration conventions
-- [Config Overrides](docs/guides/extensions/config-overrides.md) — merging and overriding configuration
-- [File Structure](docs/architecture/file-structure.md) — full directory layout reference
+- [Licensee Development Guide](../docs/guides/extensions/licensee-development-guide.md) — fork model, directory boundaries, decision rubric
+- [Private Extension Repositories](../docs/guides/extensions/private-extension-repositories.md) — nested private git repos for licensee code that must not be pushed to the framework remote
+- [Database Migrations](../docs/guides/extensions/database-migrations.md) — table naming, migration conventions
+- [Config Overrides](../docs/guides/extensions/config-overrides.md) — merging and overriding configuration
+- [File Structure](../docs/architecture/file-structure.md) — full directory layout reference

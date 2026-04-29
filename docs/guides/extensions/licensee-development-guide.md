@@ -27,6 +27,10 @@ A licensee needs custom modules, branding, and business logic. BLB must keep evo
 
 One fork. No branch lanes. No worktrees. Separation is enforced by **directory placement**, not by branching ceremony.
 
+For private licensee work developed from a public framework checkout, use a
+nested private extension repository instead. See
+`docs/guides/extensions/private-extension-repositories.md`.
+
 ### 3.1 Repository Topology
 
 ```text
@@ -51,9 +55,12 @@ Alternatives considered and rejected:
 
 | Alternative | Why it fails |
 |---|---|
-| Separate extension repo (gitignored) | Licensee code spans `extensions/` and `resources/`. Two repos to deploy, compose, and keep in sync. |
 | Git subtree/submodule | Same two-location problem plus arcane git commands. |
 | BLB as Composer package | Would require extracting all of `app/Base/` and `app/Modules/` into a package. Wrong abstraction for a framework-on-top-of-Laravel. |
+
+Separate private extension repos are still valid when the framework remote is
+public and the licensee code must not be pushed there. In that case the nested
+repo is an operational privacy boundary, not the default distribution model.
 
 ---
 
@@ -94,20 +101,18 @@ extensions/{owner}/{module}/
 
 Tests live inside the extension module (`Tests/`) rather than under `tests/extensions/`. The module is the unit of deployment — deleting or moving a module should remove its tests too. Unlike `resources/`, where Blade and CSS resolution requires a centralized path that Vite and Laravel can scan, tests have no framework-imposed path constraint and benefit more from co-location.
 
-### 4.3 ServiceProvider Registration
+### 4.3 ServiceProvider Discovery
 
-BLB auto-discovers providers inside `app/Base/` and `app/Modules/` via `ProviderRegistry`. Extension providers fall outside those scan paths, so they must be registered explicitly in `bootstrap/providers.php`:
+BLB auto-discovers providers inside `app/Base/`, `app/Modules/`, and
+`extensions/*/*/ServiceProvider.php` via `ProviderRegistry`. Routes, menus,
+settings, authz config, and migrations follow the same convention-based
+discovery model.
 
-```php
-return ProviderRegistry::resolve(
-    appProviders: [
-        App\Providers\AppServiceProvider::class,
-        \Extensions\SbGroup\Quality\ServiceProvider::class,
-    ]
-);
-```
+If an extension is not being discovered, verify that:
 
-Routes and menus are discovered automatically via globs (`extensions/*/*/Routes`, `extensions/*/*/Config/menu.php`), but the ServiceProvider itself requires this one-time registration step.
+1. The provider lives at `extensions/{owner}/{module}/ServiceProvider.php`.
+2. The namespace matches the directory structure, for example `Extensions\SbGroup\Quality`.
+3. Config cache has been cleared with `php artisan config:clear`.
 
 ### 4.4 Database Table Naming
 

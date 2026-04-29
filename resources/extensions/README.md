@@ -31,7 +31,7 @@ Licensee overrides win by CSS cascade and Blade view resolution order. Set `VITE
 
 **Guides:**
 
-- [UI Architect (AGENTS.md)](core/views/AGENTS.md) — Blade/Livewire/Tailwind conventions, component inventory
-- [Theming](docs/guides/theming.md) — token overrides and component resolution
-- [UI Layout](docs/architecture/ui-layout.md) — core/licensee presentation split
-- [Licensee Development Guide](docs/guides/licensee-development-guide.md) — UI boundary rules (§4.5)
+- [UI Architect (AGENTS.md)](../core/views/AGENTS.md) — Blade/Livewire/Tailwind conventions, component inventory
+- [Theming](../../docs/guides/theming.md) — token overrides and component resolution
+- [UI Layout](../../docs/architecture/ui-layout.md) — core/licensee presentation split
+- [Licensee Development Guide](../../docs/guides/extensions/licensee-development-guide.md) — UI boundary rules (§4.5)
