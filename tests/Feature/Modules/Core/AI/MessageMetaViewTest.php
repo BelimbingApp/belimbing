@@ -2,6 +2,42 @@
 
 use Illuminate\Support\Facades\Blade;
 
+it('shows fallback diagnostics only to users who can access the control plane', function (): void {
+    $fallbackAttempts = [[
+        'provider' => 'anthropic',
+        'model' => 'claude-opus-4',
+        'error' => 'Public fallback failure',
+        'diagnostic' => 'Sensitive diagnostic context',
+    ]];
+
+    $unauthorizedHtml = html_entity_decode(Blade::render(
+        '<x-ai.message-meta :timestamp="$timestamp" provider="openai" model="gpt-5" run-id="run-12345678" :fallback-attempts="$fallbackAttempts" />',
+        [
+            'timestamp' => now(),
+            'fallbackAttempts' => $fallbackAttempts,
+        ]
+    ));
+
+    expect($unauthorizedHtml)
+        ->toContain('Fallbacks')
+        ->toContain('Public fallback failure')
+        ->not->toContain('Sensitive diagnostic context');
+
+    $this->actingAs(createAdminUser());
+
+    $authorizedHtml = html_entity_decode(Blade::render(
+        '<x-ai.message-meta :timestamp="$timestamp" provider="openai" model="gpt-5" run-id="run-12345678" :fallback-attempts="$fallbackAttempts" />',
+        [
+            'timestamp' => now(),
+            'fallbackAttempts' => $fallbackAttempts,
+        ]
+    ));
+
+    expect($authorizedHtml)
+        ->toContain('Sensitive diagnostic context')
+        ->not->toContain('Public fallback failure');
+});
+
 it('renders the run detail popup as a native dialog with alpine popover behavior', function (): void {
     $html = html_entity_decode(Blade::render(
         '<x-ai.message-meta :timestamp="$timestamp" provider="openai" model="gpt-5" run-id="run-12345678" />',

@@ -112,7 +112,9 @@ describe('TurnEventStreamController', function () {
         $response->assertOk();
         $json = $response->json();
 
-        $eventTypes = collect($json['events'])->pluck('event_type')->all();
+        $events = $json['events'];
+        $eventTypes = collect($events)->pluck('event_type')->all();
+        $seqs = collect($events)->pluck('seq')->all();
 
         expect($eventTypes)
             ->not->toContain('turn.started')
@@ -120,6 +122,14 @@ describe('TurnEventStreamController', function () {
             ->toContain('tool.started')
             ->toContain('tool.finished')
             ->toContain('turn.completed');
+
+        expect($seqs)->not->toBeEmpty()
+            ->and($seqs[0])->toBe(6);
+
+        foreach ($events as $event) {
+            expect($event['seq'])->toBeGreaterThan(5)
+                ->and($event['turn_id'])->toBe($turn->id);
+        }
     });
 
     it('returns 404 for non-existent turn', function () {

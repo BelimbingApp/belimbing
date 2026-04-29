@@ -50,6 +50,14 @@ function createChatAttachmentsFixture(): User
     return createAdminUser();
 }
 
+function tinyPngFixture(): string
+{
+    return (string) base64_decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6n0AAAAASUVORK5CYII=',
+        true,
+    );
+}
+
 it('streams session attachments by attachment id', function (): void {
     test()->actingAs(createChatAttachmentsFixture());
 
@@ -59,7 +67,7 @@ it('streams session attachments by attachment id', function (): void {
     $dir = $sessionManager->sessionsPath(Employee::LARA_ID).'/attachments/'.$session->id;
     File::ensureDirectoryExists($dir);
 
-    File::put($dir.'/att_img1_diagram.png', 'fakepng');
+    File::put($dir.'/att_img1_diagram.png', tinyPngFixture());
     File::put($dir.'/att_doc1_notes.txt', 'hello');
 
     $img = test()
@@ -79,4 +87,32 @@ it('streams session attachments by attachment id', function (): void {
         ]).'?mime=text%2Fplain');
 
     $doc->assertOk();
+
+    expect($img->baseResponse->headers->get('content-disposition'))
+        ->toBe('inline')
+        ->and($img->baseResponse->headers->get('content-type'))->toStartWith('image/png')
+        ->and($img->baseResponse->getFile()->getPathname())->toBe($dir.'/att_img1_diagram.png');
+
+    expect($doc->baseResponse->headers->get('content-disposition'))
+        ->toBe('attachment')
+        ->and($doc->baseResponse->headers->get('content-type'))->toStartWith('text/plain')
+        ->and($doc->baseResponse->getFile()->getPathname())->toBe($dir.'/att_doc1_notes.txt');
+});
+
+it('returns 404 when the requested attachment id does not exist for the session', function (): void {
+    test()->actingAs(createChatAttachmentsFixture());
+
+    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+
+    $dir = app(SessionManager::class)->sessionsPath(Employee::LARA_ID).'/attachments/'.$session->id;
+    File::ensureDirectoryExists($dir);
+    File::put($dir.'/att_doc1_notes.txt', 'hello');
+
+    test()
+        ->get(route('ai.chat.attachments.show', [
+            'employeeId' => Employee::LARA_ID,
+            'sessionId' => $session->id,
+            'attachmentId' => 'att_missing',
+        ]).'?mime=text%2Fplain')
+        ->assertNotFound();
 });

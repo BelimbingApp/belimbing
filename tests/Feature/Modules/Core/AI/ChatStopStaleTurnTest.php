@@ -128,8 +128,13 @@ it('stopping a stale turn materializes streamed assistant output with run metada
     cancelStopStaleTurn($turn);
 
     $turn->refresh();
+    $run = AiRun::query()->findOrFail(STOP_STALE_TEST_RUN_ID);
 
     expect($turn->status)->toBe(TurnStatus::Cancelled);
+
+    expect($run->status)->toBe(AiRunStatus::Cancelled)
+        ->and($run->finished_at)->not->toBeNull()
+        ->and($run->latency_ms)->toBeGreaterThan(0);
 
     $messages = app(MessageManager::class)->read(Employee::LARA_ID, $session->id);
 

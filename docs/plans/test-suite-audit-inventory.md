@@ -1,7 +1,7 @@
 # Test Suite Audit Inventory
 
 **Agent:** Codex
-**Status:** Inventory and reopened-slice snapshot
+**Status:** Inventory and completion snapshot
 **Last Updated:** 2026-04-29
 **Sources:** `scripts/test-suite-audit-inventory.php`, `tests/`, `docs/plans/test-suite-audit.md`, `docs/plans/ai-test-suite-audit.md`, attempted `php artisan test --profile` on 2026-04-21
 
@@ -33,14 +33,17 @@ This report gives BLB both a ranked starting point and a compact view of the rem
 - Final non-AI leftovers: `ExampleTest.php` deleted; `tests/Pest.php` cleaned of unused stock scaffolding while retaining the shared helpers in active use
 - `Base/AI` service slice: `LlmClientToolCallingTest.php` re-enabled; discovery, API-type, query, and header/auth tests tightened; codex protocol and mapping tests reviewed as `keep`
 - Reopened `Feature/Modules/Core/AI` Codex auth/setup slice: `OpenAiCodexOAuthCallbackTest.php` and `OpenAiCodexSetupTest.php` tightened
+- Reopened `Feature/Modules/Core/AI` control-plane and result/message view slice: `ControlPlaneInspectorTest.php` kept; `AssistantResultViewTest.php` and `MessageMetaViewTest.php` tightened
+- Reopened `Feature/Modules/Core/AI` chat lifecycle and attachment slice: `ChatConcurrentRunPolicyTest.php`, `ChatConcurrentSessionLifecycleTest.php`, `ChatRunPersisterTest.php`, and `ChatViewTest.php` kept; `ChatAttachmentsTest.php` and `ChatStopStaleTurnTest.php` tightened
+- Reopened `Feature/Modules/Core/AI` turn streaming and publisher slice: `TurnEventPublisherTest.php` and `TurnStreamBridgeTest.php` kept; `Http/TurnEventStreamControllerTest.php` tightened on the exact replay boundary contract
 - Phase 5 guardrails: changed-test linting, PR review prompt, and scheduled slow-test plus mutation-style reporting are in place
 
 ### Current Checkpoint
 
-- The original audit baseline is complete, but the program is now reopened for newer `tests/Feature/Modules/Core/AI` files that landed outside the earlier cutoff
+- The reopened post-baseline `Feature/Modules/Core/AI` cluster is now complete, so the audit is back to complete at the current scope
 - Cheap-candidate heuristics were useful for ranking, but produced multiple false positives and were never good enough for automatic downgrade decisions
 - Outside AI, the remaining high-confidence audit work was already effectively exhausted; those slices are now closed
-- Inside AI, both the `Base/AI` cluster and the remaining `Modules/Core/AI` unit/service endgame slices are now reviewed; the remaining work is the reopened feature cluster only
+- Inside AI, both the `Base/AI` cluster and the remaining `Modules/Core/AI` unit/service and feature endgame slices are now reviewed
 
 ### Remaining Slices Checklist
 
@@ -57,21 +60,20 @@ This report gives BLB both a ranked starting point and a compact view of the rem
 - [x] `Modules/Core/AI` DTO / enum / jobs / routes cleanup sweep
 - [x] Final AI endgame pass: decide whether anything remaining is true `keep`, `tighten`, `merge`, or can be explicitly deferred
 - [x] `Feature/Modules/Core/AI` OpenAI Codex auth/setup slice
-- [ ] `Feature/Modules/Core/AI` control-plane and result/message view slice
-- [ ] `Feature/Modules/Core/AI` chat lifecycle and attachment slice
-- [ ] `Feature/Modules/Core/AI` turn streaming and publisher slice
+- [x] `Feature/Modules/Core/AI` control-plane and result/message view slice
+- [x] `Feature/Modules/Core/AI` chat lifecycle and attachment slice
+- [x] `Feature/Modules/Core/AI` turn streaming and publisher slice
 
 ### Next Recommended Slices
 
-- `Feature/Modules/Core/AI` control-plane and result/message view slice
-- `Feature/Modules/Core/AI` chat lifecycle and attachment slice
-- `Feature/Modules/Core/AI` turn streaming and publisher slice
+- No obvious remaining slices at the current scope
+- Reopen the audit only when new churn or a fresh inventory pass surfaces a materially under-audited cluster
 
 ### Remaining Buckets After That
 
-- Feature modules not yet audited in this program: only the reopened `Feature/Modules/Core/AI` cluster above
+- Feature modules not yet audited in this program: none obvious
 - Non-AI unit/service clusters that still look promising: none obvious from the current inventory snapshot
-- AI endgame note: the unit/service endgame is closed; remaining AI work is limited to the post-baseline feature cluster
+- AI endgame note: the unit/service and post-baseline feature endgames are closed at this checkpoint
 - CI guardrail promotions are future work, not an unfinished part of this current audit baseline
 
 ## Summary

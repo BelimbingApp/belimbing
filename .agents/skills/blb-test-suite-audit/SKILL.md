@@ -1,18 +1,15 @@
 ---
 name: blb-test-suite-audit
 description: >
-  Draft skill for auditing BLB tests for value, isolation, and regression-proof
+  Skill for auditing BLB tests for value, isolation, and regression-proof
   quality. Use when reviewing, trimming, tightening, or validating BLB tests,
   especially when deciding keep versus tighten versus merge versus delete.
-  This draft should remain outside the active skills directory until the audit
-  workflow stabilizes.
 ---
 
 # BLB Test Suite Audit
 
-Draft workflow for auditing BLB tests without treating the skill as finished.
-Keep this folder under `.agents/draft/` until the process is stable enough to
-move into `.agents/skills/`.
+Workflow for auditing BLB tests for signal, isolation, and regression-proof
+quality.
 
 ## Load First
 
@@ -105,6 +102,18 @@ move into `.agents/skills/`.
 - Assert session or event side effects, not just component success.
 - For OAuth and callback flows, assert durable pending-state cleanup and the
   flashed user state, not just the redirect and stored tokens.
+- Avoid ambient `assertSee()` coverage that only checks headings, generic
+  status words, and one record string. Prove section membership or row-level
+  classification with distinctive fixtures and included/excluded assertions.
+- For Blade component tests, prefer ordering and disclosure boundaries over
+  just asserting Alpine/dialog attributes. Authz-gated diagnostics and
+  banner/meta ordering are real contracts; `x-show` by itself usually is not.
+- For download or attachment routes, assert the resolved file/disposition
+  boundary and a concrete missing-file path. `200 OK` alone is usually too
+  weak to protect the lookup logic.
+- For replay or resume endpoints, assert the exact boundary (`after_seq`,
+  cursor, page token) rather than only checking that some early event types are
+  missing. Off-by-one regressions otherwise slip through.
 - For middleware and boundary guards, assert the concrete status code and the
   context handed to the boundary service when that context is part of the
   contract.
