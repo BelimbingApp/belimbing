@@ -156,11 +156,11 @@ Each phase ends with something Ham can use. Phases 0–2 are framework work that
 
 ### Phase 3 — Ham extension v1 (`extensions/ham/auto-parts`)
 
-- [ ] Car-parts `Attribute` seed: year, make, model, engine, trim, OEM #, interchange #, condition grade.
-- [ ] Car-parts `Category` seed mapped to Ham's eBay store categories.
-- [ ] Non-secret eBay store defaults in his extension (policy IDs, category mappings); actual credentials/tokens entered through `base_settings` UX.
-- [ ] Ham's description boilerplate (footer text, return-policy blurb) and car-parts-tuned prompt overrides for `describe-item`.
-- [ ] Provider setup walkthrough specific to Ham: pick a primary subscription/base-plan provider for Lara and image cleanup, set provider-side caps/plan controls where available, configure a pay-as-you-use backup such as Moonshot AI, then cancel PhotoRoom once BLB cleanup quality is acceptable.
+- [x] Car-parts `Attribute` seed: year, make, model, engine, trim, OEM #, interchange #, condition grade.
+- [x] Car-parts `Category` seed mapped to Ham's eBay store categories.
+- [x] Non-secret eBay store defaults in his extension (policy IDs, category mappings); actual credentials/tokens entered through `base_settings` UX.
+- [x] Ham's description boilerplate (footer text, return-policy blurb) and car-parts-tuned prompt overrides for `describe-item`.
+- [x] Provider setup walkthrough specific to Ham: pick a primary subscription/base-plan provider for Lara and image cleanup, set provider-side caps/plan controls where available, configure a pay-as-you-use backup such as Moonshot AI, then cancel PhotoRoom once BLB cleanup quality is acceptable.
 
 ### Phase 4 — AI assists (photo cleanup + descriptions)
 
