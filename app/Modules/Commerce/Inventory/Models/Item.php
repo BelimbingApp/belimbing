@@ -10,6 +10,7 @@ use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Catalog\Models\Description;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Database\Factories\ItemFactory;
+use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Core\Company\Models\Company;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -40,6 +41,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, ItemPhoto> $photos
  * @property-read Collection<int, AttributeValue> $catalogAttributeValues
  * @property-read Collection<int, Description> $descriptions
+ * @property-read Collection<int, Listing> $marketplaceListings
  */
 class Item extends Model
 {
@@ -135,5 +137,13 @@ class Item extends Model
     public function descriptions(): HasMany
     {
         return $this->hasMany(Description::class, 'item_id')->orderByDesc('version');
+    }
+
+    /**
+     * @return HasMany<Listing, $this>
+     */
+    public function marketplaceListings(): HasMany
+    {
+        return $this->hasMany(Listing::class, 'item_id');
     }
 }

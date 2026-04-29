@@ -12,6 +12,9 @@ use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannel;
 use App\Modules\Commerce\Marketplace\DTO\MarketplacePullResult;
 use App\Modules\Commerce\Marketplace\Exceptions\MarketplaceOperationException;
 use App\Modules\Commerce\Marketplace\Models\Listing;
+use App\Modules\Commerce\Sales\DTO\SalesOrderData;
+use App\Modules\Commerce\Sales\DTO\SalesOrderLineData;
+use App\Modules\Commerce\Sales\Services\SalesOrderMaterializer;
 use Illuminate\Support\Carbon;
 
 class EbayMarketplaceChannel implements MarketplaceChannel
@@ -20,6 +23,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         private readonly EbayConfiguration $configuration,
         private readonly EbayOAuthService $oauth,
         private readonly IntegrationHttpClientFactory $http,
+        private readonly SalesOrderMaterializer $salesOrders,
     ) {}
 
     public function key(): string
@@ -80,18 +84,43 @@ class EbayMarketplaceChannel implements MarketplaceChannel
     public function pullOrders(int $companyId): MarketplacePullResult
     {
         $config = $this->configuration->forCompany($companyId);
-        $response = $this->http->json($config['api_base_url'], $this->oauth->accessToken($companyId))
-            ->get('/sell/fulfillment/v1/order', ['limit' => 50])
-            ->throw()
-            ->json();
+        $client = $this->http->json($config['api_base_url'], $this->oauth->accessToken($companyId));
+
+        $fetched = 0;
+        $created = 0;
+        $updated = 0;
+        $linked = 0;
+        $offset = 0;
+        $limit = 100;
+
+        do {
+            $response = $client
+                ->get('/sell/fulfillment/v1/order', [
+                    'limit' => $limit,
+                    'offset' => $offset,
+                ])
+                ->throw()
+                ->json();
+
+            $orders = $response['orders'] ?? [];
+
+            foreach ($orders as $orderPayload) {
+                $fetched++;
+                $result = $this->salesOrders->materialize($companyId, $this->salesOrderData($orderPayload));
+                $result->created ? $created++ : $updated++;
+                $linked += $result->linkedCount;
+            }
+
+            $total = (int) ($response['total'] ?? count($orders));
+            $offset += $limit;
+        } while ($offset < $total);
 
         return new MarketplacePullResult(
             $this->key(),
-            (int) ($response['total'] ?? count($response['orders'] ?? [])),
-            0,
-            0,
-            0,
-            [__('Order persistence waits for the Commerce Sales schema slice.')],
+            $fetched,
+            $created,
+            $updated,
+            $linked,
         );
     }
 
@@ -147,5 +176,114 @@ class EbayMarketplaceChannel implements MarketplaceChannel
                 ],
             ],
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $order
+     */
+    private function salesOrderData(array $order): SalesOrderData
+    {
+        $total = $this->amount($order['pricingSummary']['total'] ?? null);
+        $lineItems = $order['lineItems'] ?? [];
+
+        return new SalesOrderData(
+            channel: $this->key(),
+            externalOrderId: (string) ($order['orderId'] ?? ''),
+            marketplaceId: $this->orderMarketplaceId($order),
+            buyerUsername: $this->nullableString($order['buyer']['username'] ?? null),
+            buyerEmail: $this->nullableString($order['buyer']['email'] ?? $order['buyer']['buyerRegistrationAddress']['email'] ?? null),
+            status: $this->nullableString($order['orderPaymentStatus'] ?? $order['orderFulfillmentStatus'] ?? null),
+            orderedAt: $this->date($order['creationDate'] ?? null),
+            paidAt: $this->paymentDate($order),
+            fulfilledAt: ($order['orderFulfillmentStatus'] ?? null) === 'FULFILLED'
+                ? $this->date($order['lastModifiedDate'] ?? null)
+                : null,
+            totalAmount: $total?->minorAmount,
+            currencyCode: $total?->currencyCode,
+            lines: array_map(fn (array $lineItem): SalesOrderLineData => $this->salesOrderLineData($lineItem), $lineItems),
+            rawPayload: $order,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $lineItem
+     */
+    private function salesOrderLineData(array $lineItem): SalesOrderLineData
+    {
+        $unitPrice = $this->amount($lineItem['lineItemCost'] ?? null);
+        $lineTotal = $this->amount($lineItem['total'] ?? null) ?? $unitPrice;
+
+        return new SalesOrderLineData(
+            externalLineItemId: $this->nullableString($lineItem['lineItemId'] ?? null),
+            externalListingId: $this->nullableString($lineItem['legacyItemId'] ?? $lineItem['listingId'] ?? $lineItem['itemId'] ?? null),
+            externalSku: $this->nullableString($lineItem['sku'] ?? null),
+            title: $this->nullableString($lineItem['title'] ?? null),
+            quantity: max(1, (int) ($lineItem['quantity'] ?? 1)),
+            unitPriceAmount: $unitPrice?->minorAmount,
+            lineTotalAmount: $lineTotal?->minorAmount,
+            currencyCode: $lineTotal?->currencyCode ?? $unitPrice?->currencyCode,
+            rawPayload: $lineItem,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $order
+     */
+    private function orderMarketplaceId(array $order): ?string
+    {
+        foreach ($order['lineItems'] ?? [] as $lineItem) {
+            $marketplaceId = $this->nullableString($lineItem['listingMarketplaceId'] ?? null);
+
+            if ($marketplaceId !== null) {
+                return $marketplaceId;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $order
+     */
+    private function paymentDate(array $order): ?Carbon
+    {
+        foreach ($order['paymentSummary']['payments'] ?? [] as $payment) {
+            $paidAt = $this->date($payment['paymentDate'] ?? null);
+
+            if ($paidAt !== null) {
+                return $paidAt;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>|mixed  $amount
+     */
+    private function amount(mixed $amount): ?Money
+    {
+        if (! is_array($amount)) {
+            return null;
+        }
+
+        $value = $this->nullableString($amount['value'] ?? null);
+        $currency = $this->nullableString($amount['currency'] ?? null);
+
+        return $value !== null && $currency !== null
+            ? Money::fromDecimalString($value, $currency)
+            : null;
+    }
+
+    private function date(mixed $value): ?Carbon
+    {
+        return is_string($value) && $value !== '' ? Carbon::parse($value) : null;
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
     }
 }

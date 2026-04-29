@@ -15,11 +15,11 @@ use Throwable;
 #[AsCommand(name: 'commerce:marketplace:ebay:pull')]
 class EbayPullCommand extends Command
 {
-    protected $description = 'Pull eBay marketplace listings and order summaries for one or all companies';
+    protected $description = 'Pull eBay marketplace listings and orders for one or all companies';
 
     protected $signature = 'commerce:marketplace:ebay:pull
         {--company-id= : Company ID to pull for. Omit to pull for every company.}
-        {--orders : Also call the eBay order read path. Order persistence waits for the Sales slice.}';
+        {--orders : Also pull and materialize eBay orders into Commerce Sales.}';
 
     public function handle(MarketplaceChannelRegistry $channels): int
     {
@@ -34,7 +34,7 @@ class EbayPullCommand extends Command
 
                 if ($this->option('orders')) {
                     $orders = $channel->pullOrders($companyId);
-                    $this->components->info("Company {$companyId}: read {$orders->fetched} eBay order(s).");
+                    $this->components->info("Company {$companyId}: pulled {$orders->fetched} eBay order(s), linked {$orders->linked} line(s) to inventory.");
 
                     foreach ($orders->warnings as $warning) {
                         $this->components->warn($warning);
