@@ -12,7 +12,7 @@ use Tests\TestCase;
 
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
-    ->in('Feature');
+    ->in('Feature', '../extensions/*/*/Tests/Feature');
 
 /**
  * Seed configured system roles and their capabilities for feature tests.
