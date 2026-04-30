@@ -7,9 +7,11 @@ namespace App\Base\Media\Services;
 
 use App\Base\Media\Exceptions\MediaStorageException;
 use App\Base\Media\Models\MediaAsset;
+use DateInterval;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use InvalidArgumentException;
 
 /**
@@ -71,6 +73,18 @@ class MediaAssetStore
             'file_size' => $attributes['file_size'] ?? strlen($bytes),
             'metadata' => $attributes['metadata'] ?? null,
         ]);
+    }
+
+    /**
+     * Build a short-lived signed URL the browser can fetch directly from
+     * {@see MediaAssetController::stream()}. Default lifetime is 5 minutes;
+     * pass an integer (minutes) or a {@see DateInterval} to override.
+     */
+    public function temporaryStreamUrl(MediaAsset $asset, int|DateInterval $expiresIn = 5): string
+    {
+        $expires = is_int($expiresIn) ? now()->addMinutes($expiresIn) : now()->add($expiresIn);
+
+        return URL::temporarySignedRoute('media.assets.stream', $expires, ['asset' => $asset->id]);
     }
 
     /**
