@@ -1,6 +1,6 @@
 # ham/01-ebay-car-parts-operations
 
-**Agent:** Amp, Codex
+**Agents:** Amp, Codex, claude-code/opus-4.7
 **Status:** Phase 4 not yet started — task definitions registered; Phase 0 media subsystem still gating execution.
 **Last Updated:** 2026-04-30
 **Sources:**
@@ -124,7 +124,7 @@ Each phase ends with something Ham can use. Phases 0–2 are framework work that
 
 ### Phase 0 — BLB capability gaps (framework)
 
-- [ ] Media subsystem: storage abstraction, image processing queue, signed URLs, **HTTP upload endpoint**, **derived-asset model** (cleaned image is a child of the original, never an overwrite).
+- [ ] Media subsystem: storage abstraction, image processing queue, signed URLs, **HTTP upload endpoint**, **derived-asset model** (cleaned image is a child of the original, never an overwrite). First slice has landed under `app/Base/Media`: `MediaAsset` model + `base_media_assets` table with self-FK for derivatives + open-vocabulary `kind`, plus a `MediaAssetStore` service for original/derivative row registration. No consumer migration yet — `commerce_inventory_item_photos` still writes raw `local` storage; the next slice migrates it onto `MediaAsset`. Image processing queue, signed URLs, and a generic HTTP upload endpoint remain.
 - [x] `Money` value object + currency-aware column convention; document under `docs/architecture/` (`*_amount` integer minor units + currency code).
 - [x] `base_settings` UX/storage for operator-editable API keys, OAuth details/tokens, channel bindings, provider plan/cap metadata, company default currency, and extension defaults; Ham must never need `.env`.
 - [x] Refactor editable settings declarations out of `app/Base/Settings/Config/settings.php` into owning modules' `Config/settings.php` files, and move settings UI placement to the owning module menu. Keep Base Settings as the storage/discovery/renderer module, not the owner of Commerce, AI, or channel-specific settings. First module-owned route/menu is eBay Marketplace settings; the aggregate admin settings page remains a discovery/editing surface.
