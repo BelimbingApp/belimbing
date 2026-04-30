@@ -25,7 +25,7 @@ BLB is an AI-native framework, but AI activation is currently optional and user-
 6. "Activation" means connecting Lara to a working AI provider — the record exists from day one, but she needs a configured provider to function.
 7. When Lara is not activated, the status bar shows a persistent warning (same pattern as "Licensee not set").
 8. Lara is accessible to **every authenticated user**, not scoped to a single supervisor's playground.
-9. Lara keeps `Primary` and `Backup` for chat execution, and exposes a separate Task Models surface for specialized workloads such as titling, research, and coding.
+9. Lara keeps `Primary` and `Backup` for chat execution, and exposes a separate Task Models surface for specialized workloads such as titling, research, coding, photo cleanup, and item-description drafting.
 
 ---
 

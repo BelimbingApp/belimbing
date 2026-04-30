@@ -53,6 +53,22 @@ class LaraTaskRegistry
                 runtimeReady: true,
             ),
             new LaraTaskDefinition(
+                key: 'photo-cleanup',
+                label: 'Photo Cleanup',
+                type: LaraTaskType::Simple,
+                description: 'Clean product photos, including background removal, before operator review.',
+                workloadDescription: 'Image cleanup and background-removal work. Prefer multimodal or image-capable models with strong visual segmentation behavior, predictable cost, and batch-friendly latency.',
+                runtimeReady: false,
+            ),
+            new LaraTaskDefinition(
+                key: 'describe-item',
+                label: 'Describe Item',
+                type: LaraTaskType::Simple,
+                description: 'Draft item titles, descriptions, and category suggestions from photos and catalog attributes.',
+                workloadDescription: 'Commerce listing copy from item photos, attributes, and seller notes. Prefer models with strong vision-language grounding, structured output, and concise buyer-facing writing.',
+                runtimeReady: false,
+            ),
+            new LaraTaskDefinition(
                 key: 'coding',
                 label: 'Coding',
                 type: LaraTaskType::Agentic,

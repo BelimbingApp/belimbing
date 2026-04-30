@@ -39,6 +39,20 @@ test('task models page shows activation notice when lara is not activated', func
         ->assertSee('Task models become available after Lara has been activated');
 });
 
+test('task models page exposes commerce ai assist tasks before their runtimes are wired', function (): void {
+    activateLaraForTaskModels();
+    $user = createTaskModelsTestUser();
+    $this->actingAs($user);
+
+    $this->get(route('admin.ai.task-models'))
+        ->assertOk()
+        ->assertSee('Photo Cleanup')
+        ->assertSee('Describe Item')
+        ->assertSee('Clean product photos')
+        ->assertSee('Draft item titles')
+        ->assertSee('Runtime pending');
+});
+
 test('recommendation saves a stable recommended task model choice', function (): void {
     activateLaraForTaskModels();
     $user = createTaskModelsTestUser();

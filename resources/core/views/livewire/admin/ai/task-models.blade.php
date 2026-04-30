@@ -10,7 +10,7 @@
     <div class="space-y-section-gap">
         <x-ui.page-header
             :title="__('Task Models')"
-            :subtitle="__('Choose which models Lara should use for titling, research, and coding tasks.')"
+            :subtitle="__('Choose which models Lara should use for specialized tasks.')"
         />
 
         @unless ($laraActivated)

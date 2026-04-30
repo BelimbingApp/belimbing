@@ -1,8 +1,8 @@
 # ham/01-ebay-car-parts-operations
 
 **Agent:** Amp, Codex
-**Status:** In Progress — Phase 1 browser workbench
-**Last Updated:** 2026-04-29
+**Status:** In Progress — Phase 4 AI assists
+**Last Updated:** 2026-04-30
 **Sources:**
 - User context: Ham, BLB early adopter, LA-based one-person eBay car-parts seller (~2,000 active listings), undergoing cancer treatment, on a tight budget. Today uses PhotoRoom (paid SaaS) for background removal and a Windows desktop for writing/photo editing/eBay work. BLB itself is AGPLv3 and the project sponsor (Kiat) is supporting Ham pro bono.
 - `docs/brief.md` — BLB vision: "serve the unserved," AI-native, DIY-enabling
@@ -164,7 +164,7 @@ Each phase ends with something Ham can use. Phases 0–2 are framework work that
 
 ### Phase 4 — AI assists (photo cleanup + descriptions)
 
-- [ ] Register `photo-cleanup` and `describe-item` as new Lara simple tasks (per `lara-task-models.md`); they appear on the Task Models page alongside `titling`, `research`, `coding`.
+- [x] Register `photo-cleanup` and `describe-item` as new Lara simple tasks (per `lara-task-models.md`); they appear on the Task Models page alongside `titling`, `research`, `coding`.
 - [ ] `photo-cleanup` execution: input image → cleaned (background-removed) image stored as a derived asset of the original; runs in the queue, surfaces in the Workbench when ready.
 - [ ] `describe-item` execution: photos + attributes → draft title, draft description, suggested category.
 - [ ] Workbench integration: drop raw photos in, see cleaned versions appear; one-click description draft, side-by-side review, accept-into-`Description`-version.
