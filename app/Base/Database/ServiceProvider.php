@@ -12,6 +12,7 @@ use App\Base\Database\Console\Commands\ResetCommand;
 use App\Base\Database\Console\Commands\RollbackCommand;
 use App\Base\Database\Console\Commands\StatusCommand;
 use App\Base\Database\Console\Commands\TableUnstableCommand;
+use App\Base\Database\Console\Commands\WipeCommand;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Console\Migrations\FreshCommand as LaravelFreshCommand;
 use Illuminate\Database\Console\Migrations\MigrateCommand as LaravelMigrateCommand;
@@ -19,6 +20,7 @@ use Illuminate\Database\Console\Migrations\RefreshCommand as LaravelRefreshComma
 use Illuminate\Database\Console\Migrations\ResetCommand as LaravelResetCommand;
 use Illuminate\Database\Console\Migrations\RollbackCommand as LaravelRollbackCommand;
 use Illuminate\Database\Console\Migrations\StatusCommand as LaravelStatusCommand;
+use Illuminate\Database\Console\WipeCommand as LaravelWipeCommand;
 use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
@@ -58,6 +60,10 @@ class ServiceProvider extends BaseServiceProvider
 
         $this->app->extend(LaravelFreshCommand::class, function ($_, $app) {
             return new FreshCommand($app->make(Migrator::class));
+        });
+
+        $this->app->extend(LaravelWipeCommand::class, function () {
+            return new WipeCommand;
         });
 
         $this->commands([

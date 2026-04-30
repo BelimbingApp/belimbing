@@ -79,27 +79,14 @@ class FreshCommand extends IlluminateFreshCommand
     /**
      * Drop tables selectively, preserving stable and infrastructure tables.
      *
-     * If no stable tables exist, falls back to a full db:wipe for efficiency.
-     * Otherwise, drops only non-preserved tables and cleans up their migration
-     * records so they will be re-run.
+     * Drops only non-preserved tables and cleans up their migration records
+     * so they will be re-run.
      *
      * @param  string|null  $database  Database connection name
      */
     protected function dropTablesSelectively(?string $database): void
     {
         $preservedTables = $this->getPreservedTableNames();
-
-        if ($preservedTables === TableRegistry::INFRASTRUCTURE_TABLES) {
-            // No user-stable tables — full wipe is fine
-            $this->components->task('Dropping all tables', fn () => $this->callSilent('db:wipe', array_filter([
-                '--database' => $database,
-                '--drop-views' => $this->option('drop-views'),
-                '--drop-types' => $this->option('drop-types'),
-                '--force' => true,
-            ])) == 0);
-
-            return;
-        }
 
         // Selective drop: preserve stable + infrastructure tables
         $allTables = $this->getAllTableNames();
@@ -129,6 +116,10 @@ class FreshCommand extends IlluminateFreshCommand
 
         if ($this->option('drop-views')) {
             $this->components->task('Dropping all views', fn () => $this->dropAllViews($database));
+        }
+
+        if ($this->option('drop-types')) {
+            $this->components->task('Dropping all types', fn () => $this->dropAllTypes($database));
         }
     }
 
@@ -268,11 +259,17 @@ class FreshCommand extends IlluminateFreshCommand
      */
     protected function dropAllViews(?string $database): void
     {
-        $this->callSilent('db:wipe', array_filter([
-            '--database' => $database,
-            '--drop-views' => true,
-            '--force' => true,
-        ]));
+        Schema::connection($database)->getConnection()->getSchemaBuilder()->dropAllViews();
+    }
+
+    /**
+     * Drop all types for the given database connection.
+     *
+     * @param  string|null  $database  Database connection name
+     */
+    protected function dropAllTypes(?string $database): void
+    {
+        Schema::connection($database)->getConnection()->getSchemaBuilder()->dropAllTypes();
     }
 
     /**
