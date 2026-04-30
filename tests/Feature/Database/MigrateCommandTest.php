@@ -86,9 +86,20 @@ test('framework primitives provisioner assigns core admin role when creating the
     setupAuthzRoles();
     Company::provisionLicensee();
 
-    // Use provisioner directly instead of the helper function
-    $provisioner = new FrameworkPrimitivesProvisioner;
-    $user = $provisioner->provisionAdminUser();
+    $bootstrapFile = tempnam(sys_get_temp_dir(), 'blb-admin-test-');
+    file_put_contents($bootstrapFile, implode("\n", [
+        BLB_MIGRATE_COMMAND_TEST_ADMIN_NAME,
+        BLB_MIGRATE_COMMAND_TEST_ADMIN_EMAIL,
+        BLB_MIGRATE_COMMAND_TEST_ADMIN_PASSWORD,
+    ]));
+
+    try {
+        // Use provisioner directly instead of the helper function
+        $provisioner = new FrameworkPrimitivesProvisioner(null, $bootstrapFile);
+        $user = $provisioner->provisionAdminUser();
+    } finally {
+        @unlink($bootstrapFile);
+    }
 
     $role = Role::query()
         ->whereNull('company_id')

@@ -140,7 +140,9 @@ class MigrateCommand extends IlluminateMigrateCommand
 
                 // Ensure framework primitives exist (Licensee company, admin user, Lara).
                 // Runs after production seeders, before dev seeders, in all environments.
-                $this->provisionFrameworkPrimitives();
+                if (! app()->environment('testing')) {
+                    $this->provisionFrameworkPrimitives();
+                }
 
                 // Handle dev seeders (--dev flag)
                 if ($this->option('dev')) {
@@ -277,7 +279,7 @@ class MigrateCommand extends IlluminateMigrateCommand
             $bootstrapFile,
         );
 
-        $companyName = env('LICENSEE_COMPANY_NAME', 'My Company');
+        $companyName = env('LICENSEE_COMPANY_NAME');
         $companyCode = env('LICENSEE_COMPANY_CODE');
 
         $provisioner->provision($companyName, $companyCode);

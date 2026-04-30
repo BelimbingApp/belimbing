@@ -77,13 +77,8 @@ test('provisioner creates admin user with default values', function (): void {
     Company::provisionLicensee();
 
     $provisioner = new FrameworkPrimitivesProvisioner;
-    $user = $provisioner->provisionAdminUser();
-
-    expect($user)->toBeInstanceOf(User::class);
-    expect($user->email)->toBe('admin@example.com');
-    expect($user->name)->toBe('Administrator');
-    expect($user->company_id)->toBe(Company::LICENSEE_ID);
-});
+    $provisioner->provisionAdminUser();
+})->throws(\App\Base\Foundation\Exceptions\FrameworkPrimitivesNotConfiguredException::class);
 
 test('provisioner creates admin user from bootstrap file even when stale licensee users exist', function (): void {
     Company::provisionLicensee();
@@ -134,8 +129,19 @@ test('provisioner assigns core_admin role to admin user', function (): void {
     setupAuthzRoles();
     Company::provisionLicensee();
 
-    $provisioner = new FrameworkPrimitivesProvisioner;
-    $user = $provisioner->provisionAdminUser();
+    $tempFile = tempnam(sys_get_temp_dir(), 'blb-admin-test-');
+    file_put_contents($tempFile, implode("\n", [
+        BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_NAME,
+        BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_EMAIL,
+        BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_PASSWORD,
+    ]));
+
+    try {
+        $provisioner = new FrameworkPrimitivesProvisioner(null, $tempFile);
+        $user = $provisioner->provisionAdminUser();
+    } finally {
+        @unlink($tempFile);
+    }
 
     $role = Role::query()
         ->whereNull('company_id')
@@ -198,7 +204,22 @@ test('provisioner provisions all primitives in correct order', function (): void
         $messages[] = $msg;
     });
 
-    $provisioner->provision(BLB_FRAMEWORK_PROVISIONER_TEST_COMPANY_NAME, BLB_FRAMEWORK_PROVISIONER_TEST_COMPANY_CODE);
+    $tempFile = tempnam(sys_get_temp_dir(), 'blb-admin-test-');
+    file_put_contents($tempFile, implode("\n", [
+        BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_NAME,
+        BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_EMAIL,
+        BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_PASSWORD,
+    ]));
+
+    try {
+        $provisioner = new FrameworkPrimitivesProvisioner(function (string $msg) use (&$messages): void {
+            $messages[] = $msg;
+        }, $tempFile);
+
+        $provisioner->provision(BLB_FRAMEWORK_PROVISIONER_TEST_COMPANY_NAME, BLB_FRAMEWORK_PROVISIONER_TEST_COMPANY_CODE);
+    } finally {
+        @unlink($tempFile);
+    }
 
     // Verify company was created
     $company = Company::query()->findOrFail(Company::LICENSEE_ID);
@@ -216,6 +237,6 @@ test('provisioner provisions all primitives in correct order', function (): void
 
     // Verify output messages
     expect($messages)->toContain('Created licensee company: '.BLB_FRAMEWORK_PROVISIONER_TEST_COMPANY_NAME);
-    expect($messages)->toContain('Created admin user: admin@example.com');
+    expect($messages)->toContain('Created admin user: '.BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_EMAIL);
     expect($messages)->toContain('Created Lara (system Agent — orchestrator)');
 });

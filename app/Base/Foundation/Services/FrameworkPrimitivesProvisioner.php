@@ -5,6 +5,7 @@
 
 namespace App\Base\Foundation\Services;
 
+use App\Base\Foundation\Exceptions\FrameworkPrimitivesNotConfiguredException;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
@@ -54,10 +55,10 @@ class FrameworkPrimitivesProvisioner
      * Ordering: Licensee company → admin user → Lara employee.
      * Each step depends on the previous being complete.
      *
-     * @param  string  $companyName  Display name for the licensee company
+     * @param  string|null  $companyName  Display name for the licensee company
      * @param  string|null  $companyCode  Optional company code
      */
-    public function provision(string $companyName = 'My Company', ?string $companyCode = null): void
+    public function provision(?string $companyName = null, ?string $companyCode = null): void
     {
         $this->provisionLicensee($companyName, $companyCode);
         $this->provisionAdminUser();
@@ -67,12 +68,23 @@ class FrameworkPrimitivesProvisioner
     /**
      * Provision the licensee company at id=1.
      *
-     * @param  string  $name  Display name for the licensee company
+     * @param  string|null  $name  Display name for the licensee company
      * @param  string|null  $code  Optional company code (normalized to snake_case)
      * @return bool Whether the company was created (false if updated)
      */
-    public function provisionLicensee(string $name = 'My Company', ?string $code = null): bool
+    public function provisionLicensee(?string $name = null, ?string $code = null): bool
     {
+        $licenseeExists = Company::query()->whereKey(Company::LICENSEE_ID)->exists();
+
+        if (! $licenseeExists && (! is_string($name) || trim($name) === '')) {
+            throw FrameworkPrimitivesNotConfiguredException::missingLicenseeCompany();
+        }
+
+        if ($licenseeExists && (! is_string($name) || trim($name) === '')) {
+            // Already configured; nothing to update.
+            return false;
+        }
+
         $wasCreated = Company::provisionLicensee($name, $code);
 
         if ($wasCreated) {
@@ -101,38 +113,39 @@ class FrameworkPrimitivesProvisioner
             return null;
         }
 
+        $bootstrap = $this->resolveBootstrapAdminPayload();
+
+        if ($bootstrap !== null) {
+            $user = User::query()->firstOrNew(['email' => $bootstrap['email']]);
+
+            $user->forceFill([
+                'company_id' => Company::LICENSEE_ID,
+                'name' => $bootstrap['name'],
+                'password' => $bootstrap['password'],
+                'email_verified_at' => $user->email_verified_at ?? now(),
+            ]);
+
+            $wasCreated = ! $user->exists;
+            $user->save();
+
+            $licensee->assignAdminUser($user);
+            $this->ensureSystemRoleAssigned($user, 'core_admin');
+
+            if ($wasCreated) {
+                $this->log("Created admin user: {$bootstrap['email']}");
+            } else {
+                $this->log("Updated admin user: {$bootstrap['email']}");
+            }
+
+            return $user;
+        }
+
         $existingAdmin = $licensee->resolveAdminUser();
 
         if ($existingAdmin !== null) {
             $this->ensureSystemRoleAssigned($existingAdmin, 'core_admin');
 
             return $existingAdmin;
-        }
-
-        // Bootstrap payload from the setup script takes precedence over
-        // heuristic candidate adoption. The operator's explicit input must
-        // not be silently overridden by a stale user from partial seeding.
-        $bootstrap = $this->resolveBootstrapAdminPayload();
-
-        if ($bootstrap !== null) {
-            $user = User::query()->firstOrCreate(
-                ['email' => $bootstrap['email']],
-                [
-                    'company_id' => Company::LICENSEE_ID,
-                    'name' => $bootstrap['name'],
-                    'password' => $bootstrap['password'],
-                    'email_verified_at' => now(),
-                ],
-            );
-
-            $licensee->assignAdminUser($user);
-            $this->ensureSystemRoleAssigned($user, 'core_admin');
-
-            if ($user->wasRecentlyCreated) {
-                $this->log("Created admin user: {$bootstrap['email']}");
-            }
-
-            return $user;
         }
 
         // No bootstrap payload and no canonical anchor — fall back to
@@ -146,26 +159,7 @@ class FrameworkPrimitivesProvisioner
             return $existingCandidate;
         }
 
-        // Last resort: no bootstrap file, no existing users — create a
-        // default admin so the system is still bootable.
-        $user = User::query()->firstOrCreate(
-            ['email' => 'admin@example.com'],
-            [
-                'company_id' => Company::LICENSEE_ID,
-                'name' => 'Administrator',
-                'password' => 'password',
-                'email_verified_at' => now(),
-            ],
-        );
-
-        $licensee->assignAdminUser($user);
-        $this->ensureSystemRoleAssigned($user, 'core_admin');
-
-        if ($user->wasRecentlyCreated) {
-            $this->log('Created admin user: admin@example.com');
-        }
-
-        return $user;
+        throw FrameworkPrimitivesNotConfiguredException::missingAdminBootstrap();
     }
 
     /**
