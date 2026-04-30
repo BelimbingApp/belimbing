@@ -11,7 +11,6 @@ use DateInterval;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\URL;
 use InvalidArgumentException;
 
 /**
@@ -82,9 +81,7 @@ class MediaAssetStore
      */
     public function temporaryStreamUrl(MediaAsset $asset, int|DateInterval $expiresIn = 5): string
     {
-        $expires = is_int($expiresIn) ? now()->addMinutes($expiresIn) : now()->add($expiresIn);
-
-        return URL::temporarySignedRoute('media.assets.stream', $expires, ['asset' => $asset->id]);
+        return $asset->streamUrl($expiresIn);
     }
 
     /**

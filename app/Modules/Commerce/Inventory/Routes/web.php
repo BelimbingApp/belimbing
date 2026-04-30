@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-use App\Modules\Commerce\Inventory\Http\Controllers\ItemPhotoController;
 use App\Modules\Commerce\Inventory\Livewire\Items\Create;
 use App\Modules\Commerce\Inventory\Livewire\Items\Index;
 use App\Modules\Commerce\Inventory\Livewire\Items\Show;
@@ -21,8 +20,4 @@ Route::middleware(['auth'])->group(function (): void {
     Route::get('commerce/inventory/items/{item}', Show::class)
         ->middleware('authz:commerce.inventory_item.view')
         ->name('commerce.inventory.items.show');
-
-    Route::get('commerce/inventory/items/{item}/photos/{photo}', [ItemPhotoController::class, 'show'])
-        ->middleware('authz:commerce.inventory_item.view')
-        ->name('commerce.inventory.items.photos.show');
 });

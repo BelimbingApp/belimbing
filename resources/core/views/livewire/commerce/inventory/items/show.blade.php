@@ -400,14 +400,17 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     @else
                         <div class="grid grid-cols-2 gap-3">
                             @foreach ($item->photos as $photo)
-                                @php($filename = $photo->mediaAsset?->original_filename ?? '')
+                                @php($asset = $photo->mediaAsset)
+                                @php($filename = $asset?->original_filename ?? '')
                                 <div wire:key="item-photo-{{ $photo->id }}" class="group relative overflow-hidden rounded-2xl border border-border-default bg-surface-subtle">
-                                    <img
-                                        src="{{ route('commerce.inventory.items.photos.show', [$item, $photo]) }}"
-                                        alt="{{ $filename }}"
-                                        class="aspect-square w-full object-cover"
-                                        loading="lazy"
-                                    />
+                                    @if ($asset)
+                                        <img
+                                            src="{{ $asset->streamUrl() }}"
+                                            alt="{{ $filename }}"
+                                            class="aspect-square w-full object-cover"
+                                            loading="lazy"
+                                        />
+                                    @endif
 
                                     @if ($this->canEdit())
                                         <button
