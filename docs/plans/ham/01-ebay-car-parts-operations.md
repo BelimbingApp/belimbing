@@ -1,7 +1,7 @@
 # ham/01-ebay-car-parts-operations
 
 **Agent:** Amp, Codex
-**Status:** In Progress — Phase 4 AI assists
+**Status:** Phase 4 not yet started — task definitions registered; Phase 0 media subsystem still gating execution.
 **Last Updated:** 2026-04-30
 **Sources:**
 - User context: Ham, BLB early adopter, LA-based one-person eBay car-parts seller (~2,000 active listings), undergoing cancer treatment, on a tight budget. Today uses PhotoRoom (paid SaaS) for background removal and a Windows desktop for writing/photo editing/eBay work. BLB itself is AGPLv3 and the project sponsor (Kiat) is supporting Ham pro bono.
@@ -120,6 +120,8 @@ Cross-cutting framework prerequisites — these are the "beef up BLB" items, jus
 
 Each phase ends with something Ham can use. Phases 0–2 are framework work that also unlocks the next adopter.
 
+> **Critical-path note:** Phase 0's media subsystem (storage abstraction, derived-asset model) must land before Phase 4 execution begins. The current `commerce_inventory_item_photos` table writes to raw `local` storage with no parent/child relationship; without the derived-asset model in place, `photo-cleanup` would either destructively overwrite originals (violating its public contract) or have to be rebuilt once the framework lands. Treat Phase 0 media as the gating item for Phase 4.
+
 ### Phase 0 — BLB capability gaps (framework)
 
 - [ ] Media subsystem: storage abstraction, image processing queue, signed URLs, **HTTP upload endpoint**, **derived-asset model** (cleaned image is a child of the original, never an overwrite).
@@ -127,7 +129,7 @@ Each phase ends with something Ham can use. Phases 0–2 are framework work that
 - [x] `base_settings` UX/storage for operator-editable API keys, OAuth details/tokens, channel bindings, provider plan/cap metadata, company default currency, and extension defaults; Ham must never need `.env`.
 - [x] Refactor editable settings declarations out of `app/Base/Settings/Config/settings.php` into owning modules' `Config/settings.php` files, and move settings UI placement to the owning module menu. Keep Base Settings as the storage/discovery/renderer module, not the owner of Commerce, AI, or channel-specific settings. First module-owned route/menu is eBay Marketplace settings; the aggregate admin settings page remains a discovery/editing surface.
 - [x] Integration HTTP / OAuth primitive in `Core` (typed clients, token storage table, retry + rate-limit policy, webhook receiver scaffolding). First slice is implemented under `app/Base/Integration` as framework infrastructure; the module name intentionally leaves room for non-HTTP integration surfaces such as file imports/exports, SFTP/EDI, message buses, and connector health. Webhook scaffolding remains for the first channel that needs inbound callbacks.
-- [ ] AI cost visibility and failover in `Core/AI`: provider plan/cap status when available, per-task usage estimates, current-month spend, operator warnings, and explicit backup-provider routing.
+- [ ] AI cost visibility and failover in `Core/AI`: provider plan/cap status when available, per-task usage estimates, current-month spend, operator warnings, and explicit backup-provider routing. This is the canonical home for the cost UI; Phase 4 embeds it in the Workbench rather than reimplementing it.
 
 ### Phase 1 — Inventory + Catalog skeleton (framework)
 
@@ -136,7 +138,6 @@ Each phase ends with something Ham can use. Phases 0–2 are framework work that
 - [x] `app/Modules/Commerce/Inventory`: load Create Item default currency from company `base_settings` (`commerce.default_currency_code`), falling back to MYR.
 - [ ] Ham onboarding/settings: set Ham's company default currency to USD through UX/settings once his install exists.
 - [x] `app/Modules/Commerce/Inventory`: add `ItemPhoto` and the photo grid/upload surface. Currently uses raw `'local'` storage with no derived-asset linkage — the Phase 0 media subsystem (storage abstraction, signed URLs, derived-asset model) is still the upstream prerequisite before Phase 4's `photo-cleanup` task can attach cleaned children to originals.
-- [ ] `app/Modules/Commerce/Inventory`: formalize lifecycle transitions beyond the initial status field when marketplace/photo/AI flows need them.
 - [x] `app/Modules/Commerce/Catalog`: `ProductTemplate`, `Category`, generic `Attribute`/`AttributeValue`, versioned `Description`, and generic dev seeder.
 - [x] Operator UX first slice (desktop-first): Inventory Workbench lists items, filters by search, and creates the durable item record with unit cost/target price/status/notes.
 - [x] Operator UX next slices: show/edit item surfaces for reviewing and correcting the durable item record.
@@ -168,8 +169,8 @@ Each phase ends with something Ham can use. Phases 0–2 are framework work that
 - [ ] `photo-cleanup` execution: input image → cleaned (background-removed) image stored as a derived asset of the original; runs in the queue, surfaces in the Workbench when ready.
 - [ ] `describe-item` execution: photos + attributes → draft title, draft description, suggested category.
 - [ ] Workbench integration: drop raw photos in, see cleaned versions appear; one-click description draft, side-by-side review, accept-into-`Description`-version.
-- [ ] Cost UI: Ham sees primary provider plan/cap status where available, current-month AI usage/spend split by task, and backup-provider usage at the top of the Workbench.
-- [ ] Ham extension: car-parts-tuned `describe-item` prompt (fitment table, condition disclosure, OEM/interchange callout) and a sensible default `photo-cleanup` model pick.
+- [ ] Workbench surfaces the Phase 0 cost UI (provider plan/cap status, per-task spend, backup-provider usage) inline at the top — embedding the framework surface, not reimplementing it.
+- [ ] Wire Ham's already-seeded `describe-item` and `photo-cleanup` prompt overrides (in `extensions/ham/auto-parts/Config/auto-parts.php`) into the running tasks, and pick a sensible default `photo-cleanup` model.
 
 ### Phase 5 — Lara phone channel (framework + Ham bindings)
 
@@ -189,6 +190,7 @@ The headline listing time-saver, but also the least-known integration. Built on 
 
 - [ ] Research the current eBay Sell API write model for Ham's category set: Inventory/Offer flow, category/aspect requirements, policy IDs, revision/end semantics, sandbox/live differences, and any account eligibility blockers.
 - [ ] Extend the `MarketplaceChannel` contract with `createListing()`, `reviseListing()`, `endListing()`.
+- [ ] Formalize Inventory lifecycle transitions (`draft → ready → listed → sold → archived`) when the publish path needs to enforce them — e.g., only `ready` items can be published, and `endListing` returns an item to `ready`. Until this phase forces it, the existing `status` string column is enough.
 - [ ] eBay adapter implementations of the above against the Sell APIs (Inventory + Offer model), including category-aspect submission and per-store policy ID resolution.
 - [ ] One-time eBay onboarding flow in BLB: developer-app credential capture through `base_settings` UX, OAuth grant, store policy import (shipping / return / payment), category mapping import.
 - [ ] Workbench "publish to eBay" action with a dry-run/diff preview before commit; surface eBay validation errors inline against the offending attribute.
