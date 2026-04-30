@@ -195,8 +195,8 @@ final class AnomalyCollector
         $anomalies[] = [
             'type' => 'unknown_keys',
             'severity' => 'warning',
-            'label' => __('Unknown delta keys'),
-            'detail' => __('Provider delta contained keys the formatter does not recognize: :keys', [
+            'label' => __('Unknown provider keys'),
+            'detail' => __('Provider chunks contained keys the formatter does not recognize: :keys', [
                 'keys' => implode(', ', array_keys($unknownKeys)),
             ]),
             'entry_numbers' => array_values(array_unique($unknownKeyEntries)),

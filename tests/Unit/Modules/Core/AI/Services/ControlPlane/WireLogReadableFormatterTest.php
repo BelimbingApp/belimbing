@@ -375,3 +375,75 @@ it('uses OpenAI Responses completed tool arguments as the authoritative JSON art
         ->and($toolCall['arguments_valid_json'])->toBeTrue()
         ->and($toolCall['source_entries'])->toBe([2, 4, 6]);
 });
+
+it('extracts usage from the choice-level field used by Moonshot/Kimi without flagging an anomaly', function (): void {
+    $usagePayload = [
+        'prompt_tokens' => 1754,
+        'completion_tokens' => 128,
+        'total_tokens' => 1882,
+    ];
+
+    $entries = [
+        wlrfStreamChunk(1, ['content' => 'reply']),
+        wlrfStreamChunk(2, [], finishReason: 'tool_calls', extraChoiceKeys: ['usage' => $usagePayload]),
+    ];
+
+    $result = (new WireLogReadableFormatter)->format($entries);
+
+    $unknownKeyAnomaly = collect($result['anomalies'])->firstWhere('type', 'unknown_keys');
+    expect($unknownKeyAnomaly)->toBeNull();
+
+    $streamBlock = $result['attempts'][0]['sections'][0];
+    expect($streamBlock['usage'])->toBe($usagePayload);
+});
+
+it('extracts usage from the top-level field used by standard OpenAI Chat Completions', function (): void {
+    $usagePayload = [
+        'prompt_tokens' => 50,
+        'completion_tokens' => 10,
+        'total_tokens' => 60,
+    ];
+
+    // Standard OpenAI emits the final chunk with finish_reason and a top-level `usage`.
+    $rawLine = 'data: '.json_encode([
+        'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']],
+        'usage' => $usagePayload,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    $entries = [
+        wlrfStreamChunk(1, ['content' => 'reply']),
+        wlrfEntry(2, 'llm.stream_line', ['raw_line' => $rawLine]),
+    ];
+
+    $result = (new WireLogReadableFormatter)->format($entries);
+
+    $streamBlock = $result['attempts'][0]['sections'][0];
+    expect($streamBlock['usage'])->toBe($usagePayload);
+});
+
+it('extracts usage from the empty-choice chunk OpenAI sends when include_usage is enabled', function (): void {
+    $usagePayload = [
+        'prompt_tokens' => 50,
+        'completion_tokens' => 10,
+        'total_tokens' => 60,
+    ];
+
+    $rawLine = 'data: '.json_encode([
+        'choices' => [],
+        'usage' => $usagePayload,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    $entries = [
+        wlrfStreamChunk(1, ['content' => 'reply']),
+        wlrfStreamChunk(2, [], finishReason: 'stop'),
+        wlrfEntry(3, 'llm.stream_line', ['raw_line' => $rawLine]),
+    ];
+
+    $result = (new WireLogReadableFormatter)->format($entries);
+
+    $unknownKeyAnomaly = collect($result['anomalies'])->firstWhere('type', 'unknown_keys');
+    expect($unknownKeyAnomaly)->toBeNull();
+
+    $streamBlock = $result['attempts'][0]['sections'][0];
+    expect($streamBlock['usage'])->toBe($usagePayload);
+});

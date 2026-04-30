@@ -20,6 +20,7 @@ use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorderStartInput;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\ControlPlane\WireLoggingTransportTap;
+use App\Modules\Core\AI\Values\CallUsage;
 use Illuminate\Support\Str;
 
 /**
@@ -525,6 +526,8 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return $errorResult;
             }
 
+            $this->recordSuccessfulSyncCall($runId, $iteration, $config, $result);
+
             if (($result['tool_calls'] ?? []) === []) {
                 $successResult = $this->successResult(
                     $runId,
@@ -556,6 +559,28 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
 
             $iteration++;
         }
+    }
+
+    /**
+     * Persist usage for one successful synchronous tool-loop LLM call.
+     *
+     * Failed retry attempts currently have no provider usage payload, so only
+     * the successful result for each logical loop iteration is recorded.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $result
+     */
+    private function recordSuccessfulSyncCall(string $runId, int $iteration, array $config, array $result): void
+    {
+        $this->runRecorder->recordCall(
+            runId: $runId,
+            attemptIndex: $iteration,
+            provider: $config['provider_name'] ?? null,
+            model: $config['model'] ?? null,
+            finishReason: ($result['tool_calls'] ?? []) !== [] ? 'tool_calls' : 'stop',
+            latencyMs: isset($result['latency_ms']) ? (int) $result['latency_ms'] : null,
+            usage: CallUsage::fromProviderArray(is_array($result['usage'] ?? null) ? $result['usage'] : null),
+        );
     }
 
     /**
@@ -874,6 +899,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 $credentials,
                 $toolLoopState,
                 $apiType,
+                $iteration,
             );
 
             if (isset($iterResult['runtime_error'])) {

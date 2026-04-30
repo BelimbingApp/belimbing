@@ -45,6 +45,10 @@ final class StreamAssembler
         'finish_reason',
         'native_finish_reason',
         'logprobs',
+        // Some providers (e.g. Moonshot/Kimi) emit `usage` inside the final choice
+        // rather than at the top of the chunk. Recognize it here and surface it
+        // structurally instead of treating it as an unknown key.
+        'usage',
     ];
 
     /**
@@ -64,12 +68,19 @@ final class StreamAssembler
         $unknownKeyEntries = [];
         $pendingEventType = null;
         $responsesMessagePhase = null;
+        $usage = null;
 
         foreach ($entries as $entry) {
             $fragment = $this->buildFragment($entry, $previousAt, $diffMs, $pendingEventType, $responsesMessagePhase);
             $previousAt = $fragment['at'];
 
             $this->trackUnknownKeys($fragment, $unknownKeys, $unknownKeyEntries);
+
+            if (is_array($fragment['usage'] ?? null) && $fragment['usage'] !== []) {
+                // Last usage wins — the provider's terminal chunk supersedes any
+                // partial usage reported earlier in the stream.
+                $usage = $fragment['usage'];
+            }
 
             $rawFragments[] = $fragment;
             $this->mergeArtifactsFromFragment(
@@ -117,6 +128,7 @@ final class StreamAssembler
             'max_gap_ms' => $maxGapMs,
             'unknown_keys' => array_keys($unknownKeys),
             'unknown_key_entries' => array_values(array_unique($unknownKeyEntries)),
+            'usage' => $usage,
         ];
     }
 
@@ -254,6 +266,7 @@ final class StreamAssembler
             'has_gap_warning' => $gapMs !== null && $gapMs > self::GAP_WARNING_MS,
             'raw_line' => $rawLine,
             'unknown_keys' => [],
+            'usage' => null,
         ];
 
         $previewStatusFragment = $this->previewStatusFragment($base, $previewStatus);
@@ -397,6 +410,14 @@ final class StreamAssembler
      */
     private function classifySseChunk(array $base, array $payload): array
     {
+        // OpenAI emits the terminal usage chunk with `choices: []` when
+        // `stream_options.include_usage` is enabled. Capture top-level usage
+        // before the choice guard so that chunk is not reduced to opaque raw JSON.
+        $topLevelUsage = is_array($payload['usage'] ?? null) ? $payload['usage'] : null;
+        if ($topLevelUsage !== null) {
+            $base['usage'] = $topLevelUsage;
+        }
+
         $choice = $payload['choices'][0] ?? null;
 
         if (! is_array($choice)) {
@@ -415,6 +436,13 @@ final class StreamAssembler
         $unknownKeys = array_values(array_diff(array_keys($delta), self::KNOWN_DELTA_KEYS));
         $unknownChoiceKeys = array_values(array_diff(array_keys($choice), self::KNOWN_CHOICE_KEYS));
         $base['unknown_keys'] = array_merge($unknownKeys, $unknownChoiceKeys);
+
+        // OpenAI puts `usage` at the top of the chunk; Moonshot/Kimi put it inside
+        // the final choice. Capture either so the run detail can render token totals.
+        $usage = $topLevelUsage ?? (is_array($choice['usage'] ?? null) ? $choice['usage'] : null);
+        if ($usage !== null) {
+            $base['usage'] = $usage;
+        }
 
         $content = $this->contentFragment($base, $delta);
         if ($content !== null) {

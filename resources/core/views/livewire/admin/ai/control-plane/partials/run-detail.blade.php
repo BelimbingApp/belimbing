@@ -83,14 +83,32 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
     </div>
 
     {{-- Tokens and timing --}}
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Tokens (prompt)') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['tokens']['prompt'] ?? '—' }}</p>
+            <p class="text-sm text-ink mt-1 tabular-nums">
+                {{ isset($run['tokens']['prompt']) ? number_format((int) $run['tokens']['prompt']) : '—' }}
+                @if(! empty($run['tokens']['cached_input']))
+                    <span class="text-muted text-xs">({{ __(':n cached', ['n' => number_format((int) $run['tokens']['cached_input'])]) }})</span>
+                @endif
+            </p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Tokens (completion)') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['tokens']['completion'] ?? '—' }}</p>
+            <p class="text-sm text-ink mt-1 tabular-nums">
+                {{ isset($run['tokens']['completion']) ? number_format((int) $run['tokens']['completion']) : '—' }}
+                @if(! empty($run['tokens']['reasoning']))
+                    <span class="text-muted text-xs">({{ __(':n reasoning', ['n' => number_format((int) $run['tokens']['reasoning'])]) }})</span>
+                @endif
+            </p>
+        </div>
+        <div>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Tokens (total)') }}</span>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ isset($run['tokens']['total']) ? number_format((int) $run['tokens']['total']) : '—' }}</p>
+        </div>
+        <div>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('LLM Calls') }}</span>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ number_format((int) ($run['call_count'] ?? 0)) }}</p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Retries') }}</span>
@@ -103,6 +121,45 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
             </p>
         </div>
     </div>
+
+    {{-- Per-call usage table --}}
+    @if(! empty($run['calls']))
+        <div>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Calls') }}</span>
+            <div class="mt-1 overflow-x-auto">
+                <table class="min-w-full text-xs">
+                    <thead class="bg-surface-subtle/80 text-muted uppercase tracking-wider">
+                        <tr>
+                            <th class="text-left py-table-cell-y px-table-cell-x font-semibold">#</th>
+                            <th class="text-left py-table-cell-y px-table-cell-x font-semibold">{{ __('Model') }}</th>
+                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Prompt') }}</th>
+                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Cached') }}</th>
+                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Completion') }}</th>
+                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Reasoning') }}</th>
+                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Total') }}</th>
+                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Latency') }}</th>
+                            <th class="text-left py-table-cell-y px-table-cell-x font-semibold">{{ __('Finish') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border-default">
+                        @foreach($run['calls'] as $call)
+                            <tr>
+                                <td class="py-table-cell-y px-table-cell-x tabular-nums text-ink">{{ (int) $call['attempt_index'] + 1 }}</td>
+                                <td class="py-table-cell-y px-table-cell-x text-ink">{{ $call['model'] ?? '—' }}</td>
+                                <td class="py-table-cell-y px-table-cell-x tabular-nums text-right text-ink">{{ $call['prompt_tokens'] !== null ? number_format((int) $call['prompt_tokens']) : '—' }}</td>
+                                <td class="py-table-cell-y px-table-cell-x tabular-nums text-right text-muted">{{ $call['cached_input_tokens'] !== null ? number_format((int) $call['cached_input_tokens']) : '—' }}</td>
+                                <td class="py-table-cell-y px-table-cell-x tabular-nums text-right text-ink">{{ $call['completion_tokens'] !== null ? number_format((int) $call['completion_tokens']) : '—' }}</td>
+                                <td class="py-table-cell-y px-table-cell-x tabular-nums text-right text-muted">{{ $call['reasoning_tokens'] !== null ? number_format((int) $call['reasoning_tokens']) : '—' }}</td>
+                                <td class="py-table-cell-y px-table-cell-x tabular-nums text-right text-ink">{{ $call['total_tokens'] !== null ? number_format((int) $call['total_tokens']) : '—' }}</td>
+                                <td class="py-table-cell-y px-table-cell-x tabular-nums text-right text-muted">{{ $call['latency_ms'] !== null ? number_format((int) $call['latency_ms']) . ' ms' : '—' }}</td>
+                                <td class="py-table-cell-y px-table-cell-x text-muted">{{ $call['finish_reason'] ?? '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
 
     {{-- Timestamps and context --}}
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">

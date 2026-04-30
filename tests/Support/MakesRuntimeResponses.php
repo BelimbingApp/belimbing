@@ -161,6 +161,7 @@ trait MakesRuntimeResponses
                 $llmClient,
                 \Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
                 app(AgenticExecutionControlResolver::class),
+                $runRecorder,
             ),
             app(RuntimeSessionContext::class),
             \Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),

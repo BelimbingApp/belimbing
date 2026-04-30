@@ -140,7 +140,13 @@ describe('RunInspection', function () {
             ->and($dto->model)->toBe('unknown')
             ->and($dto->outcome)->toBe('success')
             ->and($dto->latencyMs)->toBeNull()
-            ->and($dto->tokens)->toBe(['prompt' => null, 'completion' => null])
+            ->and($dto->tokens)->toBe([
+                'prompt' => null,
+                'cached_input' => null,
+                'completion' => null,
+                'reasoning' => null,
+                'total' => null,
+            ])
             ->and($dto->toolActions)->toBe([])
             ->and($dto->retryAttempts)->toBe(0);
     });

@@ -114,7 +114,8 @@ final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
 
         $delta = $data['choices'][0]['delta'] ?? [];
         $finishReason = $data['choices'][0]['finish_reason'] ?? $finishReason;
-        $usage = $data['usage'] ?? null;
+        // OpenAI puts `usage` at the top level; Moonshot/Kimi puts it inside `choices[0]`.
+        $usage = $data['usage'] ?? $data['choices'][0]['usage'] ?? null;
 
         $contentDelta = $delta['content'] ?? null;
         if (is_string($contentDelta) && $contentDelta !== '') {
@@ -142,16 +143,73 @@ final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
         if ($finishReason !== null && is_array($usage)) {
             yield $this->buildDoneEvent(
                 $finishReason,
-                [
-                    'prompt_tokens' => $usage['prompt_tokens'] ?? null,
-                    'completion_tokens' => $usage['completion_tokens'] ?? null,
-                ],
+                self::normalizeUsage($usage),
                 $startTime,
                 $mapping,
             );
 
             $finishReason = '__done__';
         }
+    }
+
+    /**
+     * Normalize OpenAI / Moonshot / Kimi style `usage` into the extended shape
+     * the rest of the system consumes.
+     *
+     * Recognizes:
+     * - `prompt_tokens` / `completion_tokens` / `total_tokens` (standard)
+     * - `prompt_tokens_details.cached_tokens` (OpenAI prompt cache)
+     * - `completion_tokens_details.reasoning_tokens` (o-series / GPT-5 reasoning)
+     *
+     * @param  array<string, mixed>  $usage
+     * @return array{
+     *     prompt_tokens: int|null,
+     *     cached_input_tokens: int|null,
+     *     completion_tokens: int|null,
+     *     reasoning_tokens: int|null,
+     *     total_tokens: int|null,
+     *     raw: array<string, mixed>
+     * }
+     */
+    private static function normalizeUsage(array $usage): array
+    {
+        $promptDetails = is_array($usage['prompt_tokens_details'] ?? null) ? $usage['prompt_tokens_details'] : [];
+        $completionDetails = is_array($usage['completion_tokens_details'] ?? null) ? $usage['completion_tokens_details'] : [];
+
+        $promptTokens = self::asNullableInt($usage['prompt_tokens'] ?? null);
+        $completionTokens = self::asNullableInt($usage['completion_tokens'] ?? null);
+
+        return [
+            'prompt_tokens' => $promptTokens,
+            'cached_input_tokens' => self::asNullableInt($promptDetails['cached_tokens'] ?? null),
+            'completion_tokens' => $completionTokens,
+            'reasoning_tokens' => self::asNullableInt($completionDetails['reasoning_tokens'] ?? null),
+            'total_tokens' => self::asNullableInt($usage['total_tokens'] ?? null)
+                ?? self::derivedTotal($promptTokens, $completionTokens),
+            'raw' => $usage,
+        ];
+    }
+
+    private static function asNullableInt(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
+
+        return null;
+    }
+
+    private static function derivedTotal(?int $prompt, ?int $completion): ?int
+    {
+        if ($prompt === null && $completion === null) {
+            return null;
+        }
+
+        return ($prompt ?? 0) + ($completion ?? 0);
     }
 
     /**
@@ -181,10 +239,7 @@ final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
 
         $result = [
             'content' => $content,
-            'usage' => [
-                'prompt_tokens' => $usage['prompt_tokens'] ?? null,
-                'completion_tokens' => $usage['completion_tokens'] ?? null,
-            ],
+            'usage' => self::normalizeUsage($usage),
             'latency_ms' => $latencyMs,
         ];
 

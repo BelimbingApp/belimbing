@@ -61,7 +61,14 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
     }
 
     /**
-     * @param  array{prompt_tokens: int|null, completion_tokens: int|null}|null  $usage
+     * @param  array{
+     *     prompt_tokens?: int|null,
+     *     cached_input_tokens?: int|null,
+     *     completion_tokens?: int|null,
+     *     reasoning_tokens?: int|null,
+     *     total_tokens?: int|null,
+     *     raw?: array<string, mixed>|null
+     * }|null  $usage
      * @param  array<string, mixed>  $extra
      * @return array<string, mixed>
      */

@@ -28,7 +28,21 @@ final readonly class RunInspection
      * @param  string  $model  Model identifier used for this run
      * @param  string  $outcome  Run outcome: 'success', 'error', 'cancelled', or 'unknown'
      * @param  int|null  $latencyMs  Total run latency in milliseconds
-     * @param  array{prompt: int|null, completion: int|null}  $tokens  Token usage
+     * @param  array{prompt: int|null, cached_input: int|null, completion: int|null, reasoning: int|null, total: int|null}  $tokens  Token usage
+     * @param  list<array{
+     *     attempt_index: int,
+     *     provider: string|null,
+     *     model: string|null,
+     *     finish_reason: string|null,
+     *     latency_ms: int|null,
+     *     prompt_tokens: int|null,
+     *     cached_input_tokens: int|null,
+     *     completion_tokens: int|null,
+     *     reasoning_tokens: int|null,
+     *     total_tokens: int|null,
+     *     pricing_source: string|null,
+     *     cost_total_cents: int|null
+     * }>  $calls  Per-LLM-call usage rows
      * @param  list<array{tool: string, result_length: int|null}>  $toolActions  Summary of tool invocations
      * @param  list<array{provider: string, model: string, error: string}>  $fallbackAttempts  Provider fallback history
      * @param  int  $retryAttempts  Number of retry attempts
@@ -44,6 +58,8 @@ final readonly class RunInspection
      * @param  int|null  $actingForUserId  User on whose behalf the agent acted
      * @param  string|null  $actingForUserName  Display name for {@see $actingForUserId} when resolvable
      * @param  string|null  $employeeName  Display name for the agent employee when resolvable
+     * @param  int|null  $costTotalCents  Total priced run cost in cents when available
+     * @param  string|null  $pricingVersion  Pricing snapshot or override version used for costing
      */
     public function __construct(
         public string $runId,
@@ -70,6 +86,10 @@ final readonly class RunInspection
         public ?int $actingForUserId = null,
         public ?string $actingForUserName = null,
         public ?string $employeeName = null,
+        public ?int $costTotalCents = null,
+        public ?string $pricingVersion = null,
+        public int $callCount = 0,
+        public array $calls = [],
     ) {}
 
     /**
@@ -103,7 +123,10 @@ final readonly class RunInspection
             latencyMs: isset($meta['latency_ms']) ? (int) $meta['latency_ms'] : null,
             tokens: [
                 'prompt' => $meta['tokens']['prompt'] ?? null,
+                'cached_input' => $meta['tokens']['cached_input'] ?? null,
                 'completion' => $meta['tokens']['completion'] ?? null,
+                'reasoning' => $meta['tokens']['reasoning'] ?? null,
+                'total' => $meta['tokens']['total'] ?? null,
             ],
             toolActions: self::normalizeToolActions($meta['tool_actions'] ?? []),
             fallbackAttempts: is_array($meta['fallback_attempts'] ?? null) ? $meta['fallback_attempts'] : [],
@@ -138,7 +161,10 @@ final readonly class RunInspection
             latencyMs: $run->latency_ms,
             tokens: [
                 'prompt' => $run->prompt_tokens,
+                'cached_input' => $run->cached_input_tokens,
                 'completion' => $run->completion_tokens,
+                'reasoning' => $run->reasoning_tokens,
+                'total' => $run->total_tokens,
             ],
             toolActions: self::normalizeToolActions($run->tool_actions ?? []),
             fallbackAttempts: $run->fallback_attempts ?? [],
@@ -155,6 +181,10 @@ final readonly class RunInspection
             actingForUserId: $run->acting_for_user_id,
             actingForUserName: self::resolveActingForUserName($run),
             employeeName: self::resolveEmployeeDisplayName($run),
+            costTotalCents: $run->cost_total_cents,
+            pricingVersion: $run->pricing_version,
+            callCount: $run->call_count ?? 0,
+            calls: self::normalizeCalls($run),
         );
     }
 
@@ -193,6 +223,29 @@ final readonly class RunInspection
     }
 
     /**
+     * @return list<array<string, mixed>>
+     */
+    private static function normalizeCalls(AiRun $run): array
+    {
+        return $run->calls
+            ->map(fn ($call): array => [
+                'attempt_index' => (int) $call->attempt_index,
+                'provider' => $call->provider,
+                'model' => $call->model,
+                'finish_reason' => $call->finish_reason,
+                'latency_ms' => $call->latency_ms,
+                'prompt_tokens' => $call->prompt_tokens,
+                'cached_input_tokens' => $call->cached_input_tokens,
+                'completion_tokens' => $call->completion_tokens,
+                'reasoning_tokens' => $call->reasoning_tokens,
+                'total_tokens' => $call->total_tokens,
+                'pricing_source' => $call->pricing_source,
+                'cost_total_cents' => $call->cost_total_cents,
+            ])
+            ->all();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(): array
@@ -222,6 +275,10 @@ final readonly class RunInspection
             'finished_at' => $this->finishedAt,
             'acting_for_user_id' => $this->actingForUserId,
             'acting_for_user_name' => $this->actingForUserName,
+            'cost_total_cents' => $this->costTotalCents,
+            'pricing_version' => $this->pricingVersion,
+            'call_count' => $this->callCount,
+            'calls' => $this->calls,
         ];
     }
 

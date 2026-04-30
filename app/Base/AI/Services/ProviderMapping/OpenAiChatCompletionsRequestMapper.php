@@ -24,6 +24,9 @@ final class OpenAiChatCompletionsRequestMapper implements ProviderRequestMapper
             'messages' => $request->messages,
             'max_tokens' => $request->executionControls->limits->maxOutputTokens,
             'stream' => $stream ? true : null,
+            'stream_options' => $stream && $request->providerName === 'openai'
+                ? ['include_usage' => true]
+                : null,
             'tools' => $this->normalizeTools($request->tools),
             'tool_choice' => $request->executionControls->tools->choice?->value,
         ];

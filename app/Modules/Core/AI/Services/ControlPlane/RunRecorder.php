@@ -9,7 +9,9 @@ use App\Base\AI\DTO\AiRuntimeError;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Models\AiRunCall;
 use App\Modules\Core\AI\Services\MessageManager;
+use App\Modules\Core\AI\Values\CallUsage;
 
 /**
  * Records AI run lifecycle events to the ai_runs ledger.
@@ -75,6 +77,11 @@ class RunRecorder
             'meta' => $this->sanitizeMeta($meta),
             'finished_at' => now(),
         ]);
+
+        // If per-call rows have been recorded, prefer the summed aggregates over
+        // the single-iteration tokens written above. Multi-call tool loops would
+        // otherwise persist only the final iteration's token counts.
+        $this->refreshRunAggregates($runId);
     }
 
     /**
@@ -119,6 +126,103 @@ class RunRecorder
         AiRun::query()
             ->where('id', $runId)
             ->update(['dispatch_id' => $dispatchId]);
+    }
+
+    /**
+     * Record one LLM call against the run and refresh run-level aggregates.
+     *
+     * Idempotent on `(run_id, attempt_index)`: the same attempt index recorded
+     * twice updates the existing row rather than inserting a duplicate. This
+     * matters because the streaming pipeline may emit a final `done` event
+     * twice (once on finish_reason+usage, once on `[DONE]`).
+     */
+    public function recordCall(
+        string $runId,
+        int $attemptIndex,
+        ?string $provider,
+        ?string $model,
+        ?string $finishReason,
+        ?int $latencyMs,
+        ?CallUsage $usage,
+    ): ?AiRunCall {
+        if (! AiRun::query()->whereKey($runId)->exists()) {
+            // Run row not yet started (or already pruned) — drop silently to keep
+            // the recorder safe to call from any seam.
+            return null;
+        }
+
+        $finishedAt = now();
+        $startedAt = $latencyMs !== null && $latencyMs > 0
+            ? $finishedAt->copy()->subMilliseconds($latencyMs)
+            : $finishedAt;
+
+        $call = AiRunCall::query()->updateOrCreate(
+            [
+                'run_id' => $runId,
+                'attempt_index' => $attemptIndex,
+            ],
+            [
+                'provider' => $provider,
+                'model' => $model,
+                'finish_reason' => $finishReason,
+                'latency_ms' => $latencyMs,
+                'prompt_tokens' => $usage?->promptTokens,
+                'cached_input_tokens' => $usage?->cachedInputTokens,
+                'completion_tokens' => $usage?->completionTokens,
+                'reasoning_tokens' => $usage?->reasoningTokens,
+                'total_tokens' => $usage?->totalTokens,
+                'raw_usage' => $usage?->raw,
+                'started_at' => $startedAt,
+                'finished_at' => $finishedAt,
+            ],
+        );
+
+        $this->refreshRunAggregates($runId);
+
+        return $call;
+    }
+
+    /**
+     * Recompute `ai_runs` token / call aggregates from `ai_run_calls`.
+     *
+     * No-op when no per-call rows exist for the run, so legacy callers that
+     * never invoke {@see recordCall()} keep whatever prompt_tokens /
+     * completion_tokens values {@see complete()} wrote directly.
+     */
+    private function refreshRunAggregates(string $runId): void
+    {
+        $aggregates = AiRunCall::query()
+            ->where('run_id', $runId)
+            ->selectRaw('
+                COUNT(*) as call_count,
+                SUM(prompt_tokens) as prompt_tokens,
+                SUM(cached_input_tokens) as cached_input_tokens,
+                SUM(completion_tokens) as completion_tokens,
+                SUM(reasoning_tokens) as reasoning_tokens,
+                SUM(total_tokens) as total_tokens,
+                SUM(cost_input_cents) as cost_input_cents,
+                SUM(cost_output_cents) as cost_output_cents,
+                SUM(cost_total_cents) as cost_total_cents
+            ')
+            ->first();
+
+        if ($aggregates === null || (int) ($aggregates->call_count ?? 0) === 0) {
+            return;
+        }
+
+        AiRun::query()
+            ->where('id', $runId)
+            ->update([
+                'call_count' => (int) $aggregates->call_count,
+                'prompt_tokens' => $aggregates->prompt_tokens !== null ? (int) $aggregates->prompt_tokens : null,
+                'cached_input_tokens' => $aggregates->cached_input_tokens !== null ? (int) $aggregates->cached_input_tokens : null,
+                'completion_tokens' => $aggregates->completion_tokens !== null ? (int) $aggregates->completion_tokens : null,
+                'reasoning_tokens' => $aggregates->reasoning_tokens !== null ? (int) $aggregates->reasoning_tokens : null,
+                'total_tokens' => $aggregates->total_tokens !== null ? (int) $aggregates->total_tokens : null,
+                'cost_input_cents' => $aggregates->cost_input_cents !== null ? (int) $aggregates->cost_input_cents : null,
+                'cost_output_cents' => $aggregates->cost_output_cents !== null ? (int) $aggregates->cost_output_cents : null,
+                'cost_total_cents' => $aggregates->cost_total_cents !== null ? (int) $aggregates->cost_total_cents : null,
+            ]);
     }
 
     /**

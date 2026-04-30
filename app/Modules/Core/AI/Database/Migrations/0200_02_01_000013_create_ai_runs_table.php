@@ -11,6 +11,9 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
+     *
+     * Per-run aggregates (cached / reasoning / total tokens, cost cents, call_count)
+     * summarize child `ai_run_calls` rows once that ledger is populated.
      */
     public function up(): void
     {
@@ -30,6 +33,14 @@ return new class extends Migration
             $table->unsignedInteger('latency_ms')->nullable();
             $table->unsignedInteger('prompt_tokens')->nullable();
             $table->unsignedInteger('completion_tokens')->nullable();
+            $table->unsignedInteger('cached_input_tokens')->nullable();
+            $table->unsignedInteger('reasoning_tokens')->nullable();
+            $table->unsignedInteger('total_tokens')->nullable();
+            $table->unsignedInteger('cost_input_cents')->nullable();
+            $table->unsignedInteger('cost_output_cents')->nullable();
+            $table->unsignedInteger('cost_total_cents')->nullable();
+            $table->string('pricing_version', 64)->nullable();
+            $table->unsignedInteger('call_count')->default(0);
             $table->json('retry_attempts')->nullable();
             $table->json('fallback_attempts')->nullable();
             $table->json('tool_actions')->nullable();

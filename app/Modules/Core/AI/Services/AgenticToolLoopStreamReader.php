@@ -11,8 +11,10 @@ use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
+use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\ControlPlane\WireLoggingTransportTap;
+use App\Modules\Core\AI\Values\CallUsage;
 
 /**
  * Consumes one LLM chat stream iteration for the agentic tool loop.
@@ -26,6 +28,7 @@ final class AgenticToolLoopStreamReader
         private readonly LlmClient $llmClient,
         private readonly WireLogger $wireLogger,
         private readonly AgenticExecutionControlResolver $executionControls,
+        private readonly RunRecorder $runRecorder,
     ) {}
 
     /**
@@ -45,6 +48,7 @@ final class AgenticToolLoopStreamReader
         array $credentials,
         array &$toolLoopState,
         AiApiType $apiType,
+        int $iteration = 0,
     ): \Generator {
         $executionControls = $this->executionControls->resolve(
             $config['execution_controls'],
@@ -105,6 +109,16 @@ final class AgenticToolLoopStreamReader
             $tc['function']['arguments'] = $streamState['tool_call_args'][$index] ?? '{}';
         }
         unset($tc);
+
+        $this->runRecorder->recordCall(
+            runId: $runId,
+            attemptIndex: $iteration,
+            provider: $config['provider_name'] ?? null,
+            model: $config['model'] ?? null,
+            finishReason: is_string($streamState['finish_reason']) ? $streamState['finish_reason'] : null,
+            latencyMs: $streamState['latency_ms'] > 0 ? $streamState['latency_ms'] : null,
+            usage: CallUsage::fromProviderArray(is_array($streamState['usage']) ? $streamState['usage'] : null),
+        );
 
         return [
             'content' => $streamState['commentary'] !== '' ? $streamState['commentary'] : $streamState['content'],

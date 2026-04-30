@@ -143,6 +143,40 @@ describe('LlmClient tool calling request payloads', function () {
 
 describe('LlmClient provider-specific request payloads', function () {
 
+    it('requests usage chunks for OpenAI Chat Completions streams', function () {
+        $payload = <<<'SSE'
+data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}],"usage":null}
+
+data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":null}
+
+data: {"choices":[],"usage":{"prompt_tokens":12,"completion_tokens":4,"total_tokens":16}}
+
+data: [DONE]
+SSE;
+
+        Http::fake([
+            '*/chat/completions' => Http::response($payload, 200, ['Content-Type' => 'text/event-stream']),
+        ]);
+
+        $client = new LlmClient;
+        $events = iterator_to_array($client->chatStream(new ChatRequest(
+            TEST_API_BASE_URL,
+            'openai-key',
+            'gpt-5.4',
+            [['role' => 'user', 'content' => 'Hello']],
+            providerName: 'openai',
+        )));
+
+        expect(collect($events)->firstWhere('type', 'done')['usage']['total_tokens'] ?? null)->toBe(16);
+
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+
+            return ($body['stream'] ?? null) === true
+                && ($body['stream_options']['include_usage'] ?? null) === true;
+        });
+    });
+
     it('maps GitHub Copilot IDE headers through provider request mapping', function () {
         fakeChatCompletionText();
 
