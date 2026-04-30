@@ -55,9 +55,9 @@ Hardcoded prices in `config/*.php` go stale silently and cannot survive multi-te
 
 1. **Override resolver** — small `ai_pricing_overrides` table for self-hosted models, custom enterprise rates, or to correct an upstream entry.
 2. **Provider API resolver** — currently `OpenRouter` (`GET /api/v1/models` returns per-model `pricing.prompt`, `pricing.completion`, `pricing.input_cache_read`, etc.); future providers if/when they ship an API.
-3. **LiteLLM snapshot resolver** — nightly fetch of BerriAI's MIT-licensed `model_prices_and_context_window.json` into `ai_pricing_snapshots(model, input_per_token, cached_input_per_token, output_per_token, snapshot_date)`. This is the *de facto* shared OSS pricing source and covers OpenAI, Anthropic, Google, Mistral, Bedrock, Azure, Vertex, Groq, etc.
+3. **LiteLLM snapshot resolver** — nightly fetch of BerriAI's MIT-licensed `model_prices_and_context_window.json` into `ai_pricing_snapshots(model, input_usd_per_million_tokens, cached_input_usd_per_million_tokens, output_usd_per_million_tokens, snapshot_date)`. This is the *de facto* shared OSS pricing source and covers OpenAI, Anthropic, Google, Mistral, Bedrock, Azure, Vertex, Groq, etc.
 
-Each call records `pricing_source` (`override` | `openrouter_api` | `litellm:2026-04-29`) and the resolved per-token rates so re-deriving cost is auditable. Unknown models record `null` cost rather than throwing; the UI labels them honestly. A `RefreshPricingSnapshot` lifecycle action handles the nightly pull; failures fall back to the previous snapshot.
+Each call records `pricing_source` (`override` | `openrouter_api` | `litellm:2026-04-29`) and the resolved USD-per-1M-token rates so re-deriving cost is auditable. Unknown models record `null` cost rather than throwing; the UI labels them honestly. A `RefreshPricingSnapshot` lifecycle action handles the nightly pull; failures fall back to the previous snapshot.
 
 ### Multi-metric budgets
 
@@ -117,7 +117,7 @@ Evidence: 23 tests pass across `CallUsageTest`, `RunRecorderTest`, and `WireLogR
 
 Goal: prices are resolved from authoritative sources, refreshed on a schedule, and auditable.
 
-- [x] Migration: `ai_pricing_snapshots` (model, provider, input_per_token, cached_input_per_token, output_per_token, snapshot_date, source) and `ai_pricing_overrides` (model, provider, rates, reason, created_by)
+- [x] Migration: `ai_pricing_snapshots` (model, provider, input_usd_per_million_tokens, cached_input_usd_per_million_tokens, output_usd_per_million_tokens, snapshot_date, source) and `ai_pricing_overrides` (model, provider, USD-per-1M-token rates, reason, created_by)
 - [ ] Implement `PricingSourceRegistry` with `OverrideResolver`, `OpenRouterApiResolver`, `LiteLLMSnapshotResolver` (override + LiteLLM snapshot resolver landed; OpenRouter live resolver seam exists, network-backed implementation deferred to refresh action)
 - [x] `RefreshPricingSnapshot` lifecycle action (nightly schedule, also runnable on demand from Lifecycle tab); idempotent; failure falls back to previous snapshot
 - [x] Wire `TokenCostCalculator` to consume `PricingSourceRegistry` output; persist `pricing_source` and `pricing_version` on each call

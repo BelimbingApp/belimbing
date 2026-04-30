@@ -26,11 +26,11 @@ class PricingOverrides extends Component implements ProvidesLaraPageContext
 
     public string $model = '';
 
-    public string $inputCentsPerToken = '';
+    public string $inputUsdPerMillionTokens = '';
 
-    public string $cachedInputCentsPerToken = '';
+    public string $cachedInputUsdPerMillionTokens = '';
 
-    public string $outputCentsPerToken = '';
+    public string $outputUsdPerMillionTokens = '';
 
     public string $reason = '';
 
@@ -58,9 +58,9 @@ class PricingOverrides extends Component implements ProvidesLaraPageContext
         $this->editingOverrideId = $override->id;
         $this->provider = $override->provider ?? '';
         $this->model = $override->model;
-        $this->inputCentsPerToken = $override->input_cents_per_token;
-        $this->cachedInputCentsPerToken = $override->cached_input_cents_per_token ?? '';
-        $this->outputCentsPerToken = $override->output_cents_per_token;
+        $this->inputUsdPerMillionTokens = $override->input_usd_per_million_tokens;
+        $this->cachedInputUsdPerMillionTokens = $override->cached_input_usd_per_million_tokens ?? '';
+        $this->outputUsdPerMillionTokens = $override->output_usd_per_million_tokens;
         $this->reason = $override->reason ?? '';
     }
 
@@ -84,11 +84,11 @@ class PricingOverrides extends Component implements ProvidesLaraPageContext
         $attributes = [
             'provider' => $provider,
             'model' => $model,
-            'input_cents_per_token' => $this->normalizeDecimal($validated['inputCentsPerToken']),
-            'cached_input_cents_per_token' => $this->blankToNull($validated['cachedInputCentsPerToken']) !== null
-                ? $this->normalizeDecimal($validated['cachedInputCentsPerToken'])
+            'input_usd_per_million_tokens' => $this->normalizeDecimal($validated['inputUsdPerMillionTokens']),
+            'cached_input_usd_per_million_tokens' => $this->blankToNull($validated['cachedInputUsdPerMillionTokens']) !== null
+                ? $this->normalizeDecimal($validated['cachedInputUsdPerMillionTokens'])
                 : null,
-            'output_cents_per_token' => $this->normalizeDecimal($validated['outputCentsPerToken']),
+            'output_usd_per_million_tokens' => $this->normalizeDecimal($validated['outputUsdPerMillionTokens']),
             'reason' => $this->blankToNull($validated['reason']),
         ];
 
@@ -149,9 +149,9 @@ class PricingOverrides extends Component implements ProvidesLaraPageContext
         return [
             'provider' => ['nullable', 'string', 'max:100'],
             'model' => ['required', 'string', 'max:255'],
-            'inputCentsPerToken' => ['required', $decimalRule],
-            'cachedInputCentsPerToken' => ['nullable', $decimalRule],
-            'outputCentsPerToken' => ['required', $decimalRule],
+            'inputUsdPerMillionTokens' => ['required', $decimalRule],
+            'cachedInputUsdPerMillionTokens' => ['nullable', $decimalRule],
+            'outputUsdPerMillionTokens' => ['required', $decimalRule],
             'reason' => ['nullable', 'string', 'max:2000'],
         ];
     }
@@ -178,9 +178,9 @@ class PricingOverrides extends Component implements ProvidesLaraPageContext
             'editingOverrideId',
             'provider',
             'model',
-            'inputCentsPerToken',
-            'cachedInputCentsPerToken',
-            'outputCentsPerToken',
+            'inputUsdPerMillionTokens',
+            'cachedInputUsdPerMillionTokens',
+            'outputUsdPerMillionTokens',
             'reason',
         ]);
         $this->resetValidation();

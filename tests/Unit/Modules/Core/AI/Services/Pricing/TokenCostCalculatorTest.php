@@ -10,10 +10,10 @@ use App\Modules\Core\AI\Values\ResolvedRate;
 it('costs regular input, cached input, and output tokens separately', function (): void {
     $cost = (new TokenCostCalculator)->costFor(
         new CallUsage(
-            promptTokens: 100,
-            cachedInputTokens: 25,
-            completionTokens: 10,
-            totalTokens: 110,
+            promptTokens: 1_000_000,
+            cachedInputTokens: 250_000,
+            completionTokens: 100_000,
+            totalTokens: 1_100_000,
             raw: [],
         ),
         new ResolvedRate(
@@ -21,9 +21,9 @@ it('costs regular input, cached input, and output tokens separately', function (
             model: 'gpt-5.4',
             source: 'override',
             version: 'override:1',
-            inputCentsPerToken: '1.000000000000',
-            cachedInputCentsPerToken: '0.100000000000',
-            outputCentsPerToken: '2.000000000000',
+            inputUsdPerMillionTokens: '1.000000000000',
+            cachedInputUsdPerMillionTokens: '0.100000000000',
+            outputUsdPerMillionTokens: '2.000000000000',
         ),
     );
 
@@ -36,10 +36,10 @@ it('costs regular input, cached input, and output tokens separately', function (
 it('charges cached tokens as regular input when no cached rate is known', function (): void {
     $cost = (new TokenCostCalculator)->costFor(
         new CallUsage(
-            promptTokens: 100,
-            cachedInputTokens: 25,
-            completionTokens: 10,
-            totalTokens: 110,
+            promptTokens: 1_000_000,
+            cachedInputTokens: 250_000,
+            completionTokens: 100_000,
+            totalTokens: 1_100_000,
             raw: [],
         ),
         new ResolvedRate(
@@ -47,9 +47,9 @@ it('charges cached tokens as regular input when no cached rate is known', functi
             model: 'claude-sonnet-4-6',
             source: 'litellm',
             version: '2026-04-30',
-            inputCentsPerToken: '1.000000000000',
-            cachedInputCentsPerToken: null,
-            outputCentsPerToken: '2.000000000000',
+            inputUsdPerMillionTokens: '1.000000000000',
+            cachedInputUsdPerMillionTokens: null,
+            outputUsdPerMillionTokens: '2.000000000000',
         ),
     );
 

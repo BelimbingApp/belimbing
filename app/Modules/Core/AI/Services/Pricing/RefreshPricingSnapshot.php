@@ -125,9 +125,9 @@ class RefreshPricingSnapshot
                     provider: $this->providerFrom($raw),
                     snapshotDate: $snapshotDate,
                     attributes: [
-                        'input_cents_per_token' => $this->dollarsToCentsPerToken($inputCost),
-                        'cached_input_cents_per_token' => $this->cachedInputCentsPerToken($raw),
-                        'output_cents_per_token' => $this->dollarsToCentsPerToken($outputCost),
+                        'input_usd_per_million_tokens' => $this->dollarsToUsdPerMillionTokens($inputCost),
+                        'cached_input_usd_per_million_tokens' => $this->cachedInputUsdPerMillionTokens($raw),
+                        'output_usd_per_million_tokens' => $this->dollarsToUsdPerMillionTokens($outputCost),
                         'source_version' => $snapshotDate->toDateString(),
                         'raw' => [
                             'source_url' => $url,
@@ -225,22 +225,22 @@ class RefreshPricingSnapshot
     /**
      * @param  array<string, mixed>  $raw
      */
-    private function cachedInputCentsPerToken(array $raw): ?string
+    private function cachedInputUsdPerMillionTokens(array $raw): ?string
     {
         foreach (['cache_read_input_token_cost', 'input_cost_per_token_cache_hit'] as $key) {
             $cost = $raw[$key] ?? null;
 
             if (is_numeric($cost)) {
-                return $this->dollarsToCentsPerToken($cost);
+                return $this->dollarsToUsdPerMillionTokens($cost);
             }
         }
 
         return null;
     }
 
-    private function dollarsToCentsPerToken(mixed $dollars): string
+    private function dollarsToUsdPerMillionTokens(mixed $dollars): string
     {
-        return sprintf('%.12F', (float) $dollars * 100);
+        return sprintf('%.12F', (float) $dollars * 1_000_000);
     }
 
     private function latestSnapshotDate(): ?Carbon

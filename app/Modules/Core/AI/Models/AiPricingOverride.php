@@ -16,9 +16,9 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property string|null $provider
  * @property string $model
- * @property string $input_cents_per_token
- * @property string|null $cached_input_cents_per_token
- * @property string $output_cents_per_token
+ * @property string $input_usd_per_million_tokens
+ * @property string|null $cached_input_usd_per_million_tokens
+ * @property string $output_usd_per_million_tokens
  * @property string|null $reason
  * @property int|null $created_by
  * @property Carbon|null $created_at
@@ -35,9 +35,9 @@ class AiPricingOverride extends Model
     protected $fillable = [
         'provider',
         'model',
-        'input_cents_per_token',
-        'cached_input_cents_per_token',
-        'output_cents_per_token',
+        'input_usd_per_million_tokens',
+        'cached_input_usd_per_million_tokens',
+        'output_usd_per_million_tokens',
         'reason',
         'created_by',
     ];
@@ -48,9 +48,9 @@ class AiPricingOverride extends Model
     protected function casts(): array
     {
         return [
-            'input_cents_per_token' => 'decimal:12',
-            'cached_input_cents_per_token' => 'decimal:12',
-            'output_cents_per_token' => 'decimal:12',
+            'input_usd_per_million_tokens' => 'decimal:12',
+            'cached_input_usd_per_million_tokens' => 'decimal:12',
+            'output_usd_per_million_tokens' => 'decimal:12',
         ];
     }
 

@@ -35,11 +35,11 @@ class OverridePricingResolver implements PricingResolver
             model: $override->model,
             source: 'override',
             version: 'override:'.$override->id,
-            inputCentsPerToken: (string) $override->input_cents_per_token,
-            cachedInputCentsPerToken: $override->cached_input_cents_per_token !== null
-                ? (string) $override->cached_input_cents_per_token
+            inputUsdPerMillionTokens: (string) $override->input_usd_per_million_tokens,
+            cachedInputUsdPerMillionTokens: $override->cached_input_usd_per_million_tokens !== null
+                ? (string) $override->cached_input_usd_per_million_tokens
                 : null,
-            outputCentsPerToken: (string) $override->output_cents_per_token,
+            outputUsdPerMillionTokens: (string) $override->output_usd_per_million_tokens,
         );
     }
 }

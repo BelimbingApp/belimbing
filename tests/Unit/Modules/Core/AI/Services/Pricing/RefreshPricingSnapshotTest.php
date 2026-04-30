@@ -68,9 +68,9 @@ it('imports LiteLLM token pricing snapshots idempotently', function (): void {
         ->and($first['skipped_count'])->toBe(2)
         ->and($second['imported_count'])->toBe(2)
         ->and(AiPricingSnapshot::query()->count())->toBe(2)
-        ->and($gpt->input_cents_per_token)->toBe('0.000100000000')
-        ->and($gpt->cached_input_cents_per_token)->toBe('0.000010000000')
-        ->and($gpt->output_cents_per_token)->toBe('0.000400000000')
+        ->and($gpt->input_usd_per_million_tokens)->toBe('1.000000000000')
+        ->and($gpt->cached_input_usd_per_million_tokens)->toBe('0.100000000000')
+        ->and($gpt->output_usd_per_million_tokens)->toBe('4.000000000000')
         ->and($gpt->source)->toBe('litellm')
         ->and($gpt->source_version)->toBe('2026-04-30');
 });
@@ -79,9 +79,9 @@ it('falls back to the previous snapshot when the source cannot refresh', functio
     AiPricingSnapshot::query()->create([
         'provider' => 'openai',
         'model' => 'gpt-5.4',
-        'input_cents_per_token' => '0.000100000000',
-        'cached_input_cents_per_token' => '0.000010000000',
-        'output_cents_per_token' => '0.000200000000',
+        'input_usd_per_million_tokens' => '1.000000000000',
+        'cached_input_usd_per_million_tokens' => '0.100000000000',
+        'output_usd_per_million_tokens' => '2.000000000000',
         'source' => 'litellm',
         'source_version' => '2026-04-29',
         'snapshot_date' => '2026-04-29',

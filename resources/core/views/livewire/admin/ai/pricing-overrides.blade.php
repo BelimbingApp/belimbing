@@ -10,7 +10,7 @@
     <div class="space-y-section-gap">
         <x-ui.page-header
             :title="__('Pricing Overrides')"
-            :subtitle="__('Maintain explicit per-token rates for custom contracts, self-hosted models, and upstream pricing corrections.')"
+            :subtitle="__('Maintain explicit USD per 1M token rates for custom contracts, self-hosted models, and upstream pricing corrections.')"
         />
 
         <x-ui.card>
@@ -20,7 +20,7 @@
                         <h3 class="text-sm font-medium text-ink">
                             {{ $editingOverrideId !== null ? __('Edit Override') : __('New Override') }}
                         </h3>
-                        <p class="mt-1 text-xs text-muted">{{ __('Rates are stored as cents per token so call costs can be re-derived from a durable snapshot.') }}</p>
+                        <p class="mt-1 text-xs text-muted">{{ __('Rates are stored as USD per 1M tokens to match provider pricing pages.') }}</p>
                     </div>
 
                     @if ($editingOverrideId !== null)
@@ -48,27 +48,27 @@
                         :error="$errors->first('model')"
                     />
                     <x-ui.input
-                        id="pricing-override-input-cents"
-                        wire:model="inputCentsPerToken"
-                        :label="__('Input ¢/Token')"
-                        :placeholder="__('0.000100000000')"
+                        id="pricing-override-input-usd-per-million"
+                        wire:model="inputUsdPerMillionTokens"
+                        :label="__('Input USD/1M tokens')"
+                        :placeholder="__('1.000000')"
                         required
-                        :error="$errors->first('inputCentsPerToken')"
+                        :error="$errors->first('inputUsdPerMillionTokens')"
                     />
                     <x-ui.input
-                        id="pricing-override-cached-cents"
-                        wire:model="cachedInputCentsPerToken"
-                        :label="__('Cached ¢/Token')"
-                        :placeholder="__('0.000010000000')"
-                        :error="$errors->first('cachedInputCentsPerToken')"
+                        id="pricing-override-cached-usd-per-million"
+                        wire:model="cachedInputUsdPerMillionTokens"
+                        :label="__('Cached USD/1M tokens')"
+                        :placeholder="__('0.100000')"
+                        :error="$errors->first('cachedInputUsdPerMillionTokens')"
                     />
                     <x-ui.input
-                        id="pricing-override-output-cents"
-                        wire:model="outputCentsPerToken"
-                        :label="__('Output ¢/Token')"
-                        :placeholder="__('0.000200000000')"
+                        id="pricing-override-output-usd-per-million"
+                        wire:model="outputUsdPerMillionTokens"
+                        :label="__('Output USD/1M tokens')"
+                        :placeholder="__('2.000000')"
                         required
-                        :error="$errors->first('outputCentsPerToken')"
+                        :error="$errors->first('outputUsdPerMillionTokens')"
                     />
                 </div>
 
@@ -111,9 +111,9 @@
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Provider') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Model') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Input') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Cached') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Output') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Input USD/1M') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Cached USD/1M') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Output USD/1M') }}</th>
                             <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Reason') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Actions') }}</th>
                         </tr>
@@ -123,9 +123,9 @@
                             <tr wire:key="pricing-override-{{ $override->id }}">
                                 <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-muted">{{ $override->provider ?? __('Any') }}</td>
                                 <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink">{{ $override->model }}</td>
-                                <td class="px-table-cell-x py-table-cell-y text-right font-mono text-xs text-muted">{{ $override->input_cents_per_token }}</td>
-                                <td class="px-table-cell-x py-table-cell-y text-right font-mono text-xs text-muted">{{ $override->cached_input_cents_per_token ?? '—' }}</td>
-                                <td class="px-table-cell-x py-table-cell-y text-right font-mono text-xs text-muted">{{ $override->output_cents_per_token }}</td>
+                                <td class="px-table-cell-x py-table-cell-y text-right font-mono text-xs text-muted">{{ $override->input_usd_per_million_tokens }}</td>
+                                <td class="px-table-cell-x py-table-cell-y text-right font-mono text-xs text-muted">{{ $override->cached_input_usd_per_million_tokens ?? '—' }}</td>
+                                <td class="px-table-cell-x py-table-cell-y text-right font-mono text-xs text-muted">{{ $override->output_usd_per_million_tokens }}</td>
                                 <td class="hidden max-w-sm truncate px-table-cell-x py-table-cell-y text-xs text-muted lg:table-cell">{{ $override->reason ?? '—' }}</td>
                                 <td class="px-table-cell-x py-table-cell-y text-right">
                                     <x-ui.icon-action-group>

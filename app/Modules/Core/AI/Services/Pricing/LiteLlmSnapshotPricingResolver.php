@@ -38,11 +38,11 @@ class LiteLlmSnapshotPricingResolver implements PricingResolver
             model: $snapshot->model,
             source: $snapshot->source,
             version: $version,
-            inputCentsPerToken: (string) $snapshot->input_cents_per_token,
-            cachedInputCentsPerToken: $snapshot->cached_input_cents_per_token !== null
-                ? (string) $snapshot->cached_input_cents_per_token
+            inputUsdPerMillionTokens: (string) $snapshot->input_usd_per_million_tokens,
+            cachedInputUsdPerMillionTokens: $snapshot->cached_input_usd_per_million_tokens !== null
+                ? (string) $snapshot->cached_input_usd_per_million_tokens
                 : null,
-            outputCentsPerToken: (string) $snapshot->output_cents_per_token,
+            outputUsdPerMillionTokens: (string) $snapshot->output_usd_per_million_tokens,
         );
     }
 }

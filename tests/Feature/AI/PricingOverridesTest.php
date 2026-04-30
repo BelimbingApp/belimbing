@@ -22,9 +22,9 @@ test('pricing overrides can be created edited and deleted', function (): void {
         ->test(PricingOverrides::class)
         ->set('provider', 'openai')
         ->set('model', 'gpt-5.4')
-        ->set('inputCentsPerToken', '0.0001')
-        ->set('cachedInputCentsPerToken', '0.00001')
-        ->set('outputCentsPerToken', '0.0002')
+        ->set('inputUsdPerMillionTokens', '1')
+        ->set('cachedInputUsdPerMillionTokens', '0.1')
+        ->set('outputUsdPerMillionTokens', '2')
         ->set('reason', 'enterprise contract')
         ->call('saveOverride')
         ->assertHasNoErrors()
@@ -34,23 +34,23 @@ test('pricing overrides can be created edited and deleted', function (): void {
 
     expect($override->provider)->toBe('openai')
         ->and($override->model)->toBe('gpt-5.4')
-        ->and($override->input_cents_per_token)->toBe('0.000100000000')
-        ->and($override->cached_input_cents_per_token)->toBe('0.000010000000')
-        ->and($override->output_cents_per_token)->toBe('0.000200000000')
+        ->and($override->input_usd_per_million_tokens)->toBe('1.000000000000')
+        ->and($override->cached_input_usd_per_million_tokens)->toBe('0.100000000000')
+        ->and($override->output_usd_per_million_tokens)->toBe('2.000000000000')
         ->and($override->created_by)->toBe($user->id);
 
     Livewire::actingAs($user)
         ->test(PricingOverrides::class)
         ->call('editOverride', $override->id)
         ->assertSet('model', 'gpt-5.4')
-        ->set('outputCentsPerToken', '0.0003')
+        ->set('outputUsdPerMillionTokens', '3')
         ->set('reason', 'updated contract')
         ->call('saveOverride')
         ->assertHasNoErrors();
 
     $override->refresh();
 
-    expect($override->output_cents_per_token)->toBe('0.000300000000')
+    expect($override->output_usd_per_million_tokens)->toBe('3.000000000000')
         ->and($override->reason)->toBe('updated contract')
         ->and(app(PricingSourceRegistry::class)->resolve('openai', 'gpt-5.4')?->source)->toBe('override');
 
@@ -67,9 +67,9 @@ test('pricing overrides reject duplicate provider model pairs before hitting the
     AiPricingOverride::query()->create([
         'provider' => null,
         'model' => 'shared-model',
-        'input_cents_per_token' => '0.000100000000',
-        'cached_input_cents_per_token' => null,
-        'output_cents_per_token' => '0.000200000000',
+        'input_usd_per_million_tokens' => '1.000000000000',
+        'cached_input_usd_per_million_tokens' => null,
+        'output_usd_per_million_tokens' => '2.000000000000',
         'reason' => 'baseline',
         'created_by' => $user->id,
     ]);
@@ -78,8 +78,8 @@ test('pricing overrides reject duplicate provider model pairs before hitting the
         ->test(PricingOverrides::class)
         ->set('provider', '')
         ->set('model', 'shared-model')
-        ->set('inputCentsPerToken', '0.0001')
-        ->set('outputCentsPerToken', '0.0002')
+        ->set('inputUsdPerMillionTokens', '1')
+        ->set('outputUsdPerMillionTokens', '2')
         ->call('saveOverride')
         ->assertHasErrors(['model']);
 

@@ -6,7 +6,7 @@
 namespace App\Modules\Core\AI\Values;
 
 /**
- * Auditable cents-per-token rate resolved for a model at call time.
+ * Auditable USD per million tokens rate resolved for a model at call time.
  */
 final readonly class ResolvedRate
 {
@@ -15,8 +15,8 @@ final readonly class ResolvedRate
         public string $model,
         public string $source,
         public ?string $version,
-        public string $inputCentsPerToken,
-        public ?string $cachedInputCentsPerToken,
-        public string $outputCentsPerToken,
+        public string $inputUsdPerMillionTokens,
+        public ?string $cachedInputUsdPerMillionTokens,
+        public string $outputUsdPerMillionTokens,
     ) {}
 }

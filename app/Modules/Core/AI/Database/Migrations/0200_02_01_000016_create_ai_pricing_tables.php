@@ -12,7 +12,7 @@ return new class extends Migration
     /**
      * Run the migrations.
      *
-     * Pricing is recorded as cents-per-token so `ai_run_calls.cost_*_cents`
+     * Pricing is recorded as USD per million tokens so `ai_run_calls.cost_*_cents`
      * can be re-derived from the stored rate snapshot.
      */
     public function up(): void
@@ -21,9 +21,9 @@ return new class extends Migration
             $table->bigIncrements('id');
             $table->string('provider')->nullable();
             $table->string('model');
-            $table->decimal('input_cents_per_token', 20, 12);
-            $table->decimal('cached_input_cents_per_token', 20, 12)->nullable();
-            $table->decimal('output_cents_per_token', 20, 12);
+            $table->decimal('input_usd_per_million_tokens', 20, 12);
+            $table->decimal('cached_input_usd_per_million_tokens', 20, 12)->nullable();
+            $table->decimal('output_usd_per_million_tokens', 20, 12);
             $table->string('source', 40);
             $table->string('source_version', 80)->nullable();
             $table->date('snapshot_date');
@@ -39,9 +39,9 @@ return new class extends Migration
             $table->bigIncrements('id');
             $table->string('provider')->nullable();
             $table->string('model');
-            $table->decimal('input_cents_per_token', 20, 12);
-            $table->decimal('cached_input_cents_per_token', 20, 12)->nullable();
-            $table->decimal('output_cents_per_token', 20, 12);
+            $table->decimal('input_usd_per_million_tokens', 20, 12);
+            $table->decimal('cached_input_usd_per_million_tokens', 20, 12)->nullable();
+            $table->decimal('output_usd_per_million_tokens', 20, 12);
             $table->text('reason')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();

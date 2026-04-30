@@ -156,9 +156,9 @@ it('costs a call from resolved pricing and aggregates run cost', function (): vo
     AiPricingOverride::query()->create([
         'provider' => 'openai',
         'model' => 'gpt-5.4',
-        'input_cents_per_token' => '1.000000000000',
-        'cached_input_cents_per_token' => '0.000000000000',
-        'output_cents_per_token' => '2.000000000000',
+        'input_usd_per_million_tokens' => '1.000000000000',
+        'cached_input_usd_per_million_tokens' => '0.000000000000',
+        'output_usd_per_million_tokens' => '2.000000000000',
         'reason' => 'test pricing',
     ]);
 
@@ -171,9 +171,9 @@ it('costs a call from resolved pricing and aggregates run cost', function (): vo
         finishReason: 'stop',
         latencyMs: 500,
         usage: CallUsage::fromProviderArray([
-            'prompt_tokens' => 100,
-            'completion_tokens' => 10,
-            'prompt_tokens_details' => ['cached_tokens' => 25],
+            'prompt_tokens' => 1_000_000,
+            'completion_tokens' => 100_000,
+            'prompt_tokens_details' => ['cached_tokens' => 250_000],
         ]),
     );
 
