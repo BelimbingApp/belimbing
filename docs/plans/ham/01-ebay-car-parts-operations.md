@@ -200,7 +200,7 @@ The headline listing time-saver, but also the least-known integration. Built on 
 
 ### Phase 7 — Insights (framework queries, Ham layouts)
 
-- [ ] General Insights query surface in `app/Modules/Commerce/Sales`: sold-in-period, gross margin per item, days-listed-without-sale.
+- [ ] General Insights query surface in `app/Modules/Commerce/Sales`: sold-in-period, gross margin per item, days-listed-without-sale. First slice landed: `SalesInsightsService::soldInPeriod($companyId, $from, $to, $currencyCode)` returns a `SalesPeriodSummary` DTO (sale count, unit count, total revenue/cost/fees in minor units, computed gross profit) for a single-currency window scoped to one company. Per-item margin and days-listed-without-sale remain.
 - [ ] Ham extension Livewire pages: "Sold this month," "Top earners last 90 days," "Listed > 180 days, no sale" — each one a thin view over the general queries.
 - [ ] CSV export for Ham's bookkeeper.
 
