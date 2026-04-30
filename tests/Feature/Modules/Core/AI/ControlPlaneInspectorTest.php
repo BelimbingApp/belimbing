@@ -228,6 +228,24 @@ it('renders the readable view with reassembled artifacts, anomaly chips, attempt
     $user = createAdminUser();
 
     createControlPlaneRun(CONTROL_PLANE_READABLE_RUN_ID);
+    AiRunCall::query()->create([
+        'run_id' => CONTROL_PLANE_READABLE_RUN_ID,
+        'attempt_index' => 1,
+        'provider' => 'anthropic',
+        'model' => 'claude-opus-4',
+        'finish_reason' => 'tool_calls',
+        'latency_ms' => 5000,
+        'prompt_tokens' => 1754,
+        'cached_input_tokens' => 1024,
+        'completion_tokens' => 128,
+        'reasoning_tokens' => 64,
+        'total_tokens' => 1882,
+        'pricing_source' => 'litellm',
+        'pricing_version' => '2026-04-30',
+        'cost_total_cents' => 12,
+        'started_at' => now(),
+        'finished_at' => now(),
+    ]);
 
     $writeAt = fn (int $seconds, string $type, array $payload): string => json_encode(
         array_merge(['at' => now()->copy()->addSeconds($seconds)->toIso8601String(), 'type' => $type], $payload),
@@ -311,6 +329,11 @@ it('renders the readable view with reassembled artifacts, anomaly chips, attempt
         ->assertSee('openai')
         ->assertSee('claude-opus-4')
         ->assertSee('Copy as cURL')
+        ->assertSee('Usage')
+        ->assertSee('1,754')
+        ->assertSee('1,024')
+        ->assertSee('$0.12')
+        ->assertSee('litellm')
         ->assertSee('Bearer $API_KEY', escape: false)
         ->assertSee('Reassembled content')
         ->assertSee('Hello, world!')

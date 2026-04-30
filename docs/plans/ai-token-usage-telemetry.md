@@ -123,8 +123,8 @@ Goal: prices are resolved from authoritative sources, refreshed on a schedule, a
 - [x] Wire `TokenCostCalculator` to consume `PricingSourceRegistry` output; persist `pricing_source` and `pricing_version` on each call
 - [x] **UI: pricing source pill** on each call row in the Run Detail / Run Inspector calls table (e.g., `litellm:2026-04-29`)
 - [x] **UI: Lifecycle tab** gets a "Refresh pricing snapshot" action with last-refreshed timestamp and current snapshot stats (model count, age)
-- [ ] **UI: Admin > AI > Pricing Overrides** CRUD page
-- [ ] Pest tests: registry resolves in priority order; missing model returns null cost without throwing; nightly action updates snapshot table
+- [x] **UI: Admin > AI > Pricing Overrides** CRUD page
+- [x] Pest tests: registry resolves in priority order; missing model returns null cost without throwing; nightly action updates snapshot table
 
 Evidence: trigger refresh action; pricing source pill flips to today's date; override entry takes precedence on a known model.
 
@@ -132,7 +132,7 @@ Evidence: trigger refresh action; pricing source pill flips to today's date; ove
 
 Goal: an operator inspecting raw provider traffic sees per-call usage inline plus a "what made this prompt big" diff.
 
-- [ ] Render a per-attempt "Usage" chip in the readable view: prompt (incl. cached split), completion (incl. reasoning split), total, cost, pricing source, finish reason
+- [x] Render a per-attempt "Usage" chip in the readable view: prompt (incl. cached split), completion (incl. reasoning split), total, cost, pricing source, finish reason
 - [ ] Compute and show "expected vs actual" prompt-token diff using the local prompt + tool-schema estimate
 - [ ] Each attempt chip links to its `ai_run_calls` row id (deep-link to Run Inspector "Calls" table)
 - [ ] Pest test: formatter output exposes the usage block per attempt; expected/actual diff is non-zero on a fixture with hidden context

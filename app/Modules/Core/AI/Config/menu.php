@@ -54,6 +54,15 @@ return [
             'permission' => 'admin.ai_tool.manage',
         ]),
         $item([
+            'id' => 'ai.pricing-overrides',
+            'label' => 'Pricing Overrides',
+            'icon' => 'heroicon-o-banknotes',
+            'route' => 'admin.ai.pricing-overrides',
+            'parent' => 'ai',
+            'position' => 45,
+            'permission' => 'admin.ai_pricing_override.manage',
+        ]),
+        $item([
             'id' => 'ai.control-plane',
             'label' => 'Control Plane',
             'icon' => 'heroicon-o-adjustments-horizontal',

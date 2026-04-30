@@ -19,6 +19,7 @@ test('ai admin menu is hidden when the user lacks AI admin capabilities', functi
     expect($flat)->not->toHaveKeys([
         'ai.lara',
         'ai.providers',
+        'ai.pricing-overrides',
         'ai.tools',
         'ai.control-plane',
     ]);
@@ -35,6 +36,7 @@ test('ai operators see the full AI admin menu', function (): void {
     expect($flat)->toHaveKeys([
         'ai.lara',
         'ai.providers',
+        'ai.pricing-overrides',
         'ai.tools',
         'ai.control-plane',
     ]);

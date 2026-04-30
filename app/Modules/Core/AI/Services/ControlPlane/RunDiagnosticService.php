@@ -10,8 +10,10 @@ use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Models\AiRunCall;
 use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\ChatTurnEvent;
+use App\Modules\Core\AI\Values\CallUsage;
 use App\Modules\Core\Employee\Models\Employee;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -81,12 +83,14 @@ class RunDiagnosticService
 
         $wireLogPreview = $this->wireLogger->preview($run->id, $wireLogOffset, $wireLogLimit);
 
+        $readable = $this->wireLogFormatter->format($wireLogPreview['entries']);
+
         return [
             'inspection' => RunInspection::fromAiRun($run),
             'transcript' => $this->runTranscript($run),
             'triggering_prompt' => $this->triggeringPrompt($run),
             'wire_log_entries' => $wireLogPreview['entries'],
-            'wire_log_readable' => $this->wireLogFormatter->format($wireLogPreview['entries']),
+            'wire_log_readable' => $this->enrichReadableAttemptsWithCalls($readable, $run),
             'wire_log_summary' => [
                 'footprint_bytes' => $wireLogPreview['footprint_bytes'],
                 'total_entries' => $wireLogPreview['total_entries'],
@@ -104,6 +108,94 @@ class RunDiagnosticService
             'wire_logging_enabled' => $this->wireLogger->enabled(),
             'turn_id' => $run->turn_id,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $readable
+     * @return array<string, mixed>
+     */
+    private function enrichReadableAttemptsWithCalls(array $readable, AiRun $run): array
+    {
+        if (! is_array($readable['attempts'] ?? null) || $readable['attempts'] === []) {
+            return $readable;
+        }
+
+        $run->loadMissing('calls');
+        $callsByAttempt = $run->calls->keyBy('attempt_index');
+        $callsByPosition = $run->calls->values();
+
+        foreach ($readable['attempts'] as $position => $attempt) {
+            if (! is_array($attempt)) {
+                continue;
+            }
+
+            $attemptIndex = isset($attempt['index']) && is_numeric($attempt['index'])
+                ? ((int) $attempt['index']) - 1
+                : $position;
+
+            /** @var AiRunCall|null $call */
+            $call = $callsByAttempt->get($attemptIndex) ?? $callsByPosition->get($position);
+            $readable['attempts'][$position]['usage_chip'] = $this->buildAttemptUsageChip($attempt, $call);
+        }
+
+        return $readable;
+    }
+
+    /**
+     * @param  array<string, mixed>  $attempt
+     * @return array<string, mixed>|null
+     */
+    private function buildAttemptUsageChip(array $attempt, ?AiRunCall $call): ?array
+    {
+        if ($call !== null) {
+            return [
+                'call_id' => $call->id,
+                'prompt_tokens' => $call->prompt_tokens,
+                'cached_input_tokens' => $call->cached_input_tokens,
+                'completion_tokens' => $call->completion_tokens,
+                'reasoning_tokens' => $call->reasoning_tokens,
+                'total_tokens' => $call->total_tokens,
+                'finish_reason' => $call->finish_reason ?? $attempt['finish_reason'] ?? null,
+                'cost_total_cents' => $call->cost_total_cents,
+                'pricing_source' => $call->pricing_source,
+            ];
+        }
+
+        $usage = $this->usageFromAttemptSections($attempt);
+
+        if ($usage === null) {
+            return null;
+        }
+
+        return [
+            'call_id' => null,
+            'prompt_tokens' => $usage->promptTokens,
+            'cached_input_tokens' => $usage->cachedInputTokens,
+            'completion_tokens' => $usage->completionTokens,
+            'reasoning_tokens' => $usage->reasoningTokens,
+            'total_tokens' => $usage->totalTokens,
+            'finish_reason' => $attempt['finish_reason'] ?? null,
+            'cost_total_cents' => null,
+            'pricing_source' => null,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $attempt
+     */
+    private function usageFromAttemptSections(array $attempt): ?CallUsage
+    {
+        $usage = null;
+
+        foreach ($attempt['sections'] ?? [] as $section) {
+            if (! is_array($section) || ! is_array($section['usage'] ?? null)) {
+                continue;
+            }
+
+            $usage = CallUsage::fromProviderArray($section['usage']);
+        }
+
+        return $usage;
     }
 
     /**

@@ -6,6 +6,11 @@
 /** @var string $runId */
 /** @var bool $showAttemptHeader */
 $replay = $attempt['replay'] ?? null;
+$usageChip = $attempt['usage_chip'] ?? null;
+$formatCount = static fn (?int $value): string => $value !== null ? number_format($value) : '—';
+$formatCents = static fn (?int $cents): string => $cents !== null
+    ? '$'.number_format($cents / 100, 2)
+    : '—';
 ?>
 <div class="rounded-2xl border border-border-default bg-surface-card p-card-inner">
     @if ($showAttemptHeader)
@@ -14,6 +19,24 @@ $replay = $attempt['replay'] ?? null;
                 {{ __('Attempt :index', ['index' => $attempt['index']]) }}
             </x-ui.badge>
             <span class="text-ink">{{ $attempt['summary'] }}</span>
+        </div>
+    @endif
+
+    @if (is_array($usageChip))
+        <div class="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border-default/60 bg-surface-subtle/40 px-3 py-2 text-xs">
+            <x-ui.badge variant="info">{{ __('Usage') }}</x-ui.badge>
+            <span class="text-muted">{{ __('In') }} <span class="font-mono text-ink">{{ $formatCount($usageChip['prompt_tokens'] ?? null) }}</span></span>
+            <span class="text-muted">{{ __('Cached') }} <span class="font-mono text-ink">{{ $formatCount($usageChip['cached_input_tokens'] ?? null) }}</span></span>
+            <span class="text-muted">{{ __('Out') }} <span class="font-mono text-ink">{{ $formatCount($usageChip['completion_tokens'] ?? null) }}</span></span>
+            <span class="text-muted">{{ __('Reasoning') }} <span class="font-mono text-ink">{{ $formatCount($usageChip['reasoning_tokens'] ?? null) }}</span></span>
+            <span class="text-muted">{{ __('Total') }} <span class="font-mono text-ink">{{ $formatCount($usageChip['total_tokens'] ?? null) }}</span></span>
+            <span class="text-muted">{{ __('Cost') }} <span class="font-mono text-ink">{{ $formatCents($usageChip['cost_total_cents'] ?? null) }}</span></span>
+            @if (! empty($usageChip['pricing_source']))
+                <x-ui.badge variant="default">{{ $usageChip['pricing_source'] }}</x-ui.badge>
+            @endif
+            @if (! empty($usageChip['finish_reason']))
+                <x-ui.badge variant="success">{{ __('finish=:reason', ['reason' => $usageChip['finish_reason']]) }}</x-ui.badge>
+            @endif
         </div>
     @endif
 

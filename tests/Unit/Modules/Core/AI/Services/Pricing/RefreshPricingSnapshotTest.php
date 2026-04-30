@@ -113,3 +113,24 @@ it('throws when refresh fails before any fallback snapshot exists', function ():
         Carbon::parse('2026-04-30'),
     );
 })->throws(PricingSnapshotRefreshException::class);
+
+it('refreshes pricing snapshots through the artisan command', function (): void {
+    Http::fake([
+        'https://pricing.test/litellm.json' => Http::response([
+            'gpt-command' => [
+                'litellm_provider' => 'openai',
+                'input_cost_per_token' => 0.000001,
+                'output_cost_per_token' => 0.000002,
+            ],
+        ]),
+    ]);
+
+    $this->artisan('blb:ai:pricing:refresh', ['--url' => 'https://pricing.test/litellm.json'])
+        ->assertExitCode(0);
+
+    expect(AiPricingSnapshot::query()
+        ->where('provider', 'openai')
+        ->where('model', 'gpt-command')
+        ->where('source', 'litellm')
+        ->exists())->toBeTrue();
+});

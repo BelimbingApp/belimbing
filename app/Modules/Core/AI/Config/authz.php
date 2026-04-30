@@ -11,6 +11,8 @@ return [
         'admin.ai_task_model.manage',
         // Grants access to provider catalog, credentials, and model sync flows.
         'admin.ai_provider.manage',
+        // Grants access to AI pricing override management.
+        'admin.ai_pricing_override.manage',
         // Grants access to AI tool catalog and per-tool workspaces.
         'admin.ai_tool.manage',
         // Grants access to the operator-facing AI diagnostics surfaces:
@@ -26,6 +28,7 @@ return [
                 'admin.ai_lara.manage',
                 'admin.ai_task_model.manage',
                 'admin.ai_provider.manage',
+                'admin.ai_pricing_override.manage',
                 'admin.ai_tool.manage',
                 'admin.ai_control_plane.view',
             ],

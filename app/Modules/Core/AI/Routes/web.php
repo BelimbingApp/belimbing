@@ -11,6 +11,7 @@ use App\Modules\Core\AI\Http\Controllers\ProviderSetupController;
 use App\Modules\Core\AI\Http\Controllers\TurnEventStreamController;
 use App\Modules\Core\AI\Http\Controllers\WireLogEntryController;
 use App\Modules\Core\AI\Livewire\ControlPlane;
+use App\Modules\Core\AI\Livewire\PricingOverrides;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
 use App\Modules\Core\AI\Livewire\RunDetail;
 use App\Modules\Core\AI\Livewire\Setup\Lara;
@@ -64,6 +65,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('admin/ai/providers/setup/{providerKey}', ProviderSetupController::class)
         ->middleware('authz:admin.ai_provider.manage')
         ->name('admin.ai.providers.setup');
+
+    Route::get('admin/ai/pricing-overrides', PricingOverrides::class)
+        ->middleware('authz:admin.ai_pricing_override.manage')
+        ->name('admin.ai.pricing-overrides');
 
     // OpenAI Codex OAuth callback (browser PKCE)
     Route::get('admin/ai/providers/openai-codex/auth/callback', OpenAiCodexOAuthCallbackController::class)
