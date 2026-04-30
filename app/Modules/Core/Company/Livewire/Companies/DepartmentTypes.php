@@ -20,6 +20,16 @@ class DepartmentTypes extends Component
     use TogglesSort;
     use WithPagination;
 
+    /**
+     * @var list<string>
+     */
+    private const CATEGORY_OPTIONS = [
+        'administrative',
+        'operational',
+        'revenue',
+        'support',
+    ];
+
     public bool $showCreateModal = false;
 
     public string $createCode = '';
@@ -62,7 +72,7 @@ class DepartmentTypes extends Component
         $validated = $this->validate([
             'createCode' => ['required', 'string', 'max:255', Rule::unique('company_department_types', 'code')],
             'createName' => ['required', 'string', 'max:255'],
-            'createCategory' => ['required', 'string', Rule::in(['administrative', 'operational', 'revenue', 'support'])],
+            'createCategory' => ['required', 'string', Rule::in(self::CATEGORY_OPTIONS)],
             'createDescription' => ['nullable', 'string'],
             'createIsActive' => ['boolean'],
         ]);
@@ -86,7 +96,7 @@ class DepartmentTypes extends Component
     {
         $rules = [
             'name' => ['required', 'string', 'max:255'],
-            'category' => ['required', 'string', Rule::in(['administrative', 'operational', 'revenue', 'support'])],
+            'category' => ['required', 'string', Rule::in(self::CATEGORY_OPTIONS)],
             'description' => ['nullable', 'string'],
         ];
 

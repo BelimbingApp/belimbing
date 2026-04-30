@@ -21,10 +21,33 @@ final class AnomalyCollector
     {
         $anomalies = [];
 
+        $previewSignals = $this->collectPreviewSignals($entries);
+        $decodeErrors = $previewSignals['decode_errors'];
+        $omittedEntries = $previewSignals['omitted_entries'];
+
+        $unknownSignals = $this->collectUnknownKeySignals($attempts);
+        $unknownKeys = $unknownSignals['unknown_keys'];
+        $unknownKeyEntries = $unknownSignals['unknown_key_entries'];
+
+        foreach ($attempts as $attempt) {
+            $this->appendAttemptAnomalies($anomalies, $attempt);
+        }
+
+        $this->appendDecodeErrorAnomaly($anomalies, $decodeErrors);
+        $this->appendOversizedAnomaly($anomalies, $omittedEntries);
+        $this->appendUnknownKeysAnomaly($anomalies, $unknownKeys, $unknownKeyEntries);
+
+        return $anomalies;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $entries
+     * @return array{decode_errors: list<int>, omitted_entries: list<int>}
+     */
+    private function collectPreviewSignals(array $entries): array
+    {
         $decodeErrors = [];
         $omittedEntries = [];
-        $unknownKeys = [];
-        $unknownKeyEntries = [];
 
         foreach ($entries as $entry) {
             $previewStatus = is_string($entry['preview_status'] ?? null) ? $entry['preview_status'] : 'full';
@@ -38,6 +61,21 @@ final class AnomalyCollector
                 $omittedEntries[] = $entryNumber;
             }
         }
+
+        return [
+            'decode_errors' => $decodeErrors,
+            'omitted_entries' => $omittedEntries,
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $attempts
+     * @return array{unknown_keys: array<string, true>, unknown_key_entries: list<int>}
+     */
+    private function collectUnknownKeySignals(array $attempts): array
+    {
+        $unknownKeys = [];
+        $unknownKeyEntries = [];
 
         foreach ($attempts as $attempt) {
             foreach ($attempt['sections'] as $section) {
@@ -53,15 +91,12 @@ final class AnomalyCollector
                     $unknownKeyEntries[] = (int) $entryNumber;
                 }
             }
-
-            $this->appendAttemptAnomalies($anomalies, $attempt);
         }
 
-        $this->appendDecodeErrorAnomaly($anomalies, $decodeErrors);
-        $this->appendOversizedAnomaly($anomalies, $omittedEntries);
-        $this->appendUnknownKeysAnomaly($anomalies, $unknownKeys, $unknownKeyEntries);
-
-        return $anomalies;
+        return [
+            'unknown_keys' => $unknownKeys,
+            'unknown_key_entries' => $unknownKeyEntries,
+        ];
     }
 
     /**

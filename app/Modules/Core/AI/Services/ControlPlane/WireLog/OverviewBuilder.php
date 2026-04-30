@@ -50,8 +50,8 @@ final class OverviewBuilder
             }
         }
 
-        $firstAt = $this->firstAt($entries);
-        $lastAt = $this->lastAt($entries);
+        $firstAt = EntryAtBounds::firstAt($entries);
+        $lastAt = EntryAtBounds::lastAt($entries);
         $totalDurationMs = $diffMs($firstAt, $lastAt);
 
         $timing = $this->buildTimingMarkers($entries, $firstAt, $diffMs);
@@ -128,20 +128,10 @@ final class OverviewBuilder
                 continue;
             }
 
-            $decoded = is_array($entry['decoded_payload'] ?? null) ? $entry['decoded_payload'] : null;
-            $rawLine = is_string($decoded['raw_line'] ?? null) ? $decoded['raw_line'] : '';
-
-            if (! str_starts_with($rawLine, StreamAssembler::SSE_DATA_PREFIX) || $rawLine === StreamAssembler::SSE_DONE_LINE) {
+            $delta = $this->streamDelta($entry);
+            if ($delta === null) {
                 continue;
             }
-
-            $payload = BlbJson::decodeArray(substr($rawLine, strlen(StreamAssembler::SSE_DATA_PREFIX)));
-
-            if (! is_array($payload)) {
-                continue;
-            }
-
-            $delta = is_array($payload['choices'][0]['delta'] ?? null) ? $payload['choices'][0]['delta'] : [];
 
             if ($markers['first_content'] === null && is_string($delta['content'] ?? null) && $delta['content'] !== '') {
                 $markers['first_content'] = $diffMs($firstAt, $at);
@@ -170,6 +160,32 @@ final class OverviewBuilder
     }
 
     /**
+     * @param  array<string, mixed>  $entry
+     * @return array<string, mixed>|null
+     */
+    private function streamDelta(array $entry): ?array
+    {
+        $decoded = is_array($entry['decoded_payload'] ?? null) ? $entry['decoded_payload'] : null;
+        $rawLine = is_string($decoded['raw_line'] ?? null) ? $decoded['raw_line'] : '';
+
+        if (! str_starts_with($rawLine, StreamAssembler::SSE_DATA_PREFIX) || $rawLine === StreamAssembler::SSE_DONE_LINE) {
+            return null;
+        }
+
+        $payload = BlbJson::decodeArray(substr($rawLine, strlen(StreamAssembler::SSE_DATA_PREFIX)));
+        if (! is_array($payload)) {
+            return null;
+        }
+
+        $choice = $payload['choices'][0] ?? null;
+        if (! is_array($choice)) {
+            return null;
+        }
+
+        return is_array($choice['delta'] ?? null) ? $choice['delta'] : [];
+    }
+
+    /**
      * @param  list<array<string, mixed>>  $attempts
      */
     private function totalContentLength(array $attempts): int
@@ -185,36 +201,6 @@ final class OverviewBuilder
         }
 
         return $total;
-    }
-
-    /**
-     * @param  list<array<string, mixed>>  $entries
-     */
-    private function firstAt(array $entries): ?string
-    {
-        foreach ($entries as $entry) {
-            if (is_string($entry['at'] ?? null)) {
-                return $entry['at'];
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @param  list<array<string, mixed>>  $entries
-     */
-    private function lastAt(array $entries): ?string
-    {
-        $last = null;
-
-        foreach ($entries as $entry) {
-            if (is_string($entry['at'] ?? null)) {
-                $last = $entry['at'];
-            }
-        }
-
-        return $last;
     }
 
     /**

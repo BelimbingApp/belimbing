@@ -3,11 +3,14 @@
 use Illuminate\Support\Facades\Blade;
 
 it('shows fallback diagnostics only to users who can access the control plane', function (): void {
+    $publicError = 'Public fallback failure';
+    $sensitiveDiagnostic = 'Sensitive diagnostic context';
+
     $fallbackAttempts = [[
         'provider' => 'anthropic',
         'model' => 'claude-opus-4',
-        'error' => 'Public fallback failure',
-        'diagnostic' => 'Sensitive diagnostic context',
+        'error' => $publicError,
+        'diagnostic' => $sensitiveDiagnostic,
     ]];
 
     $unauthorizedHtml = html_entity_decode(Blade::render(
@@ -20,8 +23,8 @@ it('shows fallback diagnostics only to users who can access the control plane', 
 
     expect($unauthorizedHtml)
         ->toContain('Fallbacks')
-        ->toContain('Public fallback failure')
-        ->not->toContain('Sensitive diagnostic context');
+        ->toContain($publicError)
+        ->not->toContain($sensitiveDiagnostic);
 
     $this->actingAs(createAdminUser());
 
@@ -34,8 +37,8 @@ it('shows fallback diagnostics only to users who can access the control plane', 
     ));
 
     expect($authorizedHtml)
-        ->toContain('Sensitive diagnostic context')
-        ->not->toContain('Public fallback failure');
+        ->toContain($sensitiveDiagnostic)
+        ->not->toContain($publicError);
 });
 
 it('renders the run detail popup as a native dialog with alpine popover behavior', function (): void {

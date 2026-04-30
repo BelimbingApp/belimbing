@@ -16,6 +16,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
+const INVENTORY_OEM_NUMBER_ATTRIBUTE_NAME = 'OEM Number';
+
 test('guests are redirected to login from inventory item pages', function (): void {
     $item = Item::factory()->create();
 
@@ -213,7 +215,7 @@ test('item detail page can edit catalog attributes and description versions', fu
     ]);
     $attribute = CatalogAttribute::factory()->create([
         'company_id' => $user->company_id,
-        'name' => 'OEM Number',
+        'name' => INVENTORY_OEM_NUMBER_ATTRIBUTE_NAME,
         'code' => 'oem_number',
     ]);
 
@@ -280,7 +282,7 @@ test('item detail page assigns catalog fit and filters applicable attributes', f
     $categoryAttribute = CatalogAttribute::factory()
         ->forCategory($category)
         ->create([
-            'name' => 'OEM Number',
+            'name' => INVENTORY_OEM_NUMBER_ATTRIBUTE_NAME,
         ]);
     $templateAttribute = CatalogAttribute::factory()
         ->forProductTemplate($template)
@@ -299,7 +301,7 @@ test('item detail page assigns catalog fit and filters applicable attributes', f
         ->call('saveCatalogAssignment')
         ->assertHasNoErrors()
         ->assertSee('Condition Grade')
-        ->assertSee('OEM Number')
+        ->assertSee(INVENTORY_OEM_NUMBER_ATTRIBUTE_NAME)
         ->assertSee('Interchange Number')
         ->assertDontSee('Paint Code')
         ->set('selectedAttributeId', $otherAttribute->id)
