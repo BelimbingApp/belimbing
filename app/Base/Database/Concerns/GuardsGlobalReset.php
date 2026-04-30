@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * Guards against global database reset/refresh.
  *
- * Blocks `migrate:refresh` and `migrate:reset` unless `--force-wipe` is
- * passed or the database is an in-memory SQLite test database.
+ * Blocks `migrate:refresh` and `migrate:reset` unless the database is an
+ * in-memory SQLite test database.
  *
  * `migrate:fresh --seed --dev` is the blessed full-reset workflow because it
  * respects table stability. `refresh`/`reset` operate at the migration level
@@ -24,7 +24,7 @@ trait GuardsGlobalReset
     use PrintsTableUnstableUsage;
 
     /**
-     * Block reset/refresh unless explicitly overridden.
+     * Block reset/refresh.
      *
      * Returns null when the operation is allowed, or Command::FAILURE
      * when it should be blocked.
@@ -37,10 +37,6 @@ trait GuardsGlobalReset
             return null;
         }
 
-        if ($this->option('force-wipe')) {
-            return null;
-        }
-
         $this->components->error(
             $this->name.' is blocked — it bypasses table stability and would wipe the entire database.'
         );
@@ -48,7 +44,6 @@ trait GuardsGlobalReset
         $this->line('  Use one of these instead:');
         $this->line('');
         $this->line('    <comment>php artisan migrate:fresh --seed --dev</comment>        Full rebuild (respects table stability)');
-        $this->line('    <comment>php artisan '.$this->name.' --force-wipe</comment>          Intentional full reset (dangerous)');
         $this->line('');
         $this->printTableUnstableUsage('  To mark specific tables unstable before migrate:fresh:');
 

@@ -26,7 +26,7 @@ class RefreshCommand extends IlluminateRefreshCommand
     /**
      * Execute the console command.
      *
-     * Blocks global refresh unless --force-wipe is explicitly passed.
+     * Blocks global refresh outside in-memory SQLite test databases.
      */
     public function handle(): int
     {
@@ -34,7 +34,7 @@ class RefreshCommand extends IlluminateRefreshCommand
             return $result;
         }
 
-        // Re-implement parent flow so we can pass --dev and --force-wipe through.
+        // Re-implement parent flow so we can pass --dev through.
         if ($this->isProhibited() || ! $this->confirmToProceed()) {
             return Command::FAILURE;
         }
@@ -57,7 +57,6 @@ class RefreshCommand extends IlluminateRefreshCommand
                 '--path' => $path,
                 '--realpath' => $this->input->getOption('realpath'),
                 '--force' => true,
-                '--force-wipe' => true,
             ]));
         }
 
@@ -83,7 +82,7 @@ class RefreshCommand extends IlluminateRefreshCommand
     /**
      * Get the console command options.
      *
-     * Adds --dev and --force-wipe to the parent options.
+     * Adds --dev to the parent options.
      *
      * {@inheritdoc}
      */
@@ -96,13 +95,6 @@ class RefreshCommand extends IlluminateRefreshCommand
             null,
             InputOption::VALUE_NONE,
             'Run dev seeders after production seeders (APP_ENV=local only). Implies --seed.',
-        ];
-
-        $options[] = [
-            'force-wipe',
-            null,
-            InputOption::VALUE_NONE,
-            'Allow destructive global refresh (bypasses safety guard).',
         ];
 
         return $options;

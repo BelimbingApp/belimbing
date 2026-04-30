@@ -132,8 +132,8 @@ The admin UI at `admin/system/database-tables` (local env only) also lets you to
 
 ## Agent Guardrails
 
-- **NEVER use `migrate:fresh --seed --dev --force-wipe`.** This flag bypasses table stability and destroys protected data. Only the human operator may decide to use it.
-- **NEVER run `migrate:fresh` without first marking the affected tables unstable** via `blb:table:unstable`. Follow the schema change workflow below.
+- **NEVER wipe the entire database as a shortcut** (local or otherwise). BLB enforces **table stability** so `migrate:fresh` only rebuilds tables explicitly marked unstable.
+- **If you need to change a migration file, first mark the affected table(s) unstable** via `blb:table:unstable`, then rebuild with `migrate:fresh`. Follow the schema change workflow below.
 - **Prefer editing the source migration** over creating additive migrations during the initialization phase (no production data to preserve).
 
 ## Local Development — Command Decision Guide

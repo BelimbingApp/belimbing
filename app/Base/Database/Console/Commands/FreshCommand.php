@@ -31,9 +31,8 @@ class FreshCommand extends IlluminateFreshCommand
      * Execute the console command.
      *
      * Re-implements parent to support table stability. Tables marked as stable
-     * are preserved during the wipe unless --force-wipe is passed. Passes
-     * --seed, --seeder, and --dev through to `migrate` instead of handling
-     * seeding separately.
+     * are preserved during the wipe. Passes --seed, --seeder, and --dev through
+     * to `migrate` instead of handling seeding separately.
      */
     public function handle()
     {
@@ -43,25 +42,13 @@ class FreshCommand extends IlluminateFreshCommand
         }
 
         $database = $this->input->getOption('database');
-        $forceWipe = $this->option('force-wipe');
-
-        $this->migrator->usingConnection($database, function () use ($database, $forceWipe) {
+        $this->migrator->usingConnection($database, function () use ($database) {
             if (! $this->migrator->repositoryExists()) {
                 return;
             }
 
             $this->newLine();
-
-            if ($forceWipe) {
-                $this->components->task('Dropping all tables (force wipe)', fn () => $this->callSilent('db:wipe', array_filter([
-                    '--database' => $database,
-                    '--drop-views' => $this->option('drop-views'),
-                    '--drop-types' => $this->option('drop-types'),
-                    '--force' => true,
-                ])) == 0);
-            } else {
-                $this->dropTablesSelectively($database);
-            }
+            $this->dropTablesSelectively($database);
         });
 
         $this->newLine();
@@ -121,7 +108,6 @@ class FreshCommand extends IlluminateFreshCommand
         if (empty($tablesToDrop)) {
             $this->components->info('All tables are stable — nothing to drop.');
             $this->printTableUnstableUsage('  To mark tables unstable so they can be dropped:');
-            $this->line('    <comment>php artisan migrate:fresh --seed --dev --force-wipe</comment>  Ignore stability (nuclear)');
             $this->line('');
 
             return;
@@ -304,7 +290,7 @@ class FreshCommand extends IlluminateFreshCommand
     /**
      * Get the console command options.
      *
-     * Extends parent by adding --dev and --force-wipe options.
+     * Extends parent by adding --dev.
      *
      * @return array
      */
@@ -312,7 +298,6 @@ class FreshCommand extends IlluminateFreshCommand
     {
         return array_merge(parent::getOptions(), [
             ['dev', null, InputOption::VALUE_NONE, 'Run dev seeders after production seeders (APP_ENV=local only). Implies --seed.'],
-            ['force-wipe', null, InputOption::VALUE_NONE, 'Ignore table stability — drop ALL tables (original migrate:fresh behavior).'],
         ]);
     }
 }
