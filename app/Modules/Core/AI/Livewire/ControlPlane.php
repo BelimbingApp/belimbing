@@ -378,6 +378,7 @@ class ControlPlane extends Component
             LifecycleAction::PruneWireLogs => [
                 'retention_days' => $this->lifecycleRetentionDays,
             ],
+            LifecycleAction::RefreshPricingSnapshot => [],
         };
     }
 }

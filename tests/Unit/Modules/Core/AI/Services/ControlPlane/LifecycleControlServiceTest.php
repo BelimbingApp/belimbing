@@ -20,6 +20,7 @@ use App\Modules\Core\AI\Services\ControlPlane\OperationalTelemetryService;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\Memory\MemoryCompactor;
 use App\Modules\Core\AI\Services\OperationsDispatchService;
+use App\Modules\Core\AI\Services\Pricing\RefreshPricingSnapshot;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
@@ -65,6 +66,7 @@ function makeLcsMocks(): array
         'sessionManager' => Mockery::mock(SessionManager::class),
         'telemetry' => $telemetry,
         'wireLogger' => Mockery::mock(WireLogger::class),
+        'pricingSnapshotRefresher' => Mockery::mock(RefreshPricingSnapshot::class),
     ];
 }
 
@@ -78,6 +80,7 @@ function makeLcsService(array $mocks): LifecycleControlService
         $mocks['sessionManager'],
         $mocks['telemetry'],
         $mocks['wireLogger'],
+        $mocks['pricingSnapshotRefresher'],
     );
 }
 
@@ -227,6 +230,28 @@ describe('preview', function () {
             ->and($preview->affectedSummary[0])->toContain('14')
             ->and($preview->affectedSummary[0])->toContain('4');
     });
+
+    it('previews pricing snapshot refresh with current stats', function () {
+        $mocks = makeLcsMocks();
+        $mocks['pricingSnapshotRefresher']->shouldReceive('stats')
+            ->once()
+            ->andReturn([
+                'source' => 'litellm',
+                'snapshot_date' => '2026-04-29',
+                'last_refreshed_at' => '2026-04-29T02:30:00+00:00',
+                'model_count' => 12,
+                'row_count' => 14,
+                'age_days' => 1,
+            ]);
+
+        $service = makeLcsService($mocks);
+        $preview = $service->preview(LifecycleAction::RefreshPricingSnapshot);
+
+        expect($preview->action)->toBe(LifecycleAction::RefreshPricingSnapshot)
+            ->and($preview->isDestructive)->toBeFalse()
+            ->and($preview->affectedCount)->toBe(14)
+            ->and($preview->affectedSummary[1])->toContain('12');
+    });
 });
 
 // ------------------------------------------------------------------
@@ -307,6 +332,41 @@ describe('execute', function () {
         expect($result->status)->toBe(LifecycleActionStatus::Completed)
             ->and($result->result['pruned_wire_logs'])->toBe(3)
             ->and($result->result['retention_days'])->toBe(7);
+    });
+
+    it('executes pricing snapshot refresh and records lifecycle request', function () {
+        $mocks = makeLcsMocks();
+        $mocks['pricingSnapshotRefresher']->shouldReceive('stats')
+            ->once()
+            ->andReturn([
+                'source' => 'litellm',
+                'snapshot_date' => null,
+                'last_refreshed_at' => null,
+                'model_count' => 0,
+                'row_count' => 0,
+                'age_days' => null,
+            ]);
+        $mocks['pricingSnapshotRefresher']->shouldReceive('refresh')
+            ->once()
+            ->andReturn([
+                'source' => 'litellm',
+                'snapshot_date' => '2026-04-30',
+                'last_refreshed_at' => '2026-04-30T02:30:00+00:00',
+                'model_count' => 2,
+                'row_count' => 2,
+                'age_days' => 0,
+                'refreshed' => true,
+                'used_fallback' => false,
+                'imported_count' => 2,
+                'skipped_count' => 1,
+            ]);
+
+        $service = makeLcsService($mocks);
+        $result = $service->execute(LifecycleAction::RefreshPricingSnapshot);
+
+        expect($result->status)->toBe(LifecycleActionStatus::Completed)
+            ->and($result->result['refreshed'])->toBeTrue()
+            ->and($result->result['model_count'])->toBe(2);
     });
 
     it('executes sweep browser sessions', function () {

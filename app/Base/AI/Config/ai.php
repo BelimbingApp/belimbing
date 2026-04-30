@@ -163,6 +163,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Pricing Telemetry
+    |--------------------------------------------------------------------------
+    |
+    | Token-price snapshots feed per-call AI cost telemetry. The LiteLLM
+    | snapshot is a best-effort public source and can be refreshed on demand
+    | from the AI Control Plane lifecycle tab.
+    |
+    */
+    'pricing' => [
+        'litellm_snapshot_url' => env(
+            'AI_PRICING_LITELLM_SNAPSHOT_URL',
+            'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json',
+        ),
+        'refresh_timeout_seconds' => (int) env('AI_PRICING_REFRESH_TIMEOUT_SECONDS', 30),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Lara (System Agent)
     |--------------------------------------------------------------------------
     |

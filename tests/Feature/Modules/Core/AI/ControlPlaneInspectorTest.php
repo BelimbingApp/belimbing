@@ -6,6 +6,7 @@
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Livewire\ControlPlane;
 use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Models\AiRunCall;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Support\Facades\File;
@@ -319,6 +320,57 @@ it('renders the readable view with reassembled artifacts, anomaly chips, attempt
         ->assertSee('id="wire-log-entry-6"', escape: false);
 
     File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_READABLE_RUN_ID.CONTROL_PLANE_WIRE_LOG_EXTENSION));
+});
+
+it('renders run usage costs and pricing source labels', function (): void {
+    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    Employee::provisionLara();
+
+    $user = createAdminUser();
+
+    createControlPlaneRun('run_control_plane_costed');
+    AiRun::query()
+        ->whereKey('run_control_plane_costed')
+        ->update([
+            'prompt_tokens' => 100,
+            'cached_input_tokens' => 25,
+            'completion_tokens' => 10,
+            'total_tokens' => 110,
+            'cost_total_cents' => 95,
+            'pricing_version' => 'override:1',
+            'call_count' => 1,
+        ]);
+
+    AiRunCall::query()->create([
+        'run_id' => 'run_control_plane_costed',
+        'attempt_index' => 0,
+        'provider' => 'openai',
+        'model' => 'gpt-5.4',
+        'finish_reason' => 'stop',
+        'latency_ms' => 500,
+        'prompt_tokens' => 100,
+        'cached_input_tokens' => 25,
+        'completion_tokens' => 10,
+        'total_tokens' => 110,
+        'pricing_source' => 'override',
+        'pricing_version' => 'override:1',
+        'cost_total_cents' => 95,
+        'started_at' => now(),
+        'finished_at' => now(),
+    ]);
+
+    $response = $this->actingAs($user)->get(route('admin.ai.control-plane', [
+        'tab' => 'inspector',
+        'runId' => 'run_control_plane_costed',
+    ]));
+
+    $response->assertOk()
+        ->assertSee('Cost')
+        ->assertSee('$0.95')
+        ->assertSee('override:1')
+        ->assertSee('Pricing')
+        ->assertSee('override')
+        ->assertSee('gpt-5.4');
 });
 
 it('streams oversized raw wire-log entries without loading them through Livewire', function (): void {

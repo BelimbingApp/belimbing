@@ -19,10 +19,10 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'blb:ai:lifecycle:execute')]
 class LifecycleExecuteCommand extends Command
 {
-    protected $description = 'Execute a lifecycle action (compact, prune, sweep) with audit';
+    protected $description = 'Execute a lifecycle action (compact, prune, sweep, refresh) with audit';
 
     protected $signature = 'blb:ai:lifecycle:execute
-        {action : Action type (compact_memory, prune_sessions, prune_artifacts, sweep_browser_sessions, sweep_operations)}
+        {action : Action type (compact_memory, prune_sessions, prune_artifacts, sweep_browser_sessions, sweep_operations, prune_wire_logs, refresh_pricing_snapshot)}
         {--employee= : Agent employee ID (for memory/session actions)}
         {--retention-days=30 : Retention period in days (for prune actions)}
         {--session= : Browser session ID (for artifact pruning)}
@@ -85,7 +85,7 @@ class LifecycleExecuteCommand extends Command
             $scope['employee_id'] = (int) $this->option('employee');
         }
 
-        if ($action === LifecycleAction::PruneSessions) {
+        if (in_array($action, [LifecycleAction::PruneSessions, LifecycleAction::PruneWireLogs], true)) {
             $scope['retention_days'] = (int) $this->option('retention-days');
         }
 

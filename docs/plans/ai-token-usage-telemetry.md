@@ -108,7 +108,7 @@ Goal: `usage` is recognized, parsed, attached to a per-call row, costed, and sho
 - [x] `RunRecorder::recordCall()` — upsert an `ai_run_calls` row per terminal `done` event keyed by (run_id, attempt_index); recompute `ai_runs` aggregates after each call
 - [x] Replace `streamState['usage']` accumulator behavior in `AgenticToolLoopStreamReader` with per-iteration recording (no overwrite); each iteration writes a row, run aggregates sum across rows
 - [x] **UI: Run Detail** — header shows totals (`prompt / completion / total`, cache and reasoning splits); a "Calls" table lists per-call rows with their own usage, latency, finish reason. Mirror on Control Plane > Run Inspector.
-- [ ] **UI: cost in Run Detail header** — deferred to Phase 2 alongside pricing; column already exists on `ai_runs.cost_total_cents`
+- [x] **UI: cost in Run Detail header** — shows aggregate cost once pricing has been resolved
 - [x] Pest tests: streamed `usage` no longer raises `unknown_keys`; multi-call tool loop persists N rows; aggregates equal SUM of children; recordCall is idempotent on duplicate (run_id, attempt_index)
 
 Evidence: 23 tests pass across `CallUsageTest`, `RunRecorderTest`, and `WireLogReadableFormatterTest`; full AI suite still green (1204 tests, 4246 assertions). Open `run_6g2xDDseIA71` in the inspector and the "Unknown delta keys" anomaly is gone; Run Detail renders totals + Calls table.
@@ -119,10 +119,10 @@ Goal: prices are resolved from authoritative sources, refreshed on a schedule, a
 
 - [x] Migration: `ai_pricing_snapshots` (model, provider, input_per_token, cached_input_per_token, output_per_token, snapshot_date, source) and `ai_pricing_overrides` (model, provider, rates, reason, created_by)
 - [ ] Implement `PricingSourceRegistry` with `OverrideResolver`, `OpenRouterApiResolver`, `LiteLLMSnapshotResolver` (override + LiteLLM snapshot resolver landed; OpenRouter live resolver seam exists, network-backed implementation deferred to refresh action)
-- [ ] `RefreshPricingSnapshot` lifecycle action (nightly schedule, also runnable on demand from Lifecycle tab); idempotent; failure falls back to previous snapshot
+- [x] `RefreshPricingSnapshot` lifecycle action (nightly schedule, also runnable on demand from Lifecycle tab); idempotent; failure falls back to previous snapshot
 - [x] Wire `TokenCostCalculator` to consume `PricingSourceRegistry` output; persist `pricing_source` and `pricing_version` on each call
-- [ ] **UI: pricing source pill** on each call row in the Run Detail / Run Inspector calls table (e.g., `litellm:2026-04-29`)
-- [ ] **UI: Lifecycle tab** gets a "Refresh pricing snapshot" action with last-refreshed timestamp and current snapshot stats (model count, age)
+- [x] **UI: pricing source pill** on each call row in the Run Detail / Run Inspector calls table (e.g., `litellm:2026-04-29`)
+- [x] **UI: Lifecycle tab** gets a "Refresh pricing snapshot" action with last-refreshed timestamp and current snapshot stats (model count, age)
 - [ ] **UI: Admin > AI > Pricing Overrides** CRUD page
 - [ ] Pest tests: registry resolves in priority order; missing model returns null cost without throwing; nightly action updates snapshot table
 

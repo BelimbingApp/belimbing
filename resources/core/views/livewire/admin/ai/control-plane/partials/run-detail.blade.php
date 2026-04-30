@@ -5,6 +5,9 @@
 
 /** @var array<string, mixed> $run */
 $controlPlaneContext = request()->only(['from', 'returnTo']);
+$formatCents = static fn (?int $cents): string => $cents !== null
+    ? '$'.number_format($cents / 100, 2)
+    : '—';
 ?>
 <div class="space-y-3">
     {{-- Key facts row --}}
@@ -83,7 +86,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
     </div>
 
     {{-- Tokens and timing --}}
-    <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Tokens (prompt)') }}</span>
             <p class="text-sm text-ink mt-1 tabular-nums">
@@ -109,6 +112,15 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('LLM Calls') }}</span>
             <p class="text-sm text-ink mt-1 tabular-nums">{{ number_format((int) ($run['call_count'] ?? 0)) }}</p>
+        </div>
+        <div>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Cost') }}</span>
+            <p class="text-sm text-ink mt-1 tabular-nums">
+                {{ $formatCents(isset($run['cost_total_cents']) ? (int) $run['cost_total_cents'] : null) }}
+                @if(! empty($run['pricing_version']))
+                    <span class="text-muted text-xs">{{ $run['pricing_version'] }}</span>
+                @endif
+            </p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Retries') }}</span>
@@ -137,6 +149,8 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                             <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Completion') }}</th>
                             <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Reasoning') }}</th>
                             <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Total') }}</th>
+                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Cost') }}</th>
+                            <th class="text-left py-table-cell-y px-table-cell-x font-semibold">{{ __('Pricing') }}</th>
                             <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Latency') }}</th>
                             <th class="text-left py-table-cell-y px-table-cell-x font-semibold">{{ __('Finish') }}</th>
                         </tr>
@@ -151,6 +165,14 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                                 <td class="py-table-cell-y px-table-cell-x tabular-nums text-right text-ink">{{ $call['completion_tokens'] !== null ? number_format((int) $call['completion_tokens']) : '—' }}</td>
                                 <td class="py-table-cell-y px-table-cell-x tabular-nums text-right text-muted">{{ $call['reasoning_tokens'] !== null ? number_format((int) $call['reasoning_tokens']) : '—' }}</td>
                                 <td class="py-table-cell-y px-table-cell-x tabular-nums text-right text-ink">{{ $call['total_tokens'] !== null ? number_format((int) $call['total_tokens']) : '—' }}</td>
+                                <td class="py-table-cell-y px-table-cell-x tabular-nums text-right text-ink">{{ $formatCents($call['cost_total_cents'] !== null ? (int) $call['cost_total_cents'] : null) }}</td>
+                                <td class="py-table-cell-y px-table-cell-x text-muted">
+                                    @if(! empty($call['pricing_source']))
+                                        <x-ui.badge variant="default">{{ $call['pricing_source'] }}</x-ui.badge>
+                                    @else
+                                        —
+                                    @endif
+                                </td>
                                 <td class="py-table-cell-y px-table-cell-x tabular-nums text-right text-muted">{{ $call['latency_ms'] !== null ? number_format((int) $call['latency_ms']) . ' ms' : '—' }}</td>
                                 <td class="py-table-cell-y px-table-cell-x text-muted">{{ $call['finish_reason'] ?? '—' }}</td>
                             </tr>

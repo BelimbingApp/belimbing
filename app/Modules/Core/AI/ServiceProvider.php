@@ -20,6 +20,7 @@ use App\Modules\Core\AI\Console\Commands\MemoryCompactCommand;
 use App\Modules\Core\AI\Console\Commands\MemoryIndexCommand;
 use App\Modules\Core\AI\Console\Commands\OperationsStatusCommand;
 use App\Modules\Core\AI\Console\Commands\OperationsSweepCommand;
+use App\Modules\Core\AI\Console\Commands\PricingSnapshotRefreshCommand;
 use App\Modules\Core\AI\Console\Commands\ReapOrphanRunsCommand;
 use App\Modules\Core\AI\Console\Commands\SchedulesTickCommand;
 use App\Modules\Core\AI\Console\Commands\SweepStaleTurnsCommand;
@@ -78,6 +79,7 @@ use App\Modules\Core\AI\Services\Orchestration\SkillPacks\KnowledgeSkillPack;
 use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
 use App\Modules\Core\AI\Services\PageContextHolder;
 use App\Modules\Core\AI\Services\PageContextResolver;
+use App\Modules\Core\AI\Services\Pricing\RefreshPricingSnapshot;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
 use App\Modules\Core\AI\Services\RuntimeSessionContext;
 use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionService;
@@ -222,6 +224,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(LifecycleControlService::class);
         $this->app->singleton(PolicyEvaluationService::class);
         $this->app->singleton(WireLogger::class);
+        $this->app->singleton(RefreshPricingSnapshot::class);
 
         $this->registerToolRegistries();
 
@@ -255,6 +258,7 @@ class ServiceProvider extends BaseServiceProvider
                 HealthSnapshotCommand::class,
                 LifecyclePreviewCommand::class,
                 LifecycleExecuteCommand::class,
+                PricingSnapshotRefreshCommand::class,
                 CodexAuthListenCommand::class,
             ]);
         }

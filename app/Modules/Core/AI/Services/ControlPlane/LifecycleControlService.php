@@ -16,6 +16,7 @@ use App\Modules\Core\AI\Services\Browser\BrowserArtifactStore;
 use App\Modules\Core\AI\Services\Browser\BrowserSessionManager;
 use App\Modules\Core\AI\Services\Memory\MemoryCompactor;
 use App\Modules\Core\AI\Services\OperationsDispatchService;
+use App\Modules\Core\AI\Services\Pricing\RefreshPricingSnapshot;
 use App\Modules\Core\AI\Services\SessionManager;
 use Illuminate\Support\Str;
 
@@ -39,6 +40,7 @@ class LifecycleControlService
         private readonly SessionManager $sessionManager,
         private readonly OperationalTelemetryService $telemetry,
         private readonly WireLogger $wireLogger,
+        private readonly RefreshPricingSnapshot $pricingSnapshotRefresher,
     ) {}
 
     /**
@@ -56,6 +58,7 @@ class LifecycleControlService
             LifecycleAction::SweepBrowserSessions => $this->previewSweepBrowserSessions(),
             LifecycleAction::SweepOperations => $this->previewSweepOperations($scope),
             LifecycleAction::PruneWireLogs => $this->previewPruneWireLogs($scope),
+            LifecycleAction::RefreshPricingSnapshot => $this->previewRefreshPricingSnapshot(),
         };
     }
 
@@ -94,6 +97,7 @@ class LifecycleControlService
                 LifecycleAction::SweepBrowserSessions => $this->executeSweepBrowserSessions(),
                 LifecycleAction::SweepOperations => $this->executeSweepOperations($scope),
                 LifecycleAction::PruneWireLogs => $this->executePruneWireLogs($scope),
+                LifecycleAction::RefreshPricingSnapshot => $this->executeRefreshPricingSnapshot(),
             };
 
             $request->markCompleted($result);
@@ -288,6 +292,33 @@ class LifecycleControlService
         );
     }
 
+    private function previewRefreshPricingSnapshot(): LifecyclePreview
+    {
+        $stats = $this->pricingSnapshotRefresher->stats();
+        $lastRefreshed = $stats['last_refreshed_at'] ?? null;
+        $current = $stats['snapshot_date'] !== null
+            ? __('Current LiteLLM snapshot: :models model(s), :rows row(s), dated :date (:age day(s) old). Last refreshed: :refreshed.', [
+                'models' => number_format((int) $stats['model_count']),
+                'rows' => number_format((int) $stats['row_count']),
+                'date' => $stats['snapshot_date'],
+                'age' => $stats['age_days'],
+                'refreshed' => is_string($lastRefreshed) && $lastRefreshed !== '' ? $lastRefreshed : __('unknown'),
+            ])
+            : __('No LiteLLM pricing snapshot has been imported yet.');
+
+        return new LifecyclePreview(
+            action: LifecycleAction::RefreshPricingSnapshot,
+            scope: [],
+            affectedCount: (int) $stats['row_count'],
+            affectedSummary: [
+                __('The refresh will fetch the configured LiteLLM pricing source and upsert today\'s local snapshot rows.'),
+                $current,
+            ],
+            isDestructive: false,
+            generatedAt: now()->toIso8601String(),
+        );
+    }
+
     // -- Execute implementations --
 
     /**
@@ -371,6 +402,14 @@ class LifecycleControlService
             'pruned_wire_logs' => $deleted,
             'retention_days' => $retentionDays,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function executeRefreshPricingSnapshot(): array
+    {
+        return $this->pricingSnapshotRefresher->refresh();
     }
 
     /**

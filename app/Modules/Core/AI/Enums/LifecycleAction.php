@@ -31,6 +31,9 @@ enum LifecycleAction: string
     /** Prune retained per-run wire log files. */
     case PruneWireLogs = 'prune_wire_logs';
 
+    /** Refresh imported AI model token pricing snapshots. */
+    case RefreshPricingSnapshot = 'refresh_pricing_snapshot';
+
     /**
      * Human-readable label.
      */
@@ -43,6 +46,7 @@ enum LifecycleAction: string
             self::SweepBrowserSessions => 'Sweep Browser Sessions',
             self::SweepOperations => 'Sweep Operations',
             self::PruneWireLogs => 'Prune Wire Logs',
+            self::RefreshPricingSnapshot => 'Refresh Pricing Snapshot',
         };
     }
 
@@ -56,6 +60,7 @@ enum LifecycleAction: string
             self::PruneSessions, self::PruneArtifacts => true,
             self::SweepBrowserSessions, self::SweepOperations => false,
             self::PruneWireLogs => true,
+            self::RefreshPricingSnapshot => false,
         };
     }
 
@@ -68,6 +73,7 @@ enum LifecycleAction: string
             self::SweepBrowserSessions => __('Mark expired browser sessions as swept so abandoned automation contexts stop accumulating.'),
             self::SweepOperations => __('Cancel or mark stale background operations that appear to be stuck.'),
             self::PruneWireLogs => __('Delete retained per-run transport wire logs older than the selected retention window.'),
+            self::RefreshPricingSnapshot => __('Fetch the latest LiteLLM token pricing snapshot and update the local pricing registry.'),
         };
     }
 }
