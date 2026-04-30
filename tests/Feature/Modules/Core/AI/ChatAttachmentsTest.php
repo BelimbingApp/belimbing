@@ -9,6 +9,8 @@ use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
+const CHAT_ATTACHMENT_DOC_FILENAME = 'att_doc1_notes.txt';
+
 beforeEach(function (): void {
     config()->set('ai.workspace_path', storage_path('framework/testing/ai-chat-attachments-'.Str::random(16)));
 });
@@ -68,7 +70,7 @@ it('streams session attachments by attachment id', function (): void {
     File::ensureDirectoryExists($dir);
 
     File::put($dir.'/att_img1_diagram.png', tinyPngFixture());
-    File::put($dir.'/att_doc1_notes.txt', 'hello');
+    File::put($dir.'/'.CHAT_ATTACHMENT_DOC_FILENAME, 'hello');
 
     $img = test()
         ->get(route('ai.chat.attachments.show', [
@@ -96,7 +98,7 @@ it('streams session attachments by attachment id', function (): void {
     expect($doc->baseResponse->headers->get('content-disposition'))
         ->toBe('attachment')
         ->and($doc->baseResponse->headers->get('content-type'))->toStartWith('text/plain')
-        ->and($doc->baseResponse->getFile()->getPathname())->toBe($dir.'/att_doc1_notes.txt');
+        ->and($doc->baseResponse->getFile()->getPathname())->toBe($dir.'/'.CHAT_ATTACHMENT_DOC_FILENAME);
 });
 
 it('returns 404 when the requested attachment id does not exist for the session', function (): void {
@@ -106,7 +108,7 @@ it('returns 404 when the requested attachment id does not exist for the session'
 
     $dir = app(SessionManager::class)->sessionsPath(Employee::LARA_ID).'/attachments/'.$session->id;
     File::ensureDirectoryExists($dir);
-    File::put($dir.'/att_doc1_notes.txt', 'hello');
+    File::put($dir.'/'.CHAT_ATTACHMENT_DOC_FILENAME, 'hello');
 
     test()
         ->get(route('ai.chat.attachments.show', [

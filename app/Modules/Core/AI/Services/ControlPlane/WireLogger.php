@@ -274,34 +274,15 @@ class WireLogger
 
                 $totalEntries++;
                 $previewEntry = $previewer->previewEntry($totalEntries, $line['line'], $line['truncated']);
-                $lastEntries[] = $previewEntry;
-
-                if (count($lastEntries) > $limit) {
-                    array_shift($lastEntries);
-                }
-
-                if ($totalEntries <= $offset) {
-                    continue;
-                }
-
-                if (count($entries) < $limit) {
-                    $entries[] = $previewEntry;
-                    $extendStreamBlock = count($entries) >= $limit && $this->isStreamLinePreviewEntry($previewEntry);
-
-                    continue;
-                }
-
-                if (! $extendStreamBlock) {
-                    continue;
-                }
-
-                if (! $this->isStreamLinePreviewEntry($previewEntry)) {
-                    $extendStreamBlock = false;
-
-                    continue;
-                }
-
-                $entries[] = $previewEntry;
+                $this->acceptPreviewEntry(
+                    $previewEntry,
+                    $totalEntries,
+                    $offset,
+                    $limit,
+                    $entries,
+                    $lastEntries,
+                    $extendStreamBlock,
+                );
             }
         } finally {
             fclose($handle);
@@ -320,6 +301,50 @@ class WireLogger
             'total_entries' => $totalEntries,
             'effective_offset' => $offset,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $previewEntry
+     * @param  list<array<string, mixed>>  $entries
+     * @param  list<array<string, mixed>>  $lastEntries
+     */
+    private function acceptPreviewEntry(
+        array $previewEntry,
+        int $totalEntries,
+        int $offset,
+        int $limit,
+        array &$entries,
+        array &$lastEntries,
+        bool &$extendStreamBlock,
+    ): void {
+        $lastEntries[] = $previewEntry;
+
+        if (count($lastEntries) > $limit) {
+            array_shift($lastEntries);
+        }
+
+        if ($totalEntries <= $offset) {
+            return;
+        }
+
+        if (count($entries) < $limit) {
+            $entries[] = $previewEntry;
+            $extendStreamBlock = count($entries) >= $limit && $this->isStreamLinePreviewEntry($previewEntry);
+
+            return;
+        }
+
+        if (! $extendStreamBlock) {
+            return;
+        }
+
+        if (! $this->isStreamLinePreviewEntry($previewEntry)) {
+            $extendStreamBlock = false;
+
+            return;
+        }
+
+        $entries[] = $previewEntry;
     }
 
     /**

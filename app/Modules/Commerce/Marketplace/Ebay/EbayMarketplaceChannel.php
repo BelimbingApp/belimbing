@@ -15,6 +15,7 @@ use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Sales\DTO\SalesOrderData;
 use App\Modules\Commerce\Sales\DTO\SalesOrderLineData;
 use App\Modules\Commerce\Sales\Services\SalesOrderMaterializer;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Carbon;
 
 class EbayMarketplaceChannel implements MarketplaceChannel
@@ -53,25 +54,17 @@ class EbayMarketplaceChannel implements MarketplaceChannel
             $inventoryItems = $inventoryResponse['inventoryItems'] ?? [];
 
             foreach ($inventoryItems as $inventoryItem) {
-                $sku = (string) ($inventoryItem['sku'] ?? '');
-                if ($sku === '') {
-                    continue;
-                }
+                $delta = $this->processInventoryItemOffers(
+                    $client,
+                    $companyId,
+                    $inventoryItem,
+                    marketplaceId: (string) $config['marketplace_id'],
+                );
 
-                $offerResponse = $client->get('/sell/inventory/v1/offer', [
-                    'sku' => $sku,
-                    'marketplace_id' => $config['marketplace_id'],
-                ])->throw()->json();
-
-                foreach ($offerResponse['offers'] ?? [] as $offer) {
-                    $fetched++;
-                    $listing = $this->upsertOffer($companyId, $offer, $inventoryItem);
-                    $listing->wasRecentlyCreated ? $created++ : $updated++;
-
-                    if ($listing->item_id !== null) {
-                        $linked++;
-                    }
-                }
+                $fetched += $delta['fetched'];
+                $created += $delta['created'];
+                $updated += $delta['updated'];
+                $linked += $delta['linked'];
             }
 
             $total = (int) ($inventoryResponse['total'] ?? count($inventoryItems));
@@ -176,6 +169,44 @@ class EbayMarketplaceChannel implements MarketplaceChannel
                 ],
             ],
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $inventoryItem
+     * @return array{fetched: int, created: int, updated: int, linked: int}
+     */
+    private function processInventoryItemOffers(
+        PendingRequest $client,
+        int $companyId,
+        array $inventoryItem,
+        string $marketplaceId,
+    ): array {
+        $sku = (string) ($inventoryItem['sku'] ?? '');
+        if ($sku === '') {
+            return ['fetched' => 0, 'created' => 0, 'updated' => 0, 'linked' => 0];
+        }
+
+        $offerResponse = $client->get('/sell/inventory/v1/offer', [
+            'sku' => $sku,
+            'marketplace_id' => $marketplaceId,
+        ])->throw()->json();
+
+        $fetched = 0;
+        $created = 0;
+        $updated = 0;
+        $linked = 0;
+
+        foreach ($offerResponse['offers'] ?? [] as $offer) {
+            $fetched++;
+            $listing = $this->upsertOffer($companyId, $offer, $inventoryItem);
+            $listing->wasRecentlyCreated ? $created++ : $updated++;
+
+            if ($listing->item_id !== null) {
+                $linked++;
+            }
+        }
+
+        return compact('fetched', 'created', 'updated', 'linked');
     }
 
     /**

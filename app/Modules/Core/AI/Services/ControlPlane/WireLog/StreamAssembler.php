@@ -256,26 +256,52 @@ final class StreamAssembler
             'unknown_keys' => [],
         ];
 
-        if ($previewStatus === 'decode_error' || $previewStatus === 'encode_error' || $previewStatus === 'line_omitted') {
-            return array_merge($base, [
-                'kind' => 'decode_error',
-                'text' => $previewStatus === 'line_omitted'
-                    ? __('Line omitted (oversized)')
-                    : __('Decode error'),
-                'severity' => 'warning',
-                'tool_index' => null,
-                'tool_call_id' => null,
-            ]);
+        $previewStatusFragment = $this->previewStatusFragment($base, $previewStatus);
+        if ($previewStatusFragment !== null) {
+            return $previewStatusFragment;
         }
 
+        $controlLineFragment = $this->controlLineFragment($base, $rawLine, $pendingEventType, $responsesMessagePhase);
+        if ($controlLineFragment !== null) {
+            return $controlLineFragment;
+        }
+
+        return $this->dataLineFragment($base, $rawLine, $pendingEventType, $responsesMessagePhase);
+    }
+
+    /**
+     * @param  array<string, mixed>  $base
+     * @return array<string, mixed>|null
+     */
+    private function previewStatusFragment(array $base, string $previewStatus): ?array
+    {
+        if (! in_array($previewStatus, ['decode_error', 'encode_error', 'line_omitted'], true)) {
+            return null;
+        }
+
+        return array_merge($base, [
+            'kind' => 'decode_error',
+            'text' => $previewStatus === 'line_omitted'
+                ? __('Line omitted (oversized)')
+                : __('Decode error'),
+            'severity' => 'warning',
+            'tool_index' => null,
+            'tool_call_id' => null,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $base
+     * @return array<string, mixed>|null
+     */
+    private function controlLineFragment(
+        array $base,
+        string $rawLine,
+        ?string &$pendingEventType,
+        ?string &$responsesMessagePhase,
+    ): ?array {
         if ($rawLine === '' || $rawLine === self::SSE_DATA_PREFIX) {
-            return array_merge($base, [
-                'kind' => 'empty',
-                'text' => '',
-                'severity' => 'default',
-                'tool_index' => null,
-                'tool_call_id' => null,
-            ]);
+            return $this->emptyFragment($base);
         }
 
         if ($rawLine === self::SSE_DONE_LINE) {
@@ -313,6 +339,19 @@ final class StreamAssembler
             ]);
         }
 
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $base
+     * @return array<string, mixed>
+     */
+    private function dataLineFragment(
+        array $base,
+        string $rawLine,
+        ?string &$pendingEventType,
+        ?string &$responsesMessagePhase,
+    ): array {
         $payload = BlbJson::decodeArray(substr($rawLine, strlen(self::SSE_DATA_PREFIX)));
         $eventType = $pendingEventType;
         $pendingEventType = null;
@@ -330,7 +369,7 @@ final class StreamAssembler
         $eventType ??= is_string($payload['type'] ?? null) ? $payload['type'] : null;
 
         if (is_string($eventType) && str_starts_with($eventType, 'response.')) {
-            return $this->classifyResponsesSseChunk($base, $eventType, $payload, $responsesMessagePhase);
+            return ResponsesSseChunkClassifier::classify($base, $eventType, $payload, $responsesMessagePhase);
         }
 
         return $this->classifySseChunk($base, $payload);
@@ -408,227 +447,6 @@ final class StreamAssembler
 
     /**
      * @param  array<string, mixed>  $base
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    private function classifyResponsesSseChunk(
-        array $base,
-        string $eventType,
-        array $payload,
-        ?string &$responsesMessagePhase,
-    ): array {
-        return match ($eventType) {
-            'response.output_text.delta' => $this->responsesTextFragment(
-                $base,
-                $payload,
-                $responsesMessagePhase === 'commentary' ? 'reasoning' : 'content',
-                $responsesMessagePhase === 'commentary' ? 'info' : 'default',
-            ),
-            'response.refusal.delta' => $this->responsesTextFragment($base, $payload, 'content', 'default'),
-            'response.reasoning_summary_text.delta',
-            'response.reasoning_text.delta' => $this->responsesTextFragment($base, $payload, 'reasoning', 'info'),
-            'response.output_item.added' => $this->responsesOutputItemAddedFragment($base, $payload, $responsesMessagePhase),
-            'response.function_call_arguments.delta' => $this->responsesToolArgumentsFragment($base, $payload),
-            'response.function_call_arguments.done' => $this->responsesToolArgumentsDoneFragment($base, $payload),
-            'response.output_item.done' => $this->responsesOutputItemDoneFragment($base, $payload, $responsesMessagePhase),
-            'response.completed' => $this->responsesCompletedFragment($base, $payload),
-            'response.failed' => $this->responsesFinishReasonFragment($base, 'error', 'danger'),
-            default => $this->emptyFragment($base),
-        };
-    }
-
-    /**
-     * @param  array<string, mixed>  $base
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    private function responsesTextFragment(array $base, array $payload, string $kind, string $severity): array
-    {
-        $delta = is_string($payload['delta'] ?? null) ? $payload['delta'] : '';
-
-        if ($delta === '') {
-            return $this->emptyFragment($base);
-        }
-
-        return array_merge($base, [
-            'kind' => $kind,
-            'text' => $delta,
-            'severity' => $severity,
-            'tool_index' => null,
-            'tool_call_id' => null,
-        ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $base
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    private function responsesOutputItemAddedFragment(array $base, array $payload, ?string &$responsesMessagePhase): array
-    {
-        $item = is_array($payload['item'] ?? null) ? $payload['item'] : [];
-
-        if (($item['type'] ?? null) === 'message') {
-            $responsesMessagePhase = is_string($item['phase'] ?? null) ? $item['phase'] : null;
-
-            return $this->emptyFragment($base);
-        }
-
-        if (($item['type'] ?? null) !== 'function_call') {
-            return $this->emptyFragment($base);
-        }
-
-        $index = is_int($payload['output_index'] ?? null) ? (int) $payload['output_index'] : 0;
-        $callId = is_string($item['call_id'] ?? null) ? $item['call_id'] : null;
-        $name = is_string($item['name'] ?? null) ? $item['name'] : null;
-
-        if ($name === null || $name === '') {
-            return $this->emptyFragment($base);
-        }
-
-        return array_merge($base, [
-            'kind' => 'tool_call',
-            'text' => $name,
-            'severity' => 'accent',
-            'tool_index' => $index,
-            'tool_call_id' => $callId,
-            'tool_name' => $name,
-            'tool_arguments' => null,
-        ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $base
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    private function responsesToolArgumentsFragment(array $base, array $payload): array
-    {
-        $delta = is_string($payload['delta'] ?? null) ? $payload['delta'] : '';
-
-        if ($delta === '') {
-            return $this->emptyFragment($base);
-        }
-
-        $index = is_int($payload['output_index'] ?? null) ? (int) $payload['output_index'] : 0;
-        $callId = is_string($payload['item_id'] ?? null) ? $payload['item_id'] : null;
-
-        return array_merge($base, [
-            'kind' => 'tool_args',
-            'text' => $delta,
-            'severity' => 'info',
-            'tool_index' => $index,
-            'tool_call_id' => $callId,
-            'tool_name' => null,
-            'tool_arguments' => $delta,
-        ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $base
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    private function responsesToolArgumentsDoneFragment(array $base, array $payload): array
-    {
-        $arguments = is_string($payload['arguments'] ?? null) ? $payload['arguments'] : '';
-
-        if ($arguments === '') {
-            return $this->emptyFragment($base);
-        }
-
-        $index = is_int($payload['output_index'] ?? null) ? (int) $payload['output_index'] : 0;
-        $callId = is_string($payload['item_id'] ?? null) ? $payload['item_id'] : null;
-
-        return array_merge($base, [
-            'kind' => 'tool_args_done',
-            'text' => __('complete arguments'),
-            'severity' => 'success',
-            'tool_index' => $index,
-            'tool_call_id' => $callId,
-            'tool_name' => null,
-            'tool_arguments' => $arguments,
-            'tool_arguments_replace' => true,
-            'tool_arguments_complete' => true,
-        ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $base
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    private function responsesOutputItemDoneFragment(array $base, array $payload, ?string &$responsesMessagePhase): array
-    {
-        $item = is_array($payload['item'] ?? null) ? $payload['item'] : [];
-
-        if (($item['type'] ?? null) === 'message') {
-            $responsesMessagePhase = null;
-
-            return $this->emptyFragment($base);
-        }
-
-        if (($item['type'] ?? null) === 'function_call') {
-            $arguments = is_string($item['arguments'] ?? null) ? $item['arguments'] : '';
-
-            if ($arguments === '') {
-                return $this->emptyFragment($base);
-            }
-
-            $index = is_int($payload['output_index'] ?? null) ? (int) $payload['output_index'] : 0;
-            $callId = is_string($item['call_id'] ?? null) ? $item['call_id'] : null;
-            $name = is_string($item['name'] ?? null) ? $item['name'] : null;
-
-            return array_merge($base, [
-                'kind' => 'tool_args_done',
-                'text' => __('complete arguments'),
-                'severity' => 'success',
-                'tool_index' => $index,
-                'tool_call_id' => $callId,
-                'tool_name' => $name,
-                'tool_arguments' => $arguments,
-                'tool_arguments_replace' => true,
-                'tool_arguments_complete' => true,
-            ]);
-        }
-
-        return $this->emptyFragment($base);
-    }
-
-    /**
-     * @param  array<string, mixed>  $base
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    private function responsesCompletedFragment(array $base, array $payload): array
-    {
-        $response = is_array($payload['response'] ?? null) ? $payload['response'] : $payload;
-        $status = is_string($response['status'] ?? null) ? $response['status'] : 'completed';
-
-        return $this->responsesFinishReasonFragment($base, match ($status) {
-            'completed' => 'stop',
-            'incomplete' => 'length',
-            default => 'error',
-        });
-    }
-
-    /**
-     * @param  array<string, mixed>  $base
-     * @return array<string, mixed>
-     */
-    private function responsesFinishReasonFragment(array $base, string $finishReason, ?string $severity = null): array
-    {
-        return array_merge($base, [
-            'kind' => 'finish_reason',
-            'text' => $finishReason,
-            'severity' => $severity ?? self::finishReasonSeverity($finishReason),
-            'tool_index' => null,
-            'tool_call_id' => null,
-        ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $base
      * @param  array<string, mixed>  $delta
      * @return array<string, mixed>|null
      */
@@ -674,6 +492,36 @@ final class StreamAssembler
      */
     private function toolFragment(array $base, array $delta): ?array
     {
+        $toolCall = $this->extractFirstToolCall($delta);
+
+        if ($toolCall === null) {
+            return null;
+        }
+
+        $hasName = $toolCall['name'] !== null && $toolCall['name'] !== '';
+        $hasArguments = $toolCall['arguments'] !== null && $toolCall['arguments'] !== '';
+
+        if ($hasName || $hasArguments) {
+            return array_merge($base, [
+                'kind' => $hasName ? 'tool_call' : 'tool_args',
+                'text' => $hasName ? (string) $toolCall['name'] : (string) $toolCall['arguments'],
+                'severity' => $hasName ? 'accent' : 'info',
+                'tool_index' => $toolCall['index'],
+                'tool_call_id' => $toolCall['call_id'],
+                'tool_name' => $hasName ? $toolCall['name'] : null,
+                'tool_arguments' => $hasArguments ? $toolCall['arguments'] : null,
+            ]);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $delta
+     * @return array{index: int, call_id: string|null, name: string|null, arguments: string|null}|null
+     */
+    private function extractFirstToolCall(array $delta): ?array
+    {
         $toolCalls = $delta['tool_calls'] ?? null;
 
         if (! (is_array($toolCalls) && isset($toolCalls[0]) && is_array($toolCalls[0]))) {
@@ -681,24 +529,14 @@ final class StreamAssembler
         }
 
         $tc = $toolCalls[0];
-        $index = is_int($tc['index'] ?? null) ? (int) $tc['index'] : 0;
-        $callId = is_string($tc['id'] ?? null) ? $tc['id'] : null;
-        $name = is_string($tc['function']['name'] ?? null) ? $tc['function']['name'] : null;
-        $arguments = is_string($tc['function']['arguments'] ?? null) ? $tc['function']['arguments'] : null;
+        $function = is_array($tc['function'] ?? null) ? $tc['function'] : [];
 
-        if (($name !== null && $name !== '') || ($arguments !== null && $arguments !== '')) {
-            return array_merge($base, [
-                'kind' => $name !== null && $name !== '' ? 'tool_call' : 'tool_args',
-                'text' => $name !== null && $name !== '' ? $name : (string) $arguments,
-                'severity' => $name !== null && $name !== '' ? 'accent' : 'info',
-                'tool_index' => $index,
-                'tool_call_id' => $callId,
-                'tool_name' => $name !== null && $name !== '' ? $name : null,
-                'tool_arguments' => $arguments !== null && $arguments !== '' ? $arguments : null,
-            ]);
-        }
-
-        return null;
+        return [
+            'index' => is_int($tc['index'] ?? null) ? (int) $tc['index'] : 0,
+            'call_id' => is_string($tc['id'] ?? null) ? $tc['id'] : null,
+            'name' => is_string($function['name'] ?? null) ? $function['name'] : null,
+            'arguments' => is_string($function['arguments'] ?? null) ? $function['arguments'] : null,
+        ];
     }
 
     /**

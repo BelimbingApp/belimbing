@@ -9,16 +9,15 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\ValueObjects\Money;
-use App\Modules\Commerce\Catalog\Models\Attribute as CatalogAttribute;
-use App\Modules\Commerce\Catalog\Models\AttributeValue;
 use App\Modules\Commerce\Catalog\Models\Category;
-use App\Modules\Commerce\Catalog\Models\Description as CatalogDescription;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
+use App\Modules\Commerce\Inventory\Livewire\Items\Concerns\ManagesItemAttributes;
+use App\Modules\Commerce\Inventory\Livewire\Items\Concerns\ManagesItemCatalogFit;
+use App\Modules\Commerce\Inventory\Livewire\Items\Concerns\ManagesItemDescriptions;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use App\Modules\Commerce\Inventory\Services\InventoryItemService;
 use Illuminate\Contracts\View\View;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -27,6 +26,9 @@ use Livewire\WithFileUploads;
 
 class Show extends Component
 {
+    use ManagesItemAttributes;
+    use ManagesItemCatalogFit;
+    use ManagesItemDescriptions;
     use SavesValidatedFields;
     use WithFileUploads;
 
@@ -36,18 +38,6 @@ class Show extends Component
      * @var array<int, mixed>
      */
     public array $photoFiles = [];
-
-    public ?int $selectedAttributeId = null;
-
-    public string $attributeValue = '';
-
-    public string $descriptionTitle = '';
-
-    public string $descriptionBody = '';
-
-    public ?int $catalogCategoryId = null;
-
-    public ?int $catalogProductTemplateId = null;
 
     public function mount(Item $item): void
     {
@@ -130,228 +120,6 @@ class Show extends Component
         $items->deletePhoto($photo);
 
         $this->item->load('photos');
-    }
-
-    public function updatedSelectedAttributeId(mixed $value): void
-    {
-        if ($value === null || $value === '' || (int) $value === 0) {
-            $this->selectedAttributeId = null;
-            $this->attributeValue = '';
-            $this->resetValidation(['selectedAttributeId', 'attributeValue']);
-        }
-    }
-
-    public function updatedCatalogCategoryId(mixed $value): void
-    {
-        if ($value === null || $value === '' || (int) $value === 0) {
-            $this->catalogCategoryId = null;
-        }
-
-        $template = $this->selectedProductTemplate();
-
-        if ($template instanceof ProductTemplate
-            && $template->category_id !== null
-            && $this->catalogCategoryId !== null
-            && $template->category_id !== $this->catalogCategoryId) {
-            $this->catalogProductTemplateId = null;
-        }
-    }
-
-    public function updatedCatalogProductTemplateId(mixed $value): void
-    {
-        if ($value === null || $value === '' || (int) $value === 0) {
-            $this->catalogProductTemplateId = null;
-
-            return;
-        }
-
-        $template = $this->selectedProductTemplate();
-
-        if ($template instanceof ProductTemplate && $template->category_id !== null) {
-            $this->catalogCategoryId = $template->category_id;
-        }
-    }
-
-    public function saveCatalogAssignment(): void
-    {
-        $this->authorizeUpdate();
-
-        $companyId = Auth::user()?->company_id;
-
-        $validated = $this->validate([
-            'catalogCategoryId' => ['nullable', 'integer', Rule::exists(Category::class, 'id')->where('company_id', $companyId)],
-            'catalogProductTemplateId' => ['nullable', 'integer', Rule::exists(ProductTemplate::class, 'id')->where('company_id', $companyId)],
-        ]);
-
-        $categoryId = $validated['catalogCategoryId'] ?? null;
-        $templateId = $validated['catalogProductTemplateId'] ?? null;
-        $template = null;
-
-        if ($templateId !== null) {
-            $template = ProductTemplate::query()
-                ->where('company_id', $companyId)
-                ->findOrFail($templateId);
-
-            if ($template->category_id !== null && $categoryId !== null && $template->category_id !== $categoryId) {
-                $this->addError('catalogProductTemplateId', __('The selected template belongs to a different category.'));
-
-                return;
-            }
-
-            $categoryId ??= $template->category_id;
-        }
-
-        $this->item->update([
-            'category_id' => $categoryId,
-            'product_template_id' => $template?->id,
-        ]);
-
-        $this->item->load('category', 'productTemplate');
-        $this->catalogCategoryId = $this->item->category_id;
-        $this->catalogProductTemplateId = $this->item->product_template_id;
-        $this->selectedAttributeId = null;
-        $this->attributeValue = '';
-
-        session()->flash('success', __('Catalog fit updated.'));
-    }
-
-    public function saveAttributeValue(): void
-    {
-        $this->authorizeUpdate();
-
-        $companyId = Auth::user()?->company_id;
-
-        $validated = $this->validate([
-            'selectedAttributeId' => [
-                'required',
-                'integer',
-                Rule::in($this->applicableAttributeQuery($companyId)->pluck('id')->all()),
-            ],
-            'attributeValue' => ['required', 'string', 'max:1000'],
-        ]);
-
-        $attribute = $this->applicableAttributeQuery($companyId)
-            ->findOrFail($validated['selectedAttributeId']);
-
-        AttributeValue::query()->updateOrCreate(
-            [
-                'item_id' => $this->item->id,
-                'attribute_id' => $attribute->id,
-            ],
-            [
-                'value' => ['text' => $validated['attributeValue']],
-                'display_value' => $validated['attributeValue'],
-            ],
-        );
-
-        $this->reset('selectedAttributeId', 'attributeValue');
-        $this->item->load('catalogAttributeValues.attribute');
-    }
-
-    public function removeAttributeValue(int $attributeValueId): void
-    {
-        $this->authorizeUpdate();
-
-        $value = $this->item->catalogAttributeValues->firstWhere('id', $attributeValueId);
-
-        if (! $value instanceof AttributeValue) {
-            return;
-        }
-
-        $value->delete();
-        $this->item->load('catalogAttributeValues.attribute');
-    }
-
-    public function addDescription(): void
-    {
-        $this->authorizeUpdate();
-
-        $validated = $this->validate([
-            'descriptionTitle' => ['required', 'string', 'max:255'],
-            'descriptionBody' => ['required', 'string', 'max:10000'],
-        ]);
-
-        $nextVersion = ((int) $this->item->descriptions()->max('version')) + 1;
-
-        CatalogDescription::query()->create([
-            'item_id' => $this->item->id,
-            'created_by_user_id' => Auth::id(),
-            'version' => $nextVersion,
-            'title' => $validated['descriptionTitle'],
-            'body' => $validated['descriptionBody'],
-            'source' => CatalogDescription::SOURCE_MANUAL,
-        ]);
-
-        $this->reset('descriptionTitle', 'descriptionBody');
-        $this->item->load('descriptions.createdByUser');
-    }
-
-    public function acceptDescription(int $descriptionId): void
-    {
-        $this->authorizeUpdate();
-
-        $description = $this->item->descriptions->firstWhere('id', $descriptionId);
-
-        if (! $description instanceof CatalogDescription) {
-            return;
-        }
-
-        DB::transaction(function () use ($description): void {
-            $this->item->descriptions()->update(['is_accepted' => false]);
-            $description->update(['is_accepted' => true]);
-        });
-
-        $this->item->load('descriptions.createdByUser');
-    }
-
-    public function saveDescriptionField(string $field, mixed $value): void
-    {
-        $this->authorizeUpdate();
-
-        $parts = explode('.', $field);
-        if (count($parts) !== 3 || $parts[0] !== 'descriptions') {
-            return;
-        }
-
-        $descriptionId = (int) $parts[1];
-        $column = $parts[2];
-
-        if (! in_array($column, ['title', 'body'], true)) {
-            return;
-        }
-
-        $description = $this->item->descriptions->firstWhere('id', $descriptionId);
-        if (! $description instanceof CatalogDescription) {
-            return;
-        }
-
-        $key = 'descriptions.'.$descriptionId.'.'.$column;
-
-        $rules = match ($column) {
-            'title' => ['required', 'string', 'max:255'],
-            'body' => ['required', 'string', 'max:10000'],
-            default => ['nullable'],
-        };
-
-        $validated = validator([$key => $value], [$key => $rules])->validate();
-        $validatedValue = $validated[$key] ?? null;
-
-        $description->update([$column => $validatedValue]);
-
-        $this->item->load('descriptions.createdByUser');
-    }
-
-    public function deleteDescription(int $descriptionId): void
-    {
-        $this->authorizeUpdate();
-
-        $description = $this->item->descriptions->firstWhere('id', $descriptionId);
-        if (! $description instanceof CatalogDescription) {
-            return;
-        }
-
-        $description->delete();
-        $this->item->load('descriptions.createdByUser');
     }
 
     public function saveMoneyField(string $field, mixed $value): void
@@ -447,57 +215,5 @@ class Show extends Component
             Actor::forUser(Auth::user()),
             'commerce.inventory_item.update',
         );
-    }
-
-    /**
-     * @return Builder<CatalogAttribute>
-     */
-    private function applicableAttributeQuery(?int $companyId): Builder
-    {
-        return $this->constrainApplicableAttributeQuery(
-            CatalogAttribute::query()->where('company_id', $companyId),
-        )
-            ->with(['category', 'productTemplate'])
-            ->orderBy('sort_order')
-            ->orderBy('name');
-    }
-
-    /**
-     * @param  Builder<CatalogAttribute>  $query
-     * @return Builder<CatalogAttribute>
-     */
-    private function constrainApplicableAttributeQuery(Builder $query): Builder
-    {
-        $categoryId = $this->item->category_id;
-        $templateId = $this->item->product_template_id;
-
-        return $query->where(function (Builder $query) use ($categoryId, $templateId): void {
-            $query->where(function (Builder $query): void {
-                $query->whereNull('category_id')
-                    ->whereNull('product_template_id');
-            });
-
-            if ($categoryId !== null) {
-                $query->orWhere(function (Builder $query) use ($categoryId): void {
-                    $query->where('category_id', $categoryId)
-                        ->whereNull('product_template_id');
-                });
-            }
-
-            if ($templateId !== null) {
-                $query->orWhere('product_template_id', $templateId);
-            }
-        });
-    }
-
-    private function selectedProductTemplate(): ?ProductTemplate
-    {
-        if ($this->catalogProductTemplateId === null) {
-            return null;
-        }
-
-        return ProductTemplate::query()
-            ->where('company_id', Auth::user()?->company_id)
-            ->find($this->catalogProductTemplateId);
     }
 }

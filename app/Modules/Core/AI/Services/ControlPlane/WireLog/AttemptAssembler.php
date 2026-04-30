@@ -78,8 +78,8 @@ final class AttemptAssembler
         $requestEntry = $bucket['request_entry'];
         $sections = $this->entryGrouper->groupEntries($entries);
 
-        $startedAt = $this->firstAt($entries);
-        $endedAt = $this->lastAt($entries);
+        $startedAt = EntryAtBounds::firstAt($entries);
+        $endedAt = EntryAtBounds::lastAt($entries);
         $statusCode = $this->extractStatusCode($entries);
         $finishReason = $this->extractFinishReason($entries);
         $errorMessage = $this->extractErrorMessage($entries);
@@ -364,36 +364,6 @@ final class AttemptAssembler
         }
 
         return false;
-    }
-
-    /**
-     * @param  list<array<string, mixed>>  $entries
-     */
-    private function firstAt(array $entries): ?string
-    {
-        foreach ($entries as $entry) {
-            if (is_string($entry['at'] ?? null)) {
-                return $entry['at'];
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @param  list<array<string, mixed>>  $entries
-     */
-    private function lastAt(array $entries): ?string
-    {
-        $last = null;
-
-        foreach ($entries as $entry) {
-            if (is_string($entry['at'] ?? null)) {
-                $last = $entry['at'];
-            }
-        }
-
-        return $last;
     }
 
     private function diffMs(?string $from, ?string $to): ?int

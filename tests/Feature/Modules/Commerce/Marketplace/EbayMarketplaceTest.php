@@ -13,20 +13,14 @@ use App\Modules\Commerce\Sales\Models\OrderLine;
 use App\Modules\Commerce\Sales\Models\Sale;
 use Illuminate\Support\Facades\Http;
 
-test('ebay marketplace page is visible to admins', function (): void {
-    $user = createAdminUser();
+const EBAY_FIXTURE_TITLE = '2008 Honda Civic driver side headlight';
+const EBAY_FIXTURE_LISTING_ID = '1234567890';
+const EBAY_FIXTURE_PRICE_DECIMAL = '120.00';
+const EBAY_FIXTURE_SKU = 'HAM-HEADLIGHT-0001';
 
-    $this->actingAs($user)
-        ->get(route('commerce.marketplace.ebay.index'))
-        ->assertOk()
-        ->assertSee('eBay Marketplace');
-});
-
-test('ebay listing pull materializes offers and links by sku', function (): void {
-    $user = createAdminUser();
-    $this->actingAs($user);
-
-    $scope = Scope::company($user->company_id);
+function configureEbayMarketplaceForCompany(int $companyId, array $scopes): void
+{
+    $scope = Scope::company($companyId);
     $settings = app(SettingsService::class);
     $settings->set('marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
@@ -42,12 +36,31 @@ test('ebay listing pull materializes offers and links by sku', function (): void
             'refresh_token' => 'refresh-token',
             'expires_in' => 3600,
         ],
+        $scopes,
+    );
+}
+
+test('ebay marketplace page is visible to admins', function (): void {
+    $user = createAdminUser();
+
+    $this->actingAs($user)
+        ->get(route('commerce.marketplace.ebay.index'))
+        ->assertOk()
+        ->assertSee('eBay Marketplace');
+});
+
+test('ebay listing pull materializes offers and links by sku', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
         ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
     );
 
     $item = Item::factory()->create([
         'company_id' => $user->company_id,
-        'sku' => 'HAM-HEADLIGHT-0001',
+        'sku' => EBAY_FIXTURE_SKU,
     ]);
 
     Http::fake([
@@ -55,8 +68,8 @@ test('ebay listing pull materializes offers and links by sku', function (): void
             'total' => 1,
             'inventoryItems' => [
                 [
-                    'sku' => 'HAM-HEADLIGHT-0001',
-                    'product' => ['title' => '2008 Honda Civic driver side headlight'],
+                    'sku' => EBAY_FIXTURE_SKU,
+                    'product' => ['title' => EBAY_FIXTURE_TITLE],
                 ],
             ],
         ]),
@@ -64,17 +77,17 @@ test('ebay listing pull materializes offers and links by sku', function (): void
             'offers' => [
                 [
                     'offerId' => 'offer-1',
-                    'sku' => 'HAM-HEADLIGHT-0001',
+                    'sku' => EBAY_FIXTURE_SKU,
                     'marketplaceId' => 'EBAY_US',
                     'status' => 'PUBLISHED',
                     'listing' => [
-                        'listingId' => '1234567890',
+                        'listingId' => EBAY_FIXTURE_LISTING_ID,
                         'listingStatus' => 'ACTIVE',
                     ],
                     'pricingSummary' => [
                         'price' => [
                             'currency' => 'USD',
-                            'value' => '120.00',
+                            'value' => EBAY_FIXTURE_PRICE_DECIMAL,
                         ],
                     ],
                 ],
@@ -84,7 +97,7 @@ test('ebay listing pull materializes offers and links by sku', function (): void
 
     $result = app(EbayMarketplaceChannel::class)->pullListings($user->company_id);
 
-    $listing = Listing::query()->where('external_listing_id', '1234567890')->first();
+    $listing = Listing::query()->where('external_listing_id', EBAY_FIXTURE_LISTING_ID)->first();
 
     expect($result->fetched)->toBe(1)
         ->and($result->created)->toBe(1)
@@ -111,28 +124,14 @@ test('ebay order pull materializes sales ledger rows and links inventory', funct
     $user = createAdminUser();
     $this->actingAs($user);
 
-    $scope = Scope::company($user->company_id);
-    $settings = app(SettingsService::class);
-    $settings->set('marketplace.ebay.environment', 'sandbox', $scope);
-    $settings->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
-    $settings->set('marketplace.ebay.client_id', 'client-123', $scope);
-    $settings->set('marketplace.ebay.client_secret', 'secret-456', $scope, encrypted: true);
-    $settings->set('marketplace.ebay.redirect_uri', 'https://blb.test/commerce/marketplace/ebay/oauth/callback', $scope);
-
-    app(OAuthTokenStore::class)->persist(
-        EbayConfiguration::CHANNEL,
-        $scope,
-        [
-            'access_token' => 'access-token',
-            'refresh_token' => 'refresh-token',
-            'expires_in' => 3600,
-        ],
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
         ['https://api.ebay.com/oauth/api_scope/sell.fulfillment'],
     );
 
     $item = Item::factory()->create([
         'company_id' => $user->company_id,
-        'sku' => 'HAM-HEADLIGHT-0001',
+        'sku' => EBAY_FIXTURE_SKU,
         'status' => Item::STATUS_LISTED,
         'unit_cost_amount' => 4000,
     ]);
@@ -141,11 +140,11 @@ test('ebay order pull materializes sales ledger rows and links inventory', funct
         'company_id' => $user->company_id,
         'item_id' => $item->id,
         'channel' => EbayConfiguration::CHANNEL,
-        'external_listing_id' => '1234567890',
+        'external_listing_id' => EBAY_FIXTURE_LISTING_ID,
         'external_offer_id' => 'offer-1',
-        'external_sku' => 'HAM-HEADLIGHT-0001',
+        'external_sku' => EBAY_FIXTURE_SKU,
         'marketplace_id' => 'EBAY_US',
-        'title' => '2008 Honda Civic driver side headlight',
+        'title' => EBAY_FIXTURE_TITLE,
         'status' => 'ACTIVE',
         'price_amount' => 12000,
         'currency_code' => 'USD',
@@ -182,18 +181,18 @@ test('ebay order pull materializes sales ledger rows and links inventory', funct
                     'lineItems' => [
                         [
                             'lineItemId' => '1001',
-                            'legacyItemId' => '1234567890',
-                            'sku' => 'HAM-HEADLIGHT-0001',
-                            'title' => '2008 Honda Civic driver side headlight',
+                            'legacyItemId' => EBAY_FIXTURE_LISTING_ID,
+                            'sku' => EBAY_FIXTURE_SKU,
+                            'title' => EBAY_FIXTURE_TITLE,
                             'quantity' => 1,
                             'listingMarketplaceId' => 'EBAY_US',
                             'lineItemCost' => [
                                 'currency' => 'USD',
-                                'value' => '120.00',
+                                'value' => EBAY_FIXTURE_PRICE_DECIMAL,
                             ],
                             'total' => [
                                 'currency' => 'USD',
-                                'value' => '120.00',
+                                'value' => EBAY_FIXTURE_PRICE_DECIMAL,
                             ],
                         ],
                     ],
