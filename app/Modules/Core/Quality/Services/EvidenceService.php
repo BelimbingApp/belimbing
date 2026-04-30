@@ -6,13 +6,11 @@
 namespace App\Modules\Core\Quality\Services;
 
 use App\Base\Media\Services\MediaAssetStore;
-use App\Modules\Core\Quality\Exceptions\EvidenceStorageException;
 use App\Modules\Core\Quality\Models\QualityEvidence;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Domain service for quality evidence file operations.
@@ -45,17 +43,7 @@ class EvidenceService
         array $options = [],
     ): QualityEvidence {
         return DB::transaction(function () use ($evidenceable, $file, $evidenceType, $uploadedByUserId, $options): QualityEvidence {
-            $storageKey = $file->store(self::STORAGE_PREFIX, ['disk' => self::STORAGE_DISK]);
-
-            if ($storageKey === false) {
-                throw EvidenceStorageException::storeFailed();
-            }
-
-            $asset = $this->mediaAssets->storeOriginal(self::STORAGE_DISK, $storageKey, [
-                'original_filename' => $file->getClientOriginalName(),
-                'mime_type' => $file->getMimeType(),
-                'file_size' => $file->getSize(),
-            ]);
+            $asset = $this->mediaAssets->putUploadedFile(self::STORAGE_DISK, self::STORAGE_PREFIX, $file);
 
             return QualityEvidence::query()->create([
                 'evidenceable_type' => $evidenceable->getMorphClass(),
@@ -73,7 +61,8 @@ class EvidenceService
     /**
      * Replace an existing evidence file with a new one.
      *
-     * Deletes the old file from storage and updates the record.
+     * Stores the new file first so the old asset is preserved if the upload
+     * fails, then swaps the pointer and removes the old asset.
      *
      * @param  QualityEvidence  $evidence  The evidence record to replace
      * @param  UploadedFile  $file  The replacement file
@@ -86,29 +75,16 @@ class EvidenceService
     ): QualityEvidence {
         return DB::transaction(function () use ($evidence, $file, $uploadedByUserId): QualityEvidence {
             $oldAsset = $evidence->mediaAsset;
-            $oldDisk = $oldAsset->disk;
-            $oldStorageKey = $oldAsset->storage_key;
 
-            $storageKey = $file->store(self::STORAGE_PREFIX, ['disk' => self::STORAGE_DISK]);
-
-            if ($storageKey === false) {
-                throw EvidenceStorageException::storeFailed();
-            }
-
-            $asset = $this->mediaAssets->storeOriginal(self::STORAGE_DISK, $storageKey, [
-                'original_filename' => $file->getClientOriginalName(),
-                'mime_type' => $file->getMimeType(),
-                'file_size' => $file->getSize(),
-            ]);
+            $newAsset = $this->mediaAssets->putUploadedFile(self::STORAGE_DISK, self::STORAGE_PREFIX, $file);
 
             $evidence->update([
-                'media_asset_id' => $asset->id,
+                'media_asset_id' => $newAsset->id,
                 'uploaded_by_user_id' => $uploadedByUserId,
                 'uploaded_at' => Carbon::now(),
             ]);
 
-            $oldAsset->delete();
-            Storage::disk($oldDisk)->delete($oldStorageKey);
+            $this->mediaAssets->delete($oldAsset);
 
             return $evidence;
         });
@@ -123,13 +99,9 @@ class EvidenceService
     {
         DB::transaction(function () use ($evidence): void {
             $asset = $evidence->mediaAsset;
-            $disk = $asset->disk;
-            $storageKey = $asset->storage_key;
 
             $evidence->delete();
-            $asset->delete();
-
-            Storage::disk($disk)->delete($storageKey);
+            $this->mediaAssets->delete($asset);
         });
     }
 }
