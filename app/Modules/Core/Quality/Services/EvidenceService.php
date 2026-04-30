@@ -5,6 +5,8 @@
 
 namespace App\Modules\Core\Quality\Services;
 
+use App\Base\Media\Services\MediaAssetStore;
+use App\Modules\Core\Quality\Exceptions\EvidenceStorageException;
 use App\Modules\Core\Quality\Models\QualityEvidence;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
@@ -24,6 +26,8 @@ class EvidenceService
 
     private const STORAGE_PREFIX = 'quality/evidence';
 
+    public function __construct(private readonly MediaAssetStore $mediaAssets) {}
+
     /**
      * Upload an evidence file and create the QualityEvidence record.
      *
@@ -41,16 +45,23 @@ class EvidenceService
         array $options = [],
     ): QualityEvidence {
         return DB::transaction(function () use ($evidenceable, $file, $evidenceType, $uploadedByUserId, $options): QualityEvidence {
-            $storageKey = $file->store(self::STORAGE_PREFIX, self::STORAGE_DISK);
+            $storageKey = $file->store(self::STORAGE_PREFIX, ['disk' => self::STORAGE_DISK]);
+
+            if ($storageKey === false) {
+                throw EvidenceStorageException::storeFailed();
+            }
+
+            $asset = $this->mediaAssets->storeOriginal(self::STORAGE_DISK, $storageKey, [
+                'original_filename' => $file->getClientOriginalName(),
+                'mime_type' => $file->getMimeType(),
+                'file_size' => $file->getSize(),
+            ]);
 
             return QualityEvidence::query()->create([
                 'evidenceable_type' => $evidenceable->getMorphClass(),
                 'evidenceable_id' => $evidenceable->getKey(),
                 'evidence_type' => $evidenceType,
-                'filename' => $file->getClientOriginalName(),
-                'storage_key' => $storageKey,
-                'mime_type' => $file->getMimeType(),
-                'file_size' => $file->getSize(),
+                'media_asset_id' => $asset->id,
                 'is_primary' => $options['is_primary'] ?? false,
                 'uploaded_by_user_id' => $uploadedByUserId,
                 'uploaded_at' => Carbon::now(),
@@ -74,20 +85,30 @@ class EvidenceService
         ?int $uploadedByUserId = null,
     ): QualityEvidence {
         return DB::transaction(function () use ($evidence, $file, $uploadedByUserId): QualityEvidence {
-            $oldStorageKey = $evidence->storage_key;
+            $oldAsset = $evidence->mediaAsset;
+            $oldDisk = $oldAsset->disk;
+            $oldStorageKey = $oldAsset->storage_key;
 
-            $storageKey = $file->store(self::STORAGE_PREFIX, self::STORAGE_DISK);
+            $storageKey = $file->store(self::STORAGE_PREFIX, ['disk' => self::STORAGE_DISK]);
 
-            $evidence->update([
-                'filename' => $file->getClientOriginalName(),
-                'storage_key' => $storageKey,
+            if ($storageKey === false) {
+                throw EvidenceStorageException::storeFailed();
+            }
+
+            $asset = $this->mediaAssets->storeOriginal(self::STORAGE_DISK, $storageKey, [
+                'original_filename' => $file->getClientOriginalName(),
                 'mime_type' => $file->getMimeType(),
                 'file_size' => $file->getSize(),
+            ]);
+
+            $evidence->update([
+                'media_asset_id' => $asset->id,
                 'uploaded_by_user_id' => $uploadedByUserId,
                 'uploaded_at' => Carbon::now(),
             ]);
 
-            Storage::disk(self::STORAGE_DISK)->delete($oldStorageKey);
+            $oldAsset->delete();
+            Storage::disk($oldDisk)->delete($oldStorageKey);
 
             return $evidence;
         });
@@ -101,11 +122,14 @@ class EvidenceService
     public function archive(QualityEvidence $evidence): void
     {
         DB::transaction(function () use ($evidence): void {
-            $storageKey = $evidence->storage_key;
+            $asset = $evidence->mediaAsset;
+            $disk = $asset->disk;
+            $storageKey = $asset->storage_key;
 
             $evidence->delete();
+            $asset->delete();
 
-            Storage::disk(self::STORAGE_DISK)->delete($storageKey);
+            Storage::disk($disk)->delete($storageKey);
         });
     }
 }

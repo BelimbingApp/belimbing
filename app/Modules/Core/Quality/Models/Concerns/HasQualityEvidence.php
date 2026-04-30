@@ -15,6 +15,6 @@ trait HasQualityEvidence
      */
     public function evidence(): MorphMany
     {
-        return $this->morphMany(QualityEvidence::class, 'evidenceable');
+        return $this->morphMany(QualityEvidence::class, 'evidenceable')->with('mediaAsset');
     }
 }

@@ -120,10 +120,10 @@
                                     <div class="flex items-center gap-3 min-w-0">
                                         <x-icon name="heroicon-o-paper-clip" class="w-4 h-4 text-muted shrink-0" />
                                         <div class="min-w-0">
-                                            <p class="text-sm font-medium text-ink truncate">{{ $evidence->filename }}</p>
+                                            <p class="text-sm font-medium text-ink truncate">{{ $evidence->mediaAsset?->original_filename ?? '—' }}</p>
                                             <p class="text-[11px] text-muted">
                                                 {{ config('quality.evidence_types.' . $evidence->evidence_type, $evidence->evidence_type) }}
-                                                · {{ Number::fileSize($evidence->file_size ?? 0) }}
+                                                · {{ Number::fileSize($evidence->mediaAsset?->file_size ?? 0) }}
                                             </p>
                                         </div>
                                     </div>
