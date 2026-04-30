@@ -6,6 +6,7 @@
 namespace App\Modules\Commerce\Inventory\Services;
 
 use App\Base\Foundation\ValueObjects\Money;
+use App\Base\Media\Services\MediaAssetStore;
 use App\Modules\Commerce\Inventory\Exceptions\InventoryStorageException;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Inventory\Models\ItemPhoto;
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\Storage;
 class InventoryItemService
 {
     private const string PHOTO_DISK = 'local';
+
+    public function __construct(private readonly MediaAssetStore $mediaAssets) {}
 
     /**
      * @param  array{sku: string, title: string, notes?: string|null, status: string, unitCostAmount?: string|null, targetPriceAmount?: string|null, currencyCode: string, categoryId?: int|null, productTemplateId?: int|null}  $data
@@ -53,22 +56,32 @@ class InventoryItemService
             throw InventoryStorageException::photoStoreFailed();
         }
 
-        return ItemPhoto::query()->create([
-            'item_id' => $item->id,
-            'filename' => $filename,
-            'storage_key' => $storageKey,
-            'mime_type' => $mimeType,
-            'file_size' => $fileSize,
-            'sort_order' => $sortOrder,
-        ]);
+        return DB::transaction(function () use ($item, $sortOrder, $filename, $mimeType, $fileSize, $storageKey): ItemPhoto {
+            $asset = $this->mediaAssets->storeOriginal(self::PHOTO_DISK, $storageKey, [
+                'original_filename' => $filename,
+                'mime_type' => $mimeType,
+                'file_size' => $fileSize,
+            ]);
+
+            return ItemPhoto::query()->create([
+                'item_id' => $item->id,
+                'media_asset_id' => $asset->id,
+                'sort_order' => $sortOrder,
+            ]);
+        });
     }
 
     public function deletePhoto(ItemPhoto $photo): void
     {
         DB::transaction(function () use ($photo): void {
-            $storageKey = $photo->storage_key;
+            $asset = $photo->mediaAsset;
+            $disk = $asset->disk;
+            $storageKey = $asset->storage_key;
+
             $photo->delete();
-            Storage::disk(self::PHOTO_DISK)->delete($storageKey);
+            $asset->delete();
+
+            Storage::disk($disk)->delete($storageKey);
         });
     }
 }

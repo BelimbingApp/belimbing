@@ -197,13 +197,20 @@ test('item photos can be uploaded and deleted from the detail page component', f
     $photo = ItemPhoto::query()->where('item_id', $item->id)->first();
     expect($photo)->not()->toBeNull();
 
-    Storage::disk('local')->assertExists($photo->storage_key);
+    $asset = $photo->mediaAsset;
+    expect($asset)->not()->toBeNull()
+        ->and($asset->disk)->toBe('local')
+        ->and($asset->original_filename)->toBe('front.jpg')
+        ->and($asset->mime_type)->toBe('image/jpeg');
+
+    Storage::disk('local')->assertExists($asset->storage_key);
 
     Livewire::test(Show::class, ['item' => $item->fresh()])
         ->call('deletePhoto', $photo->id);
 
     expect(ItemPhoto::query()->whereKey($photo->id)->exists())->toBeFalse();
-    Storage::disk('local')->assertMissing($photo->storage_key);
+    expect(\App\Base\Media\Models\MediaAsset::query()->whereKey($asset->id)->exists())->toBeFalse();
+    Storage::disk('local')->assertMissing($asset->storage_key);
 });
 
 test('item detail page can edit catalog attributes and description versions', function (): void {

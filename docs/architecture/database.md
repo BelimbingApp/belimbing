@@ -140,7 +140,7 @@ This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to preven
 
 | Prefix | Module | Dependencies |
 |--------|--------|--------------|
-| `0310_01_01_*` | Inventory | Company |
+| `0310_01_01_*` | Inventory | Company, Media |
 | `0310_01_03_*` | Catalog | Company, Inventory |
 | `0310_01_05_*` | Marketplace | Company, Inventory, Integration |
 | `0310_01_07_*` | Sales | Company, Inventory, Marketplace |

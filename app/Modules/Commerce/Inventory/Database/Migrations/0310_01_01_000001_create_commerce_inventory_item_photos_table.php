@@ -18,15 +18,16 @@ return new class extends Migration
                 ->constrained('commerce_inventory_items')
                 ->cascadeOnDelete();
 
-            $table->string('filename');
-            $table->string('storage_key');
-            $table->string('mime_type')->nullable();
-            $table->unsignedBigInteger('file_size')->nullable();
+            $table->foreignId('media_asset_id')
+                ->constrained('base_media_assets')
+                ->restrictOnDelete();
+
             $table->unsignedInteger('sort_order')->default(0);
 
             $table->timestamps();
 
             $table->index(['item_id', 'sort_order']);
+            $table->unique('media_asset_id');
         });
     }
 

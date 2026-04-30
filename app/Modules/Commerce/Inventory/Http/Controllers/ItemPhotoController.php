@@ -16,8 +16,6 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ItemPhotoController
 {
-    private const DISK = 'local';
-
     public function show(Request $request, Item $item, ItemPhoto $photo): BinaryFileResponse
     {
         $user = auth()->user();
@@ -38,12 +36,13 @@ class ItemPhotoController
             abort(404);
         }
 
-        $path = Storage::disk(self::DISK)->path($photo->storage_key);
+        $asset = $photo->mediaAsset;
+        $path = Storage::disk($asset->disk)->path($asset->storage_key);
         if (! is_file($path)) {
             abort(404);
         }
 
-        $mimeType = (string) ($photo->mime_type ?? $request->query('mime', ''));
+        $mimeType = (string) ($asset->mime_type ?? $request->query('mime', ''));
         $isImage = str_starts_with($mimeType, 'image/');
         $disposition = $isImage ? 'inline' : 'attachment';
 
