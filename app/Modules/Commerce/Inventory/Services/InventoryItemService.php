@@ -7,12 +7,10 @@ namespace App\Modules\Commerce\Inventory\Services;
 
 use App\Base\Foundation\ValueObjects\Money;
 use App\Base\Media\Services\MediaAssetStore;
-use App\Modules\Commerce\Inventory\Exceptions\InventoryStorageException;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class InventoryItemService
 {
@@ -43,25 +41,12 @@ class InventoryItemService
 
     public function uploadPhoto(Item $item, UploadedFile $file, int $sortOrder): ItemPhoto
     {
-        $filename = $file->getClientOriginalName();
-        $mimeType = $file->getMimeType();
-        $fileSize = $file->getSize();
-
-        $storageKey = $file->store(
-            'commerce/inventory/item-photos/'.$item->id,
-            ['disk' => self::PHOTO_DISK],
-        );
-
-        if ($storageKey === false) {
-            throw InventoryStorageException::photoStoreFailed();
-        }
-
-        return DB::transaction(function () use ($item, $sortOrder, $filename, $mimeType, $fileSize, $storageKey): ItemPhoto {
-            $asset = $this->mediaAssets->storeOriginal(self::PHOTO_DISK, $storageKey, [
-                'original_filename' => $filename,
-                'mime_type' => $mimeType,
-                'file_size' => $fileSize,
-            ]);
+        return DB::transaction(function () use ($item, $file, $sortOrder): ItemPhoto {
+            $asset = $this->mediaAssets->putUploadedFile(
+                self::PHOTO_DISK,
+                'commerce/inventory/item-photos/'.$item->id,
+                $file,
+            );
 
             return ItemPhoto::query()->create([
                 'item_id' => $item->id,
@@ -75,13 +60,8 @@ class InventoryItemService
     {
         DB::transaction(function () use ($photo): void {
             $asset = $photo->mediaAsset;
-            $disk = $asset->disk;
-            $storageKey = $asset->storage_key;
-
             $photo->delete();
-            $asset->delete();
-
-            Storage::disk($disk)->delete($storageKey);
+            $this->mediaAssets->delete($asset);
         });
     }
 }
