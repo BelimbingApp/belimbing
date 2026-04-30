@@ -98,4 +98,39 @@
             </div>
         </x-ui.card>
     </div>
+
+    <x-ui.card>
+        <div class="space-y-4">
+            <x-ui.catalog-section
+                :title="__('Disclosure Chevron (Expand / Collapse)')"
+                component="<code>x-ui.disclosure</code> (<code>variant</code>: <code>section</code> | <code>card-header</code>)"
+            >
+                {{ __('Use this for compact “optional detail” sections inside cards (e.g., Change Password, Effective Permissions). The chevron is purely an affordance; keep the trigger text as the accessible name and animate only opacity/transform.') }}
+            </x-ui.catalog-section>
+
+            <div class="rounded-2xl border border-border-default bg-surface-card p-4">
+                <x-ui.disclosure :title="__('Advanced Options')">
+                    <p class="text-sm text-ink">{{ __('This content is hidden by default and revealed on demand.') }}</p>
+                    <p class="mt-1 text-xs text-muted">{{ __('Keep disclosure sections short and avoid placing destructive actions inside unless you add confirmation.') }}</p>
+                </x-ui.disclosure>
+            </div>
+
+            <div class="rounded-2xl border border-border-default bg-surface-card p-4">
+                <x-ui.disclosure
+                    :title="__('Card Header Disclosure')"
+                    variant="card-header"
+                    :default-open="true"
+                    panel-id="ui-ref-card-header-disclosure"
+                    content-class="mt-3 space-y-2"
+                >
+                    <x-slot name="hint">
+                        <p class="text-xs text-muted">{{ __('Use the card-header variant when the disclosure is the primary card title, and you need a richer trigger (focus ring, larger type).') }}</p>
+                    </x-slot>
+
+                    <p class="text-sm text-ink">{{ __('This panel starts open and uses the shared disclosure transitions.') }}</p>
+                    <p class="text-xs text-muted">{{ __('Provide a stable panel id when you want aria-controls to point at the revealed content.') }}</p>
+                </x-ui.disclosure>
+            </div>
+        </div>
+    </x-ui.card>
 </div>

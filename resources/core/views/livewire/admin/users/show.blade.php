@@ -155,31 +155,12 @@
             @endif
 
             {{-- Effective Permissions --}}
-            <div x-data="{ open: false }">
-                <button
-                    @click="open = !open"
-                    class="flex items-center gap-2 w-full text-left"
-                    type="button"
-                >
-                    <span class="text-[12px] shrink-0 text-accent w-3.5 text-center" aria-hidden="true">
-                        <span x-show="!open">⮞</span>
-                        <span x-show="open">⮟</span>
-                    </span>
-                    <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">
-                        {{ __('Effective Permissions') }}
-                        <x-ui.badge>{{ collect($effectivePermissions)->flatten()->count() }}</x-ui.badge>
-                    </h3>
-                </button>
+            <x-ui.disclosure :title="__('Effective Permissions')" content-class="mt-3">
+                <x-slot name="badge">
+                    <x-ui.badge>{{ collect($effectivePermissions)->flatten()->count() }}</x-ui.badge>
+                </x-slot>
 
-                <div
-                    x-show="open"
-                    x-transition:enter="transition ease-out duration-200"
-                    x-transition:enter-start="opacity-0 -translate-y-1"
-                    x-transition:enter-end="opacity-100 translate-y-0"
-                    class="mt-3"
-                    style="display: none;"
-                >
-                    <p class="text-xs text-muted mb-3">{{ __('Green = from roles. Blue = direct grant. Red = denied. Click ✕ to remove or deny.') }}</p>
+                <p class="text-xs text-muted mb-3">{{ __('Green = from roles. Blue = direct grant. Red = denied. Click ✕ to remove or deny.') }}</p>
 
                     @forelse($effectivePermissions as $domain => $capabilities)
                         <dl class="mb-3">
@@ -290,64 +271,39 @@
                             </div>
                         </div>
                     @endif
-                </div>
-            </div>
+            </x-ui.disclosure>
         </x-ui.card>
 
         <x-ui.card>
-            <div x-data="{ open: false }">
-                <button
-                    @click="open = !open"
-                    class="flex items-center gap-2 w-full text-left"
-                    type="button"
-                >
-                    <span class="text-[12px] shrink-0 text-accent w-3.5 text-center" aria-hidden="true">
-                        <span x-show="!open">⮞</span>
-                        <span x-show="open">⮟</span>
-                    </span>
-                    <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Change Password') }}</h3>
-                </button>
+            <x-ui.disclosure :title="__('Change Password')">
+                <form wire:submit="updatePassword" class="space-y-4 max-w-md">
+                    <x-ui.input
+                        id="user-reset-password"
+                        wire:model="password"
+                        label="{{ __('New Password') }}"
+                        type="password"
+                        required
+                        autocomplete="new-password"
+                        placeholder="{{ __('Enter new password') }}"
+                        :error="$errors->first('password')"
+                    />
 
-                <div
-                    x-show="open"
-                    x-transition:enter="transition ease-out duration-200"
-                    x-transition:enter-start="opacity-0 -translate-y-1"
-                    x-transition:enter-end="opacity-100 translate-y-0"
-                    x-transition:leave="transition ease-in duration-150"
-                    x-transition:leave-start="opacity-100 translate-y-0"
-                    x-transition:leave-end="opacity-0 -translate-y-1"
-                    class="mt-4"
-                    style="display: none;"
-                >
-                    <form wire:submit="updatePassword" class="space-y-4 max-w-md">
-                        <x-ui.input
-                            id="user-reset-password"
-                            wire:model="password"
-                            label="{{ __('New Password') }}"
-                            type="password"
-                            required
-                            autocomplete="new-password"
-                            placeholder="{{ __('Enter new password') }}"
-                            :error="$errors->first('password')"
-                        />
+                    <x-ui.input
+                        id="user-reset-password-confirmation"
+                        wire:model="passwordConfirmation"
+                        label="{{ __('Confirm New Password') }}"
+                        type="password"
+                        required
+                        autocomplete="new-password"
+                        placeholder="{{ __('Confirm new password') }}"
+                        :error="$errors->first('passwordConfirmation')"
+                    />
 
-                        <x-ui.input
-                            id="user-reset-password-confirmation"
-                            wire:model="passwordConfirmation"
-                            label="{{ __('Confirm New Password') }}"
-                            type="password"
-                            required
-                            autocomplete="new-password"
-                            placeholder="{{ __('Confirm new password') }}"
-                            :error="$errors->first('passwordConfirmation')"
-                        />
-
-                        <x-ui.button type="submit" variant="primary">
-                            {{ __('Update Password') }}
-                        </x-ui.button>
-                    </form>
-                </div>
-            </div>
+                    <x-ui.button type="submit" variant="primary">
+                        {{ __('Update Password') }}
+                    </x-ui.button>
+                </form>
+            </x-ui.disclosure>
         </x-ui.card>
 
         <x-ui.card>
