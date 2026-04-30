@@ -4,6 +4,7 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiPricingOverride;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunCall;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
@@ -148,4 +149,45 @@ it('preserves call-aggregated tokens when complete() is called on a multi-call r
         ->and($run->prompt_tokens)->toBe(2500)
         ->and($run->completion_tokens)->toBe(250)
         ->and($run->call_count)->toBe(2);
+});
+
+it('costs a call from resolved pricing and aggregates run cost', function (): void {
+    rrSeedRun();
+    AiPricingOverride::query()->create([
+        'provider' => 'openai',
+        'model' => 'gpt-5.4',
+        'input_cents_per_token' => '1.000000000000',
+        'cached_input_cents_per_token' => '0.000000000000',
+        'output_cents_per_token' => '2.000000000000',
+        'reason' => 'test pricing',
+    ]);
+
+    $recorder = new RunRecorder;
+    $call = $recorder->recordCall(
+        runId: RR_RUN_ID,
+        attemptIndex: 0,
+        provider: 'openai',
+        model: 'gpt-5.4',
+        finishReason: 'stop',
+        latencyMs: 500,
+        usage: CallUsage::fromProviderArray([
+            'prompt_tokens' => 100,
+            'completion_tokens' => 10,
+            'prompt_tokens_details' => ['cached_tokens' => 25],
+        ]),
+    );
+
+    expect($call)->not->toBeNull()
+        ->and($call->pricing_source)->toBe('override')
+        ->and($call->pricing_version)->toStartWith('override:')
+        ->and($call->cost_input_cents)->toBe(75)
+        ->and($call->cost_cached_input_cents)->toBe(0)
+        ->and($call->cost_output_cents)->toBe(20)
+        ->and($call->cost_total_cents)->toBe(95);
+
+    $run = AiRun::query()->find(RR_RUN_ID);
+    expect($run->cost_input_cents)->toBe(75)
+        ->and($run->cost_cached_input_cents)->toBe(0)
+        ->and($run->cost_output_cents)->toBe(20)
+        ->and($run->cost_total_cents)->toBe(95);
 });

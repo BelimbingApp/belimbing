@@ -39,6 +39,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $reasoning_tokens
  * @property int|null $total_tokens
  * @property int|null $cost_input_cents
+ * @property int|null $cost_cached_input_cents
  * @property int|null $cost_output_cents
  * @property int|null $cost_total_cents
  * @property string|null $pricing_version
@@ -106,6 +107,7 @@ class AiRun extends Model
         'reasoning_tokens',
         'total_tokens',
         'cost_input_cents',
+        'cost_cached_input_cents',
         'cost_output_cents',
         'cost_total_cents',
         'pricing_version',

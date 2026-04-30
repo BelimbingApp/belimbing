@@ -11,7 +11,10 @@ use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunCall;
 use App\Modules\Core\AI\Services\MessageManager;
+use App\Modules\Core\AI\Services\Pricing\PricingSourceRegistry;
+use App\Modules\Core\AI\Services\Pricing\TokenCostCalculator;
 use App\Modules\Core\AI\Values\CallUsage;
+use App\Modules\Core\AI\Values\ResolvedRate;
 
 /**
  * Records AI run lifecycle events to the ai_runs ledger.
@@ -25,6 +28,11 @@ use App\Modules\Core\AI\Values\CallUsage;
  */
 class RunRecorder
 {
+    public function __construct(
+        private ?PricingSourceRegistry $pricingSourceRegistry = null,
+        private ?TokenCostCalculator $tokenCostCalculator = null,
+    ) {}
+
     /**
      * Record the start of a new run.
      *
@@ -155,6 +163,10 @@ class RunRecorder
         $startedAt = $latencyMs !== null && $latencyMs > 0
             ? $finishedAt->copy()->subMilliseconds($latencyMs)
             : $finishedAt;
+        $rate = $this->resolveRate($provider, $model);
+        $cost = $usage !== null && $rate !== null
+            ? $this->tokenCostCalculator()->costFor($usage, $rate)
+            : null;
 
         $call = AiRunCall::query()->updateOrCreate(
             [
@@ -172,6 +184,12 @@ class RunRecorder
                 'reasoning_tokens' => $usage?->reasoningTokens,
                 'total_tokens' => $usage?->totalTokens,
                 'raw_usage' => $usage?->raw,
+                'pricing_source' => $rate?->source,
+                'pricing_version' => $rate?->version,
+                'cost_input_cents' => $cost?->inputCents,
+                'cost_cached_input_cents' => $cost?->cachedInputCents,
+                'cost_output_cents' => $cost?->outputCents,
+                'cost_total_cents' => $cost?->totalCents,
                 'started_at' => $startedAt,
                 'finished_at' => $finishedAt,
             ],
@@ -201,6 +219,7 @@ class RunRecorder
                 SUM(reasoning_tokens) as reasoning_tokens,
                 SUM(total_tokens) as total_tokens,
                 SUM(cost_input_cents) as cost_input_cents,
+                SUM(cost_cached_input_cents) as cost_cached_input_cents,
                 SUM(cost_output_cents) as cost_output_cents,
                 SUM(cost_total_cents) as cost_total_cents
             ')
@@ -220,9 +239,25 @@ class RunRecorder
                 'reasoning_tokens' => $aggregates->reasoning_tokens !== null ? (int) $aggregates->reasoning_tokens : null,
                 'total_tokens' => $aggregates->total_tokens !== null ? (int) $aggregates->total_tokens : null,
                 'cost_input_cents' => $aggregates->cost_input_cents !== null ? (int) $aggregates->cost_input_cents : null,
+                'cost_cached_input_cents' => $aggregates->cost_cached_input_cents !== null ? (int) $aggregates->cost_cached_input_cents : null,
                 'cost_output_cents' => $aggregates->cost_output_cents !== null ? (int) $aggregates->cost_output_cents : null,
                 'cost_total_cents' => $aggregates->cost_total_cents !== null ? (int) $aggregates->cost_total_cents : null,
             ]);
+    }
+
+    private function resolveRate(?string $provider, ?string $model): ?ResolvedRate
+    {
+        return $this->pricingSourceRegistry()->resolve($provider, $model);
+    }
+
+    private function pricingSourceRegistry(): PricingSourceRegistry
+    {
+        return $this->pricingSourceRegistry ??= app(PricingSourceRegistry::class);
+    }
+
+    private function tokenCostCalculator(): TokenCostCalculator
+    {
+        return $this->tokenCostCalculator ??= app(TokenCostCalculator::class);
     }
 
     /**

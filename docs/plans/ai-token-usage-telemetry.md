@@ -117,10 +117,10 @@ Evidence: 23 tests pass across `CallUsageTest`, `RunRecorderTest`, and `WireLogR
 
 Goal: prices are resolved from authoritative sources, refreshed on a schedule, and auditable.
 
-- [ ] Migration: `ai_pricing_snapshots` (model, provider, input_per_token, cached_input_per_token, output_per_token, snapshot_date, source) and `ai_pricing_overrides` (model, provider, rates, reason, created_by)
-- [ ] Implement `PricingSourceRegistry` with `OverrideResolver`, `OpenRouterApiResolver`, `LiteLLMSnapshotResolver`
+- [x] Migration: `ai_pricing_snapshots` (model, provider, input_per_token, cached_input_per_token, output_per_token, snapshot_date, source) and `ai_pricing_overrides` (model, provider, rates, reason, created_by)
+- [ ] Implement `PricingSourceRegistry` with `OverrideResolver`, `OpenRouterApiResolver`, `LiteLLMSnapshotResolver` (override + LiteLLM snapshot resolver landed; OpenRouter live resolver seam exists, network-backed implementation deferred to refresh action)
 - [ ] `RefreshPricingSnapshot` lifecycle action (nightly schedule, also runnable on demand from Lifecycle tab); idempotent; failure falls back to previous snapshot
-- [ ] Wire `TokenCostCalculator` to consume `PricingSourceRegistry` output; persist `pricing_source` and `pricing_version` on each call
+- [x] Wire `TokenCostCalculator` to consume `PricingSourceRegistry` output; persist `pricing_source` and `pricing_version` on each call
 - [ ] **UI: pricing source pill** on each call row in the Run Detail / Run Inspector calls table (e.g., `litellm:2026-04-29`)
 - [ ] **UI: Lifecycle tab** gets a "Refresh pricing snapshot" action with last-refreshed timestamp and current snapshot stats (model count, age)
 - [ ] **UI: Admin > AI > Pricing Overrides** CRUD page

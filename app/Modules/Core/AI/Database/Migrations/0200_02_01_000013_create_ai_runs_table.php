@@ -37,6 +37,7 @@ return new class extends Migration
             $table->unsignedInteger('reasoning_tokens')->nullable();
             $table->unsignedInteger('total_tokens')->nullable();
             $table->unsignedInteger('cost_input_cents')->nullable();
+            $table->unsignedInteger('cost_cached_input_cents')->nullable();
             $table->unsignedInteger('cost_output_cents')->nullable();
             $table->unsignedInteger('cost_total_cents')->nullable();
             $table->string('pricing_version', 64)->nullable();
