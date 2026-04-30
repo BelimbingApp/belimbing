@@ -311,10 +311,7 @@ final class LlmResponsesDecoder
         return [
             'type' => 'done',
             'finish_reason' => self::responseFinishReason($status),
-            'usage' => $usage !== null ? [
-                'prompt_tokens' => $usage['input_tokens'] ?? null,
-                'completion_tokens' => $usage['output_tokens'] ?? null,
-            ] : null,
+            'usage' => LlmUsageNormalizer::fromProviderArray(is_array($usage) ? $usage : null),
             'latency_ms' => LlmClientSupport::latencyMs($startTime),
         ];
     }

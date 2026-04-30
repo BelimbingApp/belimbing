@@ -10,6 +10,7 @@ use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClientSupport;
+use App\Base\AI\Services\LlmUsageNormalizer;
 use App\Base\Support\Json as BlbJson;
 use Generator;
 use Illuminate\Http\Client\Response;
@@ -84,10 +85,7 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
 
         $result = [
             'content' => $content,
-            'usage' => [
-                'prompt_tokens' => $usage['input_tokens'] ?? null,
-                'completion_tokens' => $usage['output_tokens'] ?? null,
-            ],
+            'usage' => LlmUsageNormalizer::fromProviderArray(is_array($usage) ? $usage : null),
             'latency_ms' => $latencyMs,
         ];
 
@@ -126,6 +124,8 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
 
             public mixed $promptTokens = null;
 
+            public mixed $cachedInputTokens = null;
+
             public mixed $completionTokens = null;
 
             public string $finishReason = 'stop';
@@ -149,10 +149,11 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
 
         yield $this->buildDoneEvent(
             $ctx->finishReason,
-            [
-                'prompt_tokens' => $ctx->promptTokens,
-                'completion_tokens' => $ctx->completionTokens,
-            ],
+            LlmUsageNormalizer::fromProviderArray([
+                'input_tokens' => $ctx->promptTokens,
+                'cache_read_input_tokens' => $ctx->cachedInputTokens,
+                'output_tokens' => $ctx->completionTokens,
+            ]),
             $startTime,
             $mapping,
             $ctx->reasoningBlocks !== [] ? ['reasoning_blocks' => $ctx->reasoningBlocks] : [],
@@ -220,7 +221,9 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
      */
     private function anthropicOnMessageStart(array $data, object $ctx): Generator
     {
-        $ctx->promptTokens = $data['message']['usage']['input_tokens'] ?? null;
+        $usage = is_array($data['message']['usage'] ?? null) ? $data['message']['usage'] : [];
+        $ctx->promptTokens = $usage['input_tokens'] ?? null;
+        $ctx->cachedInputTokens = $usage['cache_read_input_tokens'] ?? null;
 
         yield from [];
     }
@@ -375,10 +378,11 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
     ): Generator {
         yield $this->buildDoneEvent(
             $ctx->finishReason,
-            [
-                'prompt_tokens' => $ctx->promptTokens,
-                'completion_tokens' => $ctx->completionTokens,
-            ],
+            LlmUsageNormalizer::fromProviderArray([
+                'input_tokens' => $ctx->promptTokens,
+                'cache_read_input_tokens' => $ctx->cachedInputTokens,
+                'output_tokens' => $ctx->completionTokens,
+            ]),
             $startTime,
             $mapping,
             $ctx->reasoningBlocks !== [] ? ['reasoning_blocks' => $ctx->reasoningBlocks] : [],

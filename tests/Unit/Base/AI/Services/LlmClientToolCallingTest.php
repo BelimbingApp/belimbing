@@ -525,7 +525,7 @@ describe('LlmClient reasoning and Anthropic response parsing', function () {
                         'input' => ['city' => 'Kuala Lumpur'],
                     ],
                 ],
-                'usage' => ['input_tokens' => 12, 'output_tokens' => 9],
+                'usage' => ['input_tokens' => 12, 'cache_read_input_tokens' => 8, 'output_tokens' => 9],
             ]),
         ]);
 
@@ -554,7 +554,9 @@ describe('LlmClient reasoning and Anthropic response parsing', function () {
 
         expect($result['tool_calls'][0]['id'] ?? null)->toBe('toolu_123')
             ->and($result['tool_calls'][0]['function']['arguments'] ?? null)->toBe('{"city":"Kuala Lumpur"}')
-            ->and($result['reasoning_blocks'][0]['signature'] ?? null)->toBe('sig_123');
+            ->and($result['reasoning_blocks'][0]['signature'] ?? null)->toBe('sig_123')
+            ->and($result['usage']['cached_input_tokens'] ?? null)->toBe(8)
+            ->and($result['usage']['total_tokens'] ?? null)->toBe(21);
     });
 });
 
@@ -570,12 +572,17 @@ describe('LlmClient tool calling responses api handling', function () {
                         ],
                     ],
                 ],
-                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+                'usage' => [
+                    'input_tokens' => 10,
+                    'input_tokens_details' => ['cached_tokens' => 4],
+                    'output_tokens' => 5,
+                    'output_tokens_details' => ['reasoning_tokens' => 2],
+                ],
             ]),
         ]);
 
         $client = new LlmClient;
-        $client->chat(new ChatRequest(
+        $result = $client->chat(new ChatRequest(
             TEST_API_BASE_URL,
             'test-key',
             'gpt-5.4',
@@ -583,6 +590,10 @@ describe('LlmClient tool calling responses api handling', function () {
             executionControls: ExecutionControls::defaults(temperature: 0.7),
             apiType: AiApiType::OpenAiResponses,
         ));
+
+        expect($result['usage']['cached_input_tokens'] ?? null)->toBe(4)
+            ->and($result['usage']['reasoning_tokens'] ?? null)->toBe(2)
+            ->and($result['usage']['total_tokens'] ?? null)->toBe(15);
 
         Http::assertSent(function ($request) {
             $body = $request->data();
@@ -625,7 +636,7 @@ describe('LlmClient anthropic streaming handling', function () {
     it('streams Anthropic thinking and tool-call deltas while preserving reasoning blocks', function () {
         $payload = <<<'SSE'
 event: message_start
-data: {"type":"message_start","message":{"usage":{"input_tokens":12}}}
+data: {"type":"message_start","message":{"usage":{"input_tokens":12,"cache_read_input_tokens":7}}}
 
 event: content_block_start
 data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":null}}
@@ -691,6 +702,8 @@ SSE;
             ->and($events[4]['type'] ?? null)->toBe('done')
             ->and($events[4]['reasoning_blocks'][0]['signature'] ?? null)->toBe('sig_stream')
             ->and($events[4]['usage']['prompt_tokens'] ?? null)->toBe(12)
-            ->and($events[4]['usage']['completion_tokens'] ?? null)->toBe(9);
+            ->and($events[4]['usage']['cached_input_tokens'] ?? null)->toBe(7)
+            ->and($events[4]['usage']['completion_tokens'] ?? null)->toBe(9)
+            ->and($events[4]['usage']['total_tokens'] ?? null)->toBe(21);
     });
 });

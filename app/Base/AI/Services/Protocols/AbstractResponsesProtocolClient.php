@@ -11,6 +11,7 @@ use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClientSupport;
 use App\Base\AI\Services\LlmResponsesDecoder;
+use App\Base\AI\Services\LlmUsageNormalizer;
 use Generator;
 use Illuminate\Http\Client\Response;
 
@@ -51,10 +52,7 @@ abstract class AbstractResponsesProtocolClient extends AbstractLlmProtocolClient
             ]
             : [
                 'content' => $content,
-                'usage' => [
-                    'prompt_tokens' => $usage['input_tokens'] ?? null,
-                    'completion_tokens' => $usage['output_tokens'] ?? null,
-                ],
+                'usage' => LlmUsageNormalizer::fromProviderArray(is_array($usage) ? $usage : null),
                 'latency_ms' => $latencyMs,
             ];
 

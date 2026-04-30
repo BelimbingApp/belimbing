@@ -21,7 +21,7 @@ event: response.output_text.delta
 data: {"type":"response.output_text.delta","content_index":0,"delta":"OK","item_id":"msg_test","output_index":0}
 
 event: response.completed
-data: {"type":"response.completed","response":{"status":"completed","usage":{"input_tokens":10,"output_tokens":2}}}
+data: {"type":"response.completed","response":{"status":"completed","usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":6},"output_tokens":2,"output_tokens_details":{"reasoning_tokens":1}}}}
 
 SSE;
 
@@ -45,7 +45,10 @@ SSE;
 
     expect($result['content'] ?? null)->toBe('OK')
         ->and($result['usage']['prompt_tokens'] ?? null)->toBe(10)
-        ->and($result['usage']['completion_tokens'] ?? null)->toBe(2);
+        ->and($result['usage']['cached_input_tokens'] ?? null)->toBe(6)
+        ->and($result['usage']['completion_tokens'] ?? null)->toBe(2)
+        ->and($result['usage']['reasoning_tokens'] ?? null)->toBe(1)
+        ->and($result['usage']['total_tokens'] ?? null)->toBe(12);
 
     Http::assertSent(function ($request): bool {
         $body = $request->data();

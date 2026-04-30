@@ -39,6 +39,8 @@ class LlmClient
      * - ['type' => 'content_delta', 'text' => '...']
      * - ['type' => 'tool_call_delta', 'index' => int, 'id' => ?string, 'name' => ?string, 'arguments_delta' => string]
      * - ['type' => 'done', 'finish_reason' => string, 'usage' => ?array, 'latency_ms' => int]
+     *   where usage uses prompt_tokens / cached_input_tokens / completion_tokens /
+     *   reasoning_tokens / total_tokens when reported by the provider.
      * - ['type' => 'error', 'runtime_error' => AiRuntimeError, 'latency_ms' => int]
      *
      * @return Generator<int, array<string, mixed>>

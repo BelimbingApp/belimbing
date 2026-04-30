@@ -102,7 +102,7 @@ Goal: `usage` is recognized, parsed, attached to a per-call row, costed, and sho
 - [x] Migration: create `ai_run_calls` (run_id, attempt_index, provider, model, started_at, finished_at, latency_ms, prompt_tokens, cached_input_tokens, completion_tokens, reasoning_tokens, total_tokens, finish_reason, native_finish_reason, raw_usage jsonb, pricing_source, pricing_version, cost_input_cents, cost_cached_input_cents, cost_output_cents, cost_total_cents, rate_limit_remaining_requests, rate_limit_remaining_tokens, rate_limit_reset_at)
 - [x] Migration: extend `ai_runs` with `cached_input_tokens`, `reasoning_tokens`, `total_tokens`, `cost_*_cents`, `pricing_version`, `call_count` (derived from calls)
 - [x] Extend `AbstractLlmProtocolClient::done()` docblock to allow the extended usage shape; populate full shape (`prompt`, `cached_input`, `completion`, `reasoning`, `total`) from `ChatCompletionsProtocolClient` for both top-level (OpenAI) and choice-level (Moonshot/Kimi) `usage`
-- [ ] Populate the same extended usage shape from Anthropic Messages, OpenAI Responses, and Codex Responses clients (next slice — current ChatCompletions cover the originating bug)
+- [x] Populate the same extended usage shape from Anthropic Messages, OpenAI Responses, and Codex Responses clients
 - [ ] Capture rate-limit headers in each protocol client and pass through `done` event (deferred to Phase 5 — columns exist on `ai_run_calls`, transport-tap header capture lands there)
 - [x] Introduce `CallUsage` value object; `ProviderRateLimit` deferred to Phase 5 alongside header capture
 - [x] `RunRecorder::recordCall()` — upsert an `ai_run_calls` row per terminal `done` event keyed by (run_id, attempt_index); recompute `ai_runs` aggregates after each call
