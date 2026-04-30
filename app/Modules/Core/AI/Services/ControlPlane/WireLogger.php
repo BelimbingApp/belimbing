@@ -16,7 +16,7 @@ class WireLogger
      * Hard cap for how many decoded preview rows are retained in memory while scanning the JSONL.
      * Larger windows load faster operator workflows but increase peak RAM (roughly proportional to this cap).
      */
-    private const PREVIEW_ENTRY_LIMIT_MAX = 1000;
+    private const PREVIEW_ENTRY_LIMIT_MAX = 2000;
 
     private const PREVIEW_LINE_BYTES = 64 * 1024;
 
@@ -187,6 +187,11 @@ class WireLogger
         return storage_path('app/ai/wire-logs/'.$runId.'.jsonl');
     }
 
+    public function footprintBytes(string $runId): int
+    {
+        return $this->fileFootprintBytes($this->path($runId));
+    }
+
     public function totalBytes(): int
     {
         $wireLogPath = storage_path('app/ai/wire-logs');
@@ -258,6 +263,7 @@ class WireLogger
         $entries = [];
         $lastEntries = [];
         $totalEntries = 0;
+        $extendStreamBlock = false;
         $previewer = new WireLogEntryPreviewer;
 
         try {
@@ -274,7 +280,24 @@ class WireLogger
                     array_shift($lastEntries);
                 }
 
-                if ($totalEntries <= $offset || count($entries) >= $limit) {
+                if ($totalEntries <= $offset) {
+                    continue;
+                }
+
+                if (count($entries) < $limit) {
+                    $entries[] = $previewEntry;
+                    $extendStreamBlock = count($entries) >= $limit && $this->isStreamLinePreviewEntry($previewEntry);
+
+                    continue;
+                }
+
+                if (! $extendStreamBlock) {
+                    continue;
+                }
+
+                if (! $this->isStreamLinePreviewEntry($previewEntry)) {
+                    $extendStreamBlock = false;
+
                     continue;
                 }
 
@@ -297,6 +320,14 @@ class WireLogger
             'total_entries' => $totalEntries,
             'effective_offset' => $offset,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $entry
+     */
+    private function isStreamLinePreviewEntry(array $entry): bool
+    {
+        return ($entry['type'] ?? null) === 'llm.stream_line';
     }
 
     /**

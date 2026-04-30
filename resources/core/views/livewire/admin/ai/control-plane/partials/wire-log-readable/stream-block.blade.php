@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-use Illuminate\Support\Number;
-
 /** @var array<string, mixed> $block */
 /** @var string $runId */
 $durationLabel = isset($block['duration_ms']) && $block['duration_ms'] !== null
@@ -87,13 +85,19 @@ $durationLabel = isset($block['duration_ms']) && $block['duration_ms'] !== null
                     <div class="flex flex-wrap items-center gap-2 text-xs">
                         <x-ui.badge variant="accent">{{ __('Tool call') }}</x-ui.badge>
                         <span class="font-mono text-ink">{{ $toolCall['name'] ?? __('(no name)') }}</span>
-                        @if ($toolCall['arguments_valid_json'])
+                        @if (! ($toolCall['arguments_complete'] ?? true))
+                            <x-ui.badge variant="warning">{{ __('incomplete window') }}</x-ui.badge>
+                        @elseif ($toolCall['arguments_valid_json'])
                             <x-ui.badge variant="success">{{ __('valid JSON') }}</x-ui.badge>
                         @elseif ($toolCall['arguments'] !== '')
                             <x-ui.badge variant="danger">{{ __('invalid JSON') }}</x-ui.badge>
                         @endif
                     </div>
-                    @if ($toolCall['arguments_parse_error'])
+                    @if (! ($toolCall['arguments_complete'] ?? true))
+                        <p class="mt-1 text-[11px] text-status-warning">
+                            {{ __('Arguments are assembled from the currently loaded wire-log window only; load later entries or the full run before treating this as malformed JSON.') }}
+                        </p>
+                    @elseif ($toolCall['arguments_parse_error'])
                         <p class="mt-1 text-[11px] text-status-danger">{{ $toolCall['arguments_parse_error'] }}</p>
                     @endif
                     @if ($toolCall['arguments'] !== '')

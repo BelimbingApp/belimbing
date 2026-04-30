@@ -5,7 +5,7 @@
 /** @var list<\App\Modules\Core\AI\DTO\Message> $transcript */
 /** @var \App\Modules\Core\AI\DTO\Message|null $triggeringPrompt */
 ?>
-<x-ui.card>
+<x-ui.card id="activity-transcript-card">
     <div x-data="{ activityTranscriptOpen: true }">
         <div class="mb-4 flex items-center justify-between gap-3">
             <div>
@@ -29,10 +29,18 @@
             </div>
         </div>
 
-        <div id="activity-transcript-panel" x-show="activityTranscriptOpen" x-cloak>
+        <div id="activity-transcript-panel" x-show="activityTranscriptOpen" x-cloak class="space-y-3">
+            @if ($triggeringPrompt)
+                <div
+                    class="sticky top-0 z-20 -mx-card-inner cursor-pointer rounded-2xl border border-border-default bg-surface-subtle/95 px-card-inner py-card-inner shadow-sm backdrop-blur"
+                    @click="document.getElementById('activity-transcript-card')?.scrollIntoView({ block: 'start' })"
+                >
+                    <x-ai.activity.user-message :content="$triggeringPrompt->content" :timestamp="$triggeringPrompt->timestamp" />
+                </div>
+            @endif
+
             @include('livewire.admin.ai.control-plane.partials.activity-transcript', [
                 'transcript' => $transcript,
-                'triggeringPrompt' => $triggeringPrompt,
             ])
         </div>
     </div>

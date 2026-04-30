@@ -19,35 +19,38 @@ trait ManagesWireLogWindow
     {
         $this->wireLogLimit = $this->normalizeWireLogLimit($this->wireLogLimit);
         $this->syncWireLogStartEntry();
-        $this->notifyWireLogWindowChanged();
+        $this->notifyWireLogWindowChanged(scrollWireLogPanelIntoView: false);
     }
 
     public function firstWireLogEntries(): void
     {
         $this->wireLogOffset = 0;
         $this->syncWireLogStartEntry();
-        $this->notifyWireLogWindowChanged();
+        $this->notifyWireLogWindowChanged(scrollWireLogPanelIntoView: true);
     }
 
     public function previousWireLogEntries(): void
     {
         $this->wireLogOffset = max(0, $this->wireLogOffset - $this->normalizeWireLogLimit($this->wireLogLimit));
         $this->syncWireLogStartEntry();
-        $this->notifyWireLogWindowChanged();
+        $this->notifyWireLogWindowChanged(scrollWireLogPanelIntoView: true);
     }
 
-    public function nextWireLogEntries(): void
+    public function nextWireLogEntries(int $currentRangeEnd = 0): void
     {
-        $this->wireLogOffset += $this->normalizeWireLogLimit($this->wireLogLimit);
+        $this->wireLogOffset = $currentRangeEnd > 0
+            ? $currentRangeEnd
+            : $this->wireLogOffset + $this->normalizeWireLogLimit($this->wireLogLimit);
+
         $this->syncWireLogStartEntry();
-        $this->notifyWireLogWindowChanged();
+        $this->notifyWireLogWindowChanged(scrollWireLogPanelIntoView: true);
     }
 
     public function lastWireLogEntries(int $lastOffset): void
     {
         $this->wireLogOffset = max(0, $lastOffset);
         $this->syncWireLogStartEntry();
-        $this->notifyWireLogWindowChanged();
+        $this->notifyWireLogWindowChanged(scrollWireLogPanelIntoView: true);
     }
 
     public function jumpToWireLogEntry(int $totalEntries = 0): void
@@ -60,7 +63,7 @@ trait ManagesWireLogWindow
 
         $this->wireLogOffset = $startEntry - 1;
         $this->syncWireLogStartEntry();
-        $this->notifyWireLogWindowChanged();
+        $this->notifyWireLogWindowChanged(scrollWireLogPanelIntoView: true);
     }
 
     protected function resetWireLogWindow(): void
@@ -78,11 +81,11 @@ trait ManagesWireLogWindow
     /**
      * Allowed page sizes for the wire-log inspector (must stay in sync with the Blade select and {@see WireLogger::preview} limit clamp).
      *
-     * @return int One of 100, 250, 500, or 1000.
+     * @return int One of 100, 250, 500, 1000, 1500, or 2000.
      */
     private function normalizeWireLogLimit(int $limit): int
     {
-        $sizes = [100, 250, 500, 1000];
+        $sizes = [100, 250, 500, 1000, 1500, 2000];
 
         foreach ($sizes as $size) {
             if ($limit <= $size) {
@@ -93,8 +96,11 @@ trait ManagesWireLogWindow
         return $sizes[array_key_last($sizes)];
     }
 
-    private function notifyWireLogWindowChanged(): void
+    /**
+     * @param  bool  $scrollWireLogPanelIntoView  When true, the wire-log Blade listener scrolls #wire-log-panel into view (pagination / jump). False for limit-only updates (e.g. Alpine readable-mode bootstrap) so Run Ledger navigation does not jump past Run Details.
+     */
+    private function notifyWireLogWindowChanged(bool $scrollWireLogPanelIntoView = false): void
     {
-        $this->dispatch('wire-log-window-changed');
+        $this->dispatch('wire-log-window-changed', scrollWireLogPanelIntoView: $scrollWireLogPanelIntoView);
     }
 }

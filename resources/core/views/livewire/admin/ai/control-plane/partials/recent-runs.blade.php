@@ -45,6 +45,7 @@
                     <thead class="bg-surface-subtle/80">
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Run') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Footprint') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Agent') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Provider') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
@@ -53,16 +54,24 @@
                     </thead>
                     <tbody class="divide-y divide-border-default bg-surface-card">
                         @forelse ($recentRuns as $run)
-                            <tr wire:key="recent-run-{{ $run['run_id'] }}" class="hover:bg-surface-subtle/60 transition-colors">
+                            @php($isSelectedRun = ($inspectRunId ?? '') === $run['run_id'])
+                            <tr
+                                wire:key="recent-run-{{ $run['run_id'] }}"
+                                aria-current="{{ $isSelectedRun ? 'true' : 'false' }}"
+                                class="{{ $isSelectedRun ? 'bg-accent/10 ring-1 ring-inset ring-accent/30' : 'hover:bg-surface-subtle/60' }} transition-colors"
+                            >
                                 <td class="px-table-cell-x py-table-cell-y">
                                     <a
-                                        href="{{ route('admin.ai.control-plane', array_merge($controlPlaneContext ?? [], ['tab' => 'inspector', 'runId' => $run['run_id']])) }}"
+                                        href="{{ route('admin.ai.control-plane', array_merge($controlPlaneContext ?? [], ['tab' => 'inspector', 'runId' => $run['run_id']])) }}#run-details-panel"
                                         wire:navigate
-                                        class="font-mono text-xs text-accent hover:underline"
+                                        class="font-mono text-xs {{ $isSelectedRun ? 'font-semibold text-ink' : 'text-accent' }} hover:underline"
                                     >
                                         {{ $run['run_id'] }}
                                     </a>
                                     <p class="mt-1 text-xs text-muted tabular-nums">{{ $run['started_at_display'] ?? $run['recorded_at_display'] ?? '—' }}</p>
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y text-left text-xs text-muted tabular-nums whitespace-nowrap">
+                                    {{ $run['wire_log_footprint_display'] ?? '0 B' }}
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y text-ink">{{ $run['employee_name'] }}</td>
                                 <td class="px-table-cell-x py-table-cell-y">
@@ -90,7 +99,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No runs have been recorded yet.') }}</td>
+                                <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No runs have been recorded yet.') }}</td>
                             </tr>
                         @endforelse
                     </tbody>

@@ -16,6 +16,7 @@ use App\Modules\Core\Employee\Models\Employee;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Number;
 use Illuminate\Support\Str;
 
 class RunDiagnosticService
@@ -32,7 +33,7 @@ class RunDiagnosticService
     public function inspectRun(string $runId): ?AiRun
     {
         return AiRun::query()
-            ->with(['employee', 'turn'])
+            ->with(['employee', 'turn', 'actingForUser'])
             ->find($runId);
     }
 
@@ -138,13 +139,18 @@ class RunDiagnosticService
     public function mapRecentRun(AiRun $run): array
     {
         $inspection = RunInspection::fromAiRun($run)->toArray();
+        $wireLogFootprintBytes = $this->wireLogger->footprintBytes($run->id);
 
         return array_merge($inspection, [
             'employee_name' => $run->employee?->displayName() ?? __('Unknown Agent'),
             'turn_id' => $run->turn_id,
+            'status_label' => $run->status?->label(),
+            'status_color' => $run->status?->color(),
             'turn_status' => $run->turn?->status?->value,
             'turn_status_label' => $run->turn?->status?->label(),
             'turn_status_color' => $run->turn?->status?->color(),
+            'wire_log_footprint_bytes' => $wireLogFootprintBytes,
+            'wire_log_footprint_display' => Number::fileSize($wireLogFootprintBytes),
             'recorded_at_display' => $this->dateTimeDisplay->formatDateTime($inspection['recorded_at'] ?? null),
             'started_at_display' => $this->dateTimeDisplay->formatDateTime($inspection['started_at'] ?? null),
         ]);

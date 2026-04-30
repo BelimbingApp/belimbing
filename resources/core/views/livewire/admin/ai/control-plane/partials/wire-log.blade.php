@@ -12,6 +12,35 @@ $anomalies = $readable['anomalies'] ?? [];
     class="space-y-3"
     x-data="{
         mode: 'readable',
+        init() {
+            this.$nextTick(() => this.setMode(this.mode));
+        },
+        setMode(nextMode) {
+            if (typeof $wire === 'undefined') {
+                this.$nextTick(() => this.setMode(nextMode));
+                return;
+            }
+
+            this.mode = nextMode;
+
+            let currentLimit = Number($wire.wireLogLimit ?? 0);
+            if (!Number.isFinite(currentLimit)) {
+                currentLimit = 0;
+            }
+            let nextLimit = currentLimit;
+
+            if (nextMode === 'readable' && currentLimit < 500) {
+                nextLimit = 500;
+            }
+
+            if (nextMode === 'raw' && currentLimit > 1000) {
+                nextLimit = 1000;
+            }
+
+            if (nextLimit !== currentLimit) {
+                $wire.set('wireLogLimit', nextLimit);
+            }
+        },
         focusEntry(entryNumber) {
             if (!entryNumber) return;
 
@@ -37,7 +66,12 @@ $anomalies = $readable['anomalies'] ?? [];
             });
         },
     }"
-    x-on:wire-log-window-changed.window="$nextTick(() => document.getElementById('wire-log-panel')?.scrollIntoView({ block: 'start' }))"
+    x-on:wire-log-window-changed.window="$nextTick(() => {
+        const scroll = $event.detail?.scrollWireLogPanelIntoView === true;
+        if (scroll) {
+            document.getElementById('wire-log-panel')?.scrollIntoView({ block: 'start' });
+        }
+    })"
     x-on:wire-log-focus-entry.window="focusEntry($event.detail.entryNumber)"
 >
     @if (! $wireLoggingEnabled)
@@ -49,9 +83,13 @@ $anomalies = $readable['anomalies'] ?? [];
             {{ __('No wire log entries were retained for this run.') }}
         </x-ui.alert>
     @else
-        <div class="sticky top-0 z-20 -mx-card-x rounded-2xl border border-border-default bg-surface-subtle/95 px-card-x py-card-inner shadow-sm backdrop-blur">
-            <div class="flex flex-wrap items-end justify-between gap-3">
-                <div class="space-y-1 text-xs text-muted">
+        <div
+            class="sticky top-0 z-10 -mx-card-inner rounded-2xl border border-border-default bg-surface-subtle/95 px-card-inner py-card-inner shadow-sm backdrop-blur"
+            @click="document.getElementById('wire-log-panel')?.scrollIntoView({ block: 'start' })"
+        >
+            {{-- z-10 keeps the pin above scrolling entries; translucent bg still hints at content underneath. --}}
+            <div class="space-y-3">
+                <div class="cursor-pointer space-y-1 text-xs text-muted">
                     <p class="font-medium text-ink">
                         {{ __('Showing entries :start-:end of :total retained wire-log entries.', [
                             'start' => $summary['range_start'] ?? 0,
@@ -70,12 +108,12 @@ $anomalies = $readable['anomalies'] ?? [];
                     </p>
                 </div>
 
-                <div class="grid gap-3 md:grid-cols-[auto_8rem_10rem_auto]">
+                <div class="flex flex-wrap items-end gap-3" @click.stop>
                     <div class="flex items-end">
                         <div class="flex rounded-lg bg-surface-card p-1 shadow-sm ring-1 ring-border-default/50">
                             <button
                                 type="button"
-                                @click="mode = 'readable'"
+                                @click="setMode('readable')"
                                 :class="mode === 'readable' ? 'bg-surface-subtle text-ink shadow-sm ring-1 ring-border-default/50' : 'text-muted hover:text-ink'"
                                 class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
                             >
@@ -83,7 +121,7 @@ $anomalies = $readable['anomalies'] ?? [];
                             </button>
                             <button
                                 type="button"
-                                @click="mode = 'raw'"
+                                @click="setMode('raw')"
                                 :class="mode === 'raw' ? 'bg-surface-subtle text-ink shadow-sm ring-1 ring-border-default/50' : 'text-muted hover:text-ink'"
                                 class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
                             >
@@ -92,22 +130,34 @@ $anomalies = $readable['anomalies'] ?? [];
                         </div>
                     </div>
 
-                    <x-ui.select id="wire-log-limit" wire:model.live="wireLogLimit" :label="__('Entries')">
-                        @foreach ([100, 250, 500, 1000] as $limitOption)
-                            <option value="{{ $limitOption }}">{{ $limitOption }}</option>
-                        @endforeach
-                    </x-ui.select>
+                    <div x-show="mode === 'raw'" x-cloak class="w-[8rem] shrink-0">
+                        <x-ui.select id="wire-log-limit-raw" wire:model.live="wireLogLimit" :label="__('Entries')">
+                            @foreach ([100, 250, 500, 1000] as $limitOption)
+                                <option value="{{ $limitOption }}">{{ $limitOption }}</option>
+                            @endforeach
+                        </x-ui.select>
+                    </div>
 
-                    <x-ui.input
-                        id="wire-log-start-entry"
-                        wire:model.defer="wireLogStartEntry"
-                        :label="__('Start At')"
-                        type="number"
-                        min="1"
-                        max="{{ max(1, (int) ($summary['total_entries'] ?? count($entries))) }}"
-                    />
+                    <div x-show="mode === 'readable'" x-cloak class="w-[10rem] shrink-0">
+                        <x-ui.select id="wire-log-limit-readable" wire:model.live="wireLogLimit" :label="__('Entries')">
+                            @foreach ([500, 1000, 1500, 2000] as $limitOption)
+                                <option value="{{ $limitOption }}">{{ $limitOption }}</option>
+                            @endforeach
+                        </x-ui.select>
+                    </div>
 
-                    <div class="flex flex-wrap items-end gap-2">
+                    <div class="w-[10rem] shrink-0 sm:w-[12rem]">
+                        <x-ui.input
+                            id="wire-log-start-entry"
+                            wire:model.defer="wireLogStartEntry"
+                            :label="__('Start At')"
+                            type="number"
+                            min="1"
+                            max="{{ max(1, (int) ($summary['total_entries'] ?? count($entries))) }}"
+                        />
+                    </div>
+
+                    <div class="flex min-w-0 flex-1 flex-wrap items-end gap-2">
                         <x-ui.button wire:click="jumpToWireLogEntry({{ $summary['total_entries'] ?? count($entries) }})" variant="secondary" size="sm">
                             {{ __('Go') }}
                         </x-ui.button>
@@ -117,7 +167,7 @@ $anomalies = $readable['anomalies'] ?? [];
                         <x-ui.button wire:click="previousWireLogEntries" variant="ghost" size="sm" :disabled="! ($summary['has_previous'] ?? false)">
                             {{ __('Previous') }}
                         </x-ui.button>
-                        <x-ui.button wire:click="nextWireLogEntries" variant="ghost" size="sm" :disabled="! ($summary['has_next'] ?? false)">
+                        <x-ui.button wire:click="nextWireLogEntries({{ $summary['range_end'] ?? 0 }})" variant="ghost" size="sm" :disabled="! ($summary['has_next'] ?? false)">
                             {{ __('Next') }}
                         </x-ui.button>
                         <x-ui.button wire:click="lastWireLogEntries({{ $summary['last_offset'] ?? 0 }})" variant="ghost" size="sm" :disabled="! ($summary['has_next'] ?? false)">
@@ -128,7 +178,7 @@ $anomalies = $readable['anomalies'] ?? [];
             </div>
 
             @if (! empty($anomalies))
-                <div class="mt-3 border-t border-border-default/60 pt-3">
+                <div class="mt-3 border-t border-border-default/60 pt-3" @click.stop>
                     @include('livewire.admin.ai.control-plane.partials.wire-log-readable.anomalies', [
                         'anomalies' => $anomalies,
                         'runId' => $runId,

@@ -59,7 +59,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                 @include('livewire.admin.ai.control-plane.partials.recent-runs')
 
                 @if ($runView)
-                    <x-ui.card>
+                    <x-ui.card id="run-details-panel">
                         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                             <h3 class="text-sm font-medium text-ink">{{ __('Run Details') }}</h3>
                             <x-ui.button as="a" href="#wire-log-panel" variant="ghost" size="sm">

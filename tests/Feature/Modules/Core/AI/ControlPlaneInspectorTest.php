@@ -138,11 +138,19 @@ it('navigates wire-log windows for large runs', function (): void {
         'raw_line' => '',
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-    for ($index = 4; $index <= 245; $index++) {
+    for ($index = 4; $index <= 120; $index++) {
         $lines[] = json_encode([
             'at' => now()->copy()->addSeconds($index)->toIso8601String(),
             'type' => 'llm.stream_line',
             'raw_line' => 'entry-'.$index,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    for ($index = 121; $index <= 245; $index++) {
+        $lines[] = json_encode([
+            'at' => now()->copy()->addSeconds($index)->toIso8601String(),
+            'type' => 'llm.response_body',
+            'raw_body' => 'entry-'.$index,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
@@ -156,14 +164,26 @@ it('navigates wire-log windows for large runs', function (): void {
         ->test(ControlPlane::class)
         ->set('inspectRunId', CONTROL_PLANE_WINDOWED_RUN_ID)
         ->call('inspectRun')
+        ->set('recentRunsCollapsed', false)
         ->assertSet('wireLogLimit', 100)
-        ->assertSee('Showing entries 1-100 of 245 retained wire-log entries.')
+        ->assertSeeHtml('aria-current="true"')
+        ->assertSee('Footprint')
+        ->assertSee('Succeeded')
+        ->assertSee('Showing entries 1-120 of 245 retained wire-log entries.')
         ->assertSee('Computed from this window only')
         ->assertSee('reasoning_content: " the"')
         ->assertSee('finish_reason: tool_calls')
         ->assertSee('[]')
         ->assertSee('entry-4')
         ->assertSee('entry-100')
+        ->assertSee('entry-120')
+        ->call('nextWireLogEntries', 120)
+        ->assertDispatched('wire-log-window-changed')
+        ->assertSee('Showing entries 121-220 of 245 retained wire-log entries.')
+        ->assertSee('entry-121')
+        ->assertSee('entry-220')
+        ->call('firstWireLogEntries')
+        ->assertDispatched('wire-log-window-changed')
         ->set('wireLogLimit', 250)
         ->assertDispatched('wire-log-window-changed')
         ->assertSee('Showing entries 1-245 of 245 retained wire-log entries.')

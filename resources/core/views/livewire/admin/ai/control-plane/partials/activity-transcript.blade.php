@@ -3,13 +3,8 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 /** @var list<\App\Modules\Core\AI\DTO\Message> $transcript */
-/** @var \App\Modules\Core\AI\DTO\Message|null $triggeringPrompt */
 ?>
 <div class="space-y-4">
-    @if ($triggeringPrompt)
-        <x-ai.activity.user-message :content="$triggeringPrompt->content" :timestamp="$triggeringPrompt->timestamp" />
-    @endif
-
     @if ($transcript !== [])
         <div class="space-y-2">
             @php

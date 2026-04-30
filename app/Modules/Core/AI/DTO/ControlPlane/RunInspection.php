@@ -7,6 +7,8 @@ namespace App\Modules\Core\AI\DTO\ControlPlane;
 
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Models\User;
 
 /**
  * Normalized view of a single AI runtime run.
@@ -40,6 +42,8 @@ final readonly class RunInspection
      * @param  string|null  $startedAt  ISO 8601 timestamp when the run started
      * @param  string|null  $finishedAt  ISO 8601 timestamp when the run finished
      * @param  int|null  $actingForUserId  User on whose behalf the agent acted
+     * @param  string|null  $actingForUserName  Display name for {@see $actingForUserId} when resolvable
+     * @param  string|null  $employeeName  Display name for the agent employee when resolvable
      */
     public function __construct(
         public string $runId,
@@ -64,6 +68,8 @@ final readonly class RunInspection
         public ?string $startedAt = null,
         public ?string $finishedAt = null,
         public ?int $actingForUserId = null,
+        public ?string $actingForUserName = null,
+        public ?string $employeeName = null,
     ) {}
 
     /**
@@ -105,6 +111,7 @@ final readonly class RunInspection
             errorType: $meta['error_type'] ?? null,
             errorMessage: $meta['error'] ?? null,
             recordedAt: $recordedAt,
+            employeeName: null,
         );
     }
 
@@ -146,7 +153,43 @@ final readonly class RunInspection
             startedAt: $run->started_at?->toIso8601String(),
             finishedAt: $run->finished_at?->toIso8601String(),
             actingForUserId: $run->acting_for_user_id,
+            actingForUserName: self::resolveActingForUserName($run),
+            employeeName: self::resolveEmployeeDisplayName($run),
         );
+    }
+
+    private static function resolveEmployeeDisplayName(AiRun $run): ?string
+    {
+        $employee = $run->relationLoaded('employee')
+            ? $run->getRelation('employee')
+            : $run->employee()->first();
+
+        if (! $employee instanceof Employee) {
+            return null;
+        }
+
+        $name = trim($employee->displayName());
+
+        return $name !== '' ? $name : null;
+    }
+
+    private static function resolveActingForUserName(AiRun $run): ?string
+    {
+        if ($run->acting_for_user_id === null) {
+            return null;
+        }
+
+        $user = $run->relationLoaded('actingForUser')
+            ? $run->getRelation('actingForUser')
+            : $run->actingForUser()->first();
+
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        $name = trim((string) $user->name);
+
+        return $name !== '' ? $name : null;
     }
 
     /**
@@ -157,6 +200,7 @@ final readonly class RunInspection
         return [
             'run_id' => $this->runId,
             'employee_id' => $this->employeeId,
+            'employee_name' => $this->employeeName,
             'session_id' => $this->sessionId,
             'dispatch_id' => $this->dispatchId,
             'provider' => $this->provider,
@@ -177,6 +221,7 @@ final readonly class RunInspection
             'started_at' => $this->startedAt,
             'finished_at' => $this->finishedAt,
             'acting_for_user_id' => $this->actingForUserId,
+            'acting_for_user_name' => $this->actingForUserName,
         ];
     }
 

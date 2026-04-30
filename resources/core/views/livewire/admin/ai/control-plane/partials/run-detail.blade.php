@@ -68,7 +68,17 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Acting For User') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['acting_for_user_id'] ?? '—' }}</p>
+            <p class="mt-1 text-sm text-ink">
+                @if (($run['acting_for_user_id'] ?? null) === null)
+                    <span class="text-muted tabular-nums">—</span>
+                @elseif (! empty($run['acting_for_user_name']))
+                    <span>{{ $run['acting_for_user_name'] }}</span>
+                    <span class="ml-1.5 text-xs font-normal text-muted tabular-nums">#{{ $run['acting_for_user_id'] }}</span>
+                @else
+                    <span class="tabular-nums">#{{ $run['acting_for_user_id'] }}</span>
+                    <span class="ml-1.5 text-xs text-muted">{{ __('Name unavailable') }}</span>
+                @endif
+            </p>
         </div>
     </div>
 
@@ -88,7 +98,9 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Recorded') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['recorded_at'] }}</p>
+            <p class="mt-1">
+                <x-ui.datetime :value="! empty($run['recorded_at']) ? $run['recorded_at'] : null" class="text-sm text-ink tabular-nums" />
+            </p>
         </div>
     </div>
 
@@ -96,15 +108,27 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Started At') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['started_at'] ?? '—' }}</p>
+            <p class="mt-1">
+                <x-ui.datetime :value="! empty($run['started_at']) ? $run['started_at'] : null" class="text-sm text-ink tabular-nums" />
+            </p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Finished At') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['finished_at'] ?? '—' }}</p>
+            <p class="mt-1">
+                <x-ui.datetime :value="! empty($run['finished_at']) ? $run['finished_at'] : null" class="text-sm text-ink tabular-nums" />
+            </p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Employee') }}</span>
-            <p class="text-sm text-ink mt-1 tabular-nums">{{ $run['employee_id'] }}</p>
+            <p class="mt-1 text-sm text-ink">
+                @if (! empty($run['employee_name']))
+                    <span>{{ $run['employee_name'] }}</span>
+                    <span class="ml-1.5 text-xs font-normal text-muted tabular-nums">#{{ $run['employee_id'] }}</span>
+                @else
+                    <span class="tabular-nums">#{{ $run['employee_id'] }}</span>
+                    <span class="ml-1.5 text-xs text-muted">{{ __('Name unavailable') }}</span>
+                @endif
+            </p>
         </div>
     </div>
 

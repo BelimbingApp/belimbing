@@ -44,6 +44,21 @@ function wlrfStreamChunk(int $entryNumber, array $delta, ?string $finishReason =
     return wlrfEntry($entryNumber, 'llm.stream_line', ['raw_line' => $rawLine], $at);
 }
 
+function wlrfResponsesEvent(int $entryNumber, string $event, ?string $at = null): array
+{
+    return wlrfEntry($entryNumber, 'llm.stream_line', ['raw_line' => 'event: '.$event], $at);
+}
+
+/**
+ * @param  array<string, mixed>  $payload
+ */
+function wlrfResponsesData(int $entryNumber, array $payload, ?string $at = null): array
+{
+    $rawLine = 'data: '.json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    return wlrfEntry($entryNumber, 'llm.stream_line', ['raw_line' => $rawLine], $at);
+}
+
 it('returns an empty result when no entries are present', function (): void {
     $result = (new WireLogReadableFormatter)->format([]);
 
@@ -248,4 +263,115 @@ it('keeps each fragment cross-linked to its source entry_number', function (): v
 
     expect($fragments[0]['entry_number'])->toBe(7)
         ->and($fragments[1]['entry_number'])->toBe(8);
+});
+
+it('reassembles OpenAI Responses text deltas from event and data stream lines', function (): void {
+    $entries = [
+        wlrfResponsesEvent(1, 'response.output_text.delta'),
+        wlrfResponsesData(2, ['type' => 'response.output_text.delta', 'delta' => 'Hello']),
+        wlrfResponsesEvent(3, 'response.output_text.delta'),
+        wlrfResponsesData(4, ['type' => 'response.output_text.delta', 'delta' => ' world']),
+        wlrfResponsesEvent(5, 'response.completed'),
+        wlrfResponsesData(6, ['type' => 'response.completed', 'response' => ['status' => 'completed']]),
+    ];
+
+    $result = (new WireLogReadableFormatter)->format($entries);
+    $block = $result['attempts'][0]['sections'][0];
+
+    expect($block['reassembled_content'])->toBe('Hello world')
+        ->and($block['finish_reason'])->toBe('stop')
+        ->and(collect($block['fragments'])->pluck('kind')->all())->not->toContain('raw', 'protocol_event');
+});
+
+it('routes OpenAI Responses commentary output text into reasoning content', function (): void {
+    $entries = [
+        wlrfResponsesEvent(1, 'response.output_item.added'),
+        wlrfResponsesData(2, ['type' => 'response.output_item.added', 'item' => ['type' => 'message', 'phase' => 'commentary']]),
+        wlrfResponsesEvent(3, 'response.output_text.delta'),
+        wlrfResponsesData(4, ['type' => 'response.output_text.delta', 'delta' => 'Thinking out loud']),
+        wlrfResponsesEvent(5, 'response.output_item.done'),
+        wlrfResponsesData(6, ['type' => 'response.output_item.done', 'item' => ['type' => 'message']]),
+    ];
+
+    $result = (new WireLogReadableFormatter)->format($entries);
+    $block = $result['attempts'][0]['sections'][0];
+
+    expect($block['reassembled_content'])->toBe('')
+        ->and($block['reassembled_reasoning'])->toBe('Thinking out loud')
+        ->and(collect($block['fragments'])->firstWhere('kind', 'reasoning')['entry_number'])->toBe(4);
+});
+
+it('reassembles OpenAI Responses function call argument deltas', function (): void {
+    $entries = [
+        wlrfResponsesEvent(1, 'response.output_item.added'),
+        wlrfResponsesData(2, [
+            'type' => 'response.output_item.added',
+            'output_index' => 0,
+            'item' => ['type' => 'function_call', 'call_id' => 'call_1', 'name' => 'write_js'],
+        ]),
+        wlrfResponsesEvent(3, 'response.function_call_arguments.delta'),
+        wlrfResponsesData(4, ['type' => 'response.function_call_arguments.delta', 'output_index' => 0, 'item_id' => 'fc_1', 'delta' => '{"script":']),
+        wlrfResponsesEvent(5, 'response.function_call_arguments.delta'),
+        wlrfResponsesData(6, ['type' => 'response.function_call_arguments.delta', 'output_index' => 0, 'item_id' => 'fc_1', 'delta' => '"alert(1)"}']),
+        wlrfResponsesEvent(7, 'response.completed'),
+        wlrfResponsesData(8, ['type' => 'response.completed', 'response' => ['status' => 'completed']]),
+    ];
+
+    $result = (new WireLogReadableFormatter)->format($entries);
+    $block = $result['attempts'][0]['sections'][0];
+
+    expect($block['tool_calls'])->toHaveCount(1)
+        ->and($block['tool_calls'][0]['name'])->toBe('write_js')
+        ->and($block['tool_calls'][0]['arguments'])->toBe('{"script":"alert(1)"}')
+        ->and($block['tool_calls'][0]['arguments_valid_json'])->toBeTrue()
+        ->and($block['tool_calls'][0]['source_entries'])->toBe([2, 4, 6]);
+});
+
+it('marks OpenAI Responses tool arguments as incomplete when the loaded window ends mid-stream', function (): void {
+    $entries = [
+        wlrfResponsesEvent(1, 'response.output_item.added'),
+        wlrfResponsesData(2, [
+            'type' => 'response.output_item.added',
+            'output_index' => 0,
+            'item' => ['type' => 'function_call', 'call_id' => 'call_1', 'name' => 'write_js'],
+        ]),
+        wlrfResponsesEvent(3, 'response.function_call_arguments.delta'),
+        wlrfResponsesData(4, ['type' => 'response.function_call_arguments.delta', 'output_index' => 0, 'item_id' => 'fc_1', 'delta' => '{"script":"unterminated']),
+    ];
+
+    $result = (new WireLogReadableFormatter)->format($entries);
+    $toolCall = $result['attempts'][0]['sections'][0]['tool_calls'][0];
+
+    expect($toolCall['arguments'])->toBe('{"script":"unterminated')
+        ->and($toolCall['arguments_complete'])->toBeFalse()
+        ->and($toolCall['arguments_valid_json'])->toBeFalse()
+        ->and($toolCall['arguments_parse_error'])->toBeNull();
+});
+
+it('uses OpenAI Responses completed tool arguments as the authoritative JSON artifact', function (): void {
+    $entries = [
+        wlrfResponsesEvent(1, 'response.output_item.added'),
+        wlrfResponsesData(2, [
+            'type' => 'response.output_item.added',
+            'output_index' => 0,
+            'item' => ['type' => 'function_call', 'call_id' => 'call_1', 'name' => 'write_js'],
+        ]),
+        wlrfResponsesEvent(3, 'response.function_call_arguments.delta'),
+        wlrfResponsesData(4, ['type' => 'response.function_call_arguments.delta', 'output_index' => 0, 'item_id' => 'fc_1', 'delta' => '{"script":"partial']),
+        wlrfResponsesEvent(5, 'response.function_call_arguments.done'),
+        wlrfResponsesData(6, [
+            'type' => 'response.function_call_arguments.done',
+            'output_index' => 0,
+            'item_id' => 'fc_1',
+            'arguments' => '{"script":"complete"}',
+        ]),
+    ];
+
+    $result = (new WireLogReadableFormatter)->format($entries);
+    $toolCall = $result['attempts'][0]['sections'][0]['tool_calls'][0];
+
+    expect($toolCall['arguments'])->toBe('{"script":"complete"}')
+        ->and($toolCall['arguments_complete'])->toBeTrue()
+        ->and($toolCall['arguments_valid_json'])->toBeTrue()
+        ->and($toolCall['source_entries'])->toBe([2, 4, 6]);
 });

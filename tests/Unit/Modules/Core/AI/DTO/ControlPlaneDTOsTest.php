@@ -59,10 +59,11 @@ describe('RunInspection', function () {
         $array = $dto->toArray();
 
         expect($array)->toHaveKeys([
-            'run_id', 'employee_id', 'session_id', 'dispatch_id',
+            'run_id', 'employee_id', 'employee_name', 'session_id', 'dispatch_id',
             'provider', 'model', 'outcome', 'latency_ms', 'tokens',
             'tool_actions', 'fallback_attempts', 'retry_attempts',
             'error_type', 'error_message', 'recorded_at',
+            'acting_for_user_id', 'acting_for_user_name',
         ])
             ->and($array['run_id'])->toBe(CP_DTO_RUN_ID)
             ->and($array['provider'])->toBe(CP_DTO_PROVIDER)
