@@ -35,6 +35,16 @@ source "$SCRIPTS_DIR/shared/interactive.sh" 2>/dev/null || true
 APP_ENV="${1:-local}"
 readonly UNKNOWN_VERSION='unknown'
 readonly PHP_VERSION_COMMAND='echo PHP_VERSION;'
+readonly ONDREJ_PHP_PPA='ppa:ondrej/php'
+readonly ONDREJ_PHP_PPA_ADD_TIMEOUT_SECONDS=90
+readonly COMPOSER_INSTALLER_URL='https://getcomposer.org/installer'
+readonly COMPOSER_SIGNATURE_URL='https://composer.github.io/installer.sig'
+
+readonly -a APT_PHP_PREREQUISITES=(
+    ca-certificates
+    curl
+    software-properties-common
+)
 
 # Check PHP version (requires 8.5+)
 check_php_version() {
@@ -50,6 +60,60 @@ check_php_version() {
         return 0
     fi
     return 1
+}
+
+php_apt_package_available() {
+    local required_php_version=$1
+    local package_name="php${required_php_version}-cli"
+    local candidate
+
+    candidate=$(apt-cache policy "$package_name" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')
+    [[ -n "$candidate" && "$candidate" != "(none)" ]]
+}
+
+prepare_apt_php_repository() {
+    local required_php_version=$1
+
+    sudo apt-get update -qq || {
+        echo -e "${RED}✗${NC} Failed to update apt package lists" >&2
+        return 1
+    }
+
+    sudo apt-get install -y -qq "${APT_PHP_PREREQUISITES[@]}" || {
+        echo -e "${RED}✗${NC} Failed to install apt prerequisites for PHP setup" >&2
+        return 1
+    }
+
+    if php_apt_package_available "$required_php_version"; then
+        return 0
+    fi
+
+    echo -e "${CYAN}Adding ${ONDREJ_PHP_PPA}...${NC}"
+    timeout "$ONDREJ_PHP_PPA_ADD_TIMEOUT_SECONDS" sudo add-apt-repository -y "$ONDREJ_PHP_PPA" || {
+        echo -e "${RED}✗${NC} Failed to add ${ONDREJ_PHP_PPA}" >&2
+        echo -e "  Apt only exposes PHP packages after this repository is registered." >&2
+        return 1
+    }
+
+    sudo apt-get update -qq || {
+        echo -e "${RED}✗${NC} Failed to refresh apt package lists after adding ${ONDREJ_PHP_PPA}" >&2
+        return 1
+    }
+
+    if php_apt_package_available "$required_php_version"; then
+        return 0
+    fi
+
+    echo -e "${RED}✗${NC} Apt has no candidate for php${required_php_version}-cli" >&2
+    echo -e "  Verify ${ONDREJ_PHP_PPA} supports this Ubuntu release and PHP version." >&2
+    apt-cache policy "php${required_php_version}-cli" >&2 || true
+    return 1
+}
+
+install_apt_php_packages() {
+    local required_php_version=$1
+
+    sudo apt-get install -y -qq "php${required_php_version}" "php${required_php_version}-cli" "php${required_php_version}-common" "php${required_php_version}-mbstring" "php${required_php_version}-xml" "php${required_php_version}-curl" "php${required_php_version}-zip" "php${required_php_version}-pgsql" "php${required_php_version}-bcmath" "php${required_php_version}-intl"
 }
 
 # Upgrade PHP to required version
@@ -86,10 +150,9 @@ upgrade_php() {
         linux|wsl2)
             if command_exists apt-get; then
                 echo -e "${CYAN}Adding PHP repository...${NC}"
-                sudo apt-get update -qq
-                sudo apt-get install -y -qq software-properties-common
-                sudo add-apt-repository -y ppa:ondrej/php 2>/dev/null || true
-                sudo apt-get update -qq
+                if ! prepare_apt_php_repository "$required_php_version"; then
+                    return 1
+                fi
 
                 # Check current PHP version to determine what to remove
                 local current_php_version
@@ -116,7 +179,7 @@ upgrade_php() {
 
                 # Install PHP using version from versions.sh
                 echo -e "${CYAN}Installing PHP ${required_php_version}...${NC}"
-                sudo apt-get install -y -qq "php${required_php_version}" "php${required_php_version}-cli" "php${required_php_version}-common" "php${required_php_version}-mbstring" "php${required_php_version}-xml" "php${required_php_version}-curl" "php${required_php_version}-zip" "php${required_php_version}-pgsql" "php${required_php_version}-bcmath" "php${required_php_version}-intl" || {
+                install_apt_php_packages "$required_php_version" || {
                     echo -e "${RED}✗${NC} Failed to install PHP ${required_php_version}" >&2
                     return 1
                 }
@@ -202,12 +265,12 @@ install_php() {
         linux|wsl2)
             if command_exists apt-get; then
                 echo -e "${CYAN}Adding PHP repository...${NC}"
-                sudo apt-get update -qq
-                sudo apt-get install -y -qq software-properties-common
-                sudo add-apt-repository -y ppa:ondrej/php 2>/dev/null || true
-                sudo apt-get update -qq
+                if ! prepare_apt_php_repository "$required_php_version"; then
+                    return 1
+                fi
+
                 echo -e "${CYAN}Installing PHP ${required_php_version}...${NC}"
-                sudo apt-get install -y -qq "php${required_php_version}" "php${required_php_version}-cli" "php${required_php_version}-common" "php${required_php_version}-mbstring" "php${required_php_version}-xml" "php${required_php_version}-curl" "php${required_php_version}-zip" "php${required_php_version}-pgsql" "php${required_php_version}-bcmath" "php${required_php_version}-intl" || {
+                install_apt_php_packages "$required_php_version" || {
                     echo -e "${RED}✗${NC} Failed to install PHP" >&2
                     return 1
                 }
@@ -327,17 +390,28 @@ install_composer() {
     echo -e "${CYAN}Installing Composer...${NC}"
     echo ""
 
+    if ! command_exists curl; then
+        echo -e "${RED}✗${NC} curl is required to download Composer" >&2
+        return 1
+    fi
+
     # Download and install Composer
     local composer_installer
     composer_installer=$(mktemp)
-    curl -sS https://getcomposer.org/installer -o "$composer_installer" || {
+    curl -fsSL --max-time 30 "$COMPOSER_INSTALLER_URL" -o "$composer_installer" || {
         echo -e "${RED}✗${NC} Failed to download Composer installer" >&2
+        rm -f "$composer_installer"
         return 1
     }
 
     # Verify installer
     local expected_signature
-    expected_signature=$(curl -sS https://composer.github.io/installer.sig)
+    expected_signature=$(curl -fsSL --max-time 30 "$COMPOSER_SIGNATURE_URL") || {
+        echo -e "${RED}✗${NC} Failed to download Composer installer signature" >&2
+        rm -f "$composer_installer"
+        return 1
+    }
+
     local actual_signature
     actual_signature=$(php -r "echo hash_file('sha384', '$composer_installer');")
 
