@@ -1,6 +1,10 @@
 <?php
 
+use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Inventory\Models\Item;
+use App\Modules\Commerce\Marketplace\Models\Listing;
+use App\Modules\Commerce\Sales\Models\Order;
+use App\Modules\Commerce\Sales\Models\OrderLine;
 use App\Modules\Commerce\Sales\Models\Sale;
 use App\Modules\Commerce\Sales\Services\SalesInsightsService;
 use App\Modules\Core\Company\Models\Company;
@@ -293,4 +297,280 @@ it('honors the limit when ranking top items by gross profit', function (): void 
 
     expect($rows)->toHaveCount(2)
         ->and($rows->pluck('itemId')->all())->toBe([$b->id, $a->id]);
+});
+
+it('returns active listings without sales ordered oldest first', function (): void {
+    $company = Company::factory()->create();
+    $asOf = Carbon::parse('2026-05-01 12:00:00');
+
+    $oldest = Listing::factory()->create([
+        'company_id' => $company->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(45),
+    ]);
+    $middle = Listing::factory()->create([
+        'company_id' => $company->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(20),
+    ]);
+    $newest = Listing::factory()->create([
+        'company_id' => $company->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(3),
+    ]);
+
+    $rows = app(SalesInsightsService::class)->daysListedWithoutSale(
+        companyId: $company->id,
+        currencyCode: 'USD',
+        asOf: $asOf,
+    );
+
+    expect($rows)->toHaveCount(3)
+        ->and($rows->pluck('listingId')->all())->toBe([$oldest->id, $middle->id, $newest->id])
+        ->and($rows->pluck('daysListed')->all())->toBe([45, 20, 3]);
+});
+
+it('excludes listings that already produced a sale', function (): void {
+    $company = Company::factory()->create();
+    $asOf = Carbon::parse('2026-05-01 12:00:00');
+
+    $sold = Listing::factory()->create([
+        'company_id' => $company->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(30),
+    ]);
+    $unsold = Listing::factory()->create([
+        'company_id' => $company->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(10),
+    ]);
+    Sale::factory()->create([
+        'company_id' => $company->id,
+        'listing_id' => $sold->id,
+        'currency_code' => 'USD',
+        'sold_at' => $asOf->copy()->subDays(2),
+    ]);
+
+    $rows = app(SalesInsightsService::class)->daysListedWithoutSale(
+        companyId: $company->id,
+        currencyCode: 'USD',
+        asOf: $asOf,
+    );
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows->first()->listingId)->toBe($unsold->id);
+});
+
+it('excludes ended listings and listings missing listed_at', function (): void {
+    $company = Company::factory()->create();
+    $asOf = Carbon::parse('2026-05-01 12:00:00');
+
+    Listing::factory()->create([
+        'company_id' => $company->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(30),
+        'ended_at' => $asOf->copy()->subDays(1),
+    ]);
+    Listing::factory()->create([
+        'company_id' => $company->id,
+        'currency_code' => 'USD',
+        'listed_at' => null,
+    ]);
+    $kept = Listing::factory()->create([
+        'company_id' => $company->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(15),
+    ]);
+
+    $rows = app(SalesInsightsService::class)->daysListedWithoutSale(
+        companyId: $company->id,
+        currencyCode: 'USD',
+        asOf: $asOf,
+    );
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows->first()->listingId)->toBe($kept->id);
+});
+
+it('scopes listings by company and currency', function (): void {
+    $companyA = Company::factory()->create();
+    $companyB = Company::factory()->create();
+    $asOf = Carbon::parse('2026-05-01 12:00:00');
+
+    $kept = Listing::factory()->create([
+        'company_id' => $companyA->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(20),
+    ]);
+    Listing::factory()->create([
+        'company_id' => $companyB->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(20),
+    ]);
+    Listing::factory()->create([
+        'company_id' => $companyA->id,
+        'currency_code' => 'MYR',
+        'listed_at' => $asOf->copy()->subDays(20),
+    ]);
+
+    $rows = app(SalesInsightsService::class)->daysListedWithoutSale(
+        companyId: $companyA->id,
+        currencyCode: 'USD',
+        asOf: $asOf,
+    );
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows->first()->listingId)->toBe($kept->id);
+});
+
+it('honors minDaysListed and limit when ranking aged listings', function (): void {
+    $company = Company::factory()->create();
+    $asOf = Carbon::parse('2026-05-01 12:00:00');
+
+    Listing::factory()->create([
+        'company_id' => $company->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(2),
+    ]);
+    $aged30 = Listing::factory()->create([
+        'company_id' => $company->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(30),
+    ]);
+    $aged60 = Listing::factory()->create([
+        'company_id' => $company->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(60),
+    ]);
+    $aged90 = Listing::factory()->create([
+        'company_id' => $company->id,
+        'currency_code' => 'USD',
+        'listed_at' => $asOf->copy()->subDays(90),
+    ]);
+
+    $rows = app(SalesInsightsService::class)->daysListedWithoutSale(
+        companyId: $company->id,
+        currencyCode: 'USD',
+        asOf: $asOf,
+        minDaysListed: 14,
+        limit: 2,
+    );
+
+    expect($rows)->toHaveCount(2)
+        ->and($rows->pluck('listingId')->all())->toBe([$aged90->id, $aged60->id]);
+
+    $unfiltered = app(SalesInsightsService::class)->daysListedWithoutSale(
+        companyId: $company->id,
+        currencyCode: 'USD',
+        asOf: $asOf,
+        minDaysListed: 14,
+    );
+
+    expect($unfiltered->pluck('listingId')->all())->toBe([$aged90->id, $aged60->id, $aged30->id]);
+});
+
+it('lists sales newest first with linked item title and category', function (): void {
+    $company = Company::factory()->create();
+    $lighting = Category::factory()->create(['company_id' => $company->id, 'name' => 'Lighting']);
+    $headlight = Item::factory()->create([
+        'company_id' => $company->id,
+        'title' => '2008 Civic headlight',
+        'category_id' => $lighting->id,
+    ]);
+
+    Sale::factory()->create([
+        'company_id' => $company->id,
+        'item_id' => $headlight->id,
+        'currency_code' => 'USD',
+        'sold_at' => Carbon::parse('2026-04-10 10:00:00'),
+        'sale_amount' => 5000,
+    ]);
+    Sale::factory()->create([
+        'company_id' => $company->id,
+        'item_id' => $headlight->id,
+        'currency_code' => 'USD',
+        'sold_at' => Carbon::parse('2026-04-20 10:00:00'),
+        'sale_amount' => 6000,
+    ]);
+
+    $rows = app(SalesInsightsService::class)->salesInPeriod(
+        companyId: $company->id,
+        from: Carbon::parse('2026-04-01'),
+        to: Carbon::parse('2026-04-30 23:59:59'),
+        currencyCode: 'USD',
+    );
+
+    expect($rows)->toHaveCount(2)
+        ->and($rows->first()->soldAt->toDateString())->toBe('2026-04-20')
+        ->and($rows->first()->title)->toBe('2008 Civic headlight')
+        ->and($rows->first()->categoryName)->toBe('Lighting')
+        ->and($rows->last()->soldAt->toDateString())->toBe('2026-04-10');
+});
+
+it('falls back to order line title then sku when no item is linked', function (): void {
+    $company = Company::factory()->create();
+
+    $orderA = Order::factory()->create(['company_id' => $company->id]);
+    $lineA = OrderLine::factory()->create([
+        'company_id' => $company->id,
+        'order_id' => $orderA->id,
+        'title' => 'Salvaged Toyota mirror',
+        'external_sku' => 'EBAY-MIR-1',
+    ]);
+    Sale::factory()->create([
+        'company_id' => $company->id,
+        'order_id' => $orderA->id,
+        'order_line_id' => $lineA->id,
+        'item_id' => null,
+        'currency_code' => 'USD',
+        'sold_at' => Carbon::parse('2026-04-15 10:00:00'),
+    ]);
+
+    $orderB = Order::factory()->create(['company_id' => $company->id]);
+    $lineB = OrderLine::factory()->create([
+        'company_id' => $company->id,
+        'order_id' => $orderB->id,
+        'title' => null,
+        'external_sku' => 'EBAY-BUMPER-2',
+    ]);
+    Sale::factory()->create([
+        'company_id' => $company->id,
+        'order_id' => $orderB->id,
+        'order_line_id' => $lineB->id,
+        'item_id' => null,
+        'currency_code' => 'USD',
+        'sold_at' => Carbon::parse('2026-04-10 10:00:00'),
+    ]);
+
+    $rows = app(SalesInsightsService::class)->salesInPeriod(
+        companyId: $company->id,
+        from: Carbon::parse('2026-04-01'),
+        to: Carbon::parse('2026-04-30 23:59:59'),
+        currencyCode: 'USD',
+    );
+
+    expect($rows->pluck('title')->all())->toBe(['Salvaged Toyota mirror', 'EBAY-BUMPER-2'])
+        ->and($rows->pluck('categoryName')->all())->toBe([null, null]);
+});
+
+it('honors the limit when listing recent sales', function (): void {
+    $company = Company::factory()->create();
+
+    foreach (range(1, 5) as $i) {
+        Sale::factory()->create([
+            'company_id' => $company->id,
+            'currency_code' => 'USD',
+            'sold_at' => Carbon::parse('2026-04-10')->addDays($i),
+        ]);
+    }
+
+    $rows = app(SalesInsightsService::class)->salesInPeriod(
+        companyId: $company->id,
+        from: Carbon::parse('2026-04-01'),
+        to: Carbon::parse('2026-04-30 23:59:59'),
+        currencyCode: 'USD',
+        limit: 3,
+    );
+
+    expect($rows)->toHaveCount(3);
 });

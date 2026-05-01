@@ -5,11 +5,15 @@
 
 namespace App\Modules\Commerce\Sales\Services;
 
+use App\Modules\Commerce\Marketplace\Models\Listing;
+use App\Modules\Commerce\Sales\DTO\AgedListingRow;
 use App\Modules\Commerce\Sales\DTO\ItemMarginRow;
+use App\Modules\Commerce\Sales\DTO\RecentSaleRow;
 use App\Modules\Commerce\Sales\DTO\SalesPeriodSummary;
 use App\Modules\Commerce\Sales\Models\Sale;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Read-side query surface for sales insights.
@@ -81,6 +85,107 @@ class SalesInsightsService
             totalRevenueMinor: (int) $row->total_revenue,
             totalCostMinor: (int) $row->total_cost,
             totalFeesMinor: (int) $row->total_fees,
+        ));
+    }
+
+    /**
+     * Active listings that have aged without producing a sale.
+     *
+     * "Active" means `ended_at IS NULL`; "without sale" means no row exists in
+     * `commerce_sales_sales` linked back via `listing_id`. Listings missing a
+     * `listed_at` are excluded since their age is undefined. Ordered oldest
+     * first so the operator's eye lands on the worst-stuck stock.
+     *
+     * Day count is computed in PHP (not SQL) to keep the query
+     * driver-agnostic; `minDaysListed` is applied as an upper-bound on
+     * `listed_at` so the filter still happens at the database.
+     *
+     * @return Collection<int, AgedListingRow>
+     */
+    public function daysListedWithoutSale(
+        int $companyId,
+        string $currencyCode,
+        ?Carbon $asOf = null,
+        ?int $minDaysListed = null,
+        ?int $limit = null,
+    ): Collection {
+        $asOf ??= Carbon::now();
+
+        $query = Listing::query()
+            ->where('company_id', $companyId)
+            ->where('currency_code', $currencyCode)
+            ->whereNotNull('listed_at')
+            ->whereNull('ended_at')
+            ->whereNotExists(function ($sub): void {
+                $sub->select(DB::raw('1'))
+                    ->from('commerce_sales_sales')
+                    ->whereColumn('commerce_sales_sales.listing_id', 'commerce_marketplace_listings.id');
+            })
+            ->orderBy('listed_at', 'asc');
+
+        if ($minDaysListed !== null) {
+            $query->where('listed_at', '<=', $asOf->copy()->subDays($minDaysListed));
+        }
+
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
+        return $query->get()->map(fn (Listing $listing): AgedListingRow => new AgedListingRow(
+            listingId: $listing->id,
+            itemId: $listing->item_id,
+            channel: $listing->channel,
+            marketplaceId: $listing->marketplace_id,
+            title: $listing->title,
+            priceAmountMinor: $listing->price_amount,
+            listedAt: $listing->listed_at,
+            daysListed: (int) $listing->listed_at->diffInDays($asOf, true),
+        ));
+    }
+
+    /**
+     * Recent sales as a chronological list (newest first).
+     *
+     * Unlike {@see soldInPeriod()} which collapses to a single aggregate, this
+     * returns one row per sale with its display title resolved at query time —
+     * preferring the linked `Item->title`, falling back to the `OrderLine`
+     * captured-from-channel title, then the channel SKU. Used inventory means
+     * each item is essentially one-off, so the operator's actionable signal is
+     * recency and category, not item-level rank.
+     *
+     * @return Collection<int, RecentSaleRow>
+     */
+    public function salesInPeriod(
+        int $companyId,
+        Carbon $from,
+        Carbon $to,
+        string $currencyCode,
+        ?int $limit = null,
+    ): Collection {
+        $query = Sale::query()
+            ->with(['item.category', 'orderLine'])
+            ->where('company_id', $companyId)
+            ->where('currency_code', $currencyCode)
+            ->whereBetween('sold_at', [$from, $to])
+            ->orderBy('sold_at', 'desc')
+            ->orderBy('id', 'desc');
+
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
+        return $query->get()->map(fn (Sale $sale): RecentSaleRow => new RecentSaleRow(
+            saleId: $sale->id,
+            soldAt: $sale->sold_at,
+            itemId: $sale->item_id,
+            title: $sale->item?->title
+                ?? $sale->orderLine?->title
+                ?? $sale->orderLine?->external_sku
+                ?? '',
+            categoryName: $sale->item?->category?->name,
+            channel: $sale->channel,
+            quantity: $sale->quantity,
+            saleAmountMinor: $sale->sale_amount,
         ));
     }
 }
