@@ -7,6 +7,7 @@ namespace App\Modules\Commerce\Sales\Services;
 
 use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Sales\DTO\AgedListingRow;
+use App\Modules\Commerce\Sales\DTO\CategorySalesRow;
 use App\Modules\Commerce\Sales\DTO\ItemMarginRow;
 use App\Modules\Commerce\Sales\DTO\RecentSaleRow;
 use App\Modules\Commerce\Sales\DTO\SalesPeriodSummary;
@@ -186,6 +187,54 @@ class SalesInsightsService
             channel: $sale->channel,
             quantity: $sale->quantity,
             saleAmountMinor: $sale->sale_amount,
+        ));
+    }
+
+    /**
+     * Sales aggregated by inventory category over a window.
+     *
+     * Left-joins items and categories so sales without a linked item — or
+     * with an item that has no `category_id` — collapse into a single null
+     * bucket rather than disappearing. Ordered by sale count DESC (frequency
+     * is the actionable signal for used-parts inventory).
+     *
+     * @return Collection<int, CategorySalesRow>
+     */
+    public function salesByCategory(
+        int $companyId,
+        Carbon $from,
+        Carbon $to,
+        string $currencyCode,
+        ?int $limit = null,
+    ): Collection {
+        $query = Sale::query()
+            ->from('commerce_sales_sales as s')
+            ->leftJoin('commerce_inventory_items as i', 's.item_id', '=', 'i.id')
+            ->leftJoin('commerce_catalog_categories as c', 'i.category_id', '=', 'c.id')
+            ->where('s.company_id', $companyId)
+            ->where('s.currency_code', $currencyCode)
+            ->whereBetween('s.sold_at', [$from, $to])
+            ->groupBy('c.id', 'c.name')
+            ->select(['c.id as category_id', 'c.name as category_name'])
+            ->selectRaw('COUNT(*) as sale_count')
+            ->selectRaw('COALESCE(SUM(s.quantity), 0) as unit_count')
+            ->selectRaw('COALESCE(SUM(s.sale_amount), 0) as total_revenue')
+            ->selectRaw('COALESCE(SUM(s.cost_basis_amount), 0) as total_cost')
+            ->selectRaw('COALESCE(SUM(s.fee_amount), 0) as total_fees')
+            ->orderByRaw('COUNT(*) DESC');
+
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
+        return $query->get()->map(fn ($row): CategorySalesRow => new CategorySalesRow(
+            categoryId: $row->category_id !== null ? (int) $row->category_id : null,
+            categoryName: $row->category_name !== null ? (string) $row->category_name : null,
+            saleCount: (int) $row->sale_count,
+            unitCount: (int) $row->unit_count,
+            totalRevenueMinor: (int) $row->total_revenue,
+            totalCostMinor: (int) $row->total_cost,
+            totalFeesMinor: (int) $row->total_fees,
         ));
     }
 }

@@ -574,3 +574,126 @@ it('honors the limit when listing recent sales', function (): void {
 
     expect($rows)->toHaveCount(3);
 });
+
+it('aggregates sales by category ordered by frequency', function (): void {
+    $company = Company::factory()->create();
+    $lighting = Category::factory()->create(['company_id' => $company->id, 'name' => 'Lighting']);
+    $bumpers = Category::factory()->create(['company_id' => $company->id, 'name' => 'Bumpers']);
+
+    $headlight = Item::factory()->create(['company_id' => $company->id, 'category_id' => $lighting->id]);
+    $taillight = Item::factory()->create(['company_id' => $company->id, 'category_id' => $lighting->id]);
+    $bumper = Item::factory()->create(['company_id' => $company->id, 'category_id' => $bumpers->id]);
+
+    foreach ([$headlight, $headlight, $taillight] as $i => $item) {
+        Sale::factory()->create([
+            'company_id' => $company->id,
+            'item_id' => $item->id,
+            'currency_code' => 'USD',
+            'sold_at' => Carbon::parse('2026-04-10')->addDays($i),
+            'quantity' => 1,
+            'sale_amount' => 5000,
+            'cost_basis_amount' => 1000,
+            'fee_amount' => 200,
+        ]);
+    }
+    Sale::factory()->create([
+        'company_id' => $company->id,
+        'item_id' => $bumper->id,
+        'currency_code' => 'USD',
+        'sold_at' => Carbon::parse('2026-04-15'),
+        'quantity' => 1,
+        'sale_amount' => 7000,
+        'cost_basis_amount' => 2000,
+        'fee_amount' => 300,
+    ]);
+
+    $rows = app(SalesInsightsService::class)->salesByCategory(
+        companyId: $company->id,
+        from: Carbon::parse('2026-04-01'),
+        to: Carbon::parse('2026-04-30 23:59:59'),
+        currencyCode: 'USD',
+    );
+
+    expect($rows)->toHaveCount(2)
+        ->and($rows->first()->categoryName)->toBe('Lighting')
+        ->and($rows->first()->saleCount)->toBe(3)
+        ->and($rows->first()->totalRevenueMinor)->toBe(15000)
+        ->and($rows->first()->grossProfitMinor())->toBe(15000 - 3000 - 600)
+        ->and($rows->last()->categoryName)->toBe('Bumpers')
+        ->and($rows->last()->saleCount)->toBe(1);
+});
+
+it('buckets uncategorized sales under a null category row', function (): void {
+    $company = Company::factory()->create();
+    $lighting = Category::factory()->create(['company_id' => $company->id, 'name' => 'Lighting']);
+    $headlight = Item::factory()->create(['company_id' => $company->id, 'category_id' => $lighting->id]);
+    $loose = Item::factory()->create(['company_id' => $company->id, 'category_id' => null]);
+
+    Sale::factory()->create([
+        'company_id' => $company->id,
+        'item_id' => $headlight->id,
+        'currency_code' => 'USD',
+        'sold_at' => Carbon::parse('2026-04-05'),
+        'sale_amount' => 5000,
+    ]);
+    Sale::factory()->create([
+        'company_id' => $company->id,
+        'item_id' => $loose->id,
+        'currency_code' => 'USD',
+        'sold_at' => Carbon::parse('2026-04-10'),
+        'sale_amount' => 3000,
+    ]);
+    Sale::factory()->create([
+        'company_id' => $company->id,
+        'item_id' => null,
+        'currency_code' => 'USD',
+        'sold_at' => Carbon::parse('2026-04-12'),
+        'sale_amount' => 1500,
+    ]);
+
+    $rows = app(SalesInsightsService::class)->salesByCategory(
+        companyId: $company->id,
+        from: Carbon::parse('2026-04-01'),
+        to: Carbon::parse('2026-04-30 23:59:59'),
+        currencyCode: 'USD',
+    );
+
+    expect($rows)->toHaveCount(2);
+
+    $uncategorized = $rows->firstWhere(fn ($row) => $row->categoryId === null);
+    expect($uncategorized)->not->toBeNull()
+        ->and($uncategorized->categoryName)->toBeNull()
+        ->and($uncategorized->saleCount)->toBe(2)
+        ->and($uncategorized->totalRevenueMinor)->toBe(4500);
+});
+
+it('honors the limit when ranking categories by frequency', function (): void {
+    $company = Company::factory()->create();
+    $a = Category::factory()->create(['company_id' => $company->id, 'name' => 'A']);
+    $b = Category::factory()->create(['company_id' => $company->id, 'name' => 'B']);
+    $c = Category::factory()->create(['company_id' => $company->id, 'name' => 'C']);
+
+    foreach ([[$a, 3], [$b, 2], [$c, 1]] as [$cat, $count]) {
+        $item = Item::factory()->create(['company_id' => $company->id, 'category_id' => $cat->id]);
+        for ($i = 0; $i < $count; $i++) {
+            Sale::factory()->create([
+                'company_id' => $company->id,
+                'item_id' => $item->id,
+                'currency_code' => 'USD',
+                'sold_at' => Carbon::parse('2026-04-10')->addHours($i),
+                'sale_amount' => 1000,
+            ]);
+        }
+    }
+
+    $rows = app(SalesInsightsService::class)->salesByCategory(
+        companyId: $company->id,
+        from: Carbon::parse('2026-04-01'),
+        to: Carbon::parse('2026-04-30 23:59:59'),
+        currencyCode: 'USD',
+        limit: 2,
+    );
+
+    expect($rows)->toHaveCount(2)
+        ->and($rows->pluck('categoryName')->all())->toBe(['A', 'B']);
+});
