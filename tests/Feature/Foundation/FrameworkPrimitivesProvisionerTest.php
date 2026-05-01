@@ -246,3 +246,30 @@ test('provisioner provisions all primitives in correct order', function (): void
     expect($messages)->toContain('Created admin user: '.BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_EMAIL);
     expect($messages)->toContain('Created Lara (system Agent — orchestrator)');
 });
+
+test('provisioner backfills core_admin role for an existing admin user already assigned to licensee', function (): void {
+    setupAuthzRoles();
+    Company::provisionLicensee();
+
+    $user = User::factory()->create([
+        'company_id' => Company::LICENSEE_ID,
+        'email' => BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_EMAIL,
+        'name' => BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_NAME,
+    ]);
+    Company::query()->find(Company::LICENSEE_ID)->assignAdminUser($user);
+
+    $provisioner = new FrameworkPrimitivesProvisioner;
+    $provisioner->provisionAdminUser();
+
+    $role = Role::query()
+        ->whereNull('company_id')
+        ->where('code', 'core_admin')
+        ->firstOrFail();
+
+    expect(PrincipalRole::query()->where([
+        'company_id' => Company::LICENSEE_ID,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $user->id,
+        'role_id' => $role->id,
+    ])->exists())->toBeTrue();
+});

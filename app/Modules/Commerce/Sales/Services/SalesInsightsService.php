@@ -5,11 +5,14 @@
 
 namespace App\Modules\Commerce\Sales\Services;
 
+use App\Modules\Commerce\Marketplace\Models\Listing;
+use App\Modules\Commerce\Sales\DTO\AgedListingRow;
 use App\Modules\Commerce\Sales\DTO\ItemMarginRow;
 use App\Modules\Commerce\Sales\DTO\SalesPeriodSummary;
 use App\Modules\Commerce\Sales\Models\Sale;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Read-side query surface for sales insights.
@@ -81,6 +84,61 @@ class SalesInsightsService
             totalRevenueMinor: (int) $row->total_revenue,
             totalCostMinor: (int) $row->total_cost,
             totalFeesMinor: (int) $row->total_fees,
+        ));
+    }
+
+    /**
+     * Active listings that have aged without producing a sale.
+     *
+     * "Active" means `ended_at IS NULL`; "without sale" means no row exists in
+     * `commerce_sales_sales` linked back via `listing_id`. Listings missing a
+     * `listed_at` are excluded since their age is undefined. Ordered oldest
+     * first so the operator's eye lands on the worst-stuck stock.
+     *
+     * Day count is computed in PHP (not SQL) to keep the query
+     * driver-agnostic; `minDaysListed` is applied as an upper-bound on
+     * `listed_at` so the filter still happens at the database.
+     *
+     * @return Collection<int, AgedListingRow>
+     */
+    public function daysListedWithoutSale(
+        int $companyId,
+        string $currencyCode,
+        ?Carbon $asOf = null,
+        ?int $minDaysListed = null,
+        ?int $limit = null,
+    ): Collection {
+        $asOf ??= Carbon::now();
+
+        $query = Listing::query()
+            ->where('company_id', $companyId)
+            ->where('currency_code', $currencyCode)
+            ->whereNotNull('listed_at')
+            ->whereNull('ended_at')
+            ->whereNotExists(function ($sub): void {
+                $sub->select(DB::raw('1'))
+                    ->from('commerce_sales_sales')
+                    ->whereColumn('commerce_sales_sales.listing_id', 'commerce_marketplace_listings.id');
+            })
+            ->orderBy('listed_at', 'asc');
+
+        if ($minDaysListed !== null) {
+            $query->where('listed_at', '<=', $asOf->copy()->subDays($minDaysListed));
+        }
+
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
+        return $query->get()->map(fn (Listing $listing): AgedListingRow => new AgedListingRow(
+            listingId: $listing->id,
+            itemId: $listing->item_id,
+            channel: $listing->channel,
+            marketplaceId: $listing->marketplace_id,
+            title: $listing->title,
+            priceAmountMinor: $listing->price_amount,
+            listedAt: $listing->listed_at,
+            daysListed: (int) $listing->listed_at->diffInDays($asOf, true),
         ));
     }
 }

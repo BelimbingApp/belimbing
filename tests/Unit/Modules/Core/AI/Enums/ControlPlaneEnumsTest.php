@@ -79,6 +79,16 @@ describe('LifecycleAction', function () {
         expect(LifecycleAction::cases())->toHaveCount(7);
     });
 
+    it('maps specific backing values', function () {
+        expect(LifecycleAction::CompactMemory->value)->toBe('compact_memory')
+            ->and(LifecycleAction::PruneSessions->value)->toBe('prune_sessions')
+            ->and(LifecycleAction::PruneArtifacts->value)->toBe('prune_artifacts')
+            ->and(LifecycleAction::SweepBrowserSessions->value)->toBe('sweep_browser_sessions')
+            ->and(LifecycleAction::SweepOperations->value)->toBe('sweep_operations')
+            ->and(LifecycleAction::PruneWireLogs->value)->toBe('prune_wire_logs')
+            ->and(LifecycleAction::RefreshPricingSnapshot->value)->toBe('refresh_pricing_snapshot');
+    });
+
     it('marks destructive actions correctly', function () {
         expect(LifecycleAction::CompactMemory->isDestructive())->toBeFalse()
             ->and(LifecycleAction::PruneSessions->isDestructive())->toBeTrue()
@@ -105,6 +115,14 @@ describe('LifecycleActionStatus', function () {
         expect(LifecycleActionStatus::cases())->toHaveCount(5);
     });
 
+    it('maps specific backing values', function () {
+        expect(LifecycleActionStatus::Previewed->value)->toBe('previewed')
+            ->and(LifecycleActionStatus::Executing->value)->toBe('executing')
+            ->and(LifecycleActionStatus::Completed->value)->toBe('completed')
+            ->and(LifecycleActionStatus::Failed->value)->toBe('failed')
+            ->and(LifecycleActionStatus::Cancelled->value)->toBe('cancelled');
+    });
+
     it('identifies terminal states correctly', function () {
         expect(LifecycleActionStatus::Previewed->isTerminal())->toBeFalse()
             ->and(LifecycleActionStatus::Executing->isTerminal())->toBeFalse()
@@ -128,6 +146,14 @@ describe('LifecycleActionStatus', function () {
 describe('PolicyLayer', function () {
     it(CP_ENUM_FIVE_CASES_MESSAGE, function () {
         expect(PolicyLayer::cases())->toHaveCount(5);
+    });
+
+    it('maps specific backing values', function () {
+        expect(PolicyLayer::Capability->value)->toBe('capability')
+            ->and(PolicyLayer::Readiness->value)->toBe('readiness')
+            ->and(PolicyLayer::Subsystem->value)->toBe('subsystem')
+            ->and(PolicyLayer::DataNetwork->value)->toBe('data_network')
+            ->and(PolicyLayer::Operator->value)->toBe('operator');
     });
 
     it('orders layers from 1 to 5', function () {
@@ -175,6 +201,15 @@ describe('PolicyVerdict', function () {
 describe('TelemetryEventType', function () {
     it('has twelve cases', function () {
         expect(TelemetryEventType::cases())->toHaveCount(12);
+    });
+
+    it('maps specific backing values', function () {
+        expect(TelemetryEventType::RunStarted->value)->toBe('run_started')
+            ->and(TelemetryEventType::RunCompleted->value)->toBe('run_completed')
+            ->and(TelemetryEventType::RunFailed->value)->toBe('run_failed')
+            ->and(TelemetryEventType::ToolInvoked->value)->toBe('tool_invoked')
+            ->and(TelemetryEventType::ProviderFallback->value)->toBe('provider_fallback')
+            ->and(TelemetryEventType::PolicyDecision->value)->toBe('policy_decision');
     });
 
     it('provides non-empty labels for all cases', function () {

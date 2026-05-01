@@ -6,7 +6,9 @@
 namespace App\Modules\Commerce\Marketplace\Models;
 
 use App\Modules\Commerce\Inventory\Models\Item;
+use App\Modules\Commerce\Marketplace\Database\Factories\ListingFactory;
 use App\Modules\Core\Company\Models\Company;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -36,6 +38,8 @@ use Illuminate\Support\Carbon;
  */
 class Listing extends Model
 {
+    use HasFactory;
+
     protected $table = 'commerce_marketplace_listings';
 
     /**
@@ -71,6 +75,11 @@ class Listing extends Model
             'last_synced_at' => 'datetime',
             'raw_payload' => 'array',
         ];
+    }
+
+    protected static function newFactory(): ListingFactory
+    {
+        return new ListingFactory;
     }
 
     public function company(): BelongsTo
