@@ -56,6 +56,35 @@ now_epoch_s() {
     return 0
 }
 
+# Best-effort diagnosis for startup timeout by reading recent app/server logs.
+detect_startup_failure_reason() {
+    local laravel_log="$PROJECT_ROOT/storage/logs/laravel.log"
+    local dev_log
+    dev_log="$(get_logs_dir "$PROJECT_ROOT")/dev-services.log"
+    local reason=""
+
+    if [[ -f "$laravel_log" ]]; then
+        reason=$(tail -n 400 "$laravel_log" | grep -E "local\\.ERROR:|Service provider class \[|Extension path/class mismatch|__VSCODE_LARAVEL_STARTUP_ERROR__|PHP Fatal error|Class .* not found" | tail -n1 || true)
+        if [[ -n "$reason" ]]; then
+            reason=$(printf '%s' "$reason" | sed -E 's/^\[[^]]+\] [^ ]+\.ERROR: //')
+            reason=$(printf '%s' "$reason" | sed -E 's/ \{"exception".*$//')
+            printf '%s\n' "$reason"
+            return 0
+        fi
+    fi
+
+    if [[ -f "$dev_log" ]]; then
+        reason=$(tail -n 250 "$dev_log" | grep -E "\[server\].*(ERROR|Error|error|Fatal|exception|does not exist)|script \"dev:all\" exited|octane:start" | tail -n1 || true)
+        if [[ -n "$reason" ]]; then
+            printf '%s\n' "$reason"
+            return 0
+        fi
+    fi
+
+    printf '%s\n' ""
+    return 0
+}
+
 # Check for required dependencies (verification only, no installation)
 check_dependencies() {
     local missing=()
@@ -537,6 +566,12 @@ wait_for_service() {
     done
 
     echo -e "${RED}✗${NC} $service_name did not respond at $url after ${max_attempts}s" >&2
+    local startup_reason
+    startup_reason=$(detect_startup_failure_reason)
+    if [[ -n "$startup_reason" ]]; then
+        echo -e "${YELLOW}Likely startup error:${NC} $startup_reason" >&2
+        log "Likely startup error: $startup_reason"
+    fi
     log "ERROR: $service_name not ready after $max_attempts attempts (elapsed $(( $(now_epoch_s) - start_ts ))s)"
     return 1
 }
