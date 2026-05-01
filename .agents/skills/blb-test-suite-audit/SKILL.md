@@ -35,8 +35,13 @@ Force each reviewed file into one of:
 
 ## Audit Workflow
 
-1. Pick a coherent module slice. Prefer module slices over jumping
-   file-to-file across the repo.
+1. Pick a coherent slice. If the user names one, use it. Otherwise, default
+   to tests modified in the last 3 days (`find tests -name '*.php' -mtime -3`),
+   excluding support/infrastructure files (`Pest.php`, `TestCase.php`,
+   `TestingBaselineSeeder.php`, `Support/`). State the file list before
+   proceeding. If that window yields more than ~50 files, narrow to 3 days
+   within the most active sub-area. Prefer coherent module slices over
+   jumping file-to-file across the repo.
 2. Read the tests and the production code they claim to protect.
 3. For each file, ask: what specific bad code change would this test stop? If
    the answer is vague, lean toward `tighten` or `delete`.
