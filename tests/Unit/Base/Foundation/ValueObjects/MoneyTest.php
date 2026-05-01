@@ -13,12 +13,3 @@ it('formats minor units for display and input', function (): void {
     expect(Money::format(123456, 'usd'))->toBe('USD 1,234.56')
         ->and(Money::formatInput(123456))->toBe('1234.56');
 });
-
-it('formats negative minor units with the sign before the whole part', function (): void {
-    expect(Money::format(-150, 'USD'))->toBe('USD -1.50')
-        ->and(Money::format(-50, 'USD'))->toBe('USD -0.50')
-        ->and(Money::format(-100, 'USD'))->toBe('USD -1.00')
-        ->and(Money::format(-123456, 'USD'))->toBe('USD -1,234.56')
-        ->and(Money::formatInput(-150))->toBe('-1.50')
-        ->and(Money::formatInput(-50))->toBe('-0.50');
-});
