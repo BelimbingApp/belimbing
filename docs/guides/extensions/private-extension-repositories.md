@@ -11,18 +11,19 @@ belimbing/                         # Public BLB framework git repo
 ├── app/
 ├── docs/
 ├── extensions/
-│   └── ham/
-│       └── auto-parts/            # Private nested git repo
-│           ├── .git/
-│           ├── Config/
-│           ├── Database/
-│           ├── Livewire/
-│           ├── Routes/
-│           ├── Tests/
-│           └── ServiceProvider.php
+│   └── ham/                       # Private nested git repo root
+│       ├── .git/
+│       ├── auto-parts/            # Ham auto-parts module
+│       │   ├── Config/
+│       │   ├── Database/
+│       │   ├── Livewire/
+│       │   ├── Routes/
+│       │   ├── Tests/
+│       │   └── ServiceProvider.php
+│       └── <future-module>/       # Additional Ham modules live here
 └── resources/
     └── extensions/
-        └── ham/                   # Private UI overrides; use a matching private repo or keep in the extension repo by convention
+        └── ham/                   # Private UI overrides; keep in the ham repo by convention
 ```
 
 The parent BLB repo ignores the private extension path locally. The extension
@@ -48,15 +49,15 @@ neutral.
 ## Create the Private Extension Repo
 
 ```bash
-mkdir -p extensions/ham/auto-parts
-cd extensions/ham/auto-parts
+mkdir -p extensions/ham
+cd extensions/ham
 
 git init -b main
-git remote add origin <private-blb-ham-auto-parts-repo-url>
+git remote add origin <private-blb-ham-repo-url>
 ```
 
 The remote name should be `origin` inside the nested repo. It must point to the
-private Ham extension repository, not to the parent BLB framework repository.
+private Ham repository, not to the parent BLB framework repository.
 
 After the remote exists:
 
@@ -77,7 +78,7 @@ git push origin main
 Ham extension work:
 
 ```bash
-cd extensions/ham/auto-parts
+cd extensions/ham
 git status
 git commit -m "Ham extension change"
 git push origin main
@@ -102,7 +103,7 @@ Private extension repo:
 - Ham-specific catalog seeds, eBay category mappings, policy defaults, and report pages.
 - Ham-specific prompt overrides and description boilerplate.
 - Ham-specific settings defaults that are not secrets.
-- Extension tests under `extensions/ham/auto-parts/Tests`.
+- Extension tests under `extensions/ham/<module>/Tests`.
 
 Secrets, OAuth tokens, and API keys never belong in either repository. Store
 them through `base_settings`.
