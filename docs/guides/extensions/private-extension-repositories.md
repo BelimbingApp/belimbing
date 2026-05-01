@@ -21,7 +21,7 @@ belimbing/                         # Public BLB framework git repo
 │   │   │   ├── Tests/
 │   │   │   └── ServiceProvider.php
 │   │   └── <future-module>/       # Additional Ham modules live here
-│   └── sbg/                       # Private nested git repo root (licensee: SBG)
+│   └── sb-group/                  # Private nested git repo root (licensee: SBG)
 │       ├── .git/
 │       ├── qac/                   # SBG QAC module
 │       │   ├── Config/
@@ -34,7 +34,7 @@ belimbing/                         # Public BLB framework git repo
 └── resources/
     └── extensions/
         ├── ham/                   # Private UI overrides for Ham
-        └── sbg/                   # Private UI overrides for SBG
+        └── sb-group/              # Private UI overrides for SBG
 ```
 
 The parent BLB repo ignores the private extension path locally. The extension
@@ -50,8 +50,8 @@ cat >> .git/info/exclude <<'EOF'
 # Private licensee extension repositories.
 /extensions/ham/
 /resources/extensions/ham/
-/extensions/sbg/
-/resources/extensions/sbg/
+/extensions/sb-group/
+/resources/extensions/sb-group/
 EOF
 ```
 
@@ -74,8 +74,8 @@ git remote add origin <private-blb-ham-repo-url>
 SBG example:
 
 ```bash
-mkdir -p extensions/sbg
-cd extensions/sbg
+mkdir -p extensions/sb-group
+cd extensions/sb-group
 
 git init -b main
 git remote add origin <private-blb-sbg-repo-url>
@@ -112,7 +112,7 @@ git push origin main
 SBG extension work:
 
 ```bash
-cd extensions/sbg
+cd extensions/sb-group
 git status
 git commit -m "SBG extension change"
 git push origin main
@@ -121,7 +121,7 @@ git push origin main
 Before every framework commit, verify that no private extension paths are staged:
 
 ```bash
-git diff --cached --name-only | rg '^(extensions/(ham|sbg)|resources/extensions/(ham|sbg))/' && exit 1 || true
+git diff --cached --name-only | rg '^(extensions/(ham|sb-group)|resources/extensions/(ham|sb-group))/' && exit 1 || true
 ```
 
 ## What Belongs Where
