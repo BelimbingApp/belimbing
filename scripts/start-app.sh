@@ -64,7 +64,7 @@ detect_startup_failure_reason() {
     local reason=""
 
     if [[ -f "$laravel_log" ]]; then
-        reason=$(tail -n 400 "$laravel_log" | grep -E "local\\.ERROR:|Service provider class \[|Extension path/class mismatch|__VSCODE_LARAVEL_STARTUP_ERROR__|PHP Fatal error|Class .* not found" | tail -n1 || true)
+        reason=$(tail -n 400 "$laravel_log" | grep -E "\.ERROR:" | tail -n1 || true)
         if [[ -n "$reason" ]]; then
             reason=$(printf '%s' "$reason" | sed -E 's/^\[[^]]+\] [^ ]+\.ERROR: //')
             reason=$(printf '%s' "$reason" | sed -E 's/ \{"exception".*$//')
