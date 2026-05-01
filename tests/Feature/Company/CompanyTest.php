@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\DB;
 
 function removeSeededLicenseeCompany(): void
 {
+    DB::table('employees')->where('company_id', Company::LICENSEE_ID)->delete();
+    DB::table('users')->where('company_id', Company::LICENSEE_ID)->delete();
     DB::table('companies')->where('id', Company::LICENSEE_ID)->delete();
 }
 

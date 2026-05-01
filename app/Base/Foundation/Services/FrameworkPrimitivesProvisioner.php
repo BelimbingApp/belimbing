@@ -5,10 +5,10 @@
 
 namespace App\Base\Foundation\Services;
 
-use App\Base\Foundation\Exceptions\FrameworkPrimitivesNotConfiguredException;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Base\Foundation\Exceptions\FrameworkPrimitivesNotConfiguredException;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;

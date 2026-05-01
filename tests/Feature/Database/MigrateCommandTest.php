@@ -19,6 +19,13 @@ const BLB_MIGRATE_COMMAND_TEST_ADMIN_PASSWORD = 'password123';
 const BLB_MIGRATE_COMMAND_TEST_COMPANY_NAME = 'Setup Company';
 const BLB_MIGRATE_COMMAND_TEST_COMPANY_CODE = 'setup_company_code';
 
+function removeMigrateCommandLicenseeCompany(): void
+{
+    DB::table('employees')->where('company_id', Company::LICENSEE_ID)->delete();
+    DB::table('users')->where('company_id', Company::LICENSEE_ID)->delete();
+    DB::table('companies')->where('id', Company::LICENSEE_ID)->delete();
+}
+
 afterEach(function (): void {
     putenv('ADMIN_EMAIL');
     putenv('ADMIN_NAME');
@@ -33,7 +40,7 @@ afterEach(function (): void {
 });
 
 test('migrate command provisions licensee with preferred company code from env', function (): void {
-    DB::table('companies')->where('id', Company::LICENSEE_ID)->delete();
+    removeMigrateCommandLicenseeCompany();
 
     putenv('LICENSEE_COMPANY_NAME='.BLB_MIGRATE_COMMAND_TEST_COMPANY_NAME);
     putenv('LICENSEE_COMPANY_CODE='.BLB_MIGRATE_COMMAND_TEST_COMPANY_CODE);

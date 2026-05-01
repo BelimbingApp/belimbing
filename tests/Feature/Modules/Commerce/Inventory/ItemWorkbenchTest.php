@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Media\Models\MediaAsset;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Modules\Commerce\Catalog\Models\Attribute as CatalogAttribute;
@@ -209,7 +210,7 @@ test('item photos can be uploaded and deleted from the detail page component', f
         ->call('deletePhoto', $photo->id);
 
     expect(ItemPhoto::query()->whereKey($photo->id)->exists())->toBeFalse();
-    expect(\App\Base\Media\Models\MediaAsset::query()->whereKey($asset->id)->exists())->toBeFalse();
+    expect(MediaAsset::query()->whereKey($asset->id)->exists())->toBeFalse();
     Storage::disk('local')->assertMissing($asset->storage_key);
 });
 

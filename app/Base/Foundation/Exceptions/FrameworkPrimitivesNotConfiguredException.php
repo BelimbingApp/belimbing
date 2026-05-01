@@ -21,4 +21,3 @@ final class FrameworkPrimitivesNotConfiguredException extends \RuntimeException
         );
     }
 }
-
