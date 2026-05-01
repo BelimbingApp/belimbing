@@ -74,7 +74,7 @@ detect_startup_failure_reason() {
     fi
 
     if [[ -f "$dev_log" ]]; then
-        reason=$(tail -n 250 "$dev_log" | grep -E "\[server\].*(ERROR|Error|error|Fatal|exception|does not exist)|script \"dev:all\" exited|octane:start" | tail -n1 || true)
+        reason=$(tail -n 250 "$dev_log" | grep -E "ERROR|Fatal|exception|script \"dev:all\" exited" | tail -n1 || true)
         if [[ -n "$reason" ]]; then
             printf '%s\n' "$reason"
             return 0
@@ -664,7 +664,7 @@ start_services() {
     # Override CI=1 (set by some IDEs/editors) so laravel-vite-plugin starts the HMR server
     export LARAVEL_BYPASS_ENV_CHECK=1
 
-    composer run dev >> "$dev_log_file" 2>&1 &
+    composer run dev > >(awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush() }' >> "$dev_log_file") 2>&1 &
     DEV_PID=$!
 
     # Store PID for cleanup

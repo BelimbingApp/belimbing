@@ -42,10 +42,10 @@
                             @php
                                 $modifiedAt = \Carbon\Carbon::createFromTimestamp($file->getMTime());
                             @endphp
-                            <tr wire:key="log-{{ $file->getFilename() }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="log-{{ $file->getRelativePathname() }}" class="hover:bg-surface-subtle/50 transition-colors">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium">
-                                    <a href="{{ route('admin.system.logs.show', $file->getFilename()) }}" class="text-accent hover:underline" wire:navigate>
-                                        {{ $file->getFilename() }}
+                                    <a href="{{ route('admin.system.logs.show', $file->getRelativePathname()) }}" class="text-accent hover:underline" wire:navigate>
+                                        {{ $file->getRelativePathname() }}
                                     </a>
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ Number::fileSize($file->getSize()) }}</td>

@@ -11,5 +11,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('admin/system/logs', Index::class)
         ->name('admin.system.logs.index');
     Route::get('admin/system/logs/{filename}', Show::class)
-        ->name('admin.system.logs.show');
+        ->name('admin.system.logs.show')
+        ->where('filename', '.+');
 });

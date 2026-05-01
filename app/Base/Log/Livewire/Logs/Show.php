@@ -35,7 +35,8 @@ class Show extends Component
 
     public function mount(string $filename): void
     {
-        $this->filename = basename($filename);
+        // Normalize to forward slashes, strip leading slashes; resolvedPath() enforces the jail.
+        $this->filename = ltrim(str_replace('\\', '/', $filename), '/');
         $this->ensureFileExists();
     }
 
