@@ -4,7 +4,7 @@
 # Purpose: Validate system-level requirements that later steps cannot recover from
 # Usage: ./scripts/setup-steps/01-requirements.sh [local|staging|production]
 #
-# Checks: OS compatibility, disk space, RAM, network connectivity.
+# Checks: OS compatibility, disk space, RAM.
 # Tool-level checks (PHP, Git, PostgreSQL, etc.) are handled by their own steps.
 
 set -euo pipefail
@@ -91,16 +91,6 @@ check_ram() {
     return 0
 }
 
-check_network() {
-    if curl -s --max-time 5 https://packagist.org >/dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} Network: Internet available"
-    else
-        echo -e "${YELLOW}⚠${NC} Network: Cannot reach internet (packages may fail to download)"
-    fi
-
-    return 0
-}
-
 # === Main ===
 
 print_section_banner "System Requirements ($APP_ENV)"
@@ -108,7 +98,6 @@ print_section_banner "System Requirements ($APP_ENV)"
 check_os
 check_disk_space
 check_ram
-check_network
 
 echo ""
 
