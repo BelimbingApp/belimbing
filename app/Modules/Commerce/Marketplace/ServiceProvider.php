@@ -5,6 +5,7 @@
 
 namespace App\Modules\Commerce\Marketplace;
 
+use App\Modules\Commerce\Marketplace\Console\Commands\EbayPoliciesCommand;
 use App\Modules\Commerce\Marketplace\Console\Commands\EbayPullCommand;
 use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannel;
 use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannelProvider;
@@ -36,6 +37,7 @@ class ServiceProvider extends BaseServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 EbayPullCommand::class,
+                EbayPoliciesCommand::class,
             ]);
         }
     }
