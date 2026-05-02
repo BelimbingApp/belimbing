@@ -23,6 +23,58 @@ if ! command -v detect_os >/dev/null 2>&1; then
     }
 fi
 
+# Return true when a command status indicates the operator interrupted it
+# (usually Ctrl+C). Setup steps use this to avoid treating interrupts as
+# ordinary command failures and continuing with fallback paths.
+is_interrupt_status() {
+    local status=$1
+    [[ "$status" -eq 130 || "$status" -eq 131 ]]
+}
+
+# Run a command that is allowed to fail, but abort the current script when the
+# failure was an operator interrupt. This is especially important around apt
+# repository setup, where fallback branches must not swallow Ctrl+C.
+run_setup_command() {
+    local description=$1
+    shift
+
+    set +e
+    "$@"
+    local status=$?
+    set -e
+
+    if is_interrupt_status "$status"; then
+        echo ""
+        echo -e "${YELLOW}⚠${NC} ${description} interrupted"
+        exit "$status"
+    fi
+
+    return "$status"
+}
+
+run_setup_command_with_timeout() {
+    local description=$1
+    local timeout_seconds=$2
+    shift 2
+
+    set +e
+    timeout --foreground "$timeout_seconds" "$@"
+    local status=$?
+    set -e
+
+    if is_interrupt_status "$status"; then
+        echo ""
+        echo -e "${YELLOW}⚠${NC} ${description} interrupted"
+        exit "$status"
+    fi
+
+    if [[ "$status" -eq 124 ]]; then
+        echo -e "${YELLOW}⚠${NC} ${description} timed out after ${timeout_seconds}s" >&2
+    fi
+
+    return "$status"
+}
+
 # Predicate: pid is alive AND its working directory is exactly $2.
 # Used to scope process-killing to a single BLB checkout so that, for
 # example, stopping ../sbg/belimbing never touches ../laravel/blb.

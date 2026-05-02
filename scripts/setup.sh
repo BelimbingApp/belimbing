@@ -101,7 +101,7 @@ for step in "${STEPS[@]}"; do
     export BLB_STEP="$step_num"
     export BLB_STEP_TOTAL="${#STEPS[@]}"
 
-    if bash "$step_script" "$APP_ENV"; then
+    if run_setup_command "$description" bash "$step_script" "$APP_ENV"; then
         ((++completed_count))
     else
         echo ""
