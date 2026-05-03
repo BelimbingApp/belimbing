@@ -5,10 +5,12 @@
 
 namespace App\Base\Database;
 
+use App\Base\Database\Console\Commands\BackupCommand;
 use App\Base\Database\Console\Commands\FreshCommand;
 use App\Base\Database\Console\Commands\MigrateCommand;
 use App\Base\Database\Console\Commands\RefreshCommand;
 use App\Base\Database\Console\Commands\ResetCommand;
+use App\Base\Database\Console\Commands\RestoreCommand;
 use App\Base\Database\Console\Commands\RollbackCommand;
 use App\Base\Database\Console\Commands\StatusCommand;
 use App\Base\Database\Console\Commands\TableUnstableCommand;
@@ -31,6 +33,8 @@ class ServiceProvider extends BaseServiceProvider
      */
     public function register(): void
     {
+        $this->mergeConfigFrom(__DIR__.'/Config/backup.php', 'backup');
+
         // Override Laravel's MigrateCommand by extending the binding
         // Laravel's MigrationServiceProvider (deferred) binds MigrateCommand::class directly,
         // so we extend the class name, not an alias. The extend() callback runs when
@@ -68,6 +72,8 @@ class ServiceProvider extends BaseServiceProvider
 
         $this->commands([
             TableUnstableCommand::class,
+            BackupCommand::class,
+            RestoreCommand::class,
         ]);
     }
 }

@@ -35,4 +35,16 @@ enum BlbErrorCode: string
 
     case LICENSEE_COMPANY_DELETION_FORBIDDEN = 'licensee_company_deletion_forbidden';
     case SYSTEM_EMPLOYEE_DELETION_FORBIDDEN = 'system_employee_deletion_forbidden';
+
+    case BACKUP_CONFIGURATION_INVALID = 'backup_configuration_invalid';
+    case BACKUP_DRIVER_UNSUPPORTED = 'backup_driver_unsupported';
+    case BACKUP_TOOLING_MISSING = 'backup_tooling_missing';
+    case BACKUP_DUMP_FAILED = 'backup_dump_failed';
+    case BACKUP_ENCRYPTION_FAILED = 'backup_encryption_failed';
+    case BACKUP_DECRYPTION_FAILED = 'backup_decryption_failed';
+    case BACKUP_STORAGE_FAILED = 'backup_storage_failed';
+    case BACKUP_ARTIFACT_NOT_FOUND = 'backup_artifact_not_found';
+    case BACKUP_ARTIFACT_CORRUPT = 'backup_artifact_corrupt';
+    case BACKUP_RESTORE_REFUSED = 'backup_restore_refused';
+    case BACKUP_RESTORE_FAILED = 'backup_restore_failed';
 }

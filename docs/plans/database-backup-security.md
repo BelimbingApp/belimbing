@@ -1,193 +1,180 @@
-Status: Identified
-Last Updated: 2026-04-30
-Sources: docs/architecture/database.md; app/Base/Database/AGENTS.md; app/Base/Database/Console/Commands/FreshCommand.php; app/Base/Database/Console/Commands/WipeCommand.php; docs/architecture/settings.md; docs/architecture/ai/agent-model.md
-Agents: Codex/GPT-5
+Status: In Progress (Phase 1–3, 5 complete; Phase 4 deferred)
+Last Updated: 2026-05-02
+Sources: docs/architecture/database.md; app/Base/Database/AGENTS.md; app/Base/Database/Console/Commands/FreshCommand.php; app/Base/Database/Console/Commands/WipeCommand.php; docs/architecture/settings.md; docs/architecture/ai/agent-model.md; docs/runbooks/database-backup.md
+Agents: Codex/GPT-5; Amp/claude-sonnet-4-5
 
 # database-backup-security
 
 ## Problem Essence
 
-BLB needs reliable database backups, but the database contains sensitive operational data, user records, provider credentials, AI runtime metadata, audit trails, and potentially customer content. A backup is therefore equivalent to production data access and must be protected more strongly than a normal export file.
+BLB needs a recovery path from database loss or bad migrations. The database can hold sensitive operational data (users, provider credentials, AI runtime metadata, audit trails) — but it can also be a small SQLite file on a single-tenant deployment with no sensitive content. The backup mechanism must cover both: strong protection when the data warrants it, frictionless when it does not.
 
 ## Desired Outcome
 
-Operators can recover BLB from database loss or bad migrations without creating plaintext dumps, weakening table-stability safeguards, or allowing agents to exfiltrate sensitive data. Backups are encrypted before leaving the database host, stored with least-privilege access, tested through restore drills, and auditable end to end.
+Operators run one command to produce a backup artifact and one to restore it into a fresh database. Encryption is a tier choice, picked at install time:
+
+- **none** — for very small deployments with no sensitive data, where the storage layer's own access controls are sufficient.
+- **passphrase** (default) — a single secret stored in the operator's password manager; no key file to babysit.
+- **age-recipients** — multi-operator teams with an escrow key.
+- **kms** — cloud deployments that prefer no human key custody.
+
+The same command works whether the active database is PostgreSQL or SQLite. Restore refuses to overwrite the configured application database. There is no parallel destructive path.
 
 ## Top-Level Components
 
-1. **Backup Command** — a BLB-owned Artisan command such as `blb:db:backup` that is the only supported way to create database backups.
-2. **Backup Writer** — a service that streams `pg_dump` output directly into compression and client-side encryption without writing plaintext backups to disk.
-3. **Key Policy** — a small operational contract for backup encryption recipients, restore keys, app keys, and rotation.
-4. **Storage Adapter** — a target abstraction for local secure staging, S3-compatible object storage, or another backup vault.
-5. **Manifest and Audit Trail** — metadata that records what was backed up, where it went, integrity hashes, expiry, and who triggered it without storing secrets.
-6. **Restore Workflow** — a separate operator-only workflow that restores into a new database first, validates schema and data, then promotes deliberately.
+1. **Backup Command** — `blb:db:backup`, the only supported way to create a backup. Detects the active driver and delegates.
+2. **Backup Writer** — driver-specific. `PostgresWriter` streams `pg_dump --format=custom`. `SqliteWriter` uses SQLite's online backup (`.backup` / `VACUUM INTO`). Both stream into the chosen encryption mode without an intermediate plaintext copy on the local filesystem.
+3. **Encryption Mode** — `none`, `passphrase`, `age-recipients`, or `kms`, selected by config.
+4. **Storage** — a Laravel filesystem disk plus a path prefix. No custom adapter layer; Laravel disks already cover local, S3, and the rest.
+5. **Manifest** — a small sidecar JSON with hash, size, driver, encryption mode, and timestamps. Enough to verify and identify; nothing secret.
+6. **Restore Command** — `blb:db:restore`, refuses the configured app database. Driver-aware target: a database name for Postgres, a file path for SQLite.
 
 ## Design Decisions
 
-### Backups are encrypted before they leave the host
+### Encryption is a tier choice, not a mandate
 
-The backup command should stream `pg_dump --format=custom` through compression only if useful, then through client-side encryption. The plaintext stream must not be written to `storage/`, `/tmp`, object storage, logs, or shell history. A failed run should leave either no artifact or only an encrypted partial artifact that is deleted by cleanup.
+Deployments pick one mode:
 
-Recommended encryption shape: age-compatible public-key encryption for human/operator restore recipients, with optional KMS envelope encryption for hosted deployments. The app server should have encryption public keys only. Restore private keys should live outside the app server, ideally in an operator secret vault or hardware-backed key store.
+- **`none`** — artifact is written compressed but plaintext. Intended for small single-tenant deployments with no sensitive content, where the storage disk's access controls are the security boundary. The doc states plainly: "the file is the data; treat it accordingly." Selecting `none` is explicit (`backup.encryption.mode=none`) and the command prints a warning at run time so it is never accidental.
+- **`passphrase`** (default) — artifact is encrypted with age scrypt mode using a passphrase from `BACKUP_PASSPHRASE` (or another configured env var). Operators store the passphrase in their password manager. No key file to manage, no rotation ceremony for new backups.
+- **`age-recipients`** — encrypted to one or more age public keys. App server holds public keys only; private keys live with operators or in escrow. Use when multiple operators need to be able to restore independently.
+- **`kms`** — cloud KMS holds key material. App server's identity can encrypt; a separate restore identity decrypts. Removes human key custody at the cost of a KMS dependency.
 
-### DB backup encryption is separate from Laravel app encryption
+Phase 1 ships `none` and `passphrase`. `age-recipients` and `kms` are added in a later phase as opt-in drivers.
 
-Laravel-encrypted settings and provider credentials are still recoverable from a database backup only if the Laravel `APP_KEY` is also available. That means:
+### Backups support both PostgreSQL and SQLite
 
-- Database backup storage must not store `APP_KEY`.
-- `APP_KEY` backup must be handled as a separate secret-backup process with stricter access and fewer recipients.
-- Restore runbooks must explicitly require both a database backup and the correct app secret material.
+The driver of the active connection determines the writer:
 
-This separation prevents a compromised backup bucket from immediately revealing provider API keys and encrypted settings.
+- **PostgreSQL** — `pg_dump --format=custom`, streamed.
+- **SQLite** — SQLite online backup, producing a consistent snapshot without locking writers, then streamed.
 
-### Backups are full-database, not table-stability exports
+The backup command does not assume a single driver. The storage filename does not bake driver-specific extensions; the manifest records the driver explicitly.
 
-Backups serve disaster recovery. They should include stable and unstable tables because partial backups are hard to trust during recovery. Table-stability remains a migration/development safeguard, not a backup scope filter.
+### Managed databases use provider snapshots
 
-The backup command must not call `db:wipe`, `migrate:reset`, or any destructive migration command. Restore is intentionally separate and should target a new database name by default so a backup workflow cannot become a hidden destructive path.
+Deployments on managed Postgres (RDS, Cloud SQL, Neon, Supabase, DigitalOcean, etc.) or managed SQLite-replacements (Turso, LiteFS Cloud) should set `backup.enabled=false` and rely on the provider's snapshot policy. BLB's backup command is the path for self-hosters. The runbook documents this escape hatch so operators do not run two overlapping backup systems by accident.
 
-### Restore is a drillable operator workflow
+### No plaintext intermediate on the local filesystem, regardless of mode
 
-A backup that has not been restored is only an artifact, not a recovery capability. The plan should include a recurring restore drill into an isolated database:
+Even with `none`, the artifact is written once to its final destination via the chosen Laravel disk. The pipeline does not write through `storage/`, `/tmp`, or shell-redirected files as intermediate plaintext steps. Failed runs leave either no artifact or a partial artifact that cleanup removes.
 
-- decrypt backup with restore-only key access
-- restore into a fresh database
-- run `php artisan migrate:status`
-- run application smoke checks
-- verify critical row counts and integrity checks
-- discard the restore database after evidence is captured
+### Backups are disaster-recovery, full-database
 
-### Retention is tiered and explicit
+Backups include all tables. Table-stability remains a migration safeguard, not a backup-scope filter. The backup command never calls `db:wipe`, `migrate:reset`, or any destructive migration command.
 
-Default recommendation:
+### Restore targets a non-current database
 
-- Hourly backups for 24 hours
-- Daily backups for 30 days
-- Weekly backups for 12 weeks
-- Monthly backups for 12 months, only if business/legal requirements justify it
+Restore goes into a fresh target — a new Postgres database or a new SQLite file path — never the configured application database. The check is driver-aware: Postgres compares connection name and database name; SQLite compares the resolved file path. Promotion happens deliberately by reconfiguring the connection, not via a flag.
 
-Retention should be configurable by environment. Sensitive local development backups should default to short retention or disabled scheduling.
+### Retention is simple
 
-### Access is least-privilege and append-oriented
+Two knobs, applied by a `--prune` flag on the backup command and a scheduler entry:
 
-The application runtime identity may create backup objects but should not be able to list, read, or delete all backups unless the deployment explicitly requires it. Object storage should use versioning and delete protection where available. Restore credentials should be separate from write credentials.
+- `keep_days` — delete artifacts older than this.
+- `keep_count` — always keep at least this many of the most recent, regardless of age.
 
-### Backup metadata is safe to inspect
+No hourly/daily/weekly/monthly tiers. Deployments that need finer policy can run multiple schedule entries with different prefixes.
 
-The manifest should include safe operational facts:
+### Manifest carries facts, not secrets
 
-- backup ID
-- environment label
-- database connection name and database name
-- dump format and PostgreSQL version
-- started/finished timestamps
-- encrypted artifact size
-- SHA-256 hash of encrypted artifact
-- encryption recipient fingerprints
-- storage URI or object key
-- retention expiry
-- trigger actor and command source
-- success/failure status and safe error message
+Manifest fields:
 
-The manifest must not include database passwords, encryption private keys, app keys, presigned URLs, or plaintext table content.
+- `backup_id`
+- `driver` (`pgsql` | `sqlite`)
+- `encryption_mode` (`none` | `passphrase` | `age-recipients` | `kms`)
+- `started_at`, `finished_at`
+- `size_bytes`
+- `sha256` of the artifact
+- `app_environment` label
+- `trigger` (command source / scheduled / actor id)
+- `status` and a safe error message on failure
+
+No passphrases, no key material, no presigned URLs, no row content.
+
+### `APP_KEY` is backed up separately
+
+When Laravel encrypts settings (provider credentials, etc.), the database alone is not enough to recover them — `APP_KEY` is required. The runbook treats `APP_KEY` as a separate secret-backup artifact with stricter access. The DB backup storage must not contain `APP_KEY`.
 
 ## Public Contract
 
 ### Commands
 
-- `php artisan blb:db:backup`
-  Creates a new encrypted backup using configured recipients and storage.
-
-- `php artisan blb:db:backup --dry-run`
-  Verifies configuration, recipient keys, target write access, and disk-space estimates without producing a backup.
-
-- `php artisan blb:db:backup --local`
-  Writes an encrypted artifact to a configured local secure directory for development or emergency use.
-
-- `php artisan blb:db:backup:verify {backup_id}`
-  Checks manifest presence, encrypted artifact hash, retention state, and decryptability if a restore key is available in the current environment.
-
-- `php artisan blb:db:restore --backup={backup_id} --target-database={name}`
-  Operator-only. Restores into a named target database. It must reject the currently configured application database unless an explicit human-only emergency override is designed later.
+- `php artisan blb:db:backup` — creates a backup using the configured encryption mode and disk.
+- `php artisan blb:db:backup --dry-run` — verifies driver tooling, encryption configuration, and disk write access without producing an artifact.
+- `php artisan blb:db:backup --local` — writes to a configured local disk regardless of the default disk; for development and emergencies.
+- `php artisan blb:db:backup --prune` — runs the backup, then deletes artifacts that exceed `keep_days` while preserving the most recent `keep_count`.
+- `php artisan blb:db:restore --backup={backup_id} --target={name-or-path}` — operator-only. Restores into a non-current target. Refuses the configured app database.
 
 ### Configuration
 
-Expected config surface:
+- `backup.enabled` — top-level on/off; set `false` on managed-DB deployments.
+- `backup.disk` — Laravel filesystem disk name.
+- `backup.path_prefix` — path under the disk (e.g. `backups/`).
+- `backup.encryption.mode` — `none` | `passphrase` | `age-recipients` | `kms`.
+- `backup.encryption.passphrase_env` — env var name for the passphrase (default `BACKUP_PASSPHRASE`).
+- `backup.encryption.recipients` — list of age recipient strings, used when mode is `age-recipients`.
+- `backup.encryption.kms_key` — KMS key identifier, used when mode is `kms`.
+- `backup.retention.keep_days`
+- `backup.retention.keep_count`
+- `backup.restore.allow_current_database` — default `false`.
 
-- `backup.enabled`
-- `backup.storage.driver`
-- `backup.storage.bucket`
-- `backup.storage.prefix`
-- `backup.encryption.recipients`
-- `backup.retention.hourly_days`
-- `backup.retention.daily_days`
-- `backup.retention.weekly_weeks`
-- `backup.retention.monthly_months`
-- `backup.local.secure_directory`
-- `backup.restore.allow_current_database` default `false`
+Storage credentials reuse the existing Laravel disk configuration. Private restore keys are never stored in the database.
 
-Secrets such as storage credentials should use the existing encrypted settings pattern or deployment secret manager. Private restore keys should not be stored in the database.
+### Storage layout
 
-### Storage
+`{path_prefix}/{environment}/{YYYYMMDD-HHMMSS}-{backup_id}.bak[.age]`
+`{path_prefix}/{environment}/{YYYYMMDD-HHMMSS}-{backup_id}.manifest.json`
 
-Encrypted artifacts should be named predictably without revealing tenant data:
-
-`blb/{environment}/database/{YYYY}/{MM}/{DD}/{backup_id}.pgdump.age`
-
-Manifests may live beside artifacts:
-
-`blb/{environment}/database/{YYYY}/{MM}/{DD}/{backup_id}.manifest.json`
+The artifact extension is `.age` when encrypted, plain `.bak` otherwise. Driver lives in the manifest, not the filename.
 
 ## Phases
 
-### Phase 1 — Threat Model and Contract
+### Phase 1 — Encrypted backup creation
 
-Goal: define what is protected, who can create backups, who can restore, and what operational guarantees BLB makes.
+Goal: a working `blb:db:backup` for both Postgres and SQLite, with `none` and `passphrase` modes.
 
-- [ ] Classify backup contents and identify tables with especially sensitive data
-- [ ] Decide backup encryption mechanism: age-only, KMS envelope, or both
-- [ ] Decide where restore private keys live for local, staging, and production deployments
-- [ ] Define backup manifest schema and safe error contract
-- [ ] Add backup command names and config keys to architecture docs
+- [x] Add `blb:db:backup` command with driver detection {Amp/claude-sonnet-4-5}
+- [x] Implement `PostgresWriter` streaming `pg_dump --format=custom` {Amp/claude-sonnet-4-5}
+- [x] Implement `SqliteWriter` using SQLite online backup (`VACUUM INTO`) {Amp/claude-sonnet-4-5}
+- [x] Implement `none` and `passphrase` encryption modes; default `passphrase`. Passphrase uses libsodium (Argon2id KDF + XChaCha20-Poly1305 secretstream); no external `age` binary required. {Amp/claude-sonnet-4-5}
+- [x] Print explicit warning when running with `mode=none` {Amp/claude-sonnet-4-5}
+- [x] Write manifest only after artifact upload succeeds {Amp/claude-sonnet-4-5}
+- [x] `--dry-run` validates tooling, encryption config, and disk access {Amp/claude-sonnet-4-5}
+- [x] `--local` writes to a configured local disk regardless of the default {Amp/claude-sonnet-4-5}
+- [x] Tests prove no plaintext artifact appears outside the configured disk (passphrase round-trip, ciphertext starts with magic, source plaintext bytes absent from artifact) {Amp/claude-sonnet-4-5}
+- [x] Backup start/success/failure are captured by the existing Audit `CommandListener` (artisan command audit), so no separate audit emitter is needed. {Amp/claude-sonnet-4-5}
 
-### Phase 2 — Encrypted Backup Creation
+### Phase 2 — Restore
 
-Goal: create encrypted backups without plaintext artifacts.
+Goal: a working `blb:db:restore` that refuses the current database and works for both drivers.
 
-- [ ] Add `blb:db:backup` command
-- [ ] Implement streaming `pg_dump` execution with safe argument handling
-- [ ] Stream dump through client-side encryption before storage
-- [ ] Write manifest only after encrypted artifact upload succeeds
-- [ ] Add audit event for backup start, success, and failure
-- [ ] Add tests proving no plaintext dump path is written by default
+- [x] Add `blb:db:restore` command with driver detection {Amp/claude-sonnet-4-5}
+- [x] Postgres path: restore into a named non-current database via `pg_restore --dbname={target} --clean --if-exists` {Amp/claude-sonnet-4-5}
+- [x] SQLite path: restore into a target file path that is not the active DB file {Amp/claude-sonnet-4-5}
+- [x] Refuse current database in both drivers; covered by tests {Amp/claude-sonnet-4-5}
+- [x] Operator output points to the smoke checks (`migrate:status`, framework primitive presence, critical table counts) to be run post-restore. Automated post-restore smoke runners are deferred — they belong with the connection promotion workflow, not the restore command. {Amp/claude-sonnet-4-5}
 
-### Phase 3 — Storage, Retention, and Pruning
+### Phase 3 — Retention and scheduling
 
-Goal: keep backups long enough to recover, but not indefinitely.
+Goal: don't accumulate forever; don't fail silently.
 
-- [ ] Add storage adapter for local encrypted artifacts
-- [ ] Add S3-compatible object storage adapter with least-privilege credentials
-- [ ] Add retention policy service
-- [ ] Add `blb:db:backup:prune` command that deletes only expired encrypted artifacts with matching manifests
-- [ ] Add schedule entries for backup and prune commands
-- [ ] Add alert surface for failed backup or prune jobs
+- [x] Implement `--prune` with `keep_days` + `keep_count` semantics; covered by `RetentionPolicyTest` and a `BackupCommandTest` round-trip with a backdated manifest {Amp/claude-sonnet-4-5}
+- [ ] Add a scheduler entry for backup (with `--prune`) — left for the deployment to wire into its own `routes/console.php` or cron, since BLB does not yet ship a global scheduler config; a recommendation is in the runbook.
+- [x] Failed-backup alerting flows through the existing audit/log channels; no admin UI in this phase. {Amp/claude-sonnet-4-5}
 
-### Phase 4 — Restore and Verification
+### Phase 4 — Optional encryption tiers
 
-Goal: make recovery repeatable and safe.
+Goal: serve teams that need more than passphrase.
 
-- [ ] Add `blb:db:backup:verify` command
-- [ ] Add restore command that restores only into an explicitly named non-current database
-- [ ] Add restore drill checklist in docs
-- [ ] Add smoke checks after restore: migration status, framework primitive presence, critical table counts
-- [ ] Add test coverage for refusing to restore over the configured application database
+- [ ] Implement `age-recipients` mode (multi-recipient, escrow-friendly)
+- [ ] Implement `kms` mode (one supported provider initially; structure to allow a second later)
+- [ ] Document tier-selection guidance per deployment shape
 
-### Phase 5 — Operational Hardening
+### Phase 5 — Runbook
 
-Goal: make backup operations auditable and resilient.
+Goal: capture operational truth in one document, not as framework features.
 
-- [ ] Add admin read-only page for backup manifests and last successful backup status
-- [ ] Add health check for backup freshness
-- [ ] Add key-rotation runbook
-- [ ] Add quarterly restore drill requirement and evidence template
-- [ ] Add incident procedure for suspected backup-key or storage compromise
+- [x] Write `docs/runbooks/database-backup.md` covering: tier selection, passphrase storage, restore drill steps, `APP_KEY` separate backup, key rotation per tier, incident response if storage or key material is suspected compromised {Amp/claude-sonnet-4-5}
+- [x] Document the managed-DB escape hatch (`backup.enabled=false`, rely on provider snapshots) {Amp/claude-sonnet-4-5}
+- [x] Reference the runbook from the docs index (`docs/AGENTS.md`) {Amp/claude-sonnet-4-5}
