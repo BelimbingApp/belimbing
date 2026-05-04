@@ -15,25 +15,12 @@
 
         @unless ($laraActivated)
             <x-ui.alert variant="warning">
-                {{ __('Task models become available after Lara has been activated with a primary model.') }}
-                <a href="{{ route('admin.setup.lara') }}" wire:navigate class="text-accent hover:underline">
-                    {{ __('Open Lara setup') }}
+                {{ __('Task models become available once Lara has at least one active provider in the priority chain.') }}
+                <a href="{{ route('admin.ai.providers') }}" wire:navigate class="text-accent hover:underline">
+                    {{ __('Open AI Providers') }}
                 </a>
             </x-ui.alert>
         @else
-            <x-ui.card>
-                <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Lara Primary') }}</h3>
-                        <p class="mt-1 text-sm font-medium text-ink font-mono">{{ ($currentPrimary['provider_name'] ?? '—') . '/' . ($currentPrimary['model'] ?? '—') }}</p>
-                    </div>
-
-                    <x-ui.button variant="ghost" href="{{ route('admin.setup.lara') }}" wire:navigate>
-                        {{ __('Back to Lara') }}
-                    </x-ui.button>
-                </div>
-            </x-ui.card>
-
             @foreach ($tasks as $task)
                 @php
                     $taskKey = $task->key;
@@ -59,9 +46,7 @@
 
                             <p class="text-sm text-muted">{{ __($task->description) }}</p>
 
-                            @if ($taskMode === 'primary')
-                                <p class="text-xs text-muted">{{ __('Currently uses Lara\'s primary model.') }}</p>
-                            @elseif ($taskProviderId !== null && $taskModelId !== null)
+                            @if ($taskProviderId !== null && $taskModelId !== null)
                                 <p class="text-xs text-muted">
                                     {{ __('Current selection: :provider/:model', [
                                         'provider' => optional($providers->firstWhere('id', $taskProviderId))->name ?? '—',
@@ -69,7 +54,7 @@
                                     ]) }}
                                 </p>
                             @else
-                                <p class="text-xs text-muted">{{ __('No saved model selection yet. Lara will fall back to the primary model until one is saved.') }}</p>
+                                <p class="text-xs text-muted">{{ __('No saved model selection yet. The task falls back to Lara\'s default model until one is saved.') }}</p>
                             @endif
                         </div>
 

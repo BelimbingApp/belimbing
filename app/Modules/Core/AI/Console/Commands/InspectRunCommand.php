@@ -103,7 +103,6 @@ class InspectRunCommand extends Command
             ($run['tokens']['prompt'] ?? '?').' / '.($run['tokens']['completion'] ?? '?'));
         $this->components->twoColumnDetail('Tool Actions', (string) count($run['tool_actions']));
         $this->components->twoColumnDetail('Retries', (string) $run['retry_attempts']);
-        $this->components->twoColumnDetail('Fallbacks', (string) count($run['fallback_attempts']));
 
         if ($run['dispatch_id'] !== null) {
             $this->components->twoColumnDetail('Dispatch', $run['dispatch_id']);

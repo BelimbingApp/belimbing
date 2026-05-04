@@ -195,6 +195,51 @@ class SessionManager
             $llm['model_override'] = $modelId;
         }
 
+        $this->writeLlmState($employeeId, $session, $llm);
+    }
+
+    /**
+     * Store a per-conversation execution-controls override on the session.
+     *
+     * @param  array<string, mixed>|null  $controls  Override config, or null to clear
+     */
+    public function updateExecutionControlsOverride(int $employeeId, string $sessionId, ?array $controls): void
+    {
+        $session = $this->get($employeeId, $sessionId);
+
+        if ($session === null) {
+            return;
+        }
+
+        $llm = $session->llm ?? [];
+
+        if ($controls === null || $controls === []) {
+            unset($llm['execution_controls_override']);
+        } else {
+            $llm['execution_controls_override'] = $controls;
+        }
+
+        $this->writeLlmState($employeeId, $session, $llm);
+    }
+
+    /**
+     * Read the per-session execution-controls override, if any.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getExecutionControlsOverride(int $employeeId, string $sessionId): ?array
+    {
+        $session = $this->get($employeeId, $sessionId);
+        $override = $session?->llm['execution_controls_override'] ?? null;
+
+        return is_array($override) && $override !== [] ? $override : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $llm
+     */
+    private function writeLlmState(int $employeeId, Session $session, array $llm): void
+    {
         $updated = new Session(
             id: $session->id,
             employeeId: $session->employeeId,
@@ -207,7 +252,7 @@ class SessionManager
         );
 
         file_put_contents(
-            $this->metaPath($employeeId, $sessionId),
+            $this->metaPath($employeeId, $session->id),
             json_encode($updated->toMeta(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         );
     }

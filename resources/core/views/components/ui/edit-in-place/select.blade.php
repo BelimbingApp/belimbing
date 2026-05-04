@@ -49,7 +49,7 @@
             x-transition:leave-end="max-h-0 opacity-0"
             class="mt-0.5 overflow-hidden text-xs font-normal normal-case leading-5 tracking-normal text-muted"
         >
-            <span class="block">{{ $help }}</span>
+            <span class="block">{!! $help !!}</span>
         </dd>
     @endif
 

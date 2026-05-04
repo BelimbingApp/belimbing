@@ -7,14 +7,12 @@ namespace App\Modules\Core\AI\Enums;
 
 enum TaskModelSelectionMode: string
 {
-    case Primary = 'primary';
     case Recommended = 'recommended';
     case Manual = 'manual';
 
     public function label(): string
     {
         return match ($this) {
-            self::Primary => 'Use Lara primary',
             self::Recommended => 'Recommended',
             self::Manual => 'Choose manually',
         };

@@ -39,7 +39,6 @@ class RuntimeResponseFactory
                 'prompt' => $llmResult['usage']['prompt_tokens'] ?? null,
                 'completion' => $llmResult['usage']['completion_tokens'] ?? null,
             ],
-            'fallback_attempts' => [],
         ], $extraMeta);
 
         return [
@@ -99,7 +98,6 @@ class RuntimeResponseFactory
             'error_type' => $error->errorType->value,
             'diagnostic' => $error->diagnostic !== '' ? $error->diagnostic : null,
             'message_type' => 'error',
-            'fallback_attempts' => [],
         ];
     }
 }

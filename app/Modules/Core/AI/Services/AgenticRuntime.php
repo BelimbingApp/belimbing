@@ -31,14 +31,11 @@ use Illuminate\Support\Str;
  * LLM produces a final text response or the maximum iteration limit is reached.
  *
  * Resilience strategy:
- * - Single retry on transient failures (timeout, connection, rate_limit, server_error, empty_response)
- * - Provider fallback before the tool-calling loop commits (first successful LLM call)
- * - No mid-loop fallback: once tool calls start, the provider is locked for consistency
+ * - Single retry on transient failures within the same provider/model
+ * - No silent fallback to a different provider/model — failures surface honestly
  */
 class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted collaborators handle complexity without changing behaviour
 {
-    private const ALL_PROVIDER_CONFIGURATIONS_FAILED = 'All provider configurations failed';
-
     public function __construct(
         private readonly ConfigResolver $configResolver,
         private readonly LlmClient $llmClient,
@@ -57,21 +54,21 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
     /**
      * Run an agentic conversation turn with tool calling.
      *
-     * Resolves all available provider configs and attempts each in order.
-     * Falls back to the next provider on retryable failures before the
-     * tool-calling loop commits. Each LLM call is retried once on transient errors.
+     * Resolves a single LLM config for the agent (workspace or company default
+     * by priority) and runs the tool-calling loop against it. On failure, the
+     * error surfaces directly — there is no silent retry against a different
+     * provider or model. The loop's own in-call retry on transient errors is
+     * preserved (same provider/model, single extra attempt).
      *
      * @param  list<Message>  $messages  Conversation history
      * @param  int  $employeeId  Agent employee ID
      * @param  string|null  $systemPrompt  System prompt
-     * @param  string|null  $modelOverride  Optional model override for the **primary** resolved slot only
-     *                                      (plain model id or composite `providerId:::modelId`).
-     *                                      Workspace fallback entries are left unchanged so backup
-     *                                      providers/models from Lara config are still attempted.
+     * @param  string|null  $modelOverride  Optional model override (plain model id or composite `providerId:::modelId`)
      * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
      * @param  string|null  $sessionId  Chat session ID for run ledger correlation
      * @param  array<string, mixed>|null  $configOverride  Optional fully resolved config override
      * @param  list<string>|null  $allowedToolNames  Optional task-profile tool allowlist
+     * @param  array<string, mixed>|null  $executionControlsOverride  Per-call execution controls overlay (e.g. session-scoped)
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
     public function run(// NOSONAR (parameter count): public runtime API keeps explicit optional knobs
@@ -83,6 +80,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?string $sessionId = null,
         ?array $configOverride = null,
         ?array $allowedToolNames = null,
+        ?array $executionControlsOverride = null,
     ): array {
         $this->sessionContext->set($sessionId);
 
@@ -100,11 +98,9 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 timeoutSeconds: $policy->timeoutSeconds,
             ));
 
-            $configs = $configOverride !== null
-                ? [$configOverride]
-                : $this->configResolver->resolveWithDefaultFallback($employeeId);
+            $config = $configOverride ?? $this->configResolver->resolveDefault($employeeId);
 
-            if ($configs === []) {
+            if ($config === null) {
                 $configError = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
                 $this->runRecorder->fail($runId, $configError);
 
@@ -116,83 +112,49 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 );
             }
 
-            $fallbackAttempts = [];
-            $lastErrorResult = null;
+            if ($modelOverride !== null) {
+                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
+            }
 
-            foreach ($configs as $configIndex => $config) {
-                if ($modelOverride !== null && $configIndex === 0) {
-                    $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
-                }
+            $config = $this->applyExecutionControlsOverlay($config, $executionControlsOverride);
 
-                $credentials = $this->credentialResolver->resolve($config);
+            $credentials = $this->credentialResolver->resolve($config);
 
-                if (isset($credentials['runtime_error'])) {
-                    $fallbackAttempts[] = $this->buildFallbackAttempt($config, $credentials['runtime_error']);
-                    $lastErrorResult = $this->responseFactory->error(
-                        $runId,
-                        $config['model'],
-                        (string) ($config['provider_name'] ?? 'unknown'),
-                        $credentials['runtime_error'],
-                    );
-
-                    continue;
-                }
-
-                $config['timeout'] = $policy->timeoutSeconds;
-
-                $result = $this->runToolCallingLoop(
+            if (isset($credentials['runtime_error'])) {
+                $errorResult = $this->responseFactory->error(
                     $runId,
-                    $employeeId,
-                    $config,
-                    $credentials,
-                    $messages,
-                    $systemPrompt,
-                    $fallbackAttempts,
-                    $allowedToolNames,
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $credentials['runtime_error'],
                 );
+                $this->runRecorder->fail($runId, $credentials['runtime_error'], $errorResult['meta']);
 
-                if (isset($result['meta']['error_type'])) {
-                    $errorTypeValue = $result['meta']['error_type'];
-                    if ($this->shouldFallbackFromErrorType($errorTypeValue)) {
-                        // runToolCallingLoop already added to $fallbackAttempts
-                        $lastErrorResult = $result;
+                return $errorResult;
+            }
 
-                        continue;
-                    }
+            $config['timeout'] = $policy->timeoutSeconds;
 
-                    $result['meta']['fallback_attempts'] = $fallbackAttempts;
-                    $this->runRecorder->fail(
-                        $runId,
-                        $this->runtimeErrorFromAssistantMeta($result['meta']),
-                        $result['meta'],
-                    );
+            $result = $this->runToolCallingLoop(
+                $runId,
+                $employeeId,
+                $config,
+                $credentials,
+                $messages,
+                $systemPrompt,
+                $allowedToolNames,
+            );
 
-                    return $result;
-                }
-
-                $result['meta']['fallback_attempts'] = $fallbackAttempts;
-                $this->runRecorder->complete($runId, $result['meta']);
+            if (isset($result['meta']['error_type'])) {
+                $this->runRecorder->fail(
+                    $runId,
+                    $this->runtimeErrorFromAssistantMeta($result['meta']),
+                    $result['meta'],
+                );
 
                 return $result;
             }
 
-            $result = $lastErrorResult ?? $this->responseFactory->error(
-                $runId,
-                'unknown',
-                'unknown',
-                AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED),
-            );
-            $result['meta']['fallback_attempts'] = $fallbackAttempts;
-
-            $terminalError = $lastErrorResult !== null
-                ? $this->runtimeErrorFromAssistantMeta($lastErrorResult['meta'])
-                : AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED);
-
-            $this->runRecorder->fail(
-                $runId,
-                $terminalError,
-                $result['meta'],
-            );
+            $this->runRecorder->complete($runId, $result['meta']);
 
             return $result;
         } finally {
@@ -206,18 +168,20 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
      * Tool-calling iterations run synchronously. Only the final text response
      * is streamed as SSE-compatible events. Yields arrays with 'event' and 'data' keys.
      *
-     * Provider fallback is attempted before the tool loop commits. Each LLM call
-     * is retried once on transient errors.
+     * Resolves a single LLM config and runs the streaming tool loop against it.
+     * On failure, the error event surfaces directly — no silent retry to a
+     * different provider/model.
      *
      * @param  list<Message>  $messages  Conversation history
      * @param  int  $employeeId  Agent employee ID
      * @param  string|null  $systemPrompt  System prompt
-     * @param  string|null  $modelOverride  Optional model override for the **primary** slot only; see {@see run()}
+     * @param  string|null  $modelOverride  Optional model override; see {@see run()}
      * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
      * @param  string|null  $sessionId  Chat session ID for run ledger correlation
      * @param  string|null  $turnId  Chat turn ULID for linking the run to a turn
      * @param  array<string, mixed>|null  $configOverride  Optional fully resolved config override
      * @param  list<string>|null  $allowedToolNames  Optional task-profile tool allowlist
+     * @param  array<string, mixed>|null  $executionControlsOverride  Per-call execution controls overlay (e.g. session-scoped)
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
     public function runStream(// NOSONAR (parameter count): streaming API mirrors run() plus turn correlation
@@ -230,6 +194,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?string $turnId = null,
         ?array $configOverride = null,
         ?array $allowedToolNames = null,
+        ?array $executionControlsOverride = null,
     ): \Generator {
         $this->sessionContext->set($sessionId);
 
@@ -248,11 +213,9 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 turnId: $turnId,
             ));
 
-            $configs = $configOverride !== null
-                ? [$configOverride]
-                : $this->configResolver->resolveWithDefaultFallback($employeeId);
+            $config = $configOverride ?? $this->configResolver->resolveDefault($employeeId);
 
-            if ($configs === []) {
+            if ($config === null) {
                 $error = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
                 $this->runRecorder->fail($runId, $error);
                 yield ['event' => 'error', 'data' => [
@@ -264,14 +227,40 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return;
             }
 
-            yield from $this->streamWithFallbackConfigs(
+            if ($modelOverride !== null) {
+                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
+            }
+
+            $config = $this->applyExecutionControlsOverlay($config, $executionControlsOverride);
+
+            $credentials = $this->credentialResolver->resolve($config);
+
+            if (isset($credentials['runtime_error'])) {
+                $error = $credentials['runtime_error'];
+                $errorMeta = $this->responseFactory->errorMeta(
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $error,
+                );
+                $this->runRecorder->fail($runId, $error, $errorMeta);
+                yield ['event' => 'error', 'data' => [
+                    'message' => $error->userMessage,
+                    'run_id' => $runId,
+                    'meta' => $errorMeta,
+                ]];
+
+                return;
+            }
+
+            $config['timeout'] = $policy->timeoutSeconds;
+
+            yield from $this->runStreamingToolLoop(
                 $runId,
                 $employeeId,
-                $configs,
+                $config,
+                $credentials,
                 $messages,
                 $systemPrompt,
-                $modelOverride,
-                $policy,
                 $allowedToolNames,
             );
         } finally {
@@ -280,147 +269,22 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
     }
 
     /**
-     * Stream a run across provider configs with pre-commit fallback.
+     * Layer a per-call execution-controls overlay (typically session-scoped) onto
+     * the resolved config's existing controls. Empty/null overlay is a no-op.
      *
-     * @param  list<array<string, mixed>>  $configs
-     * @param  list<Message>  $messages
-     * @param  list<string>|null  $allowedToolNames
-     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     * @param  array{execution_controls: ExecutionControls, ...}  $config
+     * @param  array<string, mixed>|null  $overlay
+     * @return array{execution_controls: ExecutionControls, ...}
      */
-    private function streamWithFallbackConfigs(// NOSONAR (complexity/params): orchestration logic; extracted helpers would change call graph
-        string $runId,
-        int $employeeId,
-        array $configs,
-        array $messages,
-        ?string $systemPrompt,
-        ?string $modelOverride,
-        ExecutionPolicy $policy,
-        ?array $allowedToolNames = null,
-    ): \Generator {
-        $fallbackAttempts = [];
-        /** @var AiRuntimeError|null $lastError */
-        $lastError = null;
-        $lastConfig = null;
-        $fallbackAttemptIndex = 0;
-
-        foreach ($configs as $configIndex => $config) {
-            if ($modelOverride !== null && $configIndex === 0) {
-                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
-            }
-
-            $credentials = $this->credentialResolver->resolve($config);
-
-            if (isset($credentials['runtime_error'])) {
-                $error = $credentials['runtime_error'];
-                $fallbackAttempts[] = $this->buildFallbackAttempt($config, $error);
-                $lastError = $error;
-                $lastConfig = $config;
-                $fallbackAttemptIndex++;
-
-                yield ['event' => 'status', 'data' => [
-                    'phase' => 'recovery_attempted',
-                    'attempt' => $fallbackAttemptIndex,
-                    'reason' => 'provider_fallback: '.$error->userMessage,
-                    'run_id' => $runId,
-                ]];
-
-                continue;
-            }
-
-            $config['timeout'] = $policy->timeoutSeconds;
-
-            $stream = $this->runStreamingToolLoop(
-                $runId,
-                $employeeId,
-                $config,
-                $credentials,
-                $messages,
-                $systemPrompt,
-                $fallbackAttempts,
-                $allowedToolNames,
-            );
-
-            $providerCommitted = false;
-            foreach ($stream as $event) {
-                if ($event['event'] === 'error') {
-                    $streamError = $event['data']['meta']['error_type'] ?? null;
-
-                    if (
-                        $this->shouldFallbackFromErrorType($streamError)
-                        && ! $providerCommitted
-                    ) {
-                        $fallbackAttempts[] = $this->buildFallbackAttemptFromStreamError($config, $streamError);
-                        $lastConfig = $config;
-                        $fallbackAttemptIndex++;
-                        $lastError = $this->lastErrorFromStreamErrorEvent($event, $streamError);
-
-                        yield ['event' => 'status', 'data' => [
-                            'phase' => 'recovery_attempted',
-                            'attempt' => $fallbackAttemptIndex,
-                            'reason' => 'provider_fallback: '.$this->errorTypeToUserMessage($streamError),
-                            'run_id' => $runId,
-                        ]];
-
-                        continue 2;
-                    }
-
-                    yield $event;
-
-                    return;
-                }
-
-                yield $event;
-
-                if ($this->streamEventLocksProvider($event)) {
-                    $providerCommitted = true;
-                    $lastConfig = $config;
-                }
-
-                if ($event['event'] === 'done') {
-                    return;
-                }
-            }
-        }
-
-        $error = $lastError ?? AiRuntimeError::fromType(AiErrorType::ConfigError, self::ALL_PROVIDER_CONFIGURATIONS_FAILED);
-        $this->runRecorder->fail($runId, $error, [
-            'fallback_attempts' => $fallbackAttempts,
-        ]);
-
-        $errorConfig = $lastConfig ?? $configs[0];
-        yield ['event' => 'error', 'data' => [
-            'message' => $error->userMessage,
-            'run_id' => $runId,
-            'meta' => array_merge(
-                $this->responseFactory->errorMeta(
-                    $errorConfig['model'] ?? 'unknown',
-                    (string) ($errorConfig['provider_name'] ?? 'unknown'),
-                    $error,
-                ),
-                ['fallback_attempts' => $fallbackAttempts],
-            ),
-        ]];
-    }
-
-    /**
-     * Build a structured runtime error from a streamed error event payload.
-     *
-     * @param  array{event: string, data?: array<string, mixed>}  $event
-     */
-    private function lastErrorFromStreamErrorEvent(array $event, ?string $streamError): AiRuntimeError
+    private function applyExecutionControlsOverlay(array $config, ?array $overlay): array
     {
-        $errorEventData = $event['data'] ?? [];
-        $streamMeta = $errorEventData['meta'] ?? null;
-
-        if (is_array($streamMeta)) {
-            return $this->runtimeErrorFromAssistantMeta($streamMeta);
+        if ($overlay === null || $overlay === []) {
+            return $config;
         }
 
-        return AiRuntimeError::fromType(
-            AiErrorType::tryFrom((string) $streamError) ?? AiErrorType::UnexpectedError,
-            is_string($errorEventData['message'] ?? null) ? $errorEventData['message'] : '',
-            latencyMs: 0,
-        );
+        $config['execution_controls'] = ExecutionControls::fromConfig($overlay, $config['execution_controls']);
+
+        return $config;
     }
 
     /**
@@ -451,15 +315,14 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
     }
 
     /**
-     * Execute the iterative tool-calling loop after configuration has been resolved.
+     * Execute the iterative tool-calling loop against a single resolved config.
      *
-     * The first LLM call uses retry. Once tool calls start, the provider is
-     * locked and subsequent calls use retry but not provider fallback.
+     * Each LLM call may retry once on transient errors against the same
+     * provider/model. There is no fallback to a different provider/model.
      *
      * @param  array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
      * @param  array{api_key: string, base_url: string}  $credentials
      * @param  list<Message>  $messages
-     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
      * @param  list<string>|null  $allowedToolNames
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
@@ -470,7 +333,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array $credentials,
         array $messages,
         ?string $systemPrompt,
-        array &$fallbackAttempts,
         ?array $allowedToolNames = null,
     ): array {
         // Hook: PreContextBuild — augment system prompt before message assembly
@@ -505,12 +367,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             $result = $this->chatWithRetry($runId, $credentials, $config, $apiMessages, $tools, $retryAttempts);
 
             if (isset($result['runtime_error'])) {
-                // On first iteration, this is a pre-commit failure — record for fallback
-                // Only record if error is retryable (we might actually fallback)
-                if ($iteration === 0 && $result['runtime_error']->retryable) {
-                    $fallbackAttempts[] = $this->buildFallbackAttempt($config, $result['runtime_error']);
-                }
-
                 $errorResult = $this->responseFactory->error(
                     $runId,
                     $config['model'],
@@ -854,7 +710,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
      * @param  array<string, mixed>  $config
      * @param  array{api_key: string, base_url: string}  $credentials
      * @param  list<Message>  $messages
-     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
      * @param  list<string>|null  $allowedToolNames
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
@@ -865,7 +720,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array $credentials,
         array $messages,
         ?string $systemPrompt,
-        array $fallbackAttempts,
         ?array $allowedToolNames = null,
     ): \Generator {
         $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt, $allowedToolNames);
@@ -904,7 +758,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
 
             if (isset($iterResult['runtime_error'])) {
                 $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
-                yield $this->streamRuntimeErrorEvent($runId, $config, $iterResult['runtime_error'], $toolLoopState, $fallbackAttempts);
+                yield $this->streamRuntimeErrorEvent($runId, $config, $iterResult['runtime_error'], $toolLoopState);
 
                 return;
             }
@@ -927,7 +781,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                     $config,
                     $iterResult,
                     $toolLoopState,
-                    $fallbackAttempts,
                 );
 
                 return;
@@ -953,12 +806,9 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
     /**
      * Emit the final response events when the streaming loop completes without tool calls.
      *
-     * Replaces AgenticFinalResponseStreamer for the streaming path.
-     *
      * @param  array<string, mixed>  $config
      * @param  array<string, mixed>  $iterResult
      * @param  array<string, mixed>  $toolLoopState
-     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
     private function emitFinalResponse(
@@ -966,7 +816,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array $config,
         array $iterResult,
         array $toolLoopState,
-        array $fallbackAttempts,
     ): \Generator {
         $fullContent = $iterResult['final_content'] ?? $iterResult['content'] ?? '';
 
@@ -993,7 +842,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                     ),
                     [
                         'retry_attempts' => $toolLoopState['retryAttempts'],
-                        'fallback_attempts' => $fallbackAttempts,
                     ],
                 ),
             ]];
@@ -1016,7 +864,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 'prompt' => null,
                 'completion' => null,
             ],
-            'fallback_attempts' => $fallbackAttempts,
             'retry_attempts' => $toolLoopState['retryAttempts'],
         ];
 
@@ -1042,24 +889,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
     }
 
     /**
-     * Build a structured fallback attempt entry for metadata.
-     *
-     * @param  array<string, mixed>  $config
-     * @return array{provider: string, model: string, error: string, error_type: string, latency_ms: int, diagnostic: string|null}
-     */
-    private function buildFallbackAttempt(array $config, AiRuntimeError $error): array
-    {
-        return [
-            'provider' => $config['provider_name'] ?? 'unknown',
-            'model' => $config['model'] ?? 'unknown',
-            'error' => $error->userMessage,
-            'error_type' => $error->errorType->value,
-            'latency_ms' => $error->latencyMs,
-            'diagnostic' => $error->diagnostic !== '' ? $error->diagnostic : null,
-        ];
-    }
-
-    /**
      * Rebuild a structured runtime error from assistant response metadata.
      *
      * Used when recording {@see RunRecorder::fail()} so ledger rows match the
@@ -1080,76 +909,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             null,
             (int) ($meta['latency_ms'] ?? 0),
             null,
-        );
-    }
-
-    /**
-     * Determine whether the runtime should fall back to the next model
-     * based on the error type string.
-     */
-    private function shouldFallbackFromErrorType(?string $errorTypeValue): bool
-    {
-        if ($errorTypeValue === null) {
-            return false;
-        }
-
-        $errorType = AiErrorType::tryFrom($errorTypeValue);
-
-        return $errorType?->retryable() === true;
-    }
-
-    /**
-     * Build a fallback attempt entry from a stream error type string.
-     *
-     * @param  array<string, mixed>  $config
-     * @return array{provider: string, model: string, error: string, error_type: string, latency_ms: int, diagnostic: string|null}
-     */
-    private function buildFallbackAttemptFromStreamError(array $config, ?string $errorTypeValue): array
-    {
-        $errorType = AiErrorType::tryFrom($errorTypeValue ?? 'unexpected_error') ?? AiErrorType::UnexpectedError;
-
-        return [
-            'provider' => $config['provider_name'] ?? 'unknown',
-            'model' => $config['model'] ?? 'unknown',
-            'error' => $errorType->userMessage(),
-            'error_type' => $errorType->value,
-            'latency_ms' => 0,
-            'diagnostic' => null,
-        ];
-    }
-
-    /**
-     * Convert an error type string to a user-facing message.
-     */
-    private function errorTypeToUserMessage(?string $errorTypeValue): string
-    {
-        $errorType = AiErrorType::tryFrom($errorTypeValue ?? 'unexpected_error') ?? AiErrorType::UnexpectedError;
-
-        return $errorType->userMessage();
-    }
-
-    /**
-     * Determine whether a streamed event means the provider has committed.
-     *
-     * Once committed, stream-mode provider fallback is no longer valid because
-     * the turn transcript has already observed output from that provider.
-     *
-     * @param  array{event: string, data: array<string, mixed>}  $event
-     */
-    private function streamEventLocksProvider(array $event): bool
-    {
-        if ($event['event'] === 'delta' || $event['event'] === 'done') {
-            return true;
-        }
-
-        if ($event['event'] !== 'status') {
-            return false;
-        }
-
-        return ! in_array(
-            (string) ($event['data']['phase'] ?? ''),
-            ['hook_action', TurnPhase::AwaitingLlm->value],
-            true,
         );
     }
 
@@ -1209,7 +968,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
      *     retryAttempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
      *     hookMetadata: array<string, mixed>
      * }  $toolLoopState
-     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $fallbackAttempts
      * @return array{event: string, data: array<string, mixed>}
      */
     private function streamRuntimeErrorEvent(
@@ -1217,7 +975,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array $config,
         AiRuntimeError $runtimeError,
         array $toolLoopState,
-        array $fallbackAttempts,
     ): array {
         return ['event' => 'error', 'data' => [
             'message' => $runtimeError->userMessage,
@@ -1230,7 +987,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 ),
                 [
                     'retry_attempts' => $toolLoopState['retryAttempts'],
-                    'fallback_attempts' => $fallbackAttempts,
                     'hooks' => $toolLoopState['hookMetadata'],
                 ],
             ),

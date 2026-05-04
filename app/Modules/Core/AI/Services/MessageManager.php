@@ -479,10 +479,6 @@ class MessageManager
             $meta['retry_attempts'] = $run->retry_attempts;
         }
 
-        if ($run->fallback_attempts !== null) {
-            $meta['fallback_attempts'] = $run->fallback_attempts;
-        }
-
         if ($run->tool_actions !== null) {
             $meta['tool_actions'] = $run->tool_actions;
         }
@@ -521,10 +517,6 @@ class MessageManager
 
         if (is_int($meta['latency_ms'] ?? null)) {
             $persisted['latency_ms'] = $meta['latency_ms'];
-        }
-
-        if (is_array($meta['fallback_attempts'] ?? null) && $meta['fallback_attempts'] !== []) {
-            $persisted['fallback_attempts'] = $meta['fallback_attempts'];
         }
 
         return $persisted;

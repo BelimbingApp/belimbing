@@ -89,7 +89,7 @@
                         :label="__('Encryption')"
                         :value="$mode"
                         field="backup.encryption.mode"
-                        :help="__('Mode applied to every new artifact. Built-in: <code>none</code> (plaintext) and <code>passphrase</code> (Argon2id&nbsp;+&nbsp;XChaCha20-Poly1305). Extensions register additional modes via <code>EncryptionModeRegistry::register()</code> in their <code>ServiceProvider::boot()</code>.')"
+                        :help="__('Mode applied to every new artifact. Built-in: <code>none</code> (plaintext) and <code>app-key</code> (HKDF-SHA-256&nbsp;+&nbsp;XChaCha20-Poly1305 keyed from APP_KEY). Extensions register additional modes via <code>EncryptionModeRegistry::register()</code> in their <code>ServiceProvider::boot()</code>.')"
                     >
                         <x-slot name="read">
                             <span class="text-sm text-ink font-mono">{{ $mode }}</span>

@@ -434,10 +434,6 @@ class ChatRunPersister
             $meta['latency_ms'] = $run->latency_ms;
         }
 
-        if (is_array($run->fallback_attempts) && $run->fallback_attempts !== []) {
-            $meta['fallback_attempts'] = $run->fallback_attempts;
-        }
-
         return $meta;
     }
 }

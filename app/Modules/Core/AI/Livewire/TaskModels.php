@@ -138,9 +138,6 @@ class TaskModels extends Component implements ProvidesLaraPageContext
         $providers = $laraActivated ? $this->availableProviders() : collect();
         $modelsByTask = [];
         $executionControlSchemasByTask = [];
-        $currentPrimary = $laraActivated
-            ? app(ConfigResolver::class)->resolvePrimaryWithDefaultFallback(Employee::LARA_ID)
-            : null;
 
         foreach ($registry->all() as $task) {
             $providerId = $this->taskProviderIds[$task->key] ?? null;
@@ -148,7 +145,7 @@ class TaskModels extends Component implements ProvidesLaraPageContext
                 ? $this->modelsForProvider($providerId)
                 : collect();
             $executionControlSchemasByTask[$task->key] = $laraActivated
-                ? $this->resolveTaskExecutionControlSchema($task->key, $currentPrimary)
+                ? $this->resolveTaskExecutionControlSchema($task->key)
                 : null;
         }
 
@@ -158,7 +155,6 @@ class TaskModels extends Component implements ProvidesLaraPageContext
             'providers' => $providers,
             'modelsByTask' => $modelsByTask,
             'executionControlSchemasByTask' => $executionControlSchemasByTask,
-            'currentPrimary' => $currentPrimary,
         ]);
     }
 
@@ -195,13 +191,6 @@ class TaskModels extends Component implements ProvidesLaraPageContext
             'mode' => $mode,
             'execution_controls' => $this->normalizeExecutionControlsConfig($this->taskExecutionControls[$taskKey] ?? []),
         ];
-
-        if ($mode === TaskModelSelectionMode::Primary->value) {
-            $resolver->writeTaskConfig(Employee::LARA_ID, $taskKey, $payload);
-            $this->dispatch("task-{$taskKey}-saved", message: __('Task now uses Lara\'s primary model.'));
-
-            return;
-        }
 
         $providerId = $this->taskProviderIds[$taskKey] ?? null;
         $modelId = $this->taskModelIds[$taskKey] ?? null;
@@ -329,26 +318,11 @@ class TaskModels extends Component implements ProvidesLaraPageContext
     }
 
     /**
-     * @param  array{provider_name: ?string, model: string, api_type: AiApiType}|null  $currentPrimary
      * @return array<string, mixed>|null
      */
-    private function resolveTaskExecutionControlSchema(string $taskKey, ?array $currentPrimary): ?array
+    private function resolveTaskExecutionControlSchema(string $taskKey): ?array
     {
         $controls = $this->taskExecutionControls[$taskKey] ?? $this->hydrateExecutionControlsConfig(null);
-        $mode = $this->taskModes[$taskKey] ?? TaskModelSelectionMode::Recommended->value;
-
-        if ($mode === TaskModelSelectionMode::Primary->value) {
-            if ($currentPrimary === null) {
-                return null;
-            }
-
-            return $this->executionControlSchema(
-                providerName: $currentPrimary['provider_name'],
-                model: $currentPrimary['model'],
-                apiType: $currentPrimary['api_type'],
-                config: $controls,
-            );
-        }
 
         $providerId = $this->taskProviderIds[$taskKey] ?? null;
         $modelId = $this->taskModelIds[$taskKey] ?? null;

@@ -10,36 +10,152 @@
     <div class="space-y-section-gap">
         <x-ui.page-header
             :title="$laraActivated ? __('Lara') : __('Set Up Lara')"
-            :subtitle="$laraActivated ? __('Manage Lara\'s AI configuration') : __('Activate Belimbing\'s built-in AI assistant')"
+            :subtitle="__('Inspect and override Lara\'s harness — system prompt, operator context, and tool notes. Model selection lives on the providers page.')"
         />
 
-        @if ($laraActivated)
+        @if (! $licenseeExists)
+            <x-ui.alert variant="warning">
+                {{ __('The Licensee company must be set up before Lara can be provisioned.') }}
+                <a href="{{ route('admin.setup.licensee') }}" wire:navigate class="text-accent hover:underline">
+                    {{ __('Set up Licensee') }}
+                </a>
+            </x-ui.alert>
+        @elseif (! $laraExists)
             <x-ui.card>
-                <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Current Configuration') }}</h3>
+                <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Provision Lara') }}</h3>
+                <p class="text-xs text-muted mb-4">{{ __('Lara\'s employee record does not exist yet. Provision her to create the system Agent record for the Licensee company.') }}</p>
+                <form wire:submit="provisionLara">
+                    <x-ui.button type="submit" variant="primary">{{ __('Provision Lara') }}</x-ui.button>
+                </form>
+            </x-ui.card>
+        @else
+            {{-- Activation status --}}
+            <x-ui.card>
+                <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-3">{{ __('Status') }}</h3>
 
-                <div class="flex items-baseline gap-3">
-                    <span class="text-sm text-muted">{{ __('Primary') }}</span>
-                    <span class="text-sm font-medium text-ink font-mono">{{ ($activeProviderName ?? '—') . '/' . ($activeModelId ?? '—') }}</span>
-                    @if ($isUsingDefault)
-                        <x-ui.badge variant="info">{{ __('Default') }}</x-ui.badge>
-                    @endif
-                </div>
-
-                @if ($activeBackupModelId !== null)
-                    <div class="flex items-baseline gap-3 mt-2">
-                        <span class="text-sm text-muted">{{ __('Backup') }}</span>
-                        <span class="text-sm font-medium text-ink font-mono">{{ $activeBackupProviderName ?? '—' }}/{{ $activeBackupModelId }}</span>
+                @if ($laraActivated)
+                    <div class="flex items-baseline gap-3">
+                        <x-ui.badge variant="success">{{ __('Active') }}</x-ui.badge>
+                        <span class="text-sm text-muted">{{ __('Default model:') }}</span>
+                        <span class="text-sm font-medium text-ink font-mono">
+                            {{ ($defaultConfig['provider_name'] ?? '—') . '/' . ($defaultConfig['model'] ?? '—') }}
+                        </span>
                     </div>
+                    <p class="text-xs text-muted mt-2">
+                        {{ __('Set on') }}
+                        <a href="{{ route('admin.ai.providers') }}" wire:navigate class="text-accent hover:underline">{{ __('AI Providers') }}</a>
+                        {{ __('— Lara uses whichever provider/model wins by priority.') }}
+                    </p>
+                @else
+                    <div class="flex items-baseline gap-3">
+                        <x-ui.badge variant="warning">{{ __('Inactive') }}</x-ui.badge>
+                        <span class="text-sm text-muted">{{ __('No active provider in the priority chain.') }}</span>
+                    </div>
+                    <p class="text-xs text-muted mt-2">
+                        {{ __('Connect at least one provider with an active model on') }}
+                        <a href="{{ route('admin.ai.providers') }}" wire:navigate class="text-accent hover:underline">{{ __('AI Providers') }}</a>.
+                    </p>
                 @endif
+            </x-ui.card>
 
-                @if ($isUsingDefault)
-                    <p class="text-xs text-muted mt-3">{{ __('Lara is using the company\'s default provider and model. Set a specific model below to override.') }}</p>
-                @endif
+            {{-- Harness inspector --}}
+            <x-ui.card>
+                <div class="flex items-baseline justify-between mb-3">
+                    <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Harness') }}</h3>
+                    <span class="text-[10px] text-muted font-mono">{{ $workspacePath }}</span>
+                </div>
+                <p class="text-xs text-muted mb-4">{{ __('Each slot is resolved from the workspace first, then the framework default. Override to copy the default into the workspace and edit it; revert to delete the workspace copy and fall back to the framework default.') }}</p>
 
-                <div class="mt-4 border-t border-border-default pt-4">
+                <div class="overflow-x-auto -mx-card-inner px-card-inner">
+                    <table class="min-w-full divide-y divide-border-default text-sm">
+                        <thead class="bg-surface-subtle/80">
+                            <tr>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Slot') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('File') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Source') }}</th>
+                                <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Size') }}</th>
+                                <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Last Edit') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-surface-card divide-y divide-border-default">
+                            @foreach ($slots as $slot)
+                                <tr wire:key="slot-{{ $slot['slot'] }}" class="hover:bg-surface-subtle/50 transition-colors">
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">{{ $slot['label'] }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-xs text-muted font-mono">{{ $slot['filename'] }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
+                                        @if ($slot['source'] === 'workspace')
+                                            <x-ui.badge variant="info">{{ __('Workspace override') }}</x-ui.badge>
+                                        @elseif ($slot['source'] === 'framework')
+                                            <x-ui.badge variant="default">{{ __('Framework default') }}</x-ui.badge>
+                                        @else
+                                            <x-ui.badge variant="warning">{{ __('Missing') }}</x-ui.badge>
+                                        @endif
+                                    </td>
+                                    <td class="hidden md:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-xs text-muted tabular-nums text-right">
+                                        {{ $slot['byteSize'] !== null ? number_format($slot['byteSize']).' B' : '—' }}
+                                    </td>
+                                    <td class="hidden md:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-xs text-muted">
+                                        @if (isset($slot['audit']) && is_array($slot['audit']))
+                                            @php
+                                                $editedAt = $slot['audit']['edited_at'] ?? null;
+                                                $editedAtTs = is_string($editedAt) ? strtotime($editedAt) : false;
+                                                $relative = $editedAtTs !== false ? \Illuminate\Support\Carbon::createFromTimestamp($editedAtTs)->diffForHumans() : null;
+                                            @endphp
+                                            <span class="font-medium text-ink">{{ $slot['audit']['user_name'] ?? __('unknown') }}</span>
+                                            @if ($relative !== null)
+                                                <span class="text-muted">· {{ $relative }}</span>
+                                            @endif
+                                        @else
+                                            —
+                                        @endif
+                                    </td>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
+                                        <x-ui.icon-action-group>
+                                            @if ($slot['isOverridden'])
+                                                <x-ui.icon-action
+                                                    icon="heroicon-o-pencil-square"
+                                                    :label="__('Edit workspace override')"
+                                                    :title="__('Edit')"
+                                                    wire:click="editSlot('{{ $slot['slot'] }}')"
+                                                />
+                                                <x-ui.icon-action
+                                                    icon="heroicon-o-arrow-uturn-left"
+                                                    :label="__('Revert to framework default')"
+                                                    :title="__('Revert')"
+                                                    wire:click="revertSlot('{{ $slot['slot'] }}')"
+                                                />
+                                            @elseif ($slot['exists'])
+                                                <x-ui.icon-action
+                                                    icon="heroicon-o-eye"
+                                                    :label="__('View framework default')"
+                                                    :title="__('View')"
+                                                    wire:click="editSlot('{{ $slot['slot'] }}')"
+                                                />
+                                                <x-ui.icon-action
+                                                    icon="heroicon-o-document-duplicate"
+                                                    :label="__('Override with a workspace copy')"
+                                                    :title="__('Override')"
+                                                    wire:click="overrideSlot('{{ $slot['slot'] }}')"
+                                                />
+                                            @else
+                                                <span class="text-xs text-muted">{{ __('No content') }}</span>
+                                            @endif
+                                        </x-ui.icon-action-group>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </x-ui.card>
+
+            {{-- Task models cross-link --}}
+            @if ($laraActivated)
+                <x-ui.card>
                     <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div class="space-y-2">
-                            <h4 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Task Models') }}</h4>
+                            <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Task Models') }}</h3>
                             @if ($taskSummaries === [])
                                 <p class="text-xs text-muted">{{ __('No task models have been configured yet.') }}</p>
                             @else
@@ -51,230 +167,80 @@
                                 @endforeach
                             @endif
                         </div>
-
                         <x-ui.button variant="ghost" href="{{ route('admin.ai.task-models') }}" wire:navigate>
                             {{ __('Manage Task Models') }}
-                        </x-ui.button>
-                    </div>
-                </div>
-            </x-ui.card>
-
-            <x-ui.card>
-                @php
-                    $selectedPrimaryProvider = $providers->firstWhere('id', $selectedProviderId);
-                    $selectedPrimaryLabel = $selectedPrimaryProvider !== null && $selectedModelId !== null
-                        ? ($selectedPrimaryProvider->name ?? '—') . '/' . $selectedModelId
-                        : null;
-                @endphp
-                <div class="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Primary Model') }}</h3>
-                    @if ($selectedPrimaryLabel !== null)
-                        <p class="text-sm font-medium text-ink font-mono">{{ $selectedPrimaryLabel }}</p>
-                    @endif
-                </div>
-                <p class="text-xs text-muted mb-1">{{ __('Select a provider and model for Lara. Frontier models (Claude Opus, GPT-5 class) are recommended for orchestration and reasoning.') }}</p>
-                @php
-                    $primaryTabs = [['id' => 'model', 'label' => __('Model')]];
-                    if (is_array($primaryExecutionControlSchema)) {
-                        $primaryTabs[] = ['id' => 'controls', 'label' => __('Execution Controls')];
-                    }
-                @endphp
-
-                <x-ui.tabs
-                    :tabs="$primaryTabs"
-                    default="model"
-                    size="sm"
-                    persistence="query"
-                    query-key="lara-primary-tab"
-                    class="mt-4"
-                >
-                    <x-ui.tab id="model" class="space-y-4">
-                        @include('livewire.admin.setup.partials.llm-provider-model-picker', [
-                            'context' => 'lara-change',
-                            'providers' => $providers,
-                            'models' => $models,
-                            'selectedProviderId' => $selectedProviderId,
-                            'providerBinding' => 'selectedProviderId',
-                            'modelBinding' => 'selectedModelId',
-                        ])
-
-                        @include('livewire.admin.setup.partials.provider-diagnostics')
-                    </x-ui.tab>
-
-                    @if (is_array($primaryExecutionControlSchema))
-                        <x-ui.tab id="controls">
-                            @include('livewire.admin.ai.partials.execution-controls', [
-                                'schema' => $primaryExecutionControlSchema,
-                                'statePath' => 'primaryExecutionControls',
-                                'subtitle' => __('Editing controls for :provider / :model. Provider-enforced wire values are shown as facts without overwriting your saved intent.', [
-                                    'provider' => $primaryExecutionControlSchema['provider_name'] ?? '—',
-                                    'model' => $primaryExecutionControlSchema['model'] ?? '—',
-                                ]),
-                            ])
-                        </x-ui.tab>
-                    @endif
-                </x-ui.tabs>
-
-                <x-action-message on="primary-saved" class="text-xs text-status-success" />
-            </x-ui.card>
-
-            <x-ui.card>
-                <div class="flex items-center justify-between mb-2">
-                    <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Backup Model') }} <span class="normal-case tracking-normal font-normal">{{ __('(Optional)') }}</span></h3>
-                    @if ($backupProviderId !== null)
-                        <x-ui.button variant="ghost" size="sm" wire:click="removeBackup" class="text-red-500 hover:text-red-600">
-                            <x-icon name="heroicon-o-x-mark" class="w-3.5 h-3.5" />
-                            {{ __('Clear backup') }}
-                        </x-ui.button>
-                    @endif
-                </div>
-                <p class="text-xs text-muted mb-1">{{ __('If the primary model fails, the system will automatically retry with this model.') }}</p>
-                @php
-                    $backupTabs = [['id' => 'model', 'label' => __('Model')]];
-                    if (is_array($backupExecutionControlSchema)) {
-                        $backupTabs[] = ['id' => 'controls', 'label' => __('Execution Controls')];
-                    }
-                @endphp
-
-                <x-ui.tabs
-                    :tabs="$backupTabs"
-                    default="model"
-                    size="sm"
-                    persistence="query"
-                    query-key="lara-backup-tab"
-                    class="mt-4"
-                >
-                    <x-ui.tab id="model" class="space-y-4">
-                        @include('livewire.admin.setup.partials.llm-provider-model-picker', [
-                            'context' => 'lara-backup',
-                            'providers' => $providers,
-                            'models' => $backupModels,
-                            'selectedProviderId' => $backupProviderId,
-                            'providerBinding' => 'backupProviderId',
-                            'modelBinding' => 'backupModelId',
-                        ])
-
-                        @include('livewire.admin.setup.partials.provider-diagnostics', [
-                            'testAction' => 'testBackupProvider',
-                            'testProviderId' => $backupProviderId,
-                            'testModelId' => $backupModelId,
-                            'testResult' => $this->backupProviderTestResult,
-                        ])
-                    </x-ui.tab>
-
-                    @if (is_array($backupExecutionControlSchema))
-                        <x-ui.tab id="controls">
-                            @include('livewire.admin.ai.partials.execution-controls', [
-                                'schema' => $backupExecutionControlSchema,
-                                'statePath' => 'backupExecutionControls',
-                                'subtitle' => __('Editing controls for :provider / :model. These controls apply only when Lara falls back to the backup model.', [
-                                    'provider' => $backupExecutionControlSchema['provider_name'] ?? '—',
-                                    'model' => $backupExecutionControlSchema['model'] ?? '—',
-                                ]),
-                            ])
-                        </x-ui.tab>
-                    @endif
-                </x-ui.tabs>
-
-                <x-action-message on="backup-saved" class="text-xs text-status-success" />
-            </x-ui.card>
-        @elseif (! $licenseeExists)
-            <x-ui.alert variant="info">
-                {{ __('Lara is Belimbing\'s built-in AI assistant — your guide to setup, configuration, and daily operations. She needs an AI provider to function.') }}
-            </x-ui.alert>
-
-            <x-ui.alert variant="warning">
-                {{ __('The Licensee company must be set up before Lara can be provisioned.') }}
-                <a href="{{ route('admin.setup.licensee') }}" wire:navigate class="text-accent hover:underline">
-                    {{ __('Set up Licensee') }}
-                </a>
-            </x-ui.alert>
-        @elseif (! $laraExists)
-            <x-ui.alert variant="info">
-                {{ __('Lara is Belimbing\'s built-in AI assistant — your guide to setup, configuration, and daily operations. She needs an AI provider to function.') }}
-            </x-ui.alert>
-
-            <x-ui.card>
-                <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Provision Lara') }}</h3>
-                <p class="text-xs text-muted mb-4">{{ __('Lara\'s employee record does not exist yet. Provision her to create the system Agent record for the Licensee company.') }}</p>
-
-                <form wire:submit="provisionLara">
-                    <x-ui.button type="submit" variant="primary">
-                        {{ __('Provision Lara') }}
-                    </x-ui.button>
-                </form>
-            </x-ui.card>
-        @elseif (! $laraActivated)
-            <x-ui.alert variant="info">
-                {{ __('Lara is Belimbing\'s built-in AI assistant — your guide to setup, configuration, and daily operations. She needs an AI provider to function.') }}
-            </x-ui.alert>
-
-            @if ($providers->isEmpty())
-                <x-ui.card>
-                    <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Connect a Provider') }}</h3>
-                    <p class="text-xs text-muted mb-4">{{ __('No AI providers are configured yet. Lara needs a provider to process AI requests. She is activated when a provider is connected.') }}</p>
-
-                    <x-ui.button variant="primary" href="{{ route('admin.ai.providers') }}" wire:navigate>
-                        <x-icon name="heroicon-o-magnifying-glass" class="w-4 h-4" />
-                        {{ __('Browse AI Providers') }}
-                    </x-ui.button>
-                </x-ui.card>
-            @else
-                <x-ui.card>
-                    <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Activate Lara') }}</h3>
-                    <p class="text-xs text-muted mb-1">{{ __('Select an AI provider and model for Lara. Frontier models (Claude Opus, GPT-5 class) are recommended for the best experience with orchestration and reasoning.') }}</p>
-                    @php
-                        $activationTabs = [['id' => 'model', 'label' => __('Model')]];
-                        if (is_array($primaryExecutionControlSchema)) {
-                            $activationTabs[] = ['id' => 'controls', 'label' => __('Execution Controls')];
-                        }
-                    @endphp
-
-                    <x-ui.tabs
-                        :tabs="$activationTabs"
-                        default="model"
-                        size="sm"
-                        persistence="query"
-                        query-key="lara-activation-tab"
-                        class="mt-4"
-                    >
-                        <x-ui.tab id="model" class="space-y-4">
-                            @include('livewire.admin.setup.partials.llm-provider-model-picker', [
-                                'context' => 'lara-activate',
-                                'providers' => $providers,
-                                'models' => $models,
-                                'selectedProviderId' => $selectedProviderId,
-                                'providerBinding' => 'selectedProviderId',
-                                'modelBinding' => 'selectedModelId',
-                            ])
-
-                            @include('livewire.admin.setup.partials.provider-diagnostics')
-                        </x-ui.tab>
-
-                        @if (is_array($primaryExecutionControlSchema))
-                            <x-ui.tab id="controls">
-                                @include('livewire.admin.ai.partials.execution-controls', [
-                                    'schema' => $primaryExecutionControlSchema,
-                                    'statePath' => 'primaryExecutionControls',
-                                    'subtitle' => __('Editing controls for :provider / :model. These settings will be stored before Lara is activated.', [
-                                        'provider' => $primaryExecutionControlSchema['provider_name'] ?? '—',
-                                        'model' => $primaryExecutionControlSchema['model'] ?? '—',
-                                    ]),
-                                ])
-                            </x-ui.tab>
-                        @endif
-                    </x-ui.tabs>
-
-                    <div class="flex items-center gap-4">
-                        <x-ui.button wire:click="activateLara" variant="primary">
-                            {{ __('Activate Lara') }}
-                        </x-ui.button>
-                        <x-ui.button variant="ghost" href="{{ route('admin.ai.providers') }}" wire:navigate>
-                            {{ __('Manage Providers') }}
                         </x-ui.button>
                     </div>
                 </x-ui.card>
             @endif
         @endif
     </div>
+
+    {{-- Slot editor modal --}}
+    <x-ui.modal wire:model="showEditorModal" class="max-w-3xl">
+        <div class="p-card-inner">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="text-lg font-medium tracking-tight text-ink">{{ __('Edit Harness Slot') }}</h3>
+                    @if ($editingSlot !== null)
+                        <p class="text-xs text-muted mt-0.5 font-mono">{{ $editingSlot }}.md</p>
+                    @endif
+                </div>
+                <button wire:click="closeSlotEditor" type="button" class="text-muted hover:text-ink" aria-label="{{ __('Close') }}">
+                    <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
+                </button>
+            </div>
+
+            @if ($editingSlot !== null)
+                @php
+                    $editorWarnings = $this->editorWarnings;
+                    $assembledPreview = null;
+                @endphp
+
+                <x-ui.tabs
+                    :tabs="[
+                        ['id' => 'edit', 'label' => __('Edit')],
+                        ['id' => 'preview', 'label' => __('Preview Assembled Prompt')],
+                    ]"
+                    default="edit"
+                    size="sm"
+                    persistence="none"
+                >
+                    <x-ui.tab id="edit" class="space-y-3">
+                        <textarea
+                            wire:model.live.debounce.300ms="editingContent"
+                            rows="20"
+                            class="w-full rounded-2xl border border-border-input bg-surface-card text-ink font-mono text-xs px-input-x py-input-y focus:ring-2 focus:ring-accent focus:ring-offset-2"
+                            spellcheck="false"
+                        ></textarea>
+
+                        @if ($editorWarnings !== [])
+                            <div class="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 space-y-1">
+                                <p class="text-[11px] uppercase tracking-wider font-semibold text-amber-700 dark:text-amber-400">{{ __('Lint warnings') }}</p>
+                                @foreach ($editorWarnings as $warning)
+                                    <p class="text-xs text-amber-700 dark:text-amber-400">• {{ $warning }}</p>
+                                @endforeach
+                                <p class="text-[11px] text-amber-700/80 dark:text-amber-400/80 pt-1">
+                                    {{ __('Warnings do not block save — fix or proceed at your discretion.') }}
+                                </p>
+                            </div>
+                        @endif
+
+                        <p class="text-xs text-muted">{{ __('Saving writes to the workspace path. Revert from the slot row to delete the workspace copy and fall back to the framework default.') }}</p>
+                    </x-ui.tab>
+
+                    <x-ui.tab id="preview" class="space-y-2">
+                        @php($assembledPreview = $this->assembledPreview)
+                        <p class="text-xs text-muted">{{ __('Static workspace assembly: prompt-content slots concatenated in load order. Runtime context (page, capabilities, JSON state) is injected separately at request time and is not shown here.') }}</p>
+                        <div class="max-h-[28rem] overflow-y-auto rounded-2xl border border-border-default bg-surface-subtle/30 px-3 py-2 text-xs font-mono text-ink whitespace-pre-wrap">{{ $assembledPreview !== '' ? $assembledPreview : __('(empty)') }}</div>
+                    </x-ui.tab>
+                </x-ui.tabs>
+            @endif
+
+            <div class="mt-4 flex justify-end gap-2">
+                <x-ui.button variant="ghost" wire:click="closeSlotEditor">{{ __('Cancel') }}</x-ui.button>
+                <x-ui.button variant="primary" wire:click="saveSlot">{{ __('Save') }}</x-ui.button>
+            </div>
+        </div>
+    </x-ui.modal>
 </div>

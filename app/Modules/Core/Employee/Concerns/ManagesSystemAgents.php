@@ -41,15 +41,7 @@ trait ManagesSystemAgents
             return null;
         }
 
-        $resolver = app(ConfigResolver::class);
-
-        if ($resolver->resolve(self::LARA_ID) !== []) {
-            return true;
-        }
-
-        return $resolver->resolveDefault(
-            Company::LICENSEE_ID,
-        ) !== null;
+        return app(ConfigResolver::class)->resolveDefault(self::LARA_ID) !== null;
     }
 
     /**

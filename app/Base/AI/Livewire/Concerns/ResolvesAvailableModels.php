@@ -22,7 +22,7 @@ trait ResolvesAvailableModels
     /**
      * Composite separator for provider/model IDs.
      */
-    private const MODEL_ID_SEPARATOR = ':::';
+    public const MODEL_ID_SEPARATOR = ':::';
 
     /**
      * Load all active models across active providers for a company, grouped by provider.

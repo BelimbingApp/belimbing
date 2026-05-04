@@ -23,7 +23,7 @@ const TASK_MODEL_RECO_FAST_REASON = 'Fast for short labels.';
 function makeTaskRecommendationService(string $responseContent): TaskModelRecommendationService
 {
     $configResolver = Mockery::mock(ConfigResolver::class);
-    $configResolver->shouldReceive('resolvePrimaryWithDefaultFallback')
+    $configResolver->shouldReceive('resolveDefault')
         ->once()
         ->andReturn([
             'api_key' => 'primary-key',
@@ -73,7 +73,7 @@ function makeTaskRecommendationService(string $responseContent): TaskModelRecomm
 function makeTaskRecommendationServiceWithRuntimeError(AiRuntimeError $runtimeError): TaskModelRecommendationService
 {
     $configResolver = Mockery::mock(ConfigResolver::class);
-    $configResolver->shouldReceive('resolvePrimaryWithDefaultFallback')
+    $configResolver->shouldReceive('resolveDefault')
         ->once()
         ->andReturn([
             'api_key' => 'primary-key',

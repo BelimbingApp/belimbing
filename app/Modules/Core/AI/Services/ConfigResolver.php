@@ -10,92 +10,35 @@ use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Services\ModelCatalogService;
 use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
-use App\Modules\Core\AI\Enums\TaskModelSelectionMode;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\Employee\Models\Employee;
 
 /**
- * Resolves LLM configuration for a Agent.
+ * Resolves LLM configuration for an Agent.
  *
- * Cascade: agent workspace config.json → company provider credentials → runtime defaults.
- * Supports multiple models with ordered fallback (first model is primary, rest are fallbacks).
+ * Returns a single resolved config from the agent's company default provider+model
+ * (priority-ordered). Runtime fallback across providers is intentionally not
+ * supported — failures surface honestly. Per-task overrides cascade through
+ * {@see resolveTask()}; per-session overrides are layered by the runtime caller.
  */
 class ConfigResolver
 {
     /**
-     * Resolve an ordered list of LLM configurations for a Agent.
+     * Resolve the default LLM configuration for an agent.
      *
-     * Returns one or more configs in priority order. The runtime should try
-     * the first config and fall back to subsequent ones on transient failures
-     * (connection error, HTTP 429, 5xx).
-     *
-     * Returns an empty array if no LLM configuration is available.
-     *
-     * @param  int  $employeeId  Agent employee ID
-     * @return list<array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}>
-     */
-    public function resolve(int $employeeId): array
-    {
-        $workspaceConfig = $this->readWorkspaceConfig($employeeId);
-
-        if ($workspaceConfig === null) {
-            return [];
-        }
-
-        $modelConfigs = $workspaceConfig['llm']['models'] ?? [];
-
-        if ($modelConfigs === []) {
-            return [];
-        }
-
-        $employee = Employee::query()->find($employeeId);
-        $companyId = $employee?->company_id ? (int) $employee->company_id : null;
-
-        $runtimeDefaults = $this->runtimeDefaults();
-        $resolved = [];
-
-        foreach ($modelConfigs as $modelConfig) {
-            $resolved[] = $this->resolveModelConfig($modelConfig, $companyId, $runtimeDefaults);
-        }
-
-        return $resolved;
-    }
-
-    /**
-     * Resolve LLM configurations for a Agent, falling back to the company's default.
-     *
-     * @param  int  $employeeId  Agent employee ID
-     * @return list<array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}>
-     */
-    public function resolveWithDefaultFallback(int $employeeId): array
-    {
-        $configs = $this->resolve($employeeId);
-
-        if ($configs !== []) {
-            return $configs;
-        }
-
-        $companyId = $this->findCompanyIdForFallback($employeeId);
-
-        if ($companyId === null) {
-            return [];
-        }
-
-        $default = $this->resolveDefault($companyId);
-
-        return $default === null ? [] : [$default];
-    }
-
-    /**
-     * Resolve the highest-priority config for a Agent, with company-default fallback.
+     * Looks up the agent's company and resolves its priority-winning
+     * provider/model. Returns null when no configuration is available.
      *
      * @param  int  $employeeId  Agent employee ID
      * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}|null
      */
-    public function resolvePrimaryWithDefaultFallback(int $employeeId): ?array
+    public function resolveDefault(int $employeeId): ?array
     {
-        return $this->resolveWithDefaultFallback($employeeId)[0] ?? null;
+        $employee = Employee::query()->find($employeeId);
+        $companyId = $employee?->company_id ? (int) $employee->company_id : null;
+
+        return $companyId === null ? null : $this->resolveCompanyDefault($companyId);
     }
 
     /**
@@ -142,35 +85,31 @@ class ConfigResolver
     }
 
     /**
-     * Resolve the configured model for a Lara task, falling back to Lara's primary model.
+     * Resolve the configured model for a Lara task, falling back to the agent's default model.
+     *
+     * Tasks have two modes: `recommended` (saved provider/model from a recommendation
+     * pass) and `manual` (operator-picked provider/model). When the saved selection is
+     * missing or no longer points to an active connected model, the resolver falls
+     * through to {@see resolveDefault()} so the task still runs.
      *
      * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, api_type: AiApiType}|null
      */
-    public function resolveTaskWithPrimaryFallback(int $employeeId, string $taskKey): ?array
+    public function resolveTask(int $employeeId, string $taskKey): ?array
     {
         $taskConfig = $this->readTaskConfig($employeeId, $taskKey);
 
         if (! is_array($taskConfig)) {
-            return $this->resolvePrimaryWithDefaultFallback($employeeId);
+            return $this->resolveDefault($employeeId);
         }
 
         $taskExecutionControls = is_array($taskConfig['execution_controls'] ?? null) ? $taskConfig['execution_controls'] : [];
-
-        $mode = $taskConfig['mode'] ?? TaskModelSelectionMode::Recommended->value;
-
-        if ($mode === TaskModelSelectionMode::Primary->value) {
-            return $this->applyExecutionControlsOverride(
-                $this->resolvePrimaryWithDefaultFallback($employeeId),
-                $taskExecutionControls,
-            );
-        }
 
         $providerName = is_string($taskConfig['provider'] ?? null) ? $taskConfig['provider'] : null;
         $modelId = is_string($taskConfig['model'] ?? null) ? $taskConfig['model'] : null;
 
         if ($providerName === null || $modelId === null) {
             return $this->applyExecutionControlsOverride(
-                $this->resolvePrimaryWithDefaultFallback($employeeId),
+                $this->resolveDefault($employeeId),
                 $taskExecutionControls,
             );
         }
@@ -179,7 +118,7 @@ class ConfigResolver
 
         if ($companyId === null) {
             return $this->applyExecutionControlsOverride(
-                $this->resolvePrimaryWithDefaultFallback($employeeId),
+                $this->resolveDefault($employeeId),
                 $taskExecutionControls,
             );
         }
@@ -192,7 +131,7 @@ class ConfigResolver
 
         if ($provider === null) {
             return $this->applyExecutionControlsOverride(
-                $this->resolvePrimaryWithDefaultFallback($employeeId),
+                $this->resolveDefault($employeeId),
                 $taskExecutionControls,
             );
         }
@@ -205,7 +144,7 @@ class ConfigResolver
 
         if (! $modelExists) {
             return $this->applyExecutionControlsOverride(
-                $this->resolvePrimaryWithDefaultFallback($employeeId),
+                $this->resolveDefault($employeeId),
                 $taskExecutionControls,
             );
         }
@@ -266,7 +205,7 @@ class ConfigResolver
             'api_key' => '',
             'base_url' => '',
             'model' => $modelId,
-            'execution_controls' => ExecutionControls::fromConfig($controlsConfig, $runtimeDefaults['execution_controls']),
+            'execution_controls' => $runtimeDefaults['execution_controls'],
             'timeout' => (int) ($modelConfig['timeout'] ?? $runtimeDefaults['timeout']),
             'provider_name' => null,
             'provider_id' => null,
@@ -274,6 +213,8 @@ class ConfigResolver
             'connection_config' => [],
             'api_type' => app(ModelCatalogService::class)->resolveApiType($providerName, $modelId),
         ];
+
+        $modelControls = $runtimeDefaults['execution_controls'];
 
         if ($providerName !== null && $companyId !== null) {
             $provider = AiProvider::query()
@@ -289,8 +230,19 @@ class ConfigResolver
                 $resolved['provider_id'] = $provider->id;
                 $resolved['credentials'] = is_array($provider->credentials) ? $provider->credentials : [];
                 $resolved['connection_config'] = is_array($provider->connection_config) ? $provider->connection_config : [];
+
+                $modelRow = AiProviderModel::query()
+                    ->where('ai_provider_id', $provider->id)
+                    ->where('model_id', $modelId)
+                    ->first();
+
+                if ($modelRow !== null && is_array($modelRow->execution_controls) && $modelRow->execution_controls !== []) {
+                    $modelControls = ExecutionControls::fromConfig($modelRow->execution_controls, $modelControls);
+                }
             }
         }
+
+        $resolved['execution_controls'] = ExecutionControls::fromConfig($controlsConfig, $modelControls);
 
         return $resolved;
     }
@@ -303,12 +255,12 @@ class ConfigResolver
      * are prioritized.
      *
      * Used for non-agent AI inferences (summarization, translation, etc.) and
-     * as fallback for agents without workspace config.
+     * as the company-level default consumed by {@see resolveDefault()}.
      *
      * @param  int  $companyId  Company ID
      * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, provider_id: int|null, credentials: array<string, mixed>, connection_config: array<string, mixed>, api_type: AiApiType}|null
      */
-    public function resolveDefault(int $companyId): ?array
+    public function resolveCompanyDefault(int $companyId): ?array
     {
         // Try prioritized providers first (priority > 0, ordered ascending)
         $provider = AiProvider::query()
@@ -349,12 +301,17 @@ class ConfigResolver
         }
 
         $defaults = $this->runtimeDefaults();
+        $controls = $defaults['execution_controls'];
+
+        if (is_array($model->execution_controls) && $model->execution_controls !== []) {
+            $controls = ExecutionControls::fromConfig($model->execution_controls, $controls);
+        }
 
         return [
             'api_key' => $provider->credentials['api_key'] ?? '',
             'base_url' => $provider->base_url,
             'model' => $model->model_id,
-            'execution_controls' => $defaults['execution_controls'],
+            'execution_controls' => $controls,
             'timeout' => $defaults['timeout'],
             'provider_name' => $provider->name,
             'provider_id' => $provider->id,
@@ -386,12 +343,22 @@ class ConfigResolver
         }
 
         $defaults = $this->runtimeDefaults();
+        $controls = $defaults['execution_controls'];
+
+        $modelRow = AiProviderModel::query()
+            ->where('ai_provider_id', $provider->id)
+            ->where('model_id', $modelId)
+            ->first();
+
+        if ($modelRow !== null && is_array($modelRow->execution_controls) && $modelRow->execution_controls !== []) {
+            $controls = ExecutionControls::fromConfig($modelRow->execution_controls, $controls);
+        }
 
         return [
             'api_key' => $provider->credentials['api_key'] ?? '',
             'base_url' => $provider->base_url,
             'model' => $modelId,
-            'execution_controls' => $defaults['execution_controls'],
+            'execution_controls' => $controls,
             'timeout' => $defaults['timeout'],
             'provider_name' => $provider->name,
             'provider_id' => $provider->id,

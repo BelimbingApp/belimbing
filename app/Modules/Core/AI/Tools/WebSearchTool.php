@@ -18,9 +18,10 @@ use Illuminate\Support\Facades\Cache;
 /**
  * Web search tool for Agents.
  *
- * Allows an agent to search the web for real-time information via configurable
- * search providers (Parallel, Brave Search). Multiple providers can be configured
- * with priority ordering — on failure, the tool falls back to the next provider.
+ * Allows an agent to search the web for real-time information via a configured
+ * search provider (Parallel, Brave Search). When multiple providers are
+ * configured, the highest-priority enabled one with an API key is used; failures
+ * surface honestly without silent fallback to a different provider.
  * Results are cached to reduce API calls for repeated queries.
  *
  * Gated by `ai.tool_web_search.execute` authz capability.
@@ -162,9 +163,10 @@ class WebSearchTool extends AbstractTool
         return [
             'display_name' => 'Web Search',
             'summary' => 'Search the public web and return summarized results.',
-            'explanation' => 'Searches the web for current information using configured providers (Parallel, Brave Search). '
-                .'Multiple providers can be configured with priority — the tool tries each in order and falls back '
-                .'on failure. Results include titles, URLs, and snippets. Cached for 15 minutes to reduce API calls. '
+            'explanation' => 'Searches the web for current information using a configured provider (Parallel, Brave Search). '
+                .'When multiple providers are configured, the highest-priority enabled one is used — failures surface '
+                .'directly without silent fallback to a different provider. Results include titles, URLs, and snippets. '
+                .'Cached for 15 minutes to reduce API calls. '
                 .'This tool cannot access private networks or internal resources.',
             'setup_requirements' => [
                 'At least one search provider configured with an API key',
@@ -201,20 +203,18 @@ class WebSearchTool extends AbstractTool
             $freshness = null;
         }
 
-        $providers = $this->resolveProviders();
+        $provider = $this->resolveProvider();
 
-        if ($providers === []) {
+        if ($provider === null) {
             return ToolResult::error(
-                'No search providers configured. Add at least one provider with an API key in the Configuration panel.',
+                'No search provider configured. Add at least one provider with an API key in the Configuration panel.',
                 'unconfigured',
             );
         }
 
         $cacheTtl = $this->resolveCacheTtl();
 
-        // Include provider names in cache key so config changes invalidate stale results.
-        $providerNames = implode(',', array_column($providers, 'name'));
-        $cacheKey = 'lara_tool:web_search:'.md5($providerNames.$query.$count.$freshness);
+        $cacheKey = 'lara_tool:web_search:'.md5($provider['name'].$query.$count.$freshness);
 
         $cached = Cache::get($cacheKey);
 
@@ -222,7 +222,7 @@ class WebSearchTool extends AbstractTool
             return ToolResult::success($cached);
         }
 
-        $result = $this->performSearchWithFallback($providers, $query, $count, $freshness);
+        $result = $this->performSearch($provider, $query, $count, $freshness);
 
         // Only cache successful results — never cache errors.
         if (! str_starts_with($result, 'Search failed:')) {
@@ -233,67 +233,59 @@ class WebSearchTool extends AbstractTool
     }
 
     /**
-     * Try each provider in priority order, returning the first successful result.
+     * Run the search against the resolved provider. Failures surface directly.
      *
-     * Falls back to the next provider on failure. Returns a formatted error
-     * string if all providers fail.
-     *
-     * @param  list<array{name: string, api_key: string, enabled: bool}>  $providers
+     * @param  array{name: string, api_key: string, enabled: bool}  $provider
      */
-    private function performSearchWithFallback(array $providers, string $query, int $count, ?string $freshness): string
+    private function performSearch(array $provider, string $query, int $count, ?string $freshness): string
     {
-        $lastError = null;
+        $result = $this->webSearchService->search(
+            provider: $provider['name'],
+            apiKey: $provider['api_key'],
+            query: $query,
+            count: $count,
+            freshness: $freshness,
+            timeoutSeconds: self::TIMEOUT_SECONDS,
+        );
 
-        foreach ($providers as $provider) {
-            $result = $this->webSearchService->search(
-                provider: $provider['name'],
-                apiKey: $provider['api_key'],
-                query: $query,
-                count: $count,
-                freshness: $freshness,
-                timeoutSeconds: self::TIMEOUT_SECONDS,
-            );
-
-            if (! isset($result['error'])) {
-                $results = $result['results'] ?? [];
-
-                if ($results === []) {
-                    return 'No results found for: '.$query;
-                }
-
-                return $this->formatResults($results);
-            }
-
-            $lastError = $provider['name'].': '.$result['error'];
+        if (isset($result['error'])) {
+            return 'Search failed: '.$provider['name'].': '.$result['error'];
         }
 
-        return 'Search failed: '.$lastError;
+        $results = $result['results'] ?? [];
+
+        if ($results === []) {
+            return 'No results found for: '.$query;
+        }
+
+        return $this->formatResults($results);
     }
 
     /**
-     * Resolve the ordered list of enabled providers with API keys.
+     * Resolve the single search provider to use.
      *
      * Resolution order:
      *   1. Direct constructor injection (tests)
-     *   2. SettingsService providers array (DB → config cascade)
+     *   2. First enabled SettingsService provider with an API key
      *   3. Legacy single-provider config (env-based)
      *
-     * @return list<array{name: string, api_key: string, enabled: bool}>
+     * @return array{name: string, api_key: string, enabled: bool}|null
      */
-    private function resolveProviders(): array
+    private function resolveProvider(): ?array
     {
         if ($this->directProviders !== []) {
-            return $this->directProviders;
+            return $this->directProviders[0];
         }
 
         $settings = app(SettingsService::class);
         $providers = $settings->get('ai.tools.web_search.providers');
 
         if (is_array($providers) && $providers !== []) {
-            return array_values(array_filter(
-                $providers,
-                fn ($p) => ($p['enabled'] ?? false) && ! empty($p['api_key'] ?? ''),
-            ));
+            foreach ($providers as $candidate) {
+                if (($candidate['enabled'] ?? false) && ! empty($candidate['api_key'] ?? '')) {
+                    return $candidate;
+                }
+            }
         }
 
         // Fallback to legacy single-provider config
@@ -301,10 +293,10 @@ class WebSearchTool extends AbstractTool
         $apiKey = $settings->get("ai.tools.web_search.{$provider}.api_key");
 
         if (is_string($apiKey) && trim($apiKey) !== '') {
-            return [['name' => $provider, 'api_key' => $apiKey, 'enabled' => true]];
+            return ['name' => $provider, 'api_key' => $apiKey, 'enabled' => true];
         }
 
-        return [];
+        return null;
     }
 
     /**

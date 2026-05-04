@@ -44,7 +44,6 @@ final readonly class RunInspection
      *     cost_total_cents: int|null
      * }>  $calls  Per-LLM-call usage rows
      * @param  list<array{tool: string, result_length: int|null}>  $toolActions  Summary of tool invocations
-     * @param  list<array{provider: string, model: string, error: string}>  $fallbackAttempts  Provider fallback history
      * @param  int  $retryAttempts  Number of retry attempts
      * @param  string|null  $errorType  Error type if the run failed
      * @param  string|null  $errorMessage  User-safe error message if the run failed
@@ -72,7 +71,6 @@ final readonly class RunInspection
         public ?int $latencyMs,
         public array $tokens,
         public array $toolActions,
-        public array $fallbackAttempts,
         public int $retryAttempts,
         public ?string $errorType,
         public ?string $errorMessage,
@@ -129,7 +127,6 @@ final readonly class RunInspection
                 'total' => $meta['tokens']['total'] ?? null,
             ],
             toolActions: self::normalizeToolActions($meta['tool_actions'] ?? []),
-            fallbackAttempts: is_array($meta['fallback_attempts'] ?? null) ? $meta['fallback_attempts'] : [],
             retryAttempts: (int) ($meta['retry_attempts'] ?? 0),
             errorType: $meta['error_type'] ?? null,
             errorMessage: $meta['error'] ?? null,
@@ -167,7 +164,6 @@ final readonly class RunInspection
                 'total' => $run->total_tokens,
             ],
             toolActions: self::normalizeToolActions($run->tool_actions ?? []),
-            fallbackAttempts: $run->fallback_attempts ?? [],
             retryAttempts: count($run->retry_attempts ?? []),
             errorType: $run->error_type,
             errorMessage: $run->error_message,
@@ -262,7 +258,6 @@ final readonly class RunInspection
             'latency_ms' => $this->latencyMs,
             'tokens' => $this->tokens,
             'tool_actions' => $this->toolActions,
-            'fallback_attempts' => $this->fallbackAttempts,
             'retry_attempts' => $this->retryAttempts,
             'error_type' => $this->errorType,
             'error_message' => $this->errorMessage,

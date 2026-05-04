@@ -163,13 +163,26 @@ use Illuminate\Support\Collection;
                             </td>
                         @endforeach
                         <td class="px-table-cell-x py-table-cell-y whitespace-nowrap" @click.stop>
-                            <div class="flex justify-center">
-                            <x-ui.checkbox
-                                id="model-active-{{ $model->id }}"
-                                :checked="$model->is_active"
-                                wire:click="toggleModelActive({{ $model->id }})"
-                                aria-label="{{ $model->is_active ? __('Deactivate :model', ['model' => $model->model_id]) : __('Activate :model', ['model' => $model->model_id]) }}"
-                            />
+                            <div class="flex items-center justify-center gap-1">
+                                <x-ui.checkbox
+                                    id="model-active-{{ $model->id }}"
+                                    :checked="$model->is_active"
+                                    wire:click="toggleModelActive({{ $model->id }})"
+                                    aria-label="{{ $model->is_active ? __('Deactivate :model', ['model' => $model->model_id]) : __('Activate :model', ['model' => $model->model_id]) }}"
+                                />
+                                <button
+                                    type="button"
+                                    wire:click.stop="openModelExecutionControls({{ $model->id }})"
+                                    class="p-1 rounded text-muted hover:text-ink hover:bg-surface-subtle transition-colors"
+                                    title="{{ is_array($model->execution_controls) && $model->execution_controls !== [] ? __('Edit execution controls (override active)') : __('Edit execution controls') }}"
+                                    aria-label="{{ __('Edit execution controls for :model', ['model' => $model->model_id]) }}"
+                                >
+                                    <x-icon name="heroicon-o-adjustments-horizontal" class="w-4 h-4" />
+                                    @if(is_array($model->execution_controls) && $model->execution_controls !== [])
+                                        <span class="sr-only">{{ __('Override active') }}</span>
+                                        <span aria-hidden="true" class="ml-0.5 inline-block w-1.5 h-1.5 rounded-full bg-accent align-middle"></span>
+                                    @endif
+                                </button>
                             </div>
                         </td>
                     </tr>
