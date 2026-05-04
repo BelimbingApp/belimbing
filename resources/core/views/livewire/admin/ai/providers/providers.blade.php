@@ -12,7 +12,7 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
     <x-slot name="title">{{ __('AI Providers') }}</x-slot>
 
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('AI Providers')" :subtitle="__('Manage connected providers and their models. Toggle the checkbox to make a model available to Agents, or click the ☆ to mark a model as the provider\'s default.')">
+        <x-ui.page-header :title="__('AI Providers')" :subtitle="__('Manage connected providers and their models. In each model table, use the Access column: ★ / ☆ for the provider default, the checkbox to offer or withhold a model from Agents, and sliders for optional execution overrides.')">
             <x-slot name="help">
                 <div class="space-y-3">
                     <p>{{ __('This page shows the LLM providers and models your organization has connected. Agents use these models to think, reason, and respond — at least one active provider with one active model is required.') }}</p>

@@ -3,24 +3,18 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 /**
- * Shared help content explaining the model table controls (★ default, ☑ available, costs).
+ * Shared help content explaining the model table (Access column, costs).
  * Included in both the main Providers page and the ProviderSetup page-header help slot.
  */
 ?>
 <div>
-    <p class="font-medium text-ink">{{ __('Default model') }}</p>
+    <p class="font-medium text-ink">{{ __('Access column') }}</p>
     <ul class="list-disc list-inside space-y-1 text-muted mt-1">
-        <li>{{ __('Each provider has a default model, marked with a') }} <span class="text-accent">★</span> {{ __('star icon.') }}</li>
-        <li>{{ __('The default model is used as the fallback when a Agent does not specify a particular model.') }}</li>
-        <li>{{ __('Click the ☆ next to a model to set it as the default. The current default is marked with') }} <span class="text-accent">★</span>.</li>
-    </ul>
-</div>
-
-<div>
-    <p class="font-medium text-ink">{{ __('Model availability') }}</p>
-    <ul class="list-disc list-inside space-y-1 text-muted mt-1">
-        <li>{{ __('Use the checkbox in the Available column to control which models Agents can use.') }}</li>
-        <li>{{ __('Unchecked models remain registered but are not offered to Agents.') }}</li>
+        <li>{{ __('The Access column groups three controls: the default star (★ / ☆), the offered-to-Agents checkbox, and the execution sliders button.') }}</li>
+        <li>{{ __('★ marks the provider default — the fallback when an Agent does not pick a model. Click ☆ on another row to move the default.') }}</li>
+        <li>{{ __('Missing Agent access: when the checkbox is off, the model is withheld from Agents — it no longer appears in model lists and cannot be selected, but the row stays for sync, catalog costs, and overrides.') }}</li>
+        <li>{{ __('When the checkbox is on, the model is offered again in Agent pickers. If the default star sits on a model that is not offered, runtime falls back to another active model until you turn that model on or change the default.') }}</li>
+        <li>{{ __('Open the sliders control for optional per-model execution overrides; it appears in the accent color when custom settings apply.') }}</li>
     </ul>
 </div>
 

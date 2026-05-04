@@ -22,8 +22,7 @@ $providerConnectionDescription = $this->providerConnectionDescription();
             :title="__(':provider Connected', ['provider' => $displayName])"
         >
             <x-slot name="subtitle">
-                <span class="block">{{ __('★ Default = fallback when no model is specified.') }}</span>
-                <span class="block">{{ __('☑ Available = offered to Agents.') }}</span>
+                <span class="block">{{ __('Access column: ★ default fallback, ☑ offered to Agents, sliders for execution overrides (accent when custom).') }}</span>
             </x-slot>
             <x-slot name="help">
                 <div class="space-y-3">

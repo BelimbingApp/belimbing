@@ -109,27 +109,14 @@ use Illuminate\Support\Collection;
                     <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Cost Override Output $/1M') }}</th>
                     <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Cache Read $/1M') }}</th>
                     <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Cache Write $/1M') }}</th>
-                    <th class="px-table-cell-x py-table-header-y text-center text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Available') }}</th>
+                    <th class="px-table-cell-x py-table-header-y text-center text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Access') }}</th>
                 </tr>
             </thead>
             <tbody class="bg-surface-card divide-y divide-border-default">
                 @foreach($models as $model)
                     <tr wire:key="model-{{ $model->id }}" class="hover:bg-surface-subtle/50 transition-colors">
                         <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink font-mono">
-                            <div class="flex items-center gap-1.5">
-                                @if($model->is_default)
-                                    <span class="text-accent" title="{{ __('Default model') }}" aria-label="{{ __('Default model') }}">★</span>
-                                @else
-                                    <button
-                                        wire:click="setDefaultModel({{ $model->id }})"
-                                        class="text-muted hover:text-accent transition-colors"
-                                        type="button"
-                                        title="{{ __('Set as default') }}"
-                                        aria-label="{{ __('Set as default model') }}"
-                                    >☆</button>
-                                @endif
-                                <span>{{ $model->model_id }}</span>
-                            </div>
+                            {{ $model->model_id }}
                         </td>
                         @php $cost = $model->cost_override ?? []; @endphp
                         @foreach(['input', 'output', 'cache_read', 'cache_write'] as $costField)
@@ -163,25 +150,42 @@ use Illuminate\Support\Collection;
                             </td>
                         @endforeach
                         <td class="px-table-cell-x py-table-cell-y whitespace-nowrap" @click.stop>
+                            @php $hasExecutionOverrides = is_array($model->execution_controls) && $model->execution_controls !== []; @endphp
                             <div class="flex items-center justify-center gap-1">
+                                @if($model->is_default)
+                                    <span
+                                        class="text-accent shrink-0 inline-flex h-4 w-4 items-center justify-center"
+                                        title="{{ $model->is_active ? __('Default for this provider.') : __('Make available to use this default.') }}"
+                                        aria-label="{{ __('Default model') }}"
+                                    >★</span>
+                                @else
+                                    <button
+                                        wire:click.stop="setDefaultModel({{ $model->id }})"
+                                        class="text-muted hover:text-accent transition-colors shrink-0 inline-flex h-4 w-4 items-center justify-center"
+                                        type="button"
+                                        title="{{ __('Set default for this provider.') }}"
+                                        aria-label="{{ __('Set as default model') }}"
+                                    >☆</button>
+                                @endif
                                 <x-ui.checkbox
                                     id="model-active-{{ $model->id }}"
                                     :checked="$model->is_active"
                                     wire:click="toggleModelActive({{ $model->id }})"
+                                    title="{{ $model->is_active ? __('Withdraw from Agent pickers.') : __('Make available to Agent pickers.') }}"
                                     aria-label="{{ $model->is_active ? __('Deactivate :model', ['model' => $model->model_id]) : __('Activate :model', ['model' => $model->model_id]) }}"
                                 />
                                 <button
                                     type="button"
                                     wire:click.stop="openModelExecutionControls({{ $model->id }})"
-                                    class="p-1 rounded text-muted hover:text-ink hover:bg-surface-subtle transition-colors"
-                                    title="{{ is_array($model->execution_controls) && $model->execution_controls !== [] ? __('Edit execution controls (override active)') : __('Edit execution controls') }}"
-                                    aria-label="{{ __('Edit execution controls for :model', ['model' => $model->model_id]) }}"
+                                    @class([
+                                        'inline-flex items-center p-1 rounded transition-colors',
+                                        'text-accent hover:text-accent hover:bg-surface-subtle' => $hasExecutionOverrides,
+                                        'text-muted hover:text-ink hover:bg-surface-subtle' => ! $hasExecutionOverrides,
+                                    ])
+                                    title="{{ $hasExecutionOverrides ? __('Edit run settings — overrides on.') : __('Edit run settings.') }}"
+                                    aria-label="{{ $hasExecutionOverrides ? __('Edit execution controls for :model (overrides active)', ['model' => $model->model_id]) : __('Edit execution controls for :model', ['model' => $model->model_id]) }}"
                                 >
                                     <x-icon name="heroicon-o-adjustments-horizontal" class="w-4 h-4" />
-                                    @if(is_array($model->execution_controls) && $model->execution_controls !== [])
-                                        <span class="sr-only">{{ __('Override active') }}</span>
-                                        <span aria-hidden="true" class="ml-0.5 inline-block w-1.5 h-1.5 rounded-full bg-accent align-middle"></span>
-                                    @endif
                                 </button>
                             </div>
                         </td>
