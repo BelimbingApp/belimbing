@@ -28,6 +28,10 @@ final readonly class Manifest
         public string $trigger,
         public string $status,
         public ?string $errorMessage = null,
+        // app-key envelope fields (base64-encoded); null for other modes.
+        public ?string $wrappedDek = null,
+        public ?string $dekNonce = null,
+        public ?string $kekFingerprint = null,
     ) {}
 
     /**
@@ -35,7 +39,7 @@ final readonly class Manifest
      */
     public function toArray(): array
     {
-        return [
+        $data = [
             'backup_id' => $this->backupId,
             'driver' => $this->driver,
             'encryption_mode' => $this->encryptionMode,
@@ -51,6 +55,18 @@ final readonly class Manifest
             'status' => $this->status,
             'error' => $this->errorMessage,
         ];
+
+        if ($this->wrappedDek !== null) {
+            $data['wrapped_dek'] = $this->wrappedDek;
+        }
+        if ($this->dekNonce !== null) {
+            $data['dek_nonce'] = $this->dekNonce;
+        }
+        if ($this->kekFingerprint !== null) {
+            $data['kek_fingerprint'] = $this->kekFingerprint;
+        }
+
+        return $data;
     }
 
     /**
@@ -73,6 +89,9 @@ final readonly class Manifest
             trigger: (string) ($data['trigger'] ?? ''),
             status: (string) ($data['status'] ?? ''),
             errorMessage: isset($data['error']) ? (string) $data['error'] : null,
+            wrappedDek: isset($data['wrapped_dek']) ? (string) $data['wrapped_dek'] : null,
+            dekNonce: isset($data['dek_nonce']) ? (string) $data['dek_nonce'] : null,
+            kekFingerprint: isset($data['kek_fingerprint']) ? (string) $data['kek_fingerprint'] : null,
         );
     }
 }

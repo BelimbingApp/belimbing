@@ -7,15 +7,13 @@ namespace App\Base\Database\Services\Backup\Writers;
 
 use App\Base\Database\Exceptions\BackupException;
 use Illuminate\Database\Connection;
-use PDO;
 use PDOException;
 
 /**
  * Backup writer for SQLite connections.
  *
  * Uses `VACUUM INTO 'path'` to produce a consistent snapshot without locking
- * out concurrent writers. Restore is a file copy of the (decrypted) artifact
- * into the target path.
+ * out concurrent writers.
  */
 final class SqliteWriter implements BackupWriter
 {
@@ -85,60 +83,5 @@ final class SqliteWriter implements BackupWriter
         }
 
         @chmod($destinationPath, 0600);
-    }
-
-    public function restore(string $sourcePath, string $target): void
-    {
-        if (! is_file($sourcePath)) {
-            throw BackupException::restoreFailed("Decrypted dump missing: {$sourcePath}");
-        }
-
-        if ($target === '') {
-            throw BackupException::restoreFailed('SQLite restore target path is empty');
-        }
-
-        if (file_exists($target)) {
-            throw BackupException::restoreFailed("Target file already exists: {$target}");
-        }
-
-        $directory = dirname($target);
-        if (! is_dir($directory)) {
-            if (! @mkdir($directory, 0755, true) && ! is_dir($directory)) {
-                throw BackupException::restoreFailed("Cannot create target directory: {$directory}");
-            }
-        }
-
-        if (! @copy($sourcePath, $target)) {
-            throw BackupException::restoreFailed("Failed to write target file: {$target}");
-        }
-
-        @chmod($target, 0600);
-
-        // Open the restored file to verify it parses as a SQLite database.
-        try {
-            $pdo = new PDO('sqlite:'.$target);
-            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $pdo->query('select 1 from sqlite_master limit 1')?->closeCursor();
-        } catch (PDOException $e) {
-            @unlink($target);
-            throw BackupException::restoreFailed('Restored file is not a valid SQLite database: '.$e->getMessage(), $e);
-        }
-    }
-
-    public function isCurrentDatabase(string $target): bool
-    {
-        $current = $this->connection->getDatabaseName();
-        if ($current === ':memory:') {
-            return false;
-        }
-
-        $resolvedCurrent = realpath($current);
-        $resolvedTarget = realpath($target);
-
-        if ($resolvedCurrent !== false && $resolvedTarget !== false) {
-            return $resolvedCurrent === $resolvedTarget;
-        }
-
-        return rtrim((string) $current, '/') === rtrim($target, '/');
     }
 }

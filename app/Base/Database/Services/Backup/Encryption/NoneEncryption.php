@@ -6,6 +6,7 @@
 namespace App\Base\Database\Services\Backup\Encryption;
 
 use App\Base\Database\Exceptions\BackupException;
+use App\Base\Database\Services\Backup\Manifest;
 
 /**
  * Pass-through encryption mode. The plaintext dump becomes the artifact.
@@ -31,7 +32,7 @@ final class NoneEncryption implements EncryptionMode
         // No key material required.
     }
 
-    public function encryptFile(string $sourcePath, string $destinationPath): void
+    public function encryptFile(string $sourcePath, string $destinationPath): EncryptResult
     {
         if (! is_file($sourcePath)) {
             throw BackupException::dumpFailed("Source dump missing: {$sourcePath}");
@@ -50,9 +51,11 @@ final class NoneEncryption implements EncryptionMode
         }
 
         @chmod($destinationPath, 0600);
+
+        return new EncryptResult();
     }
 
-    public function decryptFile(string $sourcePath, string $destinationPath): void
+    public function decryptFile(string $sourcePath, string $destinationPath, ?Manifest $manifest = null): void
     {
         if (! is_file($sourcePath)) {
             throw BackupException::artifactNotFound($sourcePath);

@@ -42,9 +42,21 @@ final class BackupCommand extends Command
             ? (string) ($config['local_disk'] ?? 'local')
             : (string) ($config['disk'] ?? 'local');
 
-        $mode = (string) ($config['encryption']['mode'] ?? 'passphrase');
+        $mode = (string) ($config['encryption']['mode'] ?? 'app-key');
         if ($mode === 'none') {
             $this->components->warn('Encryption mode is "none": the artifact is plaintext. Acceptable only for deployments with no sensitive data.');
+        }
+
+        if ($mode === 'app-key') {
+            $mismatches = $service->findFingerprintMismatches($config, $diskName);
+            if ($mismatches !== []) {
+                $this->components->error('APP_KEY has changed since these backups were created. Run `php artisan blb:key:rotate` or `blb:db:backup:rekey --old-key=<base64key> --commit` to re-wrap DEKs before running a new backup.');
+                foreach ($mismatches as $backupId) {
+                    $this->components->twoColumnDetail('Stale fingerprint', $backupId);
+                }
+
+                return self::FAILURE;
+            }
         }
 
         $dryRun = (bool) $this->option('dry-run');

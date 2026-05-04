@@ -49,7 +49,6 @@ pid_belongs_to_project() {
 # Uses Laravel's standard storage/ directory structure for consistency
 # - storage/app/.devops/: Script runtime files (PIDs, setup state)
 # - storage/logs/scripts/: Script logs (devops/deployment scripts)
-# - storage/app/backups/: Database/backup files (script-managed)
 # This simplifies drive mounting (one directory) and follows Laravel conventions
 ensure_storage_dirs() {
     local project_root=$1
@@ -64,7 +63,6 @@ ensure_storage_dirs() {
     local dirs=(
         "app/.devops"          # PID files, setup state, script temp files
         "logs/scripts"         # Script/deployment logs
-        "app/backups"          # Database/script-managed backups
     )
 
     for dir in "${dirs[@]}"; do
@@ -86,13 +84,6 @@ get_storage_dir() {
 get_logs_dir() {
     local project_root=$1
     echo "$project_root/storage/logs/scripts"
-    return 0
-}
-
-# Get backups directory path (script-managed backups)
-get_backups_dir() {
-    local project_root=$1
-    echo "$project_root/storage/app/backups"
     return 0
 }
 

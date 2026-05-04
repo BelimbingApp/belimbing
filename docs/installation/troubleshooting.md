@@ -123,7 +123,7 @@ sudo chmod -R 775 storage bootstrap/cache
 
 **Solution:**
 ```bash
-# Generate APP_KEY manually
+# Generate APP_KEY manually (safe when APP_KEY is currently empty)
 php artisan key:generate
 
 # Or re-run Laravel setup step
@@ -154,7 +154,7 @@ php artisan key:generate
    ls -la .env
    # If missing, copy from example
    cp .env.example .env
-   php artisan key:generate
+   php artisan key:generate   # safe — APP_KEY is empty in a fresh .env
    ```
 
 ### Caddy SSL Errors

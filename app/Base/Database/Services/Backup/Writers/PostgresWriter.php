@@ -15,15 +15,12 @@ use Symfony\Component\Process\Process;
 /**
  * Backup writer for PostgreSQL connections.
  *
- * Uses `pg_dump --format=custom` for a consistent online snapshot. Restore
- * uses `pg_restore --dbname={target}`. Credentials are passed via PGPASSWORD
- * env so they never appear on the command line.
+ * Uses `pg_dump --format=custom` for a consistent online snapshot. Credentials
+ * are passed via PGPASSWORD env so they never appear on the command line.
  */
 final class PostgresWriter implements BackupWriter
 {
     private const DUMP_TIMEOUT = 3600;
-
-    private const RESTORE_TIMEOUT = 3600;
 
     public function __construct(private readonly Connection $connection) {}
 
@@ -93,47 +90,6 @@ final class PostgresWriter implements BackupWriter
         }
 
         @chmod($destinationPath, 0600);
-    }
-
-    public function restore(string $sourcePath, string $target): void
-    {
-        if (! is_file($sourcePath)) {
-            throw BackupException::restoreFailed("Decrypted dump missing: {$sourcePath}");
-        }
-
-        if ($target === '') {
-            throw BackupException::restoreFailed('Postgres restore target database name is empty');
-        }
-
-        $finder = new ExecutableFinder;
-        $pgRestore = $finder->find('pg_restore');
-        if ($pgRestore === null) {
-            throw BackupException::toolingMissing('pg_restore', 'install postgresql client tools on the host');
-        }
-
-        $config = $this->connection->getConfig();
-
-        $command = [
-            $pgRestore,
-            '--no-owner',
-            '--no-privileges',
-            '--clean',
-            '--if-exists',
-            '--host='.($config['host'] ?? '127.0.0.1'),
-            '--port='.((string) ($config['port'] ?? '5432')),
-            '--username='.($config['username'] ?? ''),
-            '--dbname='.$target,
-            $sourcePath,
-        ];
-
-        $env = ['PGPASSWORD' => (string) ($config['password'] ?? '')];
-
-        $this->runProcess($command, $env, self::RESTORE_TIMEOUT, 'pg_restore');
-    }
-
-    public function isCurrentDatabase(string $target): bool
-    {
-        return $target === (string) $this->connection->getDatabaseName();
     }
 
     /**

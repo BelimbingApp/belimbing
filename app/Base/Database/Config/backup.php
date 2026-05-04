@@ -9,13 +9,25 @@ return [
     | Backup Master Switch
     |--------------------------------------------------------------------------
     |
-    | When false, blb:db:backup and blb:db:restore exit immediately with a
-    | message. Disable on managed-database deployments (RDS, Cloud SQL, Neon,
-    | Supabase, Turso, LiteFS Cloud, ...) where the platform performs its own
-    | encrypted snapshots and BLB should not run a parallel backup system.
+    | When false, blb:db:backup exits immediately with a message. Disable on
+    | managed-database deployments (RDS, Cloud SQL, Neon, Supabase, Turso,
+    | LiteFS Cloud, ...) where the platform performs its own encrypted
+    | snapshots and BLB should not run a parallel backup system.
     |
     */
     'enabled' => env('BACKUP_ENABLED', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Source Database Connection
+    |--------------------------------------------------------------------------
+    |
+    | Optional. Name of the Laravel database connection to back up. When null,
+    | the default connection is used. Set this when you want backups to target
+    | a connection different from the application's primary one.
+    |
+    */
+    'connection' => env('BACKUP_CONNECTION'),
 
     /*
     |--------------------------------------------------------------------------
@@ -62,24 +74,21 @@ return [
     | Mode is one of:
     |   - 'none'           : compressed but unencrypted; only acceptable for
     |                        small deployments with no sensitive data.
-    |   - 'passphrase'     : default; uses libsodium (Argon2id KDF +
-    |                        XChaCha20-Poly1305 secretstream). The passphrase
-    |                        is read from the configured env var.
-    |   - 'age-recipients' : reserved (not implemented in Phase 1).
-    |   - 'kms'            : reserved (not implemented in Phase 1).
+    |   - 'app-key'        : default; envelope encryption keyed from APP_KEY
+    |                        using HKDF-SHA-256 + XChaCha20-Poly1305. The DEK
+    |                        is wrapped under a KEK derived from APP_KEY; no
+    |                        separate passphrase required.
+    |   - Other values      : register an EncryptionMode factory on
+    |                        EncryptionModeRegistry from an extension service
+    |                        provider (e.g. age recipients, cloud KMS).
     |
     */
     'encryption' => [
-        'mode' => env('BACKUP_ENCRYPTION_MODE', 'passphrase'),
+        'mode' => env('BACKUP_ENCRYPTION_MODE', 'app-key'),
 
-        // Name of the env var that holds the passphrase. The passphrase
-        // itself is never persisted in this file or in the manifest.
-        'passphrase_env' => env('BACKUP_PASSPHRASE_ENV', 'BACKUP_PASSPHRASE'),
-
-        // For mode = 'age-recipients' (Phase 4).
+        // Example keys for extension-registered modes (consumed only if a mode uses them).
         'recipients' => [],
 
-        // For mode = 'kms' (Phase 4).
         'kms_key' => env('BACKUP_KMS_KEY'),
     ],
 
@@ -96,19 +105,5 @@ return [
     'retention' => [
         'keep_days' => (int) env('BACKUP_KEEP_DAYS', 30),
         'keep_count' => (int) env('BACKUP_KEEP_COUNT', 7),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Restore Guard
-    |--------------------------------------------------------------------------
-    |
-    | When false (default), blb:db:restore refuses to write into the database
-    | currently configured for the application. Promote a restored database
-    | by reconfiguring the connection, not by flipping this flag.
-    |
-    */
-    'restore' => [
-        'allow_current_database' => (bool) env('BACKUP_RESTORE_ALLOW_CURRENT_DB', false),
     ],
 ];

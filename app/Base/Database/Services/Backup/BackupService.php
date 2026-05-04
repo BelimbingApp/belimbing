@@ -6,9 +6,9 @@
 namespace App\Base\Database\Services\Backup;
 
 use App\Base\Database\Exceptions\BackupException;
+use App\Base\Database\Services\Backup\Encryption\AppKeyEncryption;
 use App\Base\Database\Services\Backup\Encryption\EncryptionMode;
-use App\Base\Database\Services\Backup\Encryption\NoneEncryption;
-use App\Base\Database\Services\Backup\Encryption\PassphraseEncryption;
+use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
 use App\Base\Database\Services\Backup\Writers\BackupWriter;
 use App\Base\Database\Services\Backup\Writers\PostgresWriter;
 use App\Base\Database\Services\Backup\Writers\SqliteWriter;
@@ -33,6 +33,7 @@ final class BackupService
     public function __construct(
         private readonly DatabaseManager $databaseManager,
         private readonly FilesystemManager $filesystemManager,
+        private readonly EncryptionModeRegistry $encryptionModes,
     ) {}
 
     /**
@@ -83,7 +84,7 @@ final class BackupService
 
         try {
             $writer->dump($tmpDump);
-            $encryption->encryptFile($tmpDump, $tmpArtifact);
+            $encryptResult = $encryption->encryptFile($tmpDump, $tmpArtifact);
 
             $sizeBytes = (int) @filesize($tmpArtifact);
             $sha256 = (string) hash_file('sha256', $tmpArtifact);
@@ -106,6 +107,9 @@ final class BackupService
                 finishedAt: $finishedAt->toIso8601String(),
                 trigger: $trigger,
                 status: 'success',
+                wrappedDek: $encryptResult->wrappedDek,
+                dekNonce: $encryptResult->dekNonce,
+                kekFingerprint: $encryptResult->kekFingerprint,
             );
 
             $disk->put($manifestPath, (string) json_encode($manifest->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
@@ -136,72 +140,14 @@ final class BackupService
     }
 
     /**
-     * Decrypt the artifact for $backupId into a local plaintext file.
-     *
-     * Returns the local plaintext path along with the manifest. Caller must
-     * unlink the plaintext when done.
-     *
-     * @param  array<string, mixed>  $config
-     */
-    public function stageDecryptedDump(array $config, string $diskName, string $backupId): StagedDump
-    {
-        $disk = $this->filesystemManager->disk($diskName);
-        $manifest = $this->findManifest($disk, $config, $backupId);
-
-        if (! $disk->exists($manifest->artifactPath)) {
-            throw BackupException::artifactNotFound($manifest->artifactPath);
-        }
-
-        $tmpArtifact = $this->makeSecureTempFile('blb-restore-art-');
-        $tmpPlain = $this->makeSecureTempFile('blb-restore-plain-');
-
-        @unlink($tmpPlain);
-
-        try {
-            $stream = $disk->readStream($manifest->artifactPath);
-            if (! is_resource($stream)) {
-                throw BackupException::artifactNotFound($manifest->artifactPath);
-            }
-
-            $local = fopen($tmpArtifact, 'wb');
-            if ($local === false) {
-                throw BackupException::restoreFailed("Could not open local stage: {$tmpArtifact}");
-            }
-            stream_copy_to_stream($stream, $local);
-            fclose($local);
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-
-            // Verify hash before decryption when we have one.
-            if ($manifest->sha256 !== '') {
-                $actual = (string) hash_file('sha256', $tmpArtifact);
-                if (! hash_equals($manifest->sha256, $actual)) {
-                    throw BackupException::artifactCorrupt('SHA-256 mismatch between artifact and manifest');
-                }
-            }
-
-            $encryption = $this->resolveEncryptionForMode($config, $manifest->encryptionMode);
-            $encryption->decryptFile($tmpArtifact, $tmpPlain);
-
-            return new StagedDump(
-                manifest: $manifest,
-                plainPath: $tmpPlain,
-            );
-        } catch (Throwable $e) {
-            @unlink($tmpPlain);
-            throw $e;
-        } finally {
-            @unlink($tmpArtifact);
-        }
-    }
-
-    /**
      * @param  array<string, mixed>  $config
      */
     public function resolveWriter(array $config): BackupWriter
     {
-        $connection = $this->databaseManager->connection();
+        $connectionName = $config['connection'] ?? null;
+        $connection = $connectionName === null
+            ? $this->databaseManager->connection()
+            : $this->databaseManager->connection((string) $connectionName);
         $driver = $connection->getDriverName();
 
         return match ($driver) {
@@ -216,39 +162,59 @@ final class BackupService
      */
     public function resolveEncryption(array $config): EncryptionMode
     {
-        $mode = (string) ($config['encryption']['mode'] ?? 'passphrase');
+        $mode = (string) ($config['encryption']['mode'] ?? 'app-key');
 
-        return $this->resolveEncryptionForMode($config, $mode);
+        return $this->encryptionModes->resolve($mode, $config);
     }
 
     /**
+     * Check whether any app-key manifests on the disk have a kek_fingerprint that
+     * does not match the current APP_KEY. Returns a list of backup IDs that cannot
+     * be decrypted with the current key.
+     *
+     * Returns an empty array when the configured mode is not 'app-key', when
+     * APP_KEY is absent/invalid (ensureReady() will catch that separately), or
+     * when all manifests are already on the current key.
+     *
      * @param  array<string, mixed>  $config
+     * @return list<string> Backup IDs with mismatched fingerprints.
      */
-    private function resolveEncryptionForMode(array $config, string $mode): EncryptionMode
+    public function findFingerprintMismatches(array $config, string $diskName): array
     {
-        return match ($mode) {
-            'none' => new NoneEncryption,
-            'passphrase' => new PassphraseEncryption($this->resolvePassphrase($config)),
-            'age-recipients', 'kms' => throw BackupException::configurationInvalid(
-                "Encryption mode '{$mode}' is reserved and not implemented yet (Phase 4).",
-            ),
-            default => throw BackupException::configurationInvalid("Unknown encryption mode '{$mode}'"),
-        };
-    }
-
-    /**
-     * @param  array<string, mixed>  $config
-     */
-    private function resolvePassphrase(array $config): string
-    {
-        $envName = (string) ($config['encryption']['passphrase_env'] ?? 'BACKUP_PASSPHRASE');
-
-        $value = getenv($envName);
-        if ($value === false || $value === '') {
-            $value = (string) ($_ENV[$envName] ?? '');
+        $mode = (string) ($config['encryption']['mode'] ?? 'app-key');
+        if ($mode !== 'app-key') {
+            return [];
         }
 
-        return $value;
+        $currentFingerprint = AppKeyEncryption::currentFingerprint();
+        if ($currentFingerprint === null) {
+            return []; // Invalid APP_KEY — ensureReady() will report this.
+        }
+
+        $disk = $this->filesystemManager->disk($diskName);
+        $prefix = trim((string) ($config['path_prefix'] ?? 'backups'), '/');
+        $environment = (string) config('app.env', 'production');
+        $directory = $prefix === '' ? $environment : "{$prefix}/{$environment}";
+
+        $mismatches = [];
+
+        foreach ($disk->files($directory) as $file) {
+            if (! str_ends_with($file, '.manifest.json')) {
+                continue;
+            }
+
+            $data = json_decode((string) $disk->get($file), true);
+            if (! is_array($data) || ($data['encryption_mode'] ?? '') !== 'app-key') {
+                continue;
+            }
+
+            $manifestFingerprint = (string) ($data['kek_fingerprint'] ?? '');
+            if ($manifestFingerprint !== '' && $manifestFingerprint !== $currentFingerprint) {
+                $mismatches[] = (string) ($data['backup_id'] ?? $file);
+            }
+        }
+
+        return $mismatches;
     }
 
     private function ensureDiskWritable(Filesystem $disk, array $config, string $diskName): void

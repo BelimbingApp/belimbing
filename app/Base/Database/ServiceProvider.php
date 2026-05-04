@@ -9,12 +9,15 @@ use App\Base\Database\Console\Commands\BackupCommand;
 use App\Base\Database\Console\Commands\FreshCommand;
 use App\Base\Database\Console\Commands\MigrateCommand;
 use App\Base\Database\Console\Commands\RefreshCommand;
+use App\Base\Database\Console\Commands\RekeyCommand;
 use App\Base\Database\Console\Commands\ResetCommand;
-use App\Base\Database\Console\Commands\RestoreCommand;
 use App\Base\Database\Console\Commands\RollbackCommand;
 use App\Base\Database\Console\Commands\StatusCommand;
 use App\Base\Database\Console\Commands\TableUnstableCommand;
 use App\Base\Database\Console\Commands\WipeCommand;
+use App\Base\Database\Services\Backup\Encryption\AppKeyEncryption;
+use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
+use App\Base\Database\Services\Backup\Encryption\NoneEncryption;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Console\Migrations\FreshCommand as LaravelFreshCommand;
 use Illuminate\Database\Console\Migrations\MigrateCommand as LaravelMigrateCommand;
@@ -34,6 +37,15 @@ class ServiceProvider extends BaseServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/Config/backup.php', 'backup');
+
+        $this->app->singleton(EncryptionModeRegistry::class, function ($app) {
+            $registry = new EncryptionModeRegistry;
+
+            $registry->register('none', fn (array $config) => new NoneEncryption);
+            $registry->register('app-key', fn (array $config) => new AppKeyEncryption);
+
+            return $registry;
+        });
 
         // Override Laravel's MigrateCommand by extending the binding
         // Laravel's MigrationServiceProvider (deferred) binds MigrateCommand::class directly,
@@ -73,7 +85,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->commands([
             TableUnstableCommand::class,
             BackupCommand::class,
-            RestoreCommand::class,
+            RekeyCommand::class,
         ]);
     }
 }

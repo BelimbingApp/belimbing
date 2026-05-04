@@ -9,8 +9,7 @@ namespace App\Base\Database\Services\Backup\Writers;
  * Driver-specific backup pipeline.
  *
  * Each implementation knows how to produce a consistent plaintext dump of the
- * configured connection, and how to restore a plaintext dump into a target
- * that is not the current application database.
+ * configured connection.
  */
 interface BackupWriter
 {
@@ -44,18 +43,4 @@ interface BackupWriter
      * leak intermediate plaintext to other locations.
      */
     public function dump(string $destinationPath): void;
-
-    /**
-     * Restore a plaintext dump from $sourcePath into the target.
-     *
-     * For Postgres, $target is a database name (must already exist or be
-     * creatable by the connection's role). For SQLite, $target is a file path.
-     */
-    public function restore(string $sourcePath, string $target): void;
-
-    /**
-     * Determine whether the given target refers to the currently configured
-     * application database. Used by the restore guard.
-     */
-    public function isCurrentDatabase(string $target): bool;
 }
