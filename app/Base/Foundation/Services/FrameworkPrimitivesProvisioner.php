@@ -8,6 +8,7 @@ namespace App\Base\Foundation\Services;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Base\Database\Models\TableRegistry;
 use App\Base\Foundation\Exceptions\FrameworkPrimitivesNotConfiguredException;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
@@ -159,7 +160,35 @@ class FrameworkPrimitivesProvisioner
             return $existingCandidate;
         }
 
+        // Defer when the operator has explicitly marked `users` unstable: a
+        // follow-up setup step (e.g. scripts/setup-steps/60-migrations.sh)
+        // will prompt for credentials and re-bootstrap. Throwing here would
+        // block routine schema iteration on the users table.
+        if ($this->usersTableIsUnstable()) {
+            $this->log('Skipping admin user provisioning — users table is unstable; re-run setup to bootstrap admin.');
+
+            return null;
+        }
+
         throw FrameworkPrimitivesNotConfiguredException::missingAdminBootstrap();
+    }
+
+    /**
+     * Whether the `users` table is registered as unstable (will be rebuilt by migrate:fresh).
+     *
+     * Returns false when the registry has no row for `users` (default-stable assumption)
+     * or when the registry table itself is unavailable.
+     */
+    private function usersTableIsUnstable(): bool
+    {
+        try {
+            return TableRegistry::query()
+                ->where('table_name', 'users')
+                ->where('is_stable', false)
+                ->exists();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

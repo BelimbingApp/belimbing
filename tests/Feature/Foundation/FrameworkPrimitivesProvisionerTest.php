@@ -3,6 +3,7 @@
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Base\Database\Models\TableRegistry;
 use App\Base\Foundation\Exceptions\FrameworkPrimitivesNotConfiguredException;
 use App\Base\Foundation\Services\FrameworkPrimitivesProvisioner;
 use App\Modules\Core\Company\Models\Company;
@@ -87,6 +88,37 @@ test('provisioner creates admin user with default values', function (): void {
     $provisioner = new FrameworkPrimitivesProvisioner;
     $provisioner->provisionAdminUser();
 })->throws(FrameworkPrimitivesNotConfiguredException::class);
+
+test('provisioner defers admin provisioning when users table is unstable', function (): void {
+    Company::provisionLicensee();
+    DB::table('users')->where('company_id', Company::LICENSEE_ID)->delete();
+
+    // Clear the canonical anchor so resolution truly has nothing to fall back on.
+    $licensee = Company::query()->find(Company::LICENSEE_ID);
+    $licensee->metadata = [];
+    $licensee->save();
+
+    $usersTable = TableRegistry::query()->where('table_name', 'users')->firstOrFail();
+    $originalStable = $usersTable->is_stable;
+    $usersTable->markUnstable();
+
+    $messages = [];
+
+    try {
+        $provisioner = new FrameworkPrimitivesProvisioner(function (string $msg) use (&$messages): void {
+            $messages[] = $msg;
+        });
+
+        $user = $provisioner->provisionAdminUser();
+
+        expect($user)->toBeNull();
+        expect($messages)->toContain('Skipping admin user provisioning — users table is unstable; re-run setup to bootstrap admin.');
+    } finally {
+        if ($originalStable) {
+            $usersTable->markStable();
+        }
+    }
+});
 
 test('provisioner creates admin user from bootstrap file even when stale licensee users exist', function (): void {
     Company::provisionLicensee();
