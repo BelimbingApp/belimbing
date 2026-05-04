@@ -936,7 +936,6 @@
                                         wire:model.live="selectedModel"
                                         class="max-w-xs !py-0.5 !text-[11px]"
                                         aria-label="{{ __('AI model') }}"
-                                        :empty-label="$currentModel"
                                     />
                                 </div>
                             @else

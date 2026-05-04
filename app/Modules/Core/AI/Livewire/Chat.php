@@ -151,6 +151,9 @@ class Chat extends Component
         $hasPendingDelegations = $state['hasPendingDelegations'];
         $activeTurnsBySession = $state['activeTurnsBySession'];
         $canAccessControlPlane = $this->canAccessControlPlane();
+
+        $availableModels = $this->canSelectModel() ? $this->availableModels() : [];
+        $this->ensureSelectedModelPopulated($availableModels);
         $sessionTurnTargets = $agentActivated
             ? $this->sessionTurnTargets($sessions, $activeTurnsBySession)
             : [];
@@ -183,7 +186,7 @@ class Chat extends Component
             'settingsUrl' => $settingsUrl,
             'canSelectModel' => $this->canSelectModel(),
             'canAttachFiles' => $canAttach,
-            'availableModels' => $this->canSelectModel() ? $this->availableModels() : [],
+            'availableModels' => $availableModels,
             'currentModel' => $this->resolveCurrentModelLabel(),
             'sessionUsage' => $sessionUsage,
             'hasPendingDelegations' => $hasPendingDelegations,
@@ -411,6 +414,33 @@ class Chat extends Component
         }
 
         return $this->loadAvailableModels($companyId);
+    }
+
+    /**
+     * Ensure $selectedModel reflects a real composite ID at render time so the
+     * model picker shows the active model selected within its provider group
+     * instead of an orphan placeholder option above the groups.
+     *
+     * @param  list<array{id: string, label: string, provider: string, providerId: int}>  $availableModels
+     */
+    private function ensureSelectedModelPopulated(array $availableModels): void
+    {
+        if ($this->selectedModel !== null || $availableModels === []) {
+            return;
+        }
+
+        $employee = Employee::query()->find($this->employeeId);
+        $companyId = $employee?->company_id ? (int) $employee->company_id : null;
+
+        if ($companyId === null) {
+            return;
+        }
+
+        $default = $this->resolveDefaultCompositeModelId($companyId);
+
+        if ($default !== '') {
+            $this->selectedModel = $default;
+        }
     }
 
     /**

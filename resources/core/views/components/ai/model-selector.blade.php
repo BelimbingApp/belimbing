@@ -1,6 +1,5 @@
 @props([
     'models' => [],
-    'emptyLabel' => __('Select model…'),
 ])
 
 <select
@@ -9,7 +8,6 @@
         'px-input-x py-input-y focus:border-accent focus:ring-0 transition-colors',
     ]) }}
 >
-    <option value="">{{ $emptyLabel }}</option>
     @php
         $grouped = collect($models)->groupBy('provider');
     @endphp
