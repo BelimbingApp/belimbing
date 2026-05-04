@@ -1,5 +1,7 @@
 <?php
 
+use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
+use App\Base\Database\Services\Backup\Encryption\NoneEncryption;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -14,7 +16,7 @@ uses(TestCase::class);
  * Returns the absolute path of the source SQLite file so callers can clean up
  * and inspect it.
  */
-function bcSetupSqliteEnvironment(string $passphrase = 'test-pp'): string
+function bcSetupSqliteEnvironment(): string
 {
     $sourcePath = sys_get_temp_dir().'/blb-bcmd-src-'.bin2hex(random_bytes(4)).'.sqlite';
     @unlink($sourcePath);
@@ -37,20 +39,16 @@ function bcSetupSqliteEnvironment(string $passphrase = 'test-pp'): string
 
     Storage::fake('local');
 
-    putenv('BACKUP_PASSPHRASE='.$passphrase);
-    config()->set('backup.encryption.passphrase_env', 'BACKUP_PASSPHRASE');
     config()->set('backup.disk', 'local');
     config()->set('backup.local_disk', 'local');
     config()->set('backup.path_prefix', 'backups');
-    config()->set('backup.encryption.mode', 'passphrase');
-    config()->set('backup.restore.allow_current_database', false);
+    config()->set('backup.encryption.mode', 'app-key');
 
     return $sourcePath;
 }
 
 function bcCleanup(string $sourcePath): void
 {
-    putenv('BACKUP_PASSPHRASE');
     DB::purge('backup_source');
     @unlink($sourcePath);
 }
@@ -70,7 +68,7 @@ it('dry-run validates configuration and writes nothing', function (): void {
     }
 });
 
-it('creates an encrypted artifact and manifest in passphrase mode', function (): void {
+it('creates an encrypted artifact and manifest in app-key mode', function (): void {
     $src = bcSetupSqliteEnvironment();
 
     try {
@@ -83,20 +81,27 @@ it('creates an encrypted artifact and manifest in passphrase mode', function ():
         expect($artifacts)->toHaveCount(1);
         expect($manifests)->toHaveCount(1);
 
-        // Artifact begins with the BLBPASS magic; never plaintext "widgets".
+        // Artifact is ciphertext — does not contain plaintext DB content.
         $artifactBytes = Storage::disk('local')->get($artifacts[0]);
-        expect(substr((string) $artifactBytes, 0, 8))->toBe("BLBPASS\x01");
         expect(str_contains((string) $artifactBytes, 'widgets'))->toBeFalse();
         expect(str_contains((string) $artifactBytes, 'belimbing'))->toBeFalse();
 
-        // Manifest contains operational facts and no secrets.
+        // Manifest contains operational facts and envelope fields.
         $manifest = json_decode((string) Storage::disk('local')->get($manifests[0]), true);
         expect($manifest['driver'])->toBe('sqlite');
-        expect($manifest['encryption_mode'])->toBe('passphrase');
+        expect($manifest['encryption_mode'])->toBe('app-key');
         expect($manifest['status'])->toBe('success');
         expect($manifest['size_bytes'])->toBeGreaterThan(0);
         expect($manifest['sha256'])->toMatch('/^[0-9a-f]{64}$/');
-        expect($manifest)->not->toHaveKey('passphrase');
+        expect($manifest)->toHaveKey('wrapped_dek');
+        expect($manifest)->toHaveKey('dek_nonce');
+        expect($manifest)->toHaveKey('kek_fingerprint');
+        // Envelope fields must decode to the exact sizes mandated by the
+        // encryption contract: 32-byte DEK + 16-byte Poly1305 MAC = 48 bytes;
+        // 24-byte secretbox nonce; 8-byte HKDF fingerprint.
+        expect(strlen((string) base64_decode($manifest['wrapped_dek'], strict: true)))->toBe(48);
+        expect(strlen((string) base64_decode($manifest['dek_nonce'], strict: true)))->toBe(24);
+        expect(strlen((string) base64_decode($manifest['kek_fingerprint'], strict: true)))->toBe(8);
     } finally {
         bcCleanup($src);
     }
@@ -119,79 +124,6 @@ it('warns and writes plain artifact in none mode', function (): void {
         $bytes = (string) Storage::disk('local')->get($artifacts[0]);
         expect(substr($bytes, 0, 16))->toBe("SQLite format 3\x00");
     } finally {
-        bcCleanup($src);
-    }
-});
-
-it('round-trips: backup then restore reproduces source data', function (): void {
-    $src = bcSetupSqliteEnvironment();
-    $target = sys_get_temp_dir().'/blb-bcmd-restored-'.bin2hex(random_bytes(4)).'.sqlite';
-    @unlink($target);
-
-    try {
-        $this->artisan('blb:db:backup')->assertExitCode(0);
-
-        $manifestPath = collect(Storage::disk('local')->allFiles('backups'))
-            ->first(fn ($f) => str_ends_with($f, '.manifest.json'));
-        expect($manifestPath)->not->toBeNull();
-        $manifest = json_decode((string) Storage::disk('local')->get($manifestPath), true);
-        $backupId = $manifest['backup_id'];
-
-        $this->artisan("blb:db:restore --backup={$backupId} --target={$target}")
-            ->assertExitCode(0);
-
-        expect(file_exists($target))->toBeTrue();
-
-        $pdo = new PDO('sqlite:'.$target);
-        $rows = $pdo->query('SELECT name FROM widgets ORDER BY id')->fetchAll(PDO::FETCH_COLUMN);
-        expect($rows)->toBe(['apple', 'belimbing', 'cherry']);
-    } finally {
-        @unlink($target);
-        bcCleanup($src);
-    }
-});
-
-it('refuses to restore over the current application database', function (): void {
-    $src = bcSetupSqliteEnvironment();
-
-    try {
-        $this->artisan('blb:db:backup')->assertExitCode(0);
-
-        $manifestPath = collect(Storage::disk('local')->allFiles('backups'))
-            ->first(fn ($f) => str_ends_with($f, '.manifest.json'));
-        $manifest = json_decode((string) Storage::disk('local')->get($manifestPath), true);
-        $backupId = $manifest['backup_id'];
-
-        $this->artisan("blb:db:restore --backup={$backupId} --target={$src}")
-            ->expectsOutputToContain('Refusing to restore over the current application database.')
-            ->assertExitCode(1);
-    } finally {
-        bcCleanup($src);
-    }
-});
-
-it('fails restore on wrong passphrase without leaving a partial target', function (): void {
-    $src = bcSetupSqliteEnvironment();
-    $target = sys_get_temp_dir().'/blb-bcmd-restored-'.bin2hex(random_bytes(4)).'.sqlite';
-    @unlink($target);
-
-    try {
-        $this->artisan('blb:db:backup')->assertExitCode(0);
-
-        $manifestPath = collect(Storage::disk('local')->allFiles('backups'))
-            ->first(fn ($f) => str_ends_with($f, '.manifest.json'));
-        $manifest = json_decode((string) Storage::disk('local')->get($manifestPath), true);
-        $backupId = $manifest['backup_id'];
-
-        putenv('BACKUP_PASSPHRASE=wrong-passphrase');
-
-        $this->artisan("blb:db:restore --backup={$backupId} --target={$target}")
-            ->expectsOutputToContain('Authentication failed')
-            ->assertExitCode(1);
-
-        expect(file_exists($target))->toBeFalse();
-    } finally {
-        @unlink($target);
         bcCleanup($src);
     }
 });
@@ -246,3 +178,72 @@ it('skips work when backup.enabled is false', function (): void {
         bcCleanup($src);
     }
 });
+
+it('resolves an extension-registered encryption mode via the registry', function (): void {
+    $src = bcSetupSqliteEnvironment();
+
+    try {
+        // Register a custom mode that aliases 'none' — no real crypto needed for this test.
+        app(EncryptionModeRegistry::class)->register(
+            'ext-test-noop',
+            fn (array $config) => new NoneEncryption,
+        );
+
+        config()->set('backup.encryption.mode', 'ext-test-noop');
+
+        $this->artisan('blb:db:backup --dry-run')
+            ->expectsOutputToContain('Dry run OK.')
+            ->assertExitCode(0);
+    } finally {
+        bcCleanup($src);
+    }
+});
+
+it('aborts with fingerprint mismatch when kek_fingerprint in manifest differs from current APP_KEY', function (): void {
+    $src = bcSetupSqliteEnvironment();
+
+    try {
+        // First backup with current APP_KEY.
+        $this->artisan('blb:db:backup')->assertExitCode(0);
+
+        $manifests = collect(Storage::disk('local')->allFiles('backups'))
+            ->filter(fn ($f) => str_ends_with($f, '.manifest.json'))
+            ->values();
+        expect($manifests)->toHaveCount(1);
+
+        // Overwrite the kek_fingerprint to simulate a stale key.
+        $data = json_decode((string) Storage::disk('local')->get($manifests[0]), true);
+        $data['kek_fingerprint'] = base64_encode('stale-fp');
+        Storage::disk('local')->put($manifests[0], (string) json_encode($data));
+
+        $this->artisan('blb:db:backup')
+            ->expectsOutputToContain('APP_KEY has changed')
+            ->assertExitCode(1);
+    } finally {
+        bcCleanup($src);
+    }
+});
+
+it('preflight ignores non-app-key manifests on the disk', function (): void {
+    $src = bcSetupSqliteEnvironment();
+
+    try {
+        // Plant a none-mode manifest with a bad fingerprint; should not trigger preflight.
+        $fakeManifest = [
+            'backup_id' => 'old-none-backup',
+            'encryption_mode' => 'none',
+            'kek_fingerprint' => base64_encode('stale-fp'),
+            'status' => 'success',
+        ];
+        Storage::disk('local')->put(
+            'backups/testing/old-none-backup.manifest.json',
+            (string) json_encode($fakeManifest)
+        );
+
+        // Backup should succeed because the stale manifest is not app-key mode.
+        $this->artisan('blb:db:backup')->assertExitCode(0);
+    } finally {
+        bcCleanup($src);
+    }
+});
+

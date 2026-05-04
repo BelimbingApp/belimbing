@@ -161,3 +161,34 @@ If you need to break a circular dependency:
 2. **Split into two migrations** (create table, then add constraint)
 3. **Use pivot tables** for many-to-many relationships
 4. **Redesign the relationship** if truly circular
+
+## Backup — Extension Encryption Contract
+
+Core ships two modes: `none` and `app-key`. Extensions may register additional modes by calling `EncryptionModeRegistry::register()` from a **service provider `boot()` method** (not `register()` — the singleton must be resolved after it is bound).
+
+```php
+// In your extension's ServiceProvider::boot()
+public function boot(): void
+{
+    $this->app->make(\App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry::class)
+        ->register('ext-acme-kms', function (array $config): EncryptionMode {
+            return new AcmeKmsEncryption($config['encryption']['kms_key'] ?? '');
+        });
+}
+```
+
+### Rules every extension mode must follow
+
+| Rule | Detail |
+|------|--------|
+| **Vendor-prefixed name** | Use `ext-{vendor}-{descriptor}` (e.g. `ext-acme-kms`). Names `none`, `app-key`, and any unprefixed string are reserved for core. |
+| **Stable manifest identifier** | The string passed to `register()` is written verbatim to `manifest.encryption_mode`. Never change it after artifacts exist in the wild. |
+| **No plaintext on the storage disk** | `encryptFile()` must not write plaintext to the configured backup disk, ever. Short-lived local temps in `sys_get_temp_dir()` are acceptable when a streaming dump API isn't available (matches core's pipeline) — they must be `chmod 0600` and unlinked in a `finally` regardless of outcome. |
+| **Fail closed in `ensureReady()`** | Throw `BackupException::configurationInvalid()` or `BackupException::toolingMissing()` if key material or SDK is unavailable. Never silently fall back to plaintext. |
+| **Configuration ownership** | Extension-specific keys (recipient lists, KMS key IDs, SDK config) live in `backup.encryption.*` sub-keys chosen by the extension author. Core does not interpret or validate them. |
+| **Restore and rotation docs** | Extension authors own the operator-facing runbook for their modality: how to decrypt, how to rotate keys, and what the incident response looks like if key material is compromised. |
+
+### When to use `app-key` vs. an extension mode
+
+- **app-key** — right for most self-hosted deployments. No separate passphrase or key management ceremony. Rotation is handled via `blb:key:rotate`.
+- **Extension (e.g. KMS, age recipients)** — right when your threat model requires IAM-bound decrypt, multi-operator key escrow, or hardware-backed key material. Extension authors own the operational complexity, dependency risk, and security maintenance burden for their modality.
