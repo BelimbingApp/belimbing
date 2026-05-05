@@ -194,8 +194,7 @@ class ModelDiscoveryService
             $deactivated = $this->deleteMissingModels($provider, $discoveredIds);
         }
 
-        // Auto-set default model if none exists for this provider
-        $this->ensureDefaultModel($provider);
+        $this->unsetInactiveDefaultModel($provider);
 
         return [
             'added' => $added,
@@ -240,8 +239,7 @@ class ModelDiscoveryService
             }
         }
 
-        // Auto-set default model if none exists for this provider
-        $this->ensureDefaultModel($provider);
+        $this->unsetInactiveDefaultModel($provider);
 
         return [
             'added' => $added,
@@ -321,49 +319,19 @@ class ModelDiscoveryService
     }
 
     /**
-     * Ensure a provider has a default model set.
-     *
-     * Falls back to the first active model ordered by model_id.
+     * Operator selects the default model. Sync should not invent one, but it should
+     * clear an invalid default (e.g. deactivated model) so UI/runtime can surface
+     * a deterministic configuration error.
      */
-    public function ensureDefaultModel(AiProvider $provider): void
+    private function unsetInactiveDefaultModel(AiProvider $provider): void
     {
-        $currentDefault = AiProviderModel::query()
+        $default = AiProviderModel::query()
             ->where('ai_provider_id', $provider->id)
             ->where('is_default', true)
             ->first();
 
-        if ($currentDefault instanceof AiProviderModel && $currentDefault->is_active) {
-            return;
-        }
-
-        if ($currentDefault instanceof AiProviderModel) {
-            $currentDefault->unsetDefault();
-        }
-
-        $preferredModelId = config('ai.provider_overlay.'.$provider->name.'.default_model');
-
-        if (is_string($preferredModelId) && $preferredModelId !== '') {
-            $preferredModel = AiProviderModel::query()
-                ->where('ai_provider_id', $provider->id)
-                ->where('model_id', $preferredModelId)
-                ->where('is_active', true)
-                ->first();
-
-            if ($preferredModel instanceof AiProviderModel) {
-                $preferredModel->setAsDefault();
-
-                return;
-            }
-        }
-
-        $candidate = AiProviderModel::query()
-            ->where('ai_provider_id', $provider->id)
-            ->where('is_active', true)
-            ->orderBy('model_id')
-            ->first();
-
-        if ($candidate instanceof AiProviderModel) {
-            $candidate->setAsDefault();
+        if ($default instanceof AiProviderModel && ! $default->is_active) {
+            $default->unsetDefault();
         }
     }
 

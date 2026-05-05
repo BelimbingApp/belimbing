@@ -78,7 +78,7 @@ test('openai codex setup surfaces connected auth state and diagnostic action', f
         ->toContain('gpt-5.4', 'gpt-5.4-mini', 'gpt-5.2');
 });
 
-test('openai codex setup sync replaces an inactive default model', function (): void {
+test('openai codex setup sync does not invent a default model', function (): void {
     Http::fake([
         OAI_CODEX_BACKEND_BASE_URL.'/codex/models*' => Http::response([
             'models' => [
@@ -102,14 +102,12 @@ test('openai codex setup sync replaces an inactive default model', function (): 
 
     $provider->refresh();
 
-    $newDefault = AiProviderModel::query()
+    $defaultCount = AiProviderModel::query()
         ->where('ai_provider_id', $provider->id)
         ->where('is_default', true)
-        ->first();
+        ->count();
 
-    expect($stale->fresh()?->is_default)->toBeFalse()
-        ->and($newDefault)->not->toBeNull()
-        ->and($newDefault?->model_id)->not->toBe('gpt-5.1-codex-mini');
+    expect($defaultCount)->toBe(0);
 });
 
 test('openai codex setup sync message reflects provider discovery sync', function (): void {

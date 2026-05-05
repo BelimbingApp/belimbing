@@ -55,10 +55,6 @@ trait ManagesModels
         }
 
         $model->update(['is_active' => ! $model->is_active]);
-
-        if ($model->is_active) {
-            app(ModelDiscoveryService::class)->ensureDefaultModel($model->provider);
-        }
     }
 
     /**
