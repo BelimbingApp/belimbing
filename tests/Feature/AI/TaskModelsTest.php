@@ -36,6 +36,9 @@ test('task models page shows activation notice when lara is not activated', func
     $this->get(route('admin.ai.task-models'))
         ->assertOk()
         ->assertSee('Task models become available once Lara has at least one active provider');
+
+    Livewire::test(TaskModels::class)
+        ->assertViewHas('laraActivated', false);
 });
 
 test('task models page exposes commerce ai assist tasks before their runtimes are wired', function (): void {
@@ -50,6 +53,15 @@ test('task models page exposes commerce ai assist tasks before their runtimes ar
         ->assertSee('Clean product photos')
         ->assertSee('Draft item titles')
         ->assertSee('Runtime pending');
+
+    Livewire::test(TaskModels::class)
+        ->assertViewHas('laraActivated', true)
+        ->assertViewHas('tasks', function ($tasks): bool {
+            $keys = collect($tasks)->map(fn ($t) => $t->key)->all();
+
+            return in_array('photo-cleanup', $keys, true)
+                && in_array('describe-item', $keys, true);
+        });
 });
 
 test('recommendation saves a stable recommended task model choice', function (): void {
@@ -149,7 +161,6 @@ test('manual task model selection auto-picks the provider default model and pers
     ]);
 });
 
-
 test('task model save preserves existing execution controls', function (): void {
     activateLaraForTaskModels();
     $user = createTaskModelsTestUser();
@@ -240,12 +251,23 @@ test('task models switch execution control surfaces when the selected model fami
         'is_default' => true,
     ]);
 
-    Livewire::test(TaskModels::class)
+    $lw = Livewire::test(TaskModels::class)
         ->set('taskModes.coding', 'manual')
         ->set('taskProviderIds.coding', $anthropicProvider->id)
-        ->assertSee('Reasoning effort')
-        ->set('taskProviderIds.coding', $moonshotProvider->id)
+        ->assertSee('Reasoning effort');
+
+    $configAnthropic = app(ConfigResolver::class)->readTaskConfig(Employee::LARA_ID, 'coding');
+    expect($configAnthropic['mode'] ?? null)->toBe('manual')
+        ->and($configAnthropic['provider'] ?? null)->toBe('anthropic')
+        ->and($configAnthropic['model'] ?? null)->toBe('claude-opus-4-6');
+
+    $lw->set('taskProviderIds.coding', $moonshotProvider->id)
         ->assertDontSee('This model family enforces temperature');
+
+    $configMoonshot = app(ConfigResolver::class)->readTaskConfig(Employee::LARA_ID, 'coding');
+    expect($configMoonshot['mode'] ?? null)->toBe('manual')
+        ->and($configMoonshot['provider'] ?? null)->toBe('moonshotai')
+        ->and($configMoonshot['model'] ?? null)->toBe('kimi-k2.5');
 });
 
 function createTaskModelsTestUser(): User
