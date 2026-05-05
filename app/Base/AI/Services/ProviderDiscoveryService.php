@@ -39,6 +39,41 @@ class ProviderDiscoveryService
         array $additionalHeaders = [],
         array $query = [],
     ): array {
+        $base = rtrim($baseUrl, '/');
+        $headers = $this->normalizeHeaders($additionalHeaders, $apiKey);
+        $normalizedQuery = $this->normalizeQuery($query);
+
+        $response = $this->integrationGateway()->send(new IntegrationRequest(
+            system: 'ai_provider',
+            operation: 'ai.provider.models.discover',
+            method: 'GET',
+            endpoint: $base.'/models',
+            protocolOperation: 'GET /models',
+            provider: $this->providerNameFromBaseUrl($baseUrl),
+            headers: $headers,
+            query: $normalizedQuery,
+            timeoutSeconds: 15,
+            metadata: [
+                'base_url' => $base,
+            ],
+        ));
+
+        if ($response->failed()) {
+            throw ProviderDiscoveryException::httpFailure(
+                (int) ($response->status ?? 0),
+                $response->exchange?->id,
+            );
+        }
+
+        return $this->modelsFromDiscoveryResponse($response);
+    }
+
+    /**
+     * @param  array<string, string>  $additionalHeaders
+     * @return array<string, string>
+     */
+    private function normalizeHeaders(array $additionalHeaders, string $apiKey): array
+    {
         $headers = [];
 
         foreach ($additionalHeaders as $name => $value) {
@@ -55,38 +90,24 @@ class ProviderDiscoveryService
             $headers['Authorization'] = 'Bearer '.$apiKey;
         }
 
-        $normalizedQuery = [];
+        return $headers;
+    }
+
+    /**
+     * @param  array<string, scalar|null>  $query
+     * @return array<string, scalar|null>
+     */
+    private function normalizeQuery(array $query): array
+    {
+        $normalized = [];
+
         foreach ($query as $key => $value) {
-            if (is_string($key) && $key !== '') {
-                if (is_scalar($value) || $value === null) {
-                    $normalizedQuery[$key] = $value;
-                }
+            if (is_string($key) && $key !== '' && (is_scalar($value) || $value === null)) {
+                $normalized[$key] = $value;
             }
         }
 
-        $response = $this->integrationGateway()->send(new IntegrationRequest(
-            system: 'ai_provider',
-            operation: 'ai.provider.models.discover',
-            method: 'GET',
-            endpoint: rtrim($baseUrl, '/').'/models',
-            protocolOperation: 'GET /models',
-            provider: $this->providerNameFromBaseUrl($baseUrl),
-            headers: $headers,
-            query: $normalizedQuery,
-            timeoutSeconds: 15,
-            metadata: [
-                'base_url' => rtrim($baseUrl, '/'),
-            ],
-        ));
-
-        if ($response->failed()) {
-            throw ProviderDiscoveryException::httpFailure(
-                (int) ($response->status ?? 0),
-                $response->exchange?->id,
-            );
-        }
-
-        return $this->modelsFromDiscoveryResponse($response);
+        return $normalized;
     }
 
     /**
