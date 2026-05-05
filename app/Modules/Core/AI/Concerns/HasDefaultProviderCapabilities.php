@@ -17,11 +17,14 @@ trait HasDefaultProviderCapabilities
      */
     public function advancedSettings(): array
     {
+        // Keep signature compatible with ProviderDefinition; parameter may be unused by default implementations.
         return [];
     }
 
     public function modelsDiscoveryProfile(AiProvider $provider, ResolvedProviderConfig $resolved): ModelsDiscoveryProfile
     {
+        $provider->getKey();
+
         return new ModelsDiscoveryProfile(
             baseUrl: rtrim($resolved->baseUrl, '/'),
             headers: $this->normalizedHeaders($resolved),
@@ -31,11 +34,15 @@ trait HasDefaultProviderCapabilities
 
     public function discoverModels(AiProvider $provider): ?array
     {
+        $provider->getKey();
+
         return null;
     }
 
     public function fallbackModelsOnDiscoveryFailure(AiProvider $provider): ?array
     {
+        $provider->getKey();
+
         return null;
     }
 
