@@ -131,23 +131,10 @@ test('disabled backup config short-circuits the run-backup action', function ():
         ->assertSee('Backup is disabled');
 });
 
-test('preflight flags missing passphrase env when mode=passphrase and worker has no env var', function (): void {
+test('runBackup flashes configuration error when encryption mode is not registered', function (): void {
     $this->actingAs(createAdminUser());
 
-    config()->set('backup.encryption.mode', 'passphrase');
-    config()->set('backup.encryption.passphrase_env', 'MISSING_PP_VAR_FOR_TEST');
-    putenv('MISSING_PP_VAR_FOR_TEST');
-
-    Livewire::test(Index::class)
-        ->assertSet('rows', [])
-        ->assertSee('environment variable is not visible to the application worker');
-});
-
-test('runBackup accepts an inline passphrase override and never stores it', function (): void {
-    $this->actingAs(createAdminUser());
-
-    // Source: a small file-based sqlite DB.
-    $sourcePath = sys_get_temp_dir().'/blb-ui-pp-'.bin2hex(random_bytes(4)).'.sqlite';
+    $sourcePath = sys_get_temp_dir().'/blb-ui-unknown-mode-'.bin2hex(random_bytes(4)).'.sqlite';
     @unlink($sourcePath);
     touch($sourcePath);
 
@@ -161,26 +148,53 @@ test('runBackup accepts an inline passphrase override and never stores it', func
     DB::connection('backup_ui_source')->statement('CREATE TABLE t (id INTEGER PRIMARY KEY)');
 
     config()->set('backup.connection', 'backup_ui_source');
-    config()->set('backup.encryption.mode', 'passphrase');
-    config()->set('backup.encryption.passphrase_env', 'MISSING_PP_FOR_OVERRIDE_TEST');
-    putenv('MISSING_PP_FOR_OVERRIDE_TEST');
+    config()->set('backup.encryption.mode', 'ext-unregistered-mode-for-test');
 
     try {
-        $component = Livewire::test(Index::class)
-            ->call('runBackup', 'inline-ui-passphrase')
+        Livewire::test(Index::class)
+            ->call('runBackup')
+            ->assertSet('statusVariant', 'danger')
+            ->assertSee('Unknown encryption mode');
+    } finally {
+        DB::purge('backup_ui_source');
+        @unlink($sourcePath);
+    }
+});
+
+test('runBackup completes in app-key mode and writes an encrypted artifact plus manifest', function (): void {
+    $this->actingAs(createAdminUser());
+
+    $sourcePath = sys_get_temp_dir().'/blb-ui-appkey-'.bin2hex(random_bytes(4)).'.sqlite';
+    @unlink($sourcePath);
+    touch($sourcePath);
+
+    config()->set('database.connections.backup_ui_source', [
+        'driver' => 'sqlite',
+        'database' => $sourcePath,
+        'prefix' => '',
+        'foreign_key_constraints' => true,
+    ]);
+    DB::purge('backup_ui_source');
+    DB::connection('backup_ui_source')->statement('CREATE TABLE t (id INTEGER PRIMARY KEY)');
+
+    config()->set('backup.connection', 'backup_ui_source');
+    config()->set('backup.encryption.mode', 'app-key');
+
+    try {
+        Livewire::test(Index::class)
+            ->call('runBackup')
             ->assertSet('statusVariant', 'success');
 
-        // Public properties must not echo the secret back to the client.
-        $component->assertNotSet('statusMessage', 'inline-ui-passphrase');
-
         $files = Storage::disk('local')->allFiles('backups');
-        $artifacts = array_filter($files, fn ($f) => str_ends_with($f, '.bak.enc'));
+        $artifacts = array_values(array_filter($files, fn ($f) => str_ends_with($f, '.bak.enc')));
         expect($artifacts)->toHaveCount(1);
 
-        // Artifact begins with the passphrase magic header — confirms the
-        // override drove a real encrypted run.
-        $bytes = (string) Storage::disk('local')->get(array_values($artifacts)[0]);
-        expect(substr($bytes, 0, 8))->toBe("BLBPASS\x01");
+        $manifestPath = str_replace('.bak.enc', '.manifest.json', $artifacts[0]);
+        expect(Storage::disk('local')->exists($manifestPath))->toBeTrue();
+
+        $manifest = json_decode((string) Storage::disk('local')->get($manifestPath), true);
+        expect(is_array($manifest))->toBeTrue()
+            ->and($manifest['encryption_mode'] ?? null)->toBe('app-key');
     } finally {
         DB::purge('backup_ui_source');
         @unlink($sourcePath);
