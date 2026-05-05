@@ -28,3 +28,18 @@ it('exposes a clear pointer to the safe rotation command', function (): void {
         ->expectsOutputToContain('php artisan blb:key:rotate')
         ->assertExitCode(1);
 });
+
+// Regression: a previous implementation tried to delegate to the real
+// key:generate via `passthru(php artisan key:generate ...)` from the same
+// overridden command, which recursed forever in CI (.env has APP_KEY=)
+// and aborted with SIGABRT (exit 134). Here we prove the empty-APP_KEY
+// bootstrap path runs in-process to completion without recursion.
+// `--show` is used so parent::handle() prints the candidate key and returns
+// without writing to the project .env.
+it('delegates to the stock command when APP_KEY is empty (fresh install / CI bootstrap)', function (): void {
+    config(['app.key' => '']);
+
+    $this->artisan('key:generate', ['--show' => true])
+        ->expectsOutputToContain('base64:')
+        ->assertExitCode(0);
+});
