@@ -213,11 +213,12 @@ test('OpenAiCodexDefinition owns curated model discovery', function (): void {
     $provider = new AiProvider;
     $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class));
 
-    expect($def->discoverModels($provider))->toBe([
-        ['model_id' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
-        ['model_id' => 'gpt-5.4-mini', 'display_name' => 'gpt-5.4-mini'],
-        ['model_id' => 'gpt-5.2', 'display_name' => 'gpt-5.2'],
-    ]);
+    expect($def->discoverModels($provider))->toBeNull()
+        ->and($def->fallbackModelsOnDiscoveryFailure($provider))->toBe([
+            ['model_id' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
+            ['model_id' => 'gpt-5.4-mini', 'display_name' => 'gpt-5.4-mini'],
+            ['model_id' => 'gpt-5.2', 'display_name' => 'gpt-5.2'],
+        ]);
 });
 
 test('GenericLocalDefinition resolveRuntime returns config without api_key when none set', function (): void {
