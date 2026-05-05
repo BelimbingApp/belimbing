@@ -14,9 +14,9 @@ use App\Modules\Core\AI\Services\ModelDiscoveryService;
  *
  * Handles add model (manual), toggle availability, inline cost overrides,
  * default model selection, and per-model execution controls. For API-discovered
- * providers, models are toggled on/off rather than deleted. Curated providers
- * (e.g. OpenAI Codex) reconcile the DB on sync and drop rows that are not on
- * the curated list.
+ * providers, models are toggled on/off rather than deleted. Providers that supply
+ * an authoritative list reconcile the DB on sync and drop rows that are not on
+ * that list.
  */
 trait ManagesModels
 {

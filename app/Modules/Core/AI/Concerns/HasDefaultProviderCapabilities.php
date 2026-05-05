@@ -39,13 +39,6 @@ trait HasDefaultProviderCapabilities
         return null;
     }
 
-    public function fallbackModelsOnDiscoveryFailure(AiProvider $provider): ?array
-    {
-        $provider->getKeyName();
-
-        return null;
-    }
-
     /**
      * @return array<string, string>
      */

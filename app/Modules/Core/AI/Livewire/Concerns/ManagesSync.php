@@ -95,13 +95,13 @@ trait ManagesSync
         $this->syncMessage = match ($source) {
             'provider_definition' => match (true) {
                 $total === 0 => __('Belimbing did not define any fallback models for this provider.'),
-                $deactivated > 0 => __('Belimbing checked this provider against its curated model list: :total supported models remain active locally, :deactivated', [
+                $deactivated > 0 => __('Belimbing checked this provider against its defined model list: :total supported models remain active locally, :deactivated', [
                     'total' => $total,
                     'deactivated' => trans_choice('{1} 1 unsupported local model deactivated.|[2,*] :count unsupported local models deactivated.', $deactivated, [
                         'count' => $deactivated,
                     ]),
                 ]),
-                default => __('Belimbing checked this provider against its curated model list: :total supported models are active locally.', [
+                default => __('Belimbing checked this provider against its defined model list: :total supported models are active locally.', [
                     'total' => $total,
                 ]),
             },

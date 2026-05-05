@@ -97,11 +97,6 @@ final readonly class GenericOAuthDefinition implements ProviderDefinition
     {
         return [];
     }
-
-    public function fallbackModelsOnDiscoveryFailure(AiProvider $provider): ?array
-    {
-        return null;
-    }
 }
 
 final class GenericOAuthRuntimeResolutionException extends \RuntimeException {}

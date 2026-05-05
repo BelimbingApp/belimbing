@@ -61,11 +61,11 @@ The Codex app-server README is the most authoritative public signal we have for 
 
 Refreshing OAuth credentials and building request headers are related but different responsibilities. The provider definition should resolve fresh runtime config from stored credentials, while the transport layer should consume the resolved config and remain focused on the ChatGPT backend protocol.
 
-### Start with curated models, not blind `/models` discovery
+### Prefer live model discovery (no curated fallback)
 
-BLB's standard provider discovery assumes a bearer token plus `GET /models`. That assumption is unsafe for this transport. The first version should use a curated set of supported Codex models and only add live discovery if BLB verifies the backend contract and failure modes end to end.
+Codex exposes a workable models endpoint for discovery, so BLB should use live discovery and avoid maintaining a curated list that will drift. If discovery fails, BLB should surface the failure rather than silently importing a stale fallback list.
 
-Implementation note: provider-specific discovery policy should live on the provider definition boundary rather than in `ModelDiscoveryService` branching on provider names. That keeps curated or non-HTTP discovery rules localized to the provider that owns them.
+Implementation note: provider-specific discovery policy should live on the provider definition boundary rather than in `ModelDiscoveryService` branching on provider names.
 
 ## Public Contract
 
@@ -74,7 +74,7 @@ Implementation note: provider-specific discovery policy should live on the provi
 - Persisted credentials should include `access_token`, `refresh_token`, `expires_at`, and `account_id`; any optional token metadata should live in the same encrypted credential bag.
 - Runtime resolution should yield the ChatGPT backend base URL plus any required headers and refreshed bearer token material through `ResolvedProviderConfig`.
 - The runtime should treat Codex subscription traffic as a dedicated API family with its own mapper and protocol behavior.
-- Model selection should start from a curated Codex model list rather than generic live discovery.
+- Model selection should use live discovery rather than a curated Codex model list.
 - Provider state should be able to surface ChatGPT auth mode, plan type, and login-in-progress status in a way that matches the official Codex app-server lifecycle.
 - UI copy and logs should say "OpenAI Codex OAuth" or "Codex subscription" rather than "OpenAI API key" when this provider fails.
 
@@ -168,7 +168,7 @@ Goal: make BLB able to sign a user into OpenAI Codex without depending on Codex 
 
 Goal: make runtime requests use the ChatGPT backend contract instead of the public OpenAI API path.
 
-Implementation note: the Codex transport now shares the common Responses parsing/streaming base with standard OpenAI Responses, but owns its own endpoint suffix (`/codex/responses`). The curated fallback model seed also now tracks the broader OpenClaw-compatible baseline (`gpt-5.4`, `gpt-5.4-mini`, `gpt-5.2`, `gpt-5.1-codex-mini`), and the Codex setup page resyncs that curated set for already-connected providers so older one-model connections self-heal.
+Implementation note: the Codex transport now shares the common Responses parsing/streaming base with standard OpenAI Responses, but owns its own endpoint suffix (`/codex/responses`). Model lists should be sourced from live discovery rather than curated seeds.
 
 #### Phase 3.1 — Resolve config (refresh-before-use)
 
@@ -186,9 +186,9 @@ Implementation note: the Codex transport now shares the common Responses parsing
     - [x] `account_id` (derived from JWT for `chatgpt-account-id` header)
   - [x] Ensure the transport does not reuse “OpenAI Responses” assumptions (no `/v1/models` discovery by default).
 
-#### Phase 3.3 — Model catalog (curated v1)
+#### Phase 3.3 — Model discovery
 
-- [x] Seed a curated Codex model list in the provider definition (or `ModelCatalogService` overlay) and disable generic `/models` discovery for v1.
+- [x] Use live `/models` discovery for Codex model sync.
 - [x] Add a “contract changed” error bucket in logs/UI when transport rejects the session or headers.
 
 ### Phase 4 — Harden admin UX and verification

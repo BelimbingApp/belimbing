@@ -118,9 +118,4 @@ final readonly class GithubCopilotDefinition implements ProviderDefinition
     {
         return null;
     }
-
-    public function fallbackModelsOnDiscoveryFailure(AiProvider $provider): ?array
-    {
-        return null;
-    }
 }

@@ -252,21 +252,6 @@ return [
             'api_type_overrides' => [
                 '*' => 'openai_codex_responses',
             ],
-            // Curated fallback seed for ChatGPT-backed Codex accounts.
-            // Keep this explicit until BLB has a verified live-discovery contract.
-            // Match codex-rs/codex-api endpoint/models.rs (append_client_version_query).
-            'models_discovery_client_version' => (string) env(
-                'BLB_AI_OPENAI_CODEX_MODELS_CLIENT_VERSION',
-                OpenAiCodexDefinition::MODELS_DISCOVERY_DEFAULT_CLIENT_VERSION,
-            ),
-            'default_model' => 'gpt-5.4',
-            'curated_models' => [
-                'gpt-5.4',
-                'gpt-5.4-mini',
-                'gpt-5.2',
-                'gpt-5.2-codex',
-                'gpt-5.3-codex',
-            ],
             // No api_key_url: this provider is subscription-backed, not API-key-backed.
         ],
         'anthropic' => [

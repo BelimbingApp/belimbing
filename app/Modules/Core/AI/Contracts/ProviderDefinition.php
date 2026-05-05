@@ -98,13 +98,4 @@ interface ProviderDefinition
      * @return list<array{model_id: string, display_name: string}>|null
      */
     public function discoverModels(AiProvider $provider): ?array;
-
-    /**
-     * Optional provider-owned fallback models when live discovery fails.
-     *
-     * When non-null, the sync pipeline should treat this list as authoritative.
-     *
-     * @return list<array{model_id: string, display_name: string}>|null
-     */
-    public function fallbackModelsOnDiscoveryFailure(AiProvider $provider): ?array;
 }

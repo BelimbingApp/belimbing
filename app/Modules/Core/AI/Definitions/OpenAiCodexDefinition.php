@@ -146,10 +146,7 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
 
     public function advancedSettings(): array
     {
-        $default = (string) config(
-            'ai.provider_overlay.'.self::KEY.'.models_discovery_client_version',
-            self::MODELS_DISCOVERY_DEFAULT_CLIENT_VERSION,
-        );
+        $default = self::MODELS_DISCOVERY_DEFAULT_CLIENT_VERSION;
 
         return [
             new ProviderAdvancedSetting(
@@ -184,10 +181,7 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
             $headers['User-Agent'] = 'codex-cli';
         }
 
-        $defaultClientVersion = (string) config(
-            'ai.provider_overlay.'.self::KEY.'.models_discovery_client_version',
-            self::MODELS_DISCOVERY_DEFAULT_CLIENT_VERSION,
-        );
+        $defaultClientVersion = self::MODELS_DISCOVERY_DEFAULT_CLIENT_VERSION;
 
         $clientVersion = $defaultClientVersion;
 
@@ -217,24 +211,6 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
     public function discoverModels(AiProvider $provider): ?array
     {
         return null;
-    }
-
-    public function fallbackModelsOnDiscoveryFailure(AiProvider $provider): ?array
-    {
-        $models = config('ai.provider_overlay.'.self::KEY.'.curated_models', []);
-
-        if (! is_array($models) || $models === []) {
-            return null;
-        }
-
-        $result = [];
-        foreach ($models as $modelId) {
-            if (is_string($modelId) && $modelId !== '') {
-                $result[] = ['model_id' => $modelId, 'display_name' => $modelId];
-            }
-        }
-
-        return $result === [] ? null : $result;
     }
 
     /**

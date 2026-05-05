@@ -74,7 +74,7 @@ class ModelDiscoveryService
      * (display_name, costs, etc.) is served from ModelCatalogService at read
      * time — only model_id and admin config (is_active, cost_override) are stored.
      *
-     * When the provider supplies a fixed curated list (authoritative sync), any local
+     * When the provider supplies a fixed definition-owned list (authoritative sync), any local
      * rows whose {@see AiProviderModel::$model_id} is not in that list are deleted.
      *
      * If API discovery fails, falls back to importing from the models.dev catalog.
@@ -106,25 +106,12 @@ class ModelDiscoveryService
         try {
             $discovered = $this->discoverModels($provider);
         } catch (RuntimeException $e) {
-            $fallback = $definition->fallbackModelsOnDiscoveryFailure($provider);
             $exchangeId = $this->markProviderDiscoveryFallback(
                 $provider,
                 'provider_discovery_failed',
                 $e,
-                fallbackProvider: $fallback !== null ? 'provider_definition' : 'models.dev',
+                fallbackProvider: 'models.dev',
             );
-
-            if ($fallback !== null) {
-                return [
-                    ...$this->syncDiscoveredModels(
-                        $provider,
-                        $fallback,
-                        authoritative: true,
-                        source: 'provider_definition_fallback',
-                    ),
-                    'exchange_id' => $exchangeId,
-                ];
-            }
 
             $this->modelCatalog->ensureSynced();
 
@@ -135,24 +122,11 @@ class ModelDiscoveryService
         }
 
         if ($discovered === []) {
-            $fallback = $definition->fallbackModelsOnDiscoveryFailure($provider);
             $exchangeId = $this->markProviderDiscoveryFallback(
                 $provider,
                 'empty_provider_discovery',
-                fallbackProvider: $fallback !== null ? 'provider_definition' : 'models.dev',
+                fallbackProvider: 'models.dev',
             );
-
-            if ($fallback !== null) {
-                return [
-                    ...$this->syncDiscoveredModels(
-                        $provider,
-                        $fallback,
-                        authoritative: true,
-                        source: 'provider_definition_fallback',
-                    ),
-                    'exchange_id' => $exchangeId,
-                ];
-            }
 
             $this->modelCatalog->ensureSynced();
 
@@ -394,7 +368,7 @@ class ModelDiscoveryService
     }
 
     /**
-     * Remove local rows whose model_id is not on the curated list (authoritative sync).
+     * Remove local rows whose model_id is not on the authoritative list (authoritative sync).
      *
      * Unlike {@see deactivateMissingModels()}, this drops already-inactive orphans so
      * they do not linger in the admin model table after "Sync models".
