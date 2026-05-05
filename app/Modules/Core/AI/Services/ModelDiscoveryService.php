@@ -96,9 +96,9 @@ class ModelDiscoveryService
                 authoritative: true,
                 source: 'provider_definition',
             );
-            $exchangeId = $this->latestProviderDiscoveryExchange($provider)?->id;
 
-            return [...$summary, 'exchange_id' => $exchangeId];
+            // Definition-owned sync may not perform any discovery HTTP request, so there may be no exchange.
+            return [...$summary, 'exchange_id' => null];
         }
 
         $exchangeId = null;
