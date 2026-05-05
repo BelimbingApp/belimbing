@@ -9,6 +9,7 @@ use App\Modules\Core\AI\Contracts\ProviderDefinition;
 use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Values\ModelsDiscoveryProfile;
 use App\Modules\Core\AI\Values\ProviderField;
 use App\Modules\Core\AI\Values\ProviderOAuthState;
 use App\Modules\Core\AI\Values\ResolvedProviderConfig;
@@ -82,9 +83,24 @@ final readonly class GenericOAuthDefinition implements ProviderDefinition
         throw new GenericOAuthRuntimeResolutionException('This provider requires a dedicated OAuth sign-in flow. Belimbing does not implement a generic OAuth runtime for it yet.');
     }
 
+    public function advancedSettings(): array
+    {
+        return [];
+    }
+
+    public function modelsDiscoveryProfile(AiProvider $provider, ResolvedProviderConfig $resolved): ModelsDiscoveryProfile
+    {
+        return new ModelsDiscoveryProfile(baseUrl: rtrim($resolved->baseUrl, '/'));
+    }
+
     public function discoverModels(AiProvider $provider): ?array
     {
         return [];
+    }
+
+    public function fallbackModelsOnDiscoveryFailure(AiProvider $provider): ?array
+    {
+        return null;
     }
 }
 

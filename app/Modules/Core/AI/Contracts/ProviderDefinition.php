@@ -8,6 +8,8 @@ namespace App\Modules\Core\AI\Contracts;
 use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Values\ModelsDiscoveryProfile;
+use App\Modules\Core\AI\Values\ProviderAdvancedSetting;
 use App\Modules\Core\AI\Values\ProviderField;
 use App\Modules\Core\AI\Values\ResolvedProviderConfig;
 use Illuminate\Validation\ValidationException;
@@ -68,6 +70,25 @@ interface ProviderDefinition
     public function resolveRuntime(AiProvider $provider): ResolvedProviderConfig;
 
     /**
+     * Provider-owned advanced settings (stored in base_settings).
+     *
+     * These settings are global (not company-scoped) unless a provider chooses
+     * to implement scoping later; callers should not assume scope.
+     *
+     * @return list<ProviderAdvancedSetting>
+     */
+    public function advancedSettings(): array;
+
+    /**
+     * Build provider-owned HTTP inputs for models discovery.
+     *
+     * Generic providers typically return the resolved base URL with no extra
+     * query parameters. Outliers (e.g. non-standard paths, required query/headers)
+     * should define them here so orchestration code remains branch-free.
+     */
+    public function modelsDiscoveryProfile(AiProvider $provider, ResolvedProviderConfig $resolved): ModelsDiscoveryProfile;
+
+    /**
      * Return provider-owned model discovery results when generic /models is unsafe or inapplicable.
      *
      * Returning `null` delegates discovery to the shared OpenAI-compatible
@@ -77,4 +98,13 @@ interface ProviderDefinition
      * @return list<array{model_id: string, display_name: string}>|null
      */
     public function discoverModels(AiProvider $provider): ?array;
+
+    /**
+     * Optional provider-owned fallback models when live discovery fails.
+     *
+     * When non-null, the sync pipeline should treat this list as authoritative.
+     *
+     * @return list<array{model_id: string, display_name: string}>|null
+     */
+    public function fallbackModelsOnDiscoveryFailure(AiProvider $provider): ?array;
 }

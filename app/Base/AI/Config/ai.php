@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
+
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
@@ -252,6 +254,11 @@ return [
             ],
             // Curated fallback seed for ChatGPT-backed Codex accounts.
             // Keep this explicit until BLB has a verified live-discovery contract.
+            // Match codex-rs/codex-api endpoint/models.rs (append_client_version_query).
+            'models_discovery_client_version' => (string) env(
+                'BLB_AI_OPENAI_CODEX_MODELS_CLIENT_VERSION',
+                OpenAiCodexDefinition::MODELS_DISCOVERY_DEFAULT_CLIENT_VERSION,
+            ),
             'default_model' => 'gpt-5.4',
             'curated_models' => [
                 'gpt-5.4',

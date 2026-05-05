@@ -57,10 +57,13 @@ class ModelDiscoveryService
         }
 
         $resolved = $definition->resolveRuntime($provider);
+        $http = $definition->modelsDiscoveryProfile($provider, $resolved);
 
         return $this->providerDiscovery->discoverModels(
-            rtrim($resolved->baseUrl, '/'),
+            $http->baseUrl,
             $resolved->apiKey ?? '',
+            $http->headers,
+            $http->query,
         );
     }
 
@@ -87,22 +90,43 @@ class ModelDiscoveryService
         $definitionModels = $definition->discoverModels($provider);
 
         if ($definitionModels !== null) {
-            return $this->syncDiscoveredModels(
+            $summary = $this->syncDiscoveredModels(
                 $provider,
                 $definitionModels,
                 authoritative: true,
                 source: 'provider_definition',
             );
-        }
+            $exchangeId = $this->latestProviderDiscoveryExchange($provider)?->id;
 
-        $this->modelCatalog->ensureSynced();
+            return [...$summary, 'exchange_id' => $exchangeId];
+        }
 
         $exchangeId = null;
 
         try {
             $discovered = $this->discoverModels($provider);
         } catch (RuntimeException $e) {
-            $exchangeId = $this->markProviderDiscoveryFallback($provider, 'provider_discovery_failed', $e);
+            $fallback = $definition->fallbackModelsOnDiscoveryFailure($provider);
+            $exchangeId = $this->markProviderDiscoveryFallback(
+                $provider,
+                'provider_discovery_failed',
+                $e,
+                fallbackProvider: $fallback !== null ? 'provider_definition' : 'models.dev',
+            );
+
+            if ($fallback !== null) {
+                return [
+                    ...$this->syncDiscoveredModels(
+                        $provider,
+                        $fallback,
+                        authoritative: true,
+                        source: 'provider_definition_fallback',
+                    ),
+                    'exchange_id' => $exchangeId,
+                ];
+            }
+
+            $this->modelCatalog->ensureSynced();
 
             return [
                 ...$this->importFromCatalog($provider),
@@ -111,7 +135,26 @@ class ModelDiscoveryService
         }
 
         if ($discovered === []) {
-            $exchangeId = $this->markProviderDiscoveryFallback($provider, 'empty_provider_discovery');
+            $fallback = $definition->fallbackModelsOnDiscoveryFailure($provider);
+            $exchangeId = $this->markProviderDiscoveryFallback(
+                $provider,
+                'empty_provider_discovery',
+                fallbackProvider: $fallback !== null ? 'provider_definition' : 'models.dev',
+            );
+
+            if ($fallback !== null) {
+                return [
+                    ...$this->syncDiscoveredModels(
+                        $provider,
+                        $fallback,
+                        authoritative: true,
+                        source: 'provider_definition_fallback',
+                    ),
+                    'exchange_id' => $exchangeId,
+                ];
+            }
+
+            $this->modelCatalog->ensureSynced();
 
             return [
                 ...$this->importFromCatalog($provider),
@@ -239,6 +282,7 @@ class ModelDiscoveryService
         AiProvider $provider,
         string $reason,
         ?RuntimeException $exception = null,
+        string $fallbackProvider = 'models.dev',
     ): ?string {
         if (! Schema::hasTable('base_integration_outbound_exchanges')) {
             return null;
@@ -257,7 +301,7 @@ class ModelDiscoveryService
         }
 
         $metadata = $exchange->metadata ?? [];
-        $metadata['fallback_provider'] = 'models.dev';
+        $metadata['fallback_provider'] = $fallbackProvider;
 
         $exchange->update([
             'fallback_used' => true,

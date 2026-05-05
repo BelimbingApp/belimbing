@@ -13,6 +13,7 @@
 namespace App\Modules\Core\AI\Livewire\Providers;
 
 use App\Base\AI\Services\ModelCatalogService;
+use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\Livewire\Concerns\FormatsDisplayValues;
@@ -22,6 +23,7 @@ use App\Modules\Core\AI\Livewire\Concerns\ManagesProviders;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesSync;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Modules\Core\AI\Services\ProviderDefinitionRegistry;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -40,6 +42,27 @@ class Providers extends Component implements ProvidesLaraPageContext
 
     /** Which catalog provider row is expanded to show model details. */
     public ?string $expandedCatalogProvider = null;
+
+    /**
+     * Provider-owned advanced settings schema for the edit modal.
+     *
+     * @var list<array{
+     *   state_key: string,
+     *   settings_key: string,
+     *   label: string,
+     *   help: string|null,
+     *   input_type: string,
+     *   default: mixed,
+     *   rules: list<string>
+     * }>
+     */
+    public array $advancedSettingsSchema = [];
+
+    /** @var array<string, mixed> Livewire state keyed by schema.state_key */
+    public array $advancedSettings = [];
+
+    /** @var array<string, bool> Whether schema.state_key is overridden in base_settings */
+    public array $advancedSettingsOverridden = [];
 
     /**
      * Toggle expansion of a connected provider row.
@@ -65,6 +88,96 @@ class Providers extends Component implements ProvidesLaraPageContext
     public function connectProvider(string $key): void
     {
         $this->redirectRoute('admin.ai.providers.setup', ['providerKey' => $key], navigate: true);
+    }
+
+    protected function afterOpenEditProvider(AiProvider $provider): void
+    {
+        $this->advancedSettingsSchema = [];
+        $this->advancedSettings = [];
+        $this->advancedSettingsOverridden = [];
+
+        $definition = app(ProviderDefinitionRegistry::class)->for($provider->name);
+        $settings = app(SettingsService::class);
+
+        foreach ($definition->advancedSettings() as $setting) {
+            $schema = $setting->toArray();
+            $stateKey = $schema['state_key'];
+            $settingsKey = $schema['settings_key'];
+            $default = $schema['default'];
+
+            $overridden = $settings->has($settingsKey, scope: null);
+            $value = $settings->get($settingsKey, default: null, scope: null);
+
+            $current = $overridden && $value !== null && $value !== ''
+                ? $value
+                : $default;
+
+            $this->advancedSettingsSchema[] = $schema;
+            $this->advancedSettings[$stateKey] = $current;
+            $this->advancedSettingsOverridden[$stateKey] = $overridden;
+        }
+    }
+
+    public function saveAdvancedSettings(): void
+    {
+        if (! $this->isEditingProvider || $this->advancedSettingsSchema === []) {
+            return;
+        }
+
+        $rules = [];
+
+        foreach ($this->advancedSettingsSchema as $schema) {
+            $stateKey = $schema['state_key'] ?? null;
+            $fieldRules = $schema['rules'] ?? [];
+
+            if (! is_string($stateKey) || $stateKey === '' || ! is_array($fieldRules) || $fieldRules === []) {
+                continue;
+            }
+
+            /** @var list<string> $fieldRules */
+            $rules['advancedSettings.'.$stateKey] = $fieldRules;
+        }
+
+        if ($rules !== []) {
+            $this->validate($rules);
+        }
+
+        $settings = app(SettingsService::class);
+
+        foreach ($this->advancedSettingsSchema as $schema) {
+            $stateKey = $schema['state_key'] ?? null;
+            $settingsKey = $schema['settings_key'] ?? null;
+
+            if (! is_string($stateKey) || $stateKey === '' || ! is_string($settingsKey) || $settingsKey === '') {
+                continue;
+            }
+
+            $settings->set($settingsKey, $this->advancedSettings[$stateKey] ?? null, scope: null);
+            $this->advancedSettingsOverridden[$stateKey] = true;
+        }
+    }
+
+    public function resetAdvancedSettings(): void
+    {
+        if (! $this->isEditingProvider || $this->advancedSettingsSchema === []) {
+            return;
+        }
+
+        $settings = app(SettingsService::class);
+
+        foreach ($this->advancedSettingsSchema as $schema) {
+            $stateKey = $schema['state_key'] ?? null;
+            $settingsKey = $schema['settings_key'] ?? null;
+            $default = $schema['default'] ?? null;
+
+            if (! is_string($stateKey) || $stateKey === '' || ! is_string($settingsKey) || $settingsKey === '') {
+                continue;
+            }
+
+            $settings->forget($settingsKey, scope: null);
+            $this->advancedSettingsOverridden[$stateKey] = false;
+            $this->advancedSettings[$stateKey] = $default;
+        }
     }
 
     public function pageContext(): PageContext

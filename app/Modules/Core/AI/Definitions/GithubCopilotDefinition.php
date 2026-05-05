@@ -10,6 +10,7 @@ use App\Modules\Core\AI\Contracts\ProviderDefinition;
 use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Values\ModelsDiscoveryProfile;
 use App\Modules\Core\AI\Values\ProviderField;
 use App\Modules\Core\AI\Values\ResolvedProviderConfig;
 use Illuminate\Support\Facades\Validator;
@@ -103,7 +104,22 @@ final readonly class GithubCopilotDefinition implements ProviderDefinition
         );
     }
 
+    public function advancedSettings(): array
+    {
+        return [];
+    }
+
+    public function modelsDiscoveryProfile(AiProvider $provider, ResolvedProviderConfig $resolved): ModelsDiscoveryProfile
+    {
+        return new ModelsDiscoveryProfile(baseUrl: rtrim($resolved->baseUrl, '/'));
+    }
+
     public function discoverModels(AiProvider $provider): ?array
+    {
+        return null;
+    }
+
+    public function fallbackModelsOnDiscoveryFailure(AiProvider $provider): ?array
     {
         return null;
     }

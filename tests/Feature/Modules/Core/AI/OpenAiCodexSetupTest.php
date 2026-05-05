@@ -5,6 +5,7 @@ use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
+use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\DTO\ProviderTestResult;
 use App\Modules\Core\AI\Livewire\Providers\OpenAiCodexSetup;
@@ -99,9 +100,18 @@ test('openai codex setup removes stale models and resets the default to the pref
         ->and($preferredModel->fresh()?->is_default)->toBeTrue();
 });
 
-test('openai codex setup sync message is honest about curated model reconciliation', function (): void {
-    config()->set('ai.provider_overlay.openai-codex.curated_models', OAI_CODEX_CURATED_MODELS);
+test('openai codex setup sync message reflects provider discovery sync', function (): void {
     config()->set('ai.provider_overlay.openai-codex.default_model', OAI_CODEX_DEFAULT_MODEL);
+
+    Http::fake([
+        OAI_CODEX_BACKEND_BASE_URL.'/codex/models*' => Http::response([
+            'models' => [
+                ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
+                ['slug' => 'gpt-5.4-mini', 'display_name' => 'gpt-5.4-mini'],
+                ['slug' => 'gpt-5.2', 'display_name' => 'gpt-5.2'],
+            ],
+        ], 200),
+    ]);
 
     $user = createAdminUser();
     $provider = createConnectedOpenAiCodexProvider($user);
@@ -111,8 +121,35 @@ test('openai codex setup sync message is honest about curated model reconciliati
 
     Livewire::test(OpenAiCodexSetup::class, ['providerKey' => OpenAiCodexDefinition::KEY])
         ->call('syncProviderModels', $provider->id)
-        ->assertSet('syncMessage', 'Belimbing checked this provider against its curated model list: 3 supported models are active locally.')
+        ->assertSet('syncMessage', 'Refreshed 3 existing provider models.')
+        ->assertSet('syncMessageProviderId', $provider->id)
         ->assertDontSee('Updated 3 models.');
+});
+
+test('openai codex sync records outbound exchange for model discovery', function (): void {
+    config()->set('ai.provider_overlay.openai-codex.default_model', OAI_CODEX_DEFAULT_MODEL);
+
+    Http::fake([
+        OAI_CODEX_BACKEND_BASE_URL.'/codex/models*' => Http::response([
+            'models' => [
+                ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
+            ],
+        ], 200),
+    ]);
+
+    $user = createAdminUser();
+    $provider = createConnectedOpenAiCodexProvider($user);
+
+    $result = app(ModelDiscoveryService::class)->syncModels($provider);
+
+    $exchange = OutboundExchange::query()
+        ->where('operation', 'ai.provider.models.discover')
+        ->firstOrFail();
+
+    expect($result['exchange_id'] ?? null)->toBe($exchange->id)
+        ->and($exchange->system)->toBe('ai_provider')
+        ->and($exchange->endpoint)->toContain(OAI_CODEX_BACKEND_BASE_URL.'/codex/models')
+        ->and($exchange->request_headers['chatgpt-account-id'] ?? null)->toBe('acct_test');
 });
 
 test('openai codex model sync deletes inactive models not on the curated list', function (): void {

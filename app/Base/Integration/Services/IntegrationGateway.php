@@ -13,8 +13,6 @@ use Illuminate\Support\Facades\Schema;
 
 class IntegrationGateway
 {
-    public const DEFAULT_PAYLOAD_PREVIEW_BYTES = 65_536;
-
     private const OUTCOME_SUCCESS = 'success';
 
     private const OUTCOME_HTTP_ERROR = 'http_error';
@@ -252,20 +250,9 @@ class IntegrationGateway
         $encoded = $encoded === false ? '' : $encoded;
         $originalBytes = strlen($encoded);
 
-        if ($originalBytes <= self::DEFAULT_PAYLOAD_PREVIEW_BYTES) {
-            return [
-                'payload' => $normalized,
-                'truncated' => false,
-                'original_bytes' => $originalBytes,
-            ];
-        }
-
         return [
-            'payload' => [
-                'kind' => 'truncated',
-                'preview' => mb_strcut($encoded, 0, self::DEFAULT_PAYLOAD_PREVIEW_BYTES, 'UTF-8'),
-            ],
-            'truncated' => true,
+            'payload' => $normalized,
+            'truncated' => false,
             'original_bytes' => $originalBytes,
         ];
     }
@@ -279,7 +266,7 @@ class IntegrationGateway
         if (is_array($payload)) {
             return [
                 'kind' => 'json',
-                'value' => $this->redactBody($payload),
+                'value' => $payload,
             ];
         }
 
@@ -287,7 +274,7 @@ class IntegrationGateway
         if (is_array($decoded)) {
             return [
                 'kind' => 'json',
-                'value' => $this->redactBody($decoded),
+                'value' => $decoded,
             ];
         }
 
@@ -295,50 +282,6 @@ class IntegrationGateway
             'kind' => 'text',
             'value' => $payload,
         ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
-     */
-    private function redactBody(array $payload): array
-    {
-        $redacted = [];
-
-        foreach ($payload as $key => $value) {
-            if ($this->isSecretBodyKey((string) $key)) {
-                $redacted[$key] = '[redacted]';
-
-                continue;
-            }
-
-            if (is_array($value)) {
-                $redacted[$key] = $this->redactBody($value);
-
-                continue;
-            }
-
-            $redacted[$key] = $value;
-        }
-
-        return $redacted;
-    }
-
-    private function isSecretBodyKey(string $normalizedKey): bool
-    {
-        $flatKey = preg_replace('/[^a-z0-9]/', '', strtolower($normalizedKey)) ?? '';
-
-        if (in_array($flatKey, ['authorization', 'cookie', 'password', 'code'], true)) {
-            return true;
-        }
-
-        foreach (['apikey', 'secret', 'token', 'devicecode'] as $needle) {
-            if (str_contains($flatKey, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function outcome(?Response $response, ?ConnectionException $error): string

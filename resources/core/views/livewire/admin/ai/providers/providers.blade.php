@@ -424,7 +424,12 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
 
     {{-- Provider Create/Edit Modal (manual add) --}}
     <x-ui.modal wire:model="showProviderForm" class="max-w-lg">
-        <div class="p-card-inner">
+        <div @class([
+            'p-card-inner',
+            // Keep modal height stable across tabs (General is taller than Advanced).
+            // This must be >= the General tab height, otherwise switching to Advanced will shrink.
+            'min-h-[30rem]' => $isEditingProvider && ($this->advancedSettingsSchema ?? []) !== [],
+        ])>
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-medium tracking-tight text-ink">
                     {{ $isEditingProvider ? __('Edit Provider') : __('Add Provider') }}
@@ -434,74 +439,67 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                 </button>
             </div>
 
-            <form wire:submit="saveProvider" class="space-y-4">
-                @unless($isEditingProvider)
-                    <x-ui.select id="provider-template" wire:change="applyTemplate($event.target.value)" label="{{ __('Template') }}">
-                        <option value="">{{ __('Other provider') }}</option>
-                        @foreach($templateOptions as $tpl)
-                            <option value="{{ $tpl['value'] }}" @selected($selectedTemplate === $tpl['value'])>{{ $tpl['label'] }}</option>
-                        @endforeach
-                    </x-ui.select>
-                @endunless
+            @php
+                $advancedAvailable = $isEditingProvider && ($this->advancedSettingsSchema ?? []) !== [];
+            @endphp
 
-                <x-ui.input
-                    id="new-provider-name"
-                    wire:model="providerName"
-                    label="{{ __('Name') }}"
-                    required
-                    placeholder="{{ __('e.g. openai') }}"
-                    :disabled="$isEditingProvider"
-                    :error="$errors->first('providerName')"
-                />
+            @if($advancedAvailable)
+                <x-ui.tabs :tabs="[
+                    ['id' => 'general', 'label' => __('General')],
+                    ['id' => 'advanced', 'label' => __('Advanced')],
+                ]" default="general" persistence="none">
+                    <x-ui.tab id="general">
+                        @include('livewire.admin.ai.providers.partials.provider-form')
+                    </x-ui.tab>
 
-                <x-ui.input
-                    id="new-provider-display-name"
-                    wire:model="providerDisplayName"
-                    label="{{ __('Display Name') }}"
-                    placeholder="{{ __('e.g. OpenAI') }}"
-                    :error="$errors->first('providerDisplayName')"
-                />
+                    <x-ui.tab id="advanced">
+                        <div class="space-y-4">
+                            @foreach(($this->advancedSettingsSchema ?? []) as $setting)
+                                @php
+                                    $stateKey = $setting['state_key'] ?? '';
+                                    $label = $setting['label'] ?? $stateKey;
+                                    $help = $setting['help'] ?? null;
+                                    $type = $setting['input_type'] ?? 'text';
+                                @endphp
 
-                <x-ui.input
-                    id="new-provider-base-url"
-                    wire:model="providerBaseUrl"
-                    label="{{ __('Base URL') }}"
-                    required
-                    placeholder="{{ __('e.g. https://api.openai.com/v1') }}"
-                    :error="$errors->first('providerBaseUrl')"
-                />
+                                @if(is_string($stateKey) && $stateKey !== '')
+                                    <div>
+                                        <x-ui.input
+                                            :id="'provider-advanced-'.$stateKey"
+                                            wire:model="advancedSettings.{{ $stateKey }}"
+                                            :type="$type"
+                                            :label="$label"
+                                            :error="$errors->first('advancedSettings.'.$stateKey)"
+                                        />
+                                        @if(is_string($help) && $help !== '')
+                                            <p class="text-xs text-muted mt-1">{{ $help }}</p>
+                                        @endif
+                                    </div>
+                                @endif
+                            @endforeach
 
-                <div class="space-y-1">
-                    <label for="new-provider-api-key" class="block text-[11px] uppercase tracking-wider font-semibold text-muted">
-                        {{ __('API Key') }}
-                        @if(!$isEditingProvider)
-                            <span class="text-status-danger">*</span>
-                        @endif
-                        @if($isEditingProvider)
-                            <span class="ml-2 normal-case tracking-normal font-normal text-xs text-muted">
-                                {{ __('Current key:') }}
-                                <span class="{{ filled($providerApiKeyPreview) ? 'font-mono' : '' }}">{{ filled($providerApiKeyPreview) ? $providerApiKeyPreview : __('not set') }}</span>
-                            </span>
-                        @endif
-                    </label>
-
-                    <x-ui.input
-                        id="new-provider-api-key"
-                        wire:model="providerApiKey"
-                        type="password"
-                        :required="!$isEditingProvider"
-                        :placeholder="$isEditingProvider ? __('Leave blank to keep current key') : ''"
-                        :error="$errors->first('providerApiKey')"
-                    />
-                </div>
-
-                <x-ui.checkbox id="provider-is-active" wire:model="providerIsActive" label="{{ __('Active') }}" />
-
-                <div class="flex justify-end gap-2 pt-2">
-                    <x-ui.button variant="ghost" wire:click="$set('showProviderForm', false)">{{ __('Cancel') }}</x-ui.button>
-                    <x-ui.button type="submit" variant="primary">{{ $isEditingProvider ? __('Update') : __('Create') }}</x-ui.button>
-                </div>
-            </form>
+                            <div class="flex justify-end gap-2 pt-2">
+                                <x-ui.button
+                                    variant="ghost"
+                                    type="button"
+                                    wire:click="resetAdvancedSettings"
+                                >
+                                    {{ __('Reset to default') }}
+                                </x-ui.button>
+                                <x-ui.button
+                                    variant="primary"
+                                    type="button"
+                                    wire:click="saveAdvancedSettings"
+                                >
+                                    {{ __('Save') }}
+                                </x-ui.button>
+                            </div>
+                        </div>
+                    </x-ui.tab>
+                </x-ui.tabs>
+            @else
+                @include('livewire.admin.ai.providers.partials.provider-form')
+            @endif
         </div>
     </x-ui.modal>
 

@@ -20,6 +20,9 @@ trait ManagesSync
 {
     public ?string $syncMessage = null;
 
+    /** Which provider row owns {@see $syncMessage} (success banner scoped per provider). */
+    public ?int $syncMessageProviderId = null;
+
     /** Persistent sync error (connection failures — not auto-dismissed) */
     public ?string $syncError = null;
 
@@ -45,6 +48,8 @@ trait ManagesSync
             $this->syncError = null;
             $this->syncErrorProviderId = null;
         }
+        $this->syncMessage = null;
+        $this->syncMessageProviderId = null;
         $this->syncExchangeId = null;
         $this->syncExchangeProviderId = null;
 
@@ -116,6 +121,18 @@ trait ManagesSync
                 default => __('The local model list already matches the provider response.'),
             },
         };
+        $this->syncMessageProviderId = $providerId;
+    }
+
+    /**
+     * Dismiss the success sync banner.
+     */
+    public function clearSyncMessage(): void
+    {
+        $this->syncMessage = null;
+        $this->syncMessageProviderId = null;
+        $this->syncExchangeId = null;
+        $this->syncExchangeProviderId = null;
     }
 
     /**
