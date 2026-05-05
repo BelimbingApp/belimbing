@@ -6,8 +6,8 @@ use App\Base\Settings\DTO\Scope;
 use App\Modules\Commerce\Marketplace\Ebay\DTO\EbayInventoryLocation;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayLocationsService;
+use App\Modules\Commerce\Marketplace\Exceptions\MarketplaceOperationException;
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
 function configureEbayLocationsEnvironment(int $companyId): void
@@ -136,5 +136,9 @@ test('exits non-zero by surfacing HTTP failures from eBay', function (): void {
     ]);
 
     expect(fn () => app(EbayLocationsService::class)->pullInventoryLocations($user->company_id))
-        ->toThrow(RequestException::class);
+        ->toThrow(function (MarketplaceOperationException $exception): void {
+            expect($exception->context['status'])->toBe(401)
+                ->and($exception->context['exchange_id'] ?? null)->toStartWith('ix_')
+                ->and($exception->getMessage())->toContain('Integration exchange [ix_');
+        });
 });

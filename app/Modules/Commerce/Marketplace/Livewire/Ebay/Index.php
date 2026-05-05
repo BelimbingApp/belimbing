@@ -8,6 +8,7 @@ namespace App\Modules\Commerce\Marketplace\Livewire\Ebay;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\ValueObjects\Money;
+use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
@@ -125,7 +126,22 @@ class Index extends Component
             'listings' => $this->listings($companyId),
             'unlistedItems' => $this->unlistedItems($companyId),
             'stats' => $this->stats($companyId),
+            'recentExchanges' => $this->recentExchanges($companyId),
         ]);
+    }
+
+    /**
+     * @return Collection<int, OutboundExchange>
+     */
+    private function recentExchanges(int $companyId): Collection
+    {
+        return OutboundExchange::query()
+            ->where('system', EbayConfiguration::CHANNEL)
+            ->where('owner_type', 'company')
+            ->where('owner_id', $companyId)
+            ->latest('occurred_at')
+            ->limit(5)
+            ->get();
     }
 
     /**

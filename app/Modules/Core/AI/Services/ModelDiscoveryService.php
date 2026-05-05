@@ -10,8 +10,11 @@ use App\Base\AI\Exceptions\ModelCatalogSyncException;
 use App\Base\AI\Exceptions\ProviderDiscoveryException;
 use App\Base\AI\Services\ModelCatalogService;
 use App\Base\AI\Services\ProviderDiscoveryService;
+use App\Base\Foundation\Exceptions\BlbException;
+use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 /**
@@ -94,17 +97,32 @@ class ModelDiscoveryService
 
         $this->modelCatalog->ensureSynced();
 
+        $exchangeId = null;
+
         try {
             $discovered = $this->discoverModels($provider);
-        } catch (RuntimeException) {
-            return $this->importFromCatalog($provider);
+        } catch (RuntimeException $e) {
+            $exchangeId = $this->markProviderDiscoveryFallback($provider, 'provider_discovery_failed', $e);
+
+            return [
+                ...$this->importFromCatalog($provider),
+                'exchange_id' => $exchangeId,
+            ];
         }
 
         if ($discovered === []) {
-            return $this->importFromCatalog($provider);
+            $exchangeId = $this->markProviderDiscoveryFallback($provider, 'empty_provider_discovery');
+
+            return [
+                ...$this->importFromCatalog($provider),
+                'exchange_id' => $exchangeId,
+            ];
         }
 
-        return $this->syncDiscoveredModels($provider, $discovered, source: 'provider_api');
+        return [
+            ...$this->syncDiscoveredModels($provider, $discovered, source: 'provider_api'),
+            'exchange_id' => $this->latestProviderDiscoveryExchange($provider)?->id,
+        ];
     }
 
     /**
@@ -215,6 +233,73 @@ class ModelDiscoveryService
             'deactivated' => 0,
             'source' => 'catalog',
         ];
+    }
+
+    private function markProviderDiscoveryFallback(
+        AiProvider $provider,
+        string $reason,
+        ?RuntimeException $exception = null,
+    ): ?string {
+        if (! Schema::hasTable('base_integration_outbound_exchanges')) {
+            return null;
+        }
+
+        $exchange = $this->exchangeFromException($exception)
+            ?? OutboundExchange::query()
+                ->where('system', 'ai_provider')
+                ->where('operation', 'ai.provider.models.discover')
+                ->where('provider', $this->providerNameFromBaseUrl($provider->base_url))
+                ->latest('occurred_at')
+                ->first();
+
+        if (! $exchange instanceof OutboundExchange) {
+            return null;
+        }
+
+        $metadata = $exchange->metadata ?? [];
+        $metadata['fallback_provider'] = 'models.dev';
+
+        $exchange->update([
+            'fallback_used' => true,
+            'fallback_reason' => $reason,
+            'metadata' => $metadata,
+        ]);
+
+        return $exchange->id;
+    }
+
+    private function exchangeFromException(?RuntimeException $exception): ?OutboundExchange
+    {
+        if (! $exception instanceof BlbException) {
+            return null;
+        }
+
+        $exchangeId = $exception->context['exchange_id'] ?? null;
+
+        return is_string($exchangeId) && $exchangeId !== ''
+            ? OutboundExchange::query()->find($exchangeId)
+            : null;
+    }
+
+    private function providerNameFromBaseUrl(?string $baseUrl): ?string
+    {
+        $host = is_string($baseUrl) ? parse_url($baseUrl, PHP_URL_HOST) : null;
+
+        return is_string($host) && $host !== '' ? $host : null;
+    }
+
+    private function latestProviderDiscoveryExchange(AiProvider $provider): ?OutboundExchange
+    {
+        if (! Schema::hasTable('base_integration_outbound_exchanges')) {
+            return null;
+        }
+
+        return OutboundExchange::query()
+            ->where('system', 'ai_provider')
+            ->where('operation', 'ai.provider.models.discover')
+            ->where('provider', $this->providerNameFromBaseUrl($provider->base_url))
+            ->latest('occurred_at')
+            ->first();
     }
 
     /**

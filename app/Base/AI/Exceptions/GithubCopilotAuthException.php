@@ -7,9 +7,14 @@ namespace App\Base\AI\Exceptions;
 
 final class GithubCopilotAuthException extends \RuntimeException
 {
-    public static function deviceCodeRequestFailed(int $status): self
+    public function __construct(string $message, public readonly ?string $exchangeId = null)
     {
-        return new self('GitHub device code request failed: HTTP '.$status);
+        parent::__construct($exchangeId === null ? $message : $message.' Integration exchange ['.$exchangeId.'].');
+    }
+
+    public static function deviceCodeRequestFailed(int $status, ?string $exchangeId = null): self
+    {
+        return new self('GitHub device code request failed: HTTP '.$status, $exchangeId);
     }
 
     public static function missingDeviceCodeFields(): self
@@ -17,9 +22,9 @@ final class GithubCopilotAuthException extends \RuntimeException
         return new self('GitHub device code response missing required fields');
     }
 
-    public static function tokenExchangeFailed(int $status): self
+    public static function tokenExchangeFailed(int $status, ?string $exchangeId = null): self
     {
-        return new self('Copilot token exchange failed: HTTP '.$status);
+        return new self('Copilot token exchange failed: HTTP '.$status, $exchangeId);
     }
 
     public static function missingCopilotToken(): self

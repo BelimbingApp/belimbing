@@ -26,6 +26,10 @@ trait ManagesSync
     /** Provider ID the current syncError belongs to */
     public ?int $syncErrorProviderId = null;
 
+    public ?string $syncExchangeId = null;
+
+    public ?int $syncExchangeProviderId = null;
+
     /**
      * Sync models for a provider from its live API, with template fallback.
      */
@@ -41,6 +45,8 @@ trait ManagesSync
             $this->syncError = null;
             $this->syncErrorProviderId = null;
         }
+        $this->syncExchangeId = null;
+        $this->syncExchangeProviderId = null;
 
         try {
             $result = app(ModelDiscoveryService::class)->syncModels($provider);
@@ -49,6 +55,8 @@ trait ManagesSync
                 'url' => $provider->base_url,
             ]);
             $this->syncErrorProviderId = $providerId;
+            $this->syncExchangeId = $this->exchangeIdFromException($e);
+            $this->syncExchangeProviderId = $providerId;
 
             Log::warning('Model sync failed', [
                 'provider' => $provider->name,
@@ -60,6 +68,8 @@ trait ManagesSync
         } catch (\Exception $e) {
             $this->syncError = __('Sync failed: :message', ['message' => $e->getMessage()]);
             $this->syncErrorProviderId = $providerId;
+            $this->syncExchangeId = $this->exchangeIdFromException($e);
+            $this->syncExchangeProviderId = $providerId;
 
             Log::warning('Model sync failed', [
                 'provider' => $provider->name,
@@ -70,6 +80,8 @@ trait ManagesSync
         }
 
         $source = (string) ($result['source'] ?? 'provider_api');
+        $this->syncExchangeId = is_string($result['exchange_id'] ?? null) ? $result['exchange_id'] : null;
+        $this->syncExchangeProviderId = $this->syncExchangeId !== null ? $providerId : null;
         $added = (int) ($result['added'] ?? 0);
         $updated = (int) ($result['updated'] ?? 0);
         $deactivated = (int) ($result['deactivated'] ?? 0);
@@ -113,5 +125,15 @@ trait ManagesSync
     {
         $this->syncError = null;
         $this->syncErrorProviderId = null;
+    }
+
+    private function exchangeIdFromException(\Throwable $exception): ?string
+    {
+        $context = property_exists($exception, 'context') && is_array($exception->context)
+            ? $exception->context
+            : [];
+        $exchangeId = $context['exchange_id'] ?? null;
+
+        return is_string($exchangeId) && $exchangeId !== '' ? $exchangeId : null;
     }
 }

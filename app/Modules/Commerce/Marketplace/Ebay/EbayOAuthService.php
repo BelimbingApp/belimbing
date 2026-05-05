@@ -45,6 +45,11 @@ class EbayOAuthService
             $config['client_secret'],
             $code,
             $config['redirect_uri'],
+            system: EbayConfiguration::CHANNEL,
+            provider: EbayConfiguration::CHANNEL,
+            ownerType: 'company',
+            ownerId: $companyId,
+            metadata: ['environment' => $config['environment']],
         );
 
         return $this->tokens->persist(
@@ -76,6 +81,11 @@ class EbayOAuthService
             $config['client_secret'],
             $token->refresh_token,
             $config['scopes'],
+            system: EbayConfiguration::CHANNEL,
+            provider: EbayConfiguration::CHANNEL,
+            ownerType: 'company',
+            ownerId: $companyId,
+            metadata: ['environment' => $config['environment']],
         );
 
         return $this->tokens

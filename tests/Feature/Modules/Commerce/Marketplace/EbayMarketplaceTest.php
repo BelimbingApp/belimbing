@@ -11,6 +11,7 @@ use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
 use App\Modules\Commerce\Sales\Models\Order;
 use App\Modules\Commerce\Sales\Models\OrderLine;
 use App\Modules\Commerce\Sales\Models\Sale;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
 const EBAY_FIXTURE_TITLE = '2008 Honda Civic driver side headlight';
@@ -106,6 +107,9 @@ test('ebay listing pull materializes offers and links by sku', function (): void
         ->and($listing->item_id)->toBe($item->id)
         ->and($listing->price_amount)->toBe(12000)
         ->and($listing->currency_code)->toBe('USD');
+
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/sell/inventory/v1/offer')
+        && $request->hasHeader('X-EBAY-C-MARKETPLACE-ID', 'EBAY_US'));
 });
 
 test('ebay registers as a marketplace channel provider', function (): void {

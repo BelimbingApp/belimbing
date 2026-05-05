@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager;
@@ -66,6 +67,12 @@ test('openai codex oauth callback persists credentials and marks provider connec
         ->and($provider->credentials[OpenAiCodexDefinition::CRED_REFRESH_TOKEN])->toBe('refresh-1')
         ->and($provider->credentials[OpenAiCodexDefinition::CRED_ACCOUNT_ID])->toBe('acct_abc123')
         ->and(Cache::get('openai_codex_oauth:'.$state))->toBeNull();
+
+    $exchange = OutboundExchange::query()->firstOrFail();
+    expect($exchange->operation)->toBe('ai.openai_codex.oauth.authorization_code.exchange')
+        ->and($exchange->protocol)->toBe('oauth2')
+        ->and($exchange->request_body['value']['code'])->toBe('[redacted]')
+        ->and($exchange->response_body['value']['access_token'])->toBe('[redacted]');
 
     $auth = $provider->connection_config[OpenAiCodexDefinition::AUTH_STATE_KEY] ?? [];
     expect($auth['status'] ?? null)->toBe('connected');

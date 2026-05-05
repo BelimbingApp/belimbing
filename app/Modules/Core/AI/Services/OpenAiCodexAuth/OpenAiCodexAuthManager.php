@@ -5,10 +5,11 @@
 
 namespace App\Modules\Core\AI\Services\OpenAiCodexAuth;
 
+use App\Base\Integration\Services\IntegrationGateway;
+use App\Base\Integration\Services\IntegrationRequest;
 use App\Modules\Core\AI\Models\AiProvider;
 use Illuminate\Cache\Repository as CacheRepository;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 
 /**
  * OpenAI Codex OAuth (ChatGPT subscription) auth manager.
@@ -44,6 +45,7 @@ final class OpenAiCodexAuthManager
     public function __construct(
         private readonly CacheRepository $cache,
         private readonly OpenAiCodexAuthStorage $storage,
+        private readonly IntegrationGateway $integration,
     ) {}
 
     /**
@@ -149,7 +151,7 @@ final class OpenAiCodexAuthManager
         }
 
         try {
-            $token = $this->exchangeAuthorizationCode($code, $verifier, $redirectUri);
+            $token = $this->exchangeAuthorizationCode($provider, $code, $verifier, $redirectUri);
             $accountId = $this->extractAccountIdFromJwt($token['access_token']);
 
             $this->storage->persistCredentials($provider, [
@@ -167,7 +169,7 @@ final class OpenAiCodexAuthManager
             throw $e;
         } catch (\Throwable $e) {
             $this->storage->markError($provider, 'callback_failed', $e->getMessage());
-            throw new OpenAiCodexOAuthException('callback_failed', $e->getMessage(), $e);
+            throw new OpenAiCodexOAuthException('callback_failed', $e->getMessage(), previous: $e);
         }
     }
 
@@ -192,14 +194,28 @@ final class OpenAiCodexAuthManager
         }
 
         try {
-            $response = Http::asForm()->post(self::TOKEN_URL, [
-                'grant_type' => 'refresh_token',
-                'refresh_token' => $refreshToken,
-                'client_id' => self::CLIENT_ID,
-            ]);
+            $response = $this->integration->send(new IntegrationRequest(
+                system: 'ai_provider',
+                operation: 'ai.openai_codex.oauth.refresh',
+                method: 'POST',
+                endpoint: self::TOKEN_URL,
+                protocol: 'oauth2',
+                protocolOperation: 'POST oauth/token',
+                provider: 'openai-codex',
+                body: [
+                    'grant_type' => 'refresh_token',
+                    'refresh_token' => $refreshToken,
+                    'client_id' => self::CLIENT_ID,
+                ],
+                ownerType: 'company',
+                ownerId: $provider->company_id,
+                asJson: false,
+                asForm: true,
+                metadata: ['ai_provider_id' => $provider->id],
+            ));
 
             if (! $response->successful()) {
-                throw new OpenAiCodexOAuthException('refresh_failed', 'Token refresh failed ('.$response->status().').');
+                throw new OpenAiCodexOAuthException('refresh_failed', 'Token refresh failed ('.$response->status.').', $response->exchange?->id);
             }
 
             $json = $response->json();
@@ -228,25 +244,39 @@ final class OpenAiCodexAuthManager
         } catch (\Throwable $e) {
             $this->storage->markError($provider, 'refresh_failed', $e->getMessage());
 
-            throw new OpenAiCodexOAuthException('refresh_failed', $e->getMessage(), $e);
+            throw new OpenAiCodexOAuthException('refresh_failed', $e->getMessage(), previous: $e);
         }
     }
 
     /**
      * @return array{access_token: string, refresh_token: string, expires_at: string}
      */
-    private function exchangeAuthorizationCode(string $code, string $verifier, string $redirectUri): array
+    private function exchangeAuthorizationCode(AiProvider $provider, string $code, string $verifier, string $redirectUri): array
     {
-        $response = Http::asForm()->post(self::TOKEN_URL, [
-            'grant_type' => 'authorization_code',
-            'client_id' => self::CLIENT_ID,
-            'code' => $code,
-            'code_verifier' => $verifier,
-            'redirect_uri' => $redirectUri,
-        ]);
+        $response = $this->integration->send(new IntegrationRequest(
+            system: 'ai_provider',
+            operation: 'ai.openai_codex.oauth.authorization_code.exchange',
+            method: 'POST',
+            endpoint: self::TOKEN_URL,
+            protocol: 'oauth2',
+            protocolOperation: 'POST oauth/token',
+            provider: 'openai-codex',
+            body: [
+                'grant_type' => 'authorization_code',
+                'client_id' => self::CLIENT_ID,
+                'code' => $code,
+                'code_verifier' => $verifier,
+                'redirect_uri' => $redirectUri,
+            ],
+            ownerType: 'company',
+            ownerId: $provider->company_id,
+            asJson: false,
+            asForm: true,
+            metadata: ['ai_provider_id' => $provider->id],
+        ));
 
         if (! $response->successful()) {
-            throw new OpenAiCodexOAuthException('token_exchange_failed', 'Token exchange failed ('.$response->status().').');
+            throw new OpenAiCodexOAuthException('token_exchange_failed', 'Token exchange failed ('.$response->status.').', $response->exchange?->id);
         }
 
         $json = $response->json();

@@ -63,7 +63,12 @@ use Illuminate\Support\Collection;
             x-show="show"
             x-transition.opacity
         >
-            {{ $syncMessage }}
+            <span>{{ $syncMessage }}</span>
+            @if($syncExchangeId && $syncExchangeProviderId === $provider->id)
+                <a href="{{ route('admin.integration.outbound-exchanges.show', $syncExchangeId) }}" class="ml-2 text-accent hover:underline" wire:navigate>
+                    {{ $syncExchangeId }}
+                </a>
+            @endif
         </div>
     @endif
 
@@ -76,6 +81,11 @@ use Illuminate\Support\Collection;
                     <div class="min-w-0">
                         <p class="text-sm text-red-700 dark:text-red-300 font-medium">{{ $syncError }}</p>
                         <p class="text-xs text-red-600 dark:text-red-400 mt-0.5">{{ $helpAdvice }}</p>
+                        @if($syncExchangeId && $syncExchangeProviderId === $provider->id)
+                            <a href="{{ route('admin.integration.outbound-exchanges.show', $syncExchangeId) }}" class="mt-1 inline-flex text-xs text-red-700 dark:text-red-300 hover:underline" wire:navigate>
+                                {{ __('Inspect exchange :id', ['id' => $syncExchangeId]) }}
+                            </a>
+                        @endif
                     </div>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">

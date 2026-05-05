@@ -1,50 +1,34 @@
-# Base AI Module — Agent Guidelines
+# Base AI — Agent Guidelines
 
-## Purpose
+## Scope
 
-Stateless AI infrastructure. Provides model catalog, LLM client, provider discovery, and auth helpers. No database tables, no ownership concepts, no sessions.
+AI infrastructure: model catalog, LLM client, provider discovery, auth helpers. Owns AI protocol and catalog semantics — not company/provider governance, sessions, or business ownership.
 
-## Architecture
+## Layout
 
 ```
 app/Base/AI/
-├── ServiceProvider.php          # Registers services + merges config
-├── Config/ai.php                # workspace_path, llm defaults, provider_overlay
-├── Console/Commands/
-│   └── AiCatalogSyncCommand.php # blb:ai:catalog:sync
+├── ServiceProvider.php
+├── Config/ai.php                       # workspace_path, llm defaults, provider_overlay
+├── Console/Commands/AiCatalogSyncCommand.php  # blb:ai:catalog:sync
 ├── Services/
-│   ├── ModelCatalogService.php  # Fetch, cache, serve models.dev catalog
-│   ├── LlmClient.php           # Stateless OpenAI-compatible chat
-│   ├── ProviderDiscoveryService.php  # GET /models discovery
-│   └── GithubCopilotAuthService.php  # GitHub device flow
-└── DTO/
-    └── CatalogSyncResult.php
+│   ├── ModelCatalogService.php         # models.dev fetch + file cache
+│   ├── LlmClient.php                   # stateless OpenAI-compatible chat
+│   ├── ProviderDiscoveryService.php    # GET /models
+│   └── GithubCopilotAuthService.php    # device flow
+└── DTO/CatalogSyncResult.php
 ```
 
-## Key Principles
+## Rules
 
-1. **Stateless** — all services take explicit parameters, return results. No database, no scoping.
-2. **No ownership** — no `company_id`, `employee_id`, or any business entity references.
-3. **File-based cache** — catalog stored in `storage/download/ai/models-dev/catalog.json`, following the Geonames pattern.
-4. **ETag invalidation** — conditional HTTP requests avoid unnecessary re-downloads.
-
-## Sonar / Maintainability Guardrails
-
-- Keep orchestration methods shallow. When stream parsing, payload normalization, or retry/response branching starts to dominate a method, extract a private helper with one named responsibility.
-- AI-specific exception boundaries (per root AGENTS.md §Sonar Prevention Guard): catalog sync, provider discovery, LLM transport.
-- For HTTP and SSE parsing code, separate these concerns:
-  - transport execution
-  - payload decoding
-  - response mapping
-- Provider extensions must follow the canonical `execution_controls` contract; see `docs/architecture/ai/agent-model.md`.
-- In Node-facing or OpenAI-compatible code, rethrow unexpected errors instead of swallowing them in broad catches.
+1. Stateless services; no `company_id`/`employee_id` or business refs.
+2. Non-LLM external calls go through `app/Base/Integration` for exchange observability. LLM runtime stays on AI WireLogger for now.
+3. Catalog cache: `storage/download/ai/models-dev/catalog.json` (Geonames pattern), with ETag conditional requests.
+4. Base AI owns the `ai` config key; Core reads `config('ai.*')` from here.
+5. Provider extensions follow the canonical `execution_controls` contract (see `docs/architecture/ai/agent-model.md`).
+6. Exception boundaries: catalog sync, provider discovery, LLM transport. Rethrow unexpected errors — don't swallow in broad catches.
 
 ## Data Sources
 
-- **models.dev** (`https://models.dev/api.json`) — community-maintained provider and model catalog (MIT licensed)
-- **Provider overlay** (`config('ai.provider_overlay')`) — BLB-specific fields: `base_url`, `auth_type`, `api_key_url`
-- Overlay-only providers (local/self-hosted) are not in models.dev
-
-## Config Ownership
-
-Base AI owns the `ai` config key. Core AI's `Config/ai.php` has been removed; Core reads `config('ai.*')` from Base.
+- `https://models.dev/api.json` — community catalog (MIT).
+- `config('ai.provider_overlay')` — BLB fields (`base_url`, `auth_type`, `api_key_url`); also hosts overlay-only local/self-hosted providers absent from models.dev.

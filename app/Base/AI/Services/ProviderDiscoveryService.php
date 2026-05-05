@@ -6,7 +6,8 @@
 namespace App\Base\AI\Services;
 
 use App\Base\AI\Exceptions\ProviderDiscoveryException;
-use Illuminate\Support\Facades\Http;
+use App\Base\Integration\Services\IntegrationGateway;
+use App\Base\Integration\Services\IntegrationRequest;
 
 /**
  * Stateless model discovery via the OpenAI-compatible GET /models endpoint.
@@ -16,6 +17,10 @@ use Illuminate\Support\Facades\Http;
  */
 class ProviderDiscoveryService
 {
+    public function __construct(
+        private readonly ?IntegrationGateway $gateway = null,
+    ) {}
+
     /**
      * Discover available models from an OpenAI-compatible /models endpoint.
      *
@@ -27,16 +32,31 @@ class ProviderDiscoveryService
      */
     public function discoverModels(string $baseUrl, string $apiKey = ''): array
     {
-        $request = Http::acceptJson()->timeout(15);
+        $headers = [];
 
         if ($apiKey !== '' && $apiKey !== 'not-required') {
-            $request = $request->withToken($apiKey);
+            $headers['Authorization'] = 'Bearer '.$apiKey;
         }
 
-        $response = $request->get(rtrim($baseUrl, '/').'/models');
+        $response = $this->integrationGateway()->send(new IntegrationRequest(
+            system: 'ai_provider',
+            operation: 'ai.provider.models.discover',
+            method: 'GET',
+            endpoint: rtrim($baseUrl, '/').'/models',
+            protocolOperation: 'GET /models',
+            provider: $this->providerNameFromBaseUrl($baseUrl),
+            headers: $headers,
+            timeoutSeconds: 15,
+            metadata: [
+                'base_url' => rtrim($baseUrl, '/'),
+            ],
+        ));
 
-        if (! $response->successful()) {
-            throw ProviderDiscoveryException::httpFailure($response->status());
+        if ($response->failed()) {
+            throw ProviderDiscoveryException::httpFailure(
+                (int) ($response->status ?? 0),
+                $response->exchange?->id,
+            );
         }
 
         $data = $response->json('data', []);
@@ -63,6 +83,18 @@ class ProviderDiscoveryService
         usort($models, fn (array $a, array $b): int => strcasecmp($a['display_name'], $b['display_name']));
 
         return $models;
+    }
+
+    private function integrationGateway(): IntegrationGateway
+    {
+        return $this->gateway ?? app(IntegrationGateway::class);
+    }
+
+    private function providerNameFromBaseUrl(string $baseUrl): ?string
+    {
+        $host = parse_url($baseUrl, PHP_URL_HOST);
+
+        return is_string($host) && $host !== '' ? $host : null;
     }
 
     /**

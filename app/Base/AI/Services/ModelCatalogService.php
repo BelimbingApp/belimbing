@@ -8,12 +8,13 @@ namespace App\Base\AI\Services;
 use App\Base\AI\DTO\CatalogSyncResult;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Exceptions\ModelCatalogSyncException;
+use App\Base\Integration\Services\IntegrationGateway;
+use App\Base\Integration\Services\IntegrationRequest;
 use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
 use DateTimeImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 
 /**
  * Fetches, caches, and serves the models.dev community model catalog.
@@ -43,6 +44,10 @@ class ModelCatalogService
     private const CATALOG_SYNC_LOCK_WAIT_SECONDS = 45;
 
     private ?array $catalogCache = null;
+
+    public function __construct(
+        private readonly ?IntegrationGateway $gateway = null,
+    ) {}
 
     /**
      * Ensure the models.dev catalog is on disk (refresh via conditional GET if needed).
@@ -79,15 +84,27 @@ class ModelCatalogService
         $currentMeta = $this->readMeta();
         $currentEtag = $force ? null : ($currentMeta['etag'] ?? null);
 
-        $request = Http::acceptJson()->timeout(30);
-
+        $headers = [];
         if ($currentEtag !== null) {
-            $request = $request->withHeaders(['If-None-Match' => $currentEtag]);
+            $headers['If-None-Match'] = $currentEtag;
         }
 
-        $response = $request->get(self::CATALOG_URL);
+        $response = $this->integrationGateway()->send(new IntegrationRequest(
+            system: 'ai_catalog',
+            operation: 'ai.catalog.models_dev.sync',
+            method: 'GET',
+            endpoint: self::CATALOG_URL,
+            protocolOperation: 'GET /api.json',
+            provider: 'models.dev',
+            headers: $headers,
+            timeoutSeconds: 30,
+            metadata: [
+                'force' => $force,
+                'current_etag' => $currentEtag,
+            ],
+        ));
 
-        if ($response->status() === 304) {
+        if ($response->status === 304) {
             $this->writeMeta($currentMeta['etag'] ?? '', now()->toIso8601String());
 
             $stats = $this->countStats($this->readCatalogFile());
@@ -101,16 +118,16 @@ class ModelCatalogService
         }
 
         if (! $response->successful()) {
-            throw ModelCatalogSyncException::httpFailure($response->status());
+            throw ModelCatalogSyncException::httpFailure((int) ($response->status ?? 0), $response->exchange?->id);
         }
 
         $data = $response->json();
 
         if (! is_array($data) || $data === []) {
-            throw ModelCatalogSyncException::invalidPayload();
+            throw ModelCatalogSyncException::invalidPayload($response->exchange?->id);
         }
 
-        $etag = $response->header('ETag') ?? '';
+        $etag = (string) ($response->headers['ETag'][0] ?? $response->headers['etag'][0] ?? '');
 
         BlbFile::put($catalogPath, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         $this->writeMeta($etag, now()->toIso8601String());
@@ -379,5 +396,10 @@ class ModelCatalogService
     private function metaPath(): string
     {
         return storage_path(self::CATALOG_DIR.'/'.self::META_FILE);
+    }
+
+    private function integrationGateway(): IntegrationGateway
+    {
+        return $this->gateway ?? app(IntegrationGateway::class);
     }
 }

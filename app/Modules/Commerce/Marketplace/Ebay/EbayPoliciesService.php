@@ -5,8 +5,10 @@
 
 namespace App\Modules\Commerce\Marketplace\Ebay;
 
-use App\Base\Integration\Services\IntegrationHttpClientFactory;
+use App\Base\Integration\Services\IntegrationGateway;
+use App\Base\Integration\Services\IntegrationRequest;
 use App\Modules\Commerce\Marketplace\Ebay\DTO\EbayBusinessPolicy;
+use App\Modules\Commerce\Marketplace\Exceptions\MarketplaceOperationException;
 use Illuminate\Support\Collection;
 
 /**
@@ -27,7 +29,7 @@ class EbayPoliciesService
     public function __construct(
         private readonly EbayConfiguration $configuration,
         private readonly EbayOAuthService $oauth,
-        private readonly IntegrationHttpClientFactory $http,
+        private readonly IntegrationGateway $integration,
     ) {}
 
     /**
@@ -78,16 +80,35 @@ class EbayPoliciesService
     private function fetch(int $companyId, string $path, string $listKey, string $idKey, string $kind): Collection
     {
         $config = $this->configuration->forCompany($companyId);
-        $client = $this->http->json(
-            (string) $config['api_base_url'],
-            $this->oauth->accessToken($companyId),
-        );
         $marketplaceId = (string) $config['marketplace_id'];
 
-        $response = $client
-            ->get($path, ['marketplace_id' => $marketplaceId])
-            ->throw()
-            ->json();
+        $response = $this->integration->send(new IntegrationRequest(
+            system: EbayConfiguration::CHANNEL,
+            operation: 'commerce.marketplace.ebay.policies.pull.'.$kind,
+            method: 'GET',
+            endpoint: rtrim((string) $config['api_base_url'], '/').$path,
+            protocolOperation: 'GET '.$path,
+            provider: EbayConfiguration::CHANNEL,
+            headers: ['Authorization' => 'Bearer '.$this->oauth->accessToken($companyId)],
+            query: ['marketplace_id' => $marketplaceId],
+            ownerType: 'company',
+            ownerId: $companyId,
+            timeoutSeconds: 30,
+            retryTimes: 1,
+            metadata: ['policy_kind' => $kind, 'marketplace_id' => $marketplaceId],
+        ));
+
+        if ($response->failed()) {
+            throw MarketplaceOperationException::requestFailed(
+                EbayConfiguration::CHANNEL,
+                'policies.pull.'.$kind,
+                $response->status,
+                $response->exchange?->id,
+            );
+        }
+
+        $response = $response->json();
+        $response = is_array($response) ? $response : [];
 
         $items = is_array($response[$listKey] ?? null) ? $response[$listKey] : [];
 

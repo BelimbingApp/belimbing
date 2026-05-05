@@ -6,7 +6,8 @@
 namespace App\Modules\Commerce\Marketplace\Ebay;
 
 use App\Base\Foundation\ValueObjects\Money;
-use App\Base\Integration\Services\IntegrationHttpClientFactory;
+use App\Base\Integration\Services\IntegrationGateway;
+use App\Base\Integration\Services\IntegrationRequest;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannel;
 use App\Modules\Commerce\Marketplace\DTO\MarketplacePullResult;
@@ -15,7 +16,6 @@ use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Sales\DTO\SalesOrderData;
 use App\Modules\Commerce\Sales\DTO\SalesOrderLineData;
 use App\Modules\Commerce\Sales\Services\SalesOrderMaterializer;
-use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Carbon;
 
 class EbayMarketplaceChannel implements MarketplaceChannel
@@ -23,7 +23,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
     public function __construct(
         private readonly EbayConfiguration $configuration,
         private readonly EbayOAuthService $oauth,
-        private readonly IntegrationHttpClientFactory $http,
+        private readonly IntegrationGateway $integration,
         private readonly SalesOrderMaterializer $salesOrders,
     ) {}
 
@@ -35,8 +35,8 @@ class EbayMarketplaceChannel implements MarketplaceChannel
     public function pullListings(int $companyId): MarketplacePullResult
     {
         $config = $this->configuration->forCompany($companyId);
-        $client = $this->http->json($config['api_base_url'], $this->oauth->accessToken($companyId))
-            ->withHeaders(['X-EBAY-C-MARKETPLACE-ID' => $config['marketplace_id']]);
+        $accessToken = $this->oauth->accessToken($companyId);
+        $marketplaceId = (string) $config['marketplace_id'];
 
         $fetched = 0;
         $created = 0;
@@ -46,19 +46,28 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         $limit = 100;
 
         do {
-            $inventoryResponse = $client->get('/sell/inventory/v1/inventory_item', [
-                'limit' => $limit,
-                'offset' => $offset,
-            ])->throw()->json();
+            $inventoryResponse = $this->ebayGet(
+                config: $config,
+                companyId: $companyId,
+                accessToken: $accessToken,
+                operation: 'listings.inventory_items.pull',
+                path: '/sell/inventory/v1/inventory_item',
+                query: [
+                    'limit' => $limit,
+                    'offset' => $offset,
+                ],
+                headers: ['X-EBAY-C-MARKETPLACE-ID' => $marketplaceId],
+            );
 
             $inventoryItems = $inventoryResponse['inventoryItems'] ?? [];
 
             foreach ($inventoryItems as $inventoryItem) {
                 $delta = $this->processInventoryItemOffers(
-                    $client,
-                    $companyId,
-                    $inventoryItem,
-                    marketplaceId: (string) $config['marketplace_id'],
+                    config: $config,
+                    companyId: $companyId,
+                    accessToken: $accessToken,
+                    inventoryItem: $inventoryItem,
+                    marketplaceId: $marketplaceId,
                 );
 
                 $fetched += $delta['fetched'];
@@ -77,7 +86,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
     public function pullOrders(int $companyId): MarketplacePullResult
     {
         $config = $this->configuration->forCompany($companyId);
-        $client = $this->http->json($config['api_base_url'], $this->oauth->accessToken($companyId));
+        $accessToken = $this->oauth->accessToken($companyId);
 
         $fetched = 0;
         $created = 0;
@@ -87,13 +96,17 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         $limit = 100;
 
         do {
-            $response = $client
-                ->get('/sell/fulfillment/v1/order', [
+            $response = $this->ebayGet(
+                config: $config,
+                companyId: $companyId,
+                accessToken: $accessToken,
+                operation: 'orders.pull',
+                path: '/sell/fulfillment/v1/order',
+                query: [
                     'limit' => $limit,
                     'offset' => $offset,
-                ])
-                ->throw()
-                ->json();
+                ],
+            );
 
             $orders = $response['orders'] ?? [];
 
@@ -176,8 +189,9 @@ class EbayMarketplaceChannel implements MarketplaceChannel
      * @return array{fetched: int, created: int, updated: int, linked: int}
      */
     private function processInventoryItemOffers(
-        PendingRequest $client,
+        array $config,
         int $companyId,
+        string $accessToken,
         array $inventoryItem,
         string $marketplaceId,
     ): array {
@@ -186,10 +200,18 @@ class EbayMarketplaceChannel implements MarketplaceChannel
             return ['fetched' => 0, 'created' => 0, 'updated' => 0, 'linked' => 0];
         }
 
-        $offerResponse = $client->get('/sell/inventory/v1/offer', [
-            'sku' => $sku,
-            'marketplace_id' => $marketplaceId,
-        ])->throw()->json();
+        $offerResponse = $this->ebayGet(
+            config: $config,
+            companyId: $companyId,
+            accessToken: $accessToken,
+            operation: 'listings.offers.pull',
+            path: '/sell/inventory/v1/offer',
+            query: [
+                'sku' => $sku,
+                'marketplace_id' => $marketplaceId,
+            ],
+            headers: ['X-EBAY-C-MARKETPLACE-ID' => $marketplaceId],
+        );
 
         $fetched = 0;
         $created = 0;
@@ -207,6 +229,51 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         }
 
         return compact('fetched', 'created', 'updated', 'linked');
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $query
+     * @param  array<string, string>  $headers
+     * @return array<string, mixed>
+     */
+    private function ebayGet(
+        array $config,
+        int $companyId,
+        string $accessToken,
+        string $operation,
+        string $path,
+        array $query = [],
+        array $headers = [],
+    ): array {
+        $response = $this->integration->send(new IntegrationRequest(
+            system: EbayConfiguration::CHANNEL,
+            operation: 'commerce.marketplace.ebay.'.$operation,
+            method: 'GET',
+            endpoint: rtrim((string) $config['api_base_url'], '/').$path,
+            protocolOperation: 'GET '.$path,
+            provider: EbayConfiguration::CHANNEL,
+            headers: array_merge(['Authorization' => 'Bearer '.$accessToken], $headers),
+            query: $query,
+            ownerType: 'company',
+            ownerId: $companyId,
+            timeoutSeconds: 30,
+            retryTimes: 1,
+            metadata: ['marketplace_id' => $config['marketplace_id'] ?? null],
+        ));
+
+        if ($response->failed()) {
+            throw MarketplaceOperationException::requestFailed(
+                $this->key(),
+                $operation,
+                $response->status,
+                $response->exchange?->id,
+            );
+        }
+
+        $json = $response->json();
+
+        return is_array($json) ? $json : [];
     }
 
     /**

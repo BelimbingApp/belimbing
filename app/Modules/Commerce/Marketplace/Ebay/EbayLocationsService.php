@@ -5,8 +5,10 @@
 
 namespace App\Modules\Commerce\Marketplace\Ebay;
 
-use App\Base\Integration\Services\IntegrationHttpClientFactory;
+use App\Base\Integration\Services\IntegrationGateway;
+use App\Base\Integration\Services\IntegrationRequest;
 use App\Modules\Commerce\Marketplace\Ebay\DTO\EbayInventoryLocation;
+use App\Modules\Commerce\Marketplace\Exceptions\MarketplaceOperationException;
 use Illuminate\Support\Collection;
 
 /**
@@ -24,7 +26,7 @@ class EbayLocationsService
     public function __construct(
         private readonly EbayConfiguration $configuration,
         private readonly EbayOAuthService $oauth,
-        private readonly IntegrationHttpClientFactory $http,
+        private readonly IntegrationGateway $integration,
     ) {}
 
     /**
@@ -33,15 +35,33 @@ class EbayLocationsService
     public function pullInventoryLocations(int $companyId): Collection
     {
         $config = $this->configuration->forCompany($companyId);
-        $client = $this->http->json(
-            (string) $config['api_base_url'],
-            $this->oauth->accessToken($companyId),
-        );
+        $response = $this->integration->send(new IntegrationRequest(
+            system: EbayConfiguration::CHANNEL,
+            operation: 'commerce.marketplace.ebay.locations.pull',
+            method: 'GET',
+            endpoint: rtrim((string) $config['api_base_url'], '/').'/sell/account/v1/location',
+            protocolOperation: 'GET /sell/account/v1/location',
+            provider: EbayConfiguration::CHANNEL,
+            headers: ['Authorization' => 'Bearer '.$this->oauth->accessToken($companyId)],
+            query: ['limit' => 100],
+            ownerType: 'company',
+            ownerId: $companyId,
+            timeoutSeconds: 30,
+            retryTimes: 1,
+            metadata: ['marketplace_id' => $config['marketplace_id'] ?? null],
+        ));
 
-        $response = $client
-            ->get('/sell/account/v1/location', ['limit' => 100])
-            ->throw()
-            ->json();
+        if ($response->failed()) {
+            throw MarketplaceOperationException::requestFailed(
+                EbayConfiguration::CHANNEL,
+                'locations.pull',
+                $response->status,
+                $response->exchange?->id,
+            );
+        }
+
+        $response = $response->json();
+        $response = is_array($response) ? $response : [];
 
         $items = is_array($response['locations'] ?? null) ? $response['locations'] : [];
 

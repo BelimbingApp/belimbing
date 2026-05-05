@@ -68,6 +68,20 @@
                         {{ __('Pull Orders') }}
                     </x-ui.button>
                 </div>
+
+                @if($recentExchanges->isNotEmpty())
+                    <div class="mt-5 border-t border-border-default pt-4">
+                        <div class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Recent Exchanges') }}</div>
+                        <div class="space-y-1.5">
+                            @foreach($recentExchanges as $exchange)
+                                <a href="{{ route('admin.integration.outbound-exchanges.show', $exchange) }}" class="flex items-center justify-between gap-3 text-xs text-accent hover:underline" wire:navigate>
+                                    <span class="truncate">{{ $exchange->operation }}</span>
+                                    <span class="font-mono">{{ $exchange->response_status ?? $exchange->outcome }}</span>
+                                </a>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
             </x-ui.card>
 
             <x-ui.card class="xl:col-span-3">

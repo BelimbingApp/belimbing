@@ -6,8 +6,9 @@
 namespace App\Base\AI\Services;
 
 use App\Base\AI\Exceptions\GithubCopilotAuthException;
+use App\Base\Integration\Services\IntegrationGateway;
+use App\Base\Integration\Services\IntegrationRequest;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 
 /**
  * GitHub Copilot OAuth device flow and token exchange.
@@ -43,6 +44,10 @@ class GithubCopilotAuthService
 
     public const DEFAULT_BASE_URL = 'https://api.individual.githubcopilot.com';
 
+    public function __construct(
+        private readonly ?IntegrationGateway $gateway = null,
+    ) {}
+
     /**
      * Request a device code from GitHub for the OAuth device flow.
      *
@@ -52,15 +57,24 @@ class GithubCopilotAuthService
      */
     public function requestDeviceCode(): array
     {
-        $response = Http::acceptJson()
-            ->asForm()
-            ->post(self::DEVICE_CODE_URL, [
+        $response = $this->integrationGateway()->send(new IntegrationRequest(
+            system: 'ai_provider',
+            operation: 'ai.github_copilot.device_code.request',
+            method: 'POST',
+            endpoint: self::DEVICE_CODE_URL,
+            protocol: 'oauth2',
+            protocolOperation: 'POST device/code',
+            provider: 'github-copilot',
+            body: [
                 'client_id' => self::CLIENT_ID,
                 'scope' => 'read:user',
-            ]);
+            ],
+            asJson: false,
+            asForm: true,
+        ));
 
         if (! $response->successful()) {
-            throw GithubCopilotAuthException::deviceCodeRequestFailed($response->status());
+            throw GithubCopilotAuthException::deviceCodeRequestFailed((int) ($response->status ?? 0), $response->exchange?->id);
         }
 
         $data = $response->json();
@@ -90,16 +104,25 @@ class GithubCopilotAuthService
      */
     public function pollForAccessToken(string $deviceCode): array
     {
-        $response = Http::acceptJson()
-            ->asForm()
-            ->post(self::ACCESS_TOKEN_URL, [
+        $response = $this->integrationGateway()->send(new IntegrationRequest(
+            system: 'ai_provider',
+            operation: 'ai.github_copilot.device_token.poll',
+            method: 'POST',
+            endpoint: self::ACCESS_TOKEN_URL,
+            protocol: 'oauth2',
+            protocolOperation: 'POST oauth/access_token',
+            provider: 'github-copilot',
+            body: [
                 'client_id' => self::CLIENT_ID,
                 'device_code' => $deviceCode,
                 'grant_type' => 'urn:ietf:params:oauth:grant-type:device_code',
-            ]);
+            ],
+            asJson: false,
+            asForm: true,
+        ));
 
         if (! $response->successful()) {
-            return ['status' => 'error', 'error' => 'HTTP '.$response->status()];
+            return ['status' => 'error', 'error' => 'HTTP '.$response->status, 'exchange_id' => $response->exchange?->id];
         }
 
         $data = $response->json();
@@ -138,12 +161,18 @@ class GithubCopilotAuthService
             return $cached;
         }
 
-        $response = Http::acceptJson()
-            ->withToken($githubToken)
-            ->get(self::COPILOT_TOKEN_URL);
+        $response = $this->integrationGateway()->send(new IntegrationRequest(
+            system: 'ai_provider',
+            operation: 'ai.github_copilot.copilot_token.exchange',
+            method: 'GET',
+            endpoint: self::COPILOT_TOKEN_URL,
+            provider: 'github-copilot',
+            headers: ['Authorization' => 'Bearer '.$githubToken],
+            timeoutSeconds: 30,
+        ));
 
         if (! $response->successful()) {
-            throw GithubCopilotAuthException::tokenExchangeFailed($response->status());
+            throw GithubCopilotAuthException::tokenExchangeFailed((int) ($response->status ?? 0), $response->exchange?->id);
         }
 
         $data = $response->json();
@@ -217,5 +246,10 @@ class GithubCopilotAuthService
         }
 
         throw GithubCopilotAuthException::invalidExpiresAt();
+    }
+
+    private function integrationGateway(): IntegrationGateway
+    {
+        return $this->gateway ?? app(IntegrationGateway::class);
     }
 }

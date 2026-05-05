@@ -10,9 +10,12 @@ use Throwable;
 
 final class ModelCatalogSyncException extends BlbIntegrationException
 {
-    public static function httpFailure(int $status): self
+    public static function httpFailure(int $status, ?string $exchangeId = null): self
     {
-        return new self('Catalog sync failed: HTTP '.$status, context: ['status' => $status]);
+        return new self('Catalog sync failed: HTTP '.$status, context: array_filter([
+            'status' => $status,
+            'exchange_id' => $exchangeId,
+        ], static fn (mixed $value): bool => $value !== null));
     }
 
     public static function lockTimeout(int $waitSeconds, ?Throwable $previous = null): self
@@ -24,8 +27,10 @@ final class ModelCatalogSyncException extends BlbIntegrationException
         );
     }
 
-    public static function invalidPayload(): self
+    public static function invalidPayload(?string $exchangeId = null): self
     {
-        return new self('Catalog sync returned empty or invalid data');
+        return new self('Catalog sync returned empty or invalid data', context: array_filter([
+            'exchange_id' => $exchangeId,
+        ], static fn (mixed $value): bool => $value !== null));
     }
 }

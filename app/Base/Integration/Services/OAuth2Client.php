@@ -6,11 +6,14 @@
 namespace App\Base\Integration\Services;
 
 use App\Base\Foundation\Exceptions\BlbIntegrationException;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 class OAuth2Client
 {
+    public function __construct(
+        private readonly IntegrationGateway $integration,
+    ) {}
+
     /**
      * @param  list<string>  $scopes
      * @param  array<string, string>  $extra
@@ -43,12 +46,28 @@ class OAuth2Client
         string $clientSecret,
         string $code,
         string $redirectUri,
+        string $system = 'oauth2',
+        ?string $provider = null,
+        ?string $ownerType = null,
+        ?int $ownerId = null,
+        array $metadata = [],
     ): array {
-        return $this->tokenRequest($tokenEndpoint, $clientId, $clientSecret, [
-            'grant_type' => 'authorization_code',
-            'code' => $code,
-            'redirect_uri' => $redirectUri,
-        ]);
+        return $this->tokenRequest(
+            tokenEndpoint: $tokenEndpoint,
+            clientId: $clientId,
+            clientSecret: $clientSecret,
+            payload: [
+                'grant_type' => 'authorization_code',
+                'code' => $code,
+                'redirect_uri' => $redirectUri,
+            ],
+            operation: 'oauth2.authorization_code.exchange',
+            system: $system,
+            provider: $provider,
+            ownerType: $ownerType,
+            ownerId: $ownerId,
+            metadata: $metadata,
+        );
     }
 
     /**
@@ -61,6 +80,11 @@ class OAuth2Client
         string $clientSecret,
         string $refreshToken,
         array $scopes = [],
+        string $system = 'oauth2',
+        ?string $provider = null,
+        ?string $ownerType = null,
+        ?int $ownerId = null,
+        array $metadata = [],
     ): array {
         $payload = [
             'grant_type' => 'refresh_token',
@@ -71,20 +95,53 @@ class OAuth2Client
             $payload['scope'] = implode(' ', $scopes);
         }
 
-        return $this->tokenRequest($tokenEndpoint, $clientId, $clientSecret, $payload);
+        return $this->tokenRequest(
+            tokenEndpoint: $tokenEndpoint,
+            clientId: $clientId,
+            clientSecret: $clientSecret,
+            payload: $payload,
+            operation: 'oauth2.refresh_token.exchange',
+            system: $system,
+            provider: $provider,
+            ownerType: $ownerType,
+            ownerId: $ownerId,
+            metadata: $metadata,
+        );
     }
 
     /**
      * @param  array<string, string>  $payload
      * @return array<string, mixed>
      */
-    private function tokenRequest(string $tokenEndpoint, string $clientId, string $clientSecret, array $payload): array
-    {
-        $response = Http::asForm()
-            ->acceptJson()
-            ->withBasicAuth($clientId, $clientSecret)
-            ->timeout(30)
-            ->post($tokenEndpoint, $payload);
+    private function tokenRequest(
+        string $tokenEndpoint,
+        string $clientId,
+        string $clientSecret,
+        array $payload,
+        string $operation,
+        string $system,
+        ?string $provider,
+        ?string $ownerType,
+        ?int $ownerId,
+        array $metadata,
+    ): array {
+        $response = $this->integration->send(new IntegrationRequest(
+            system: $system,
+            operation: $operation,
+            method: 'POST',
+            endpoint: $tokenEndpoint,
+            protocol: 'oauth2',
+            protocolOperation: 'POST token',
+            provider: $provider ?? $this->providerNameFromEndpoint($tokenEndpoint),
+            body: $payload,
+            ownerType: $ownerType,
+            ownerId: $ownerId,
+            timeoutSeconds: 30,
+            asJson: false,
+            asForm: true,
+            basicAuth: [$clientId, $clientSecret],
+            metadata: $metadata,
+        ));
 
         if (! $response->successful()) {
             throw new BlbIntegrationException(
@@ -93,10 +150,18 @@ class OAuth2Client
                     'endpoint' => $tokenEndpoint,
                     'status' => $response->status(),
                     'body' => $response->json() ?? $response->body(),
+                    'exchange_id' => $response->exchange?->id,
                 ],
             );
         }
 
         return $response->json();
+    }
+
+    private function providerNameFromEndpoint(string $tokenEndpoint): ?string
+    {
+        $host = parse_url($tokenEndpoint, PHP_URL_HOST);
+
+        return is_string($host) && $host !== '' ? $host : null;
     }
 }
