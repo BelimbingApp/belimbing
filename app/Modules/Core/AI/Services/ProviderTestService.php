@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\AI\Contracts\Tracing\LlmTraceContextFactory;
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
@@ -26,6 +27,8 @@ use Illuminate\Support\Facades\Log;
  */
 final readonly class ProviderTestService
 {
+    private const TRACE_SOURCE = 'core_ai_provider_test';
+
     private const TEST_PROMPT = 'Reply with OK only.';
 
     private const TEST_MAX_TOKENS = 16;
@@ -34,6 +37,7 @@ final readonly class ProviderTestService
         private ConfigResolver $configResolver,
         private RuntimeCredentialResolver $credentialResolver,
         private LlmClient $llmClient,
+        private LlmTraceContextFactory $traceContextFactory,
     ) {}
 
     /**
@@ -72,6 +76,12 @@ final readonly class ProviderTestService
      */
     private function executeTestCall(string $providerName, string $model, array $credentials, array $config): ProviderTestResult
     {
+        $traceContext = $this->traceContextFactory->start(self::TRACE_SOURCE, [
+            'provider_name' => $providerName,
+            'model' => $model,
+            'api_type' => ($config['api_type'] ?? AiApiType::OpenAiChatCompletions)->value,
+        ]);
+
         try {
             $response = $this->llmClient->chat(new ChatRequest(
                 baseUrl: $credentials['base_url'],
@@ -85,6 +95,7 @@ final readonly class ProviderTestService
                 timeout: (int) $config['timeout'],
                 providerName: $providerName,
                 apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
+                transportTap: $traceContext->transportTap,
                 providerHeaders: $credentials['headers'] ?? [],
             ));
         } catch (\Throwable $e) {

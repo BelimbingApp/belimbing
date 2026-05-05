@@ -5,6 +5,7 @@ use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
+use App\Base\AI\Services\Tracing\NullLlmTraceContextFactory;
 use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\DTO\ProviderTestResult;
@@ -499,5 +500,5 @@ function makeCodexProviderTestService(int $providerId, ProviderTestResult $resul
             ? ['latency_ms' => $result->latencyMs]
             : ['runtime_error' => $result->error]);
 
-    return new ProviderTestService($configResolver, $credentialResolver, $llmClient);
+    return new ProviderTestService($configResolver, $credentialResolver, $llmClient, new NullLlmTraceContextFactory);
 }

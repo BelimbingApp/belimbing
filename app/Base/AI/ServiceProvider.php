@@ -6,6 +6,7 @@
 namespace App\Base\AI;
 
 use App\Base\AI\Console\Commands\AiCatalogSyncCommand;
+use App\Base\AI\Contracts\Tracing\LlmTraceContextFactory;
 use App\Base\AI\Providers\Help\ProviderHelpRegistry;
 use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Base\AI\Services\KnowledgeNavigator;
@@ -17,6 +18,7 @@ use App\Base\AI\Services\ProviderDiscoveryService;
 use App\Base\AI\Services\ProviderMapping\ProviderCapabilityRegistry;
 use App\Base\AI\Services\ProviderMapping\ProviderRequestHeaderResolver;
 use App\Base\AI\Services\ProviderMapping\ProviderRequestMapperRegistry;
+use App\Base\AI\Services\Tracing\NullLlmTraceContextFactory;
 use App\Base\AI\Services\UrlSafetyGuard;
 use App\Base\AI\Services\VectorStoreService;
 use App\Base\AI\Services\WebFetchService;
@@ -42,6 +44,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(ProviderRequestMapperRegistry::class);
         $this->app->singleton(LlmProtocolClientRegistry::class);
         $this->app->singleton(LlmClient::class);
+        $this->app->singleton(LlmTraceContextFactory::class, NullLlmTraceContextFactory::class);
         $this->app->singleton(KnowledgeNavigator::class);
         $this->app->singleton(ProviderDiscoveryService::class);
         $this->app->singleton(UrlSafetyGuard::class);

@@ -6,6 +6,7 @@
 namespace App\Modules\Core\AI;
 
 use App\Base\AI\Contracts\Tool;
+use App\Base\AI\Contracts\Tracing\LlmTraceContextFactory;
 use App\Base\AI\Services\WebSearchService;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Menu\Services\MenuConditionRegistry;
@@ -42,6 +43,7 @@ use App\Modules\Core\AI\Services\ControlPlane\PolicyEvaluationService;
 use App\Modules\Core\AI\Services\ControlPlane\RunDiagnosticService;
 use App\Modules\Core\AI\Services\ControlPlane\RunInspectionService;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
+use App\Modules\Core\AI\Services\ControlPlane\WireLoggingTraceContextFactory;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraContextProvider;
 use App\Modules\Core\AI\Services\LaraNavigationRouter;
@@ -224,6 +226,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(LifecycleControlService::class);
         $this->app->singleton(PolicyEvaluationService::class);
         $this->app->singleton(WireLogger::class);
+        $this->app->singleton(LlmTraceContextFactory::class, WireLoggingTraceContextFactory::class);
         $this->app->singleton(RefreshPricingSnapshot::class);
 
         $this->registerToolRegistries();

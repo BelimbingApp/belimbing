@@ -5,6 +5,7 @@ use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
+use App\Base\AI\Services\Tracing\NullLlmTraceContextFactory;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\ProviderTestService;
 use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
@@ -53,7 +54,7 @@ test('ProviderTestService rewrites Codex transport rejections into reconnect gui
 
     Log::spy();
 
-    $service = new ProviderTestService($configResolver, $credentialResolver, $llmClient);
+    $service = new ProviderTestService($configResolver, $credentialResolver, $llmClient, new NullLlmTraceContextFactory);
     $result = $service->testSelection(101, 'gpt-5.4-nano');
 
     expect($result->connected)->toBeFalse()
@@ -113,7 +114,7 @@ test('ProviderTestService surfaces unsupported Codex models as a model-selection
 
     Log::spy();
 
-    $service = new ProviderTestService($configResolver, $credentialResolver, $llmClient);
+    $service = new ProviderTestService($configResolver, $credentialResolver, $llmClient, new NullLlmTraceContextFactory);
     $result = $service->testSelection(101, 'gpt-5.1-codex-mini');
 
     expect($result->connected)->toBeFalse()

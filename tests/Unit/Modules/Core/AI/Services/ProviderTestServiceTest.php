@@ -1,8 +1,13 @@
 <?php
 
+use App\Base\AI\Contracts\LlmTransportTap;
+use App\Base\AI\Contracts\Tracing\LlmTraceContextFactory;
+use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
+use App\Base\AI\Services\Tracing\LlmTraceContext;
+use App\Base\AI\Services\Tracing\NullLlmTraceContextFactory;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\ProviderTestService;
 use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
@@ -38,6 +43,7 @@ function makeProviderTestService(array $config): ProviderTestService
         $configResolver,
         $credentialResolver,
         new LlmClient,
+        new NullLlmTraceContextFactory,
     );
 }
 
@@ -161,3 +167,70 @@ it('surfaces structured provider errors across supported protocol clients', func
         '*/messages',
     ],
 ]);
+
+it('attaches trace context to provider test chat requests', function (): void {
+    $config = [
+        'provider_name' => 'openai',
+        'model' => PROVIDER_TEST_SERVICE_MODEL_ID,
+        'timeout' => 30,
+        'api_type' => AiApiType::OpenAiChatCompletions,
+    ];
+
+    $configResolver = Mockery::mock(ConfigResolver::class);
+    $configResolver
+        ->shouldReceive('resolveForProvider')
+        ->once()
+        ->with(PROVIDER_TEST_SERVICE_PROVIDER_ID, PROVIDER_TEST_SERVICE_MODEL_ID)
+        ->andReturn($config);
+
+    $credentialResolver = Mockery::mock(RuntimeCredentialResolver::class);
+    $credentialResolver
+        ->shouldReceive('resolve')
+        ->once()
+        ->with($config)
+        ->andReturn([
+            'api_key' => 'test-key',
+            'base_url' => PROVIDER_TEST_SERVICE_BASE_URL,
+        ]);
+
+    $transportTap = Mockery::mock(LlmTransportTap::class);
+    $traceContextFactory = Mockery::mock(LlmTraceContextFactory::class);
+    $traceContextFactory
+        ->shouldReceive('start')
+        ->once()
+        ->with('core_ai_provider_test', [
+            'provider_name' => 'openai',
+            'model' => PROVIDER_TEST_SERVICE_MODEL_ID,
+            'api_type' => AiApiType::OpenAiChatCompletions->value,
+        ])
+        ->andReturn(new LlmTraceContext(
+            correlationId: 'trace_provider_test',
+            source: 'core_ai_provider_test',
+            transportTap: $transportTap,
+        ));
+
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient
+        ->shouldReceive('chat')
+        ->once()
+        ->withArgs(fn (ChatRequest $request): bool => $request->transportTap === $transportTap)
+        ->andReturn([
+            'content' => 'OK',
+            'latency_ms' => 12,
+        ]);
+
+    $service = new ProviderTestService(
+        $configResolver,
+        $credentialResolver,
+        $llmClient,
+        $traceContextFactory,
+    );
+
+    $result = $service->testSelection(
+        PROVIDER_TEST_SERVICE_PROVIDER_ID,
+        PROVIDER_TEST_SERVICE_MODEL_ID,
+    );
+
+    expect($result->connected)->toBeTrue()
+        ->and($result->latencyMs)->toBe(12);
+});
