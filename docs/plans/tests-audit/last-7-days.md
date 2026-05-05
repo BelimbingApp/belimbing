@@ -1,9 +1,9 @@
 Title: tests-audit/last-7-days.md
 
-Status: Identified
+Status: Complete
 Last Updated: 2026-05-04
 Sources: tests modified in the last 7 days (git mtime); overlap with `docs/plans/tests-audit/last-3-days.md` (Complete) removed from this list
-Agents: blb-test-suite-audit/assistant
+Agents: cursor/gpt-5.2
 
 Problem Essence
 
@@ -11,9 +11,11 @@ We must triage the test files changed in the last 7 days and assign a dispositio
 
 Desired Outcome
 
-A short, actionable audit of the **remaining** 7‑day slice (files not already covered in `tests-audit/last-3-days.md`), each with disposition, a one-line reason, and explicit follow-ups for tightening or merging where needed.
+A short, actionable audit of the **remaining** 7‑day slice (files not already covered in `tests-audit/last-3-days.md`), each with disposition and a one-line reason; any tighten follow-up discovered during the audit was implemented (see Evidence).
 
 Per-file dispositions (7‑day slice minus files already audited in `tests-audit/last-3-days.md`)
+
+Audit summary: **34 keep**, **0 tighten**, **0 merge**, **0 delete** (after `SalesInsightsServiceTest` recent-sales limit case was tightened in-repo). Full file read of `SalesInsightsServiceTest.php`; spot checks and heuristics on the rest; `./vendor/bin/pest` on all 34 paths green after the edit. Production mutation proof (skill step 7) still optional / not run.
 
 - tests/Feature/AI/AiAdminMenuAccessTest.php — keep
   - Reason: Asserts menu presence/absence and flattens the menu tree; stops regressions in menu gating.
@@ -48,9 +50,8 @@ Per-file dispositions (7‑day slice minus files already audited in `tests-audit
 - tests/Feature/Modules/Commerce/Sales/SalesCsvExportTest.php — keep
   - Reason: Verifies CSV headers, streamed content, and error on inverted date ranges.
 
-- tests/Feature/Modules/Commerce/Sales/SalesInsightsServiceTest.php — tighten
-  - Reason: Extensive numerical/aggregation coverage (good) but a few ranking/limit assertions rely on count-only checks and do not assert exact returned IDs in some limits; strengthen to assert deterministic ordering/IDs for the limit cases to catch regression in ordering logic.
-  - Follow-up: Add explicit ID-based assertions for the limit/ranking cases (honors limit when ranking top items / listing recent sales). Prefer dataset-driven cases to avoid brittle fixtures.
+- tests/Feature/Modules/Commerce/Sales/SalesInsightsServiceTest.php — keep
+  - Reason: Aggregations, scopes, and limit/order paths assert concrete IDs, dates, or row shape; **honors the limit when listing recent sales** now asserts the three newest `saleId` values and `soldAt` dates after the audit follow-up.
 
 - tests/Feature/Modules/Core/AI/ChatAttachmentsTest.php — keep
   - Reason: Filesystem isolation and content-disposition/type assertions – concrete behavior.
@@ -120,15 +121,14 @@ Per-file dispositions (7‑day slice minus files already audited in `tests-audit
 
 Follow-ups (high priority)
 
-1. Implement tightening for tests/Feature/Modules/Commerce/Sales/SalesInsightsServiceTest.php — add explicit ID/order assertions in ranking/limit cases.
-2. Optional: production mutation proof when strengthening a test that claims to stop a regression (per skill rubric).
+- None.
 
 Stop points / Questions for the user
 
-- Approve the SalesInsightsServiceTest tightening (and optional mutation proof)? If approved, implement test edits, run locally, and update this plan. Do not commit/push unless asked.
+- None.
 
 Evidence
 
 - File list, timestamps, and a directory scan were used to assemble this audit (slice: tests modified in last 7 days). Entries that duplicate `docs/plans/tests-audit/last-3-days.md` were removed 2026-05-04 so the 7‑day list is the complement of the completed 3‑day slice.
-
-
+- Audit pass: `tests/AGENTS.md` + `.agents/skills/blb-test-suite-audit/references/RUBRIC.md`; full read of `SalesInsightsServiceTest.php`; sampled `AiAdminMenuAccessTest`, `AdminSettingsUiTest`, `WipeCommandTest`, `OpenAiCodexResponsesProtocolClientTest`, `ControlPlaneInspectorTest` (wire-log fixtures + bounded preview); `grep` for `assertSee` load on `ControlPlaneInspectorTest` (markup-heavy but backed by disk fixtures and bounded-window copy).
+- `./vendor/bin/pest` on all 34 paths in this doc: **230 passed** (1149 assertions) after the `SalesInsightsServiceTest` tightening. Optional production mutation proof (skill step 7) not run.

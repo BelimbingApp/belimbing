@@ -3,7 +3,7 @@ Title: tests-audit/last-3-days.md
 Status: Complete
 Last Updated: 2026-05-04
 Sources: tests modified in the last 3 days (git mtime)
-Agents: blb-test-suite-audit/assistant, blb-test-suite-audit/cursor-audit-pass
+Agents: blb-test-suite-audit/assistant, provider=cursor, model=gpt-5.2
 
 Problem Essence
 

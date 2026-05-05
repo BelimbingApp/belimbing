@@ -556,8 +556,9 @@ it('falls back to order line title then sku when no item is linked', function ()
 it('honors the limit when listing recent sales', function (): void {
     $company = Company::factory()->create();
 
+    $sales = [];
     foreach (range(1, 5) as $i) {
-        Sale::factory()->create([
+        $sales[] = Sale::factory()->create([
             'company_id' => $company->id,
             'currency_code' => 'USD',
             'sold_at' => Carbon::parse('2026-04-10')->addDays($i),
@@ -572,7 +573,17 @@ it('honors the limit when listing recent sales', function (): void {
         limit: 3,
     );
 
-    expect($rows)->toHaveCount(3);
+    expect($rows)->toHaveCount(3)
+        ->and($rows->pluck('saleId')->all())->toBe([
+            $sales[4]->id,
+            $sales[3]->id,
+            $sales[2]->id,
+        ])
+        ->and($rows->pluck('soldAt')->map(fn (Carbon $c) => $c->toDateString())->all())->toBe([
+            '2026-04-15',
+            '2026-04-14',
+            '2026-04-13',
+        ]);
 });
 
 it('aggregates sales by category ordered by frequency', function (): void {
