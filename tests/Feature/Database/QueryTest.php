@@ -79,8 +79,8 @@ test('executor accepts valid SELECT queries', function (string $sql): void {
 // ─── CRUD via Livewire ──────────────────────────────────────────────
 
 test('query CRUD operations and sharing', function (): void {
-    $owner = User::factory()->create();
-    $recipient = User::factory()->create();
+    $owner = createAdminUser();
+    $recipient = createAdminUser();
 
     // Create a saved query
     $view = Query::query()->create([

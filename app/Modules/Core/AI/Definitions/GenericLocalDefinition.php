@@ -5,6 +5,7 @@
 
 namespace App\Modules\Core\AI\Definitions;
 
+use App\Modules\Core\AI\Concerns\HasDefaultProviderCapabilities;
 use App\Modules\Core\AI\Contracts\ProviderDefinition;
 use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Enums\ProviderOperation;
@@ -21,6 +22,8 @@ use Illuminate\Validation\ValidationException;
  */
 readonly class GenericLocalDefinition implements ProviderDefinition
 {
+    use HasDefaultProviderCapabilities;
+
     public function __construct(
         private string $providerKey,
         private string $defaultUrl = '',
@@ -84,10 +87,5 @@ readonly class GenericLocalDefinition implements ProviderDefinition
             baseUrl: $provider->base_url,
             apiKey: $provider->credentials['api_key'] ?? null,
         );
-    }
-
-    public function discoverModels(AiProvider $provider): ?array
-    {
-        return null;
     }
 }

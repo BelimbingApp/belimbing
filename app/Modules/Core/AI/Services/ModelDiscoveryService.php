@@ -57,10 +57,13 @@ class ModelDiscoveryService
         }
 
         $resolved = $definition->resolveRuntime($provider);
+        $http = $definition->modelsDiscoveryProfile($provider, $resolved);
 
         return $this->providerDiscovery->discoverModels(
-            rtrim($resolved->baseUrl, '/'),
+            $http->baseUrl,
             $resolved->apiKey ?? '',
+            $http->headers,
+            $http->query,
         );
     }
 
@@ -71,7 +74,7 @@ class ModelDiscoveryService
      * (display_name, costs, etc.) is served from ModelCatalogService at read
      * time — only model_id and admin config (is_active, cost_override) are stored.
      *
-     * When the provider supplies a fixed curated list (authoritative sync), any local
+     * When the provider supplies a fixed definition-owned list (authoritative sync), any local
      * rows whose {@see AiProviderModel::$model_id} is not in that list are deleted.
      *
      * If API discovery fails, falls back to importing from the models.dev catalog.
@@ -87,22 +90,30 @@ class ModelDiscoveryService
         $definitionModels = $definition->discoverModels($provider);
 
         if ($definitionModels !== null) {
-            return $this->syncDiscoveredModels(
+            $summary = $this->syncDiscoveredModels(
                 $provider,
                 $definitionModels,
                 authoritative: true,
                 source: 'provider_definition',
             );
-        }
 
-        $this->modelCatalog->ensureSynced();
+            // Definition-owned sync may not perform any discovery HTTP request, so there may be no exchange.
+            return [...$summary, 'exchange_id' => null];
+        }
 
         $exchangeId = null;
 
         try {
             $discovered = $this->discoverModels($provider);
         } catch (RuntimeException $e) {
-            $exchangeId = $this->markProviderDiscoveryFallback($provider, 'provider_discovery_failed', $e);
+            $exchangeId = $this->markProviderDiscoveryFallback(
+                $provider,
+                'provider_discovery_failed',
+                $e,
+                fallbackProvider: 'models.dev',
+            );
+
+            $this->modelCatalog->ensureSynced();
 
             return [
                 ...$this->importFromCatalog($provider),
@@ -111,7 +122,13 @@ class ModelDiscoveryService
         }
 
         if ($discovered === []) {
-            $exchangeId = $this->markProviderDiscoveryFallback($provider, 'empty_provider_discovery');
+            $exchangeId = $this->markProviderDiscoveryFallback(
+                $provider,
+                'empty_provider_discovery',
+                fallbackProvider: 'models.dev',
+            );
+
+            $this->modelCatalog->ensureSynced();
 
             return [
                 ...$this->importFromCatalog($provider),
@@ -177,8 +194,7 @@ class ModelDiscoveryService
             $deactivated = $this->deleteMissingModels($provider, $discoveredIds);
         }
 
-        // Auto-set default model if none exists for this provider
-        $this->ensureDefaultModel($provider);
+        $this->unsetInactiveDefaultModel($provider);
 
         return [
             'added' => $added,
@@ -223,8 +239,7 @@ class ModelDiscoveryService
             }
         }
 
-        // Auto-set default model if none exists for this provider
-        $this->ensureDefaultModel($provider);
+        $this->unsetInactiveDefaultModel($provider);
 
         return [
             'added' => $added,
@@ -239,6 +254,7 @@ class ModelDiscoveryService
         AiProvider $provider,
         string $reason,
         ?RuntimeException $exception = null,
+        string $fallbackProvider = 'models.dev',
     ): ?string {
         if (! Schema::hasTable('base_integration_outbound_exchanges')) {
             return null;
@@ -257,7 +273,7 @@ class ModelDiscoveryService
         }
 
         $metadata = $exchange->metadata ?? [];
-        $metadata['fallback_provider'] = 'models.dev';
+        $metadata['fallback_provider'] = $fallbackProvider;
 
         $exchange->update([
             'fallback_used' => true,
@@ -303,54 +319,24 @@ class ModelDiscoveryService
     }
 
     /**
-     * Ensure a provider has a default model set.
-     *
-     * Falls back to the first active model ordered by model_id.
+     * Operator selects the default model. Sync should not invent one, but it should
+     * clear an invalid default (e.g. deactivated model) so UI/runtime can surface
+     * a deterministic configuration error.
      */
-    public function ensureDefaultModel(AiProvider $provider): void
+    private function unsetInactiveDefaultModel(AiProvider $provider): void
     {
-        $currentDefault = AiProviderModel::query()
+        $default = AiProviderModel::query()
             ->where('ai_provider_id', $provider->id)
             ->where('is_default', true)
             ->first();
 
-        if ($currentDefault instanceof AiProviderModel && $currentDefault->is_active) {
-            return;
-        }
-
-        if ($currentDefault instanceof AiProviderModel) {
-            $currentDefault->unsetDefault();
-        }
-
-        $preferredModelId = config('ai.provider_overlay.'.$provider->name.'.default_model');
-
-        if (is_string($preferredModelId) && $preferredModelId !== '') {
-            $preferredModel = AiProviderModel::query()
-                ->where('ai_provider_id', $provider->id)
-                ->where('model_id', $preferredModelId)
-                ->where('is_active', true)
-                ->first();
-
-            if ($preferredModel instanceof AiProviderModel) {
-                $preferredModel->setAsDefault();
-
-                return;
-            }
-        }
-
-        $candidate = AiProviderModel::query()
-            ->where('ai_provider_id', $provider->id)
-            ->where('is_active', true)
-            ->orderBy('model_id')
-            ->first();
-
-        if ($candidate instanceof AiProviderModel) {
-            $candidate->setAsDefault();
+        if ($default instanceof AiProviderModel && ! $default->is_active) {
+            $default->unsetDefault();
         }
     }
 
     /**
-     * Remove local rows whose model_id is not on the curated list (authoritative sync).
+     * Remove local rows whose model_id is not on the authoritative list (authoritative sync).
      *
      * Unlike {@see deactivateMissingModels()}, this drops already-inactive orphans so
      * they do not linger in the admin model table after "Sync models".

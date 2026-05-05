@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\AI\Livewire\Providers\GithubCopilotSetup;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
 use App\Modules\Core\AI\Livewire\Providers\ProviderSetup;
@@ -36,6 +37,43 @@ test('edit provider modal shows current key not set when no api key is saved', f
         ->call('openEditProvider', $provider->id)
         ->assertSee('Current key:')
         ->assertSee('not set');
+});
+
+test('edit provider advanced settings can be saved and reset (global)', function (): void {
+    $user = createAiProvidersTestUser();
+    $provider = AiProvider::query()->create([
+        'company_id' => $user->company_id,
+        'name' => 'openai-codex',
+        'display_name' => 'OpenAI Codex',
+        'base_url' => 'https://chatgpt.com/backend-api',
+        'auth_type' => 'oauth',
+        'credentials' => [],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 1,
+        'created_by' => $user->employee_id,
+    ]);
+
+    $this->actingAs($user);
+
+    $settingsKey = 'ai.openai_codex.models_discovery_client_version';
+
+    Livewire::test(Providers::class)
+        ->call('openEditProvider', $provider->id)
+        ->assertSet('advancedSettingsSchema', fn (array $schema): bool => $schema !== [])
+        ->set('advancedSettings.modelsDiscoveryClientVersion', '0.129.0')
+        ->call('saveAdvancedSettings')
+        ->assertHasNoErrors();
+
+    $settings = app(SettingsService::class);
+    expect($settings->get($settingsKey, default: null, scope: null))->toBe('0.129.0');
+
+    Livewire::test(Providers::class)
+        ->call('openEditProvider', $provider->id)
+        ->call('resetAdvancedSettings')
+        ->assertHasNoErrors();
+
+    expect($settings->has($settingsKey, scope: null))->toBeFalse();
 });
 
 test('github copilot setup starts device flow for a company-scoped user without employee link', function (): void {

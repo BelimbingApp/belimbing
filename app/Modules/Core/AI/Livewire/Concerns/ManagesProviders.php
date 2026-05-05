@@ -89,6 +89,10 @@ trait ManagesProviders
         $this->providerApiKeyPreview = BlbStr::maskMiddle($provider->credentials['api_key'] ?? '', 7, 4);
         $this->providerIsActive = $provider->is_active;
         $this->showProviderForm = true;
+
+        if (method_exists($this, 'afterOpenEditProvider')) {
+            $this->afterOpenEditProvider($provider);
+        }
     }
 
     public function saveProvider(): void

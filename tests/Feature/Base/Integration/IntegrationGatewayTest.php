@@ -7,7 +7,7 @@ use App\Base\Integration\Services\IntegrationRequest;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
-it('records redacted successful external exchanges', function (): void {
+it('records successful external exchanges', function (): void {
     Http::fake([
         'https://api.example.test/v1/models?limit=2' => Http::response([
             'data' => [['id' => 'alpha']],
@@ -56,18 +56,18 @@ it('records redacted successful external exchanges', function (): void {
         ->and($exchange->response_status)->toBe(200)
         ->and($exchange->request_headers['Authorization'])->toBe('[redacted]')
         ->and($exchange->request_headers['X-Trace'])->toBe('trace-1')
-        ->and($exchange->request_body['value']['api_key'])->toBe('[redacted]')
-        ->and($exchange->request_body['value']['APIKey'])->toBe('[redacted]')
-        ->and($exchange->request_body['value']['XAuthToken'])->toBe('[redacted]')
+        ->and($exchange->request_body['value']['api_key'])->toBe('sk-test')
+        ->and($exchange->request_body['value']['APIKey'])->toBe('sk-test-caps')
+        ->and($exchange->request_body['value']['XAuthToken'])->toBe('token-test')
         ->and($exchange->request_body['value']['prompt'])->toBe('hello')
-        ->and($exchange->response_body['value']['access_token'])->toBe('[redacted]')
-        ->and($exchange->response_body['value']['APIKey'])->toBe('[redacted]')
+        ->and($exchange->response_body['value']['access_token'])->toBe('provider-secret')
+        ->and($exchange->response_body['value']['APIKey'])->toBe('response-secret')
         ->and($exchange->response_body['value']['data'][0]['id'])->toBe('alpha');
 });
 
-it('records failed external exchanges and payload truncation', function (): void {
+it('records failed external exchanges without payload truncation', function (): void {
     Http::fake([
-        'https://api.example.test/fail' => Http::response(str_repeat('x', IntegrationGateway::DEFAULT_PAYLOAD_PREVIEW_BYTES + 10), 503),
+        'https://api.example.test/fail' => Http::response(str_repeat('x', 10_000), 503),
     ]);
 
     $response = app(IntegrationGateway::class)->send(new IntegrationRequest(
@@ -82,8 +82,8 @@ it('records failed external exchanges and payload truncation', function (): void
     expect($response->failed())->toBeTrue()
         ->and($exchange->outcome)->toBe('http_error')
         ->and($exchange->response_status)->toBe(503)
-        ->and($exchange->response_body_truncated)->toBeTrue()
-        ->and($exchange->response_body['kind'])->toBe('truncated');
+        ->and($exchange->response_body_truncated)->toBeFalse()
+        ->and($exchange->response_body['kind'])->toBe('text');
 });
 
 it('records actual retries rather than configured retry allowance', function (): void {
@@ -117,7 +117,7 @@ it('records actual retries rather than configured retry allowance', function ():
         ->and($exchange->retry_count)->toBe(1);
 });
 
-it('keeps truncated multibyte payload previews valid UTF-8', function (): void {
+it('stores multibyte payloads without truncation', function (): void {
     Http::fake([
         'https://api.example.test/utf8' => Http::response(json_encode([
             'message' => str_repeat('€', 30_000),
@@ -133,8 +133,9 @@ it('keeps truncated multibyte payload previews valid UTF-8', function (): void {
 
     $exchange = OutboundExchange::query()->firstOrFail();
 
-    expect($exchange->response_body_truncated)->toBeTrue()
-        ->and(mb_check_encoding($exchange->response_body['preview'], 'UTF-8'))->toBeTrue();
+    expect($exchange->response_body_truncated)->toBeFalse()
+        ->and($exchange->response_body['kind'])->toBe('json')
+        ->and(($exchange->response_body_original_bytes ?? 0) > 10_000)->toBeTrue();
 });
 
 it('registers integration exchange authz capabilities', function (): void {

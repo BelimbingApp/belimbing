@@ -55,18 +55,24 @@ use Illuminate\Support\Collection;
         </div>
     </div>
 
-    @if($syncMessage)
-        <div
-            class="mb-2 px-3 py-1.5 bg-surface-subtle rounded text-sm text-muted"
-            x-data="{ show: true }"
-            x-init="setTimeout(() => { show = false; $wire.set('syncMessage', null) }, 4000)"
-            x-show="show"
-            x-transition.opacity
-        >
-            <span>{{ $syncMessage }}</span>
+    @if($syncMessage && $syncMessageProviderId === $provider->id)
+        <div class="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-surface-subtle px-3 py-1.5 text-sm text-muted">
+            <button
+                type="button"
+                wire:click="clearSyncMessage"
+                class="min-w-0 flex-1 text-left cursor-pointer rounded-sm text-muted hover:bg-surface-subtle/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-subtle motion-reduce:transition-none"
+                title="{{ __('Dismiss') }}"
+            >
+                <span>{{ $syncMessage }}</span>
+            </button>
             @if($syncExchangeId && $syncExchangeProviderId === $provider->id)
-                <a href="{{ route('admin.integration.outbound-exchanges.show', $syncExchangeId) }}" class="ml-2 text-accent hover:underline" wire:navigate>
-                    {{ $syncExchangeId }}
+                <a
+                    href="{{ route('admin.integration.outbound-exchanges.show', $syncExchangeId) }}"
+                    class="shrink-0 text-accent hover:underline"
+                    wire:click.stop
+                    wire:navigate
+                >
+                    {{ __('Outbound exchange') }}
                 </a>
             @endif
         </div>

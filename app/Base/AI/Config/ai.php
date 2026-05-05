@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
+
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
@@ -249,16 +251,6 @@ return [
             'auth_type' => 'oauth',
             'api_type_overrides' => [
                 '*' => 'openai_codex_responses',
-            ],
-            // Curated fallback seed for ChatGPT-backed Codex accounts.
-            // Keep this explicit until BLB has a verified live-discovery contract.
-            'default_model' => 'gpt-5.4',
-            'curated_models' => [
-                'gpt-5.4',
-                'gpt-5.4-mini',
-                'gpt-5.2',
-                'gpt-5.2-codex',
-                'gpt-5.3-codex',
             ],
             // No api_key_url: this provider is subscription-backed, not API-key-backed.
         ],

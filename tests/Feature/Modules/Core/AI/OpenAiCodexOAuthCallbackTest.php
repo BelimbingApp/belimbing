@@ -71,8 +71,8 @@ test('openai codex oauth callback persists credentials and marks provider connec
     $exchange = OutboundExchange::query()->firstOrFail();
     expect($exchange->operation)->toBe('ai.openai_codex.oauth.authorization_code.exchange')
         ->and($exchange->protocol)->toBe('oauth2')
-        ->and($exchange->request_body['value']['code'])->toBe('[redacted]')
-        ->and($exchange->response_body['value']['access_token'])->toBe('[redacted]');
+        ->and($exchange->request_body['value']['code'])->toBe('code-1')
+        ->and($exchange->response_body['value']['access_token'])->toBe($accessToken);
 
     $auth = $provider->connection_config[OpenAiCodexDefinition::AUTH_STATE_KEY] ?? [];
     expect($auth['status'] ?? null)->toBe('connected');

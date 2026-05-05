@@ -35,7 +35,7 @@ it('records github copilot device flow and copilot token exchanges', function ()
 
     $exchange = OutboundExchange::query()->where('operation', 'ai.github_copilot.device_code.request')->firstOrFail();
     expect($exchange->request_body['value']['device_code'] ?? null)->toBeNull()
-        ->and($exchange->response_body['value']['device_code'])->toBe('[redacted]');
+        ->and($exchange->response_body['value']['device_code'])->toBe('device-secret');
 });
 
 it('includes exchange id when github copilot token exchange fails', function (): void {

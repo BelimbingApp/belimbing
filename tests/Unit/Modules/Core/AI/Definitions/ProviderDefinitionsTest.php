@@ -203,21 +203,11 @@ test('OpenAiCodexDefinition edit preserves durable auth state by omitting connec
         ->not->toHaveKey('connection_config');
 });
 
-test('OpenAiCodexDefinition owns curated model discovery', function (): void {
-    config()->set('ai.provider_overlay.openai-codex.curated_models', [
-        'gpt-5.4',
-        'gpt-5.4-mini',
-        'gpt-5.2',
-    ]);
-
+test('OpenAiCodexDefinition does not define fallback model lists', function (): void {
     $provider = new AiProvider;
     $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class));
 
-    expect($def->discoverModels($provider))->toBe([
-        ['model_id' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
-        ['model_id' => 'gpt-5.4-mini', 'display_name' => 'gpt-5.4-mini'],
-        ['model_id' => 'gpt-5.2', 'display_name' => 'gpt-5.2'],
-    ]);
+    expect($def->discoverModels($provider))->toBeNull();
 });
 
 test('GenericLocalDefinition resolveRuntime returns config without api_key when none set', function (): void {

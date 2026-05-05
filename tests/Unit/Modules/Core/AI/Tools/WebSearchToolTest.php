@@ -198,7 +198,7 @@ describe('brave provider', function () {
 });
 
 describe('multi-provider fallback', function () {
-    it('falls back to second provider when first fails', function () {
+    it('surfaces provider failure without silent fallback', function () {
         $tool = new WebSearchTool;
 
         $settings = app(SettingsService::class);
@@ -220,7 +220,8 @@ describe('multi-provider fallback', function () {
 
         $result = $tool->execute(['query' => 'fallback test']);
 
-        expect((string) $result)->toContain('Brave Fallback');
+        expect((string) $result)->toContain('Search failed: parallel: HTTP 401: Unauthorized');
+        Http::assertNotSent(fn ($req) => str_contains($req->url(), 'api.search.brave.com'));
     });
 
     it('returns error when all providers fail', function () {
@@ -279,7 +280,7 @@ describe('multi-provider fallback', function () {
         $result = $tool->execute(['query' => 'no providers']);
 
         expect($result->isError)->toBeTrue()
-            ->and((string) $result)->toContain('No search providers configured');
+            ->and((string) $result)->toContain('No search provider configured');
     });
 });
 

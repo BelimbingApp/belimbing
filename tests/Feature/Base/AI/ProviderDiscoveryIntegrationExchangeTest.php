@@ -9,6 +9,7 @@ use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use App\Modules\Core\AI\Services\ProviderDefinitionRegistry;
 use App\Modules\Core\Company\Models\Company;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
 it('records provider model discovery through the integration gateway', function (): void {
@@ -37,6 +38,36 @@ it('records provider model discovery through the integration gateway', function 
         ->and($exchange->metadata['http_method'])->toBe('GET')
         ->and($exchange->request_headers)->toBe([])
         ->and($exchange->response_body['value']['data'][0]['id'])->toBe('zeta-model');
+});
+
+it('merges provider-specific headers and query on GET /models (Codex-compatible)', function (): void {
+    Http::fake(function (Request $request) {
+        expect($request->url())->toBe('https://chatgpt.com/backend-api/codex/models?client_version=0.99.test')
+            ->and($request->header('Authorization')[0] ?? null)->toBe('Bearer jwt-token')
+            ->and($request->header('User-Agent')[0] ?? null)->toBe('codex-cli-test')
+            ->and($request->header('chatgpt-account-id')[0] ?? null)->toBe('acct_123');
+
+        return Http::response([
+            'models' => [['slug' => 'gpt-5.4', 'display_name' => 'GPT Five Four']],
+        ], 200);
+    });
+
+    $models = app(ProviderDiscoveryService::class)->discoverModels(
+        'https://chatgpt.com/backend-api/codex',
+        'jwt-token',
+        [
+            'chatgpt-account-id' => 'acct_123',
+            'User-Agent' => 'codex-cli-test',
+        ],
+        ['client_version' => '0.99.test'],
+    );
+
+    $exchange = OutboundExchange::query()->firstOrFail();
+
+    expect($models)->toBe([['model_id' => 'gpt-5.4', 'display_name' => 'GPT Five Four']])
+        ->and($exchange->request_headers['chatgpt-account-id'])->toBe('acct_123')
+        ->and($exchange->request_headers['User-Agent'])->toBe('codex-cli-test')
+        ->and($exchange->request_headers['Authorization'])->toBe('[redacted]');
 });
 
 it('includes the exchange id when provider discovery fails', function (): void {
