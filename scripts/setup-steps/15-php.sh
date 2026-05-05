@@ -36,6 +36,8 @@ APP_ENV="${1:-local}"
 readonly UNKNOWN_VERSION='unknown'
 readonly PHP_VERSION_COMMAND='echo PHP_VERSION;'
 readonly ONDREJ_PHP_PPA='ppa:ondrej/php'
+readonly PHP_APT_UPDATE_TIMEOUT_SECONDS=180
+readonly PHP_APT_INSTALL_TIMEOUT_SECONDS=300
 readonly ONDREJ_PHP_PPA_ADD_TIMEOUT_SECONDS=90
 readonly COMPOSER_INSTALLER_URL='https://getcomposer.org/installer'
 readonly COMPOSER_SIGNATURE_URL='https://composer.github.io/installer.sig'
@@ -43,6 +45,7 @@ readonly COMPOSER_SIGNATURE_URL='https://composer.github.io/installer.sig'
 readonly -a APT_PHP_PREREQUISITES=(
     ca-certificates
     curl
+    python3-launchpadlib
     software-properties-common
 )
 
@@ -74,12 +77,12 @@ php_apt_package_available() {
 prepare_apt_php_repository() {
     local required_php_version=$1
 
-    sudo apt-get update -qq || {
+    run_setup_command_with_timeout "Refreshing apt package lists" "$PHP_APT_UPDATE_TIMEOUT_SECONDS" sudo apt-get update -qq || {
         echo -e "${RED}✗${NC} Failed to update apt package lists" >&2
         return 1
     }
 
-    sudo apt-get install -y -qq "${APT_PHP_PREREQUISITES[@]}" || {
+    run_setup_command_with_timeout "Installing PHP apt prerequisites" "$PHP_APT_INSTALL_TIMEOUT_SECONDS" sudo apt-get install -y -qq "${APT_PHP_PREREQUISITES[@]}" || {
         echo -e "${RED}✗${NC} Failed to install apt prerequisites for PHP setup" >&2
         return 1
     }
@@ -89,13 +92,14 @@ prepare_apt_php_repository() {
     fi
 
     echo -e "${CYAN}Adding ${ONDREJ_PHP_PPA}...${NC}"
-    timeout "$ONDREJ_PHP_PPA_ADD_TIMEOUT_SECONDS" sudo add-apt-repository -y "$ONDREJ_PHP_PPA" || {
+    run_setup_command_with_timeout "Adding ${ONDREJ_PHP_PPA}" "$ONDREJ_PHP_PPA_ADD_TIMEOUT_SECONDS" sudo add-apt-repository -y "$ONDREJ_PHP_PPA" || {
         echo -e "${RED}✗${NC} Failed to add ${ONDREJ_PHP_PPA}" >&2
-        echo -e "  Apt only exposes PHP packages after this repository is registered." >&2
+        echo -e "  Apt only exposes PHP ${required_php_version} packages after this repository is registered." >&2
+        echo -e "  The repository command may need network access to Launchpad and a supported Ubuntu release." >&2
         return 1
     }
 
-    sudo apt-get update -qq || {
+    run_setup_command_with_timeout "Refreshing apt package lists" "$PHP_APT_UPDATE_TIMEOUT_SECONDS" sudo apt-get update -qq || {
         echo -e "${RED}✗${NC} Failed to refresh apt package lists after adding ${ONDREJ_PHP_PPA}" >&2
         return 1
     }
@@ -113,7 +117,7 @@ prepare_apt_php_repository() {
 install_apt_php_packages() {
     local required_php_version=$1
 
-    sudo apt-get install -y -qq "php${required_php_version}" "php${required_php_version}-cli" "php${required_php_version}-common" "php${required_php_version}-mbstring" "php${required_php_version}-xml" "php${required_php_version}-curl" "php${required_php_version}-zip" "php${required_php_version}-pgsql" "php${required_php_version}-bcmath" "php${required_php_version}-intl"
+    run_setup_command_with_timeout "Installing PHP ${required_php_version} packages" "$PHP_APT_INSTALL_TIMEOUT_SECONDS" sudo apt-get install -y -qq "php${required_php_version}" "php${required_php_version}-cli" "php${required_php_version}-common" "php${required_php_version}-mbstring" "php${required_php_version}-xml" "php${required_php_version}-curl" "php${required_php_version}-zip" "php${required_php_version}-pgsql" "php${required_php_version}-bcmath" "php${required_php_version}-intl"
 }
 
 # Upgrade PHP to required version
@@ -483,7 +487,7 @@ main() {
                         echo ""
                         echo -e "${YELLOW}Please upgrade PHP to ${required_php_version}+ manually:${NC}"
                         echo -e "  • macOS: ${CYAN}brew install php@${required_php_version} && brew link php@${required_php_version}${NC}"
-                        echo -e "  • Linux: ${CYAN}sudo apt-get install php${required_php_version}${NC}"
+                        echo -e "  • Linux: ${CYAN}sudo add-apt-repository ${ONDREJ_PHP_PPA} && sudo apt-get update && sudo apt-get install php${required_php_version}${NC}"
                         echo -e "  • Manual: ${CYAN}https://www.php.net/downloads${NC}"
                         exit 1
                     fi
@@ -505,7 +509,7 @@ main() {
                 echo ""
                 echo -e "${YELLOW}Please install PHP ${required_php_version}+ manually:${NC}"
                 echo -e "  • macOS: ${CYAN}brew install php@${required_php_version}${NC}"
-                echo -e "  • Linux: ${CYAN}sudo apt-get install php${required_php_version}${NC}"
+                echo -e "  • Linux: ${CYAN}sudo add-apt-repository ${ONDREJ_PHP_PPA} && sudo apt-get update && sudo apt-get install php${required_php_version}${NC}"
                 echo -e "  • Manual: ${CYAN}https://www.php.net/downloads${NC}"
                 exit 1
             fi
