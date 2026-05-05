@@ -178,7 +178,8 @@ install_git() {
 
                     if [[ "$ppa_added" = false ]]; then
                         if [[ "$needs_upgrade" = true ]]; then
-                            continue_with_existing_git "Could not add ${GIT_CORE_PPA}; latest Git packages are unavailable from apt on this machine." && return 0
+                            continue_with_existing_git "Could not add ${GIT_CORE_PPA}; latest Git packages are unavailable from apt on this machine."
+                            return 0
                         fi
                     else
                         run_setup_command_with_timeout "Refreshing apt package lists" "$GIT_APT_UPDATE_TIMEOUT_SECONDS" sudo apt-get update -qq || {
@@ -190,10 +191,8 @@ install_git() {
                     if [[ "$needs_upgrade" = true ]] && ! apt_git_candidate_meets_latest; then
                         local candidate_version
                         candidate_version=$(apt_git_candidate_version 2>/dev/null || echo "none")
-                        continue_with_existing_git "Apt candidate for Git is ${candidate_version}, below requested ${LATEST_GIT_VERSION}. ${GIT_CORE_PPA} was not added or does not currently publish the requested version." && return 0
-                        echo -e "${RED}✗${NC} Apt candidate for Git is ${candidate_version}, below requested ${LATEST_GIT_VERSION}" >&2
-                        echo -e "  ${GIT_CORE_PPA} was not added or does not currently publish the requested version." >&2
-                        return 1
+                        continue_with_existing_git "Apt candidate for Git is ${candidate_version}, below requested ${LATEST_GIT_VERSION}. ${GIT_CORE_PPA} was not added or does not currently publish the requested version."
+                        return 0
                     fi
                 else
                     run_setup_command_with_timeout "Refreshing apt package lists" "$GIT_APT_UPDATE_TIMEOUT_SECONDS" sudo apt-get update -qq || {
@@ -215,9 +214,8 @@ install_git() {
                     if ! check_git_version "$installed_version"; then
                         if [[ "$needs_upgrade" = true ]]; then
                             CURRENT_GIT_VERSION="$installed_version"
-                            continue_with_existing_git "Git upgrade did not reach requested version ${LATEST_GIT_VERSION} (installed: ${installed_version})." && return 0
-                            echo -e "${RED}✗${NC} Git upgrade did not reach requested version ${LATEST_GIT_VERSION} (installed: ${installed_version})" >&2
-                            return 1
+                            continue_with_existing_git "Git upgrade did not reach requested version ${LATEST_GIT_VERSION} (installed: ${installed_version})."
+                            return 0
                         fi
 
                         echo -e "${YELLOW}⚠${NC} Installed Git version $installed_version is older than latest ${LATEST_GIT_VERSION}"

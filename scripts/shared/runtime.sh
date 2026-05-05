@@ -38,10 +38,17 @@ run_setup_command() {
     local description=$1
     shift
 
+    local had_errexit=
+    [[ $- == *e* ]] && had_errexit=1
+
     set +e
     "$@"
     local status=$?
-    set -e
+    if [[ -n "$had_errexit" ]]; then
+        set -e
+    else
+        set +e
+    fi
 
     if is_interrupt_status "$status"; then
         echo ""
@@ -57,10 +64,17 @@ run_setup_command_with_timeout() {
     local timeout_seconds=$2
     shift 2
 
+    local had_errexit=
+    [[ $- == *e* ]] && had_errexit=1
+
     set +e
     timeout --foreground "$timeout_seconds" "$@"
     local status=$?
-    set -e
+    if [[ -n "$had_errexit" ]]; then
+        set -e
+    else
+        set +e
+    fi
 
     if is_interrupt_status "$status"; then
         echo ""
