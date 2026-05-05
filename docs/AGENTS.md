@@ -21,6 +21,7 @@
 | How-to guides (setup, theming, extensions, trusted HTTPS) | `docs/guides/` |
 | Module documentation (Company, User, Employee, Geonames, Quality) | `docs/modules/` |
 | Tutorials (Caddy, Vite, Livewire, logging) | `docs/tutorials/` |
+| Operational runbooks (database backup, ...) | `docs/runbooks/` |
 | Reference (package evaluation) | `docs/reference/` |
 | Planning (active) | `docs/plans/` (`docs/plans/AGENTS.md`) |
 | Planning (legacy, migrating) | `docs/todo/` (`docs/todo/AGENTS.md`) |
@@ -35,6 +36,7 @@ docs/
 │   └── extensions/        # Extension development guides (migrations, config)
 ├── modules/               # Per-module documentation (overviews, APIs, design decisions)
 ├── tutorials/             # Learning-oriented tutorials (Caddy, Vite, Livewire, logging)
+├── runbooks/              # Operational runbooks (database backup, ...)
 ├── reference/             # Lookup tables, evaluations
 ├── plans/                 # Active planning documents (preferred)
 ├── todo/                  # Legacy planning documents (migrating to plans/)

@@ -5,11 +5,11 @@
     "": {
       "dependencies": {
         "@tailwindcss/vite": "^4.2.4",
-        "alpinejs": "^3.15.11",
+        "alpinejs": "^3.15.12",
         "autoprefixer": "^10.5.0",
         "axios": "^1.15.2",
         "concurrently": "^9.2.1",
-        "laravel-vite-plugin": "^3.0.1",
+        "laravel-vite-plugin": "^3.1.0",
         "playwright": "^1.59.1",
         "sortablejs": "^1.15.7",
         "tailwindcss": "^4.2.4",
@@ -113,7 +113,7 @@
 
     "@vue/shared": ["@vue/shared@3.1.5", "", {}, ""],
 
-    "alpinejs": ["alpinejs@3.15.11", "", { "dependencies": { "@vue/reactivity": "~3.1.1" } }, "sha512-m26gkTg/MId8O+F4jHKK3vB3SjbFxxk/JHP+qzmw1H6aQrZuPAg4CUoAefnASzzp/eNroBjrRQe7950bNeaBJw=="],
+    "alpinejs": ["alpinejs@3.15.12", "", { "dependencies": { "@vue/reactivity": "~3.1.1" } }, "sha512-nJvPAQVNPdZZ0NrExJ/kzQco3ijR8LwvCOadQecllESiqT4NyZ/57sN9V2XyvhlBGAbmlKYgeWZvYdKq99ij/Q=="],
 
     "ansi-regex": ["ansi-regex@5.0.1", "", {}, ""],
 
@@ -201,7 +201,7 @@
 
     "jiti": ["jiti@2.6.1", "", { "bin": "lib/jiti-cli.mjs" }, ""],
 
-    "laravel-vite-plugin": ["laravel-vite-plugin@3.0.1", "", { "dependencies": { "picocolors": "^1.0.0", "tinyglobby": "^0.2.12", "vite-plugin-full-reload": "^1.1.0" }, "peerDependencies": { "vite": "^8.0.0" }, "bin": { "clean-orphaned-assets": "bin/clean.js" } }, "sha512-Bx8sVcLIaZT1d0eisABcmjQ1GZdJpaXcV66A8RhXGp9JgR3iL8jDnvakVDXuH87Tn5S9KNx3VOhmJZW1CSexOg=="],
+    "laravel-vite-plugin": ["laravel-vite-plugin@3.1.0", "", { "dependencies": { "picocolors": "^1.0.0", "tinyglobby": "^0.2.12", "vite-plugin-full-reload": "^1.1.0" }, "peerDependencies": { "fontaine": "^0.5.0", "vite": "^8.0.0" }, "optionalPeers": ["fontaine"], "bin": { "clean-orphaned-assets": "bin/clean.js" } }, "sha512-Fzocl+X4eQ9jOi0RwdphYRGkUbPJ3ky1pTAST5Ot18cS2gw6d2vldK2eCrlKDVjtibCjCx5qptYDlA0373n7qg=="],
 
     "lightningcss": ["lightningcss@1.32.0", "", { "dependencies": { "detect-libc": "^2.0.3" }, "optionalDependencies": { "lightningcss-android-arm64": "1.32.0", "lightningcss-darwin-arm64": "1.32.0", "lightningcss-darwin-x64": "1.32.0", "lightningcss-freebsd-x64": "1.32.0", "lightningcss-linux-arm-gnueabihf": "1.32.0", "lightningcss-linux-arm64-gnu": "1.32.0", "lightningcss-linux-arm64-musl": "1.32.0", "lightningcss-linux-x64-gnu": "1.32.0", "lightningcss-linux-x64-musl": "1.32.0", "lightningcss-win32-arm64-msvc": "1.32.0", "lightningcss-win32-x64-msvc": "1.32.0" } }, "sha512-NXYBzinNrblfraPGyrbPoD19C1h9lfI/1mzgWYvXUTe414Gz/X1FD2XBZSZM7rRTrMA8JL3OtAaGifrIKhQ5yQ=="],
 
@@ -275,7 +275,7 @@
 
     "tapable": ["tapable@2.3.1", "", {}, "sha512-b+u3CEM6FjDHru+nhUSjDofpWSBp2rINziJWgApm72wwGasQ/wKXftZe4tI2Y5HPv6OpzXSZHOFq87H4vfsgsw=="],
 
-    "tinyglobby": ["tinyglobby@0.2.15", "", { "dependencies": { "fdir": "^6.5.0", "picomatch": "^4.0.3" } }, ""],
+    "tinyglobby": ["tinyglobby@0.2.16", "", { "dependencies": { "fdir": "^6.5.0", "picomatch": "^4.0.4" } }, "sha512-pn99VhoACYR8nFHhxqix+uvsbXineAasWm5ojXoN8xEwK5Kd3/TrhNn1wByuD52UxWRLy8pu+kRMniEi6Eq9Zg=="],
 
     "tree-kill": ["tree-kill@1.2.2", "", { "bin": "cli.js" }, ""],
 
@@ -309,13 +309,9 @@
 
     "chalk/supports-color": ["supports-color@7.2.0", "", { "dependencies": { "has-flag": "^4.0.0" } }, ""],
 
-    "tinyglobby/picomatch": ["picomatch@4.0.3", "", {}, ""],
-
     "vite/fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
 
     "vite/postcss": ["postcss@8.5.10", "", { "dependencies": { "nanoid": "^3.3.11", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-pMMHxBOZKFU6HgAZ4eyGnwXF/EvPGGqUr0MnZ5+99485wwW41kW91A4LOGxSHhgugZmSChL5AlElNdwlNgcnLQ=="],
-
-    "vite/tinyglobby": ["tinyglobby@0.2.16", "", { "dependencies": { "fdir": "^6.5.0", "picomatch": "^4.0.4" } }, "sha512-pn99VhoACYR8nFHhxqix+uvsbXineAasWm5ojXoN8xEwK5Kd3/TrhNn1wByuD52UxWRLy8pu+kRMniEi6Eq9Zg=="],
 
     "vite-plugin-full-reload/picomatch": ["picomatch@2.3.1", "", {}, ""],
   }

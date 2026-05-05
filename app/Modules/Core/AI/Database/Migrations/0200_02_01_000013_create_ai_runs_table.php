@@ -43,7 +43,6 @@ return new class extends Migration
             $table->string('pricing_version', 64)->nullable();
             $table->unsignedInteger('call_count')->default(0);
             $table->json('retry_attempts')->nullable();
-            $table->json('fallback_attempts')->nullable();
             $table->json('tool_actions')->nullable();
             $table->string('error_type', 40)->nullable();
             $table->text('error_message')->nullable();

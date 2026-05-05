@@ -256,24 +256,6 @@ $formatCents = static fn (?int $cents): string => $cents !== null
         </div>
     @endif
 
-    {{-- Fallback attempts --}}
-    @if($run['fallback_attempts'] !== [])
-        <div>
-            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Fallback Attempts') }}</span>
-            <div class="mt-1 space-y-1">
-                @foreach($run['fallback_attempts'] as $attempt)
-                    <p class="text-xs text-muted">
-                        {{ $attempt['provider'] ?? '?' }} / {{ $attempt['model'] ?? '?' }}
-                        — <span class="text-danger">{{ $attempt['error'] ?? __('unknown error') }}</span>
-                    </p>
-                    @if(! empty($attempt['diagnostic']))
-                        <p class="text-xs text-muted font-mono ml-4 mt-0.5">{{ $attempt['diagnostic'] }}</p>
-                    @endif
-                @endforeach
-            </div>
-        </div>
-    @endif
-
     {{-- Error details --}}
     @if($run['error_type'] || $run['error_message'])
         <div class="rounded-lg bg-surface-subtle p-3">

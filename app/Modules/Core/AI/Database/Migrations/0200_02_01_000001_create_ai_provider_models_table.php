@@ -21,6 +21,7 @@ return new class extends Migration
             $table->boolean('is_active')->default(false);
             $table->boolean('is_default')->default(false);
             $table->json('cost_override')->nullable();
+            $table->json('execution_controls')->nullable();
             $table->timestamps();
 
             $table->unique(['ai_provider_id', 'model_id']);

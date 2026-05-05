@@ -604,7 +604,6 @@
                             $messageLatencyMs = $message->getMetaInt('latency_ms');
                             $messageTimeoutSeconds = $message->getMetaInt('timeout_seconds');
                             $messageRetryAttempts = $message->getMetaInt('retry_attempts');
-                            $messageFallbackAttempts = $message->getMetaArray('fallback_attempts');
                             $messageErrorType = $message->getMetaString('error_type');
                             $messageErrorMessage = $message->getMetaString('error');
                             $messageRunStatus = $message->getMetaString('status');
@@ -664,7 +663,6 @@
                                 :model="$messageModel"
                                 :markdown="$markdown"
                                 :latency-ms="$messageLatencyMs"
-                                :fallback-attempts="$messageFallbackAttempts"
                             />
                         @elseif ($message->role === 'assistant' && $messageOrchestrationStatus !== null)
                             {{-- Action message (navigation, guide, models, etc.) --}}
@@ -684,8 +682,7 @@
                                         :latency-ms="$messageLatencyMs"
                                         :timeout-seconds="$messageTimeoutSeconds"
                                         :retry-attempts="$messageRetryAttempts"
-                                        :fallback-attempts="$messageFallbackAttempts"
-                                        :error-type="$messageErrorType"
+                                                :error-type="$messageErrorType"
                                         :error-message="$messageErrorMessage"
                                         :run-status="$messageRunStatus"
                                     />
@@ -703,7 +700,6 @@
                                 :latency-ms="$messageLatencyMs"
                                 :timeout-seconds="$messageTimeoutSeconds"
                                 :retry-attempts="$messageRetryAttempts"
-                                :fallback-attempts="$messageFallbackAttempts"
                                 :run-status="$messageRunStatus"
                                 :stop-note="$messageStopNote"
                             />
@@ -903,29 +899,6 @@
                     </button>
                 </div>
 
-                {{-- Fallback banner --}}
-                @if ($showSessionFallbackBanner && $sessionFallbackBannerAttempt !== null)
-                    <div
-                        x-data="{ dismissed: false }"
-                        x-show="!dismissed"
-                        x-cloak
-                        class="border-t border-amber-500/20 bg-amber-500/5 px-4 py-2 flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400"
-                    >
-                        <x-icon name="heroicon-o-exclamation-triangle" class="w-4 h-4 shrink-0 mt-0.5" />
-                        <div class="flex-1 min-w-0">
-                            <span>{{ __('Earlier in this conversation, :provider/:model reported: :error.', [
-                                'provider' => $sessionFallbackBannerAttempt['provider'] ?? '?',
-                                'model' => $sessionFallbackBannerAttempt['model'] ?? '?',
-                                'error' => $sessionFallbackBannerAttempt['error'] ?? __('unknown error'),
-                            ]) }}</span>
-                            <span class="text-muted">{{ __('If this keeps happening, try another model or retry in a few minutes.') }}</span>
-                        </div>
-                        <button type="button" @click="dismissed = true" class="shrink-0 text-amber-500 hover:text-amber-700 dark:hover:text-amber-300" aria-label="{{ __('Dismiss') }}">
-                            <x-icon name="heroicon-o-x-mark" class="w-3.5 h-3.5" />
-                        </button>
-                    </div>
-                @endif
-
                 {{-- Sticky turn status bar (coding-agent console) --}}
                 <div
                     x-show="isBusy"
@@ -963,7 +936,6 @@
                                         wire:model.live="selectedModel"
                                         class="max-w-xs !py-0.5 !text-[11px]"
                                         aria-label="{{ __('AI model') }}"
-                                        :empty-label="$currentModel"
                                     />
                                 </div>
                             @else

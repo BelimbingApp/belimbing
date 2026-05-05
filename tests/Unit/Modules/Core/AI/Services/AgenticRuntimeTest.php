@@ -256,21 +256,6 @@ function runAgenticConversation(
         ->run([test()->makeMessage('user', $userMessage)], 1, $systemPrompt, null, $policy, null, null, $allowedToolNames);
 }
 
-/**
- * @param  list<array<string, mixed>>  $events
- */
-function assertBackupFallbackStreamSucceeded(array $events): void
-{
-    $doneEvent = collect($events)->firstWhere('event', 'done');
-
-    expect($doneEvent)->not->toBeNull()
-        ->and($doneEvent['data']['content'] ?? '')->toBe('Success from backup!')
-        ->and($doneEvent['data']['meta']['model'] ?? '')->toBe('gpt-4-backup')
-        ->and($doneEvent['data']['meta']['fallback_attempts'] ?? [])->toHaveCount(1)
-        ->and($doneEvent['data']['meta']['fallback_attempts'][0]['provider'] ?? '')->toBe('primary-provider')
-        ->and($doneEvent['data']['meta']['fallback_attempts'][0]['error_type'] ?? '')->toBe('rate_limit');
-}
-
 describe('AgenticRuntime (sync)', function () {
     it('returns direct response when LLM produces no tool calls', function () {
         $llmClient = Mockery::mock(LlmClient::class);
@@ -590,7 +575,7 @@ describe('AgenticRuntime (sync context and errors)', function () {
 
     it('returns error when no LLM configuration is available', function () {
         $configResolver = Mockery::mock(ConfigResolver::class);
-        $configResolver->shouldReceive('resolveWithDefaultFallback')->with(1)->andReturn([]);
+        $configResolver->shouldReceive('resolveDefault')->with(1)->andReturn(null);
 
         $llmClient = Mockery::mock(LlmClient::class);
         $result = runAgenticConversation($llmClient, $configResolver);
@@ -660,36 +645,11 @@ describe('AgenticRuntime (sync fallback)', function () {
         expect($result['meta']['retry_attempts'])->toBeEmpty();
     });
 
-    it('falls back to backup model on retryable runtime error in sync mode', function () {
-        $llmClient = Mockery::mock(LlmClient::class);
-        // Primary fails with rate limit on BOTH attempts (initial + retry)
-        $llmClient->shouldReceive('chat')->twice()->andReturn(
-            $this->makeErrorResponse(AiErrorType::RateLimit, AGENTIC_RUNTIME_TOO_MANY_REQUESTS, 50)
-        );
-        // Backup succeeds
-        $llmClient->shouldReceive('chat')->once()->andReturn(
-            $this->makeFinalResponse('Success from backup model!')
-        );
-
-        $configResolver = $this->mockResolvedConfigResolver([
-            $this->makeConfig('primary-provider', 'gpt-4-primary'),
-            $this->makeConfig('backup-provider', 'gpt-4-backup'),
-        ]);
-
-        $result = runAgenticConversation($llmClient, $configResolver);
-
-        expect($result['content'])->toBe('Success from backup model!')
-            ->and($result['meta']['model'])->toBe('gpt-4-backup')
-            ->and($result['meta']['fallback_attempts'])->toHaveCount(1)
-            ->and($result['meta']['fallback_attempts'][0]['provider'])->toBe('primary-provider')
-            ->and($result['meta']['fallback_attempts'][0]['error_type'])->toBe('rate_limit');
-    });
 });
 
 describe('AgenticRuntime (streaming)', function () {
-    it('falls back to backup model on retryable runtime error in stream mode', function () {
+    it('surfaces a streaming runtime error directly (no cross-provider fallback)', function () {
         $llmClient = Mockery::mock(LlmClient::class);
-        // Primary fails with rate limit - streaming error
         $llmClient->shouldReceive('chatStream')->once()->andReturnUsing(function () {
             yield ['type' => 'error', 'runtime_error' => AiRuntimeError::fromType(
                 AiErrorType::RateLimit,
@@ -697,25 +657,19 @@ describe('AgenticRuntime (streaming)', function () {
                 latencyMs: 50
             ), 'latency_ms' => 50];
         });
-        // Backup succeeds
-        $llmClient->shouldReceive('chatStream')->once()->andReturnUsing(function () {
-            yield ['type' => 'content_delta', 'text' => 'Success from backup!'];
-            yield ['type' => 'done', 'finish_reason' => 'stop', 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5], 'latency_ms' => 200];
-        });
 
-        $configResolver = $this->mockResolvedConfigResolver([
-            $this->makeConfig('primary-provider', 'gpt-4-primary'),
-            $this->makeConfig('backup-provider', 'gpt-4-backup'),
-        ]);
-
-        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
+        $runtime = $this->makeAgenticRuntime($llmClient);
         $events = iterator_to_array($runtime->runStream(
             [test()->makeMessage('user', 'Hello')],
             1,
             AGENTIC_RUNTIME_SYSTEM_PROMPT,
         ));
 
-        assertBackupFallbackStreamSucceeded($events);
+        $errorEvent = collect($events)->firstWhere('event', 'error');
+
+        expect($errorEvent)->not->toBeNull()
+            ->and($errorEvent['data']['meta']['error_type'] ?? null)->toBe('rate_limit');
+        expect(collect($events)->pluck('event')->all())->not->toContain('done');
     });
 
     it('yields stream events before the full provider stream completes', function () {
@@ -786,115 +740,29 @@ describe('AgenticRuntime (streaming)', function () {
     });
 });
 
-describe('AgenticRuntime (streaming fallback boundaries)', function () {
-
-    it('does not fall back in stream mode after the provider already emitted output', function () {
-        $llmClient = Mockery::mock(LlmClient::class);
-        $llmClient->shouldReceive('chatStream')->once()->andReturnUsing(function () {
-            yield ['type' => 'thinking_delta', 'text' => 'Inspecting...'];
-            yield ['type' => 'error', 'runtime_error' => AiRuntimeError::fromType(
-                AiErrorType::RateLimit,
-                AGENTIC_RUNTIME_TOO_MANY_REQUESTS,
-                latencyMs: 50
-            ), 'latency_ms' => 50];
-        });
-
-        $configResolver = $this->mockResolvedConfigResolver([
-            $this->makeConfig('primary-provider', 'gpt-4-primary'),
-            $this->makeConfig('backup-provider', 'gpt-4-backup'),
-        ]);
-
-        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
-        $events = iterator_to_array($runtime->runStream(
-            [test()->makeMessage('user', 'Hello')],
-            1,
-            AGENTIC_RUNTIME_SYSTEM_PROMPT,
-        ));
-
-        expect(collect($events)->pluck('event')->all())->toContain('error')
-            ->and(collect($events)->pluck('event')->all())->not->toContain('done');
-
-        $recoveryEvents = array_values(array_filter(
-            $events,
-            static fn (array $event): bool => $event['event'] === 'status'
-                && ($event['data']['phase'] ?? null) === 'recovery_attempted'
-        ));
-
-        expect($recoveryEvents)->toBeEmpty();
-
-        $errorEvent = collect($events)->firstWhere('event', 'error');
-
-        expect($errorEvent['data']['meta']['model'] ?? null)->toBe('gpt-4-primary')
-            ->and($errorEvent['data']['meta']['fallback_attempts'] ?? [])->toBeEmpty();
-    });
+describe('AgenticRuntime (error surfacing)', function () {
 
     it('does not fall back on non-retryable runtime error in sync mode', function () {
         $llmClient = Mockery::mock(LlmClient::class);
-        // Primary fails with auth error (non-retryable)
         $llmClient->shouldReceive('chat')->once()->andReturn(
             $this->makeErrorResponse(AiErrorType::AuthError, 'Invalid API key', 50)
         );
-        // Backup should NOT be called
 
-        $configResolver = $this->mockResolvedConfigResolver([
-            $this->makeConfig('primary-provider', 'gpt-4-primary'),
-            $this->makeConfig('backup-provider', 'gpt-4-backup'),
-        ]);
+        $result = runAgenticConversation($llmClient);
 
-        $result = runAgenticConversation($llmClient, $configResolver);
-
-        expect($result['meta']['error_type'])->toBe('auth_error')
-            ->and($result['meta']['fallback_attempts'])->toBeEmpty();
+        expect($result['meta']['error_type'])->toBe('auth_error');
     });
 
-    it('surfaces the last stream runtime error when every configuration hits a retryable stream failure', function () {
-        $rateLimit = AiRuntimeError::fromType(
-            AiErrorType::RateLimit,
-            AGENTIC_RUNTIME_TOO_MANY_REQUESTS,
-            latencyMs: 50,
-        );
-
-        $llmClient = Mockery::mock(LlmClient::class);
-        $llmClient->shouldReceive('chatStream')->twice()->andReturnUsing(function () use ($rateLimit) {
-            yield ['type' => 'error', 'runtime_error' => $rateLimit, 'latency_ms' => 50];
-        });
-
-        $configResolver = $this->mockResolvedConfigResolver([
-            $this->makeConfig('primary-provider', 'gpt-4-primary'),
-            $this->makeConfig('backup-provider', 'gpt-4-backup'),
-        ]);
-
-        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
-        $events = iterator_to_array($runtime->runStream(
-            [test()->makeMessage('user', 'Hello')],
-            1,
-            AGENTIC_RUNTIME_SYSTEM_PROMPT,
-        ));
-
-        $terminal = collect($events)->last(static fn (array $e): bool => $e['event'] === 'error');
-
-        expect($terminal)->not->toBeNull()
-            ->and($terminal['data']['meta']['error_type'] ?? null)->toBe('rate_limit')
-            ->and($terminal['data']['meta']['fallback_attempts'] ?? [])->toHaveCount(2)
-            ->and($terminal['data']['meta']['fallback_attempts'][0]['error_type'] ?? null)->toBe('rate_limit')
-            ->and($terminal['data']['meta']['fallback_attempts'][1]['error_type'] ?? null)->toBe('rate_limit');
-    });
-
-    it('applies model override only to the primary slot so fallback uses the workspace backup model', function () {
+    it('applies a model override to the resolved primary config', function () {
         $primary = $this->makeConfig('github-copilot', 'gpt-primary-slot');
-        $backup = $this->makeConfig('moonshotai', 'moonshot-v1-auto', 'moon-key', 'https://api.moonshot.example/v1');
-        $configResolver = $this->mockResolvedConfigResolver([$primary, $backup]);
+        $configResolver = $this->mockResolvedConfigResolver([$primary]);
 
         $llmClient = Mockery::mock(LlmClient::class);
         $seenModels = [];
-        $llmClient->shouldReceive('chat')->times(3)->andReturnUsing(function (ChatRequest $request) use (&$seenModels): array {
+        $llmClient->shouldReceive('chat')->once()->andReturnUsing(function (ChatRequest $request) use (&$seenModels): array {
             $seenModels[] = [$request->model, $request->baseUrl];
 
-            if (count($seenModels) <= 2) {
-                return $this->makeErrorResponse(AiErrorType::RateLimit, 'HTTP 429', 50);
-            }
-
-            return $this->makeFinalResponse('From backup');
+            return $this->makeFinalResponse('Override applied');
         });
 
         $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
@@ -905,13 +773,9 @@ describe('AgenticRuntime (streaming fallback boundaries)', function () {
             'claude-opus-4.6',
         );
 
-        expect($result['content'])->toContain('From backup')
-            ->and($seenModels)->toHaveCount(3)
+        expect($result['content'])->toContain('Override applied')
+            ->and($seenModels)->toHaveCount(1)
             ->and($seenModels[0][0])->toBe('claude-opus-4.6')
-            ->and($seenModels[0][1])->toBe($primary['base_url'])
-            ->and($seenModels[1][0])->toBe('claude-opus-4.6')
-            ->and($seenModels[1][1])->toBe($primary['base_url'])
-            ->and($seenModels[2][0])->toBe('moonshot-v1-auto')
-            ->and($seenModels[2][1])->toBe($backup['base_url']);
+            ->and($seenModels[0][1])->toBe($primary['base_url']);
     });
 });

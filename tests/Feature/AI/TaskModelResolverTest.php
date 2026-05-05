@@ -76,7 +76,7 @@ test('resolve task uses the saved task model when it is valid', function (): voi
         ],
     ]);
 
-    $resolved = $resolver->resolveTaskWithPrimaryFallback(Employee::LARA_ID, 'research');
+    $resolved = $resolver->resolveTask(Employee::LARA_ID, 'research');
 
     expect($resolved)->not->toBeNull()
         ->and($resolved['provider_name'])->toBe('anthropic')
@@ -122,7 +122,7 @@ test('resolve task falls back to lara primary when the saved task model is incom
         ],
     ]);
 
-    $resolved = $resolver->resolveTaskWithPrimaryFallback(Employee::LARA_ID, 'coding');
+    $resolved = $resolver->resolveTask(Employee::LARA_ID, 'coding');
 
     expect($resolved)->not->toBeNull()
         ->and($resolved['provider_name'])->toBe('openai')
@@ -170,7 +170,7 @@ test('resolve task falls back to lara primary when the saved recommended model i
         ],
     ]);
 
-    $resolved = $resolver->resolveTaskWithPrimaryFallback(Employee::LARA_ID, 'coding');
+    $resolved = $resolver->resolveTask(Employee::LARA_ID, 'coding');
 
     expect($resolved)->not->toBeNull()
         ->and($resolved['provider_name'])->toBe('openai')
@@ -204,26 +204,20 @@ test('resolve task uses lara primary when the task mode is primary', function ()
     $resolver = app(ConfigResolver::class);
     $resolver->writeWorkspaceConfig(Employee::LARA_ID, [
         'llm' => [
-            'models' => [[
-                'provider' => 'openai',
-                'model' => 'gpt-primary',
-            ]],
             'tasks' => [
-                'titling' => [
-                    'mode' => 'primary',
-                ],
+                'titling' => [],
             ],
         ],
     ]);
 
-    $resolved = $resolver->resolveTaskWithPrimaryFallback(Employee::LARA_ID, 'titling');
+    $resolved = $resolver->resolveTask(Employee::LARA_ID, 'titling');
 
     expect($resolved)->not->toBeNull()
         ->and($resolved['provider_name'])->toBe('openai')
         ->and($resolved['model'])->toBe('gpt-primary');
 });
 
-test('resolve task overlays task execution controls onto the fallback primary model', function (): void {
+test('resolve task overlays task execution controls onto the fallback default model', function (): void {
     $company = Company::query()->find(Company::LICENSEE_ID)
         ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
     Employee::provisionLara();
@@ -250,25 +244,8 @@ test('resolve task overlays task execution controls onto the fallback primary mo
     $resolver = app(ConfigResolver::class);
     $resolver->writeWorkspaceConfig(Employee::LARA_ID, [
         'llm' => [
-            'models' => [[
-                'provider' => 'openai',
-                'model' => 'gpt-primary',
-                'execution_controls' => [
-                    'limits' => [
-                        'max_output_tokens' => 2048,
-                    ],
-                    'sampling' => [
-                        'temperature' => 0.7,
-                    ],
-                    'reasoning' => [
-                        'mode' => 'auto',
-                        'visibility' => 'none',
-                    ],
-                ],
-            ]],
             'tasks' => [
                 'titling' => [
-                    'mode' => 'primary',
                     'execution_controls' => [
                         'limits' => [
                             'max_output_tokens' => 64,
@@ -282,7 +259,7 @@ test('resolve task overlays task execution controls onto the fallback primary mo
         ],
     ]);
 
-    $resolved = $resolver->resolveTaskWithPrimaryFallback(Employee::LARA_ID, 'titling');
+    $resolved = $resolver->resolveTask(Employee::LARA_ID, 'titling');
 
     expect($resolved)->not->toBeNull()
         ->and($resolved['provider_name'])->toBe('openai')

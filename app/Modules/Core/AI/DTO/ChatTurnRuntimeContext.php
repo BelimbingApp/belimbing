@@ -14,6 +14,7 @@ final readonly class ChatTurnRuntimeContext
      * @param  list<mixed>  $messages
      * @param  array<string, mixed>|null  $promptMeta
      * @param  list<string>|null  $allowedToolNames  Tool profile allowlist (null = all tools)
+     * @param  array<string, mixed>|null  $executionControlsOverride  Per-session execution-controls overlay (null = no override)
      */
     public function __construct(
         public int $employeeId,
@@ -24,5 +25,6 @@ final readonly class ChatTurnRuntimeContext
         public ExecutionPolicy $policy,
         public ?array $promptMeta,
         public ?array $allowedToolNames = null,
+        public ?array $executionControlsOverride = null,
     ) {}
 }

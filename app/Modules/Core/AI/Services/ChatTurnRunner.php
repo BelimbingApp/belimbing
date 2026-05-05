@@ -33,6 +33,7 @@ class ChatTurnRunner
         private readonly TurnStreamBridge $bridge,
         private readonly TurnEventPublisher $turnPublisher,
         private readonly ChatToolProfileRegistry $profileRegistry,
+        private readonly SessionManager $sessionManager,
     ) {}
 
     /**
@@ -69,6 +70,7 @@ class ChatTurnRunner
             policy: $this->resolveExecutionPolicy($turn),
             promptMeta: $promptMeta,
             allowedToolNames: $allowedToolNames,
+            executionControlsOverride: $this->sessionManager->getExecutionControlsOverride($employeeId, $sessionId),
         );
 
         try {
@@ -97,6 +99,7 @@ class ChatTurnRunner
             $runtimeContext->sessionId,
             turnId: $turn->id,
             allowedToolNames: $runtimeContext->allowedToolNames,
+            executionControlsOverride: $runtimeContext->executionControlsOverride,
         );
 
         $cancelled = false;

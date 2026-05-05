@@ -116,8 +116,8 @@ class ArtisanTool extends AbstractHighImpactProcessTool
                     'runnable' => false,
                 ],
                 [
-                    'label' => 'Wipe database (destroys all data)',
-                    'input' => ['command' => 'db:wipe --force'],
+                    'label' => 'Show migration status',
+                    'input' => ['command' => 'migrate:status'],
                     'runnable' => false,
                 ],
             ],

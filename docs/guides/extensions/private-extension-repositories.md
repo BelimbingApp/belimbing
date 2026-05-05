@@ -11,18 +11,30 @@ belimbing/                         # Public BLB framework git repo
 ├── app/
 ├── docs/
 ├── extensions/
-│   └── ham/
-│       └── auto-parts/            # Private nested git repo
-│           ├── .git/
-│           ├── Config/
-│           ├── Database/
-│           ├── Livewire/
-│           ├── Routes/
-│           ├── Tests/
-│           └── ServiceProvider.php
+│   ├── ham/                       # Private nested git repo root (licensee: Ham)
+│   │   ├── .git/
+│   │   ├── auto-parts/            # Ham auto-parts module
+│   │   │   ├── Config/
+│   │   │   ├── Database/
+│   │   │   ├── Livewire/
+│   │   │   ├── Routes/
+│   │   │   ├── Tests/
+│   │   │   └── ServiceProvider.php
+│   │   └── <future-module>/       # Additional Ham modules live here
+│   └── sb-group/                  # Private nested git repo root (licensee: SBG)
+│       ├── .git/
+│       ├── qac/                   # SBG QAC module
+│       │   ├── Config/
+│       │   ├── Database/
+│       │   ├── Models/
+│       │   ├── Routes/
+│       │   ├── Services/
+│       │   └── ServiceProvider.php
+│       └── <future-module>/       # Additional SBG modules live here
 └── resources/
     └── extensions/
-        └── ham/                   # Private UI overrides; use a matching private repo or keep in the extension repo by convention
+        ├── ham/                   # Private UI overrides for Ham
+        └── sb-group/              # Private UI overrides for SBG
 ```
 
 The parent BLB repo ignores the private extension path locally. The extension
@@ -38,6 +50,8 @@ cat >> .git/info/exclude <<'EOF'
 # Private licensee extension repositories.
 /extensions/ham/
 /resources/extensions/ham/
+/extensions/sb-group/
+/resources/extensions/sb-group/
 EOF
 ```
 
@@ -47,16 +61,28 @@ neutral.
 
 ## Create the Private Extension Repo
 
+Ham example:
+
 ```bash
-mkdir -p extensions/ham/auto-parts
-cd extensions/ham/auto-parts
+mkdir -p extensions/ham
+cd extensions/ham
 
 git init -b main
-git remote add origin <private-blb-ham-auto-parts-repo-url>
+git remote add origin <private-blb-ham-repo-url>
+```
+
+SBG example:
+
+```bash
+mkdir -p extensions/sb-group
+cd extensions/sb-group
+
+git init -b main
+git remote add origin <private-blb-sbg-repo-url>
 ```
 
 The remote name should be `origin` inside the nested repo. It must point to the
-private Ham extension repository, not to the parent BLB framework repository.
+licensee's private repository, not to the parent BLB framework repository.
 
 After the remote exists:
 
@@ -77,16 +103,25 @@ git push origin main
 Ham extension work:
 
 ```bash
-cd extensions/ham/auto-parts
+cd extensions/ham
 git status
 git commit -m "Ham extension change"
+git push origin main
+```
+
+SBG extension work:
+
+```bash
+cd extensions/sb-group
+git status
+git commit -m "SBG extension change"
 git push origin main
 ```
 
 Before every framework commit, verify that no private extension paths are staged:
 
 ```bash
-git diff --cached --name-only | rg '^(extensions/ham|resources/extensions/ham)/' && exit 1 || true
+git diff --cached --name-only | rg '^(extensions/(ham|sb-group)|resources/extensions/(ham|sb-group))/' && exit 1 || true
 ```
 
 ## What Belongs Where
@@ -99,10 +134,10 @@ Framework repo:
 
 Private extension repo:
 
-- Ham-specific catalog seeds, eBay category mappings, policy defaults, and report pages.
-- Ham-specific prompt overrides and description boilerplate.
-- Ham-specific settings defaults that are not secrets.
-- Extension tests under `extensions/ham/auto-parts/Tests`.
+- Licensee-specific seeds, mappings, policy defaults, and report pages.
+- Licensee-specific prompt overrides and description boilerplate.
+- Licensee-specific settings defaults that are not secrets.
+- Extension tests under `extensions/<licensee>/<module>/Tests`.
 
 Secrets, OAuth tokens, and API keys never belong in either repository. Store
 them through `base_settings`.

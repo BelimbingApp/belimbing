@@ -36,10 +36,10 @@ class TaskModelRecommendationService
             return ['error' => 'Unknown task.'];
         }
 
-        $config = $this->configResolver->resolvePrimaryWithDefaultFallback($employeeId);
+        $config = $this->configResolver->resolveDefault($employeeId);
 
         if ($config === null) {
-            return ['error' => 'Lara does not have a primary model configured yet.'];
+            return ['error' => 'Lara has no default model configured yet.'];
         }
 
         $credentials = $this->credentialResolver->resolve($config);

@@ -8,12 +8,15 @@ namespace App\Modules\Core\AI\Livewire\Concerns;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
+use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Base\AI\Services\LlmClient;
+use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
 use App\Modules\Core\AI\Services\RuntimeMessageBuilder;
 use App\Modules\Core\AI\Services\SessionManager;
+use App\Modules\Core\User\Models\User;
 
 /**
  * Handles chat session CRUD, title management, and search.
@@ -32,8 +35,74 @@ trait ManagesChatSessions
         $session = app(SessionManager::class)->create($this->employeeId);
         $this->selectedSessionId = $session->id;
         $this->lastRunMeta = null;
-        $this->selectedModel = null;
+        $this->selectedModel = $this->seedModelFromUserPrefs();
         $this->dispatch('agent-chat-focus-composer');
+    }
+
+    /**
+     * Build the composite model id from the current user's last-used hint for this agent.
+     */
+    private function seedModelFromUserPrefs(): ?string
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        $hint = $user->getLastUsedModel($this->employeeId);
+
+        if ($hint === null) {
+            return null;
+        }
+
+        $companyId = $user->getCompanyId();
+
+        if ($companyId === null) {
+            return null;
+        }
+
+        $provider = AiProvider::query()
+            ->forCompany($companyId)
+            ->active()
+            ->where('name', $hint['provider'])
+            ->first();
+
+        if ($provider === null) {
+            return null;
+        }
+
+        return $provider->id.ResolvesAvailableModels::MODEL_ID_SEPARATOR.$hint['model'];
+    }
+
+    /**
+     * Persist the user's last-used model hint based on the picker's composite id.
+     */
+    private function persistUserLastUsedModel(?string $compositeId): void
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return;
+        }
+
+        if ($compositeId === null) {
+            $user->setLastUsedModel($this->employeeId, null, null);
+
+            return;
+        }
+
+        $resolved = $this->resolveModelConfigFromComposite($compositeId);
+
+        if (isset($resolved['error'])) {
+            return;
+        }
+
+        $user->setLastUsedModel(
+            $this->employeeId,
+            $resolved['provider_name'] ?? null,
+            $resolved['model'] ?? null,
+        );
     }
 
     /**
@@ -76,6 +145,8 @@ trait ManagesChatSessions
                 $this->selectedModel,
             );
         }
+
+        $this->persistUserLastUsedModel($this->selectedModel);
     }
 
     /**
@@ -150,7 +221,7 @@ trait ManagesChatSessions
             return;
         }
 
-        $config = app(ConfigResolver::class)->resolveTaskWithPrimaryFallback($this->employeeId, 'titling');
+        $config = app(ConfigResolver::class)->resolveTask($this->employeeId, 'titling');
         if ($config === null) {
             return;
         }

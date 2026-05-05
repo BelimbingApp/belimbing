@@ -11,7 +11,6 @@
     'provider' => null,
     'model' => null,
     'markdown',
-    'fallbackAttempts' => null,
     'errorMessage' => null,
     'latencyMs' => null,
 ])
@@ -32,7 +31,6 @@
             :model="$model"
             :run-id="$runId"
             :latency-ms="$latencyMs"
-            :fallback-attempts="$fallbackAttempts"
             :error-type="$errorType"
             :error-message="$errorMessage"
         />

@@ -153,6 +153,7 @@ class PostcodeSeeder extends Seeder
         }
 
         $this->command?->info("Extracted {$iso}.txt successfully.");
+
         return $txtPath;
     }
 

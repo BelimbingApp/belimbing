@@ -49,7 +49,6 @@ describe('RunInspection', function () {
             latencyMs: 1500,
             tokens: ['prompt' => 100, 'completion' => 50],
             toolActions: [['tool' => 'bash', 'result_length' => 42]],
-            fallbackAttempts: [],
             retryAttempts: 0,
             errorType: null,
             errorMessage: null,
@@ -61,7 +60,7 @@ describe('RunInspection', function () {
         expect($array)->toHaveKeys([
             'run_id', 'employee_id', 'employee_name', 'session_id', 'dispatch_id',
             'provider', 'model', 'outcome', 'latency_ms', 'tokens',
-            'tool_actions', 'fallback_attempts', 'retry_attempts',
+            'tool_actions', 'retry_attempts',
             'error_type', 'error_message', 'recorded_at',
             'acting_for_user_id', 'acting_for_user_name',
         ])
@@ -82,7 +81,6 @@ describe('RunInspection', function () {
                 ['tool' => 'query_data', 'result_length' => 256],
                 ['name' => 'bash'],
             ],
-            'fallback_attempts' => [],
             'retry_attempts' => 1,
         ];
 

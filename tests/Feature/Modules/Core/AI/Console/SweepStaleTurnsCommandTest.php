@@ -9,27 +9,30 @@ use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\ChatTurnEvent;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Models\User;
 
 const SWEEP_STALE_SESSION = 'sess_stale_test';
 
 const SWEEP_EXPECT_ONE_STALE_LINE = '1 stale turn';
 
-function createSweepFixture(): void
+function createSweepFixture(): int
 {
     Company::provisionLicensee('Test Company');
     Employee::provisionLara();
+
+    return User::factory()->create(['company_id' => Company::LICENSEE_ID])->id;
 }
 
 describe('SweepStaleTurnsCommand', function () {
     beforeEach(function () {
-        createSweepFixture();
+        $this->actingForUserId = createSweepFixture();
     });
 
     it('fails queued turns past the threshold', function () {
         $turn = ChatTurn::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => SWEEP_STALE_SESSION,
-            'acting_for_user_id' => 1,
+            'acting_for_user_id' => $this->actingForUserId,
             'status' => TurnStatus::Queued,
             'current_phase' => TurnPhase::WaitingForWorker,
         ]);
@@ -50,7 +53,7 @@ describe('SweepStaleTurnsCommand', function () {
         $turn = ChatTurn::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => SWEEP_STALE_SESSION,
-            'acting_for_user_id' => 1,
+            'acting_for_user_id' => $this->actingForUserId,
             'status' => TurnStatus::Booting,
             'current_phase' => TurnPhase::AwaitingLlm,
         ]);
@@ -71,7 +74,7 @@ describe('SweepStaleTurnsCommand', function () {
         $turn = ChatTurn::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => SWEEP_STALE_SESSION,
-            'acting_for_user_id' => 1,
+            'acting_for_user_id' => $this->actingForUserId,
             'status' => TurnStatus::Running,
             'current_phase' => TurnPhase::RunningTool,
         ]);
@@ -92,7 +95,7 @@ describe('SweepStaleTurnsCommand', function () {
         ChatTurn::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => SWEEP_STALE_SESSION,
-            'acting_for_user_id' => 1,
+            'acting_for_user_id' => $this->actingForUserId,
             'status' => TurnStatus::Queued,
             'current_phase' => TurnPhase::WaitingForWorker,
         ]);
@@ -106,7 +109,7 @@ describe('SweepStaleTurnsCommand', function () {
         $turn = ChatTurn::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => SWEEP_STALE_SESSION,
-            'acting_for_user_id' => 1,
+            'acting_for_user_id' => $this->actingForUserId,
             'status' => TurnStatus::Completed,
             'current_phase' => TurnPhase::Finalizing,
         ]);
@@ -124,7 +127,7 @@ describe('SweepStaleTurnsCommand', function () {
         $turn = ChatTurn::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => SWEEP_STALE_SESSION,
-            'acting_for_user_id' => 1,
+            'acting_for_user_id' => $this->actingForUserId,
             'status' => TurnStatus::Queued,
             'current_phase' => TurnPhase::WaitingForWorker,
         ]);

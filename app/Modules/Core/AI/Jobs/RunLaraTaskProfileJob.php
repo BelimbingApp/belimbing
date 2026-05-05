@@ -89,7 +89,7 @@ class RunLaraTaskProfileJob implements ShouldQueue
                 return;
             }
 
-            $resolvedConfig = $configResolver->resolveTaskWithPrimaryFallback(Employee::LARA_ID, $taskProfileKey);
+            $resolvedConfig = $configResolver->resolveTask(Employee::LARA_ID, $taskProfileKey);
 
             if ($resolvedConfig === null) {
                 $this->markFailed(

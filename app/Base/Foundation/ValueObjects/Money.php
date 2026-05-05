@@ -46,10 +46,12 @@ final readonly class Money
             return '-';
         }
 
-        $whole = intdiv($minorAmount, 100);
-        $fraction = str_pad((string) ($minorAmount % 100), 2, '0', STR_PAD_LEFT);
+        $sign = $minorAmount < 0 ? '-' : '';
+        $abs = abs($minorAmount);
+        $whole = intdiv($abs, 100);
+        $fraction = str_pad((string) ($abs % 100), 2, '0', STR_PAD_LEFT);
 
-        return strtoupper($currencyCode).' '.number_format($whole).'.'.$fraction;
+        return strtoupper($currencyCode).' '.$sign.number_format($whole).'.'.$fraction;
     }
 
     public static function formatInput(?int $minorAmount): ?string
@@ -58,9 +60,11 @@ final readonly class Money
             return null;
         }
 
-        $whole = intdiv($minorAmount, 100);
-        $fraction = str_pad((string) ($minorAmount % 100), 2, '0', STR_PAD_LEFT);
+        $sign = $minorAmount < 0 ? '-' : '';
+        $abs = abs($minorAmount);
+        $whole = intdiv($abs, 100);
+        $fraction = str_pad((string) ($abs % 100), 2, '0', STR_PAD_LEFT);
 
-        return $whole.'.'.$fraction;
+        return $sign.$whole.'.'.$fraction;
     }
 }

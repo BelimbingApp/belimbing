@@ -21,7 +21,6 @@ use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\OperationsDispatchService;
 use App\Modules\Core\AI\Services\QuickActionRegistry;
 use App\Modules\Core\AI\Services\SessionManager;
-use App\Modules\Core\AI\Services\TranscriptFallbackBannerAttemptResolver;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
@@ -151,11 +150,10 @@ class Chat extends Component
         $sessionUsage = $state['sessionUsage'];
         $hasPendingDelegations = $state['hasPendingDelegations'];
         $activeTurnsBySession = $state['activeTurnsBySession'];
-        $sessionFallbackBannerAttempt = $state['sessionFallbackBannerAttempt'];
-
-        $showSessionFallbackBanner = $sessionFallbackBannerAttempt !== null
-            && $this->shouldShowSessionFallbackBanner($sessionFallbackBannerAttempt);
         $canAccessControlPlane = $this->canAccessControlPlane();
+
+        $availableModels = $this->canSelectModel() ? $this->availableModels() : [];
+        $this->ensureSelectedModelPopulated($availableModels);
         $sessionTurnTargets = $agentActivated
             ? $this->sessionTurnTargets($sessions, $activeTurnsBySession)
             : [];
@@ -188,7 +186,7 @@ class Chat extends Component
             'settingsUrl' => $settingsUrl,
             'canSelectModel' => $this->canSelectModel(),
             'canAttachFiles' => $canAttach,
-            'availableModels' => $this->canSelectModel() ? $this->availableModels() : [],
+            'availableModels' => $availableModels,
             'currentModel' => $this->resolveCurrentModelLabel(),
             'sessionUsage' => $sessionUsage,
             'hasPendingDelegations' => $hasPendingDelegations,
@@ -198,8 +196,6 @@ class Chat extends Component
             'selectedSessionActiveTurn' => $selectedSessionActiveTurn,
             'activeTurnCount' => $activeTurnCount,
             'hasActiveTurns' => $activeTurnCount > 0,
-            'showSessionFallbackBanner' => $showSessionFallbackBanner,
-            'sessionFallbackBannerAttempt' => $sessionFallbackBannerAttempt,
             'phaseLabels' => $phaseLabels,
             'canAccessControlPlane' => $canAccessControlPlane,
             'sessionTurnTargets' => $sessionTurnTargets,
@@ -213,8 +209,7 @@ class Chat extends Component
      *     messages: list<Message>,
      *     sessionUsage: mixed,
      *     hasPendingDelegations: bool,
-     *     activeTurnsBySession: array<string, array{turnId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, status: string}>,
-     *     sessionFallbackBannerAttempt: array<string, mixed>|null
+     *     activeTurnsBySession: array<string, array{turnId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, status: string}>
      * }
      */
     private function resolveRenderState(bool $agentActivated): array
@@ -224,7 +219,6 @@ class Chat extends Component
         $sessionUsage = null;
         $hasPendingDelegations = false;
         $activeTurnsBySession = [];
-        $sessionFallbackBannerAttempt = null;
 
         if (! $agentActivated) {
             return compact(
@@ -233,7 +227,6 @@ class Chat extends Component
                 'sessionUsage',
                 'hasPendingDelegations',
                 'activeTurnsBySession',
-                'sessionFallbackBannerAttempt',
             );
         }
 
@@ -247,14 +240,12 @@ class Chat extends Component
                 'sessionUsage',
                 'hasPendingDelegations',
                 'activeTurnsBySession',
-                'sessionFallbackBannerAttempt',
             );
         }
 
         $messageManager = app(MessageManager::class);
         $messages = $messageManager->read($this->employeeId, $this->selectedSessionId);
         $sessionUsage = $messageManager->sessionUsage($this->employeeId, $this->selectedSessionId);
-        $sessionFallbackBannerAttempt = TranscriptFallbackBannerAttemptResolver::latestFailureAttempt($messages);
 
         if ($this->employeeId === Employee::LARA_ID && is_int(auth()->id())) {
             $hasPendingDelegations = app(OperationsDispatchService::class)
@@ -267,7 +258,6 @@ class Chat extends Component
             'sessionUsage',
             'hasPendingDelegations',
             'activeTurnsBySession',
-            'sessionFallbackBannerAttempt',
         );
     }
 
@@ -379,33 +369,6 @@ class Chat extends Component
     }
 
     /**
-     * Whether the sticky session fallback notice should appear for the current model selection.
-     *
-     * The failed attempt is taken from the latest assistant transcript line only; when the user has
-     * switched the composer to a different provider/model than that failure, the notice is hidden.
-     *
-     * @param  array<string, mixed>  $failedAttempt
-     */
-    public function shouldShowSessionFallbackBanner(array $failedAttempt): bool
-    {
-        if ($this->selectedModel === null || $this->selectedModel === '') {
-            return true;
-        }
-
-        $resolved = $this->resolveModelConfigFromComposite($this->selectedModel);
-
-        if (isset($resolved['error'])) {
-            return true;
-        }
-
-        $failedProvider = is_string($failedAttempt['provider'] ?? null) ? $failedAttempt['provider'] : '';
-        $failedModel = is_string($failedAttempt['model'] ?? null) ? $failedAttempt['model'] : '';
-
-        return ($resolved['provider_name'] ?? '') === $failedProvider
-            && ($resolved['model'] ?? '') === $failedModel;
-    }
-
-    /**
      * Check if the current user has model selection capability.
      */
     public function canSelectModel(): bool
@@ -454,6 +417,33 @@ class Chat extends Component
     }
 
     /**
+     * Ensure $selectedModel reflects a real composite ID at render time so the
+     * model picker shows the active model selected within its provider group
+     * instead of an orphan placeholder option above the groups.
+     *
+     * @param  list<array{id: string, label: string, provider: string, providerId: int}>  $availableModels
+     */
+    private function ensureSelectedModelPopulated(array $availableModels): void
+    {
+        if ($this->selectedModel !== null || $availableModels === []) {
+            return;
+        }
+
+        $employee = Employee::query()->find($this->employeeId);
+        $companyId = $employee?->company_id ? (int) $employee->company_id : null;
+
+        if ($companyId === null) {
+            return;
+        }
+
+        $default = $this->resolveDefaultCompositeModelId($companyId);
+
+        if ($default !== '') {
+            $this->selectedModel = $default;
+        }
+    }
+
+    /**
      * Get the display label for the currently active model.
      *
      * Extracts the model_id from a composite "providerId:::modelId" string
@@ -465,31 +455,18 @@ class Chat extends Component
             return $this->extractModelId($this->selectedModel) ?? $this->selectedModel;
         }
 
-        $config = app(ConfigResolver::class)->resolvePrimaryWithDefaultFallback($this->employeeId);
+        $config = app(ConfigResolver::class)->resolveDefault($this->employeeId);
 
         return $config['model'] ?? __('Default');
     }
 
     private function isAgentActivated(): bool
     {
-        $isActivated = false;
-
-        if (Employee::query()->whereKey($this->employeeId)->exists()) {
-            $resolver = app(ConfigResolver::class);
-            $configs = $resolver->resolve($this->employeeId);
-            $isActivated = count($configs) > 0;
-
-            if (! $isActivated) {
-                $employee = Employee::query()->find($this->employeeId);
-                $companyId = $employee?->company_id ? (int) $employee->company_id : null;
-
-                if ($companyId !== null) {
-                    $isActivated = $resolver->resolveDefault($companyId) !== null;
-                }
-            }
+        if (! Employee::query()->whereKey($this->employeeId)->exists()) {
+            return false;
         }
 
-        return $isActivated;
+        return app(ConfigResolver::class)->resolveDefault($this->employeeId) !== null;
     }
 
     private function settingsUrl(): ?string

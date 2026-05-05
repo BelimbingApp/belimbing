@@ -17,9 +17,9 @@ use Illuminate\Support\Str;
 /**
  * Stage 0 Agent runtime adapter.
  *
- * Delegates LLM execution to the stateless Base LlmClient. Handles per-agent
- * configuration resolution, message building, and ordered fallback on
- * transient failures (connection error, HTTP 429, 5xx).
+ * Delegates LLM execution to the stateless Base LlmClient. Resolves a single
+ * config for the agent and makes one call. Failures surface honestly to the
+ * caller — there is no silent retry across providers or models.
  */
 class AgentRuntime
 {
@@ -34,13 +34,9 @@ class AgentRuntime
     /**
      * Run a conversation turn and return the assistant response with metadata.
      *
-     * Resolves LLM config for the given Agent (workspace config.json),
-     * falling back to the company's default provider+model when no workspace
-     * config exists. Tries models in priority order with fallback on transient failures.
-     *
-     * Collects structured fallback attempt entries (OpenClaw-style) when multiple
-     * models are tried. Each attempt records provider, model, error, error_type,
-     * and latency_ms. The attempts array is included in meta['fallback_attempts'].
+     * Resolves a single LLM config for the given Agent (workspace config.json
+     * or company default by priority), calls the model once, and returns the
+     * result. On failure, the error surfaces directly — no fallback chain.
      *
      * @param  list<Message>  $messages  Conversation history
      * @param  int  $employeeId  Agent employee ID
@@ -50,67 +46,22 @@ class AgentRuntime
     public function run(array $messages, int $employeeId, ?string $systemPrompt = null): array
     {
         $runId = 'run_'.Str::random(12);
-        $configs = $this->configResolver->resolveWithDefaultFallback($employeeId);
-        $result = null;
+        $config = $this->configResolver->resolveDefault($employeeId);
 
-        if ($configs === []) {
-            $result = $this->noLlmConfigResult($runId);
-        } else {
-            $lastResult = null;
-            $fallbackAttempts = [];
-
-            foreach ($configs as $config) {
-                $attemptResult = $this->tryModel($messages, $systemPrompt, $config, $runId);
-
-                if (! $this->shouldFallback($attemptResult)) {
-                    $attemptResult['meta']['fallback_attempts'] = $fallbackAttempts;
-                    $result = $attemptResult;
-
-                    break;
-                }
-
-                $fallbackAttempts[] = [
-                    'provider' => $config['provider_name'] ?? 'unknown',
-                    'model' => $config['model'] ?? 'unknown',
-                    'error' => $attemptResult['meta']['error'] ?? 'Unknown error',
-                    'error_type' => $attemptResult['meta']['error_type'] ?? 'unknown',
-                    'latency_ms' => $attemptResult['meta']['latency_ms'] ?? 0,
-                    'diagnostic' => $attemptResult['meta']['diagnostic'] ?? null,
-                ];
-
-                $lastResult = $attemptResult;
-            }
-
-            if ($result === null) {
-                $result = $lastResult ?? $this->noLlmConfigResult($runId);
-                $result['meta']['fallback_attempts'] = $fallbackAttempts;
-
-                if (count($fallbackAttempts) > 1 && $lastResult !== null) {
-                    $result['content'] .= ' '.__('All :count configured models failed.', ['count' => count($fallbackAttempts)]);
-                }
-            }
+        if ($config === null) {
+            return $this->responseFactory->error(
+                $runId,
+                'unknown',
+                'unknown',
+                AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration available'),
+            );
         }
 
-        return $result;
+        return $this->callModel($messages, $systemPrompt, $config, $runId);
     }
 
     /**
-     * Build a consistent error result for the "no configuration available" state.
-     *
-     * @return array{content: string, run_id: string, meta: array<string, mixed>}
-     */
-    private function noLlmConfigResult(string $runId): array
-    {
-        return $this->responseFactory->error(
-            $runId,
-            'unknown',
-            'unknown',
-            AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration available'),
-        );
-    }
-
-    /**
-     * Try a single model configuration and return the result.
+     * Call the resolved model and shape the result into the runtime response envelope.
      *
      * For GitHub Copilot, exchanges the stored GitHub OAuth token for a
      * short-lived Copilot API token before each request (cached by
@@ -122,7 +73,7 @@ class AgentRuntime
      * @param  string  $runId  Run identifier
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
-    private function tryModel(array $messages, ?string $systemPrompt, array $config, string $runId): array
+    private function callModel(array $messages, ?string $systemPrompt, array $config, string $runId): array
     {
         $model = $config['model'];
         $credentials = $this->credentialResolver->resolve($config);
@@ -166,26 +117,5 @@ class AgentRuntime
         }
 
         return $this->responseFactory->success($runId, $config, $result, $extraMeta);
-    }
-
-    /**
-     * Determine whether the runtime should fall back to the next model.
-     *
-     * Falls back on transient failures (connection, rate limit, server error).
-     * Does NOT fall back on client errors (400, 401, 403) or success.
-     *
-     * @param  array{content: string, run_id: string, meta: array<string, mixed>}  $result
-     */
-    private function shouldFallback(array $result): bool
-    {
-        $errorTypeValue = $result['meta']['error_type'] ?? null;
-
-        if ($errorTypeValue === null) {
-            return false;
-        }
-
-        $errorType = AiErrorType::tryFrom($errorTypeValue);
-
-        return $errorType?->retryable() === true;
     }
 }

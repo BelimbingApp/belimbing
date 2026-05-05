@@ -1,8 +1,8 @@
 # Lara Task Models
 
-**Status:** Complete
-**Last Updated:** 2026-04-14
-**Sources:** `app/Modules/Core/AI/Livewire/Concerns/ManagesChatSessions.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Livewire/Concerns/ManagesAgentModelSelection.php`, `app/Modules/Core/AI/Livewire/Setup/Lara.php`, `app/Modules/Core/AI/Livewire/Playground.php`, `app/Modules/Core/AI/Config/menu.php`, `app/Modules/Core/AI/Routes/web.php`, `resources/core/views/livewire/admin/setup/lara.blade.php`, `docs/architecture/ai/agent-model.md` (§2.9 one visible system primitive, §15.2 config.json shape), `docs/architecture/ai/lara.md`
+**Status:** Superseded in part by [Lara: Collapse Primary/Backup Into Provider Priority](ai-lara-collapse-into-provider-priority.md) — Primary/Backup as a chat-config concept and `mode=primary` for tasks have been removed.
+**Last Updated:** 2026-05-03
+**Sources:** `app/Modules/Core/AI/Livewire/Concerns/ManagesChatSessions.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Livewire/Setup/Lara.php`, `app/Modules/Core/AI/Livewire/Playground.php`, `app/Modules/Core/AI/Config/menu.php`, `app/Modules/Core/AI/Routes/web.php`, `resources/core/views/livewire/admin/setup/lara.blade.php`, `docs/architecture/ai/agent-model.md` (§2.9 one visible system primitive, §15.2 config.json shape), `docs/architecture/ai/lara.md`
 
 ## Problem Essence
 
@@ -19,7 +19,7 @@ Both patterns share the same config shape (mode + provider/model per task) and t
 
 ## Public Contract
 
-- Lara workspace config keeps `llm.models[]` for chat execution only.
+- Lara workspace config no longer carries `llm.models[]`. Chat execution resolves through the company default in priority order; per-conversation overrides live on the chat session. See the companion plan [ai-lara-collapse-into-provider-priority.md](ai-lara-collapse-into-provider-priority.md).
 - Auxiliary workloads live under `llm.tasks.*`.
 - The initial shipped Lara task profiles are `titling`, `research`, and `coding`.
 - **Lara Tasks** is the umbrella product concept; **Task Models** is the specific configuration UI for choosing which model handles each Lara task.
@@ -28,12 +28,12 @@ Both patterns share the same config shape (mode + provider/model per task) and t
 - Task Models is a separate user-facing page. Its menu entry is available only when Lara is activated; direct visits before activation show an activation-required notice.
 - Each task is classified as either **simple** (single inference, no tools) or **agentic** (sub-agent delegation with own prompt and tools). The classification is framework-defined, not user-configurable. Both types share the same config shape and UI.
 - All tasks support a small, explicit mode set:
-  - `primary` — use Lara's primary model directly
-  - `recommended` — administrator asks Lara's primary model to recommend a model, then saves that recommendation as the task's current stable choice
+  - `recommended` — administrator asks Lara's default model to recommend a model, then saves that recommendation as the task's current stable choice
   - `manual` — administrator picks provider/model explicitly
+- When a task has no saved provider/model (or the saved selection is no longer active), the task falls through to the same default-resolution path as chat (user last-used → priority #1).
 - Recommendation never creates or persists an unknown provider/model pair. BLB only accepts a recommendation that resolves to an active connected model for the licensee company.
 - Recommendation is on-demand, not re-evaluated automatically at task runtime. Once saved, the task keeps using the stored choice until the user refreshes or changes it.
-- Task config is persisted in Lara's workspace `config.json` alongside `llm.models[]`. Each task entry carries `mode` (`primary`, `recommended`, or `manual`), and for `recommended`/`manual` modes a stable saved `provider`/`model` pair plus an optional `reason` string for UI display.
+- Task config is persisted in Lara's workspace `config.json` under `llm.tasks.*`. Each task entry carries `mode` (`recommended` or `manual`), and a stable saved `provider`/`model` pair plus an optional `reason` string for UI display.
 - The initial shipped UI exposes `Titling`, `Research`, and `Coding` together on the dedicated Task Models page. `titling` is fully wired as a simple task, and both `coding` and `research` are wired as Lara agentic execution profiles for delegated background work.
 - Agentic task execution profiles (system prompt template, tool set, iteration limits) are framework-defined and versioned with BLB, not user-configurable. They live in the codebase (e.g., `app/Modules/Core/AI/Resources/tasks/`), not in workspace config. Users only configure model selection per task.
 
@@ -41,7 +41,7 @@ Both patterns share the same config shape (mode + provider/model per task) and t
 
 ### Config resolution
 
-`ConfigResolver` gains a task-specific resolution path that reads `llm.tasks.<name>` and falls back cleanly when the task config is missing or invalid. The existing primary/backup resolution path remains unchanged for chat. The resolver is agnostic to task type (simple vs agentic) — it returns model config either way.
+`ConfigResolver::resolveTask($employeeId, $taskKey)` reads `llm.tasks.<name>` and falls back cleanly when the task config is missing or its saved selection is no longer active — falling through to `resolveDefault()` (priority chain). The resolver is agnostic to task type (simple vs agentic) — it returns model config either way.
 
 ### Task registry
 

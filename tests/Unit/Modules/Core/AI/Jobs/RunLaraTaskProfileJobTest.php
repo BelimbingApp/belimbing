@@ -101,7 +101,7 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
         ->andReturn(LARA_PROFILE_BASE_PROMPT."\n\nTask profile instructions:\nYou are running Lara's coding task profile.");
 
     $configResolver = Mockery::mock(ConfigResolver::class);
-    $configResolver->shouldReceive('resolveTaskWithPrimaryFallback')
+    $configResolver->shouldReceive('resolveTask')
         ->once()
         ->with(Employee::LARA_ID, 'coding')
         ->andReturn([
@@ -198,7 +198,7 @@ it('runs the Lara research task profile with the resolved research model', funct
         ->andReturn(LARA_PROFILE_BASE_PROMPT."\n\nTask profile instructions:\nYou are running Lara's research task profile.");
 
     $configResolver = Mockery::mock(ConfigResolver::class);
-    $configResolver->shouldReceive('resolveTaskWithPrimaryFallback')
+    $configResolver->shouldReceive('resolveTask')
         ->once()
         ->with(Employee::LARA_ID, 'research')
         ->andReturn([

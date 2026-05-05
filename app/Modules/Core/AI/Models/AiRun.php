@@ -45,7 +45,6 @@ use Illuminate\Support\Carbon;
  * @property string|null $pricing_version
  * @property int $call_count
  * @property list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>|null $retry_attempts
- * @property list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int, diagnostic: string|null}>|null $fallback_attempts
  * @property list<array{tool: string, result_length: int|null}>|null $tool_actions
  * @property string|null $error_type
  * @property string|null $error_message
@@ -113,7 +112,6 @@ class AiRun extends Model
         'pricing_version',
         'call_count',
         'retry_attempts',
-        'fallback_attempts',
         'tool_actions',
         'error_type',
         'error_message',
@@ -132,7 +130,6 @@ class AiRun extends Model
         return [
             'status' => AiRunStatus::class,
             'retry_attempts' => 'json',
-            'fallback_attempts' => 'json',
             'tool_actions' => 'json',
             'meta' => 'json',
             'started_at' => 'datetime',

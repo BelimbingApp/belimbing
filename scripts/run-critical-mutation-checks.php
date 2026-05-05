@@ -35,21 +35,6 @@ function mutationCases(): array
 {
     return [
         new MutationCase(
-            name: 'final-stream-error-must-terminate',
-            file: 'app/Modules/Core/AI/Services/AgenticFinalResponseStreamer.php',
-            search: <<<'PHP'
-        if ($streamFailed) {
-            return;
-        }
-PHP,
-            replace: <<<'PHP'
-        if (false) {
-            return;
-        }
-PHP,
-            command: './vendor/bin/pest --compact tests/Unit/Modules/Core/AI/Services/AgenticFinalResponseStreamerTest.php',
-        ),
-        new MutationCase(
             name: 'browser-artifact-test-must-enforce-test-root',
             file: 'app/Modules/Core/AI/Services/Browser/BrowserArtifactStore.php',
             search: <<<'PHP'

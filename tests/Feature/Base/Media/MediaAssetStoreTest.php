@@ -127,6 +127,38 @@ it('deletes both the row and the file', function (): void {
     Storage::disk('local')->assertMissing($asset->storage_key);
 });
 
+it('deletes derivative files when the parent is deleted', function (): void {
+    Storage::fake('local');
+    $store = app(MediaAssetStore::class);
+
+    $file = UploadedFile::fake()->createWithContent('headlight.jpg', 'JPEG-BYTES');
+    $original = $store->putUploadedFile('local', 'media/originals', $file);
+
+    $cleaned = $store->putDerivativeBytes(
+        $original,
+        'background_removed',
+        'local',
+        'media/derived/abc.png',
+        'PNG-BYTES',
+    );
+
+    $grandchild = $store->putDerivativeBytes(
+        $cleaned,
+        'thumbnail',
+        'local',
+        'media/derived/abc-thumb.png',
+        'THUMB-BYTES',
+    );
+
+    $store->delete($original);
+
+    Storage::disk('local')->assertMissing($original->storage_key);
+    Storage::disk('local')->assertMissing($cleaned->storage_key);
+    Storage::disk('local')->assertMissing($grandchild->storage_key);
+    expect(MediaAsset::query()->whereKey($cleaned->id)->exists())->toBeFalse()
+        ->and(MediaAsset::query()->whereKey($grandchild->id)->exists())->toBeFalse();
+});
+
 it('wraps a failed upload in MediaStorageException', function (): void {
     $store = app(MediaAssetStore::class);
 

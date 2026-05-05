@@ -4,51 +4,39 @@
 Belimbing (BLB) is a Laravel-based framework:
 - **PHP:** 8.5+
 - **Framework:** Laravel 13
-- **App Server:** FrankenPHP 1.12.2 (required for Belimbing's PHP worker model)
+- **App Server:** FrankenPHP 1.12.2 (required for BLB's PHP worker model)
 - **Frontend/Logic:** Livewire 4 + Tailwind CSS 4 + Alpine.js 3
 - **Testing:** Pest 4
 - **Linting:** Laravel Pint
-- **Dependencies:** Always on the latest available minor/patch within each major version.
+- **Dependencies:** latest minor/patch within each major version.
 
-BLB extends Laravel (not a stock app): keep compatibility where practical, but diverge and customize when its architecture requires. Favor deep modules, simple interfaces, and clear boundaries.
+BLB extends Laravel; keep compatibility where practical, diverge when architecture requires. Vision and quality bar: `docs/brief.md`.
 
-## 2. Development Philosophy: Early & Fluid
-**Context:** Initialization phase — no external users, no production deployment. This gives *design freedom* to build correctly from the start. Do not treat it as permission to shortcut quality.
+## 2. Development Philosophy
 
-### Production Mindset
-**No MVP mindset.** Build to production standards from the start—initialization is not an excuse for shortcuts.
+Initialization phase — design freedom, not a license to shortcut. Build production-grade from the start.
 
 ### Core Principles
-- **System Stewardship:** You are not just a task executor — you are a steward of the entire system's health. Think beyond the immediate task and notice entropy: inconsistent patterns, leaky abstractions, repeated workarounds, structural drift.
-  - **Boy-scout rule** — fix in passing: dead code, stale references, naming issues, orphaned artifacts.
-  - **Completeness** — when creating or modifying an artifact (config, schema, policy), consider its full purpose, not just what the current task demands. Ask "what else belongs here?" by examining the module's full scope.
-  - **Reduce system entropy** — when you notice something larger (a pattern that should be unified, an abstraction that's leaking across modules, duplication that signals a missing primitive), create a follow-up plan doc in `docs/plans/` to capture the problem and proposed improvement.
-- **Destructive Evolution:** Prioritize the best current design over backward compatibility. Drop tables, refactor schemas, and rewrite APIs freely — no migration paths for data. Use this freedom for structural improvement, not for cutting corners.
-- **Deep Modules:** Modules should provide powerful functionality through simple interfaces. Hide complexity; do not leak implementation details.
-- **Honesty:** Names, persisted values, APIs, docs, and UI copy should be truthful, transparent, and grounded in facts from code and data; prefer shared types and existing rules over ad hoc strings or duplicated logic.
 
-## 3. Planning Through Plan Docs
-When work needs a real plan, keep the **visible** plan in `docs/plans/` per `docs/plans/AGENTS.md`. It is the SSOT. Use it.
+- **System Stewardship:** beyond your task, notice entropy: inconsistent patterns, leaky abstractions, duplication, structural drift.
+  - **Boy-scout rule:** fix in passing — dead code, stale references, naming, orphaned artifacts.
+  - **Completeness:** when modifying an artifact, consider its full purpose. Ask "what else belongs here?"
+  - **Larger drift:** capture as a follow-up plan in `docs/plans/`, don't silently absorb.
+- **Strategic Programming (Ousterhout):** invest 10–20% extra effort in design over the tactical path. When plurality is on the roadmap — not speculation — and cost-now is small while cost-later requires a data migration over existing rows, design for it now. Speculative or expensive-to-carry items still get deferred.
+- **Destructive Evolution:** best current design over backward compatibility. Drop tables, refactor schemas, rewrite APIs freely — no migration paths for seed/schema data. Persisted user data (prefs, content, configs) is harder to discard than tables; shape it for known-recurring needs from day one.
+- **Deep Modules (Ousterhout):** powerful functionality through simple interfaces. Hide complexity; do not leak implementation details. Define errors out of existence where the type system can carry the proof.
+- **Honesty:** names, persisted values, APIs, docs, UI copy must be truthful and grounded in code/data. Prefer shared types and existing rules over ad hoc strings or duplicated logic.
 
-## 4. PHP Coding Conventions
+## 3. Plan Docs
+Real plans live in `docs/plans/` per `docs/plans/AGENTS.md` — single source of truth.
 
-### Debug Logging
-- **Use `blb_log_var()` for temporary debugging** — output goes to a dedicated file under `storage/logs/` instead of `laravel.log`.
-- Signature: `blb_log_var(mixed $value, string $file = 'debug.log', array $context = [], string $level = 'info')`
+## 4. PHP Conventions
 
-### Reducing Duplication
-- **Extract repeated Livewire glue code into shared concerns** when the same behavior appears in three or more components.
-- Reuse existing shared primitives: `ResetsPaginationOnSearch`, `SearchablePaginatedList`, `DecodesJsonFields`, `SavesValidatedFields`.
-- Reuse `Actor::forUser()` and existing authz concerns instead of rebuilding inline.
-- **Do not force abstractions for tiny duplication.** Extract only when it meaningfully reduces repetition.
-- **Prefer `require` over `require_once`** for PHP config files that return arrays.
+- **Debug logging:** `blb_log_var(mixed $value, string $file = 'debug.log', array $context = [], string $level = 'info')` — writes under `storage/logs/`, not `laravel.log`.
+- **Reuse Livewire concerns** when behavior repeats in 3+ components: `ResetsPaginationOnSearch`, `SearchablePaginatedList`, `DecodesJsonFields`, `SavesValidatedFields`, `Actor::forUser()`, existing authz concerns. Don't force abstractions for tiny duplication.
+- **`require` over `require_once`** for PHP config files returning arrays.
+- **Never `useCurrent()`** on `timestamp` columns — captures DB session TZ, not UTC. Set `now()` from app code.
+- **Throw domain exceptions** at module boundaries, not generic `RuntimeException`/`Exception`, when the failure belongs to a named subsystem.
 
-### Database / Schema
-- **Never use `useCurrent()` on `timestamp` columns** — it captures DB session TZ, not UTC. Set `now()` from app code.
-
-### Exceptions
-- **In PHP services**, throw dedicated domain exceptions at module boundaries instead of generic `RuntimeException`/`Exception` when the failure belongs to a named subsystem.
-
-## 5. Module-First Placement Guard
-Before creating new framework/module assets, verify placement against `docs/architecture/file-structure.md`.
-If the task touches module config, migrations, or seeders, **stop and verify placement/prefix/registration rules first** before creating or moving files.
+## 5. Module-First Placement
+Verify placement against `docs/architecture/file-structure.md` before creating module assets (config, migrations, seeders). When in doubt, stop and check first.

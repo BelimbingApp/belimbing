@@ -143,11 +143,10 @@ class ModelDiscoveryService
                 'model_id' => $modelId,
             ]);
 
-            if (! $providerModel->is_active) {
-                $providerModel->update(['is_active' => true]);
-            }
-
             if ($providerModel->wasRecentlyCreated) {
+                // New discoveries default to active so they're immediately usable.
+                // Existing rows keep the admin's explicit is_active choice.
+                $providerModel->update(['is_active' => true]);
                 $added++;
 
                 continue;

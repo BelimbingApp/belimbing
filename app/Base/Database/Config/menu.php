@@ -23,5 +23,14 @@ return [
             'parent' => 'system',
             'position' => 11,
         ],
+        [
+            'id' => 'system.database-backups',
+            'label' => 'Database Backups',
+            'icon' => 'heroicon-o-archive-box',
+            'route' => 'admin.system.database-backups.index',
+            'permission' => 'admin.backup.list',
+            'parent' => 'system',
+            'position' => 12,
+        ],
     ],
 ];

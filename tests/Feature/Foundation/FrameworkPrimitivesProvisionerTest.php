@@ -3,6 +3,8 @@
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Base\Database\Models\TableRegistry;
+use App\Base\Foundation\Exceptions\FrameworkPrimitivesNotConfiguredException;
 use App\Base\Foundation\Services\FrameworkPrimitivesProvisioner;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
@@ -15,6 +17,13 @@ const BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_PASSWORD = 'secure_password_123';
 const BLB_FRAMEWORK_PROVISIONER_TEST_COMPANY_NAME = 'Provisioner Test Company';
 const BLB_FRAMEWORK_PROVISIONER_TEST_COMPANY_CODE = 'provisioner_test_code';
 
+function removeProvisionerLicenseeCompany(): void
+{
+    DB::table('employees')->where('company_id', Company::LICENSEE_ID)->delete();
+    DB::table('users')->where('company_id', Company::LICENSEE_ID)->delete();
+    DB::table('companies')->where('id', Company::LICENSEE_ID)->delete();
+}
+
 afterEach(function (): void {
     putenv('LICENSEE_COMPANY_NAME');
     putenv('LICENSEE_COMPANY_CODE');
@@ -24,7 +33,7 @@ afterEach(function (): void {
 });
 
 test('provisioner creates licensee company when it does not exist', function (): void {
-    DB::table('companies')->where('id', Company::LICENSEE_ID)->delete();
+    removeProvisionerLicenseeCompany();
 
     $provisioner = new FrameworkPrimitivesProvisioner;
     $wasCreated = $provisioner->provisionLicensee(BLB_FRAMEWORK_PROVISIONER_TEST_COMPANY_NAME, BLB_FRAMEWORK_PROVISIONER_TEST_COMPANY_CODE);
@@ -52,7 +61,7 @@ test('provisioner updates existing licensee company and returns false', function
 });
 
 test('provisioner calls output callback with messages', function (): void {
-    DB::table('companies')->where('id', Company::LICENSEE_ID)->delete();
+    removeProvisionerLicenseeCompany();
 
     $messages = [];
     $provisioner = new FrameworkPrimitivesProvisioner(function (string $msg) use (&$messages): void {
@@ -65,7 +74,7 @@ test('provisioner calls output callback with messages', function (): void {
 });
 
 test('provisioner returns null for admin user when licensee does not exist', function (): void {
-    DB::table('companies')->where('id', Company::LICENSEE_ID)->delete();
+    removeProvisionerLicenseeCompany();
 
     $provisioner = new FrameworkPrimitivesProvisioner;
     $user = $provisioner->provisionAdminUser();
@@ -78,7 +87,38 @@ test('provisioner creates admin user with default values', function (): void {
 
     $provisioner = new FrameworkPrimitivesProvisioner;
     $provisioner->provisionAdminUser();
-})->throws(\App\Base\Foundation\Exceptions\FrameworkPrimitivesNotConfiguredException::class);
+})->throws(FrameworkPrimitivesNotConfiguredException::class);
+
+test('provisioner defers admin provisioning when users table is unstable', function (): void {
+    Company::provisionLicensee();
+    DB::table('users')->where('company_id', Company::LICENSEE_ID)->delete();
+
+    // Clear the canonical anchor so resolution truly has nothing to fall back on.
+    $licensee = Company::query()->find(Company::LICENSEE_ID);
+    $licensee->metadata = [];
+    $licensee->save();
+
+    $usersTable = TableRegistry::query()->where('table_name', 'users')->firstOrFail();
+    $originalStable = $usersTable->is_stable;
+    $usersTable->markUnstable();
+
+    $messages = [];
+
+    try {
+        $provisioner = new FrameworkPrimitivesProvisioner(function (string $msg) use (&$messages): void {
+            $messages[] = $msg;
+        });
+
+        $user = $provisioner->provisionAdminUser();
+
+        expect($user)->toBeNull();
+        expect($messages)->toContain('Skipping admin user provisioning — users table is unstable; re-run setup to bootstrap admin.');
+    } finally {
+        if ($originalStable) {
+            $usersTable->markStable();
+        }
+    }
+});
 
 test('provisioner creates admin user from bootstrap file even when stale licensee users exist', function (): void {
     Company::provisionLicensee();
@@ -195,9 +235,7 @@ test('provisioner calls output callback when creating Lara', function (): void {
 test('provisioner provisions all primitives in correct order', function (): void {
     setupAuthzRoles();
     // Clear all state first
-    DB::table('users')->where('company_id', Company::LICENSEE_ID)->delete();
-    DB::table('employees')->where('id', 1)->delete();
-    DB::table('companies')->where('id', Company::LICENSEE_ID)->delete();
+    removeProvisionerLicenseeCompany();
 
     $messages = [];
     $provisioner = new FrameworkPrimitivesProvisioner(function (string $msg) use (&$messages): void {
@@ -239,4 +277,31 @@ test('provisioner provisions all primitives in correct order', function (): void
     expect($messages)->toContain('Created licensee company: '.BLB_FRAMEWORK_PROVISIONER_TEST_COMPANY_NAME);
     expect($messages)->toContain('Created admin user: '.BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_EMAIL);
     expect($messages)->toContain('Created Lara (system Agent — orchestrator)');
+});
+
+test('provisioner backfills core_admin role for an existing admin user already assigned to licensee', function (): void {
+    setupAuthzRoles();
+    Company::provisionLicensee();
+
+    $user = User::factory()->create([
+        'company_id' => Company::LICENSEE_ID,
+        'email' => BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_EMAIL,
+        'name' => BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_NAME,
+    ]);
+    Company::query()->find(Company::LICENSEE_ID)->assignAdminUser($user);
+
+    $provisioner = new FrameworkPrimitivesProvisioner;
+    $provisioner->provisionAdminUser();
+
+    $role = Role::query()
+        ->whereNull('company_id')
+        ->where('code', 'core_admin')
+        ->firstOrFail();
+
+    expect(PrincipalRole::query()->where([
+        'company_id' => Company::LICENSEE_ID,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $user->id,
+        'role_id' => $role->id,
+    ])->exists())->toBeTrue();
 });

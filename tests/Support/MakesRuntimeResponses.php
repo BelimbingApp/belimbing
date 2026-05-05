@@ -77,9 +77,7 @@ trait MakesRuntimeResponses
     protected function mockResolvedConfigResolver(array $configs): ConfigResolver
     {
         $configResolver = \Mockery::mock(ConfigResolver::class);
-        $configResolver->shouldReceive('resolve')->andReturn($configs);
-        $configResolver->shouldReceive('resolveWithDefaultFallback')->andReturn($configs);
-        $configResolver->shouldReceive('resolvePrimaryWithDefaultFallback')->andReturn($configs[0] ?? null);
+        $configResolver->shouldReceive('resolveDefault')->andReturn($configs[0] ?? null);
 
         return $configResolver;
     }
@@ -210,16 +208,4 @@ trait MakesRuntimeResponses
         ];
     }
 
-    protected function assertFallbackAttempt(
-        array $attempt,
-        string $provider,
-        string $model,
-        string $errorType,
-        int $latencyMs,
-    ): void {
-        expect($attempt['provider'])->toBe($provider)
-            ->and($attempt['model'])->toBe($model)
-            ->and($attempt['error_type'])->toBe($errorType)
-            ->and($attempt['latency_ms'])->toBe($latencyMs);
-    }
 }

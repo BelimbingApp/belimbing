@@ -80,7 +80,6 @@ class RunRecorder
             'prompt_tokens' => $meta['tokens']['prompt'] ?? null,
             'completion_tokens' => $meta['tokens']['completion'] ?? null,
             'retry_attempts' => $meta['retry_attempts'] ?? null,
-            'fallback_attempts' => $meta['fallback_attempts'] ?? null,
             'tool_actions' => $meta['tool_actions'] ?? null,
             'meta' => $this->sanitizeMeta($meta),
             'finished_at' => now(),
@@ -115,7 +114,6 @@ class RunRecorder
             'model' => $meta['model'] ?? $meta['llm']['model'] ?? null,
             'latency_ms' => $error->latencyMs > 0 ? $error->latencyMs : ($meta['latency_ms'] ?? null),
             'retry_attempts' => $meta['retry_attempts'] ?? null,
-            'fallback_attempts' => $meta['fallback_attempts'] ?? null,
             'tool_actions' => $meta['tool_actions'] ?? null,
             'error_type' => $error->errorType->value,
             'error_message' => $error->userMessage,
@@ -328,7 +326,7 @@ class RunRecorder
     {
         $safe = array_diff_key($meta, array_flip([
             'provider_name', 'model', 'latency_ms', 'tokens',
-            'retry_attempts', 'fallback_attempts', 'tool_actions',
+            'retry_attempts', 'tool_actions',
             'error', 'error_type', 'diagnostic', 'message_type',
             'llm',
         ]));

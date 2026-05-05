@@ -56,6 +56,35 @@ now_epoch_s() {
     return 0
 }
 
+# Best-effort diagnosis for startup timeout by reading recent app/server logs.
+detect_startup_failure_reason() {
+    local laravel_log="$PROJECT_ROOT/storage/logs/laravel.log"
+    local dev_log
+    dev_log="$(get_logs_dir "$PROJECT_ROOT")/dev-services.log"
+    local reason=""
+
+    if [[ -f "$laravel_log" ]]; then
+        reason=$(tail -n 400 "$laravel_log" | grep -E "\.ERROR:" | tail -n1 || true)
+        if [[ -n "$reason" ]]; then
+            reason=$(printf '%s' "$reason" | sed -E 's/^\[[^]]+\] [^ ]+\.ERROR: //')
+            reason=$(printf '%s' "$reason" | sed -E 's/ \{"exception".*$//')
+            printf '%s\n' "$reason"
+            return 0
+        fi
+    fi
+
+    if [[ -f "$dev_log" ]]; then
+        reason=$(tail -n 250 "$dev_log" | grep -E "ERROR|Fatal|exception|script \"dev:all\" exited" | tail -n1 || true)
+        if [[ -n "$reason" ]]; then
+            printf '%s\n' "$reason"
+            return 0
+        fi
+    fi
+
+    printf '%s\n' ""
+    return 0
+}
+
 # Check for required dependencies (verification only, no installation)
 check_dependencies() {
     local missing=()
@@ -537,6 +566,12 @@ wait_for_service() {
     done
 
     echo -e "${RED}✗${NC} $service_name did not respond at $url after ${max_attempts}s" >&2
+    local startup_reason
+    startup_reason=$(detect_startup_failure_reason)
+    if [[ -n "$startup_reason" ]]; then
+        echo -e "${YELLOW}Likely startup error:${NC} $startup_reason" >&2
+        log "Likely startup error: $startup_reason"
+    fi
     log "ERROR: $service_name not ready after $max_attempts attempts (elapsed $(( $(now_epoch_s) - start_ts ))s)"
     return 1
 }
@@ -629,7 +664,7 @@ start_services() {
     # Override CI=1 (set by some IDEs/editors) so laravel-vite-plugin starts the HMR server
     export LARAVEL_BYPASS_ENV_CHECK=1
 
-    composer run dev >> "$dev_log_file" 2>&1 &
+    composer run dev > >(awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush() }' >> "$dev_log_file") 2>&1 &
     DEV_PID=$!
 
     # Store PID for cleanup

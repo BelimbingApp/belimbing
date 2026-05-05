@@ -24,6 +24,7 @@ class AiProviderModel extends Model
         'is_active',
         'is_default',
         'cost_override',
+        'execution_controls',
     ];
 
     /**
@@ -35,6 +36,7 @@ class AiProviderModel extends Model
             'is_active' => 'boolean',
             'is_default' => 'boolean',
             'cost_override' => 'array',
+            'execution_controls' => 'array',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];

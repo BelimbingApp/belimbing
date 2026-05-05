@@ -37,7 +37,7 @@ class User extends Authenticatable implements CompanyScoped
      *
      * @var list<string>
      */
-    protected $fillable = ['company_id', 'employee_id', 'name', 'email', 'password'];
+    protected $fillable = ['company_id', 'employee_id', 'name', 'email', 'password', 'prefs'];
 
     /**
      * The attributes that should be hidden for serialization.
@@ -56,7 +56,73 @@ class User extends Authenticatable implements CompanyScoped
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'prefs' => 'array',
         ];
+    }
+
+    /**
+     * Get the user's last-used model hint for an agent, validated against active connected models.
+     *
+     * Hints are keyed by the agent's employee id so a single user can keep
+     * separate preferences across Lara, supervised agents, etc. Returns null
+     * when no hint is recorded, the hint is malformed, or the referenced
+     * provider/model is no longer active for this company.
+     *
+     * @return array{provider: string, model: string}|null
+     */
+    public function getLastUsedModel(int $employeeId): ?array
+    {
+        $hint = $this->prefs['last_used_model'][(string) $employeeId] ?? null;
+
+        if (! is_array($hint)) {
+            return null;
+        }
+
+        $provider = $hint['provider'] ?? null;
+        $model = $hint['model'] ?? null;
+
+        if (! is_string($provider) || $provider === '' || ! is_string($model) || $model === '') {
+            return null;
+        }
+
+        $companyId = $this->getCompanyId();
+
+        if ($companyId === null) {
+            return null;
+        }
+
+        $exists = \App\Modules\Core\AI\Models\AiProviderModel::query()
+            ->whereHas('provider', fn ($q) => $q->forCompany($companyId)->active()->where('name', $provider))
+            ->where('model_id', $model)
+            ->active()
+            ->exists();
+
+        return $exists ? ['provider' => $provider, 'model' => $model] : null;
+    }
+
+    /**
+     * Persist the user's last-used model hint for an agent. Pass null provider/model to clear.
+     */
+    public function setLastUsedModel(int $employeeId, ?string $provider, ?string $model): void
+    {
+        $prefs = is_array($this->prefs) ? $this->prefs : [];
+        $hints = is_array($prefs['last_used_model'] ?? null) ? $prefs['last_used_model'] : [];
+        $key = (string) $employeeId;
+
+        if ($provider === null || $provider === '' || $model === null || $model === '') {
+            unset($hints[$key]);
+        } else {
+            $hints[$key] = ['provider' => $provider, 'model' => $model];
+        }
+
+        if ($hints === []) {
+            unset($prefs['last_used_model']);
+        } else {
+            $prefs['last_used_model'] = $hints;
+        }
+
+        $this->prefs = $prefs === [] ? null : $prefs;
+        $this->save();
     }
 
     /**

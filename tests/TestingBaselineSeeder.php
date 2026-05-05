@@ -3,6 +3,8 @@
 namespace Tests;
 
 use App\Base\Database\Models\SeederRegistry;
+use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Database\Seeder;
 
 /**
@@ -41,6 +43,9 @@ class TestingBaselineSeeder extends Seeder
                 throw $e;
             }
         }
+
+        Company::provisionLicensee('Belimbing Test Licensee', 'belimbing_test_licensee');
+        Employee::provisionLara();
     }
 
     /**

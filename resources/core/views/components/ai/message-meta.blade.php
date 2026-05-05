@@ -13,7 +13,6 @@
     'latencyMs' => null,
     'timeoutSeconds' => null,
     'retryAttempts' => null,
-    'fallbackAttempts' => null,
     'errorType' => null,
     'errorMessage' => null,
     'runStatus' => null,
@@ -43,7 +42,7 @@
         default => 'text-muted focus-visible:ring-accent/40',
     };
 
-    $hasRunMeta = $runIdLabel !== null && ($tokens !== null || $latencyMs !== null || $retryAttempts !== null || $fallbackAttempts !== null || $errorType !== null);
+    $hasRunMeta = $runIdLabel !== null && ($tokens !== null || $latencyMs !== null || $retryAttempts !== null || $errorType !== null);
 
     $canAccessControlPlane = false;
     if ($runIdLabel !== null && auth()->check()) {
@@ -187,26 +186,6 @@
                             <div class="flex justify-between">
                                 <span class="text-muted">{{ __('Retries') }}</span>
                                 <span>{{ count($retryAttempts) }}</span>
-                            </div>
-                        @endif
-
-                        @if (is_array($fallbackAttempts) && count($fallbackAttempts) > 0)
-                            <div class="border-t border-border-default pt-1.5 mt-1.5">
-                                <div class="flex justify-between">
-                                    <span class="text-amber-500">{{ __('Fallbacks') }}</span>
-                                    <span class="text-amber-500">{{ count($fallbackAttempts) }}</span>
-                                </div>
-                                @foreach ($fallbackAttempts as $attempt)
-                                    @php
-                                        $attemptError = ($canAccessControlPlane && ! empty($attempt['diagnostic']))
-                                            ? $attempt['diagnostic']
-                                            : ($attempt['error'] ?? __('unknown error'));
-                                    @endphp
-                                    <div class="text-muted mt-0.5 text-[10px]">
-                                        {{ $attempt['provider'] ?? '?' }}/{{ $attempt['model'] ?? '?' }}
-                                        — <span class="text-red-400 line-clamp-3">{{ $attemptError }}</span>
-                                    </div>
-                                @endforeach
                             </div>
                         @endif
 

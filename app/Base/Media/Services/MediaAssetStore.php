@@ -11,7 +11,6 @@ use DateInterval;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\URL;
 use InvalidArgumentException;
 
 /**
@@ -82,24 +81,42 @@ class MediaAssetStore
      */
     public function temporaryStreamUrl(MediaAsset $asset, int|DateInterval $expiresIn = 5): string
     {
-        $expires = is_int($expiresIn) ? now()->addMinutes($expiresIn) : now()->add($expiresIn);
-
-        return URL::temporarySignedRoute('media.assets.stream', $expires, ['asset' => $asset->id]);
+        return $asset->streamUrl($expiresIn);
     }
 
     /**
-     * Delete an asset's row and its file bytes. The row delete cascades any
-     * derivative rows; their files remain the caller's responsibility for now.
+     * Delete an asset's row plus its file bytes, and recursively delete any
+     * derivative rows and their files. The DB cascade alone leaves derivative
+     * files orphaned, so we walk the tree before the row delete to collect
+     * every (disk, storage_key) we need to clean up.
      */
     public function delete(MediaAsset $asset): void
     {
-        $disk = $asset->disk;
-        $storageKey = $asset->storage_key;
+        $locations = $this->collectAssetLocations($asset);
 
-        DB::transaction(function () use ($asset, $disk, $storageKey): void {
+        DB::transaction(function () use ($asset): void {
             $asset->delete();
-            Storage::disk($disk)->delete($storageKey);
         });
+
+        foreach ($locations as [$disk, $storageKey]) {
+            Storage::disk($disk)->delete($storageKey);
+        }
+    }
+
+    /**
+     * @return list<array{0: string, 1: string}>
+     */
+    private function collectAssetLocations(MediaAsset $asset): array
+    {
+        $locations = [[$asset->disk, $asset->storage_key]];
+
+        foreach ($asset->derivatives as $derivative) {
+            foreach ($this->collectAssetLocations($derivative) as $nested) {
+                $locations[] = $nested;
+            }
+        }
+
+        return $locations;
     }
 
     /**

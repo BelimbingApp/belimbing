@@ -12,7 +12,7 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
     <x-slot name="title">{{ __('AI Providers') }}</x-slot>
 
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('AI Providers')" :subtitle="__('Manage connected providers and their models. Toggle the checkbox to make a model available to Agents, or click the ☆ to set it as the default fallback.')">
+        <x-ui.page-header :title="__('AI Providers')" :subtitle="__('Manage connected providers and their models. In each model table, use the Access column: ★ / ☆ for the provider default, the checkbox to offer or withhold a model from Agents, and sliders for optional execution overrides.')">
             <x-slot name="help">
                 <div class="space-y-3">
                     <p>{{ __('This page shows the LLM providers and models your organization has connected. Agents use these models to think, reason, and respond — at least one active provider with one active model is required.') }}</p>
@@ -20,10 +20,10 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                     <div>
                         <p class="font-medium text-ink">{{ __('Priority') }}</p>
                         <ul class="list-disc list-inside space-y-1 text-muted mt-1">
-                            <li>{{ __('The Priority column shows the order in which providers are tried when a Agent needs a model.') }}</li>
-                            <li>{{ __('Lower numbers mean higher priority — provider #1 is tried first.') }}</li>
+                            <li>{{ __('Priority decides which provider/model is the default — the highest-priority active provider with a default model wins.') }}</li>
+                            <li>{{ __('Lower numbers mean higher priority — provider #1 is the default.') }}</li>
                             <li>{{ __('Click the ↑ arrow to move a provider up one position.') }}</li>
-                            <li>{{ __('If the top-priority provider fails or is unavailable, the system automatically falls back to the next one.') }}</li>
+                            <li>{{ __('Priority is not a runtime fallback chain. When the chosen provider fails, the failure is surfaced honestly — pick another model in the chat or fix the upstream issue.') }}</li>
                         </ul>
                     </div>
 
@@ -551,6 +551,44 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                     <x-ui.button type="submit" variant="primary">{{ __('Add') }}</x-ui.button>
                 </div>
             </form>
+        </div>
+    </x-ui.modal>
+
+    {{-- Per-model execution controls editor --}}
+    @php
+        $editingControlsSchema = $editingControlsModelId !== null ? $this->editingModelExecutionControlSchema() : null;
+    @endphp
+    <x-ui.modal wire:model="showExecutionControlsModal" class="max-w-2xl">
+        <div class="p-card-inner">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="text-lg font-medium tracking-tight text-ink">{{ __('Execution Controls') }}</h3>
+                    @if (is_array($editingControlsSchema))
+                        <p class="text-xs text-muted mt-0.5 font-mono">{{ ($editingControlsSchema['provider_name'] ?? '—') . '/' . ($editingControlsSchema['model'] ?? '—') }}</p>
+                    @endif
+                </div>
+                <button wire:click="closeModelExecutionControls" type="button" class="text-muted hover:text-ink" aria-label="{{ __('Close') }}">
+                    <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
+                </button>
+            </div>
+
+            @if (is_array($editingControlsSchema))
+                @include('livewire.admin.ai.partials.execution-controls', [
+                    'schema' => $editingControlsSchema,
+                    'statePath' => 'editingExecutionControls',
+                    'subtitle' => __('Per-model defaults. Saved automatically as you change values; agents using this model inherit these settings unless a session override is set.'),
+                ])
+            @else
+                <p class="text-sm text-muted">{{ __('No editable controls available for this model.') }}</p>
+            @endif
+
+            <div class="mt-6 flex justify-between gap-2">
+                <x-ui.button variant="ghost" wire:click="clearModelExecutionControls" class="text-red-500 hover:text-red-600">
+                    <x-icon name="heroicon-o-arrow-uturn-left" class="w-3.5 h-3.5" />
+                    {{ __('Reset to system defaults') }}
+                </x-ui.button>
+                <x-ui.button variant="primary" wire:click="closeModelExecutionControls">{{ __('Done') }}</x-ui.button>
+            </div>
         </div>
     </x-ui.modal>
 </div>
