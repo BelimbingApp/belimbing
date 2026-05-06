@@ -1,15 +1,14 @@
 <?php
 
-use App\Base\AI\DTO\ChatRequest;
-use App\Base\AI\Services\LlmClient;
+use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Enums\TurnStatus;
 use App\Modules\Core\AI\Livewire\Chat;
-use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
@@ -19,6 +18,7 @@ use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 
@@ -27,6 +27,7 @@ const CHAT_VIEW_TEST_MODEL = 'stream-model';
 
 beforeEach(function (): void {
     config()->set('ai.workspace_path', storage_path('framework/testing/ai-chat-view-'.Str::random(16)));
+    $this->wireLogPath = storage_path('framework/testing/ai-chat-view-wire-logs-'.Str::random(16));
 });
 
 afterEach(function (): void {
@@ -34,6 +35,10 @@ afterEach(function (): void {
 
     if (is_string($workspacePath)) {
         File::deleteDirectory($workspacePath);
+    }
+
+    if (isset($this->wireLogPath) && is_string($this->wireLogPath)) {
+        File::deleteDirectory($this->wireLogPath);
     }
 });
 
@@ -171,26 +176,34 @@ it('re-hydrates session override and active turn state when selectedSessionId is
         );
 });
 
-it('records a titling run and writes wire logs when wire logging is enabled', function (): void {
+it('records a titling run, outbound exchange, and wire logs when wire logging is enabled', function (): void {
     config()->set('ai.wire_logging.enabled', true);
 
     $user = createChatViewFixture();
     test()->actingAs($user);
 
-    $llmClient = Mockery::mock(LlmClient::class);
-    $llmClient->shouldReceive('chat')
-        ->once()
-        ->with(Mockery::on(function (ChatRequest $request): bool {
-            return $request->transportTap !== null
-                && $request->messages !== [];
-        }))
-        ->andReturn([
-            'content' => '"Quarterly Revenue Summary"',
-            'usage' => ['prompt_tokens' => 12, 'completion_tokens' => 4],
-            'latency_ms' => 25,
-        ]);
+    $wireLogger = new class($this->wireLogPath) extends WireLogger
+    {
+        public function __construct(
+            private readonly string $testWireLogPath,
+        ) {}
 
-    app()->instance(LlmClient::class, $llmClient);
+        public function path(string $runId): string
+        {
+            return $this->testWireLogPath.'/'.$runId.'.jsonl';
+        }
+    };
+
+    app()->instance(WireLogger::class, $wireLogger);
+
+    Http::fake([
+        'stream-provider.example.test/chat/completions' => Http::response([
+            'choices' => [
+                ['message' => ['role' => 'assistant', 'content' => '"Quarterly Revenue Summary"']],
+            ],
+            'usage' => ['prompt_tokens' => 12, 'completion_tokens' => 4, 'total_tokens' => 16],
+        ]),
+    ]);
 
     $session = app(SessionManager::class)->create(Employee::LARA_ID);
     app(MessageManager::class)->appendUserMessage(Employee::LARA_ID, $session->id, 'Summarize the latest revenue discussion.');
@@ -209,7 +222,24 @@ it('records a titling run and writes wire logs when wire logging is enabled', fu
         ->and($run->source)->toBe('simple_task')
         ->and($run->status->value)->toBe('succeeded');
 
-    $entries = app(WireLogger::class)->read($run->id);
+    $exchange = OutboundExchange::query()
+        ->where('system', 'ai')
+        ->where('operation', 'ai.llm.chat')
+        ->first();
 
-    expect($entries)->not->toBe([]);
+    expect($exchange)->not->toBeNull()
+        ->and($exchange->provider)->toBe(CHAT_VIEW_TEST_PROVIDER)
+        ->and($exchange->protocol_operation)->toBe('POST /chat/completions')
+        ->and($exchange->response_status)->toBe(200)
+        ->and($exchange->request_body['value']['messages'])->not->toBeEmpty()
+        ->and($exchange->response_body['value']['choices'][0]['message']['content'])->toBe('"Quarterly Revenue Summary"');
+
+    $entries = $wireLogger->read($run->id);
+    $entryTypes = array_column($entries, 'type');
+
+    expect($entryTypes)
+        ->toContain('llm.request')
+        ->toContain('llm.response_status')
+        ->toContain('llm.response_body')
+        ->toContain('llm.complete');
 });

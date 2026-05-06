@@ -10,7 +10,11 @@ use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Services\LlmClientSupport;
 use App\Base\AI\Services\ProviderMapping\ProviderRequestMapperRegistry;
+use App\Base\Integration\Services\IntegrationGateway;
+use App\Base\Integration\Services\IntegrationRequest;
+use App\Base\Integration\Services\IntegrationResponse;
 use Generator;
+use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Psr\Http\Message\StreamInterface;
@@ -112,12 +116,7 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
         $request->transportTap?->request($request, $mapping, $endpoint, false);
 
         try {
-            $http = LlmClientSupport::buildHttp($request, $mapping->headers);
-
-            $response = $http->post(
-                rtrim($request->baseUrl, '/').'/'.$pathSuffix,
-                $mapping->payload,
-            );
+            $integrationResponse = $this->sendChatExchange($request, $mapping, $pathSuffix);
         } catch (ConnectionException $e) {
             $request->transportTap?->error('connection', $e->getMessage());
             $request->transportTap?->complete([
@@ -126,6 +125,22 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
 
             return LlmClientSupport::connectionError($e, $startTime);
         }
+
+        if ($integrationResponse->status === null) {
+            $message = 'LLM request failed before an HTTP response was received.';
+            $request->transportTap?->error('connection', $message);
+            $request->transportTap?->complete([
+                'latency_ms' => LlmClientSupport::latencyMs($startTime),
+            ]);
+
+            return LlmClientSupport::connectionError(new ConnectionException($message), $startTime);
+        }
+
+        $response = new Response(new Psr7Response(
+            $integrationResponse->status,
+            $integrationResponse->headers,
+            $integrationResponse->body,
+        ));
 
         $request->transportTap?->responseStatus($response->status(), false);
         $request->transportTap?->responseBody($response->body(), $response->status());
@@ -147,6 +162,33 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
         ]);
 
         return $this->withProviderMapping($result, $mapping);
+    }
+
+    private function sendChatExchange(
+        ChatRequest $request,
+        ProviderRequestMapping $mapping,
+        string $pathSuffix,
+    ): IntegrationResponse {
+        $endpoint = rtrim($request->baseUrl, '/').'/'.$pathSuffix;
+
+        return app(IntegrationGateway::class)->send(new IntegrationRequest(
+            system: 'ai',
+            operation: 'ai.llm.chat',
+            method: 'POST',
+            endpoint: $endpoint,
+            protocol: $request->apiType->value,
+            protocolOperation: 'POST /'.$pathSuffix,
+            provider: $request->providerName,
+            headers: LlmClientSupport::headersFor($request, $mapping->headers),
+            body: $mapping->payload,
+            timeoutSeconds: $request->timeout,
+            metadata: [
+                'model' => $request->model,
+                'stream' => false,
+                'api_type' => $request->apiType->value,
+                'provider_mapping' => $mapping->meta(),
+            ],
+        ));
     }
 
     /**

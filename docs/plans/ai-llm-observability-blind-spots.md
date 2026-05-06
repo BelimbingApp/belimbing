@@ -2,20 +2,21 @@
 
 **Status:** Completed
 **Last Updated:** 2026-05-06
-**Sources:** `app/Base/AI/DTO/ChatRequest.php`, `app/Base/AI/Contracts/LlmTransportTap.php`, `app/Base/Database/Livewire/Queries/Show.php`, `app/Modules/Core/AI/Livewire/Concerns/ManagesChatSessions.php`, `app/Modules/Core/AI/Services/Runtime/AgenticRuntime.php`, `app/Modules/Core/AI/Services/Runtime/SimpleTaskExecutor.php`, `app/Modules/Core/AI/Services/TaskModelRecommendationService.php`, `app/Modules/Core/AI/Services/ProviderTestService.php`, `app/Modules/Core/AI/Services/ControlPlane/RunRecorder.php`, `app/Modules/Core/AI/Services/ControlPlane/WireLogger.php`, `app/Modules/Core/AI/Services/ControlPlane/WireLoggingTransportTap.php`, `app/Modules/Core/AI/Jobs/RunLaraTaskProfileJob.php`, `tests/Feature/Modules/Core/AI/ChatViewTest.php`, `tests/Feature/Database/QueryTest.php`, `docs/plans/integration-external-system-observability.md`, `docs/plans/ai-lara-collapse-into-provider-priority.md`, `docs/plans/lara-task-models.md`, `docs/architecture/ai/lara.md`
+**Sources:** `app/Base/AI/DTO/ChatRequest.php`, `app/Base/AI/Contracts/LlmTransportTap.php`, `app/Base/AI/Services/LlmClientSupport.php`, `app/Base/AI/Services/Protocols/AbstractLlmProtocolClient.php`, `app/Base/Database/Livewire/Queries/Show.php`, `app/Base/Integration/Models/OutboundExchange.php`, `app/Modules/Core/AI/Livewire/Concerns/ManagesChatSessions.php`, `app/Modules/Core/AI/Services/Runtime/AgenticRuntime.php`, `app/Modules/Core/AI/Services/Runtime/SimpleTaskExecutor.php`, `app/Modules/Core/AI/Services/TaskModelRecommendationService.php`, `app/Modules/Core/AI/Services/ProviderTestService.php`, `app/Modules/Core/AI/Services/ControlPlane/RunRecorder.php`, `app/Modules/Core/AI/Services/ControlPlane/WireLogger.php`, `app/Modules/Core/AI/Services/ControlPlane/WireLoggingTransportTap.php`, `app/Modules/Core/AI/Jobs/RunLaraTaskProfileJob.php`, `tests/Feature/Modules/Core/AI/ChatViewTest.php`, `tests/Feature/Database/QueryTest.php`, `docs/plans/integration-external-system-observability.md`, `docs/plans/ai-lara-collapse-into-provider-priority.md`, `docs/plans/lara-task-models.md`, `docs/architecture/ai/lara.md`
 **Agents:** Cursor/GPT-5.2, Amp/gpt-5.5-medium
 
 ## Problem Essence
 
-BLB can still make operator-visible LLM calls through low-level `LlmClient::chat(...)` paths that bypass both Core AI run recording and the AI wire logging tap. These become “ghost” requests: the UI or admin workflow visibly uses AI, but the request cannot be found in the Control Plane or wire-log evidence.
+BLB can still make operator-visible LLM calls through low-level `LlmClient::chat(...)` paths that bypass both Core AI run recording and the AI wire logging tap. These become “ghost” requests: the UI or admin workflow visibly uses AI, but the request cannot be found in the Control Plane, wire-log evidence, or the outbound-exchange operator ledger where sync LLM HTTP calls are now also captured.
 
-This is distinct from Integration outbound-exchange observability: the Integration ledger intentionally excludes LLM runtime calls and focuses on non-LLM external systems.
+This is distinct from the original Integration outbound-exchange observability scope: that plan started with non-LLM external systems, while this plan now bridges sync LLM HTTP transport into the same operator ledger without replacing AI run recording or wire logs.
 
 ## Desired Outcome
 
 Every LLM request initiated by BLB is traceable through the strongest inspection surface that fits its ownership boundary:
 
 - **Core AI work** appears in the Control Plane as a run (`run_id`) with source, task key when applicable, provider/model metadata, status, token/cost metadata when available, and wire-log evidence when wire logging is enabled.
+- **Sync LLM HTTP transport** also appears in the Integration outbound-exchange ledger with AI operation metadata, provider/protocol labels, retained request/response previews, and centralized redaction so operators can diagnose calls from the Outbound Exchanges surface.
 - **Core AI diagnostics and Base-module utility calls** at least attach the AI wire logging tap when wire logging is enabled, using a stable correlation id and source metadata that make the file meaningful to operators.
 
 No feature or diagnostic workflow should construct an ad-hoc `LlmClient::chat(...)` request without either going through the Core runtime/run ledger or explicitly obtaining a trace context for the call.
@@ -41,6 +42,8 @@ Base AI may also be reorganized while this seam is added, but only around its ow
 ### Wire logging surface
 
 AI wire logs are the evidence surface for raw LLM transport. They remain separate from the Integration exchange ledger and use file-backed JSONL under `storage/app/ai/wire-logs/`. Wire logs should include source/task/correlation metadata early in each file so operators can understand why the call exists even when there is no `ai_runs` row.
+
+Sync LLM HTTP calls now also pass through the Integration gateway before protocol parsing. The two surfaces are complementary: the outbound-exchange row provides the filterable operator ledger entry, while the AI wire log keeps the run-scoped raw/mapped LLM evidence. Streaming LLM calls remain on the AI wire-log path until a focused streaming/exchange bridge is designed.
 
 ## Design Decisions
 
@@ -174,7 +177,7 @@ Goal: remove attractive but unsafe paths.
 
 Goal: make the rule hard to regress.
 
-- [x] Add focused tests proving titling records an `ai_runs` row and writes wire logs when wire logging is enabled. Evidence: `tests/Feature/Modules/Core/AI/ChatViewTest.php` now includes `it('records a titling run and writes wire logs when wire logging is enabled', ...)`. {Copilot/GPT-5.3-Codex}
+- [x] Add focused tests proving titling records an `ai_runs` row, creates an outbound exchange, and writes real LLM request/response wire-log entries when wire logging is enabled. Evidence: `tests/Feature/Modules/Core/AI/ChatViewTest.php` now includes `it('records a titling run, outbound exchange, and wire logs when wire logging is enabled', ...)`, drives the real protocol path with `Http::fake()`, and asserts the exchange plus `llm.request`/`llm.response_*` entries. {Copilot/GPT-5.3-Codex, Amp/gpt-5.5-medium}
 - [x] Add focused tests proving provider tests attach a trace tap when the trace factory returns one. {Amp/gpt-5.5-medium}
 - [x] Add focused tests proving Base Database attaches a trace tap when the trace factory returns one. Evidence: `tests/Feature/Database/QueryTest.php` now includes `test('database query SQL generation attaches trace tap from the trace context factory', ...)`. {Copilot/GPT-5.3-Codex}
 - [x] Add or document a lightweight static check for `LlmClient::chat(` call sites so future direct calls are reviewed against this contract. Check command: `rg -n "llmClient->chat\(" app/Modules/Core/AI app/Base/Database -g '*.php'`. Current expected allowlist: `app/Modules/Core/AI/Services/Runtime/AgenticRuntime.php` and `app/Modules/Core/AI/Services/ProviderTestService.php`. {Copilot/GPT-5.3-Codex}

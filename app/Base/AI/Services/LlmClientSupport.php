@@ -31,19 +31,32 @@ final class LlmClientSupport
             $http = $http->withOptions(['stream' => true]);
         }
 
-        $headers = array_merge($providerHeaders, $request->providerHeaders);
+        $headers = self::headersFor($request, $providerHeaders);
 
         if ($headers !== []) {
             $http = $http->withHeaders($headers);
         }
 
+        return $http;
+    }
+
+    /**
+     * @param  array<string, string>  $providerHeaders
+     * @return array<string, string>
+     */
+    public static function headersFor(ChatRequest $request, array $providerHeaders = []): array
+    {
+        $headers = array_merge($providerHeaders, $request->providerHeaders);
+
         if ($request->apiType === AiApiType::AnthropicMessages && $request->apiKey !== '') {
-            $http = $http->withHeaders(['x-api-key' => $request->apiKey]);
-        } elseif ($request->apiKey !== '') {
-            $http = $http->withToken($request->apiKey);
+            return array_merge($headers, ['x-api-key' => $request->apiKey]);
         }
 
-        return $http;
+        if ($request->apiKey !== '') {
+            return array_merge($headers, ['Authorization' => 'Bearer '.$request->apiKey]);
+        }
+
+        return $headers;
     }
 
     public static function parseFailedResponse(Response $response, int $latencyMs): array
