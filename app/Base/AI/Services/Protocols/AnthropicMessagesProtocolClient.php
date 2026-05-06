@@ -7,6 +7,7 @@ namespace App\Base\AI\Services\Protocols;
 
 use App\Base\AI\Contracts\LlmTransportTap;
 use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClientSupport;
@@ -104,6 +105,7 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
      * @return Generator<int, array<string, mixed>>
      */
     protected function protocolStreamSse(
+        ChatRequest $request,
         Response $response,
         int $startTime,
         ProviderRequestMapping $mapping,
@@ -131,16 +133,30 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
             public string $finishReason = 'stop';
         };
 
+        $lastMeaningfulOutputAt = hrtime(true);
+
         foreach ($this->sseLines($response, $transportTap, flushTrailingBuffer: true) as $line) {
+            if ($this->streamProgressTimedOut($lastMeaningfulOutputAt, $request)) {
+                yield $this->streamProgressTimeoutEvent($request, $startTime);
+
+                return;
+            }
+
             $terminal = false;
 
-            yield from $this->anthropicYieldFromSseLine(
+            foreach ($this->anthropicYieldFromSseLine(
                 $line,
                 $ctx,
                 $startTime,
                 $mapping,
                 $terminal,
-            );
+            ) as $event) {
+                if ($this->isMeaningfulStreamEvent($event)) {
+                    $lastMeaningfulOutputAt = hrtime(true);
+                }
+
+                yield $event;
+            }
 
             if ($terminal) {
                 return;

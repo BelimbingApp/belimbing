@@ -237,7 +237,15 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
         }
 
         try {
-            yield from $this->protocolStreamSse($response, $startTime, $mapping, $request->transportTap);
+            yield from $this->protocolStreamSse($request, $response, $startTime, $mapping, $request->transportTap);
+        } catch (\RuntimeException $e) {
+            if (! $this->isStreamReadTimeout($e)) {
+                throw $e;
+            }
+
+            $request->transportTap?->error('timeout', $e->getMessage());
+
+            yield LlmClientSupport::timeoutStreamError($e->getMessage(), $startTime);
         } finally {
             $request->transportTap?->complete([
                 'latency_ms' => LlmClientSupport::latencyMs($startTime),
@@ -306,6 +314,45 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
         }
     }
 
+    protected function streamProgressTimedOut(int $lastMeaningfulOutputAt, ChatRequest $request): bool
+    {
+        return LlmClientSupport::latencyMs($lastMeaningfulOutputAt) >= (max(1, $request->timeout) * 1000);
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     */
+    protected function isMeaningfulStreamEvent(array $event): bool
+    {
+        return in_array($event['type'] ?? null, [
+            'content_delta',
+            'tool_call_delta',
+            'thinking_delta',
+            'done',
+            'error',
+        ], true);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function streamProgressTimeoutEvent(ChatRequest $request, int $startTime): array
+    {
+        return LlmClientSupport::timeoutStreamError(
+            "Provider stream produced no model output for {$request->timeout} seconds.",
+            $startTime,
+        );
+    }
+
+    private function isStreamReadTimeout(\RuntimeException $e): bool
+    {
+        $message = strtolower($e->getMessage());
+
+        return str_contains($message, 'timed out')
+            || str_contains($message, 'read timeout')
+            || str_contains($message, 'unable to read from stream');
+    }
+
     /**
      * Decode provider-specific Server-Sent Events after a successful streaming POST.
      *
@@ -324,6 +371,7 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
      * @return Generator<int, array<string, mixed>>
      */
     abstract protected function protocolStreamSse(
+        ChatRequest $request,
         Response $response,
         int $startTime,
         ProviderRequestMapping $mapping,

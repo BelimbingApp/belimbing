@@ -7,6 +7,7 @@ namespace App\Base\AI\Services\Protocols;
 
 use App\Base\AI\Contracts\LlmTransportTap;
 use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClientSupport;
@@ -70,18 +71,33 @@ final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
      * @return Generator<int, array<string, mixed>>
      */
     protected function protocolStreamSse(
+        ChatRequest $request,
         Response $response,
         int $startTime,
         ProviderRequestMapping $mapping,
         ?LlmTransportTap $transportTap,
     ): Generator {
         $finishReason = null;
+        $lastMeaningfulOutputAt = hrtime(true);
+
         foreach ($this->sseLines($response, $transportTap) as $line) {
+            if ($this->streamProgressTimedOut($lastMeaningfulOutputAt, $request)) {
+                yield $this->streamProgressTimeoutEvent($request, $startTime);
+
+                return;
+            }
+
             if ($line === '' || str_starts_with($line, ':') || ! str_starts_with($line, 'data: ')) {
                 continue;
             }
 
-            yield from $this->parseSsePayload(substr($line, 6), $finishReason, $startTime, $mapping);
+            foreach ($this->parseSsePayload(substr($line, 6), $finishReason, $startTime, $mapping) as $event) {
+                if ($this->isMeaningfulStreamEvent($event)) {
+                    $lastMeaningfulOutputAt = hrtime(true);
+                }
+
+                yield $event;
+            }
 
             if ($finishReason === '__done__') {
                 return;

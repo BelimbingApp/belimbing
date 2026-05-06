@@ -3,15 +3,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
+use App\Base\AI\Contracts\LlmTransportTap;
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
+use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Enums\ReasoningMode;
 use App\Base\AI\Enums\ReasoningVisibility;
 use App\Base\AI\Enums\ToolChoiceMode;
 use App\Base\AI\Services\LlmClient;
+use App\Base\AI\Services\Protocols\AbstractLlmProtocolClient;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -142,6 +146,85 @@ describe('LlmClient tool calling request payloads', function () {
 });
 
 describe('LlmClient provider-specific request payloads', function () {
+
+    it('sets a stream body read timeout for LLM streams', function () {
+        $optionsSeen = [];
+        $payload = <<<'SSE'
+data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}],"usage":null}
+
+data: [DONE]
+SSE;
+
+        Http::fake(function ($request, array $options) use (&$optionsSeen, $payload) {
+            $optionsSeen = $options;
+
+            return Http::response($payload, 200, ['Content-Type' => 'text/event-stream']);
+        });
+
+        $client = new LlmClient;
+        iterator_to_array($client->chatStream(new ChatRequest(
+            TEST_API_BASE_URL,
+            'openai-key',
+            'gpt-5.4',
+            [['role' => 'user', 'content' => 'Hello']],
+            timeout: 7,
+            providerName: 'openai',
+        )));
+
+        expect($optionsSeen['stream'] ?? null)->toBeTrue()
+            ->and($optionsSeen['read_timeout'] ?? null)->toBe(7);
+    });
+
+    it('classifies heartbeat-only stream progress as a timeout', function () {
+        $protocol = new class extends AbstractLlmProtocolClient
+        {
+            public function timedOut(int $lastMeaningfulOutputAt, ChatRequest $request): bool
+            {
+                return $this->streamProgressTimedOut($lastMeaningfulOutputAt, $request);
+            }
+
+            public function timeoutEvent(ChatRequest $request, int $startTime): array
+            {
+                return $this->streamProgressTimeoutEvent($request, $startTime);
+            }
+
+            protected function pathSuffix(): string
+            {
+                return 'test';
+            }
+
+            protected function parseResponse(Response $response, int $latencyMs, string $model): array
+            {
+                return [];
+            }
+
+            protected function protocolStreamSse(
+                ChatRequest $request,
+                Response $response,
+                int $startTime,
+                ProviderRequestMapping $mapping,
+                ?LlmTransportTap $transportTap,
+            ): Generator {
+                yield from [];
+            }
+        };
+
+        $request = new ChatRequest(
+            TEST_API_BASE_URL,
+            'openai-key',
+            'gpt-5.4',
+            [['role' => 'user', 'content' => 'Hello']],
+            timeout: 1,
+        );
+        $lastMeaningfulOutputAt = hrtime(true) - 1_200_000_000;
+
+        $event = $protocol->timeoutEvent($request, hrtime(true) - 1_200_000_000);
+
+        expect($protocol->timedOut($lastMeaningfulOutputAt, $request))->toBeTrue()
+            ->and($event['type'] ?? null)->toBe('error')
+            ->and($event['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
+            ->and($event['runtime_error']->errorType)->toBe(AiErrorType::Timeout);
+    });
 
     it('requests usage chunks for OpenAI Chat Completions streams', function () {
         $payload = <<<'SSE'

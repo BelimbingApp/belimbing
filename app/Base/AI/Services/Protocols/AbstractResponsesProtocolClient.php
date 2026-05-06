@@ -7,6 +7,7 @@ namespace App\Base\AI\Services\Protocols;
 
 use App\Base\AI\Contracts\LlmTransportTap;
 use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClientSupport;
@@ -67,6 +68,7 @@ abstract class AbstractResponsesProtocolClient extends AbstractLlmProtocolClient
      * @return Generator<int, array<string, mixed>>
      */
     protected function protocolStreamSse(
+        ChatRequest $request,
         Response $response,
         int $startTime,
         ProviderRequestMapping $mapping,
@@ -85,15 +87,29 @@ abstract class AbstractResponsesProtocolClient extends AbstractLlmProtocolClient
             public mixed $currentMessagePhase = null;
         };
 
+        $lastMeaningfulOutputAt = hrtime(true);
+
         foreach ($this->sseLines($response, $transportTap) as $line) {
+            if ($this->streamProgressTimedOut($lastMeaningfulOutputAt, $request)) {
+                yield $this->streamProgressTimeoutEvent($request, $startTime);
+
+                return;
+            }
+
             $done = false;
 
-            yield from $this->yieldResponsesSseLineEvents(
+            foreach ($this->yieldResponsesSseLineEvents(
                 $line,
                 $ctx,
                 $startTime,
                 $done,
-            );
+            ) as $event) {
+                if ($this->isMeaningfulStreamEvent($event)) {
+                    $lastMeaningfulOutputAt = hrtime(true);
+                }
+
+                yield $event;
+            }
 
             if ($done) {
                 return;

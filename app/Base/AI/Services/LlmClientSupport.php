@@ -28,7 +28,10 @@ final class LlmClientSupport
         $http = Http::timeout($request->timeout);
 
         if ($stream) {
-            $http = $http->withOptions(['stream' => true]);
+            $http = $http->withOptions([
+                'stream' => true,
+                'read_timeout' => max(1, $request->timeout),
+            ]);
         }
 
         $headers = self::headersFor($request, $providerHeaders);
@@ -152,6 +155,25 @@ final class LlmClientSupport
         yield [
             'type' => 'error',
             'runtime_error' => AiRuntimeError::fromType($errorType, $e->getMessage(), latencyMs: $latencyMs),
+            'latency_ms' => $latencyMs,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function timeoutStreamError(string $diagnostic, int $startTime): array
+    {
+        $latencyMs = self::latencyMs($startTime);
+
+        return [
+            'type' => 'error',
+            'runtime_error' => AiRuntimeError::fromType(
+                AiErrorType::Timeout,
+                $diagnostic,
+                'The provider stream did not produce model output before the timeout budget expired.',
+                latencyMs: $latencyMs,
+            ),
             'latency_ms' => $latencyMs,
         ];
     }
