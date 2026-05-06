@@ -2,14 +2,13 @@
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Enums\AiErrorType;
-use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\DTO\LaraTaskDefinition;
 use App\Modules\Core\AI\Enums\LaraTaskType;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\LaraTaskRegistry;
-use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
 use App\Modules\Core\AI\Services\TaskModelRecommendationService;
 use App\Modules\Core\Company\Models\Company;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -32,13 +31,15 @@ function makeTaskRecommendationService(string $responseContent): TaskModelRecomm
             'provider_name' => 'openai',
         ]);
 
-    $llmClient = Mockery::mock(LlmClient::class);
-    $llmClient->shouldReceive('chat')
+    $runtime = Mockery::mock(AgenticRuntime::class);
+    $runtime->shouldReceive('run')
         ->once()
         ->andReturn([
             'content' => $responseContent,
-            'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
-            'latency_ms' => 100,
+            'meta' => [
+                'tokens' => ['prompt' => 10, 'completion' => 5],
+                'latency_ms' => 100,
+            ],
         ]);
 
     $taskRegistry = Mockery::mock(LaraTaskRegistry::class);
@@ -54,19 +55,10 @@ function makeTaskRecommendationService(string $responseContent): TaskModelRecomm
             runtimeReady: true,
         ));
 
-    $credentialResolver = Mockery::mock(RuntimeCredentialResolver::class);
-    $credentialResolver->shouldReceive('resolve')
-        ->once()
-        ->andReturn([
-            'api_key' => 'primary-key',
-            'base_url' => TASK_MODEL_RECO_BASE_URL,
-        ]);
-
     return new TaskModelRecommendationService(
         $configResolver,
-        $llmClient,
+        $runtime,
         $taskRegistry,
-        $credentialResolver,
     );
 }
 
@@ -82,12 +74,17 @@ function makeTaskRecommendationServiceWithRuntimeError(AiRuntimeError $runtimeEr
             'provider_name' => 'openai',
         ]);
 
-    $llmClient = Mockery::mock(LlmClient::class);
-    $llmClient->shouldReceive('chat')
+    $runtime = Mockery::mock(AgenticRuntime::class);
+    $runtime->shouldReceive('run')
         ->once()
         ->andReturn([
-            'runtime_error' => $runtimeError,
-            'latency_ms' => 100,
+            'content' => '⚠ '.$runtimeError->userMessage,
+            'meta' => [
+                'error_type' => $runtimeError->errorType->value,
+                'error' => $runtimeError->userMessage,
+                'diagnostic' => $runtimeError->diagnostic,
+                'latency_ms' => 100,
+            ],
         ]);
 
     $taskRegistry = Mockery::mock(LaraTaskRegistry::class);
@@ -103,19 +100,10 @@ function makeTaskRecommendationServiceWithRuntimeError(AiRuntimeError $runtimeEr
             runtimeReady: false,
         ));
 
-    $credentialResolver = Mockery::mock(RuntimeCredentialResolver::class);
-    $credentialResolver->shouldReceive('resolve')
-        ->once()
-        ->andReturn([
-            'api_key' => 'primary-key',
-            'base_url' => TASK_MODEL_RECO_BASE_URL,
-        ]);
-
     return new TaskModelRecommendationService(
         $configResolver,
-        $llmClient,
+        $runtime,
         $taskRegistry,
-        $credentialResolver,
     );
 }
 

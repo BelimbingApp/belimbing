@@ -6,12 +6,10 @@
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
-use App\Base\AI\DTO\ChatRequest;
-use App\Base\AI\DTO\ExecutionControls;
-use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
-use App\Base\AI\Services\LlmClient;
 use App\Base\Support\Json as BlbJson;
+use App\Modules\Core\AI\DTO\ExecutionPolicy;
+use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\Company\Models\Company;
@@ -20,9 +18,8 @@ class TaskModelRecommendationService
 {
     public function __construct(
         private readonly ConfigResolver $configResolver,
-        private readonly LlmClient $llmClient,
+        private readonly AgenticRuntime $agenticRuntime,
         private readonly LaraTaskRegistry $taskRegistry,
-        private readonly RuntimeCredentialResolver $credentialResolver,
     ) {}
 
     /**
@@ -42,49 +39,40 @@ class TaskModelRecommendationService
             return ['error' => 'Lara has no default model configured yet.'];
         }
 
-        $credentials = $this->credentialResolver->resolve($config);
-
-        if (isset($credentials['runtime_error'])) {
-            return ['error' => $credentials['runtime_error']->userMessage ?? $credentials['runtime_error']->diagnostic];
-        }
-
         $candidates = $this->candidateList();
 
         if ($candidates === []) {
             return ['error' => 'No active provider models are available for recommendation.'];
         }
 
-        $messages = [
-            [
-                'role' => 'system',
-                'content' => 'Choose the single best model for the named Lara task from the provided candidates. '
-                    .'Return strict JSON only: {"provider":"...","model":"...","reason":"..."} '
-                    .'Use provider and model values exactly as listed in the candidates. '
-                    .'Keep reason under 18 words.',
-            ],
-            [
+        $response = $this->agenticRuntime->run(
+            messages: [[
                 'role' => 'user',
                 'content' => $this->buildPrompt($task->label, $task->type->value, $task->workloadDescription, $candidates),
-            ],
-        ];
-
-        $response = $this->llmClient->chat(new ChatRequest(
-            $credentials['base_url'],
-            $credentials['api_key'],
-            $config['model'],
-            $messages,
-            executionControls: ExecutionControls::defaults(
-                maxOutputTokens: 120,
+            ]],
+            employeeId: $employeeId,
+            systemPrompt: 'Choose the single best model for the named Lara task from the provided candidates. '
+                .'Return strict JSON only: {"provider":"...","model":"...","reason":"..."} '
+                .'Use provider and model values exactly as listed in the candidates. '
+                .'Keep reason under 18 words.',
+            policy: new ExecutionPolicy(
+                mode: ExecutionMode::Interactive,
+                timeoutSeconds: 30,
             ),
-            timeout: 30,
-            providerName: $config['provider_name'] ?? null,
-            apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
-            providerHeaders: $credentials['headers'] ?? [],
-        ));
+            configOverride: $config,
+            allowedToolNames: [],
+            executionControlsOverride: ['limits' => ['max_output_tokens' => 120]],
+            context: new RuntimeInvocationContext(
+                source: 'core_ai_task_model_recommendation',
+                taskKey: $taskKey,
+            ),
+        );
 
-        if (isset($response['runtime_error'])) {
+        if (isset($response['meta']['error_type'])) {
+            $runtimeError = $this->runtimeErrorFromResult($response);
+
             $fallback = $this->fallbackRecommendationForRuntimeError(
-                $response['runtime_error'],
+                $runtimeError,
                 $config,
                 $candidates,
             );
@@ -93,10 +81,26 @@ class TaskModelRecommendationService
                 return $fallback;
             }
 
-            return ['error' => $response['runtime_error']->userMessage ?? $response['runtime_error']->diagnostic];
+            return ['error' => $runtimeError->userMessage];
         }
 
         return $this->normalizeRecommendation((string) ($response['content'] ?? ''), $candidates);
+    }
+
+    /**
+     * @param  array{meta?: array<string, mixed>}  $result
+     */
+    private function runtimeErrorFromResult(array $result): AiRuntimeError
+    {
+        $meta = is_array($result['meta'] ?? null) ? $result['meta'] : [];
+        $type = AiErrorType::tryFrom((string) ($meta['error_type'] ?? '')) ?? AiErrorType::UnexpectedError;
+
+        return new AiRuntimeError(
+            errorType: $type,
+            userMessage: is_string($meta['error'] ?? null) ? $meta['error'] : null,
+            diagnostic: is_string($meta['diagnostic'] ?? null) ? $meta['diagnostic'] : '',
+            latencyMs: (int) ($meta['latency_ms'] ?? 0),
+        );
     }
 
     /**

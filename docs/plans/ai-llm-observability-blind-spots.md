@@ -150,7 +150,7 @@ Goal: eliminate the most visible “ghost LLM call”.
 
 Goal: either move Core AI utilities onto run-level tracing or explicitly mark them as traced diagnostics.
 
-- [ ] Route `TaskModelRecommendationService` through a run-recorded Core AI path, preserving its strict JSON contract and fallback recommendation behavior.
+- [x] Route `TaskModelRecommendationService` through a run-recorded Core AI path, preserving its strict JSON contract and fallback recommendation behavior. {Copilot/GPT-5.3-Codex}
 - [x] Add wire-trace context to `ProviderTestService` so provider tests leave request/response evidence when wire logging is enabled without pretending to be Lara chat runs. {Amp/gpt-5.5-medium}
 - [ ] Decide the fate of any remaining Core AI direct `LlmClient::chat(...)` calls case-by-case: runtime/executor internals are allowed; feature and admin flows must be traced.
 
