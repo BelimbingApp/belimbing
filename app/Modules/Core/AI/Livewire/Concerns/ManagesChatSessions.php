@@ -5,7 +5,6 @@
 
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
-use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\SessionManager;
@@ -66,7 +65,7 @@ trait ManagesChatSessions
             return null;
         }
 
-        return $provider->id.ResolvesAvailableModels::MODEL_ID_SEPARATOR.$hint['model'];
+        return $provider->id.self::MODEL_ID_SEPARATOR.$hint['model'];
     }
 
     /**

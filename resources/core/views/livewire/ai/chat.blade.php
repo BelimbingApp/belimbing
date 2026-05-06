@@ -460,7 +460,7 @@
                                             wire:keydown.enter="saveTitle"
                                             wire:keydown.escape="cancelEditingTitle"
                                             x-init="$nextTick(() => $el.focus())"
-                                            class="flex-1 min-w-0 text-sm font-medium bg-surface-default border border-border-default rounded px-1.5 py-0.5 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                                            class="flex-1 min-w-0 text-[11px] font-medium bg-surface-default border border-border-default rounded px-1.5 py-0.5 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
                                             placeholder="{{ __('Session title') }}"
                                         />
                                         <button
@@ -489,12 +489,12 @@
                                         <button
                                             type="button"
                                             wire:click.stop="startEditingTitle('{{ $session->id }}')"
-                                            class="w-full text-left truncate font-medium hover:text-ink"
+                                            class="w-full text-left text-[11px] leading-snug line-clamp-2 font-medium hover:text-ink"
                                             title="{{ __('Edit title') }}"
                                         >
                                             {{ $session->title ?? __('Untitled') }}<span class="sr-only">, {{ __('edit title') }}</span>
                                         </button>
-                                        <div class="text-xs text-muted tabular-nums">{{ $session->lastActivityAt->format('M j, H:i') }}</div>
+                                        <div class="text-[11px] text-muted tabular-nums">{{ $session->lastActivityAt->format('M j, H:i') }}</div>
                                         @if ($canAccessControlPlane && isset($sessionTurnTargets[$session->id]))
                                             <div class="mt-0.5">
                                                 <a
