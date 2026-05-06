@@ -391,11 +391,14 @@ describe('AgenticRuntime (sync tool loop)', function () {
         expect($result['meta']['tool_actions'][0]['arguments'])->toBe(['input' => 'world']);
     });
 
-    it('stops sync tool loops at the iteration cap', function () {
+    it('continues sync tool loops until the model stops calling tools', function () {
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')
             ->times(24)
             ->andReturn($this->makeToolCallResponse('call_001', 'echo_tool', '{"input": "world"}'));
+        $llmClient->shouldReceive('chat')
+            ->once()
+            ->andReturn($this->makeFinalResponse('The echo result was: executed:echo_tool:world'));
 
         $result = runAgenticConversation(
             $llmClient,
@@ -404,8 +407,8 @@ describe('AgenticRuntime (sync tool loop)', function () {
             systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
         );
 
-        expect($result['meta']['error_type'])->toBe('unexpected_error')
-            ->and($result['meta']['diagnostic'])->toContain('Tool loop exceeded 24 iterations');
+        expect($result['content'])->toContain('executed:echo_tool:world')
+            ->and($result['meta']['tool_actions'])->toHaveCount(24);
     });
 
     it('records one usage call per successful synchronous tool-loop iteration', function () {
