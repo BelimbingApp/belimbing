@@ -10,7 +10,7 @@ use App\Base\AI\Services\Tracing\LlmTraceContext;
 use App\Base\AI\Services\Tracing\NullLlmTraceContextFactory;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\ProviderTestService;
-use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
+use App\Modules\Core\AI\Services\Runtime\RuntimeCredentialResolver;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 

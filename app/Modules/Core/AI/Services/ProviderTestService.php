@@ -14,6 +14,7 @@ use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\DTO\ProviderTestResult;
+use App\Modules\Core\AI\Services\Runtime\RuntimeCredentialResolver;
 use Illuminate\Support\Facades\Log;
 
 /**

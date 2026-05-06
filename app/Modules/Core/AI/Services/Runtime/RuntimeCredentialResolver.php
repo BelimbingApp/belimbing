@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-namespace App\Modules\Core\AI\Services;
+namespace App\Modules\Core\AI\Services\Runtime;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Exceptions\GithubCopilotAuthException;
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Services\ProviderDefinitionRegistry;
 
 /**
  * Resolves API credentials for runtime calls by dispatching through provider definitions.

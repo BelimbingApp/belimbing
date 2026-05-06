@@ -20,7 +20,7 @@ use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use App\Modules\Core\AI\Services\LaraTaskProfileSelector;
 use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
-use App\Modules\Core\AI\Services\RuntimeSessionContext;
+use App\Modules\Core\AI\Services\Runtime\RuntimeSessionContext;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Auth\Access\AuthorizationException;
 

@@ -1,8 +1,8 @@
 # ai-llm-observability-blind-spots
 
-**Status:** In Progress
-**Last Updated:** 2026-05-05
-**Sources:** `app/Base/AI/DTO/ChatRequest.php`, `app/Base/AI/Contracts/LlmTransportTap.php`, `app/Base/Database/Livewire/Queries/Show.php`, `app/Modules/Core/AI/Livewire/Concerns/ManagesChatSessions.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/AgentRuntime.php`, `app/Modules/Core/AI/Services/TaskModelRecommendationService.php`, `app/Modules/Core/AI/Services/ProviderTestService.php`, `app/Modules/Core/AI/Services/ControlPlane/RunRecorder.php`, `app/Modules/Core/AI/Services/ControlPlane/WireLogger.php`, `app/Modules/Core/AI/Services/ControlPlane/WireLoggingTransportTap.php`, `app/Modules/Core/AI/Jobs/RunLaraTaskProfileJob.php`, `docs/plans/integration-external-system-observability.md`, `docs/plans/ai-lara-collapse-into-provider-priority.md`, `docs/plans/lara-task-models.md`, `docs/architecture/ai/lara.md`
+**Status:** Completed
+**Last Updated:** 2026-05-06
+**Sources:** `app/Base/AI/DTO/ChatRequest.php`, `app/Base/AI/Contracts/LlmTransportTap.php`, `app/Base/Database/Livewire/Queries/Show.php`, `app/Modules/Core/AI/Livewire/Concerns/ManagesChatSessions.php`, `app/Modules/Core/AI/Services/Runtime/AgenticRuntime.php`, `app/Modules/Core/AI/Services/Runtime/SimpleTaskExecutor.php`, `app/Modules/Core/AI/Services/TaskModelRecommendationService.php`, `app/Modules/Core/AI/Services/ProviderTestService.php`, `app/Modules/Core/AI/Services/ControlPlane/RunRecorder.php`, `app/Modules/Core/AI/Services/ControlPlane/WireLogger.php`, `app/Modules/Core/AI/Services/ControlPlane/WireLoggingTransportTap.php`, `app/Modules/Core/AI/Jobs/RunLaraTaskProfileJob.php`, `tests/Feature/Modules/Core/AI/ChatViewTest.php`, `tests/Feature/Database/QueryTest.php`, `docs/plans/integration-external-system-observability.md`, `docs/plans/ai-lara-collapse-into-provider-priority.md`, `docs/plans/lara-task-models.md`, `docs/architecture/ai/lara.md`
 **Agents:** Cursor/GPT-5.2, Amp/gpt-5.5-medium
 
 ## Problem Essence
@@ -104,12 +104,12 @@ This is intentionally **not** a whole-AI rewrite. Do not move UI Livewire compon
 
 ## Blind Spots (Current State)
 
-- ~~**Lara chat session titling**: `ManagesChatSessions::generateSessionTitle()` calls `LlmClient::chat(...)` directly with no run record and no wire tap.~~ **Fixed** (Phase 2): now routes through `SimpleTaskExecutor` → `AgenticRuntime`; source=`simple_task`, taskKey=`titling`.
-- **Task model recommendations**: `TaskModelRecommendationService::recommend()` calls `LlmClient::chat(...)` directly from Core AI admin workflow with no run record and no wire tap.
-- **Provider connectivity tests**: `ProviderTestService::executeTestCall()` calls `LlmClient::chat(...)` directly. This may reasonably stay out of `ai_runs`, but it still needs wire-log evidence when wire logging is enabled.
-- **Future Lara “Simple” task profiles**: without a standard simple-task executor, these are likely to follow the same direct-call pattern and repeat the problem.
-- **Base Database query generator**: `Base/Database/Livewire/Queries/Show::generateSql()` calls `LlmClient::chat(...)` directly with no run record and no wire tap.
-- **Legacy `AgentRuntime` adapter**: exists and is bound as a singleton; it calls `LlmClient::chat(...)` without taps, and should not be used as a model for new work.
+- ~~**Lara chat session titling**: `ManagesChatSessions::generateSessionTitle()` calls `LlmClient::chat(...)` directly with no run record and no wire tap.~~ **Fixed** (Phase 2): routes through `SimpleTaskExecutor` → `AgenticRuntime`; source=`simple_task`, taskKey=`titling`.
+- ~~**Task model recommendations**: `TaskModelRecommendationService::recommend()` calls `LlmClient::chat(...)` directly from Core AI admin workflow with no run record and no wire tap.~~ **Fixed** (Phase 3): routed through `AgenticRuntime` with truthful source metadata.
+- ~~**Provider connectivity tests**: `ProviderTestService::executeTestCall()` calls `LlmClient::chat(...)` directly with no trace metadata.~~ **Fixed** (Phase 3): remains a diagnostic direct call, now trace-context-backed and wire-log-capable.
+- ~~**Future Lara “Simple” task profiles**: without a standard simple-task executor, these are likely to follow the same direct-call pattern and repeat the problem.~~ **Fixed** (Phase 2): `SimpleTaskExecutor` is the standard runtime path.
+- ~~**Base Database query generator**: `Base/Database/Livewire/Queries/Show::generateSql()` calls `LlmClient::chat(...)` directly with no trace context.~~ **Fixed** (Phase 4): now requests Base trace context and attaches transport tap.
+- ~~**Legacy `AgentRuntime` adapter**: exists and is bound as a singleton; it calls `LlmClient::chat(...)` without taps, and should not be used as a model for new work.~~ **Fixed** (Phase 5): adapter and binding removed.
 
 Provider testing and Base Database query generation are deliberately listed separately from Lara work because they may need wire-level trace without a run row. That distinction keeps the plan honest instead of forcing everything into `ai_runs` with misleading ownership.
 
@@ -127,15 +127,15 @@ Provider testing and Base Database query generation are deliberately listed sepa
 
 Goal: make the right path obvious by class placement and public contracts before fixing callers.
 
-- [ ] Move run-recorded execution classes into a coherent Core AI runtime subtree and update namespaces/imports in one pass.
-- [ ] Delete or rename the legacy `AgentRuntime` adapter during the move unless an active caller forces a short-lived compatibility shim; do not leave it as the advertised runtime path.
+- [x] Move run-recorded execution classes into a coherent Core AI runtime subtree and update namespaces/imports in one pass. {Copilot/GPT-5.3-Codex}
+- [x] Delete or rename the legacy `AgentRuntime` adapter during the move unless an active caller forces a short-lived compatibility shim; do not leave it as the advertised runtime path. {Copilot/GPT-5.3-Codex}
 - [x] Add a Core runtime invocation context value object and thread it through `AgenticRuntime::run()` / `runStream()` without breaking existing chat callers. {Copilot/claude-sonnet-4-6}
 - [x] Use invocation context to write truthful run `source` values and task/profile metadata while preserving existing session/turn correlation. {Copilot/claude-sonnet-4-6}
 - [x] Add a Base AI trace-context contract/factory/value object that returns a correlation id and optional `LlmTransportTap` for direct `ChatRequest` callers. {Amp/gpt-5.5-medium}
 - [x] Bind a Core AI implementation of that trace-context contract that creates `WireLoggingTransportTap` when wire logging is enabled and a null/no-op implementation otherwise. {Amp/gpt-5.5-medium}
 - [x] Place the new Base AI tracing seam under a clear tracing/transport namespace; move `LlmClient`/protocol mechanics only if doing so clarifies the same seam. {Amp/gpt-5.5-medium}
 - [x] Add source metadata to wire-log entries so pseudo-run files are understandable without opening application code. {Amp/gpt-5.5-medium}
-- [ ] Sweep docs, `AGENTS.md`, and imports that still describe the old runtime layout before starting call-site conversions.
+- [x] Sweep docs, `AGENTS.md`, and imports that still describe the old runtime layout before starting call-site conversions. {Copilot/GPT-5.3-Codex}
 
 ### Phase 2 — Make Lara simple work observable
 
@@ -152,7 +152,7 @@ Goal: either move Core AI utilities onto run-level tracing or explicitly mark th
 
 - [x] Route `TaskModelRecommendationService` through a run-recorded Core AI path, preserving its strict JSON contract and fallback recommendation behavior. {Copilot/GPT-5.3-Codex}
 - [x] Add wire-trace context to `ProviderTestService` so provider tests leave request/response evidence when wire logging is enabled without pretending to be Lara chat runs. {Amp/gpt-5.5-medium}
-- [ ] Decide the fate of any remaining Core AI direct `LlmClient::chat(...)` calls case-by-case: runtime/executor internals are allowed; feature and admin flows must be traced.
+- [x] Decide the fate of any remaining Core AI direct `LlmClient::chat(...)` calls case-by-case: runtime/executor internals are allowed; feature and admin flows must be traced. Decision: only two direct call sites remain and are allowed by contract — `app/Modules/Core/AI/Services/Runtime/AgenticRuntime.php` (runtime internal execution) and `app/Modules/Core/AI/Services/ProviderTestService.php` (trace-context-backed diagnostics). Evidence: `rg -n "llmClient->chat\(" app/Modules/Core/AI app/Base/Database -g '*.php'`. {Copilot/GPT-5.3-Codex}
 
 ### Phase 4 — Add wire-tap coverage for Base-module LLM calls
 
@@ -174,9 +174,9 @@ Goal: remove attractive but unsafe paths.
 
 Goal: make the rule hard to regress.
 
-- [ ] Add focused tests proving titling records an `ai_runs` row and writes wire logs when wire logging is enabled.
+- [x] Add focused tests proving titling records an `ai_runs` row and writes wire logs when wire logging is enabled. Evidence: `tests/Feature/Modules/Core/AI/ChatViewTest.php` now includes `it('records a titling run and writes wire logs when wire logging is enabled', ...)`. {Copilot/GPT-5.3-Codex}
 - [x] Add focused tests proving provider tests attach a trace tap when the trace factory returns one. {Amp/gpt-5.5-medium}
-- [ ] Add focused tests proving Base Database attaches a trace tap when the trace factory returns one.
-- [ ] Add or document a lightweight static check for `LlmClient::chat(` call sites so future direct calls are reviewed against this contract.
+- [x] Add focused tests proving Base Database attaches a trace tap when the trace factory returns one. Evidence: `tests/Feature/Database/QueryTest.php` now includes `test('database query SQL generation attaches trace tap from the trace context factory', ...)`. {Copilot/GPT-5.3-Codex}
+- [x] Add or document a lightweight static check for `LlmClient::chat(` call sites so future direct calls are reviewed against this contract. Check command: `rg -n "llmClient->chat\(" app/Modules/Core/AI app/Base/Database -g '*.php'`. Current expected allowlist: `app/Modules/Core/AI/Services/Runtime/AgenticRuntime.php` and `app/Modules/Core/AI/Services/ProviderTestService.php`. {Copilot/GPT-5.3-Codex}
 - [x] Run the targeted Core AI provider-test slice and record evidence here before handing off. Evidence: `php artisan test tests/Unit/Modules/Core/AI/Services/ProviderTestServiceTest.php tests/Unit/Modules/Core/AI/Services/ProviderTestServiceCodexTest.php` passed 9 tests / 70 assertions; `php artisan test tests/Feature/Modules/Core/AI/OpenAiCodexSetupTest.php` passed 11 tests / 59 assertions with 1 pre-existing skipped case. {Amp/gpt-5.5-medium}
-- [ ] Run the targeted Base Database test slice once Base Database tracing is implemented.
+- [x] Run the targeted Base Database test slice once Base Database tracing is implemented. Evidence: `php artisan test tests/Feature/Database/QueryTest.php` passed 18 tests / 41 assertions. {Copilot/GPT-5.3-Codex}

@@ -16,7 +16,7 @@ use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager;
 use App\Modules\Core\AI\Services\ProviderTestService;
-use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
+use App\Modules\Core\AI\Services\Runtime\RuntimeCredentialResolver;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;

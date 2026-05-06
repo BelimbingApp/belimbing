@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-namespace App\Modules\Core\AI\Services;
+namespace App\Modules\Core\AI\Services\Runtime;
 
 /**
  * Invocation context for a single LLM runtime call.

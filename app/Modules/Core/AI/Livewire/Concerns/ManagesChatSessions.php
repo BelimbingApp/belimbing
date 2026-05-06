@@ -9,7 +9,7 @@ use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\SessionManager;
-use App\Modules\Core\AI\Services\SimpleTaskExecutor;
+use App\Modules\Core\AI\Services\Runtime\SimpleTaskExecutor;
 use App\Modules\Core\User\Models\User;
 
 /**

@@ -13,6 +13,7 @@ use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Modules\Core\Employee\Models\Employee;
 
 /**

@@ -1,14 +1,19 @@
 <?php
 
+use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Enums\TurnStatus;
 use App\Modules\Core\AI\Livewire\Chat;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\OperationDispatch;
+use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
+use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
@@ -164,4 +169,47 @@ it('re-hydrates session override and active turn state when selectedSessionId is
             activeTurnPhase: TurnPhase::WaitingForWorker->value,
             activeTurnLabel: TurnPhase::WaitingForWorker->label(),
         );
+});
+
+it('records a titling run and writes wire logs when wire logging is enabled', function (): void {
+    config()->set('ai.wire_logging.enabled', true);
+
+    $user = createChatViewFixture();
+    test()->actingAs($user);
+
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('chat')
+        ->once()
+        ->with(Mockery::on(function (ChatRequest $request): bool {
+            return $request->transportTap !== null
+                && $request->messages !== [];
+        }))
+        ->andReturn([
+            'content' => '"Quarterly Revenue Summary"',
+            'usage' => ['prompt_tokens' => 12, 'completion_tokens' => 4],
+            'latency_ms' => 25,
+        ]);
+
+    app()->instance(LlmClient::class, $llmClient);
+
+    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+    app(MessageManager::class)->appendUserMessage(Employee::LARA_ID, $session->id, 'Summarize the latest revenue discussion.');
+
+    Livewire::test(Chat::class)->call('generateSessionTitle', $session->id);
+
+    $updatedSession = app(SessionManager::class)->get(Employee::LARA_ID, $session->id);
+    expect($updatedSession?->title)->toBe('Quarterly Revenue Summary');
+
+    $run = AiRun::query()
+        ->where('session_id', $session->id)
+        ->latest('created_at')
+        ->first();
+
+    expect($run)->not->toBeNull()
+        ->and($run->source)->toBe('simple_task')
+        ->and($run->status->value)->toBe('succeeded');
+
+    $entries = app(WireLogger::class)->read($run->id);
+
+    expect($entries)->not->toBe([]);
 });

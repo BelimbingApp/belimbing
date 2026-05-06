@@ -8,7 +8,7 @@ Core AI is the **governance layer** for AI in BLB. It manages company-scoped pro
 - `Models/AiProvider.php` — Company-scoped provider credentials (encrypted API key, `company_id`/`created_by` FKs)
 - `Models/AiProviderModel.php` — Model registry per provider (`model_id`, `is_active`, `is_default`, `cost_override`)
 - `Services/ConfigResolver.php` — Resolves LLM config cascade: agent workspace → company provider → runtime defaults
-- `Services/AgenticRuntime.php` — Core execution path for run-recorded runtime calls (sync + streaming + tool loop)
+- `Services/Runtime/AgenticRuntime.php` — Core execution path for run-recorded runtime calls (sync + streaming + tool loop)
 - `Services/ModelDiscoveryService.php` — Syncs models from live API + catalog enrichment via Base services
 - `Services/ProviderAuthFlowService.php` — Company-scoped auth lifecycle (delegates to Base `GithubCopilotAuthService`)
 - `Services/SessionManager.php` / `Services/MessageManager.php` — Workspace-based session and message storage

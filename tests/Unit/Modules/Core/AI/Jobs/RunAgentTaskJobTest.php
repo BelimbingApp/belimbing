@@ -5,7 +5,7 @@ use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Jobs\RunAgentTaskJob;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
-use App\Modules\Core\AI\Services\AgenticRuntime;
+use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgentTaskPromptFactory;
 use App\Modules\Core\AI\Services\DispatchTranscriptBridge;
 use App\Modules\Core\AI\Services\Workspace\PromptRenderer;

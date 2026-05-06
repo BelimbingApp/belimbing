@@ -1,9 +1,16 @@
 <?php
 
+use App\Base\AI\Contracts\LlmTransportTap;
+use App\Base\AI\Contracts\Tracing\LlmTraceContextFactory;
+use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Services\LlmClient;
+use App\Base\AI\Services\Tracing\LlmTraceContext;
 use App\Base\Database\Exceptions\BlbQueryException;
 use App\Base\Database\Livewire\Queries\Index;
 use App\Base\Database\Livewire\Queries\Show;
 use App\Base\Database\Services\QueryExecutor;
+use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\User\Models\Query;
 use App\Modules\Core\User\Models\User;
 use App\Modules\Core\User\Models\UserPin;
@@ -153,4 +160,68 @@ test('executor returns structured result for valid query', function (): void {
     expect($result['total'])->toBe(1);
     expect($result['current_page'])->toBe(1);
     expect($result['last_page'])->toBe(1);
+});
+
+test('database query SQL generation attaches trace tap from the trace context factory', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $provider = AiProvider::query()->create([
+        'company_id' => $user->company_id,
+        'name' => 'trace-provider',
+        'display_name' => 'Trace Provider',
+        'base_url' => 'https://trace-provider.example.test',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'trace-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 1,
+    ]);
+
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $provider->id,
+        'model_id' => 'trace-model',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    $traceTap = Mockery::mock(LlmTransportTap::class);
+
+    $traceContextFactory = Mockery::mock(LlmTraceContextFactory::class);
+    $traceContextFactory->shouldReceive('start')
+        ->once()
+        ->with('base_database_query_generator', Mockery::on(fn (array $metadata): bool => (
+            ($metadata['action'] ?? null) === 'generate_sql'
+            && ($metadata['selected_model_id'] ?? null) === $provider->id.':::trace-model'
+        )))
+        ->andReturn(new LlmTraceContext(
+            correlationId: 'trace-correlation',
+            source: 'base_database_query_generator',
+            transportTap: $traceTap,
+        ));
+
+    app()->instance(LlmTraceContextFactory::class, $traceContextFactory);
+
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('chat')
+        ->once()
+        ->with(Mockery::on(function (ChatRequest $request) use ($traceTap, $provider): bool {
+            return $request->transportTap === $traceTap
+                && $request->providerName === $provider->name
+                && $request->messages !== [];
+        }))
+        ->andReturn([
+            'content' => "TITLE: Trace Query\nDESCRIPTION: Generated with tracing\nSQL: SELECT 1",
+            'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 10],
+            'latency_ms' => 18,
+        ]);
+
+    app()->instance(LlmClient::class, $llmClient);
+
+    Livewire\Livewire::test(Show::class, ['slug' => '_new'])
+        ->set('selectedModelId', $provider->id.':::trace-model')
+        ->set('editPrompt', 'Show one row')
+        ->call('generateSql')
+        ->assertSet('aiError', '')
+        ->assertSet('editSql', 'SELECT 1');
 });

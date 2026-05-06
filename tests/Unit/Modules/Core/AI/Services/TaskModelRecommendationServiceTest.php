@@ -6,7 +6,7 @@ use App\Modules\Core\AI\DTO\LaraTaskDefinition;
 use App\Modules\Core\AI\Enums\LaraTaskType;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\AI\Services\AgenticRuntime;
+use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\LaraTaskRegistry;
 use App\Modules\Core\AI\Services\TaskModelRecommendationService;

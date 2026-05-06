@@ -12,7 +12,7 @@ use App\Base\AI\Enums\ReasoningVisibility;
 use App\Base\AI\Enums\ToolChoiceMode;
 use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
-use App\Modules\Core\AI\Services\AgenticToolLoopStreamReader;
+use App\Modules\Core\AI\Services\Runtime\AgenticToolLoopStreamReader;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Values\CallUsage;

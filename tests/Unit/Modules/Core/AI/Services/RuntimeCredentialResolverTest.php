@@ -7,7 +7,7 @@ use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
+use App\Modules\Core\AI\Services\Runtime\RuntimeCredentialResolver;
 use App\Modules\Core\Company\Models\Company;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;

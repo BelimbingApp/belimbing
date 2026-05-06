@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-namespace App\Modules\Core\AI\Services;
+namespace App\Modules\Core\AI\Services\Runtime;
 
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
@@ -16,10 +16,12 @@ use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Enums\TurnPhase;
+use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
+use App\Modules\Core\AI\Services\AgentToolRegistry;
+use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorderStartInput;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
-use App\Modules\Core\AI\Services\RuntimeInvocationContext;
 use App\Modules\Core\AI\Services\ControlPlane\WireLoggingTransportTap;
 use App\Modules\Core\AI\Values\CallUsage;
 use Illuminate\Support\Str;

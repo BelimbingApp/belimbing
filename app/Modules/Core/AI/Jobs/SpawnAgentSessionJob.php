@@ -9,7 +9,7 @@ use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\OrchestrationSession;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
-use App\Modules\Core\AI\Services\AgenticRuntime;
+use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
 use DateTimeImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
