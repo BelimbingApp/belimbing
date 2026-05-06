@@ -104,7 +104,7 @@ This is intentionally **not** a whole-AI rewrite. Do not move UI Livewire compon
 
 ## Blind Spots (Current State)
 
-- **Lara chat session titling**: `ManagesChatSessions::generateSessionTitle()` calls `LlmClient::chat(...)` directly with no run record and no wire tap.
+- ~~**Lara chat session titling**: `ManagesChatSessions::generateSessionTitle()` calls `LlmClient::chat(...)` directly with no run record and no wire tap.~~ **Fixed** (Phase 2): now routes through `SimpleTaskExecutor` → `AgenticRuntime`; source=`simple_task`, taskKey=`titling`.
 - **Task model recommendations**: `TaskModelRecommendationService::recommend()` calls `LlmClient::chat(...)` directly from Core AI admin workflow with no run record and no wire tap.
 - **Provider connectivity tests**: `ProviderTestService::executeTestCall()` calls `LlmClient::chat(...)` directly. This may reasonably stay out of `ai_runs`, but it still needs wire-log evidence when wire logging is enabled.
 - **Future Lara “Simple” task profiles**: without a standard simple-task executor, these are likely to follow the same direct-call pattern and repeat the problem.
@@ -129,8 +129,8 @@ Goal: make the right path obvious by class placement and public contracts before
 
 - [ ] Move run-recorded execution classes into a coherent Core AI runtime subtree and update namespaces/imports in one pass.
 - [ ] Delete or rename the legacy `AgentRuntime` adapter during the move unless an active caller forces a short-lived compatibility shim; do not leave it as the advertised runtime path.
-- [ ] Add a Core runtime invocation context value object and thread it through `AgenticRuntime::run()` / `runStream()` without breaking existing chat callers.
-- [ ] Use invocation context to write truthful run `source` values and task/profile metadata while preserving existing session/turn correlation.
+- [x] Add a Core runtime invocation context value object and thread it through `AgenticRuntime::run()` / `runStream()` without breaking existing chat callers. {Copilot/claude-sonnet-4-6}
+- [x] Use invocation context to write truthful run `source` values and task/profile metadata while preserving existing session/turn correlation. {Copilot/claude-sonnet-4-6}
 - [x] Add a Base AI trace-context contract/factory/value object that returns a correlation id and optional `LlmTransportTap` for direct `ChatRequest` callers. {Amp/gpt-5.5-medium}
 - [x] Bind a Core AI implementation of that trace-context contract that creates `WireLoggingTransportTap` when wire logging is enabled and a null/no-op implementation otherwise. {Amp/gpt-5.5-medium}
 - [x] Place the new Base AI tracing seam under a clear tracing/transport namespace; move `LlmClient`/protocol mechanics only if doing so clarifies the same seam. {Amp/gpt-5.5-medium}
@@ -141,10 +141,10 @@ Goal: make the right path obvious by class placement and public contracts before
 
 Goal: eliminate the most visible “ghost LLM call”.
 
-- [ ] Define one Lara simple-task executor that resolves `resolveTask()` config overrides, applies tight execution controls, passes an empty tool allowlist, and calls `AgenticRuntime` with source/task metadata.
-- [ ] Route chat session titling through the simple-task executor so it produces a `run_id` and wire log entries when enabled.
-- [ ] Ensure titling is labeled distinctly from chat turns in run source/meta so operators can filter it.
-- [ ] Update `docs/plans/lara-task-models.md` and `docs/architecture/ai/lara.md` references that currently describe simple tasks as direct `LlmClient::chat()` calls.
+- [x] Define one Lara simple-task executor that resolves `resolveTask()` config overrides, applies tight execution controls, passes an empty tool allowlist, and calls `AgenticRuntime` with source/task metadata. {Copilot/claude-sonnet-4-6}
+- [x] Route chat session titling through the simple-task executor so it produces a `run_id` and wire log entries when enabled. {Copilot/claude-sonnet-4-6}
+- [x] Ensure titling is labeled distinctly from chat turns in run source/meta so operators can filter it. Source value is `simple_task`; task key is `titling`. {Copilot/claude-sonnet-4-6}
+- [x] Update `docs/plans/lara-task-models.md` and `docs/architecture/ai/lara.md` references that currently describe simple tasks as direct `LlmClient::chat()` calls. {Copilot/claude-sonnet-4-6}
 
 ### Phase 3 — Cover Core AI direct-call utilities
 

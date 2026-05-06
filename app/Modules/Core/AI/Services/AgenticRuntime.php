@@ -19,6 +19,7 @@ use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorderStartInput;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
+use App\Modules\Core\AI\Services\RuntimeInvocationContext;
 use App\Modules\Core\AI\Services\ControlPlane\WireLoggingTransportTap;
 use App\Modules\Core\AI\Values\CallUsage;
 use Illuminate\Support\Str;
@@ -69,6 +70,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
      * @param  array<string, mixed>|null  $configOverride  Optional fully resolved config override
      * @param  list<string>|null  $allowedToolNames  Optional task-profile tool allowlist
      * @param  array<string, mixed>|null  $executionControlsOverride  Per-call execution controls overlay (e.g. session-scoped)
+     * @param  RuntimeInvocationContext|null  $context  Invocation context for truthful source labelling; defaults to 'chat'
      * @return array{content: string, run_id: string, meta: array<string, mixed>}
      */
     public function run(// NOSONAR (parameter count): public runtime API keeps explicit optional knobs
@@ -81,6 +83,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?array $configOverride = null,
         ?array $allowedToolNames = null,
         ?array $executionControlsOverride = null,
+        ?RuntimeInvocationContext $context = null,
     ): array {
         $this->sessionContext->set($sessionId);
 
@@ -91,7 +94,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             $this->runRecorder->start(new RunRecorderStartInput(
                 runId: $runId,
                 employeeId: $employeeId,
-                source: 'chat',
+                source: $context?->source ?? 'chat',
                 executionMode: $policy->mode->value,
                 sessionId: $sessionId,
                 actingForUserId: auth()->id(),
@@ -182,6 +185,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
      * @param  array<string, mixed>|null  $configOverride  Optional fully resolved config override
      * @param  list<string>|null  $allowedToolNames  Optional task-profile tool allowlist
      * @param  array<string, mixed>|null  $executionControlsOverride  Per-call execution controls overlay (e.g. session-scoped)
+     * @param  RuntimeInvocationContext|null  $context  Invocation context for truthful source labelling; defaults to 'stream'
      * @return \Generator<int, array{event: string, data: array<string, mixed>}>
      */
     public function runStream(// NOSONAR (parameter count): streaming API mirrors run() plus turn correlation
@@ -195,6 +199,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?array $configOverride = null,
         ?array $allowedToolNames = null,
         ?array $executionControlsOverride = null,
+        ?RuntimeInvocationContext $context = null,
     ): \Generator {
         $this->sessionContext->set($sessionId);
 
@@ -205,7 +210,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             $this->runRecorder->start(new RunRecorderStartInput(
                 runId: $runId,
                 employeeId: $employeeId,
-                source: 'stream',
+                source: $context?->source ?? 'stream',
                 executionMode: $policy->mode->value,
                 sessionId: $sessionId,
                 actingForUserId: auth()->id(),

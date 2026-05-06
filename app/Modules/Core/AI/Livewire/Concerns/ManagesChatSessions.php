@@ -5,17 +5,11 @@
 
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
-use App\Base\AI\DTO\ChatRequest;
-use App\Base\AI\DTO\ExecutionControls;
-use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
-use App\Base\AI\Services\LlmClient;
 use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\MessageManager;
-use App\Modules\Core\AI\Services\RuntimeCredentialResolver;
-use App\Modules\Core\AI\Services\RuntimeMessageBuilder;
 use App\Modules\Core\AI\Services\SessionManager;
+use App\Modules\Core\AI\Services\SimpleTaskExecutor;
 use App\Modules\Core\User\Models\User;
 
 /**
@@ -221,18 +215,22 @@ trait ManagesChatSessions
             return;
         }
 
-        $config = app(ConfigResolver::class)->resolveTask($this->employeeId, 'titling');
-        if ($config === null) {
-            return;
-        }
+        $title = app(SimpleTaskExecutor::class)->execute(
+            employeeId: $this->employeeId,
+            taskKey: 'titling',
+            messages: $messages,
+            systemPrompt: 'Generate a concise 3–6 word title summarizing this conversation. Reply with only the title, no quotes or punctuation.',
+            maxOutputTokens: 20,
+            timeout: 15,
+            sessionId: $sessionId,
+        );
 
-        $credentials = app(RuntimeCredentialResolver::class)->resolve($config);
-        if (isset($credentials['runtime_error'])) {
-            return;
-        }
-
-        $title = $this->requestGeneratedSessionTitle($messages, $config, $credentials);
         if ($title === null) {
+            return;
+        }
+
+        $title = trim($title, '"\'');
+        if ($title === '') {
             return;
         }
 
@@ -280,43 +278,6 @@ trait ManagesChatSessions
     {
         $this->searchQuery = '';
         $this->searchResults = [];
-    }
-
-    /**
-     * Request a concise session title from the configured LLM.
-     *
-     * @param  array<int, mixed>  $messages
-     * @param  array<string, mixed>  $config
-     * @param  array<string, mixed>  $credentials
-     */
-    private function requestGeneratedSessionTitle(array $messages, array $config, array $credentials): ?string
-    {
-        $apiMessages = app(RuntimeMessageBuilder::class)->build(
-            $messages,
-            'Generate a concise 3–6 word title summarizing this conversation. Reply with only the title, no quotes or punctuation.',
-        );
-
-        $response = app(LlmClient::class)->chat(new ChatRequest(
-            $credentials['base_url'],
-            $credentials['api_key'],
-            $config['model'],
-            $apiMessages,
-            executionControls: ExecutionControls::defaults(
-                maxOutputTokens: 20,
-            ),
-            timeout: 15,
-            providerName: $config['provider_name'] ?? null,
-            apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
-            providerHeaders: $credentials['headers'] ?? [],
-        ));
-
-        if (isset($response['runtime_error'])) {
-            return null;
-        }
-
-        $title = trim($response['content'] ?? '');
-
-        return $title === '' ? null : trim($title, '"\'');
     }
 
     private function syncSelectedSessionState(?string $sessionId, bool $dispatchSelectionEvent = false): void

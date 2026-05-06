@@ -75,7 +75,7 @@ The existing `ManagesAgentModelSelection` trait is coupled to the primary/backup
 
 ### Titling call site
 
-Session-title generation switches from `resolvePrimaryWithDefaultFallback()` to the task-specific resolver so the task model is actually used. This is a simple task — direct `LlmClient::chat()` call with the resolved model, no agentic loop.
+Session-title generation switches from `resolvePrimaryWithDefaultFallback()` to the task-specific resolver so the task model is actually used. This is a simple task — routed through `SimpleTaskExecutor` → `AgenticRuntime` with an empty tool allowlist, so the call is recorded in the Control Plane and wire-logged when enabled.
 
 ### Surface consolidation
 
@@ -160,7 +160,7 @@ Sub-agents spawned for agentic tasks do not have employee records, separate pers
 
 ### Phase 4 — Wire titling runtime
 
-- [x] Change session-title generation to resolve the `titling` task model instead of always using Lara's primary model (simple task — direct `LlmClient::chat()`, no agentic loop)
+- [x] Change session-title generation to resolve the `titling` task model instead of always using Lara's primary model (simple task — routed through `SimpleTaskExecutor` → `AgenticRuntime` with no tools, producing a run record and wire-log evidence)
 - [x] Preserve current behavior as fallback when no task config exists yet
 - [x] Add focused tests for recommended/manual/primary resolution across all three tasks, plus invalid recommendation fallback
 - [x] Verify that `coding` and `research` config resolves correctly before their agentic execution profiles are wired
