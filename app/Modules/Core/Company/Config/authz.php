@@ -4,6 +4,10 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 return [
+    'domains' => [
+        'core' => 'Core platform modules',
+    ],
+
     'capabilities' => [
         'core.company.view',
         'core.company.list',

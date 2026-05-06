@@ -5,6 +5,10 @@
 // are declared by the owning business module, not here.
 
 return [
+    'domains' => [
+        'workflow' => 'Workflow and state transitions',
+    ],
+
     'capabilities' => [
         'workflow.process.manage',
         'workflow.status.manage',

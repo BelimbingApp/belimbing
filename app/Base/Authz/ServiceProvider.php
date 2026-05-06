@@ -70,7 +70,7 @@ class ServiceProvider extends BaseServiceProvider
      * Discover and merge module authz configs into the aggregated config.
      *
      * Scans Base and Module directories for Config/authz.php files,
-     * merging their capabilities and roles into the main authz config.
+     * merging their domains, capabilities, and roles into the main authz config.
      */
     private function discoverModuleAuthzConfigs(): void
     {
@@ -89,6 +89,13 @@ class ServiceProvider extends BaseServiceProvider
                 }
 
                 $moduleConfig = require $file;
+
+                if (isset($moduleConfig['domains'])) {
+                    $config->set('authz.domains', array_merge(
+                        $config->get('authz.domains', []),
+                        $moduleConfig['domains']
+                    ));
+                }
 
                 if (isset($moduleConfig['capabilities'])) {
                     $config->set('authz.capabilities', array_merge(

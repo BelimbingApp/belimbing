@@ -4,6 +4,11 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 return [
+    'domains' => [
+        'it_ticket' => 'IT support ticket management',
+        'workflow' => 'Workflow and state transitions',
+    ],
+
     'capabilities' => [
         'workflow.it_ticket.assign',
         'it_ticket.ticket.create',

@@ -4,6 +4,11 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 return [
+    'domains' => [
+        'quality' => 'Quality management (NCR, CAPA, SCAR)',
+        'workflow' => 'Workflow and state transitions',
+    ],
+
     'capabilities' => [
         // NCR module capabilities
         'quality.ncr.create',

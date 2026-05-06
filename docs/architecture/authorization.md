@@ -241,13 +241,17 @@ Validated by `CapabilityKey` value object (`app/Base/Authz/Capability/Capability
 - Parseable into `{domain, resource, action}`.
 - Agent-specific framework capabilities must use `ai.agent.<action>` or module-owned `*.agent.<action>` patterns.
 
-### 5.2 Module-Owned Capabilities
+### 5.2 Module-Owned Domains and Capabilities
 
-Each module declares its own capabilities in `Config/authz.php`:
+Each module declares its own domains and capabilities in `Config/authz.php`:
 
 ```php
 // app/Modules/Core/User/Config/authz.php
 return [
+    'domains' => [
+        'core' => 'Core platform modules',
+    ],
+
     'capabilities' => [
         'core.user.view',
         'core.user.list',
@@ -258,17 +262,17 @@ return [
 ];
 ```
 
-**Auto-discovery:** The `AuthzServiceProvider` scans these paths at boot and merges capabilities into the aggregated config:
+**Auto-discovery:** The `AuthzServiceProvider` scans these paths at boot and merges domains, capabilities, and roles into the aggregated config:
 - `app/Base/*/Config/authz.php`
 - `app/Modules/*/*/Config/authz.php`
 
 The base `Config/authz.php` holds only:
-- Grammar rules (domains, verbs)
-- Framework-level capabilities not yet owned by a module (e.g., `ai.agent.*`)
+- Global grammar verbs
+- AuthZ-owned domains and capabilities
 - System role definitions that aggregate capabilities across modules
 - Decision log retention config
 
-**Adding capabilities for a new module:** Create `Config/authz.php` in the module directory. No service provider changes needed — the file is auto-discovered. For **Agent** administration capabilities (e.g. `employee.agent.create`, `employee.agent.update`), the vocabulary is defined in [docs/architecture/ai/agent-model.md](ai/agent-model.md) §5.3; AuthZ owns registration and enforcement.
+**Adding capabilities for a new module:** Create `Config/authz.php` in the module directory and declare any new capability domain used by that module. No service provider changes needed — the file is auto-discovered. For **Agent** administration capabilities (e.g. `employee.agent.create`, `employee.agent.update`), the vocabulary is defined in [docs/architecture/ai/agent-model.md](ai/agent-model.md) §5.3; AuthZ owns registration and enforcement.
 
 ### 5.3 Catalog and Registry
 
@@ -369,20 +373,20 @@ AuthZ migrations use prefix `0100_01_11` (Base layer, module 11). See `docs/arch
 
 ### 7.1 System Roles
 
-Defined in `app/Base/Authz/Config/authz.php` under the `roles` key. System roles have `company_id = null` and `is_system = true`. They are seeded by `AuthzRoleSeeder` and `AuthzRoleCapabilitySeeder`.
+Defined in discovered `Config/authz.php` files under the `roles` key. System roles have `company_id = null` and `is_system = true`. They are seeded by `AuthzRoleSeeder` and `AuthzRoleCapabilitySeeder`.
 
 Current system roles:
 
 | Code | Name | Capabilities |
 |------|------|-------------|
-| `core_admin` | Core Administrator | All `core.*` and `ai.agent.*` |
+| `core_admin` | Core Administrator | All configured capabilities via `grant_all` |
 | `user_viewer` | User Viewer | `core.user.list`, `core.user.view` |
 | `user_editor` | User Editor | All `core.user.*` |
 
 ### 7.2 Role Placement
 
 - **Cross-module system roles** (like `core_admin` spanning User + Company + AI capabilities): defined in base `Config/authz.php`.
-- **Module-scoped roles** (only referencing a single module's capabilities): may be defined in the module's own `Config/authz.php` under a `roles` key.
+- **Module-owned roles** (like `user_viewer`, `agent_operator`, and `messaging_operator`): defined in the owning module's `Config/authz.php` under a `roles` key.
 
 ---
 
@@ -573,8 +577,9 @@ app/Base/Authz/
 
 Module capability configs:
 ```
-app/Modules/Core/User/Config/authz.php      # core.user.*
-app/Modules/Core/Company/Config/authz.php    # core.company.*
+app/Modules/Core/User/Config/authz.php      # core domain, core.user.*, user roles
+app/Modules/Core/AI/Config/authz.php        # ai/messaging domains, ai.*, messaging.*, AI roles
+app/Modules/Core/Company/Config/authz.php   # core domain, core.company.*
 ```
 
 ---
