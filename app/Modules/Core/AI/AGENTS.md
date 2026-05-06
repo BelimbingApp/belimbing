@@ -8,7 +8,7 @@ Core AI is the **governance layer** for AI in BLB. It manages company-scoped pro
 - `Models/AiProvider.php` — Company-scoped provider credentials (encrypted API key, `company_id`/`created_by` FKs)
 - `Models/AiProviderModel.php` — Model registry per provider (`model_id`, `is_active`, `is_default`, `cost_override`)
 - `Services/ConfigResolver.php` — Resolves LLM config cascade: agent workspace → company provider → runtime defaults
-- `Services/AgentRuntime.php` — Executes LLM calls with fallback, delegates HTTP to Base `LlmClient`
+- `Services/AgenticRuntime.php` — Core execution path for run-recorded runtime calls (sync + streaming + tool loop)
 - `Services/ModelDiscoveryService.php` — Syncs models from live API + catalog enrichment via Base services
 - `Services/ProviderAuthFlowService.php` — Company-scoped auth lifecycle (delegates to Base `GithubCopilotAuthService`)
 - `Services/SessionManager.php` / `Services/MessageManager.php` — Workspace-based session and message storage
@@ -20,7 +20,7 @@ Core AI reads catalog data from `app/Base/AI/Services/ModelCatalogService`. It d
 | Concern | Base AI (stateless) | Core AI (governance) |
 |---------|---------------------|---------------------|
 | Model catalog | `ModelCatalogService` — fetch, cache, serve | Reads from Base catalog |
-| LLM execution | `LlmClient::chat(...)` | `AgentRuntime` — config + fallback via Base client |
+| LLM execution | `LlmClient::chat(...)` | `AgenticRuntime` — run recording + tool loop + invocation context |
 | Provider discovery | `ProviderDiscoveryService::discoverModels(...)` | `ModelDiscoveryService` — syncs to DB |
 | Auth helpers | `GithubCopilotAuthService` | `ProviderAuthFlowService` — company-scoped lifecycle |
 

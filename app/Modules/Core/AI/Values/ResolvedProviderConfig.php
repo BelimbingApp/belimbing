@@ -9,7 +9,7 @@ namespace App\Modules\Core\AI\Values;
  * Resolved provider configuration consumed by runtime services.
  *
  * Replaces the untyped `['api_key' => ..., 'base_url' => ...]` arrays
- * previously threaded through ConfigResolver → RuntimeCredentialResolver → AgentRuntime.
+ * previously threaded through ConfigResolver → RuntimeCredentialResolver → runtime execution layers.
  */
 final readonly class ResolvedProviderConfig
 {

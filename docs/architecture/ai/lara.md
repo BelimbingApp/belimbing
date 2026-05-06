@@ -425,7 +425,7 @@ The agentic loop runs iteratively: the LLM receives the conversation + tool defi
 |-----------|----------|----------------|
 | `AgentTool` | `app/Modules/Core/AI/Contracts/AgentTool.php` | Interface for all agent tools — name, description, parameters schema, authz capability, execute |
 | `AgentToolRegistry` | `app/Modules/Core/AI/Services/AgentToolRegistry.php` | Discovers and registers tools, generates OpenAI-format definitions filtered by user authz, dispatches execution |
-| `AgenticRuntime` | `app/Modules/Core/AI/Services/AgenticRuntime.php` | Agentic loop: LLM call → tool execution → feed results → repeat. Uses same config resolution as `AgentRuntime` |
+| `AgenticRuntime` | `app/Modules/Core/AI/Services/AgenticRuntime.php` | Agentic loop: LLM call → tool execution → feed results → repeat. Uses Core AI config resolution and records runs/wire context |
 | `LlmClient` (updated) | `app/Base/AI/Services/LlmClient.php` | Now supports `tools` and `toolChoice` parameters, parses `tool_calls` from LLM response |
 | `ArtisanTool` | `app/Modules/Core/AI/Tools/ArtisanTool.php` | Execute `php artisan` commands (process-isolated, no shell) |
 | `BashTool` | `app/Modules/Core/AI/Tools/BashTool.php` | Execute arbitrary bash commands (30s timeout, project root) |

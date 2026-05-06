@@ -158,17 +158,17 @@ Goal: either move Core AI utilities onto run-level tracing or explicitly mark th
 
 Goal: Base features still produce evidence when wire logging is enabled.
 
-- [ ] Update `Base/Database` SQL generation to request a Base AI trace context and attach its tap to `ChatRequest`.
-- [ ] Use a source label such as `base_database_query_generator` and include the query/user-facing action context needed for operator diagnosis without leaking secrets.
-- [ ] Keep Base AI and Base Database free of direct Core Control Plane imports.
+- [x] Update `Base/Database` SQL generation to request a Base AI trace context and attach its tap to `ChatRequest`. {Copilot/GPT-5.3-Codex}
+- [x] Use a source label such as `base_database_query_generator` and include the query/user-facing action context needed for operator diagnosis without leaking secrets. {Copilot/GPT-5.3-Codex}
+- [x] Keep Base AI and Base Database free of direct Core Control Plane imports. {Copilot/GPT-5.3-Codex}
 
 ### Phase 5 — Remove legacy adapter footguns
 
 Goal: remove attractive but unsafe paths.
 
-- [ ] Delete `AgentRuntime` if it is unused, or refactor it to attach wire taps at minimum and clearly document its intended usage boundary.
-- [ ] Remove the `AgentRuntime` singleton binding if no production caller remains.
-- [ ] Update module documentation and `AGENTS.md` references that still present `AgentRuntime` as the Core execution path.
+- [x] Delete `AgentRuntime` if it is unused, or refactor it to attach wire taps at minimum and clearly document its intended usage boundary. {Copilot/GPT-5.3-Codex}
+- [x] Remove the `AgentRuntime` singleton binding if no production caller remains. {Copilot/GPT-5.3-Codex}
+- [x] Update module documentation and `AGENTS.md` references that still present `AgentRuntime` as the Core execution path. {Copilot/GPT-5.3-Codex}
 
 ### Phase 6 — Regression guardrails
 

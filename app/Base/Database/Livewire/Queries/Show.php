@@ -5,6 +5,7 @@
 
 namespace App\Base\Database\Livewire\Queries;
 
+use App\Base\AI\Contracts\Tracing\LlmTraceContextFactory;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
@@ -62,6 +63,8 @@ class Show extends Component
     public string $shareSearch = '';
 
     public string $shareSuccess = '';
+
+    private const TRACE_SOURCE = 'base_database_query_generator';
 
     /**
      * Result grid sort: column name from the last successful result set, or empty when none.
@@ -235,6 +238,12 @@ class Show extends Component
             }
 
             $schemaContext = $this->buildSchemaContext();
+            $traceContext = app(LlmTraceContextFactory::class)->start(self::TRACE_SOURCE, [
+                'action' => 'generate_sql',
+                'query_slug' => $this->query?->slug,
+                'is_new' => $this->isNew,
+                'selected_model_id' => $this->selectedModelId,
+            ]);
 
             $result = app(LlmClient::class)->chat(new ChatRequest(
                 baseUrl: $config['base_url'],
@@ -275,6 +284,7 @@ class Show extends Component
                 timeout: 30,
                 providerName: $config['provider_name'],
                 apiType: $config['api_type'] ?? AiApiType::OpenAiChatCompletions,
+                transportTap: $traceContext->transportTap,
             ));
 
             if (isset($result['runtime_error'])) {

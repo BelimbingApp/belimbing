@@ -105,7 +105,7 @@ OpenClaw organizes tools into groups with an allow/deny policy system:
 | Component | Status | Notes |
 |-----------|--------|-------|
 | `LlmClient` | ✅ Done | Stateless OpenAI-compatible chat with tool support |
-| `AgentRuntime` | ✅ Done | Config cascade + ordered fallback |
+| `AgenticRuntime` | ✅ Done | Run-recorded execution path (sync/stream/tool loop) with invocation context |
 | `ConfigResolver` | ✅ Done | agent workspace → company provider → global defaults |
 | `ModelCatalogService` | ✅ Done | models.dev catalog fetch + cache |
 | `ProviderDiscoveryService` | ✅ Done | Live `/models` endpoint discovery |

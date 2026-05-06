@@ -27,7 +27,6 @@ use App\Modules\Core\AI\Console\Commands\SchedulesTickCommand;
 use App\Modules\Core\AI\Console\Commands\SweepStaleTurnsCommand;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgenticRuntime;
-use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\AgentTaskPromptFactory;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\BackgroundCommandService;
@@ -149,7 +148,6 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(LaraTaskExecutionProfileRegistry::class);
         $this->app->singleton(LaraTaskProfileSelector::class);
         $this->app->singleton(TaskModelRecommendationService::class);
-        $this->app->singleton(AgentRuntime::class);
         $this->app->singleton(ProviderAuthFlowService::class);
         $this->app->singleton(LaraContextProvider::class);
         $this->app->singleton(LaraCapabilityMatcher::class);

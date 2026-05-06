@@ -13,7 +13,6 @@ use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
 use App\Modules\Core\AI\Services\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgenticToolLoopStreamReader;
-use App\Modules\Core\AI\Services\AgentRuntime;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
@@ -164,19 +163,6 @@ trait MakesRuntimeResponses
             app(RuntimeSessionContext::class),
             \Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
             app(AgenticExecutionControlResolver::class),
-        );
-    }
-
-    protected function makeAgentRuntime(
-        ConfigResolver $configResolver,
-        LlmClient $llmClient,
-    ): AgentRuntime {
-        return new AgentRuntime(
-            $configResolver,
-            $llmClient,
-            $this->makePassthroughCredentialResolver(),
-            new RuntimeMessageBuilder,
-            new RuntimeResponseFactory,
         );
     }
 
