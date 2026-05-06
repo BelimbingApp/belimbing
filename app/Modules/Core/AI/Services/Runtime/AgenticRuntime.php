@@ -39,9 +39,9 @@ use Illuminate\Support\Str;
  */
 class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted collaborators handle complexity without changing behaviour
 {
-    private const MAX_TOOL_LOOP_ITERATIONS = 8;
+    private const MAX_TOOL_LOOP_ITERATIONS = 24;
 
-    private const MAX_TOOL_CALLS_PER_RUN = 20;
+    private const MAX_TOOL_CALLS_PER_RUN = 80;
 
     private const MAX_TOOL_RESULT_CHARS = 20000;
 

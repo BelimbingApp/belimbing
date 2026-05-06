@@ -394,7 +394,7 @@ describe('AgenticRuntime (sync tool loop)', function () {
     it('stops sync tool loops at the iteration cap', function () {
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chat')
-            ->times(8)
+            ->times(24)
             ->andReturn($this->makeToolCallResponse('call_001', 'echo_tool', '{"input": "world"}'));
 
         $result = runAgenticConversation(
@@ -405,7 +405,7 @@ describe('AgenticRuntime (sync tool loop)', function () {
         );
 
         expect($result['meta']['error_type'])->toBe('unexpected_error')
-            ->and($result['meta']['diagnostic'])->toContain('Tool loop exceeded 8 iterations');
+            ->and($result['meta']['diagnostic'])->toContain('Tool loop exceeded 24 iterations');
     });
 
     it('records one usage call per successful synchronous tool-loop iteration', function () {
