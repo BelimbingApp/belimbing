@@ -19,10 +19,12 @@ it('contains metadata for all built-in tools', function () {
     expect($all)->toHaveCount(26);
 
     // Spot-check a few well-known tools
-    expect($registry->has('query_data'))->toBeTrue();
     expect($registry->has('web_search'))->toBeTrue();
     expect($registry->has('system_info'))->toBeTrue();
     expect($registry->has('bash'))->toBeTrue();
+    expect($registry->has('read'))->toBeTrue();
+    expect($registry->has('search'))->toBeTrue();
+    expect($registry->has('edit'))->toBeTrue();
 });
 
 it('returns null for unknown tool name', function () {

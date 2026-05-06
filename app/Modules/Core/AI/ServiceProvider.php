@@ -26,7 +26,6 @@ use App\Modules\Core\AI\Console\Commands\ReapOrphanRunsCommand;
 use App\Modules\Core\AI\Console\Commands\SchedulesTickCommand;
 use App\Modules\Core\AI\Console\Commands\SweepStaleTurnsCommand;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
-use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Modules\Core\AI\Services\AgentTaskPromptFactory;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\BackgroundCommandService;
@@ -70,6 +69,7 @@ use App\Modules\Core\AI\Services\Messaging\OutboundMessageService;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use App\Modules\Core\AI\Services\OperationsDispatchService;
 use App\Modules\Core\AI\Services\Orchestration\AgentCapabilityCatalog;
+use App\Modules\Core\AI\Services\Orchestration\FilesystemSkillPackLoader;
 use App\Modules\Core\AI\Services\Orchestration\OrchestrationPolicyService;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRegistry;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRunner;
@@ -82,6 +82,8 @@ use App\Modules\Core\AI\Services\PageContextHolder;
 use App\Modules\Core\AI\Services\PageContextResolver;
 use App\Modules\Core\AI\Services\Pricing\RefreshPricingSnapshot;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
+use App\Modules\Core\AI\Services\RepositorySurfaceResolver;
+use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Modules\Core\AI\Services\Runtime\RuntimeSessionContext;
 use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionService;
 use App\Modules\Core\AI\Services\Scheduling\SchedulePlanner;
@@ -101,8 +103,7 @@ use App\Modules\Core\AI\Tools\BrowserTool;
 use App\Modules\Core\AI\Tools\DelegateTaskTool;
 use App\Modules\Core\AI\Tools\DelegationStatusTool;
 use App\Modules\Core\AI\Tools\DocumentAnalysisTool;
-use App\Modules\Core\AI\Tools\EditDataTool;
-use App\Modules\Core\AI\Tools\EditFileTool;
+use App\Modules\Core\AI\Tools\EditTool;
 use App\Modules\Core\AI\Tools\GuideTool;
 use App\Modules\Core\AI\Tools\ImageAnalysisTool;
 use App\Modules\Core\AI\Tools\MemoryGetTool;
@@ -111,8 +112,9 @@ use App\Modules\Core\AI\Tools\MemoryStatusTool;
 use App\Modules\Core\AI\Tools\MessageTool;
 use App\Modules\Core\AI\Tools\NavigateTool;
 use App\Modules\Core\AI\Tools\NotificationTool;
-use App\Modules\Core\AI\Tools\QueryDataTool;
+use App\Modules\Core\AI\Tools\ReadTool;
 use App\Modules\Core\AI\Tools\ScheduleTaskTool;
+use App\Modules\Core\AI\Tools\SearchTool;
 use App\Modules\Core\AI\Tools\SystemInfoTool;
 use App\Modules\Core\AI\Tools\TicketUpdateTool;
 use App\Modules\Core\AI\Tools\VisibleNavMenuSnapshotTool;
@@ -149,6 +151,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(LaraTaskProfileSelector::class);
         $this->app->singleton(TaskModelRecommendationService::class);
         $this->app->singleton(ProviderAuthFlowService::class);
+        $this->app->singleton(RepositorySurfaceResolver::class);
         $this->app->singleton(LaraContextProvider::class);
         $this->app->singleton(LaraCapabilityMatcher::class);
         $this->app->singleton(LaraTaskDispatcher::class);
@@ -179,6 +182,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(TaskRoutingService::class);
         $this->app->singleton(SessionSpawnManager::class);
         $this->app->singleton(SkillPackRegistry::class);
+        $this->app->singleton(FilesystemSkillPackLoader::class);
         $this->app->singleton(SkillContextResolver::class);
         $this->app->singleton(RuntimeHookRegistry::class);
         $this->app->singleton(RuntimeHookRunner::class);
@@ -276,6 +280,12 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->afterResolving(SkillPackRegistry::class, function (SkillPackRegistry $registry): void {
             $pack = $this->app->make(KnowledgeSkillPack::class);
             $registry->register($pack->manifest());
+
+            foreach ($this->app->make(FilesystemSkillPackLoader::class)->load() as $manifest) {
+                if (! $registry->has($manifest->id)) {
+                    $registry->register($manifest);
+                }
+            }
         });
     }
 
@@ -349,8 +359,7 @@ class ServiceProvider extends BaseServiceProvider
             $app->make(DelegateTaskTool::class),
             $app->make(DelegationStatusTool::class),
             new DocumentAnalysisTool,
-            new EditDataTool,
-            new EditFileTool,
+            $app->make(EditTool::class),
             $app->make(GuideTool::class),
             new ImageAnalysisTool,
             $this->buildMemoryGetTool($app),
@@ -359,8 +368,9 @@ class ServiceProvider extends BaseServiceProvider
             new NavigateTool,
             $app->make(VisibleNavMenuSnapshotTool::class),
             new NotificationTool,
-            new QueryDataTool,
+            $app->make(ReadTool::class),
             $app->make(ScheduleTaskTool::class),
+            $app->make(SearchTool::class),
             new SystemInfoTool,
             $app->make(TicketUpdateTool::class),
             $app->make(WebFetchTool::class),

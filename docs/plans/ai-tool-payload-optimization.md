@@ -1,9 +1,11 @@
 # AI Tool Payload Optimization
 
 **Agent:** Amp
-**Status:** Phase 1 Complete, Phase 2 Near-Complete — Phase 3 design revised after review
-**Last Updated:** 2026-04-21
-**Sources:** `storage/app/ai/wire-logs/run_9A4JM8k82gI7.jsonl`, `app/Modules/Core/AI/Services/AgentToolRegistry.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/LaraTaskExecutionProfileRegistry.php`, `app/Modules/Core/AI/Services/ChatToolProfileRegistry.php`, `app/Modules/Core/AI/Resources/lara/system_prompt.md`, `app/Base/Authz/Config/authz.php`
+**Status:** Superseded by Lara minimal default allowlist
+**Last Updated:** 2026-05-06
+**Sources:** `storage/app/ai/wire-logs/run_9A4JM8k82gI7.jsonl`, `app/Modules/Core/AI/Services/AgentToolRegistry.php`, `app/Modules/Core/AI/Services/AgenticRuntime.php`, `app/Modules/Core/AI/Services/LaraTaskExecutionProfileRegistry.php`, `app/Modules/Core/AI/Services/ChatTurnRunner.php`, `app/Modules/Core/AI/Resources/lara/system_prompt.md`, `app/Base/Authz/Config/authz.php`
+
+> Supersession note: BLB no longer uses named interactive chat tool profiles. Lara now uses one minimal default allowlist in `ChatTurnRunner`, with authz, environment policy, and tool guardrails as the real boundaries. The older profile ladder remains below as historical context only.
 
 ## Problem Essence
 

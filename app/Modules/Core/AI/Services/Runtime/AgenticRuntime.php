@@ -39,6 +39,12 @@ use Illuminate\Support\Str;
  */
 class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted collaborators handle complexity without changing behaviour
 {
+    private const MAX_TOOL_LOOP_ITERATIONS = 8;
+
+    private const MAX_TOOL_CALLS_PER_RUN = 20;
+
+    private const MAX_TOOL_RESULT_CHARS = 20000;
+
     public function __construct(
         private readonly ConfigResolver $configResolver,
         private readonly LlmClient $llmClient,
@@ -363,11 +369,22 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             $hookMetadata['pre_tool_registry_removed'] = $removedTools;
         }
 
-        $this->recordProfileWireEvent($runId, $allowedToolNames, $tools);
+        $this->recordToolAllowlistWireEvent($runId, $allowedToolNames, $tools);
 
         $iteration = 0;
+        $toolCallCount = 0;
 
         while (true) {
+            if ($iteration >= self::MAX_TOOL_LOOP_ITERATIONS) {
+                return $this->toolLoopLimitResult(
+                    $runId,
+                    $config,
+                    'Tool loop exceeded '.self::MAX_TOOL_LOOP_ITERATIONS.' iterations.',
+                    $retryAttempts,
+                    $hookMetadata,
+                );
+            }
+
             // Hook: PreLlmCall — observe or augment before each LLM call
             $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $hookMetadata);
 
@@ -408,6 +425,17 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return $successResult;
             }
 
+            $nextToolCallCount = $toolCallCount + count($result['tool_calls'] ?? []);
+            if ($nextToolCallCount > self::MAX_TOOL_CALLS_PER_RUN) {
+                return $this->toolLoopLimitResult(
+                    $runId,
+                    $config,
+                    'Tool loop exceeded '.self::MAX_TOOL_CALLS_PER_RUN.' tool calls.',
+                    $retryAttempts,
+                    $hookMetadata,
+                );
+            }
+
             $this->appendAssistantToolCallMessage($apiMessages, $result);
             $this->executeToolCallsWithHooks(
                 $runId,
@@ -420,6 +448,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 $allowedToolNames,
             );
 
+            $toolCallCount = $nextToolCallCount;
             $iteration++;
         }
     }
@@ -606,6 +635,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
     private function buildToolExecution(string $functionName, array $arguments, string $toolCallId, ToolResult $toolResult): array
     {
         $resultString = (string) $toolResult;
+        $originalLength = mb_strlen($resultString);
 
         $action = [
             'tool' => $functionName,
@@ -622,6 +652,12 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             $clientActions = $matches[0];
         }
 
+        if ($originalLength > self::MAX_TOOL_RESULT_CHARS) {
+            $resultString = Str::limit($resultString, self::MAX_TOOL_RESULT_CHARS, "\n\n[Tool result truncated before returning to the model. Use bash or a narrower command for more detail.]");
+            $action['result_truncated'] = true;
+            $action['result_length'] = $originalLength;
+        }
+
         return [
             'action' => $action,
             'client_actions' => $clientActions,
@@ -631,6 +667,34 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 'content' => $resultString,
             ],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $retryAttempts
+     * @param  array<string, mixed>  $hookMetadata
+     * @return array{content: string, run_id: string, meta: array<string, mixed>}
+     */
+    private function toolLoopLimitResult(
+        string $runId,
+        array $config,
+        string $diagnostic,
+        array $retryAttempts,
+        array $hookMetadata,
+    ): array {
+        $runtimeError = AiRuntimeError::fromType(AiErrorType::UnexpectedError, $diagnostic);
+        $this->runRecorder->fail($runId, $runtimeError);
+
+        $errorResult = $this->responseFactory->error(
+            $runId,
+            $config['model'],
+            (string) ($config['provider_name'] ?? 'unknown'),
+            $runtimeError,
+        );
+        $errorResult['meta']['retry_attempts'] = $retryAttempts;
+        $errorResult['meta']['hooks'] = $hookMetadata;
+
+        return $errorResult;
     }
 
     /**
@@ -745,6 +809,19 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
 
         while (true) {
+            if ($iteration >= self::MAX_TOOL_LOOP_ITERATIONS) {
+                $runtimeError = AiRuntimeError::fromType(
+                    AiErrorType::UnexpectedError,
+                    'Tool loop exceeded '.self::MAX_TOOL_LOOP_ITERATIONS.' iterations.',
+                );
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+                $this->runRecorder->fail($runId, $runtimeError);
+
+                yield $this->streamRuntimeErrorEvent($runId, $config, $runtimeError, $toolLoopState);
+
+                return;
+            }
+
             // Turn is blocked on the model round-trip for this loop iteration.
             yield ['event' => 'status', 'data' => [
                 'phase' => TurnPhase::AwaitingLlm->value,
@@ -789,6 +866,19 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                     $iterResult,
                     $toolLoopState,
                 );
+
+                return;
+            }
+
+            if ($toolIndex + count($iterResult['tool_calls'] ?? []) > self::MAX_TOOL_CALLS_PER_RUN) {
+                $runtimeError = AiRuntimeError::fromType(
+                    AiErrorType::UnexpectedError,
+                    'Tool loop exceeded '.self::MAX_TOOL_CALLS_PER_RUN.' tool calls.',
+                );
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+                $this->runRecorder->fail($runId, $runtimeError);
+
+                yield $this->streamRuntimeErrorEvent($runId, $config, $runtimeError, $toolLoopState);
 
                 return;
             }
@@ -956,7 +1046,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             $hookMetadata['pre_tool_registry_removed'] = $removedTools;
         }
 
-        $this->recordProfileWireEvent($runId, $allowedToolNames, $tools);
+        $this->recordToolAllowlistWireEvent($runId, $allowedToolNames, $tools);
 
         return [
             'apiMessages' => $apiMessages,
@@ -1241,12 +1331,12 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
     }
 
     /**
-     * Record which tool profile was selected for this run.
+     * Record which tool allowlist was selected for this run.
      *
      * @param  list<string>|null  $allowedToolNames
      * @param  list<array<string, mixed>>  $tools
      */
-    private function recordProfileWireEvent(string $runId, ?array $allowedToolNames, array $tools): void
+    private function recordToolAllowlistWireEvent(string $runId, ?array $allowedToolNames, array $tools): void
     {
         if (! $this->wireLogger->enabled()) {
             return;
@@ -1255,8 +1345,8 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         $toolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
 
         $this->wireLogger->append($runId, [
-            'type' => 'profile.selected',
-            'profile_tools' => $allowedToolNames,
+            'type' => 'tool_allowlist.selected',
+            'allowed_tools' => $allowedToolNames,
             'effective_tools' => $toolNames,
             'tool_count' => count($toolNames),
         ]);

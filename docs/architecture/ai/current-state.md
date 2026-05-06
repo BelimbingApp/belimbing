@@ -3,8 +3,8 @@
 **Document Type:** Implementation Reference
 **Status:** Active
 **Purpose:** Source of truth for BLB AI features implemented in code
-**Coverage:** OpenClaw parity Phases 1-6, Claw Code runtime parity (hook transcript entries + approval visibility), AI Run Ledger Phases 0-3, and Lara direct-stream transport delivery
-**Last Updated:** 2026-04-14
+**Coverage:** OpenClaw parity Phases 1-6, Claw Code runtime parity, AI Run Ledger Phases 0-3, Lara direct-stream transport, and Lara resident coding-agent baseline
+**Last Updated:** 2026-05-06
 **Related:** [agent-model.md](agent-model.md), [lara.md](lara.md), [capability-map.md](capability-map.md), `docs/Base/AI/tool-framework.md`
 
 ---
@@ -34,6 +34,7 @@ It covers the completed OpenClaw parity work through Phase 6, the delivered Claw
 6. Operator control plane and policy depth
 7. Claw Code runtime parity gaps around hook visibility, transcript fidelity, and usage reconstruction
 8. Run ledger, activity stream, execution policy, and Lara direct-stream chat UX
+9. Lara minimal default tool allowlist, repository tools, and ownership-scoped filesystem skills
 
 ---
 
@@ -313,6 +314,41 @@ Implementation notes:
 - the live transport for Lara chat is direct HTTP streaming
 - `ai_chat_turn_events` is the durable source of truth for replay, resume, and ordered recovery
 
+### 5.8 Lara Resident Coding-Agent Baseline
+
+Implemented outcome:
+
+- Lara's default interactive path uses one minimal tool allowlist instead of named chat profiles
+- the default interactive allowlist keeps `bash` and `browser`, still filtered by the logged-in user's capabilities
+- repository work has an explicit target surface: `core` or `extension:<slug>`
+- core repository tools reject extension paths unless the caller selects the matching extension surface
+- extension surfaces are discovered under `extensions/`, `extensions/custom/`, `extensions/vendor/`, and `resources/extensions/`
+- filesystem skills are loaded from BLB core and extension-owned `.agents/skills/*/SKILL.md` roots
+- broad `read`, `search`, and `edit` tools remain registered for explicit profiles and future agents, but are not Lara's default coding/chat path
+
+Implemented services and tools:
+
+- `RepositorySurfaceResolver`
+- `FilesystemSkillPackLoader`
+- Lara default allowlist in `ChatTurnRunner`
+- `read`
+- `search`
+- target-surface aware `edit`
+
+Repository tool behavior:
+
+- `read` reads project files with denied secret/dependency/generated paths and a byte limit, and can run guarded read-only data queries
+- `search` searches paths or contents inside the selected surface, excluding dependency, generated, VCS, and environment files
+- `edit` supports file write, append, and exact single-match replacement scoped to the selected surface, and can run guarded data writes
+- repository diffs are intentionally left to `bash`/git instead of a separate tool
+
+Remaining gaps:
+
+- repository write results do not yet persist before/after snapshots in run metadata
+- remote/origin enforcement for core vs extension repositories is not complete
+- automatic cross-surface work splitting and completion-evidence policy are runtime work, not yet enforced
+- filesystem skills are loaded and ownership-labelled, but task-time filtering and operator lifecycle UI are still pending
+
 ---
 
 ## 6. Tool Inventory
@@ -330,7 +366,7 @@ Core/general tools:
 
 Data and knowledge tools:
 
-- `query_data`
+- `read`
 - `guide`
 - `memory_get`
 - `memory_search`
@@ -352,8 +388,8 @@ Coordination and operations tools:
 Browser and editing tools:
 
 - `browser`
-- `edit_file`
-- `edit_data`
+- `edit`
+- `search`
 - `ticket_update`
 
 The tool framework itself is documented in `docs/Base/AI/tool-framework.md`. This document is concerned with which tools are implemented and how they fit the runtime.
@@ -416,7 +452,7 @@ Use the companion docs for that:
 
 ## 10. Status Summary
 
-As of 2026-04-09, BLB's AI system includes:
+As of 2026-05-06, BLB's AI system includes:
 
 1. provider and model management
 2. workspace-driven prompt assembly
@@ -432,5 +468,7 @@ As of 2026-04-09, BLB's AI system includes:
 12. direct Lara turn streaming with persisted event replay and gap-fill recovery
 13. session token usage reconstruction from `ai_runs` with transcript fallback
 14. per-agent backup model configuration (max 2 entries in `llm.models[]`) with UI-configurable backup provider+model, inline fallback notices, and thread-level fallback banners
+15. Lara's minimal default interactive tool allowlist with registered repository read/search/edit capabilities
+16. ownership-scoped filesystem skills for BLB core and extension roots
 
 This is the current implementation baseline.

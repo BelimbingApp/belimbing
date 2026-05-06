@@ -85,7 +85,7 @@ it('builds a descriptor with structured capabilities from metadata', function ()
         'domains' => [CATALOG_DOMAIN_IT_SUPPORT, CATALOG_DOMAIN_CODE_REVIEW],
         'task_types' => [CATALOG_TASK_RESOLVE_TICKET],
         'specialties' => [CATALOG_SPECIALTY_DATABASE],
-        'tool_access' => ['query_data', 'edit_data'],
+        'tool_access' => ['read', 'edit'],
         'requires_human_review' => true,
         'meta' => ['maturity' => 'beta'],
     ], [
@@ -101,7 +101,7 @@ it('builds a descriptor with structured capabilities from metadata', function ()
         ->and($descriptor->domains)->toBe([CATALOG_DOMAIN_IT_SUPPORT, CATALOG_DOMAIN_CODE_REVIEW])
         ->and($descriptor->taskTypes)->toBe([CATALOG_TASK_RESOLVE_TICKET])
         ->and($descriptor->specialties)->toBe([CATALOG_SPECIALTY_DATABASE])
-        ->and($descriptor->toolAccess)->toBe(['query_data', 'edit_data'])
+        ->and($descriptor->toolAccess)->toBe(['read', 'edit'])
         ->and($descriptor->requiresHumanReview)->toBeTrue()
         ->and($descriptor->meta)->toBe(['maturity' => 'beta'])
         ->and($descriptor->hasStructuredCapabilities())->toBeTrue()

@@ -118,7 +118,7 @@ OpenClaw organizes tools into groups with an allow/deny policy system:
 | OpenClaw Capability | BLB Equivalent | Gap |
 |---------------------|----------------|-----|
 | `exec` + `process` | `bash` tool + background command dispatch ledger | Implemented shell execution and queued background work, but not OpenClaw-style process-session polling |
-| `read` / `write` / `edit` | `edit_file` / `edit_data` tools | Partial parity; BLB favors deeper editing tools over a raw read/write/apply_patch suite |
+| `read` / `search` / `edit` | Broad `read`, `search`, and `edit` tools | Implemented as a small agent-facing surface over repository and data operations |
 | `web_search` / `web_fetch` | `web_search` / `web_fetch` tools | Implemented |
 | `browser` | `BrowserTool` + persistent browser session subsystem | Implemented; differs from OpenClaw by using BLB-managed server-side browser infrastructure |
 | `memory_search` / `memory_get` | `memory_search` / `memory_get` tools + per-agent memory index | Implemented |
@@ -160,12 +160,12 @@ OpenClaw organizes tools into groups with an allow/deny policy system:
 
 These tools directly serve Lara's core mission and build on existing infrastructure.
 
-**1a. `QueryDataTool`** — Execute read-only database queries
+**1a. `read` data mode** — Execute read-only database queries
 - **OpenClaw parallel:** Part of `exec` (running SQL via CLI)
 - **BLB approach:** A dedicated tool with SQL validation, query limits, read-only enforcement (`SELECT` only), and result formatting
 - **Parameters:** `query` (SQL string), `limit` (max rows, default 50)
 - **Safety:** Parse SQL to reject writes (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `TRUNCATE`). Statement timeout. Row count cap.
-- **Capability:** `ai.tool_query_data.execute`
+- **Capability:** `ai.tool_read.execute`
 - **Value:** Lara can answer data questions ("How many employees are active?", "Show recent orders") without piping through artisan tinker
 
 **1b. `WebSearchTool`** — Search the web for information
@@ -596,7 +596,9 @@ Every tool in BLB declares a `requiredCapability()`. The supervisor grants or re
 |------|-----------|-------|-------------|
 | `artisan` | `ai.tool_artisan.execute` | Existing | Run `php artisan` commands |
 | `navigate` | `ai.tool_navigate.execute` | Existing | Client-side SPA navigation |
-| `query_data` | `ai.tool_query_data.execute` | 1 | Read-only SQL queries |
+| `read` | `ai.tool_read.execute` | 1 | Read files and read-only SQL data |
+| `search` | `ai.tool_search.execute` | 1 | Search repository paths and file contents |
+| `edit` | `ai.tool_edit.execute` | 1 | Edit files and guarded data |
 | `web_search` | `ai.tool_web_search.execute` | 1 | Web search via provider API |
 | `web_fetch` | `ai.tool_web_fetch.execute` | 1 | Fetch + extract URL content |
 | `system_info` | `ai.tool_system_info.execute` | 1 | BLB instance state |
@@ -623,7 +625,7 @@ A sales manager creates a "Lead Qualifier" agent and grants:
 - ✅ `messaging.linkedin.send` — post to LinkedIn Company Page
 - ✅ `ai.tool_web_search.execute` — research prospects
 - ✅ `ai.tool_web_fetch.execute` — read prospect websites
-- ✅ `ai.tool_query_data.execute` — look up CRM data
+- ✅ `ai.tool_read.execute` — look up CRM data
 - ❌ `ai.tool_artisan.execute` — no system commands
 - ❌ `ai.tool_browser.execute` — no browser automation
 - ❌ `messaging.telegram.send` — not needed for this role
@@ -672,7 +674,7 @@ Map OpenClaw's config-file tool groups to BLB's authz role system:
 | BLB Authz Role | Tools Included | OpenClaw Equivalent |
 |----------------|----------------|---------------------|
 | `lara_viewer` | `system_info`, `guide`, `agent_list`, `delegation_status` | `minimal` |
-| `lara_analyst` | Above + `query_data`, `web_search`, `web_fetch`, `memory_search`, `memory_get` | `coding` (adapted) |
+| `lara_analyst` | Above + `read`, `web_search`, `web_fetch`, `memory_search`, `memory_get` | `coding` (adapted) |
 | `lara_operator` | Above + `navigate`, `delegate_task`, `schedule_task`, `notification`, `message` | `messaging` (adapted) |
 | `agent_power_user` | All tools including `artisan`, `browser`, `write_js`, `document_analysis`, `image_analysis` | `full` |
 
@@ -938,7 +940,7 @@ Lara should be able to help admins configure tool settings conversationally. Ins
 |------|----------------------|
 | `web_search` | `provider` (parallel/brave), `{provider}.api_key`, `default_count` |
 | `web_fetch` | `max_chars`, `timeout_seconds`, `ssrf_allow_private` |
-| `query_data` | `max_rows`, `timeout_seconds`, `allowed_tables` (optional allowlist) |
+| `read` | `max_rows`, `timeout_seconds`, `allowed_tables` (optional allowlist) |
 | `browser` | `enabled`, `max_contexts`, `evaluate_enabled` |
 | `message` | Channel-level enable/disable, rate limits |
 

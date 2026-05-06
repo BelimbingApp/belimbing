@@ -33,9 +33,21 @@ class ChatTurnRunner
         private readonly ChatRunPersister $persister,
         private readonly TurnStreamBridge $bridge,
         private readonly TurnEventPublisher $turnPublisher,
-        private readonly ChatToolProfileRegistry $profileRegistry,
         private readonly SessionManager $sessionManager,
     ) {}
+
+    /**
+     * Minimal default tool surface for interactive agents.
+     *
+     * Authz and tool guardrails still filter execution. This list only avoids
+     * sending duplicate or non-essential tools to the model by default.
+     *
+     * @var list<string>
+     */
+    public const DEFAULT_INTERACTIVE_AGENT_TOOL_NAMES = [
+        'bash',
+        'browser',
+    ];
 
     /**
      * Execute a chat turn through the streaming runtime pipeline.
@@ -60,8 +72,6 @@ class ChatTurnRunner
 
         $messages = $this->messageManager->read($employeeId, $sessionId);
         [$systemPrompt, $promptMeta] = $this->resolvePromptPackage($employeeId, $messages);
-        $allowedToolNames = $this->resolveToolProfile($runtimeMeta);
-
         $runtimeContext = new ChatTurnRuntimeContext(
             employeeId: $employeeId,
             sessionId: $sessionId,
@@ -70,7 +80,7 @@ class ChatTurnRunner
             modelOverride: $modelOverride,
             policy: $this->resolveExecutionPolicy($turn),
             promptMeta: $promptMeta,
-            allowedToolNames: $allowedToolNames,
+            allowedToolNames: self::DEFAULT_INTERACTIVE_AGENT_TOOL_NAMES,
             executionControlsOverride: $this->sessionManager->getExecutionControlsOverride($employeeId, $sessionId),
         );
 
@@ -255,23 +265,6 @@ class ChatTurnRunner
         }
 
         return ExecutionPolicy::interactive();
-    }
-
-    /**
-     * Resolve the tool allowlist from the turn's tool profile.
-     *
-     * Reads `tool_profile` from runtime_meta if set; otherwise defaults
-     * to the registry's default profile. Returns null when all tools
-     * should be available.
-     *
-     * @param  array<string, mixed>  $runtimeMeta
-     * @return list<string>|null
-     */
-    private function resolveToolProfile(array $runtimeMeta): ?array
-    {
-        $profileKey = $runtimeMeta['tool_profile'] ?? ChatToolProfileRegistry::DEFAULT_PROFILE;
-
-        return $this->profileRegistry->resolve($profileKey);
     }
 
     private function markCurrentRunCancelled(?string $runId): void

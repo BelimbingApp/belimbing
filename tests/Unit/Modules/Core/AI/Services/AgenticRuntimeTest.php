@@ -16,14 +16,14 @@ use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
-use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
-use App\Modules\Core\AI\Services\Runtime\AgenticToolLoopStreamReader;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRegistry;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRunner;
+use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
+use App\Modules\Core\AI\Services\Runtime\AgenticToolLoopStreamReader;
 use App\Modules\Core\AI\Services\Runtime\RuntimeHookCoordinator;
 use App\Modules\Core\AI\Services\Runtime\RuntimeMessageBuilder;
 use App\Modules\Core\AI\Services\Runtime\RuntimeResponseFactory;
@@ -389,6 +389,23 @@ describe('AgenticRuntime (sync tool loop)', function () {
         expect($result['meta']['tool_actions'])->toHaveCount(1);
         expect($result['meta']['tool_actions'][0]['tool'])->toBe('echo_tool');
         expect($result['meta']['tool_actions'][0]['arguments'])->toBe(['input' => 'world']);
+    });
+
+    it('stops sync tool loops at the iteration cap', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')
+            ->times(8)
+            ->andReturn($this->makeToolCallResponse('call_001', 'echo_tool', '{"input": "world"}'));
+
+        $result = runAgenticConversation(
+            $llmClient,
+            toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+            userMessage: 'Loop forever',
+            systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        );
+
+        expect($result['meta']['error_type'])->toBe('unexpected_error')
+            ->and($result['meta']['diagnostic'])->toContain('Tool loop exceeded 8 iterations');
     });
 
     it('records one usage call per successful synchronous tool-loop iteration', function () {

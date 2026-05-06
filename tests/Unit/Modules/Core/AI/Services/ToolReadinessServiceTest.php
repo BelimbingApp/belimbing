@@ -59,12 +59,12 @@ it('returns UNAUTHORIZED when user lacks tool capability', function (): void {
 
 it('returns READY when tool is registered and user is authorized', function (): void {
     $toolRegistry = Mockery::mock(AgentToolRegistry::class);
-    $toolRegistry->shouldReceive('isRegistered')->with('query_data')->andReturn(true);
-    $toolRegistry->shouldReceive('canCurrentUserUseTool')->with('query_data')->andReturn(true);
+    $toolRegistry->shouldReceive('isRegistered')->with('read')->andReturn(true);
+    $toolRegistry->shouldReceive('canCurrentUserUseTool')->with('read')->andReturn(true);
 
     $service = makeReadinessService($toolRegistry);
 
-    expect($service->readiness('query_data'))->toBe(ToolReadiness::READY);
+    expect($service->readiness('read'))->toBe(ToolReadiness::READY);
 });
 
 it('returns null lastVerified when no test has been run', function (): void {
@@ -75,11 +75,11 @@ it('returns null lastVerified when no test has been run', function (): void {
 
 it('returns lastVerified from settings when test has been run', function (): void {
     $settings = app(SettingsService::class);
-    $settings->set('ai.tools.query_data.last_verified_at', '2026-03-10T12:00:00+00:00');
-    $settings->set('ai.tools.query_data.last_verified_success', true);
+    $settings->set('ai.tools.read.last_verified_at', '2026-03-10T12:00:00+00:00');
+    $settings->set('ai.tools.read.last_verified_success', true);
 
     $service = makeReadinessService();
-    $result = $service->lastVerified('query_data');
+    $result = $service->lastVerified('read');
 
     expect($result)->not->toBeNull()
         ->and($result['at'])->toBe('2026-03-10T12:00:00+00:00')
@@ -88,11 +88,11 @@ it('returns lastVerified from settings when test has been run', function (): voi
 
 it('provides combined snapshot with readiness and lastVerified', function (): void {
     $toolRegistry = Mockery::mock(AgentToolRegistry::class);
-    $toolRegistry->shouldReceive('isRegistered')->with('query_data')->andReturn(true);
-    $toolRegistry->shouldReceive('canCurrentUserUseTool')->with('query_data')->andReturn(true);
+    $toolRegistry->shouldReceive('isRegistered')->with('read')->andReturn(true);
+    $toolRegistry->shouldReceive('canCurrentUserUseTool')->with('read')->andReturn(true);
 
     $service = makeReadinessService($toolRegistry);
-    $snapshot = $service->snapshot('query_data');
+    $snapshot = $service->snapshot('read');
 
     expect($snapshot)->toHaveKeys(['readiness', 'lastVerified'])
         ->and($snapshot['readiness'])->toBe(ToolReadiness::READY)
@@ -106,10 +106,10 @@ it('provides metadata and readiness for all known tool snapshots', function (): 
     $service = makeReadinessService($toolRegistry);
     $snapshots = $service->allSnapshots();
 
-    expect($snapshots)->toHaveKey('query_data')
+    expect($snapshots)->toHaveKey('read')
         ->and($snapshots)->toHaveKey('web_search')
-        ->and($snapshots['query_data']['readiness'])->toBe(ToolReadiness::UNAVAILABLE)
+        ->and($snapshots['read']['readiness'])->toBe(ToolReadiness::UNAVAILABLE)
         ->and($snapshots['web_search']['readiness'])->toBe(ToolReadiness::UNCONFIGURED)
-        ->and($snapshots['query_data']['metadata']->name)->toBe('query_data')
+        ->and($snapshots['read']['metadata']->name)->toBe('read')
         ->and($snapshots['web_search']['metadata']->name)->toBe('web_search');
 });

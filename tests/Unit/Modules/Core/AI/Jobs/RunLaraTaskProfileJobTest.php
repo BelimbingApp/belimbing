@@ -9,11 +9,11 @@ use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Jobs\RunLaraTaskProfileJob;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
-use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\DispatchTranscriptBridge;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
 use App\Modules\Core\AI\Services\LaraTaskExecutionProfileRegistry;
+use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -56,7 +56,7 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
         taskKey: 'coding',
         label: 'Coding',
         systemPromptPath: app_path('Modules/Core/AI/Resources/tasks/coding/system_prompt.md'),
-        allowedToolNames: ['bash', 'edit_file'],
+        allowedToolNames: ['bash'],
         executionMode: ExecutionMode::Background,
     );
 
@@ -76,7 +76,7 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
                 && $modelOverride === null
                 && $sessionId === null
                 && $configOverride['model'] === 'gpt-coder'
-                && $allowedToolNames === ['bash', 'edit_file'];
+                && $allowedToolNames === ['bash'];
         })
         ->andReturn([
             'content' => 'Implemented the dashboard page.',
