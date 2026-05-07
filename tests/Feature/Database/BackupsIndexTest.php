@@ -54,16 +54,7 @@ test('verify action reports OK when manifest sha matches artifact', function ():
     $manifestPath = 'backups/local/test.manifest.json';
     $payload = "fake-backup-bytes\n";
     $disk->put($artifactPath, $payload);
-    $disk->put($manifestPath, json_encode([
-        'backup_id' => 'bk-test',
-        'driver' => 'sqlite',
-        'encryption_mode' => 'none',
-        'finished_at' => now()->toIso8601String(),
-        'size_bytes' => strlen($payload),
-        'sha256' => hash('sha256', $payload),
-        'status' => 'success',
-        'artifact_path' => $artifactPath,
-    ]));
+    $disk->put($manifestPath, json_encode(makeBackupManifestPayload('bk-test', $artifactPath, $payload)));
 
     Livewire::test(Index::class)
         ->call('verify', $manifestPath)
@@ -77,17 +68,12 @@ test('verify action flags failure when artifact bytes differ from manifest', fun
     $disk = Storage::disk('local');
     $artifactPath = 'backups/local/tampered.bak';
     $manifestPath = 'backups/local/tampered.manifest.json';
-    $disk->put($artifactPath, 'tampered-bytes');
-    $disk->put($manifestPath, json_encode([
-        'backup_id' => 'bk-bad',
-        'driver' => 'sqlite',
-        'encryption_mode' => 'none',
-        'finished_at' => now()->toIso8601String(),
+    $artifactBytes = 'tampered-bytes';
+    $disk->put($artifactPath, $artifactBytes);
+    $disk->put($manifestPath, json_encode(makeBackupManifestPayload('bk-bad', $artifactPath, $artifactBytes, [
         'size_bytes' => 14,
         'sha256' => str_repeat('0', 64),
-        'status' => 'success',
-        'artifact_path' => $artifactPath,
-    ]));
+    ])));
 
     Livewire::test(Index::class)
         ->call('verify', $manifestPath)
@@ -101,17 +87,9 @@ test('delete action removes the manifest and artifact pair', function (): void {
     $disk = Storage::disk('local');
     $artifactPath = 'backups/local/will-be-deleted.bak';
     $manifestPath = 'backups/local/will-be-deleted.manifest.json';
-    $disk->put($artifactPath, 'bytes');
-    $disk->put($manifestPath, json_encode([
-        'backup_id' => 'bk-del',
-        'driver' => 'sqlite',
-        'encryption_mode' => 'none',
-        'finished_at' => now()->toIso8601String(),
-        'size_bytes' => 5,
-        'sha256' => hash('sha256', 'bytes'),
-        'status' => 'success',
-        'artifact_path' => $artifactPath,
-    ]));
+    $artifactBytes = 'bytes';
+    $disk->put($artifactPath, $artifactBytes);
+    $disk->put($manifestPath, json_encode(makeBackupManifestPayload('bk-del', $artifactPath, $artifactBytes)));
 
     Livewire::test(Index::class)
         ->call('delete', $manifestPath)

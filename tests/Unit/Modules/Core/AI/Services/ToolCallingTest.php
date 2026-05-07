@@ -64,83 +64,15 @@ function makeDenyAllAuthzService(): AuthorizationService
 
 function makeSimpleTool(string $name, ?string $capability = null): Tool
 {
-    return new class($name, $capability) implements Tool
-    {
-        public function __construct(
-            private readonly string $toolName,
-            private readonly ?string $toolCapability,
-        ) {}
-
-        public function name(): string
-        {
-            return $this->toolName;
-        }
-
-        public function displayName(): string
-        {
-            return $this->toolName;
-        }
-
-        public function description(): string
-        {
-            return 'Test tool: '.$this->toolName;
-        }
-
-        public function parametersSchema(): array
-        {
-            return ['type' => 'object', 'properties' => ['input' => ['type' => 'string']]];
-        }
-
-        public function requiredCapability(): ?string
-        {
-            return $this->toolCapability;
-        }
-
-        public function category(): ToolCategory
-        {
-            return ToolCategory::SYSTEM;
-        }
-
-        public function riskClass(): ToolRiskClass
-        {
-            return ToolRiskClass::READ_ONLY;
-        }
-
-        public function summary(): string
-        {
-            return 'Test tool: '.$this->toolName;
-        }
-
-        public function explanation(): string
-        {
-            return '';
-        }
-
-        public function setupRequirements(): array
-        {
-            return [];
-        }
-
-        public function testExamples(): array
-        {
-            return [];
-        }
-
-        public function healthChecks(): array
-        {
-            return [];
-        }
-
-        public function limits(): array
-        {
-            return [];
-        }
-
-        public function execute(array $arguments): ToolResult
-        {
-            return ToolResult::success('executed:'.$this->toolName.':'.(string) ($arguments['input'] ?? 'no-input'));
-        }
-    };
+    return new StubTool(
+        toolName: $name,
+        toolDescription: 'Test tool: '.$name,
+        schema: ['type' => 'object', 'properties' => ['input' => ['type' => 'string']]],
+        execute: fn (array $arguments): ToolResult => ToolResult::success(
+            'executed:'.$name.':'.(string) ($arguments['input'] ?? 'no-input')
+        ),
+        capability: $capability,
+    );
 }
 
 function makeToolCallingTempRelativePath(string $filename): string

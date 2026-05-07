@@ -23,89 +23,16 @@ const AGENTIC_RUNTIME_STOP_PROVIDER_TEXT = 'Provider already answered.';
 
 function runtimeStopTool(int &$executionCount): Tool
 {
-    return new class($executionCount) implements Tool
-    {
-        public function __construct(
-            private int &$executionCount,
-        ) {}
-
-        public function name(): string
-        {
-            return 'stop_gap_tool';
-        }
-
-        public function description(): string
-        {
-            return 'Should not execute after Stop.';
-        }
-
-        public function parametersSchema(): array
-        {
-            return ['type' => 'object', 'properties' => ['input' => ['type' => 'string']]];
-        }
-
-        public function requiredCapability(): ?string
-        {
-            return null;
-        }
-
-        public function category(): ToolCategory
-        {
-            return ToolCategory::SYSTEM;
-        }
-
-        public function riskClass(): ToolRiskClass
-        {
-            return ToolRiskClass::READ_ONLY;
-        }
-
-        public function displayName(): string
-        {
-            return 'Stop gap tool';
-        }
-
-        public function summary(): string
-        {
-            return 'Should not execute after Stop.';
-        }
-
-        public function explanation(): string
-        {
-            return '';
-        }
-
-        /** @return list<string> */
-        public function setupRequirements(): array
-        {
-            return [];
-        }
-
-        /** @return list<array<string, mixed>> */
-        public function testExamples(): array
-        {
-            return [];
-        }
-
-        /** @return list<array<string, mixed>> */
-        public function healthChecks(): array
-        {
-            return [];
-        }
-
-        /** @return array<string, mixed> */
-        public function limits(): array
-        {
-            return [];
-        }
-
-        /** @param  array<string, mixed>  $arguments */
-        public function execute(array $arguments): ToolResult
-        {
-            $this->executionCount++;
+    return new StubTool(
+        toolName: 'stop_gap_tool',
+        toolDescription: 'Should not execute after Stop.',
+        schema: ['type' => 'object', 'properties' => ['input' => ['type' => 'string']]],
+        execute: function () use (&$executionCount): ToolResult {
+            $executionCount++;
 
             return ToolResult::success('executed');
-        }
-    };
+        },
+    );
 }
 
 it('renders provider output after Stop but does not execute new tool work', function (): void {

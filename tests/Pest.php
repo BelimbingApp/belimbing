@@ -3,6 +3,10 @@
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Base\AI\Contracts\Tool;
+use App\Base\AI\Enums\ToolCategory;
+use App\Base\AI\Enums\ToolRiskClass;
+use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\RelationshipType;
 use App\Modules\Core\User\Models\User;
@@ -78,5 +82,117 @@ function createCompanyRelationshipFixture(): array
         Company::factory()->create(),
         Company::factory()->create(),
         RelationshipType::factory()->create(),
+    ];
+}
+
+final class StubTool implements Tool
+{
+    /**
+     * @param  array<string, mixed>  $schema
+     * @param  (callable(array<string, mixed>): ToolResult)|null  $execute
+     */
+    public function __construct(
+        private readonly string $toolName,
+        private readonly string $toolDescription = '',
+        private readonly array $schema = ['type' => 'object', 'properties' => []],
+        private readonly mixed $execute = null,
+        private readonly ?string $capability = null,
+        private readonly ToolCategory $category = ToolCategory::SYSTEM,
+        private readonly ToolRiskClass $riskClass = ToolRiskClass::READ_ONLY,
+    ) {}
+
+    public function name(): string
+    {
+        return $this->toolName;
+    }
+
+    public function displayName(): string
+    {
+        return $this->toolName;
+    }
+
+    public function description(): string
+    {
+        return $this->toolDescription;
+    }
+
+    public function parametersSchema(): array
+    {
+        return $this->schema;
+    }
+
+    public function requiredCapability(): ?string
+    {
+        return $this->capability;
+    }
+
+    public function category(): ToolCategory
+    {
+        return $this->category;
+    }
+
+    public function riskClass(): ToolRiskClass
+    {
+        return $this->riskClass;
+    }
+
+    public function summary(): string
+    {
+        return $this->toolDescription;
+    }
+
+    public function explanation(): string
+    {
+        return '';
+    }
+
+    public function setupRequirements(): array
+    {
+        return [];
+    }
+
+    public function testExamples(): array
+    {
+        return [];
+    }
+
+    public function healthChecks(): array
+    {
+        return [];
+    }
+
+    public function limits(): array
+    {
+        return [];
+    }
+
+    public function execute(array $arguments): ToolResult
+    {
+        if ($this->execute === null) {
+            return ToolResult::success('executed');
+        }
+
+        return ($this->execute)($arguments);
+    }
+}
+
+/**
+ * Build a minimal backup manifest payload for tests.
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function makeBackupManifestPayload(string $backupId, string $artifactPath, string $payloadBytes, array $overrides = []): array
+{
+    return [
+        'backup_id' => $backupId,
+        'driver' => 'sqlite',
+        'encryption_mode' => 'none',
+        'finished_at' => now()->toIso8601String(),
+        'size_bytes' => strlen($payloadBytes),
+        'sha256' => hash('sha256', $payloadBytes),
+        'status' => 'success',
+        'artifact_path' => $artifactPath,
+        ...$overrides,
     ];
 }
