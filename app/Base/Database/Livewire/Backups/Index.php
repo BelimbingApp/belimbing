@@ -182,7 +182,7 @@ class Index extends Component
             'keepCount' => (int) ($config['retention']['keep_count'] ?? 0),
             'canCreate' => $this->capabilityAllows('admin.system.database-backup.create'),
             'canDelete' => $this->capabilityAllows('admin.system.database-backup.delete'),
-            'canManageSettings' => $this->capabilityAllows('admin.system.setting.manage'),
+            'canManageBackup' => $this->capabilityAllows('admin.system.database-backup.manage'),
             'statusMessage' => $this->statusMessage,
             'statusVariant' => $this->statusVariant,
         ]);
@@ -261,7 +261,7 @@ class Index extends Component
      */
     public function saveField(string $field, mixed $value): void
     {
-        $this->requireCapability('admin.system.setting.manage');
+        $this->requireCapability('admin.system.database-backup.manage');
 
         $coerced = match ($field) {
             'backup.enabled'                  => filter_var($value, FILTER_VALIDATE_BOOLEAN) ? '1' : '0',

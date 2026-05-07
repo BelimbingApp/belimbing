@@ -13,5 +13,6 @@ return [
         'commerce.inventory.item.list',
         'commerce.inventory.item.update',
         'commerce.inventory.item.view',
+        'commerce.inventory.manage',
     ],
 ];

@@ -6,6 +6,7 @@
 use App\Modules\Commerce\Inventory\Livewire\Items\Create;
 use App\Modules\Commerce\Inventory\Livewire\Items\Index;
 use App\Modules\Commerce\Inventory\Livewire\Items\Show;
+use App\Modules\Commerce\Inventory\Livewire\Settings;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function (): void {
@@ -20,4 +21,8 @@ Route::middleware(['auth'])->group(function (): void {
     Route::get('commerce/inventory/items/{item}', Show::class)
         ->middleware('authz:commerce.inventory.item.view')
         ->name('commerce.inventory.items.show');
+
+    Route::get('commerce/inventory/settings', Settings::class)
+        ->middleware('authz:commerce.inventory.manage')
+        ->name('commerce.inventory.settings');
 });

@@ -57,7 +57,7 @@
 
         <x-ui.card>
             <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Backup Configuration') }}</h3>
-            @if ($canManageSettings)
+            @if ($canManageBackup)
                 <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <x-ui.edit-in-place.select
                         :label="__('Enabled')"

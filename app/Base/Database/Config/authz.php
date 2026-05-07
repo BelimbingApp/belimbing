@@ -13,5 +13,6 @@ return [
         'admin.system.database-backup.list',
         'admin.system.database-backup.create',
         'admin.system.database-backup.delete',
+        'admin.system.database-backup.manage',
     ],
 ];

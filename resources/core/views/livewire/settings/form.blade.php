@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-/** @var \App\Base\Settings\Livewire\Admin\Index $this */
+/** @var \App\Base\Settings\Livewire\SettingsForm $this */
+/** @var array<string, mixed> $group */
+/** @var string $groupId */
 ?>
 
 <div>
@@ -16,19 +18,12 @@
         @endif
 
         <form wire:submit="save" class="space-y-6">
-            @if ($groups === [])
+            @if (($group['fields'] ?? []) === [])
                 <x-ui.card>
                     <p class="text-sm text-muted">{{ __('No editable settings are registered for this page.') }}</p>
                 </x-ui.card>
-            @endif
-
-            @foreach ($groups as $groupId => $group)
+            @else
                 <x-ui.card wire:key="settings-group-{{ $groupId }}">
-                    <div class="mb-5">
-                        <h2 class="text-base font-medium tracking-tight text-ink">{{ __($group['label']) }}</h2>
-                        <p class="mt-1 text-sm text-muted">{{ __($group['description']) }}</p>
-                    </div>
-
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                         @foreach ($group['fields'] as $field)
                             @php($key = $field['key'])
@@ -73,7 +68,7 @@
                         @endforeach
                     </div>
                 </x-ui.card>
-            @endforeach
+            @endif
 
             <div class="flex items-center gap-3">
                 <x-ui.button type="submit" variant="primary">

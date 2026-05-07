@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-namespace App\Base\Settings\Livewire\Admin;
+namespace App\Base\Settings\Livewire;
 
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
@@ -12,18 +12,19 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
-class Index extends Component
+/**
+ * Base Livewire form for editing one settings group registered in
+ * `config('settings.editable')`. Subclasses pin the group via group().
+ */
+abstract class SettingsForm extends Component
 {
     /**
      * @var array<string, mixed>
      */
     public array $values = [];
 
-    public ?string $group = null;
-
-    public function mount(SettingsService $settings, ?string $group = null): void
+    public function mount(SettingsService $settings): void
     {
-        $this->group = $group;
         $scope = $this->companyScope();
 
         foreach ($this->fields() as $field) {
@@ -77,27 +78,30 @@ class Index extends Component
 
     public function render(): View
     {
-        return view('livewire.admin.settings.index', [
-            'groups' => $this->groups(),
-            'pageTitle' => $this->pageTitle(),
-            'pageSubtitle' => $this->pageSubtitle(),
+        $group = $this->groupConfig();
+
+        return view('livewire.settings.form', [
+            'groupId' => $this->group(),
+            'group' => $group,
+            'pageTitle' => __(':label Settings', ['label' => $group['label'] ?? __('Module')]),
+            'pageSubtitle' => __($group['description'] ?? 'Operator-editable module settings stored in base_settings.'),
         ]);
     }
 
     /**
-     * @return array<string, array<string, mixed>>
+     * Settings group key (e.g. 'marketplace_ebay'). Must match an entry in
+     * `config('settings.editable')`.
      */
-    private function groups(): array
+    abstract protected function group(): string;
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function groupConfig(): array
     {
         $groups = config('settings.editable', []);
 
-        if ($this->group === null || $this->group === '') {
-            return $groups;
-        }
-
-        return isset($groups[$this->group])
-            ? [$this->group => $groups[$this->group]]
-            : [];
+        return $groups[$this->group()] ?? [];
     }
 
     /**
@@ -105,10 +109,7 @@ class Index extends Component
      */
     private function fields(): array
     {
-        return collect($this->groups())
-            ->flatMap(fn (array $group): array => $group['fields'] ?? [])
-            ->values()
-            ->all();
+        return $this->groupConfig()['fields'] ?? [];
     }
 
     /**
@@ -167,31 +168,5 @@ class Index extends Component
     private function formKey(string $settingKey): string
     {
         return str_replace('.', '__', $settingKey);
-    }
-
-    private function pageTitle(): string
-    {
-        $groups = $this->groups();
-
-        if (count($groups) === 1) {
-            $group = reset($groups);
-
-            return __(':label Settings', ['label' => $group['label'] ?? __('Module')]);
-        }
-
-        return __('Settings');
-    }
-
-    private function pageSubtitle(): string
-    {
-        $groups = $this->groups();
-
-        if (count($groups) === 1) {
-            $group = reset($groups);
-
-            return __($group['description'] ?? 'Operator-editable module settings stored in base_settings.');
-        }
-
-        return __('Operator-editable framework settings stored in base_settings, scoped to this company where applicable.');
     }
 }
