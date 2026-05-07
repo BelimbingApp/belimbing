@@ -12,7 +12,6 @@ return [
             'route' => 'admin.system.sessions.index',
             'permission' => 'admin.system_session.list',
             'parent' => 'system',
-            'position' => 60,
         ],
     ],
 ];

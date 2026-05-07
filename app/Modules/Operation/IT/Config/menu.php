@@ -9,8 +9,7 @@ return [
             'id' => 'it',
             'label' => 'IT',
             'icon' => 'heroicon-o-computer-desktop',
-            'parent' => 'business',
-            'position' => 100,
+            'parent' => 'operations',
         ],
         [
             'id' => 'it.tickets',
@@ -19,7 +18,6 @@ return [
             'route' => 'it.tickets.index',
             'permission' => 'it_ticket.ticket.list',
             'parent' => 'it',
-            'position' => 100,
         ],
     ],
 ];

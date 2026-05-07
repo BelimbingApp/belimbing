@@ -12,7 +12,6 @@ return [
             'route' => 'admin.workflows.index',
             'permission' => 'workflow.process.manage',
             'parent' => 'admin',
-            'position' => 220,
         ],
     ],
 ];

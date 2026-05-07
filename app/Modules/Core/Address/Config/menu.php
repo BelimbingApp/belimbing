@@ -12,7 +12,6 @@ return [
             'route' => 'admin.addresses.index',
             'permission' => 'core.address.list',
             'parent' => 'admin',
-            'position' => 210,
         ],
     ],
 ];

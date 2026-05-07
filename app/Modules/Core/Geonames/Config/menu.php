@@ -11,7 +11,6 @@ return [
             'icon' => 'heroicon-o-globe-alt',
             'permission' => 'core.geonames.list',
             'parent' => 'admin',
-            'position' => 200,
         ],
         [
             'id' => 'admin.geonames.countries',
@@ -19,7 +18,6 @@ return [
             'icon' => 'heroicon-o-flag',
             'route' => 'admin.geonames.countries.index',
             'parent' => 'admin.geonames',
-            'position' => 10,
         ],
         [
             'id' => 'admin.geonames.admin1',
@@ -27,7 +25,6 @@ return [
             'icon' => 'heroicon-o-map',
             'route' => 'admin.geonames.admin1.index',
             'parent' => 'admin.geonames',
-            'position' => 15,
         ],
         [
             'id' => 'admin.geonames.postcodes',
@@ -35,7 +32,6 @@ return [
             'icon' => 'heroicon-o-map-pin',
             'route' => 'admin.geonames.postcodes.index',
             'parent' => 'admin.geonames',
-            'position' => 20,
         ],
     ],
 ];

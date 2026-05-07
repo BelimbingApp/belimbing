@@ -12,7 +12,6 @@ return [
             'route' => 'admin.integration.outbound-exchanges.index',
             'permission' => 'admin.integration_exchange.list',
             'parent' => 'system',
-            'position' => 13,
         ],
     ],
 ];

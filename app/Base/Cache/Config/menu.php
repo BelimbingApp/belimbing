@@ -12,7 +12,6 @@ return [
             'route' => 'admin.system.cache.index',
             'permission' => 'admin.system_cache.view',
             'parent' => 'system',
-            'position' => 70,
         ],
     ],
 ];

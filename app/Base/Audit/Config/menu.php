@@ -10,7 +10,6 @@ return [
             'label' => 'Audit Log',
             'icon' => 'heroicon-o-document-magnifying-glass',
             'parent' => 'admin',
-            'position' => 220,
         ],
         [
             'id' => 'audit.mutations',
@@ -19,7 +18,6 @@ return [
             'route' => 'admin.audit.mutations',
             'permission' => 'admin.audit_log.list',
             'parent' => 'audit',
-            'position' => 5,
         ],
         [
             'id' => 'audit.actions',
@@ -28,7 +26,6 @@ return [
             'route' => 'admin.audit.actions',
             'permission' => 'admin.audit_log.list',
             'parent' => 'audit',
-            'position' => 10,
         ],
     ],
 ];

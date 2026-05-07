@@ -10,7 +10,6 @@ return [
             'label' => 'Authorization',
             'icon' => 'heroicon-o-shield-check',
             'parent' => 'admin',
-            'position' => 210,
         ],
         [
             'id' => 'authz.capabilities',
@@ -19,7 +18,6 @@ return [
             'route' => 'admin.authz.capabilities.index',
             'permission' => 'admin.capability.list',
             'parent' => 'authz',
-            'position' => 5,
         ],
         [
             'id' => 'authz.roles',
@@ -28,7 +26,6 @@ return [
             'route' => 'admin.roles.index',
             'permission' => 'admin.role.list',
             'parent' => 'authz',
-            'position' => 10,
         ],
         [
             'id' => 'authz.principal-roles',
@@ -37,7 +34,6 @@ return [
             'route' => 'admin.authz.principal-roles.index',
             'permission' => 'admin.principal_role.list',
             'parent' => 'authz',
-            'position' => 20,
         ],
         [
             'id' => 'authz.principal-capabilities',
@@ -46,7 +42,6 @@ return [
             'route' => 'admin.authz.principal-capabilities.index',
             'permission' => 'admin.principal_capability.list',
             'parent' => 'authz',
-            'position' => 30,
         ],
         [
             'id' => 'authz.decision-logs',
@@ -55,7 +50,6 @@ return [
             'route' => 'admin.authz.decision-logs.index',
             'permission' => 'admin.decision_log.list',
             'parent' => 'authz',
-            'position' => 40,
         ],
     ],
 ];

@@ -12,7 +12,6 @@ return [
             'route' => 'admin.settings.index',
             'permission' => 'admin.settings.manage',
             'parent' => 'system',
-            'position' => 94,
         ],
     ],
 ];

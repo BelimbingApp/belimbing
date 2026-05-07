@@ -37,10 +37,10 @@ class MenuBuilder
     /**
      * Build tree recursively.
      *
-     * Items at each level are sorted alphabetically by label.
-     * The position field is retained for backward compatibility but no longer
-     * used as the primary sort — alphabetical ordering keeps the menu
-     * predictable as new items are added.
+     * Items at each level are sorted alphabetically by label. Alphabetical
+     * ordering keeps the menu predictable as new items are added; explicit
+     * curated positions invite bitrot (collisions, drift, items "moving" when
+     * unrelated edits land), so we do not support a position field.
      *
      * @param  Collection  $items  All menu items
      * @param  string|null  $parentId  Current parent ID (null = root level)

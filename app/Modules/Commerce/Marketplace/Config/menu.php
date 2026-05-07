@@ -12,7 +12,6 @@ return [
             'route' => 'commerce.marketplace.ebay.index',
             'permission' => 'commerce.marketplace.list',
             'parent' => 'commerce',
-            'position' => 20,
         ],
         [
             'id' => 'commerce.marketplace.ebay_settings',
@@ -21,7 +20,6 @@ return [
             'route' => 'commerce.marketplace.ebay.settings',
             'permission' => 'commerce.marketplace.manage',
             'parent' => 'commerce.marketplace',
-            'position' => 25,
         ],
     ],
 ];

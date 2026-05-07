@@ -13,9 +13,22 @@ class MenuDiscoveryService
     /**
      * Glob patterns for menu file discovery.
      */
+    /**
+     * Glob patterns for menu file discovery.
+     *
+     * One-level patterns (e.g. `app/Modules/<Domain>/Config/menu.php`) are
+     * "domain anchors" — stable files where a domain declares its top-level
+     * bucket. Leaf modules / packages live one level deeper and declare only
+     * leaves and intermediate containers, never a root. Extensions follow the
+     * same shape: `extensions/<vendor>/Config/menu.php` for vendor-anchored
+     * buckets, `extensions/<vendor>/<package>/Config/menu.php` for package
+     * leaves.
+     */
     protected array $scanPatterns = [
         'app/Base/*/Config/menu.php',
+        'app/Modules/*/Config/menu.php',
         'app/Modules/*/*/Config/menu.php',
+        'extensions/*/Config/menu.php',
         'extensions/*/*/Config/menu.php',
     ];
 
@@ -100,9 +113,11 @@ class MenuDiscoveryService
     protected function extractModuleName(string $relativePath): ?string
     {
         // Extract from patterns:
-        // app/Base/Menu/Config/menu.php -> Menu
-        // app/Modules/Core/Geonames/Config/menu.php -> Geonames
-        // extensions/sb-group/quality/Config/menu.php -> quality
+        // app/Base/Menu/Config/menu.php             -> Menu
+        // app/Modules/Commerce/Config/menu.php      -> Commerce        (domain anchor)
+        // app/Modules/Core/Geonames/Config/menu.php -> Geonames        (leaf)
+        // extensions/ham/Config/menu.php            -> ham             (vendor anchor)
+        // extensions/ham/auto-parts/Config/menu.php -> auto-parts      (package leaf)
 
         if (preg_match('#app/Base/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
             return $matches[1];
@@ -112,7 +127,15 @@ class MenuDiscoveryService
             return $matches[1];
         }
 
+        if (preg_match('#app/Modules/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
+            return $matches[1];
+        }
+
         if (preg_match('#extensions/[^/]+/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
+            return $matches[1];
+        }
+
+        if (preg_match('#extensions/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
             return $matches[1];
         }
 

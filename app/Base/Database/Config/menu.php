@@ -12,7 +12,6 @@ return [
             'route' => 'admin.system.database-tables.index',
             'permission' => 'admin.system_table.list',
             'parent' => 'system',
-            'position' => 10,
         ],
         [
             'id' => 'system.database-queries',
@@ -21,7 +20,6 @@ return [
             'route' => 'admin.system.database-queries.index',
             'permission' => 'admin.system_table.list',
             'parent' => 'system',
-            'position' => 11,
         ],
         [
             'id' => 'system.database-backups',
@@ -30,7 +28,6 @@ return [
             'route' => 'admin.system.database-backups.index',
             'permission' => 'admin.backup.list',
             'parent' => 'system',
-            'position' => 12,
         ],
     ],
 ];

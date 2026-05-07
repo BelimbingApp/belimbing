@@ -14,7 +14,6 @@ readonly class MenuItem
         public ?string $route = null,
         public ?string $url = null,
         public ?string $parent = null,
-        public int $position = 1000,
         public ?string $permission = null,
         public ?string $condition = null,
     ) {}
@@ -33,7 +32,6 @@ readonly class MenuItem
             route: $data['route'] ?? null,
             url: $data['url'] ?? null,
             parent: $data['parent'] ?? null,
-            position: $data['position'] ?? 1000,
             permission: $data['permission'] ?? null,
             condition: $data['condition'] ?? null,
         );

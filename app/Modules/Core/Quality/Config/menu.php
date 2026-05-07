@@ -9,8 +9,7 @@ return [
             'id' => 'quality',
             'label' => 'Quality',
             'icon' => 'heroicon-o-shield-check',
-            'parent' => 'business',
-            'position' => 200,
+            'parent' => 'operations',
         ],
         [
             'id' => 'quality.ncr',
@@ -18,7 +17,6 @@ return [
             'route' => 'quality.ncr.index',
             'permission' => 'quality.ncr.view',
             'parent' => 'quality',
-            'position' => 100,
         ],
         [
             'id' => 'quality.scar',
@@ -26,7 +24,6 @@ return [
             'route' => 'quality.scar.index',
             'permission' => 'quality.scar.view',
             'parent' => 'quality',
-            'position' => 200,
         ],
     ],
 ];

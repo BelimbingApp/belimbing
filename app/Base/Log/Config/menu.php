@@ -12,7 +12,6 @@ return [
             'route' => 'admin.system.logs.index',
             'permission' => 'admin.system_log.list',
             'parent' => 'system',
-            'position' => 80,
         ],
     ],
 ];

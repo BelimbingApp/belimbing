@@ -18,8 +18,12 @@ class MenuRegistry
 
     /**
      * Cache key for stored menu items.
+     *
+     * Bumped to v2 when the `position` field was removed from MenuItem so a
+     * stale serialized payload from before the change does not blow up
+     * MenuItem::fromArray with an unexpected key.
      */
-    protected const CACHE_KEY = 'blb.menu.registry';
+    protected const CACHE_KEY = 'blb.menu.registry.v2';
 
     public function __construct()
     {
@@ -141,8 +145,8 @@ class MenuRegistry
                 'route' => $item->route,
                 'url' => $item->url,
                 'parent' => $item->parent,
-                'position' => $item->position,
                 'permission' => $item->permission,
+                'condition' => $item->condition,
             ];
         })->all();
 

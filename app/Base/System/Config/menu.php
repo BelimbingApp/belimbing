@@ -12,7 +12,6 @@ return [
             'route' => 'admin.system.info.index',
             'permission' => 'admin.system_info.view',
             'parent' => 'system',
-            'position' => 90,
         ],
         [
             'id' => 'system.localization',
@@ -21,7 +20,6 @@ return [
             'route' => 'admin.system.localization.index',
             'permission' => 'admin.system_localization.manage',
             'parent' => 'system',
-            'position' => 95,
         ],
         [
             'id' => 'system.ui-reference',
@@ -30,7 +28,6 @@ return [
             'route' => 'admin.system.ui-reference.index',
             'permission' => 'admin.system_ui_reference.view',
             'parent' => 'system',
-            'position' => 97,
         ],
         [
             'id' => 'system.test-transport',
@@ -39,7 +36,6 @@ return [
             'route' => 'admin.system.test-transport.index',
             'permission' => 'admin.system_transport_test.view',
             'parent' => 'system',
-            'position' => 98,
         ],
     ],
 ];

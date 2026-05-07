@@ -12,7 +12,6 @@ return [
             'route' => 'admin.companies.index',
             'permission' => 'core.company.list',
             'parent' => 'admin',
-            'position' => 220,
         ],
         [
             'id' => 'admin.companies.legal-entity-types',
@@ -20,7 +19,6 @@ return [
             'icon' => 'heroicon-o-scale',
             'route' => 'admin.companies.legal-entity-types',
             'parent' => 'admin.companies',
-            'position' => 10,
         ],
         [
             'id' => 'admin.companies.department-types',
@@ -28,7 +26,6 @@ return [
             'icon' => 'heroicon-o-rectangle-group',
             'route' => 'admin.companies.department-types',
             'parent' => 'admin.companies',
-            'position' => 20,
         ],
     ],
 ];

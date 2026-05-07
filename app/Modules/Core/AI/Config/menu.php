@@ -14,7 +14,6 @@ return [
             'label' => 'AI',
             'icon' => 'heroicon-o-cpu-chip',
             'parent' => 'admin',
-            'position' => 200,
         ]),
         $item([
             'id' => 'ai.lara',
@@ -22,7 +21,6 @@ return [
             'icon' => 'heroicon-o-sparkles',
             'route' => 'admin.setup.lara',
             'parent' => 'ai',
-            'position' => 10,
             'permission' => 'admin.ai_lara.manage',
         ]),
         $item([
@@ -31,7 +29,6 @@ return [
             'icon' => 'heroicon-o-adjustments-vertical',
             'route' => 'admin.ai.task-models',
             'parent' => 'ai',
-            'position' => 20,
             'condition' => 'ai.lara_activated',
             'permission' => 'admin.ai_task_model.manage',
         ]),
@@ -41,7 +38,6 @@ return [
             'icon' => 'heroicon-o-server-stack',
             'route' => 'admin.ai.providers',
             'parent' => 'ai',
-            'position' => 30,
             'permission' => 'admin.ai_provider.manage',
         ]),
         $item([
@@ -50,7 +46,6 @@ return [
             'icon' => 'heroicon-o-wrench-screwdriver',
             'route' => 'admin.ai.tools',
             'parent' => 'ai',
-            'position' => 40,
             'permission' => 'admin.ai_tool.manage',
         ]),
         $item([
@@ -59,7 +54,6 @@ return [
             'icon' => 'heroicon-o-banknotes',
             'route' => 'admin.ai.pricing-overrides',
             'parent' => 'ai',
-            'position' => 45,
             'permission' => 'admin.ai_pricing_override.manage',
         ]),
         $item([
@@ -68,7 +62,6 @@ return [
             'icon' => 'heroicon-o-adjustments-horizontal',
             'route' => 'admin.ai.control-plane',
             'parent' => 'ai',
-            'position' => 50,
             'permission' => 'admin.ai_control_plane.view',
         ]),
     ],

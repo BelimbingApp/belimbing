@@ -11,8 +11,7 @@ return [
             'icon' => 'heroicon-o-user-group',
             'route' => 'admin.employees.index',
             'permission' => 'core.employee.list',
-            'parent' => 'admin',
-            'position' => 230,
+            'parent' => 'people',
         ],
         [
             'id' => 'admin.employee-types',
@@ -21,7 +20,6 @@ return [
             'route' => 'admin.employee-types.index',
             'permission' => 'core.employee_type.list',
             'parent' => 'admin.employees',
-            'position' => 10,
         ],
     ],
 ];

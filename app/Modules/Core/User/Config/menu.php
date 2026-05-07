@@ -12,7 +12,6 @@ return [
             'route' => 'admin.users.index',
             'permission' => 'core.user.list',
             'parent' => 'admin',
-            'position' => 205,
         ],
     ],
 ];
