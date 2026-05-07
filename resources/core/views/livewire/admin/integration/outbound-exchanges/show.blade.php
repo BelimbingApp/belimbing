@@ -29,7 +29,14 @@
                 </div>
                 <div>
                     <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Outcome') }}</dt>
-                    <dd class="mt-1"><x-ui.badge :variant="$exchange->outcome === 'success' ? 'success' : 'danger'">{{ $exchange->outcome }}</x-ui.badge></dd>
+                    <dd class="mt-1">
+                        <x-ui.badge
+                            :variant="$outcomeBadge['variant']"
+                            :tooltip="$outcomeBadge['tooltip']"
+                        >
+                            {{ $outcomeBadge['label'] }}
+                        </x-ui.badge>
+                    </dd>
                 </div>
                 <div>
                     <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Operation') }}</dt>
@@ -72,24 +79,33 @@
             <x-ui.alert variant="warning">{{ __('Retained payload inspection requires the admin.integration_payload.view capability.') }}</x-ui.alert>
         @else
             <div class="grid gap-6 xl:grid-cols-2">
-                @foreach([
-                    __('Request Headers') => $exchange->request_headers,
-                    __('Request Body') => $exchange->request_body,
-                    __('Response Headers') => $exchange->response_headers,
-                    __('Response Body') => $exchange->response_body,
-                    __('Metadata') => $exchange->metadata,
-                ] as $label => $payload)
+                @foreach($payloadSections as $section)
                     <x-ui.card>
                         <div class="mb-3 flex items-center justify-between gap-3">
-                            <h2 class="text-sm font-medium text-ink">{{ $label }}</h2>
-                            @if(str_contains($label, 'Body'))
-                                <x-ui.badge>{{ str_contains($label, 'Request') ? ($exchange->request_body_truncated ? __('Truncated') : __('Retained')) : ($exchange->response_body_truncated ? __('Truncated') : __('Retained')) }}</x-ui.badge>
-                            @endif
+                            <h2 class="text-sm font-medium text-ink">{{ $section['label'] }}</h2>
+                            <div class="flex items-center gap-2">
+                                @if($section['badge'] !== null)
+                                    <x-ui.badge :tooltip="$section['badge']['tooltip']">{{ $section['badge']['label'] }}</x-ui.badge>
+                                @endif
+                                @if($section['payload'] !== null)
+                                    <button
+                                        type="button"
+                                        x-data="{ copied: false }"
+                                        @click="navigator.clipboard.writeText(@js($section['display'])); copied = true; setTimeout(() => copied = false, 1500);"
+                                        class="relative inline-flex size-7 items-center justify-center rounded-md text-ink hover:bg-surface-subtle focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+                                        :aria-label="copied ? '{{ __('Copied') }}' : '{{ __('Copy') }}'"
+                                        title="{{ __('Copy') }}"
+                                    >
+                                        <x-icon name="mdi-content-copy" class="size-3.5" />
+                                        <span x-show="copied" x-cloak class="absolute -mt-8 rounded border border-border-default bg-surface-card px-1.5 py-0.5 text-[11px] text-status-success shadow-sm">{{ __('Copied!') }}</span>
+                                    </button>
+                                @endif
+                            </div>
                         </div>
-                        @if($payload === null)
+                        @if($section['payload'] === null)
                             <p class="text-sm text-muted">{{ __('No retained payload.') }}</p>
                         @else
-                            <pre class="max-h-[32rem] overflow-auto rounded border border-border-default bg-surface-subtle p-3 text-xs text-ink">{{ $this->formattedPayload($payload) }}</pre>
+                            <pre class="max-h-[32rem] overflow-auto rounded border border-border-default bg-surface-subtle p-3 text-xs text-ink">{{ $section['display'] }}</pre>
                         @endif
                     </x-ui.card>
                 @endforeach

@@ -35,8 +35,45 @@ it('lists and shows outbound exchanges with retained payloads', function (): voi
         ->get(route('admin.integration.outbound-exchanges.show', $exchange))
         ->assertOk()
         ->assertSee($exchange->id)
+        ->assertSee('Success')
+        ->assertSee('Retained')
         ->assertSee('hello')
-        ->assertSee('world');
+        ->assertSee('world')
+        ->assertSee('Copy payload')
+        ->assertSee('Completed with a non-error response.')
+        ->assertSee('Retained payloads are removed by retention cleanup.');
+});
+
+it('shows explanatory tooltips for truncated payloads and HTTP errors', function (): void {
+    $user = createAdminUser();
+    $exchange = OutboundExchange::query()->create([
+        'system' => 'example',
+        'provider' => 'provider.example',
+        'operation' => 'example.operation',
+        'transport' => 'http',
+        'protocol' => 'rest',
+        'protocol_operation' => 'POST /things',
+        'endpoint' => 'https://provider.example/things',
+        'owner_type' => 'company',
+        'owner_id' => $user->company_id,
+        'request_body' => ['kind' => 'json', 'value' => ['hello' => 'world']],
+        'request_body_truncated' => true,
+        'response_status' => 422,
+        'response_body' => ['kind' => 'json', 'value' => ['error' => 'invalid']],
+        'response_body_truncated' => true,
+        'duration_ms' => 12,
+        'retry_count' => 0,
+        'outcome' => 'http_error',
+        'occurred_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('admin.integration.outbound-exchanges.show', $exchange))
+        ->assertOk()
+        ->assertSee('HTTP error')
+        ->assertSee('Truncated')
+        ->assertSee('The external system returned an HTTP error.')
+        ->assertSee('Stored as a shortened preview.');
 });
 
 it('cleans retained payloads according to retention policy', function (): void {
