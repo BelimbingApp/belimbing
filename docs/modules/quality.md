@@ -1,11 +1,11 @@
-# Core Quality Module
+# Operation Quality Module
 
 ## Overview
 
-The Core Quality module provides industry-standard **NCR / CAPA / SCAR** quality management, aligned with ISO 9001 and IATF 16949 vocabulary. It is designed as a reusable BLB framework module that licensees extend with organisation-specific fields, approval gates, and numbering formats.
+The Operation Quality module provides industry-standard **NCR / CAPA / SCAR** quality management, aligned with ISO 9001 and IATF 16949 vocabulary. It is designed as a reusable BLB framework module that licensees extend with organisation-specific fields, approval gates, and numbering formats.
 
-**Path:** `app/Modules/Core/Quality/`
-**Migration prefix:** `0200_01_25_*`
+**Path:** `app/Modules/Operation/Quality/`
+**Migration prefix:** `0300_01_03_*`
 **Workflow flows:** `quality_ncr`, `quality_scar`
 
 ---
@@ -202,7 +202,7 @@ All routes require `auth` middleware with `authz:` capability checks.
 ## File Structure
 
 ```
-app/Modules/Core/Quality/
+app/Modules/Operation/Quality/
 ├── ServiceProvider.php
 ├── Config/
 │   ├── authz.php
@@ -211,7 +211,7 @@ app/Modules/Core/Quality/
 ├── Contracts/
 │   └── NumberingService.php
 ├── Database/
-│   ├── Migrations/          (6 migrations, prefix 0200_01_25_*)
+│   ├── Migrations/          (6 migrations, prefix 0300_01_03_*)
 │   ├── Seeders/
 │   │   ├── NcrWorkflowSeeder.php
 │   │   └── ScarWorkflowSeeder.php

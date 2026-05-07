@@ -15,7 +15,7 @@ This registry tracks the YYYY_MM_DD prefixes assigned to each module to prevent 
 | Layer | Year Range | Purpose | Location |
 |-------|------------|---------|----------|
 | Base | `0100` | Framework infrastructure | `app/Base/Database/Migrations/` |
-| Core | `0200` | Core business modules | `app/Modules/Core/{Module}/Database/Migrations/` |
+| Core | `0200` | Required business foundations | `app/Modules/Core/{Module}/Database/Migrations/` |
 | Operation | `0300` | Operational modules | `app/Modules/Operation/{Module}/Database/Migrations/` |
 | Commerce | `0310` | Commerce modules | `app/Modules/Commerce/{Module}/Database/Migrations/` |
 | Extensions | `2026+` | Third-party extensions | `extensions/{vendor}/{module}/Database/Migrations/` |
@@ -36,6 +36,9 @@ This keeps track of all the migration files and their dependencies.
 | `0200_01_07_*` | Modules/Core | Company | Geonames, Address |
 | `0200_01_09_*` | Modules/Core | Employee | Company, Address |
 | `0200_01_20_*` | Modules/Core | User | Company, Employee |
+| `0200_02_01_*` | Modules/Core | AI | Company, Employee |
+| `0300_01_01_*` | Modules/Operation | IT | Company, User |
+| `0300_01_03_*` | Modules/Operation | Quality | Company, Employee, User, Workflow |
 | `0310_01_01_*` | Modules/Commerce | Inventory | Company |
 | `0310_01_03_*` | Modules/Commerce | Catalog | Company, Inventory |
 
@@ -89,11 +92,13 @@ Core Layer (0200)
   ├─ Geonames (01_03) → [no dependencies, runs first]
   ├─ Address (01_05) → [depends on: Geonames]
   ├─ Company (01_07) → [depends on: Address]
-  ├─ User (01_20) → [depends on: Company]
-  └─ Workflow (01_21) → [to do depends on: User]
+  ├─ Employee (01_09) → [depends on: Company, Address]
+  ├─ User (01_20) → [depends on: Company, Employee]
+  └─ AI (02_01) → [depends on: Company, Employee]
 
-Business Layer (0300+)
-  └─ (modules depend on Core modules)
+Operation Layer (0300)
+  ├─ IT (01_01) → [depends on: Company, User]
+  └─ Quality (01_03) → [depends on: Company, Employee, User, Workflow]
 ```
 ---
 

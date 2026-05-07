@@ -36,7 +36,7 @@ app/{Layer0}/{Layer1}/{Module}/...           # For categorized application modul
 | Term | Meaning | Examples |
 |------|---------|----------|
 | **Layer0** | The first architectural boundary under `app/`. It separates framework-owned infrastructure from application-owned modules. | `Base`, `Modules` |
-| **Layer1** | A module category under `app/Modules`. It groups modules by architectural or domain area. Base modules skip this layer. | `Core`, `Commerce`, `Operation` |
+| **Layer1** | A module category under `app/Modules`. It groups modules by architectural or domain area. Base modules skip this layer. | `Core`, `Commerce`, `Operation`; `People` exists today as a navigation/domain anchor |
 | **Module** | The ownership boundary for a cohesive capability. Labeling stops here; everything below the module directory is module internals. | `Database`, `AI`, `Geonames`, `Inventory`, `IT` |
 | **Entity** | A domain object or relation owned by a module. Entities appear in models, tables, routes, UI features, factories, and seeders, but they are not architectural layers. | `Country`, `Part`, `Ticket`, `Role` |
 
@@ -204,7 +204,7 @@ app/Base/
 
 ### `app/Modules/` - Application Modules (Layer0)
 
-**Layer Pattern:** `app/Modules/{Layer1}/{Module}/` — Layer1 categories (`Core`, `Commerce`, `Operation`) contain modules.
+**Layer Pattern:** `app/Modules/{Layer1}/{Module}/` — Layer1 categories (`Core`, `Commerce`, `Operation`) contain modules. `People` currently anchors licensee-scoped people navigation; it should not own the canonical Employee module while employee records can belong to any company.
 
 Each module is a self-contained capability. Subdirectories are module internals (see [Module Structure Template](#module-structure-template-for-appmoduleslayer1module) for the full list). Modules include only the internals they need.
 
@@ -224,19 +224,20 @@ app/Modules/
 │   │   └── Hooks/
 │   │
 │   ├── Geonames/            # Database/, Models/
+│   ├── Employee/            # Employment records and employee types for any company
 │   ├── User/                # Database/, Models/, Services/, Controllers/, Livewire/, Hooks/
-│   ├── Workflow/            # Database/, Models/, Services/, Livewire/
-│   └── Admin/               # Admin panel module
-│       ├── Git/
-│       ├── Extensions/
-│       ├── Configuration/
-│       └── Deployment/
+│   └── Workflow/            # Database/, Models/, Services/, Livewire/
+│
+├── People/                  # Licensee-scoped people navigation anchor
+│   └── Config/
+│       └── menu.php
 │
 ├── Commerce/                # Commerce modules
 │   └── Inventory/           # Sellable inventory module
 │
 └── Operation/               # Operational modules
-    └── IT/                  # IT support module
+    ├── IT/                  # IT support module
+    └── Quality/             # NCR / SCAR / CAPA workflows
 ```
 
 **Module Structure Template (for `app/Modules/{Layer1}/{Module}/`):**
@@ -321,6 +322,7 @@ database/
 #                   app/Modules/Core/User/Database/Migrations/*
 # Commerce modules: app/Modules/Commerce/Inventory/Database/Migrations/*
 # Operation modules: app/Modules/Operation/IT/Database/Migrations/*
+#                    app/Modules/Operation/Quality/Database/Migrations/*
 ```
 
 ---
@@ -422,8 +424,6 @@ resources/core/
 │   │   │   ├── ai/
 │   │   │   ├── authz/
 │   │   │   ├── companies/
-│   │   │   ├── employee-types/
-│   │   │   ├── employees/
 │   │   │   ├── geonames/
 │   │   │   ├── roles/
 │   │   │   ├── setup/
@@ -431,7 +431,9 @@ resources/core/
 │   │   │   ├── users/
 │   │   │   └── workflows/
 │   │   ├── auth/            # Guest authentication flow
+│   │   ├── people/          # People-scoped views over Core records
 │   │   ├── it/              # Operation → IT
+│   │   ├── quality/         # Operation → Quality
 │   │   └── profile/         # Current user's own settings
 │   │
 │   └── components/          # Blade components

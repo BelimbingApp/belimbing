@@ -1,28 +1,28 @@
 <?php
 
 use App\Base\Authz\DTO\Actor;
-use App\Modules\Core\Quality\Contracts\NumberingService;
-use App\Modules\Core\Quality\Database\Seeders\NcrWorkflowSeeder;
-use App\Modules\Core\Quality\Database\Seeders\ScarWorkflowSeeder;
-use App\Modules\Core\Quality\Livewire\Ncr\Show as NcrShow;
-use App\Modules\Core\Quality\Livewire\Scar\Create as ScarCreate;
-use App\Modules\Core\Quality\Livewire\Scar\Show as ScarShow;
-use App\Modules\Core\Quality\Models\Capa;
-use App\Modules\Core\Quality\Models\Ncr;
-use App\Modules\Core\Quality\Models\QualityEvent;
-use App\Modules\Core\Quality\Models\Scar;
-use App\Modules\Core\Quality\Services\NcrService;
-use App\Modules\Core\Quality\Services\ScarService;
+use App\Modules\Operation\Quality\Contracts\NumberingService;
+use App\Modules\Operation\Quality\Database\Seeders\NcrWorkflowSeeder;
+use App\Modules\Operation\Quality\Database\Seeders\ScarWorkflowSeeder;
+use App\Modules\Operation\Quality\Livewire\Ncr\Show as NcrShow;
+use App\Modules\Operation\Quality\Livewire\Scar\Create as ScarCreate;
+use App\Modules\Operation\Quality\Livewire\Scar\Show as ScarShow;
+use App\Modules\Operation\Quality\Models\Capa;
+use App\Modules\Operation\Quality\Models\Ncr;
+use App\Modules\Operation\Quality\Models\QualityEvent;
+use App\Modules\Operation\Quality\Models\Scar;
+use App\Modules\Operation\Quality\Services\NcrService;
+use App\Modules\Operation\Quality\Services\ScarService;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
     setupAuthzRoles();
     config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
     $this->artisan('migrate', [
-        '--path' => base_path('app/Modules/Core/Quality/Database/Migrations'),
+        '--path' => base_path('app/Modules/Operation/Quality/Database/Migrations'),
         '--realpath' => true,
     ]);
-    require_once base_path('app/Modules/Core/Quality/Routes/web.php');
+    require_once base_path('app/Modules/Operation/Quality/Routes/web.php');
     (new NcrWorkflowSeeder)->run();
     (new ScarWorkflowSeeder)->run();
 });

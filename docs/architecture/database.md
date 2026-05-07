@@ -35,7 +35,7 @@ Migration filenames use the timestamp prefix to encode execution order. The year
 | :--- | :--- | :--- |
 | `0001` | Laravel | Native Laravel tables such as jobs, cache, and sessions. |
 | `0100` | Base Layer0 | Framework infrastructure modules. |
-| `0200` | Modules/Core Layer1 | Required business foundations. |
+| `0200` | Modules/Core Layer1 | Required business foundations loaded before operational and commerce workflows. |
 | `0300` | Modules/Operation Layer1 | Operational modules. |
 | `0310` | Modules/Commerce Layer1 | Commerce modules. |
 | `2026+` | Extensions | Licensee or vendor extensions using real calendar years. |
@@ -44,7 +44,7 @@ Migration filenames use the timestamp prefix to encode execution order. The year
 
 Within each prefix range, the `MM_DD` component identifies the module. Additional migrations for the **same** module reuse that `YYYY_MM_DD` prefix and differ only in the trailing **`HHMMSS`** segment (for example `000000`, then `000001`) — do not advance `MM_DD` as if it were a calendar day.
 *   **Base (0100):** `0100_01_01` (Database), `0100_01_03` (Events)
-*   **Core (0200):** `0200_01_03` (Geonames), `0200_01_20` (User)
+*   **Core foundations (0200):** `0200_01_03` (Geonames), `0200_01_09` (Employee), `0200_01_20` (User)
 
 **Example ordering:**
 1.  `0100_01_01_000000_create_base_database_seeders_table.php` (Base: seeder registry)
@@ -59,7 +59,7 @@ Table names use owner, module, and entity names to prevent ownership conflicts. 
 | Owner | Pattern | Example |
 | :--- | :--- | :--- |
 | Base modules | `base_{module}_{entity}` | `base_database_tables`, `base_authz_roles` |
-| Core modules | `{entity}` or `{module}_{entity}` when needed for clarity; no `core_` prefix | `companies`, `users`, `geonames_countries` |
+| Core modules | `{entity}` or `{module}_{entity}` when needed for clarity; no `core_` prefix | `companies`, `users`, `employees`, `geonames_countries` |
 | Application Layer1 modules | `{layer1}_{module}_{entity}` | `commerce_inventory_items`, `operation_it_tickets` |
 | Extensions | `{vendor}_{module}_{entity}` | `sbg_quality_ncr_ext` |
 
@@ -127,7 +127,6 @@ This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to preven
 | `0200_01_07_*` | Company | Geonames, Address |
 | `0200_01_09_*` | Employee | Company, Address |
 | `0200_01_20_*` | User | Company, Employee |
-| `0200_01_25_*` | Quality | Company, Employee, User, Workflow |
 | `0200_02_01_*` | AI | Company, Employee |
 
 ### Operation
@@ -135,6 +134,7 @@ This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to preven
 | Prefix | Module | Dependencies |
 |--------|--------|--------------|
 | `0300_01_01_*` | IT | Company, User |
+| `0300_01_03_*` | Quality | Company, Employee, User, Workflow |
 
 ### Commerce
 

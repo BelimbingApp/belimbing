@@ -7,6 +7,7 @@ namespace App\Modules\Core\User\Models;
 
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Foundation\Contracts\CompanyScoped;
+use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\ExternalAccess;
 use App\Modules\Core\Employee\Models\Employee;
@@ -91,7 +92,7 @@ class User extends Authenticatable implements CompanyScoped
             return null;
         }
 
-        $exists = \App\Modules\Core\AI\Models\AiProviderModel::query()
+        $exists = AiProviderModel::query()
             ->whereHas('provider', fn ($q) => $q->forCompany($companyId)->active()->where('name', $provider))
             ->where('model_id', $model)
             ->active()

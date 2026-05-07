@@ -7,6 +7,7 @@ namespace App\Modules\Core\AI\Livewire\Setup;
 
 use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
+use App\Modules\Core\AI\DTO\WorkspaceManifest;
 use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\LaraTaskRegistry;
@@ -270,7 +271,7 @@ class Lara extends Component
     /**
      * @return list<array{slot: string, label: string, source: string, exists: bool, byteSize: int|null, isOverridden: bool, audit: array<string, mixed>|null}>
      */
-    private function buildSlotRows(\App\Modules\Core\AI\DTO\WorkspaceManifest $manifest): array
+    private function buildSlotRows(WorkspaceManifest $manifest): array
     {
         $rows = [];
 
@@ -321,7 +322,7 @@ class Lara extends Component
             ->all();
     }
 
-    private function readSlotContent(\App\Modules\Core\AI\DTO\WorkspaceManifest $manifest, WorkspaceFileSlot $slot): string
+    private function readSlotContent(WorkspaceManifest $manifest, WorkspaceFileSlot $slot): string
     {
         $entry = $manifest->entry($slot);
 

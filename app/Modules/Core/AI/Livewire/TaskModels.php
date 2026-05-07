@@ -5,7 +5,6 @@
 
 namespace App\Modules\Core\AI\Livewire;
 
-use App\Base\AI\Enums\AiApiType;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\Enums\TaskModelSelectionMode;

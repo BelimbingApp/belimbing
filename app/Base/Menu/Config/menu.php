@@ -14,7 +14,7 @@
  *                 the structure requires). The first segment is always a live
  *                 top-level bucket: admin, operations, commerce, people.
  *                 Examples: admin.system.log, commerce.marketplace.ebay-setting,
- *                 people.employee, operations.quality.ncr.
+ *                 admin.employee, operations.quality.ncr.
  *
  *   Permission    <item-id>.<action> where action is one of:
  *                     view, list, manage, create, update, delete
