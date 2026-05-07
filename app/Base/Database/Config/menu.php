@@ -11,7 +11,7 @@ return [
             'icon' => 'heroicon-o-table-cells',
             'route' => 'admin.system.database-tables.index',
             'permission' => 'admin.system_table.list',
-            'parent' => 'system',
+            'parent' => 'system.database',
         ],
         [
             'id' => 'system.database-queries',
@@ -19,7 +19,7 @@ return [
             'icon' => 'heroicon-o-circle-stack',
             'route' => 'admin.system.database-queries.index',
             'permission' => 'admin.system_table.list',
-            'parent' => 'system',
+            'parent' => 'system.database',
         ],
         [
             'id' => 'system.database-backups',
@@ -27,7 +27,7 @@ return [
             'icon' => 'heroicon-o-archive-box',
             'route' => 'admin.system.database-backups.index',
             'permission' => 'admin.backup.list',
-            'parent' => 'system',
+            'parent' => 'system.database',
         ],
     ],
 ];

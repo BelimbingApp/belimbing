@@ -11,7 +11,7 @@ return [
             'icon' => 'heroicon-o-arrow-top-right-on-square',
             'route' => 'admin.integration.outbound-exchanges.index',
             'permission' => 'admin.integration_exchange.list',
-            'parent' => 'system',
+            'parent' => 'system.integrations',
         ],
     ],
 ];

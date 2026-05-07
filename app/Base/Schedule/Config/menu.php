@@ -11,7 +11,7 @@ return [
             'icon' => 'heroicon-o-clock',
             'route' => 'admin.system.scheduled-tasks.index',
             'permission' => 'admin.system_scheduled_task.list',
-            'parent' => 'system',
+            'parent' => 'system.diagnostics',
         ],
     ],
 ];

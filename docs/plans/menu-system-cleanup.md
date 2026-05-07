@@ -1,7 +1,7 @@
 # Menu System Cleanup
 
-**Status:** In Progress (Phases 1–2 applied)
-**Last Updated:** 2026-05-07 (Phase 2 implemented; tests green)
+**Status:** In Progress (Phases 1–3 applied)
+**Last Updated:** 2026-05-07 (Phase 3 implemented; tests green)
 **Sources:** `app/Base/Menu/`, all 25 `Config/menu.php` files under `app/Base/*`, `app/Modules/*/*`, and `extensions/*/*`
 **Agents:** claude/opus-4-7
 
@@ -148,17 +148,17 @@ Phases 1, 2, 3, 4, 5, 6 each touch a small disjoint slice. Phase 7 (the rename) 
 
 ### Phase 3 — Subgroup the System bucket
 
-**Goal:** four named containers under `admin.system`, with leaves re-parented.
+**Goal:** four named containers under `system` (renamed to `admin.system` in Phase 7), with leaves re-parented.
 
-- [ ] Add `admin.system.diagnostics`, `admin.system.database`, `admin.system.configuration`, `admin.system.integrations` containers to `app/Base/Menu/Config/menu.php`, each parented to `admin.system`
-- [ ] Re-parent leaves in `app/Base/Log/Config/menu.php`, `app/Base/Queue/Config/menu.php`, `app/Base/Session/Config/menu.php`, `app/Base/Cache/Config/menu.php`, `app/Base/Schedule/Config/menu.php` → `admin.system.diagnostics`
-- [ ] Re-parent leaves in `app/Base/Database/Config/menu.php` (all three) → `admin.system.database`
-- [ ] Re-parent leaves in `app/Base/Settings/Config/menu.php`, plus the Localization and UI Reference items in `app/Base/System/Config/menu.php` → `admin.system.configuration`
-- [ ] Re-parent the Outbound Exchanges item in `app/Base/Integration/Config/menu.php` and the Test Transport item in `app/Base/System/Config/menu.php` → `admin.system.integrations`
-- [ ] Leave System Info as a direct child of `admin.system`
+- [x] Add `system.diagnostics`, `system.database`, `system.integrations` containers to `app/Base/Menu/Config/menu.php`, each parented to `system` (icons: signal / circle-stack / link). The originally proposed `system.configuration` container was dropped during review — Settings, Localization, UI Reference don't cohere as a subgroup; they live as direct children of `system` alongside System Info. UI Reference in particular is a developer reference catalog, not configuration. claude/opus-4-7
+- [x] Re-parent leaves in `app/Base/Log/Config/menu.php`, `app/Base/Queue/Config/menu.php`, `app/Base/Session/Config/menu.php`, `app/Base/Cache/Config/menu.php`, `app/Base/Schedule/Config/menu.php` → `system.diagnostics` claude/opus-4-7
+- [x] Re-parent leaves in `app/Base/Database/Config/menu.php` (all three) → `system.database` claude/opus-4-7
+- [x] Re-parent the Outbound Exchanges item in `app/Base/Integration/Config/menu.php` and the Test Transport item in `app/Base/System/Config/menu.php` → `system.integrations` claude/opus-4-7
+- [x] Settings, Localization, UI Reference, System Info all stay/become direct children of `system` claude/opus-4-7
+- [x] Discovery probe + menu test suite (11 tests) green claude/opus-4-7
 - [ ] Visual check at `/admin/system/*` — every item still reachable; active highlighting still works
 
-(IDs are still in their pre-rename form during Phase 3; full ID renames land in Phase 7. Parent fields in this phase use the new subgroup IDs.)
+(IDs stay in pre-rename form during Phase 3; full rename to `admin.system.*` happens in Phase 7. Parent fields use the new subgroup IDs.)
 
 ### Phase 4 — Group Ham insights
 

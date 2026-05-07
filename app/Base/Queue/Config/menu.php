@@ -11,7 +11,7 @@ return [
             'icon' => 'heroicon-o-exclamation-triangle',
             'route' => 'admin.system.failed-jobs.index',
             'permission' => 'admin.system_failed_job.list',
-            'parent' => 'system',
+            'parent' => 'system.diagnostics',
         ],
         [
             'id' => 'system.job-batches',
@@ -19,7 +19,7 @@ return [
             'icon' => 'heroicon-o-squares-plus',
             'route' => 'admin.system.job-batches.index',
             'permission' => 'admin.system_job_batch.list',
-            'parent' => 'system',
+            'parent' => 'system.diagnostics',
         ],
     ],
 ];

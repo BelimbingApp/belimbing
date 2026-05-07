@@ -35,7 +35,7 @@ return [
             'icon' => 'heroicon-o-play',
             'route' => 'admin.system.test-transport.index',
             'permission' => 'admin.system_transport_test.view',
-            'parent' => 'system',
+            'parent' => 'system.integrations',
         ],
     ],
 ];

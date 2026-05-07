@@ -65,5 +65,26 @@ return [
             'icon' => 'heroicon-o-server-stack',
             'parent' => 'admin',
         ],
+
+        // System subgroups. IDs stay in pre-rename form (system.*) until
+        // Phase 7 renames the whole `system` subtree to `admin.system.*`.
+        [
+            'id' => 'system.diagnostics',
+            'label' => 'Diagnostics',
+            'icon' => 'heroicon-o-signal',
+            'parent' => 'system',
+        ],
+        [
+            'id' => 'system.database',
+            'label' => 'Database',
+            'icon' => 'heroicon-o-circle-stack',
+            'parent' => 'system',
+        ],
+        [
+            'id' => 'system.integrations',
+            'label' => 'Integrations',
+            'icon' => 'heroicon-o-link',
+            'parent' => 'system',
+        ],
     ],
 ];

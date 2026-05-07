@@ -11,7 +11,7 @@ return [
             'icon' => 'heroicon-o-document-text',
             'route' => 'admin.system.logs.index',
             'permission' => 'admin.system_log.list',
-            'parent' => 'system',
+            'parent' => 'system.diagnostics',
         ],
     ],
 ];
