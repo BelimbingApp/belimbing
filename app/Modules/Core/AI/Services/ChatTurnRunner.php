@@ -11,6 +11,7 @@ use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\DTO\PageSnapshot;
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\ExecutionMode;
+use App\Modules\Core\AI\Enums\TurnStatus;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
@@ -113,41 +114,20 @@ class ChatTurnRunner
             executionControlsOverride: $runtimeContext->executionControlsOverride,
         );
 
-        $cancelled = false;
-
         foreach ($this->bridge->wrap($turn, $runtimeStream) as $payload) {
             if ($onEvent !== null) {
                 $onEvent($payload);
             }
-
-            $turn->refresh();
-
-            if ($turn->isCancelRequested()) {
-                if (! $turn->isTerminal()) {
-                    $this->turnPublisher->turnCancelled($turn, 'User cancelled');
-                }
-
-                $cancelled = true;
-
-                break;
-            }
         }
 
-        if ($cancelled) {
-            $this->markCurrentRunCancelled($turn->current_run_id);
-            $this->persister->materializeFromTurn(
-                $turn->refresh(),
-                $this->messageManager,
-                $runtimeContext->employeeId,
-                $runtimeContext->sessionId,
-                $this->promptPackageMeta($runtimeContext),
-            );
+        $turn->refresh();
 
-            return;
+        if ($turn->status === TurnStatus::Cancelled) {
+            $this->markCurrentRunCancelled($turn->current_run_id);
         }
 
         $this->persister->materializeFromTurn(
-            $turn->refresh(),
+            $turn,
             $this->messageManager,
             $runtimeContext->employeeId,
             $runtimeContext->sessionId,

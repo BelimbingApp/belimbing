@@ -283,12 +283,6 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
         $firstByteRecorded = false;
 
         while (! $stream->eof()) {
-            if ($request->isCancelRequested()) {
-                $stream->close();
-
-                return;
-            }
-
             try {
                 $chunk = $stream->read(8192);
             } catch (\RuntimeException $e) {
@@ -308,12 +302,6 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
             }
 
             if ($chunk === '') {
-                if ($request->isCancelRequested()) {
-                    $stream->close();
-
-                    return;
-                }
-
                 continue;
             }
 

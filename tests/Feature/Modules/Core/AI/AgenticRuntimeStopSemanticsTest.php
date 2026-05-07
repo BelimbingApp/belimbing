@@ -1,0 +1,165 @@
+<?php
+
+// SPDX-License-Identifier: AGPL-3.0-only
+// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+
+use App\Base\AI\Contracts\Tool;
+use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\Enums\ToolCategory;
+use App\Base\AI\Enums\ToolRiskClass;
+use App\Base\AI\Services\LlmClient;
+use App\Base\AI\Tools\ToolResult;
+use App\Modules\Core\AI\Enums\TurnPhase;
+use App\Modules\Core\AI\Enums\TurnStatus;
+use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Employee\Models\Employee;
+use Tests\Support\MakesRuntimeResponses;
+
+uses(MakesRuntimeResponses::class);
+
+const AGENTIC_RUNTIME_STOP_SESSION = 'sess_runtime_stop_semantics';
+const AGENTIC_RUNTIME_STOP_PROVIDER_TEXT = 'Provider already answered.';
+
+function runtimeStopTool(int &$executionCount): Tool
+{
+    return new class($executionCount) implements Tool
+    {
+        public function __construct(
+            private int &$executionCount,
+        ) {}
+
+        public function name(): string
+        {
+            return 'stop_gap_tool';
+        }
+
+        public function description(): string
+        {
+            return 'Should not execute after Stop.';
+        }
+
+        public function parametersSchema(): array
+        {
+            return ['type' => 'object', 'properties' => ['input' => ['type' => 'string']]];
+        }
+
+        public function requiredCapability(): ?string
+        {
+            return null;
+        }
+
+        public function category(): ToolCategory
+        {
+            return ToolCategory::SYSTEM;
+        }
+
+        public function riskClass(): ToolRiskClass
+        {
+            return ToolRiskClass::READ_ONLY;
+        }
+
+        public function displayName(): string
+        {
+            return 'Stop gap tool';
+        }
+
+        public function summary(): string
+        {
+            return 'Should not execute after Stop.';
+        }
+
+        public function explanation(): string
+        {
+            return '';
+        }
+
+        /** @return list<string> */
+        public function setupRequirements(): array
+        {
+            return [];
+        }
+
+        /** @return list<array<string, mixed>> */
+        public function testExamples(): array
+        {
+            return [];
+        }
+
+        /** @return list<array<string, mixed>> */
+        public function healthChecks(): array
+        {
+            return [];
+        }
+
+        /** @return array<string, mixed> */
+        public function limits(): array
+        {
+            return [];
+        }
+
+        /** @param  array<string, mixed>  $arguments */
+        public function execute(array $arguments): ToolResult
+        {
+            $this->executionCount++;
+
+            return ToolResult::success('executed');
+        }
+    };
+}
+
+it('renders provider output after Stop but does not execute new tool work', function (): void {
+    $company = Company::factory()->create();
+    $employee = Employee::factory()->create([
+        'company_id' => $company->id,
+        'status' => 'active',
+    ]);
+    $turn = ChatTurn::query()->create([
+        'employee_id' => $employee->id,
+        'session_id' => AGENTIC_RUNTIME_STOP_SESSION,
+        'status' => TurnStatus::Running,
+        'current_phase' => TurnPhase::AwaitingLlm,
+    ]);
+    $turn->requestCancel('User pressed stop');
+
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('chatStream')
+        ->once()
+        ->with(Mockery::on(fn (ChatRequest $request): bool => $request->isCancelRequested()))
+        ->andReturn((function (): Generator {
+            yield ['type' => 'content_delta', 'text' => AGENTIC_RUNTIME_STOP_PROVIDER_TEXT];
+            yield [
+                'type' => 'tool_call_delta',
+                'index' => 0,
+                'id' => 'call_should_not_run',
+                'name' => 'stop_gap_tool',
+                'arguments_delta' => '{"input":"late"}',
+            ];
+            yield [
+                'type' => 'done',
+                'finish_reason' => 'tool_calls',
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+                'latency_ms' => 123,
+            ];
+        })());
+
+    $executionCount = 0;
+    $runtime = $this->makeAgenticRuntime(
+        $llmClient,
+        toolRegistry: $this->makeToolRegistry(runtimeStopTool($executionCount)),
+    );
+
+    $events = iterator_to_array($runtime->runStream(
+        [$this->makeMessage('user', 'Please use a tool')],
+        $employee->id,
+        'You are Lara.',
+        sessionId: AGENTIC_RUNTIME_STOP_SESSION,
+        turnId: $turn->id,
+    ), false);
+
+    expect(collect($events)->firstWhere('event', 'delta')['data']['text'] ?? null)->toBe(AGENTIC_RUNTIME_STOP_PROVIDER_TEXT)
+        ->and(collect($events)->where('event', 'status')->pluck('data.phase')->all())->toContain(TurnPhase::Cancelled->value)
+        ->and(collect($events)->where('event', 'status')->pluck('data.phase')->all())->not->toContain('tool_started')
+        ->and(collect($events)->pluck('event')->all())->not->toContain('done')
+        ->and($executionCount)->toBe(0);
+});

@@ -1977,7 +1977,6 @@
             state.stopRequestedAt = new Date().toISOString();
             state.turnLabel = this.stoppingLabel;
             this.$wire.cancelActiveTurn(turnId);
-            this.abortPersistentFetch(turnId);
             this.startReplayPolling(turnId, state.scrollContainer);
         },
 

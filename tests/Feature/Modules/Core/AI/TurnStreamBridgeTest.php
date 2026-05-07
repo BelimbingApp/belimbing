@@ -149,6 +149,24 @@ describe('TurnStreamBridge', function () {
         expect($types)->toContain(TurnEventType::TurnPhaseChanged)
             ->and($types)->toContain(TurnEventType::AssistantThinkingStarted);
     });
+
+    it('maps runtime cancellation status to a terminal cancelled turn event', function () {
+        $turn = createBridgeTurn();
+        $bridge = app(TurnStreamBridge::class);
+
+        $stream = runtimeStream([
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => TurnPhase::Cancelled->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+        ]);
+
+        $output = iterator_to_array($bridge->wrap($turn, $stream), false);
+
+        $turn->refresh();
+
+        expect(array_column($output, 'event_type'))->toContain('turn.cancelled')
+            ->and($turn->status)->toBe(TurnStatus::Cancelled)
+            ->and($turn->current_phase)->toBe(TurnPhase::Cancelled);
+    });
 });
 
 describe('TurnStreamBridge tool and streaming events', function () {

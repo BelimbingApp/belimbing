@@ -792,6 +792,14 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return;
             }
 
+            if ($this->isToolLoopCancellationRequested($toolLoopState)) {
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+
+                yield from $this->emitStoppedAfterProviderResponse($runId, $iterResult, $toolLoopState);
+
+                return;
+            }
+
             if (is_string($iterResult['finish_reason'] ?? null) && $iterResult['finish_reason'] !== '') {
                 yield ['event' => 'status', 'data' => [
                     'phase' => 'iteration_completed',
@@ -846,11 +854,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array $iterResult,
         array $toolLoopState,
     ): \Generator {
-        $fullContent = $iterResult['final_content'] ?? $iterResult['content'] ?? '';
-
-        if ($toolLoopState['clientActions'] !== []) {
-            $fullContent = implode("\n", $toolLoopState['clientActions'])."\n".$fullContent;
-        }
+        $fullContent = $this->finalContentFromIterationResult($iterResult, $toolLoopState);
 
         if (trim($fullContent) === '' && $toolLoopState['clientActions'] === []) {
             $emptyError = AiRuntimeError::fromType(
@@ -915,6 +919,49 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             'content' => $fullContent,
             'meta' => $meta,
         ]];
+    }
+
+    /**
+     * Surface provider text that arrived after Stop, but do not execute tool calls
+     * or start another LLM iteration. Stop is a boundary against new work; the
+     * already-open stream is only drained for transparency.
+     *
+     * @param  array<string, mixed>  $iterResult
+     * @param  array<string, mixed>  $toolLoopState
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function emitStoppedAfterProviderResponse(
+        string $runId,
+        array $iterResult,
+        array $toolLoopState,
+    ): \Generator {
+        $fullContent = $this->finalContentFromIterationResult($iterResult, $toolLoopState);
+
+        if (trim($fullContent) !== '') {
+            yield ['event' => 'delta', 'data' => ['text' => $fullContent]];
+        }
+
+        yield ['event' => 'status', 'data' => [
+            'phase' => TurnPhase::Cancelled->value,
+            'run_id' => $runId,
+            'provider_output_rendered' => trim($fullContent) !== '',
+            'skipped_tool_call_count' => count($iterResult['tool_calls'] ?? []),
+        ]];
+    }
+
+    /**
+     * @param  array<string, mixed>  $iterResult
+     * @param  array<string, mixed>  $toolLoopState
+     */
+    private function finalContentFromIterationResult(array $iterResult, array $toolLoopState): string
+    {
+        $fullContent = $iterResult['final_content'] ?? $iterResult['content'] ?? '';
+
+        if ($toolLoopState['clientActions'] !== []) {
+            return implode("\n", $toolLoopState['clientActions'])."\n".$fullContent;
+        }
+
+        return (string) $fullContent;
     }
 
     /**
@@ -1005,6 +1052,16 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             ->whereKey($turnId)
             ->whereNotNull('cancel_requested_at')
             ->exists();
+    }
+
+    /**
+     * @param  array{cancelRequested?: Closure|null}  $toolLoopState
+     */
+    private function isToolLoopCancellationRequested(array $toolLoopState): bool
+    {
+        $cancelRequested = $toolLoopState['cancelRequested'] ?? null;
+
+        return $cancelRequested instanceof Closure && (bool) $cancelRequested();
     }
 
     /**

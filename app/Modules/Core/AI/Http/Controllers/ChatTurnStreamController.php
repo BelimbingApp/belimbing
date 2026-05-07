@@ -37,6 +37,7 @@ class ChatTurnStreamController
     private function writeTurnStream(ChatTurn $turn): void
     {
         set_time_limit(0);
+        ignore_user_abort(true);
 
         $runner = app(ChatTurnRunner::class);
         $disconnected = false;
