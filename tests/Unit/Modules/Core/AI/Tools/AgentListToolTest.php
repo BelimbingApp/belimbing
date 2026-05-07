@@ -34,7 +34,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'agent_list',
-            'ai.tool_agent_list.execute',
+            'admin.ai.tool.agent-list.execute',
             ['capability_filter'],
             [],
         );

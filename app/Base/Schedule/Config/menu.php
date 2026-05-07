@@ -6,12 +6,12 @@
 return [
     'items' => [
         [
-            'id' => 'system.scheduled-tasks',
+            'id' => 'admin.system.scheduled-task',
             'label' => 'Scheduled Tasks',
             'icon' => 'heroicon-o-clock',
             'route' => 'admin.system.scheduled-tasks.index',
-            'permission' => 'admin.system_scheduled_task.list',
-            'parent' => 'system.diagnostics',
+            'permission' => 'admin.system.scheduled-task.list',
+            'parent' => 'admin.system.diagnostics',
         ],
     ],
 ];

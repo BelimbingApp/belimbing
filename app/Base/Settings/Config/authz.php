@@ -5,6 +5,6 @@
 
 return [
     'capabilities' => [
-        'admin.settings.manage',
+        'admin.system.setting.manage',
     ],
 ];

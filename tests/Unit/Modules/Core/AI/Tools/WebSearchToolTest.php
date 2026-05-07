@@ -21,7 +21,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'web_search',
-            'ai.tool_web_search.execute',
+            'admin.ai.tool.web-search.execute',
             ['query'],
             ['query'],
         );

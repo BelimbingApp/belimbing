@@ -6,28 +6,28 @@
 return [
     'items' => [
         [
-            'id' => 'system.database-tables',
+            'id' => 'admin.system.database-table',
             'label' => 'Database Tables',
             'icon' => 'heroicon-o-table-cells',
             'route' => 'admin.system.database-tables.index',
-            'permission' => 'admin.system_table.list',
-            'parent' => 'system.database',
+            'permission' => 'admin.system.database-table.list',
+            'parent' => 'admin.system.database',
         ],
         [
-            'id' => 'system.database-queries',
+            'id' => 'admin.system.database-query',
             'label' => 'Database Queries',
             'icon' => 'heroicon-o-circle-stack',
             'route' => 'admin.system.database-queries.index',
-            'permission' => 'admin.system_table.list',
-            'parent' => 'system.database',
+            'permission' => 'admin.system.database-table.list',
+            'parent' => 'admin.system.database',
         ],
         [
-            'id' => 'system.database-backups',
+            'id' => 'admin.system.database-backup',
             'label' => 'Database Backups',
             'icon' => 'heroicon-o-archive-box',
             'route' => 'admin.system.database-backups.index',
-            'permission' => 'admin.backup.list',
-            'parent' => 'system.database',
+            'permission' => 'admin.system.database-backup.list',
+            'parent' => 'admin.system.database',
         ],
     ],
 ];

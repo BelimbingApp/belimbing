@@ -18,7 +18,7 @@ use App\Modules\Core\Employee\Models\Employee;
  * embedding availability, and compaction status. Useful for
  * agents to assess their own memory state before searching.
  *
- * Gated by `ai.tool_memory_get.execute` authz capability (same as MemoryGetTool).
+ * Gated by `admin.ai.tool.memory-get.execute` authz capability (same as MemoryGetTool).
  */
 class MemoryStatusTool extends AbstractReadOnlyMemoryTool
 {
@@ -51,7 +51,7 @@ class MemoryStatusTool extends AbstractReadOnlyMemoryTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_memory_get.execute';
+        return 'admin.ai.tool.memory-get.execute';
     }
 
     protected function metadata(): array

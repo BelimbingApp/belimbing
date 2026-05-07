@@ -16,7 +16,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'system_info',
-            'ai.tool_system_info.execute',
+            'admin.ai.tool.system-info.execute',
             ['section'],
             [],
         );

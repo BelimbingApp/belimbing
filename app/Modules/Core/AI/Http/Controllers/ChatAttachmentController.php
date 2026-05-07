@@ -22,7 +22,7 @@ class ChatAttachmentController
         }
 
         $actor = Actor::forUser($user);
-        $allowed = app(AuthorizationService::class)->can($actor, 'ai.chat_attachments.manage')->allowed;
+        $allowed = app(AuthorizationService::class)->can($actor, 'admin.ai.chat-attachment.manage')->allowed;
         if (! $allowed) {
             abort(403);
         }

@@ -52,7 +52,7 @@ class Index extends Component implements ProvidesLaraPageContext
         $authActor = Actor::forUser($authUser);
 
         $canCreate = app(AuthorizationService::class)
-            ->can($authActor, 'admin.role.create')
+            ->can($authActor, 'admin.authz.role.create')
             ->allowed;
 
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'base_authz_roles.name';

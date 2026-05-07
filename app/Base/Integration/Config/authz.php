@@ -5,8 +5,8 @@
 
 return [
     'capabilities' => [
-        'admin.integration_exchange.list',
-        'admin.integration_payload.view',
-        'admin.integration_exchange.delete',
+        'admin.system.outbound-exchange.list',
+        'admin.system.outbound-exchange.payload.view',
+        'admin.system.outbound-exchange.delete',
     ],
 ];

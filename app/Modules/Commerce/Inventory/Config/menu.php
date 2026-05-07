@@ -6,11 +6,11 @@
 return [
     'items' => [
         [
-            'id' => 'commerce.inventory.items',
+            'id' => 'commerce.inventory.item',
             'label' => 'Inventory Workbench',
             'icon' => 'heroicon-o-queue-list',
             'route' => 'commerce.inventory.items.index',
-            'permission' => 'commerce.inventory_item.list',
+            'permission' => 'commerce.inventory.item.list',
             'parent' => 'commerce',
         ],
     ],

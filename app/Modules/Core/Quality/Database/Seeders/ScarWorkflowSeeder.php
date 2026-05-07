@@ -45,21 +45,21 @@ class ScarWorkflowSeeder extends Seeder
     protected function workflowTransitions(): array
     {
         return [
-            ['from_code' => 'draft',                 'to_code' => 'issued',                'label' => 'Issue to Supplier',  'capability' => 'workflow.quality_scar.issue',  'position' => 0],
-            ['from_code' => 'draft',                 'to_code' => 'cancelled',             'label' => 'Cancel',             'capability' => 'workflow.quality_scar.cancel', 'position' => 1],
-            ['from_code' => 'draft',                 'to_code' => 'rejected',              'label' => 'Reject',             'capability' => 'workflow.quality_scar.reject', 'position' => 2],
+            ['from_code' => 'draft',                 'to_code' => 'issued',                'label' => 'Issue to Supplier',  'capability' => 'operations.quality.scar.issue',  'position' => 0],
+            ['from_code' => 'draft',                 'to_code' => 'cancelled',             'label' => 'Cancel',             'capability' => 'operations.quality.scar.cancel', 'position' => 1],
+            ['from_code' => 'draft',                 'to_code' => 'rejected',              'label' => 'Reject',             'capability' => 'operations.quality.scar.reject', 'position' => 2],
             ['from_code' => 'issued',                'to_code' => 'acknowledged',          'label' => 'Acknowledge',        'capability' => null, 'position' => 0],
-            ['from_code' => 'issued',                'to_code' => 'cancelled',             'label' => 'Cancel',             'capability' => 'workflow.quality_scar.cancel', 'position' => 1],
+            ['from_code' => 'issued',                'to_code' => 'cancelled',             'label' => 'Cancel',             'capability' => 'operations.quality.scar.cancel', 'position' => 1],
             ['from_code' => 'acknowledged',          'to_code' => 'containment_submitted', 'label' => 'Submit Containment', 'capability' => null, 'position' => 0],
             ['from_code' => 'acknowledged',          'to_code' => 'under_investigation',   'label' => 'Begin Investigation', 'capability' => null, 'position' => 1],
             ['from_code' => 'containment_submitted', 'to_code' => 'under_investigation',   'label' => 'Begin Investigation', 'capability' => null, 'position' => 0],
             ['from_code' => 'under_investigation',   'to_code' => 'response_submitted',    'label' => 'Submit Response',    'capability' => null, 'position' => 0],
-            ['from_code' => 'response_submitted',    'to_code' => 'under_review',          'label' => 'Begin Review',       'capability' => 'workflow.quality_scar.review', 'position' => 0],
-            ['from_code' => 'under_review',          'to_code' => 'action_required',       'label' => 'Request Revision',   'capability' => 'workflow.quality_scar.rework', 'position' => 0],
-            ['from_code' => 'under_review',          'to_code' => 'verification_pending',  'label' => 'Accept Response',    'capability' => 'workflow.quality_scar.accept', 'position' => 1],
+            ['from_code' => 'response_submitted',    'to_code' => 'under_review',          'label' => 'Begin Review',       'capability' => 'operations.quality.scar.review', 'position' => 0],
+            ['from_code' => 'under_review',          'to_code' => 'action_required',       'label' => 'Request Revision',   'capability' => 'operations.quality.scar.rework', 'position' => 0],
+            ['from_code' => 'under_review',          'to_code' => 'verification_pending',  'label' => 'Accept Response',    'capability' => 'operations.quality.scar.accept', 'position' => 1],
             ['from_code' => 'action_required',       'to_code' => 'response_submitted',    'label' => 'Resubmit',           'capability' => null, 'position' => 0],
-            ['from_code' => 'verification_pending',  'to_code' => 'closed',                'label' => 'Verify and Close',   'capability' => 'workflow.quality_scar.close',  'position' => 0],
-            ['from_code' => 'verification_pending',  'to_code' => 'action_required',       'label' => 'Verification Failed', 'capability' => 'workflow.quality_scar.rework', 'position' => 1],
+            ['from_code' => 'verification_pending',  'to_code' => 'closed',                'label' => 'Verify and Close',   'capability' => 'operations.quality.scar.close',  'position' => 0],
+            ['from_code' => 'verification_pending',  'to_code' => 'action_required',       'label' => 'Verification Failed', 'capability' => 'operations.quality.scar.rework', 'position' => 1],
         ];
     }
 }

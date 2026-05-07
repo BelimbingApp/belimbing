@@ -6,26 +6,26 @@
 return [
     'items' => [
         [
-            'id' => 'quality',
+            'id' => 'operations.quality',
             'label' => 'Quality',
             'icon' => 'heroicon-o-shield-check',
             'parent' => 'operations',
         ],
         [
-            'id' => 'quality.ncr',
+            'id' => 'operations.quality.ncr',
             'label' => 'NCR',
             'icon' => 'heroicon-o-flag',
             'route' => 'quality.ncr.index',
-            'permission' => 'quality.ncr.view',
-            'parent' => 'quality',
+            'permission' => 'operations.quality.ncr.view',
+            'parent' => 'operations.quality',
         ],
         [
-            'id' => 'quality.scar',
+            'id' => 'operations.quality.scar',
             'label' => 'SCAR',
             'icon' => 'heroicon-o-clipboard-document-check',
             'route' => 'quality.scar.index',
-            'permission' => 'quality.scar.view',
-            'parent' => 'quality',
+            'permission' => 'operations.quality.scar.view',
+            'parent' => 'operations.quality',
         ],
     ],
 ];

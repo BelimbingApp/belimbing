@@ -17,13 +17,13 @@ test('ai admin menu is hidden when the user lacks AI admin capabilities', functi
     $tree = app(MenuBuilder::class)->build($snapshot['filtered']);
 
     expect($flat)->not->toHaveKeys([
-        'ai.lara',
-        'ai.providers',
-        'ai.pricing-overrides',
-        'ai.tools',
-        'ai.control-plane',
+        'admin.ai.lara',
+        'admin.ai.provider',
+        'admin.ai.pricing-override',
+        'admin.ai.tool',
+        'admin.ai.control-plane',
     ]);
-    expect(flattenMenuTreeIds($tree))->not->toContain('ai');
+    expect(flattenMenuTreeIds($tree))->not->toContain('admin.ai');
 });
 
 test('ai operators see the full AI admin menu', function (): void {
@@ -34,13 +34,13 @@ test('ai operators see the full AI admin menu', function (): void {
     $tree = app(MenuBuilder::class)->build($snapshot['filtered']);
 
     expect($flat)->toHaveKeys([
-        'ai.lara',
-        'ai.providers',
-        'ai.pricing-overrides',
-        'ai.tools',
-        'ai.control-plane',
+        'admin.ai.lara',
+        'admin.ai.provider',
+        'admin.ai.pricing-override',
+        'admin.ai.tool',
+        'admin.ai.control-plane',
     ]);
-    expect(flattenMenuTreeIds($tree))->toContain('ai');
+    expect(flattenMenuTreeIds($tree))->toContain('admin.ai');
 });
 
 function createAiMenuTestUserWithRole(string $roleCode): User

@@ -9,9 +9,9 @@ return [
     ],
 
     'capabilities' => [
-        'commerce.inventory_item.create',
-        'commerce.inventory_item.list',
-        'commerce.inventory_item.update',
-        'commerce.inventory_item.view',
+        'commerce.inventory.item.create',
+        'commerce.inventory.item.list',
+        'commerce.inventory.item.update',
+        'commerce.inventory.item.view',
     ],
 ];

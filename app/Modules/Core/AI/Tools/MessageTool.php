@@ -33,7 +33,7 @@ use Illuminate\Support\Facades\Auth;
  * edit, delete, poll, list, search) remain stubbed until their backing
  * services are implemented.
  *
- * Gated by `ai.tool_message.execute` authz capability.
+ * Gated by `admin.ai.tool.message.execute` authz capability.
  * Per-channel send capabilities (e.g., `messaging.whatsapp.send`) are
  * enforced at the authz layer, not within this tool.
  */
@@ -102,7 +102,7 @@ class MessageTool extends AbstractActionTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_message.execute';
+        return 'admin.ai.tool.message.execute';
     }
 
     protected function toolMetadata(): array

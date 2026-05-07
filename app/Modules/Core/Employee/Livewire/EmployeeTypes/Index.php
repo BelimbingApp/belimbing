@@ -67,7 +67,7 @@ class Index extends Component
     {
         $authUser = auth()->user();
         $authActor = Actor::forUser($authUser);
-        $canCreate = app(AuthorizationService::class)->can($authActor, 'core.employee_type.create')->allowed;
+        $canCreate = app(AuthorizationService::class)->can($authActor, 'people.employee-type.create')->allowed;
 
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'is_system';
 

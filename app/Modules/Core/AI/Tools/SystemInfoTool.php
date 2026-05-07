@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\DB;
  * details, active modules, configured AI providers, and health checks.
  * The LLM reads this to answer system-related questions.
  *
- * Gated by `ai.tool_system_info.execute` authz capability.
+ * Gated by `admin.ai.tool.system-info.execute` authz capability.
  */
 class SystemInfoTool extends AbstractTool
 {
@@ -76,7 +76,7 @@ class SystemInfoTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_system_info.execute';
+        return 'admin.ai.tool.system-info.execute';
     }
 
     protected function metadata(): array

@@ -6,18 +6,18 @@
 return [
     'items' => [
         [
-            'id' => 'it',
+            'id' => 'operations.it',
             'label' => 'IT',
             'icon' => 'heroicon-o-computer-desktop',
             'parent' => 'operations',
         ],
         [
-            'id' => 'it.tickets',
+            'id' => 'operations.it.ticket',
             'label' => 'Tickets',
             'icon' => 'heroicon-o-ticket',
             'route' => 'it.tickets.index',
-            'permission' => 'it_ticket.ticket.list',
-            'parent' => 'it',
+            'permission' => 'operations.it.ticket.list',
+            'parent' => 'operations.it',
         ],
     ],
 ];

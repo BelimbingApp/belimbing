@@ -9,10 +9,10 @@ return [
     ],
 
     'capabilities' => [
-        'core.company.view',
-        'core.company.list',
-        'core.company.create',
-        'core.company.update',
-        'core.company.delete',
+        'admin.company.view',
+        'admin.company.list',
+        'admin.company.create',
+        'admin.company.update',
+        'admin.company.delete',
     ],
 ];

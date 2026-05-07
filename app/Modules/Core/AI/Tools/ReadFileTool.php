@@ -54,7 +54,7 @@ class ReadFileTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_read_file.execute';
+        return 'admin.ai.tool.read-file.execute';
     }
 
     protected function toolMetadata(): array

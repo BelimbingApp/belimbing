@@ -87,7 +87,7 @@ class EditTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_edit.execute';
+        return 'admin.ai.tool.edit.execute';
     }
 
     protected function toolMetadata(): array

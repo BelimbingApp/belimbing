@@ -5,6 +5,6 @@
 
 return [
     'capabilities' => [
-        'admin.system_log.list',
+        'admin.system.log.list',
     ],
 ];

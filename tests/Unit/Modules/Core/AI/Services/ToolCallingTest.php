@@ -204,7 +204,7 @@ describe('AgentToolRegistry', function () {
 
     it('filters tools by user authz capabilities', function () {
         $registry = new AgentToolRegistry(makeDenyAllAuthzService());
-        $registry->register(makeSimpleTool('restricted', 'ai.tool_artisan.execute'));
+        $registry->register(makeSimpleTool('restricted', 'admin.ai.tool.artisan.execute'));
         $registry->register(makeSimpleTool('public', null));
 
         $definitions = $registry->toolDefinitionsForCurrentUser();
@@ -216,7 +216,7 @@ describe('AgentToolRegistry', function () {
 
     it('denies execution for tools the user lacks capability for', function () {
         $registry = new AgentToolRegistry(makeDenyAllAuthzService());
-        $registry->register(makeSimpleTool('restricted', 'ai.tool_artisan.execute'));
+        $registry->register(makeSimpleTool('restricted', 'admin.ai.tool.artisan.execute'));
 
         $result = $registry->execute('restricted', ['input' => 'test']);
 
@@ -312,7 +312,7 @@ describe('ArtisanTool', function () {
         $tool = new ArtisanTool(Mockery::mock(BackgroundCommandService::class));
 
         expect($tool->name())->toBe('artisan');
-        expect($tool->requiredCapability())->toBe('ai.tool_artisan.execute');
+        expect($tool->requiredCapability())->toBe('admin.ai.tool.artisan.execute');
     });
 
     it('returns error for empty command', function () {
@@ -337,7 +337,7 @@ describe('NavigateTool', function () {
         $tool = new NavigateTool;
 
         expect($tool->name())->toBe('navigate');
-        expect($tool->requiredCapability())->toBe('ai.tool_navigate.execute');
+        expect($tool->requiredCapability())->toBe('admin.ai.tool.navigate.execute');
     });
 
     it('returns agent-action block for valid URL', function () {
@@ -380,7 +380,7 @@ describe('BashTool', function () {
         $tool = new BashTool;
 
         expect($tool->name())->toBe('bash');
-        expect($tool->requiredCapability())->toBe('ai.tool_bash.execute');
+        expect($tool->requiredCapability())->toBe('admin.ai.tool.bash.execute');
     });
 
     it('returns error for empty command', function () {
@@ -434,7 +434,7 @@ describe('DelegateTaskTool', function () {
         $tool = makeToolCallingDelegateTool();
 
         expect($tool->name())->toBe('delegate_task');
-        expect($tool->requiredCapability())->toBe('ai.tool_delegate.execute');
+        expect($tool->requiredCapability())->toBe('admin.ai.tool.delegate.execute');
     });
 
     it('returns error for empty task', function () {
@@ -539,7 +539,7 @@ describe('DocumentAnalysisTool', function () {
         $tool = new DocumentAnalysisTool;
 
         expect($tool->name())->toBe('document_analysis');
-        expect($tool->requiredCapability())->toBe('ai.tool_document_analysis.execute');
+        expect($tool->requiredCapability())->toBe('admin.ai.tool.document-analysis.execute');
     });
 
     it('returns error for empty or missing path', function () {
@@ -604,7 +604,7 @@ describe('ImageAnalysisTool', function () {
         $tool = new ImageAnalysisTool;
 
         expect($tool->name())->toBe('image_analysis');
-        expect($tool->requiredCapability())->toBe('ai.tool_image_analysis.execute');
+        expect($tool->requiredCapability())->toBe('admin.ai.tool.image-analysis.execute');
     });
 
     it('returns error for empty or missing path', function () {

@@ -45,7 +45,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'delegation_status',
-            'ai.tool_delegation_status.execute',
+            'admin.ai.tool.delegation-status.execute',
             ['action', 'dispatch_id', 'type', 'status', 'limit'],
             ['action'],
         );

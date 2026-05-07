@@ -10,9 +10,15 @@ use InvalidArgumentException;
 final class CapabilityKey
 {
     /**
-     * Capability key pattern: <domain>.<resource>.<action>.
+     * Capability key pattern: <domain>.<resource-path>.<action>.
+     *
+     * Segments are lowercase words with optional numbers and hyphens.
+     * The first segment is the domain, the last segment is the action, and
+     * any middle segments form the resource path.
      */
-    private const PATTERN = '/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/';
+    private const SEGMENT = '[a-z][a-z0-9]*(?:-[a-z0-9]+)*';
+
+    private const PATTERN = '/^'.self::SEGMENT.'(?:\.'.self::SEGMENT.'){2,}$/';
 
     /**
      * Determine whether a capability key uses the BLB grammar.
@@ -33,11 +39,13 @@ final class CapabilityKey
             throw new InvalidArgumentException("Invalid capability key [$key].");
         }
 
-        [$domain, $resource, $action] = explode('.', $key, 3);
+        $segments = explode('.', $key);
+        $domain = array_shift($segments);
+        $action = array_pop($segments);
 
         return [
             'domain' => $domain,
-            'resource' => $resource,
+            'resource' => implode('.', $segments),
             'action' => $action,
         ];
     }

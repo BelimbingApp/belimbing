@@ -205,7 +205,7 @@ test('validator denies transition when actor lacks required capability', functio
 
     $transition = StatusTransition::query()
         ->where('flow', WF_TEST_FLOW)->where('from_code', 'open')->where('to_code', 'in_progress')->first();
-    $transition->update(['capability' => 'workflow.test_ticket.start_work']);
+    $transition->update(['capability' => 'admin.workflow.manage']);
 
     $validator = app(TransitionValidator::class);
     $actor = createTestActor();
@@ -221,7 +221,7 @@ test('validator allows transition when actor has required capability', function 
     $transition = StatusTransition::query()
         ->where('flow', WF_TEST_FLOW)->where('from_code', 'open')->where('to_code', 'in_progress')->first();
     // Use a capability registered in Config/authz.php so KnownCapabilityPolicy passes
-    $transition->update(['capability' => 'workflow.process.manage']);
+    $transition->update(['capability' => 'admin.workflow.manage']);
 
     $actor = Actor::forUser($user);
     $validator = app(TransitionValidator::class);

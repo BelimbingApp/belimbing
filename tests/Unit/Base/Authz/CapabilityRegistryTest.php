@@ -9,7 +9,8 @@ use Tests\TestCase;
 uses(TestCase::class);
 
 it('validates capability key grammar', function (): void {
-    expect(CapabilityKey::isValid('core.user.view'))->toBeTrue();
+    expect(CapabilityKey::isValid('admin.user.view'))->toBeTrue();
+    expect(CapabilityKey::isValid('admin.system.database-table.list'))->toBeTrue();
     expect(CapabilityKey::isValid('Core.User.View'))->toBeFalse();
     expect(CapabilityKey::isValid('core.user'))->toBeFalse();
 });
@@ -21,8 +22,8 @@ it('builds registry from configured catalog', function (): void {
     $catalog = CapabilityCatalog::fromConfig($authzConfig);
     $registry = CapabilityRegistry::fromCatalog($catalog);
 
-    expect($registry->has('core.user.view'))->toBeTrue();
-    expect($registry->forDomain('core'))->toContain('core.company.view');
+    expect($registry->has('admin.user.view'))->toBeTrue();
+    expect($registry->forDomain('admin'))->toContain('admin.company.view');
 });
 
 it('throws for unknown capability', function (): void {

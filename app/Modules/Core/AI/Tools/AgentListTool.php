@@ -22,7 +22,7 @@ use App\Modules\Core\AI\Services\Orchestration\AgentCapabilityCatalog;
  * capability data. Uses the AgentCapabilityCatalog for richer
  * discovery than the legacy keyword matcher.
  *
- * Gated by `ai.tool_agent_list.execute` authz capability.
+ * Gated by `admin.ai.tool.agent-list.execute` authz capability.
  */
 class AgentListTool extends AbstractTool
 {
@@ -67,7 +67,7 @@ class AgentListTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_agent_list.execute';
+        return 'admin.ai.tool.agent-list.execute';
     }
 
     protected function metadata(): array

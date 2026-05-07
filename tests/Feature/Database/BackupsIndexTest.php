@@ -35,7 +35,7 @@ test('unauthenticated request is redirected from the backups page', function ():
         ->assertRedirect();
 });
 
-test('authenticated user without admin.backup.list capability is denied', function (): void {
+test('authenticated user without admin.system.database-backup.list capability is denied', function (): void {
     setupAuthzRoles();
 
     // Build a user without core_admin (no roles attached).

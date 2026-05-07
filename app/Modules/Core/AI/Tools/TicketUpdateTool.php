@@ -26,7 +26,7 @@ use App\Modules\Operation\IT\Services\TicketService;
  * updates, questions, deliverables, errors) and transition the ticket
  * to a new status. All mutations flow through TicketService.
  *
- * Gated by `ai.tool_ticket_update.execute` authz capability.
+ * Gated by `admin.ai.tool.ticket-update.execute` authz capability.
  */
 class TicketUpdateTool extends AbstractTool
 {
@@ -105,7 +105,7 @@ class TicketUpdateTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_ticket_update.execute';
+        return 'admin.ai.tool.ticket-update.execute';
     }
 
     protected function toolMetadata(): array

@@ -9,10 +9,10 @@ return [
     ],
 
     'capabilities' => [
-        'core.address.view',
-        'core.address.list',
-        'core.address.create',
-        'core.address.update',
-        'core.address.delete',
+        'admin.address.view',
+        'admin.address.list',
+        'admin.address.create',
+        'admin.address.update',
+        'admin.address.delete',
     ],
 ];

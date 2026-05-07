@@ -182,7 +182,7 @@ class Show extends Component
     public function canEdit(): bool
     {
         return app(AuthorizationService::class)
-            ->can(Actor::forUser(Auth::user()), 'commerce.inventory_item.update')
+            ->can(Actor::forUser(Auth::user()), 'commerce.inventory.item.update')
             ->allowed;
     }
 
@@ -213,7 +213,7 @@ class Show extends Component
     {
         app(AuthorizationService::class)->authorize(
             Actor::forUser(Auth::user()),
-            'commerce.inventory_item.update',
+            'commerce.inventory.item.update',
         );
     }
 }

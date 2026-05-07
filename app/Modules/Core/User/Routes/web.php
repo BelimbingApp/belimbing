@@ -54,13 +54,13 @@ Route::middleware('auth')->group(function () {
 
     // User admin
     Route::get('admin/users', Index::class)
-        ->middleware('authz:core.user.list')
+        ->middleware('authz:admin.user.list')
         ->name('admin.users.index');
     Route::get('admin/users/create', Create::class)
-        ->middleware('authz:core.user.create')
+        ->middleware('authz:admin.user.create')
         ->name('admin.users.create');
     Route::get('admin/users/{user}', Show::class)
-        ->middleware('authz:core.user.view')
+        ->middleware('authz:admin.user.view')
         ->name('admin.users.show');
 
     // User settings

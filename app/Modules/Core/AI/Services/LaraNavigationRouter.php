@@ -175,7 +175,7 @@ class LaraNavigationRouter
             'users' => [
                 'route' => 'admin.users.index',
                 'label' => __('Users'),
-                'capability' => 'core.user.list',
+                'capability' => 'admin.user.list',
             ],
             'companies' => [
                 'route' => 'admin.companies.index',
@@ -190,7 +190,7 @@ class LaraNavigationRouter
             'roles' => [
                 'route' => 'admin.roles.index',
                 'label' => __('Roles'),
-                'capability' => 'admin.role.list',
+                'capability' => 'admin.authz.role.list',
             ],
             'addresses' => [
                 'route' => 'admin.addresses.index',
@@ -200,27 +200,27 @@ class LaraNavigationRouter
             'providers' => [
                 'route' => 'admin.ai.providers',
                 'label' => __('AI Providers'),
-                'capability' => 'admin.ai_provider.manage',
+                'capability' => 'admin.ai.provider.manage',
             ],
             'models' => [
                 'route' => 'admin.ai.providers',
                 'label' => __('AI Providers'),
-                'capability' => 'admin.ai_provider.manage',
+                'capability' => 'admin.ai.provider.manage',
             ],
             'playground' => [
                 'route' => 'admin.ai.task-models',
                 'label' => __('Task Models'),
-                'capability' => 'admin.ai_task_model.manage',
+                'capability' => 'admin.ai.task-model.manage',
             ],
             'task-models' => [
                 'route' => 'admin.ai.task-models',
                 'label' => __('Task Models'),
-                'capability' => 'admin.ai_task_model.manage',
+                'capability' => 'admin.ai.task-model.manage',
             ],
             'setup-lara' => [
                 'route' => 'admin.setup.lara',
                 'label' => __('Lara Setup'),
-                'capability' => 'admin.ai_lara.manage',
+                'capability' => 'admin.ai.lara.manage',
             ],
         ];
     }

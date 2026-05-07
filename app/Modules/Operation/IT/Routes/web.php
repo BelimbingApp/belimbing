@@ -10,14 +10,14 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {
     Route::get('it/tickets', Index::class)
-        ->middleware('authz:it_ticket.ticket.list')
+        ->middleware('authz:operations.it.ticket.list')
         ->name('it.tickets.index');
 
     Route::get('it/tickets/create', Create::class)
-        ->middleware('authz:it_ticket.ticket.create')
+        ->middleware('authz:operations.it.ticket.create')
         ->name('it.tickets.create');
 
     Route::get('it/tickets/{ticket}', Show::class)
-        ->middleware('authz:it_ticket.ticket.view')
+        ->middleware('authz:operations.it.ticket.view')
         ->name('it.tickets.show');
 });

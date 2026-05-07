@@ -19,7 +19,7 @@ use App\Base\AI\Tools\ToolResult;
  * Allows an agent to navigate the user's browser to Belimbing pages.
  * Returns an `<agent-action>` block that the client-side executor handles.
  *
- * Gated by `ai.tool_navigate.execute` authz capability.
+ * Gated by `admin.ai.tool.navigate.execute` authz capability.
  */
 class NavigateTool extends AbstractTool
 {
@@ -59,7 +59,7 @@ class NavigateTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_navigate.execute';
+        return 'admin.ai.tool.navigate.execute';
     }
 
     protected function metadata(): array

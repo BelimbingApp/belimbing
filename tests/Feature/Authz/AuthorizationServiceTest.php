@@ -17,7 +17,7 @@ beforeEach(function (): void {
 it('denies when actor context is invalid', function (): void {
     $service = app(AuthorizationService::class);
 
-    $decision = $service->can(new Actor(PrincipalType::USER, 0, null), 'core.user.view');
+    $decision = $service->can(new Actor(PrincipalType::USER, 0, null), 'admin.user.view');
 
     expect($decision->allowed)->toBeFalse();
     expect($decision->reasonCode)->toBe(AuthorizationReasonCode::DENIED_INVALID_ACTOR_CONTEXT);
@@ -28,7 +28,7 @@ it('denies when Agent has no acting_for_user_id', function (): void {
 
     $decision = $service->can(
         new Actor(PrincipalType::AGENT, 1, 10),
-        'core.user.view'
+        'admin.user.view'
     );
 
     expect($decision->allowed)->toBeFalse();
@@ -40,7 +40,7 @@ it('denies when resource company is outside actor scope', function (): void {
 
     $decision = $service->can(
         new Actor(PrincipalType::USER, 888, 10),
-        'core.user.view',
+        'admin.user.view',
         new ResourceContext('users', 1, 20)
     );
 
@@ -74,7 +74,7 @@ it('allows when user has capability via role', function (): void {
 
     $decision = $service->can(
         new Actor(PrincipalType::USER, 42, 10),
-        'core.user.view'
+        'admin.user.view'
     );
 
     expect($decision->allowed)->toBeTrue();
@@ -87,7 +87,7 @@ it('allows when user has explicit direct capability grant', function (): void {
         'company_id' => 10,
         'principal_type' => PrincipalType::USER->value,
         'principal_id' => 55,
-        'capability_key' => 'core.company.view',
+        'capability_key' => 'admin.company.view',
         'is_allowed' => true,
     ]);
 
@@ -95,7 +95,7 @@ it('allows when user has explicit direct capability grant', function (): void {
 
     $decision = $service->can(
         new Actor(PrincipalType::USER, 55, 10),
-        'core.company.view'
+        'admin.company.view'
     );
 
     expect($decision->allowed)->toBeTrue();
@@ -116,7 +116,7 @@ it('denies when user has explicit direct deny even with role grant', function ()
         'company_id' => 10,
         'principal_type' => PrincipalType::USER->value,
         'principal_id' => 60,
-        'capability_key' => 'core.user.delete',
+        'capability_key' => 'admin.user.delete',
         'is_allowed' => false,
     ]);
 
@@ -124,7 +124,7 @@ it('denies when user has explicit direct deny even with role grant', function ()
 
     $decision = $service->can(
         new Actor(PrincipalType::USER, 60, 10),
-        'core.user.delete'
+        'admin.user.delete'
     );
 
     expect($decision->allowed)->toBeFalse();
@@ -136,7 +136,7 @@ it('denies when user has no grants at all', function (): void {
 
     $decision = $service->can(
         new Actor(PrincipalType::USER, 999, 10),
-        'core.user.view'
+        'admin.user.view'
     );
 
     expect($decision->allowed)->toBeFalse();
@@ -162,7 +162,7 @@ it('filters allowed resources correctly', function (): void {
         new ResourceContext('users', 3, 10),
     ];
 
-    $allowed = $service->filterAllowed($actor, 'core.user.view', $resources);
+    $allowed = $service->filterAllowed($actor, 'admin.user.view', $resources);
 
     expect($allowed)->toHaveCount(2);
     expect($allowed[0]->id)->toBe(1);
@@ -174,7 +174,7 @@ it('allows agent with valid acting_for_user_id', function (): void {
         'company_id' => 10,
         'principal_type' => PrincipalType::AGENT->value,
         'principal_id' => 100,
-        'capability_key' => 'ai.agent.execute',
+        'capability_key' => 'admin.ai.agent.execute',
         'is_allowed' => true,
     ]);
 
@@ -182,7 +182,7 @@ it('allows agent with valid acting_for_user_id', function (): void {
 
     $decision = $service->can(
         new Actor(PrincipalType::AGENT, 100, 10, actingForUserId: 42),
-        'ai.agent.execute'
+        'admin.ai.agent.execute'
     );
 
     expect($decision->allowed)->toBeTrue();
@@ -202,7 +202,7 @@ it('records applied policy trail in decision', function (): void {
 
     $decision = $service->can(
         new Actor(PrincipalType::USER, 80, 10),
-        'core.user.view'
+        'admin.user.view'
     );
 
     expect($decision->allowed)->toBeTrue();

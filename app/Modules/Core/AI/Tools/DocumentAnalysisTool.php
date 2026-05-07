@@ -22,7 +22,7 @@ use App\Base\AI\Tools\ToolResult;
  * Note: Currently returns stub responses. PDF parser and LLM integration
  * will be implemented once the document processing infrastructure is deployed.
  *
- * Gated by `ai.tool_document_analysis.execute` authz capability.
+ * Gated by `admin.ai.tool.document-analysis.execute` authz capability.
  */
 class DocumentAnalysisTool extends AbstractTool
 {
@@ -87,7 +87,7 @@ class DocumentAnalysisTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_document_analysis.execute';
+        return 'admin.ai.tool.document-analysis.execute';
     }
 
     /**

@@ -27,7 +27,7 @@ class Show extends Component
 
         return view('livewire.admin.integration.outbound-exchanges.show', [
             'exchange' => $exchange,
-            'canViewPayload' => $this->capabilityAllows('admin.integration_payload.view'),
+            'canViewPayload' => $this->capabilityAllows('admin.system.outbound-exchange.payload.view'),
             'outcomeBadge' => [
                 'label' => $this->outcomeLabel($exchange->outcome),
                 'variant' => $this->outcomeVariant($exchange->outcome),

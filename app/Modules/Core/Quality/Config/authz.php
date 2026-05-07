@@ -5,54 +5,41 @@
 
 return [
     'domains' => [
-        'quality' => 'Quality management (NCR, CAPA, SCAR)',
-        'workflow' => 'Workflow and state transitions',
+        'operations' => 'Operational modules, including quality management.',
     ],
 
     'capabilities' => [
         // NCR module capabilities
-        'quality.ncr.create',
-        'quality.ncr.view',
-        'quality.ncr.triage',
-        'quality.ncr.assign',
-        'quality.ncr.respond',
-        'quality.ncr.review',
-        'quality.ncr.verify',
-        'quality.ncr.close',
-        'quality.ncr.reject',
+        'operations.quality.ncr.create',
+        'operations.quality.ncr.view',
+        'operations.quality.ncr.triage',
+        'operations.quality.ncr.assign',
+        'operations.quality.ncr.respond',
+        'operations.quality.ncr.review',
+        'operations.quality.ncr.rework',
+        'operations.quality.ncr.verify',
+        'operations.quality.ncr.close',
+        'operations.quality.ncr.reject',
 
         // SCAR module capabilities
-        'quality.scar.create',
-        'quality.scar.view',
-        'quality.scar.issue',
-        'quality.scar.review',
-        'quality.scar.accept',
-        'quality.scar.rework',
-        'quality.scar.close',
-        'quality.scar.cancel',
-        'quality.scar.reject',
+        'operations.quality.scar.create',
+        'operations.quality.scar.view',
+        'operations.quality.scar.issue',
+        'operations.quality.scar.review',
+        'operations.quality.scar.accept',
+        'operations.quality.scar.rework',
+        'operations.quality.scar.close',
+        'operations.quality.scar.cancel',
+        'operations.quality.scar.reject',
 
         // Evidence capabilities
-        'quality.evidence.upload',
-        'quality.evidence.view',
+        'operations.quality.evidence.upload',
+        'operations.quality.evidence.view',
 
         // Knowledge and reporting capabilities
-        'quality.knowledge.view',
-        'quality.report.view',
+        'operations.quality.knowledge.view',
+        'operations.quality.report.view',
 
-        // Workflow transition capabilities (used by StatusTransition.capability)
-        'workflow.quality_ncr.triage',
-        'workflow.quality_ncr.assign',
-        'workflow.quality_ncr.rework',
-        'workflow.quality_ncr.verify',
-        'workflow.quality_ncr.reject',
-        'workflow.quality_ncr.close',
-        'workflow.quality_scar.issue',
-        'workflow.quality_scar.review',
-        'workflow.quality_scar.accept',
-        'workflow.quality_scar.rework',
-        'workflow.quality_scar.close',
-        'workflow.quality_scar.cancel',
-        'workflow.quality_scar.reject',
+        // Workflow transitions use the same menu-aligned capability keys.
     ],
 ];

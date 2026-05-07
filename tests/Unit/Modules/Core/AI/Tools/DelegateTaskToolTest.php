@@ -71,7 +71,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'delegate_task',
-            'ai.tool_delegate.execute',
+            'admin.ai.tool.delegate.execute',
             ['task', 'task_type', 'agent_id'],
             ['task', 'task_type'],
         );

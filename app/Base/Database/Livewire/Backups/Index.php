@@ -20,8 +20,8 @@ use Throwable;
 /**
  * Admin UI for the database backup pipeline.
  *
- * Read = admin.backup.list (route middleware).
- * Write = admin.backup.create / admin.backup.delete (enforced inside actions).
+ * Read = admin.system.database-backup.list (route middleware).
+ * Write = admin.system.database-backup.create / admin.system.database-backup.delete (enforced inside actions).
  *
  * Restore is intentionally CLI-only; the UI does not expose a restore action
  * because restore writes to a database and the operator must consciously stage
@@ -51,7 +51,7 @@ class Index extends Component
         $service ??= app(BackupService::class);
         $filesystemManager ??= app(FilesystemManager::class);
 
-        $this->requireCapability('admin.backup.create');
+        $this->requireCapability('admin.system.database-backup.create');
 
         $config = $this->resolveConfig();
         if (($config['enabled'] ?? true) === false) {
@@ -94,7 +94,7 @@ class Index extends Component
 
     public function verify(string $manifestPath, BackupService $service, FilesystemManager $filesystemManager): void
     {
-        $this->requireCapability('admin.backup.list');
+        $this->requireCapability('admin.system.database-backup.list');
 
         $config = $this->resolveConfig();
         $diskName = (string) ($config['disk'] ?? 'local');
@@ -135,7 +135,7 @@ class Index extends Component
 
     public function delete(string $manifestPath, BackupService $service, FilesystemManager $filesystemManager): void
     {
-        $this->requireCapability('admin.backup.delete');
+        $this->requireCapability('admin.system.database-backup.delete');
 
         $config = $this->resolveConfig();
         $diskName = (string) ($config['disk'] ?? 'local');
@@ -180,9 +180,9 @@ class Index extends Component
             'pathPrefix' => (string) ($config['path_prefix'] ?? 'backups'),
             'keepDays' => (int) ($config['retention']['keep_days'] ?? 0),
             'keepCount' => (int) ($config['retention']['keep_count'] ?? 0),
-            'canCreate' => $this->capabilityAllows('admin.backup.create'),
-            'canDelete' => $this->capabilityAllows('admin.backup.delete'),
-            'canManageSettings' => $this->capabilityAllows('admin.settings.manage'),
+            'canCreate' => $this->capabilityAllows('admin.system.database-backup.create'),
+            'canDelete' => $this->capabilityAllows('admin.system.database-backup.delete'),
+            'canManageSettings' => $this->capabilityAllows('admin.system.setting.manage'),
             'statusMessage' => $this->statusMessage,
             'statusVariant' => $this->statusVariant,
         ]);
@@ -261,7 +261,7 @@ class Index extends Component
      */
     public function saveField(string $field, mixed $value): void
     {
-        $this->requireCapability('admin.settings.manage');
+        $this->requireCapability('admin.system.setting.manage');
 
         $coerced = match ($field) {
             'backup.enabled'                  => filter_var($value, FILTER_VALIDATE_BOOLEAN) ? '1' : '0',

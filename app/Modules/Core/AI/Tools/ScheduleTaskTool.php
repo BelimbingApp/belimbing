@@ -31,7 +31,7 @@ use Illuminate\Support\Facades\Auth;
  * argument validation and response formatting; the service owns
  * persistence and business rules.
  *
- * Gated by `ai.tool_schedule.execute` authz capability.
+ * Gated by `admin.ai.tool.schedule.execute` authz capability.
  */
 class ScheduleTaskTool extends AbstractActionTool
 {
@@ -85,7 +85,7 @@ class ScheduleTaskTool extends AbstractActionTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_schedule.execute';
+        return 'admin.ai.tool.schedule.execute';
     }
 
     protected function toolMetadata(): array

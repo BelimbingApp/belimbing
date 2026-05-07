@@ -6,11 +6,11 @@
 return [
     'items' => [
         [
-            'id' => 'admin.users',
+            'id' => 'admin.user',
             'label' => 'Users',
             'icon' => 'heroicon-o-users',
             'route' => 'admin.users.index',
-            'permission' => 'core.user.list',
+            'permission' => 'admin.user.list',
             'parent' => 'admin',
         ],
     ],

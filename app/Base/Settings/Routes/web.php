@@ -8,6 +8,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function (): void {
     Route::get('admin/system/settings', Index::class)
-        ->middleware('authz:admin.settings.manage')
+        ->middleware('authz:admin.system.setting.manage')
         ->name('admin.settings.index');
 });

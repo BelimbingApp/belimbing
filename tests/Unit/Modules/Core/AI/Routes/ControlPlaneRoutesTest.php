@@ -10,13 +10,13 @@ uses(TestCase::class);
 
 it('registers authz middleware on AI admin routes', function (): void {
     $expectedMiddleware = [
-        'admin.setup.lara' => 'authz:admin.ai_lara.manage',
-        'admin.ai.task-models' => 'authz:admin.ai_task_model.manage',
-        'admin.ai.providers' => 'authz:admin.ai_provider.manage',
-        'admin.ai.providers.setup' => 'authz:admin.ai_provider.manage',
-        'admin.ai.tools' => 'authz:admin.ai_tool.manage',
-        'admin.ai.control-plane' => 'authz:admin.ai_control_plane.view',
-        'admin.ai.runs.show' => 'authz:admin.ai_control_plane.view',
+        'admin.setup.lara' => 'authz:admin.ai.lara.manage',
+        'admin.ai.task-models' => 'authz:admin.ai.task-model.manage',
+        'admin.ai.providers' => 'authz:admin.ai.provider.manage',
+        'admin.ai.providers.setup' => 'authz:admin.ai.provider.manage',
+        'admin.ai.tools' => 'authz:admin.ai.tool.manage',
+        'admin.ai.control-plane' => 'authz:admin.ai.control-plane.view',
+        'admin.ai.runs.show' => 'authz:admin.ai.control-plane.view',
     ];
 
     foreach ($expectedMiddleware as $routeName => $middleware) {

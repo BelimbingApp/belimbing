@@ -27,7 +27,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'notification',
-            'ai.tool_notification.execute',
+            'admin.ai.tool.notification.execute',
             ['user_id', 'channel', 'subject', 'body'],
             ['user_id', 'subject', 'body'],
         );

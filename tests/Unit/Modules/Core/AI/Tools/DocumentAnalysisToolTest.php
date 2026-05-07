@@ -32,7 +32,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'document_analysis',
-            'ai.tool_document_analysis.execute',
+            'admin.ai.tool.document-analysis.execute',
             ['path', 'prompt', 'pages', 'model'],
             ['path', 'prompt'],
         );

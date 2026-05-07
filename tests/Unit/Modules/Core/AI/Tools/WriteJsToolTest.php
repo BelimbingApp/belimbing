@@ -15,7 +15,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'write_js',
-            'ai.tool_write_js.execute',
+            'admin.ai.tool.write-js.execute',
             ['script', 'description'],
             ['script', 'description'],
         );

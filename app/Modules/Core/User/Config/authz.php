@@ -9,11 +9,11 @@ return [
     ],
 
     'capabilities' => [
-        'core.user.view',
-        'core.user.list',
-        'core.user.create',
-        'core.user.update',
-        'core.user.delete',
+        'admin.user.view',
+        'admin.user.list',
+        'admin.user.create',
+        'admin.user.update',
+        'admin.user.delete',
     ],
 
     'roles' => [
@@ -21,19 +21,19 @@ return [
             'name' => 'User Viewer',
             'description' => 'Read-only access to user management.',
             'capabilities' => [
-                'core.user.list',
-                'core.user.view',
+                'admin.user.list',
+                'admin.user.view',
             ],
         ],
         'user_editor' => [
             'name' => 'User Editor',
             'description' => 'Read-write access to user management.',
             'capabilities' => [
-                'core.user.list',
-                'core.user.view',
-                'core.user.create',
-                'core.user.update',
-                'core.user.delete',
+                'admin.user.list',
+                'admin.user.view',
+                'admin.user.create',
+                'admin.user.update',
+                'admin.user.delete',
             ],
         ],
     ],

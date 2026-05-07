@@ -24,7 +24,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'edit_data',
-            'ai.tool_edit_data.execute',
+            'admin.ai.tool.edit-data.execute',
             ['statement'],
             ['statement'],
         );

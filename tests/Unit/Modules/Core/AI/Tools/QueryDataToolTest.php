@@ -19,7 +19,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'query_data',
-            'ai.tool_query_data.execute',
+            'admin.ai.tool.query-data.execute',
             ['query', 'limit'],
             ['query'],
         );

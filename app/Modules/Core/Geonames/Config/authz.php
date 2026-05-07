@@ -9,7 +9,7 @@ return [
     ],
 
     'capabilities' => [
-        'core.geonames.view',
-        'core.geonames.list',
+        'admin.geonames.view',
+        'admin.geonames.list',
     ],
 ];

@@ -35,8 +35,8 @@ use RuntimeException;
  * This tool is an action router: it validates arguments, enforces SSRF and
  * evaluate policy gates, then dispatches to the session manager.
  *
- * Gated by `ai.tool_browser.execute` authz capability.
- * The `evaluate` action additionally requires `ai.tool_browser_evaluate.execute`.
+ * Gated by `admin.ai.tool.browser.execute` authz capability.
+ * The `evaluate` action additionally requires `admin.ai.tool.browser-evaluate.execute`.
  */
 class BrowserTool extends AbstractActionTool
 {
@@ -128,7 +128,7 @@ class BrowserTool extends AbstractActionTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_browser.execute';
+        return 'admin.ai.tool.browser.execute';
     }
 
     protected function toolMetadata(): array

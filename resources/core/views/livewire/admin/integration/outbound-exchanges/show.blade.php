@@ -76,7 +76,7 @@
         </x-ui.card>
 
         @if(! $canViewPayload)
-            <x-ui.alert variant="warning">{{ __('Retained payload inspection requires the admin.integration_payload.view capability.') }}</x-ui.alert>
+            <x-ui.alert variant="warning">{{ __('Retained payload inspection requires the admin.system.outbound-exchange.payload.view capability.') }}</x-ui.alert>
         @else
             <div class="grid gap-6 xl:grid-cols-2">
                 @foreach($payloadSections as $section)

@@ -22,7 +22,7 @@ use App\Modules\Core\Employee\Models\Employee;
  * Safety: Path traversal is blocked, absolute paths are rejected, binary
  * files are detected, and output is capped at 500 lines.
  *
- * Gated by `ai.tool_memory_get.execute` authz capability.
+ * Gated by `admin.ai.tool.memory-get.execute` authz capability.
  */
 class MemoryGetTool extends AbstractReadOnlyMemoryTool
 {
@@ -76,7 +76,7 @@ class MemoryGetTool extends AbstractReadOnlyMemoryTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_memory_get.execute';
+        return 'admin.ai.tool.memory-get.execute';
     }
 
     protected function metadata(): array

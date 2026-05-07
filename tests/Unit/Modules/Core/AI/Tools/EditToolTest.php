@@ -29,7 +29,7 @@ describe('tool metadata', function (): void {
         $this->assertToolMetadata(
             $this->tool,
             'edit',
-            'ai.tool_edit.execute',
+            'admin.ai.tool.edit.execute',
             ['target', 'file_path', 'statement'],
             [],
         );

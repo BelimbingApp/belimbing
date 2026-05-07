@@ -26,7 +26,7 @@ use App\Modules\Core\AI\Services\RepositorySurfaceResolver;
  * - append: Append content to an existing file
  * - replace: Replace one exact text block with another
  *
- * Gated by `ai.tool_edit_file.execute` authz capability.
+ * Gated by `admin.ai.tool.edit-file.execute` authz capability.
  */
 class EditFileTool extends AbstractTool
 {
@@ -125,7 +125,7 @@ class EditFileTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_edit_file.execute';
+        return 'admin.ai.tool.edit-file.execute';
     }
 
     protected function toolMetadata(): array

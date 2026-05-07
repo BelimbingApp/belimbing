@@ -141,7 +141,7 @@ it('stores multibyte payloads without truncation', function (): void {
 it('registers integration exchange authz capabilities', function (): void {
     $registry = app(CapabilityRegistry::class);
 
-    expect($registry->has('admin.integration_exchange.list'))->toBeTrue()
-        ->and($registry->has('admin.integration_payload.view'))->toBeTrue()
-        ->and($registry->has('admin.integration_exchange.delete'))->toBeTrue();
+    expect($registry->has('admin.system.outbound-exchange.list'))->toBeTrue()
+        ->and($registry->has('admin.system.outbound-exchange.payload.view'))->toBeTrue()
+        ->and($registry->has('admin.system.outbound-exchange.delete'))->toBeTrue();
 });

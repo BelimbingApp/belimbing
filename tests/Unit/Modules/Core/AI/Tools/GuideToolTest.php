@@ -17,7 +17,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'guide',
-            'ai.tool_guide.execute',
+            'admin.ai.tool.guide.execute',
             ['topic'],
             ['topic'],
         );

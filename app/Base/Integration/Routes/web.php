@@ -9,10 +9,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function (): void {
     Route::get('admin/integration/outbound-exchanges', Index::class)
-        ->middleware('authz:admin.integration_exchange.list')
+        ->middleware('authz:admin.system.outbound-exchange.list')
         ->name('admin.integration.outbound-exchanges.index');
 
     Route::get('admin/integration/outbound-exchanges/{exchange}', Show::class)
-        ->middleware('authz:admin.integration_exchange.list')
+        ->middleware('authz:admin.system.outbound-exchange.list')
         ->name('admin.integration.outbound-exchanges.show');
 });

@@ -32,7 +32,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'web_fetch',
-            'ai.tool_web_fetch.execute',
+            'admin.ai.tool.web-fetch.execute',
             ['url'],
             ['url'],
         );

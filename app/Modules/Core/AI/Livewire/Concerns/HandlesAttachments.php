@@ -41,7 +41,7 @@ trait HandlesAttachments
 
         $actor = Actor::forUser($user);
 
-        return app(AuthorizationService::class)->can($actor, 'ai.chat_attachments.manage')->allowed;
+        return app(AuthorizationService::class)->can($actor, 'admin.ai.chat-attachment.manage')->allowed;
     }
 
     /**

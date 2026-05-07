@@ -52,11 +52,11 @@ it('allows request when capability is authorized', function (): void {
     $request->setUserResolver(fn () => new FakeAuthenticatable(1, ['company_id' => 10]));
     $request->setRouteResolver(fn () => Route::getRoutes()->getByName('admin.users.index'));
 
-    $response = $middleware->handle($request, fn () => new Response('ok', 200), 'core.user.list');
+    $response = $middleware->handle($request, fn () => new Response('ok', 200), 'admin.user.list');
 
     expect($response->getStatusCode())->toBe(200)
         ->and($service->authorizeCall)->not->toBeNull()
-        ->and($service->authorizeCall['capability'])->toBe('core.user.list')
+        ->and($service->authorizeCall['capability'])->toBe('admin.user.list')
         ->and($service->authorizeCall['context'])->toBe(['route' => 'admin.users.index'])
         ->and($service->authorizeCall['actor']->id)->toBe(1)
         ->and($service->authorizeCall['actor']->companyId)->toBe(10);
@@ -95,7 +95,7 @@ it('aborts with 403 when capability is denied', function (): void {
             $nextCalled = true;
 
             return new Response('ok', 200);
-        }, 'core.user.list');
+        }, 'admin.user.list');
 
         $this->fail('Expected denied authorization to abort.');
     } catch (HttpException $exception) {
@@ -113,7 +113,7 @@ it('registers authz middleware on user routes', function (): void {
     expect($createRoute)->not->toBeNull();
     expect($showRoute)->not->toBeNull();
 
-    expect($indexRoute->gatherMiddleware())->toContain('authz:core.user.list');
-    expect($createRoute->gatherMiddleware())->toContain('authz:core.user.create');
-    expect($showRoute->gatherMiddleware())->toContain('authz:core.user.view');
+    expect($indexRoute->gatherMiddleware())->toContain('authz:admin.user.list');
+    expect($createRoute->gatherMiddleware())->toContain('authz:admin.user.create');
+    expect($showRoute->gatherMiddleware())->toContain('authz:admin.user.view');
 });

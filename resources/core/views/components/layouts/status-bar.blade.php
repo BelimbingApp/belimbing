@@ -12,7 +12,7 @@
         $user = auth()->user();
         $actor = \App\Base\Authz\DTO\Actor::forUser($user);
         $canManageLocalization = app(\App\Base\Authz\Contracts\AuthorizationService::class)
-            ->can($actor, 'admin.system_localization.manage')
+            ->can($actor, 'admin.system.localization.manage')
             ->allowed;
     }
 @endphp

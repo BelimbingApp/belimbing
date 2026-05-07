@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Process;
  * Background mode enforces a command allowlist policy to prevent
  * arbitrary command execution in queued context.
  *
- * Gated by `ai.tool_artisan.execute` authz capability.
+ * Gated by `admin.ai.tool.artisan.execute` authz capability.
  *
  * Safety: Only `php artisan` commands are allowed. Laravel's Process
  * class uses proc_open without shell invocation, so metacharacters
@@ -93,7 +93,7 @@ class ArtisanTool extends AbstractHighImpactProcessTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_artisan.execute';
+        return 'admin.ai.tool.artisan.execute';
     }
 
     protected function metadata(): array

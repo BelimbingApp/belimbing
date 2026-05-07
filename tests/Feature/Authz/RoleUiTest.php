@@ -73,12 +73,12 @@ test('capabilities can be assigned to a custom role', function (): void {
     ]);
 
     Livewire::test('admin.roles.show', ['role' => $role])
-        ->set('selectedCapabilities', ['core.user.create'])
+        ->set('selectedCapabilities', ['admin.user.create'])
         ->call('assignCapabilities');
 
     expect($role->capabilities()->count())->toBe(1);
     expect(
-        $role->capabilities()->where('capability_key', 'core.user.create')->exists()
+        $role->capabilities()->where('capability_key', 'admin.user.create')->exists()
     )->toBeTrue();
 });
 
@@ -96,18 +96,18 @@ test('capabilities can be removed from a custom role', function (): void {
     $now = now();
     DB::table('base_authz_role_capabilities')->insert([
         'role_id' => $role->id,
-        'capability_key' => 'core.user.view',
+        'capability_key' => 'admin.user.view',
         'created_at' => $now,
         'updated_at' => $now,
     ]);
 
-    $cap = $role->capabilities()->where('capability_key', 'core.user.view')->first();
+    $cap = $role->capabilities()->where('capability_key', 'admin.user.view')->first();
 
     Livewire::test('admin.roles.show', ['role' => $role])
         ->call('removeCapability', $cap->id);
 
     expect(
-        $role->capabilities()->where('capability_key', 'core.user.view')->exists()
+        $role->capabilities()->where('capability_key', 'admin.user.view')->exists()
     )->toBeFalse();
 });
 
@@ -184,7 +184,7 @@ test('system role capabilities cannot be modified via UI', function (): void {
     $initialCount = $role->capabilities()->count();
 
     Livewire::test('admin.roles.show', ['role' => $role])
-        ->set('selectedCapabilities', ['core.geonames.view'])
+        ->set('selectedCapabilities', ['admin.geonames.view'])
         ->call('assignCapabilities');
 
     expect($role->capabilities()->count())->toBe($initialCount);
@@ -306,7 +306,7 @@ test('users without update capability cannot modify role capabilities', function
     $viewer = User::factory()->create(['company_id' => $company->id]);
     $viewerRole = Role::query()->where('code', 'user_viewer')->whereNull('company_id')->firstOrFail();
 
-    // Give viewer only user_viewer role (has core.user.list + core.user.view, not admin.role.update)
+    // Give viewer only user_viewer role (has admin.user.list + admin.user.view, not admin.authz.role.update)
     PrincipalRole::query()->create([
         'company_id' => $company->id,
         'principal_type' => PrincipalType::USER->value,
@@ -320,7 +320,7 @@ test('users without update capability cannot modify role capabilities', function
     $this->actingAs($viewer);
 
     Livewire::test('admin.roles.show', ['role' => $targetRole])
-        ->set('selectedCapabilities', ['core.company.view'])
+        ->set('selectedCapabilities', ['admin.company.view'])
         ->call('assignCapabilities');
 
     expect($targetRole->capabilities()->count())->toBe($initialCount);
@@ -421,13 +421,13 @@ test('direct capabilities can be added to a user', function (): void {
     $this->actingAs($admin);
 
     Livewire::test('admin.users.show', ['user' => $targetUser])
-        ->set('selectedCapabilityKeys', ['core.company.view'])
+        ->set('selectedCapabilityKeys', ['admin.company.view'])
         ->call('addCapabilities');
 
     expect(
         PrincipalCapability::query()
             ->where('principal_id', $targetUser->id)
-            ->where('capability_key', 'core.company.view')
+            ->where('capability_key', 'admin.company.view')
             ->where('is_allowed', true)
             ->exists()
     )->toBeTrue();
@@ -442,7 +442,7 @@ test('direct capabilities can be removed from a user', function (): void {
         'company_id' => $company->id,
         'principal_type' => PrincipalType::USER->value,
         'principal_id' => $targetUser->id,
-        'capability_key' => 'core.company.view',
+        'capability_key' => 'admin.company.view',
         'is_allowed' => true,
     ]);
 
@@ -471,11 +471,11 @@ test('role capability can be denied for a user', function (): void {
     $this->actingAs($admin);
 
     Livewire::test('admin.users.show', ['user' => $targetUser])
-        ->call('denyCapability', 'core.user.view');
+        ->call('denyCapability', 'admin.user.view');
 
     $deny = PrincipalCapability::query()
         ->where('principal_id', $targetUser->id)
-        ->where('capability_key', 'core.user.view')
+        ->where('capability_key', 'admin.user.view')
         ->first();
 
     expect($deny)->not->toBeNull();
@@ -491,7 +491,7 @@ test('denied capability can be un-denied by removing it', function (): void {
         'company_id' => $company->id,
         'principal_type' => PrincipalType::USER->value,
         'principal_id' => $targetUser->id,
-        'capability_key' => 'core.user.view',
+        'capability_key' => 'admin.user.view',
         'is_allowed' => false,
     ]);
 

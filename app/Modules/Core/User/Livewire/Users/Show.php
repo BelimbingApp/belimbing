@@ -193,7 +193,7 @@ class Show extends Component
      */
     public function assignRoles(): void
     {
-        if (! $this->checkCapability('core.user.update')) {
+        if (! $this->checkCapability('admin.user.update')) {
             return;
         }
 
@@ -218,7 +218,7 @@ class Show extends Component
      */
     public function removeRole(int $principalRoleId): void
     {
-        if (! $this->checkCapability('core.user.update')) {
+        if (! $this->checkCapability('admin.user.update')) {
             return;
         }
 
@@ -234,7 +234,7 @@ class Show extends Component
      */
     public function addCapabilities(): void
     {
-        if (! $this->checkCapability('core.user.update')) {
+        if (! $this->checkCapability('admin.user.update')) {
             return;
         }
 
@@ -264,7 +264,7 @@ class Show extends Component
      */
     public function removeCapability(int $capabilityId): void
     {
-        if (! $this->checkCapability('core.user.update')) {
+        if (! $this->checkCapability('admin.user.update')) {
             return;
         }
 
@@ -280,7 +280,7 @@ class Show extends Component
      */
     public function denyCapability(string $capabilityKey): void
     {
-        if (! $this->checkCapability('core.user.update')) {
+        if (! $this->checkCapability('admin.user.update')) {
             return;
         }
 
@@ -306,7 +306,7 @@ class Show extends Component
      */
     public function linkEmployee(int $employeeId): void
     {
-        if (! $this->checkCapability('core.user.update')) {
+        if (! $this->checkCapability('admin.user.update')) {
             return;
         }
 
@@ -330,7 +330,7 @@ class Show extends Component
      */
     public function unlinkEmployee(int $employeeId): void
     {
-        if (! $this->checkCapability('core.user.update')) {
+        if (! $this->checkCapability('admin.user.update')) {
             return;
         }
 
@@ -347,7 +347,7 @@ class Show extends Component
      */
     public function addEmployee(): void
     {
-        if (! $this->checkCapability('core.user.update')) {
+        if (! $this->checkCapability('admin.user.update')) {
             return;
         }
 
@@ -385,7 +385,7 @@ class Show extends Component
         $authActor = Actor::forUser($authUser);
 
         $canManageRoles = app(AuthorizationService::class)
-            ->can($authActor, 'core.user.update')
+            ->can($authActor, 'admin.user.update')
             ->allowed;
 
         $assignedRoles = PrincipalRole::query()

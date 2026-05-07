@@ -54,7 +54,7 @@ class Index extends Component
 
     public function cleanupPayloads(OutboundExchangePruner $pruner): void
     {
-        $this->requireCapability('admin.integration_exchange.delete');
+        $this->requireCapability('admin.system.outbound-exchange.delete');
 
         $count = $pruner->prunePayloads();
         $this->statusMessage = trans_choice('{0} No retained payloads were old enough for cleanup.|{1} Cleaned retained payloads from 1 exchange.|[2,*] Cleaned retained payloads from :count exchanges.', $count, ['count' => $count]);
@@ -63,7 +63,7 @@ class Index extends Component
 
     public function deleteExchange(string $id): void
     {
-        $this->requireCapability('admin.integration_exchange.delete');
+        $this->requireCapability('admin.system.outbound-exchange.delete');
 
         OutboundExchange::query()->whereKey($id)->delete();
         $this->statusMessage = __('Deleted outbound exchange :id.', ['id' => $id]);
@@ -100,7 +100,7 @@ class Index extends Component
             'protocols' => $this->distinct('protocol'),
             'outcomes' => $this->distinct('outcome'),
             'ownerTypes' => $this->distinct('owner_type'),
-            'canDelete' => $this->capabilityAllows('admin.integration_exchange.delete'),
+            'canDelete' => $this->capabilityAllows('admin.system.outbound-exchange.delete'),
             'statusMessage' => $this->statusMessage,
             'statusVariant' => $this->statusVariant,
         ]);

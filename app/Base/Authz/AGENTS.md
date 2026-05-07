@@ -29,7 +29,7 @@ php artisan migrate:fresh --seed --dev
 ### Key Principles
 
 1. **Explicit Synchronization**: The system does not automatically sync database roles with config on every request for performance reasons. Manual seeding is required after config edits.
-2. **Capability Grammar**: All capability keys must follow the `<domain>.<resource>.<action>` format (e.g., `admin.system_log.list`).
+2. **Capability Grammar**: All capability keys must follow the `<domain>.<resource>.<action>` format (e.g., `admin.system.log.list`).
 3. **Effective Permissions**: The `EffectivePermissions` service combines role grants, direct allows, and explicit denies. Direct denies always win.
 
 ## Reference Files

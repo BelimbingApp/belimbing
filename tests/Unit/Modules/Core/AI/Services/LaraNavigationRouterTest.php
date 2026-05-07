@@ -77,7 +77,7 @@ it('resolves /go providers to AI Providers route', function (): void {
         ->and($result['navigation']['url'])->toBe(AI_PROVIDERS_URL);
 });
 
-it('resolves /go users when user has core.user.list capability', function (): void {
+it('resolves /go users when user has admin.user.list capability', function (): void {
     $fixture = $this->createLaraFixture();
     $this->actingAs($fixture['user']);
 
@@ -89,7 +89,7 @@ it('resolves /go users when user has core.user.list capability', function (): vo
         ->and($result['navigation']['url'])->toBe('/admin/users');
 });
 
-it('denies /go users when user lacks core.user.list capability', function (): void {
+it('denies /go users when user lacks admin.user.list capability', function (): void {
     $fixture = $this->createLaraFixture();
     $this->actingAs($fixture['user']);
 
@@ -102,7 +102,7 @@ it('denies /go users when user lacks core.user.list capability', function (): vo
         ->and($result['message'])->toContain('permission');
 });
 
-it('denies /go roles when user lacks admin.role.list capability', function (): void {
+it('denies /go roles when user lacks admin.authz.role.list capability', function (): void {
     $fixture = $this->createLaraFixture();
     $this->actingAs($fixture['user']);
 

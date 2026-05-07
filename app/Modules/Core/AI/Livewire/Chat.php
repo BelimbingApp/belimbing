@@ -380,7 +380,7 @@ class Chat extends Component
 
         $actor = Actor::forUser($user);
 
-        return app(AuthorizationService::class)->can($actor, 'ai.chat_model.manage')->allowed;
+        return app(AuthorizationService::class)->can($actor, 'admin.ai.chat-model.manage')->allowed;
     }
 
     public function canAccessControlPlane(): bool
@@ -391,7 +391,7 @@ class Chat extends Component
         }
 
         return app(AuthorizationService::class)
-            ->can(Actor::forUser($user), 'admin.ai_control_plane.view')
+            ->can(Actor::forUser($user), 'admin.ai.control-plane.view')
             ->allowed;
     }
 

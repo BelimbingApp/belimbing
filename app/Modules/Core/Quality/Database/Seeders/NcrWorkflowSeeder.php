@@ -41,16 +41,16 @@ class NcrWorkflowSeeder extends Seeder
     protected function workflowTransitions(): array
     {
         return [
-            ['from_code' => 'open',          'to_code' => 'under_triage', 'label' => 'Triage',             'capability' => 'workflow.quality_ncr.triage', 'position' => 0],
-            ['from_code' => 'open',          'to_code' => 'rejected',     'label' => 'Reject',             'capability' => 'workflow.quality_ncr.reject', 'position' => 1],
-            ['from_code' => 'under_triage',  'to_code' => 'assigned',     'label' => 'Assign',             'capability' => 'workflow.quality_ncr.assign', 'position' => 0],
-            ['from_code' => 'under_triage',  'to_code' => 'rejected',     'label' => 'Reject',             'capability' => 'workflow.quality_ncr.reject', 'position' => 1],
+            ['from_code' => 'open',          'to_code' => 'under_triage', 'label' => 'Triage',             'capability' => 'operations.quality.ncr.triage', 'position' => 0],
+            ['from_code' => 'open',          'to_code' => 'rejected',     'label' => 'Reject',             'capability' => 'operations.quality.ncr.reject', 'position' => 1],
+            ['from_code' => 'under_triage',  'to_code' => 'assigned',     'label' => 'Assign',             'capability' => 'operations.quality.ncr.assign', 'position' => 0],
+            ['from_code' => 'under_triage',  'to_code' => 'rejected',     'label' => 'Reject',             'capability' => 'operations.quality.ncr.reject', 'position' => 1],
             ['from_code' => 'assigned',      'to_code' => 'in_progress',  'label' => 'Start Investigation', 'capability' => null, 'position' => 0],
             ['from_code' => 'in_progress',   'to_code' => 'under_review', 'label' => 'Submit Response',    'capability' => null, 'position' => 0],
-            ['from_code' => 'under_review',  'to_code' => 'in_progress',  'label' => 'Request Rework',     'capability' => 'workflow.quality_ncr.rework', 'position' => 0],
-            ['from_code' => 'under_review',  'to_code' => 'verified',     'label' => 'Verify Effective',   'capability' => 'workflow.quality_ncr.verify', 'position' => 1],
-            ['from_code' => 'under_review',  'to_code' => 'rejected',     'label' => 'Reject',             'capability' => 'workflow.quality_ncr.reject', 'position' => 2],
-            ['from_code' => 'verified',      'to_code' => 'closed',       'label' => 'Close',              'capability' => 'workflow.quality_ncr.close',  'position' => 0],
+            ['from_code' => 'under_review',  'to_code' => 'in_progress',  'label' => 'Request Rework',     'capability' => 'operations.quality.ncr.rework', 'position' => 0],
+            ['from_code' => 'under_review',  'to_code' => 'verified',     'label' => 'Verify Effective',   'capability' => 'operations.quality.ncr.verify', 'position' => 1],
+            ['from_code' => 'under_review',  'to_code' => 'rejected',     'label' => 'Reject',             'capability' => 'operations.quality.ncr.reject', 'position' => 2],
+            ['from_code' => 'verified',      'to_code' => 'closed',       'label' => 'Close',              'capability' => 'operations.quality.ncr.close',  'position' => 0],
         ];
     }
 }

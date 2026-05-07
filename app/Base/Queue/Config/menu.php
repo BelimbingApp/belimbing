@@ -6,20 +6,20 @@
 return [
     'items' => [
         [
-            'id' => 'system.failed-jobs',
+            'id' => 'admin.system.failed-job',
             'label' => 'Failed Jobs',
             'icon' => 'heroicon-o-exclamation-triangle',
             'route' => 'admin.system.failed-jobs.index',
-            'permission' => 'admin.system_failed_job.list',
-            'parent' => 'system.diagnostics',
+            'permission' => 'admin.system.failed-job.list',
+            'parent' => 'admin.system.diagnostics',
         ],
         [
-            'id' => 'system.job-batches',
+            'id' => 'admin.system.job-batch',
             'label' => 'Job Batches',
             'icon' => 'heroicon-o-squares-plus',
             'route' => 'admin.system.job-batches.index',
-            'permission' => 'admin.system_job_batch.list',
-            'parent' => 'system.diagnostics',
+            'permission' => 'admin.system.job-batch.list',
+            'parent' => 'admin.system.diagnostics',
         ],
     ],
 ];

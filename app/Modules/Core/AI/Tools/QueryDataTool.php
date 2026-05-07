@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\DB;
  * rejected at the SQL parsing level. A statement timeout and row count
  * cap provide additional protection.
  *
- * Gated by `ai.tool_query_data.execute` authz capability.
+ * Gated by `admin.ai.tool.query-data.execute` authz capability.
  */
 class QueryDataTool extends AbstractTool
 {
@@ -108,7 +108,7 @@ class QueryDataTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_query_data.execute';
+        return 'admin.ai.tool.query-data.execute';
     }
 
     protected function metadata(): array

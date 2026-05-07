@@ -6,11 +6,11 @@
 return [
     'items' => [
         [
-            'id' => 'admin.addresses',
+            'id' => 'admin.address',
             'label' => 'Addresses',
             'icon' => 'heroicon-o-map-pin',
             'route' => 'admin.addresses.index',
-            'permission' => 'core.address.list',
+            'permission' => 'admin.address.list',
             'parent' => 'admin',
         ],
     ],

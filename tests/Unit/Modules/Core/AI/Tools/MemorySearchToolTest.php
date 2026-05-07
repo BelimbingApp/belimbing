@@ -16,7 +16,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'memory_search',
-            'ai.tool_memory_search.execute',
+            'admin.ai.tool.memory-search.execute',
             ['query'],
             ['query'],
         );

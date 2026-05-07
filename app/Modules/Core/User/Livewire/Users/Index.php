@@ -57,7 +57,7 @@ class Index extends Component
         $actor = Actor::forUser($authUser);
 
         try {
-            app(AuthorizationService::class)->authorize($actor, 'core.user.delete');
+            app(AuthorizationService::class)->authorize($actor, 'admin.user.delete');
         } catch (AuthorizationDeniedException) {
             Session::flash('error', __('You do not have permission to delete users.'));
 
@@ -83,7 +83,7 @@ class Index extends Component
         $actor = Actor::forUser($authUser);
 
         $canDelete = app(AuthorizationService::class)
-            ->can($actor, 'core.user.delete')
+            ->can($actor, 'admin.user.delete')
             ->allowed;
 
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'users.name';

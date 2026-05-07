@@ -22,7 +22,7 @@ use App\Base\AI\Tools\ToolResult;
  * Note: Currently returns stub responses. Vision model integration
  * will be implemented once the inference pipeline is deployed.
  *
- * Gated by `ai.tool_image_analysis.execute` authz capability.
+ * Gated by `admin.ai.tool.image-analysis.execute` authz capability.
  */
 class ImageAnalysisTool extends AbstractTool
 {
@@ -75,7 +75,7 @@ class ImageAnalysisTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_image_analysis.execute';
+        return 'admin.ai.tool.image-analysis.execute';
     }
 
     /**

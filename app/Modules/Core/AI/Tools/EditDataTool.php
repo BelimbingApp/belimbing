@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\DB;
  * risky operations, refuse clearly destructive ones, and always explain what
  * a statement will do before executing it.
  *
- * Gated by `ai.tool_edit_data.execute` authz capability.
+ * Gated by `admin.ai.tool.edit-data.execute` authz capability.
  */
 class EditDataTool extends AbstractTool
 {
@@ -131,7 +131,7 @@ class EditDataTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_edit_data.execute';
+        return 'admin.ai.tool.edit-data.execute';
     }
 
     protected function metadata(): array

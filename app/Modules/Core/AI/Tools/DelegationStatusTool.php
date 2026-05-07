@@ -24,7 +24,7 @@ use App\Modules\Core\AI\Services\OperationsDispatchService;
  * dispatched operation (agent tasks, scheduled tasks, background commands).
  * Supports single-ID lookup via "get" and filtered listing via "list".
  *
- * Gated by `ai.tool_delegation_status.execute` authz capability.
+ * Gated by `admin.ai.tool.delegation-status.execute` authz capability.
  */
 class DelegationStatusTool extends AbstractActionTool
 {
@@ -100,7 +100,7 @@ class DelegationStatusTool extends AbstractActionTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_delegation_status.execute';
+        return 'admin.ai.tool.delegation-status.execute';
     }
 
     protected function toolMetadata(): array

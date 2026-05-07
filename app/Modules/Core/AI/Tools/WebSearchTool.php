@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Cache;
  * surface honestly without silent fallback to a different provider.
  * Results are cached to reduce API calls for repeated queries.
  *
- * Gated by `ai.tool_web_search.execute` authz capability.
+ * Gated by `admin.ai.tool.web-search.execute` authz capability.
  */
 class WebSearchTool extends AbstractTool
 {
@@ -155,7 +155,7 @@ class WebSearchTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_web_search.execute';
+        return 'admin.ai.tool.web-search.execute';
     }
 
     protected function metadata(): array

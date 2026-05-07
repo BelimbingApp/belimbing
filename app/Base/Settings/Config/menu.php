@@ -6,12 +6,12 @@
 return [
     'items' => [
         [
-            'id' => 'system.settings',
+            'id' => 'admin.system.setting',
             'label' => 'Settings',
             'icon' => 'heroicon-o-cog-6-tooth',
             'route' => 'admin.settings.index',
-            'permission' => 'admin.settings.manage',
-            'parent' => 'system',
+            'permission' => 'admin.system.setting.manage',
+            'parent' => 'admin.system',
         ],
     ],
 ];

@@ -20,7 +20,7 @@ use App\Base\AI\Tools\ToolResult;
  * `<agent-action>` block that the client-side executor handles.
  * Scripts are validated for safety before execution.
  *
- * Gated by `ai.tool_write_js.execute` authz capability.
+ * Gated by `admin.ai.tool.write-js.execute` authz capability.
  */
 class WriteJsTool extends AbstractTool
 {
@@ -80,7 +80,7 @@ class WriteJsTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_write_js.execute';
+        return 'admin.ai.tool.write-js.execute';
     }
 
     protected function metadata(): array

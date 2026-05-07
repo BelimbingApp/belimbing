@@ -20,7 +20,7 @@ return [
             'parent' => 'commerce.marketplace',
         ],
         [
-            'id' => 'commerce.marketplace.ebay_settings',
+            'id' => 'commerce.marketplace.ebay-setting',
             'label' => 'eBay Settings',
             'icon' => 'heroicon-o-cog-6-tooth',
             'route' => 'commerce.marketplace.ebay.settings',

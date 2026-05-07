@@ -5,6 +5,6 @@
 
 return [
     'capabilities' => [
-        'admin.system_session.list',
+        'admin.system.session.list',
     ],
 ];

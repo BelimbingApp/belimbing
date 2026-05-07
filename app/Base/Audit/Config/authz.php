@@ -5,7 +5,7 @@
 
 return [
     'capabilities' => [
-        'admin.audit_log.list',
-        'admin.audit_log.view',
+        'admin.audit.log.list',
+        'admin.audit.log.view',
     ],
 ];

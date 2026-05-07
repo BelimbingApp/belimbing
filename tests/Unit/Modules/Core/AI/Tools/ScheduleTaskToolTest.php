@@ -122,7 +122,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'schedule_task',
-            'ai.tool_schedule.execute',
+            'admin.ai.tool.schedule.execute',
             ['action', 'task_id', 'description', 'execution_payload', 'cron_expression', 'agent_id', 'timezone', 'enabled'],
             ['action'],
         );

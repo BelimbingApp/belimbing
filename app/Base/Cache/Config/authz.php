@@ -5,6 +5,6 @@
 
 return [
     'capabilities' => [
-        'admin.system_cache.view',
+        'admin.system.cache.view',
     ],
 ];

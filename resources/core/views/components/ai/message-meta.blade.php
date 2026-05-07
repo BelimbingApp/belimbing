@@ -48,7 +48,7 @@
     if ($runIdLabel !== null && auth()->check()) {
         $actor = \App\Base\Authz\DTO\Actor::forUser(auth()->user());
         $canAccessControlPlane = app(\App\Base\Authz\Contracts\AuthorizationService::class)
-            ->can($actor, 'admin.ai_control_plane.view')
+            ->can($actor, 'admin.ai.control-plane.view')
             ->allowed;
     }
 

@@ -17,7 +17,7 @@ use App\Base\AI\Tools\ToolResult;
  * returning matched references with summaries and the content of the
  * top-matching file for substantive grounding.
  *
- * Gated by `ai.tool_guide.execute` authz capability.
+ * Gated by `admin.ai.tool.guide.execute` authz capability.
  */
 class GuideTool extends AbstractReadOnlyMemoryTool
 {
@@ -50,7 +50,7 @@ class GuideTool extends AbstractReadOnlyMemoryTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_guide.execute';
+        return 'admin.ai.tool.guide.execute';
     }
 
     protected function metadata(): array

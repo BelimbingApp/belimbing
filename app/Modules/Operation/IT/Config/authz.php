@@ -5,14 +5,13 @@
 
 return [
     'domains' => [
-        'it_ticket' => 'IT support ticket management',
-        'workflow' => 'Workflow and state transitions',
+        'operations' => 'Operational modules, including IT support tickets.',
     ],
 
     'capabilities' => [
-        'workflow.it_ticket.assign',
-        'it_ticket.ticket.create',
-        'it_ticket.ticket.view',
-        'it_ticket.ticket.list',
+        'operations.it.ticket.assign',
+        'operations.it.ticket.create',
+        'operations.it.ticket.view',
+        'operations.it.ticket.list',
     ],
 ];

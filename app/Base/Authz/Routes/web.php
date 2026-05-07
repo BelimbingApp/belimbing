@@ -31,26 +31,26 @@ Route::middleware('auth')->group(function () {
 
     // Role management
     Route::get('admin/roles', RolesIndex::class)
-        ->middleware('authz:admin.role.list')
+        ->middleware('authz:admin.authz.role.list')
         ->name('admin.roles.index');
     Route::get('admin/roles/create', RolesCreate::class)
-        ->middleware('authz:admin.role.create')
+        ->middleware('authz:admin.authz.role.create')
         ->name('admin.roles.create');
     Route::get('admin/roles/{role}', RolesShow::class)
-        ->middleware('authz:admin.role.view')
+        ->middleware('authz:admin.authz.role.view')
         ->name('admin.roles.show');
 
     // Authz administration
     Route::get('admin/authz/capabilities', CapabilitiesIndex::class)
-        ->middleware('authz:admin.capability.list')
+        ->middleware('authz:admin.authz.capability.list')
         ->name('admin.authz.capabilities.index');
     Route::get('admin/authz/principal-roles', PrincipalRolesIndex::class)
-        ->middleware('authz:admin.principal_role.list')
+        ->middleware('authz:admin.authz.principal-role.list')
         ->name('admin.authz.principal-roles.index');
     Route::get('admin/authz/principal-capabilities', PrincipalCapabilitiesIndex::class)
-        ->middleware('authz:admin.principal_capability.list')
+        ->middleware('authz:admin.authz.principal-capability.list')
         ->name('admin.authz.principal-capabilities.index');
     Route::get('admin/authz/decision-logs', DecisionLogsIndex::class)
-        ->middleware('authz:admin.decision_log.list')
+        ->middleware('authz:admin.authz.decision-log.list')
         ->name('admin.authz.decision-logs.index');
 });

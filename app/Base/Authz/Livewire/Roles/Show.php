@@ -72,7 +72,7 @@ class Show extends Component implements ProvidesLaraPageContext
      */
     public function saveField(string $field, mixed $value): void
     {
-        if (! $this->checkCapability('admin.role.update')) {
+        if (! $this->checkCapability('admin.authz.role.update')) {
             return;
         }
 
@@ -95,7 +95,7 @@ class Show extends Component implements ProvidesLaraPageContext
      */
     public function saveScope(?string $companyId): void
     {
-        if ($this->checkCapability('admin.role.update')) {
+        if ($this->checkCapability('admin.authz.role.update')) {
             $newCompanyId = $companyId !== '' && $companyId !== null ? (int) $companyId : null;
 
             if ($this->role->is_system) {
@@ -147,7 +147,7 @@ class Show extends Component implements ProvidesLaraPageContext
      */
     public function deleteRole(): void
     {
-        if (! $this->checkCapability('admin.role.delete')) {
+        if (! $this->checkCapability('admin.authz.role.delete')) {
             return;
         }
 
@@ -169,7 +169,7 @@ class Show extends Component implements ProvidesLaraPageContext
      */
     public function assignCapabilities(): void
     {
-        if (! $this->checkCapability('admin.role.update')) {
+        if (! $this->checkCapability('admin.authz.role.update')) {
             return;
         }
 
@@ -199,7 +199,7 @@ class Show extends Component implements ProvidesLaraPageContext
      */
     public function removeCapability(int $roleCapabilityId): void
     {
-        if (! $this->checkCapability('admin.role.update')) {
+        if (! $this->checkCapability('admin.authz.role.update')) {
             return;
         }
 
@@ -222,7 +222,7 @@ class Show extends Component implements ProvidesLaraPageContext
      */
     public function assignUsers(): void
     {
-        if (! $this->checkCapability('admin.role.update')) {
+        if (! $this->checkCapability('admin.authz.role.update')) {
             return;
         }
 
@@ -253,7 +253,7 @@ class Show extends Component implements ProvidesLaraPageContext
      */
     public function removeUser(int $principalRoleId): void
     {
-        if (! $this->checkCapability('admin.role.update')) {
+        if (! $this->checkCapability('admin.authz.role.update')) {
             return;
         }
 
@@ -271,8 +271,8 @@ class Show extends Component implements ProvidesLaraPageContext
 
         $authzService = app(AuthorizationService::class);
 
-        $canEdit = $authzService->can($authActor, 'admin.role.update')->allowed;
-        $canDelete = $authzService->can($authActor, 'admin.role.delete')->allowed;
+        $canEdit = $authzService->can($authActor, 'admin.authz.role.update')->allowed;
+        $canDelete = $authzService->can($authActor, 'admin.authz.role.delete')->allowed;
 
         $allCapabilities = app(CapabilityRegistry::class)->all();
         sort($allCapabilities);

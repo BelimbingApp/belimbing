@@ -6,20 +6,20 @@
 return [
     'items' => [
         [
-            'id' => 'admin.employees',
+            'id' => 'people.employee',
             'label' => 'Employees',
             'icon' => 'heroicon-o-user-group',
             'route' => 'admin.employees.index',
-            'permission' => 'core.employee.list',
+            'permission' => 'people.employee.list',
             'parent' => 'people',
         ],
         [
-            'id' => 'admin.employee-types',
+            'id' => 'people.employee-type',
             'label' => 'Employee Types',
             'icon' => 'heroicon-o-tag',
             'route' => 'admin.employee-types.index',
-            'permission' => 'core.employee_type.list',
-            'parent' => 'admin.employees',
+            'permission' => 'people.employee-type.list',
+            'parent' => 'people.employee',
         ],
     ],
 ];

@@ -17,27 +17,27 @@ Route::middleware(['auth'])->group(function () {
         ->name('admin.system.info.index');
 
     Route::get('admin/system/localization', LocalizationIndex::class)
-        ->middleware('authz:admin.system_localization.manage')
+        ->middleware('authz:admin.system.localization.manage')
         ->name('admin.system.localization.index');
 
     Route::get('admin/system/test-transport', TestTransportIndex::class)
-        ->middleware('authz:admin.system_transport_test.view')
+        ->middleware('authz:admin.system.test-transport.view')
         ->name('admin.system.test-transport.index');
 
     Route::get('admin/system/test-transport/stream', TestTransportStreamController::class)
-        ->middleware('authz:admin.system_transport_test.view')
+        ->middleware('authz:admin.system.test-transport.view')
         ->name('admin.system.test-transport.stream');
 
     Route::get('admin/system/ui-reference', UiReferenceIndex::class)
-        ->middleware('authz:admin.system_ui_reference.view')
+        ->middleware('authz:admin.system.ui-reference.view')
         ->name('admin.system.ui-reference.index');
 
     Route::get('admin/system/ui-reference/{section}', UiReferenceIndex::class)
-        ->middleware('authz:admin.system_ui_reference.view')
+        ->middleware('authz:admin.system.ui-reference.view')
         ->whereIn('section', UiReferenceSection::slugs())
         ->name('admin.system.ui-reference.show');
 
     Route::get('admin/system/menu-inspector', MenuInspectorIndex::class)
-        ->middleware('authz:admin.system_menu_inspector.view')
+        ->middleware('authz:admin.system.menu-inspector.view')
         ->name('admin.system.menu-inspector.index');
 });

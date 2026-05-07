@@ -60,7 +60,7 @@ class SearchFilesTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_search_files.execute';
+        return 'admin.ai.tool.search-files.execute';
     }
 
     protected function toolMetadata(): array

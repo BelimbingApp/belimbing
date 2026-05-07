@@ -5,6 +5,6 @@
 
 return [
     'capabilities' => [
-        'admin.system_scheduled_task.list',
+        'admin.system.scheduled-task.list',
     ],
 ];

@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Notification as NotificationFacade;
  * (database channel). Supports sending to a specific user by ID or
  * sending to all users in the authenticated user's company.
  *
- * Gated by `ai.tool_notification.execute` authz capability.
+ * Gated by `admin.ai.tool.notification.execute` authz capability.
  */
 class NotificationTool extends AbstractTool
 {
@@ -95,7 +95,7 @@ class NotificationTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_notification.execute';
+        return 'admin.ai.tool.notification.execute';
     }
 
     protected function metadata(): array

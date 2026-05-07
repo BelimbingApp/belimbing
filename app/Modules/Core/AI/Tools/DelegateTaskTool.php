@@ -34,7 +34,7 @@ use Illuminate\Auth\Access\AuthorizationException;
  * Returns a dispatch ID that can be used with delegation_status to poll
  * for results.
  *
- * Gated by `ai.tool_delegate.execute` authz capability.
+ * Gated by `admin.ai.tool.delegate.execute` authz capability.
  */
 class DelegateTaskTool extends AbstractTool
 {
@@ -102,7 +102,7 @@ class DelegateTaskTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_delegate.execute';
+        return 'admin.ai.tool.delegate.execute';
     }
 
     protected function metadata(): array

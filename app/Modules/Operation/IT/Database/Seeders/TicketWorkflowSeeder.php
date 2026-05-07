@@ -77,7 +77,7 @@ class TicketWorkflowSeeder extends Seeder
     private function seedTransitions(): void
     {
         $transitions = [
-            ['from_code' => 'open',            'to_code' => 'assigned',       'label' => 'Assign',              'capability' => 'workflow.it_ticket.assign', 'position' => 0],
+            ['from_code' => 'open',            'to_code' => 'assigned',       'label' => 'Assign',              'capability' => 'operations.it.ticket.assign', 'position' => 0],
             ['from_code' => 'assigned',        'to_code' => 'in_progress',    'label' => 'Start Work',          'capability' => null, 'position' => 0],
             ['from_code' => 'in_progress',     'to_code' => 'awaiting_parts', 'label' => 'Await Parts',         'capability' => null, 'position' => 0],
             ['from_code' => 'awaiting_parts',  'to_code' => 'in_progress',    'label' => 'Resume',              'capability' => null, 'position' => 0],

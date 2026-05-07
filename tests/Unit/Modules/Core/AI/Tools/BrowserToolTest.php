@@ -80,7 +80,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'browser',
-            'ai.tool_browser.execute',
+            'admin.ai.tool.browser.execute',
             ['action'],
             ['action'],
         );

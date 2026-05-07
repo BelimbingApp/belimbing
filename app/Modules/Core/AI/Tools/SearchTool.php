@@ -28,7 +28,7 @@ class SearchTool extends SearchFilesTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_search.execute';
+        return 'admin.ai.tool.search.execute';
     }
 
     protected function toolMetadata(): array

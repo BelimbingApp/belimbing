@@ -17,12 +17,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('admin/employees/{employee}', EmployeesShow::class)->name('admin.employees.show');
 
     Route::get('admin/employee-types', EmployeeTypesIndex::class)
-        ->middleware('authz:core.employee_type.list')
+        ->middleware('authz:people.employee-type.list')
         ->name('admin.employee-types.index');
     Route::get('admin/employee-types/create', EmployeeTypesCreate::class)
-        ->middleware('authz:core.employee_type.create')
+        ->middleware('authz:people.employee-type.create')
         ->name('admin.employee-types.create');
     Route::get('admin/employee-types/{employeeType}/edit', EmployeeTypesEdit::class)
-        ->middleware('authz:core.employee_type.update')
+        ->middleware('authz:people.employee-type.update')
         ->name('admin.employee-types.edit');
 });

@@ -40,56 +40,56 @@ Route::middleware(['auth'])->group(function () {
         ->where('attachmentId', '[a-zA-Z0-9_]+');
     // Lara setup
     Route::get('admin/setup/lara', Lara::class)
-        ->middleware('authz:admin.ai_lara.manage')
+        ->middleware('authz:admin.ai.lara.manage')
         ->name('admin.setup.lara');
 
     Route::get('admin/ai/task-models', TaskModels::class)
-        ->middleware('authz:admin.ai_task_model.manage')
+        ->middleware('authz:admin.ai.task-model.manage')
         ->name('admin.ai.task-models');
 
     // Unified AI Providers page (management + catalog)
     Route::get('admin/ai/providers', Providers::class)
-        ->middleware('authz:admin.ai_provider.manage')
+        ->middleware('authz:admin.ai.provider.manage')
         ->name('admin.ai.providers');
 
     // Legacy provider sub-pages — keep backward compatible redirects
     Route::get('admin/ai/providers/browse', fn () => redirect()->route('admin.ai.providers'))
-        ->middleware('authz:admin.ai_provider.manage')
+        ->middleware('authz:admin.ai.provider.manage')
         ->name('admin.ai.providers.browse');
 
     Route::get('admin/ai/providers/connections', fn () => redirect()->route('admin.ai.providers'))
-        ->middleware('authz:admin.ai_provider.manage')
+        ->middleware('authz:admin.ai.provider.manage')
         ->name('admin.ai.providers.connections');
 
     // Dynamic provider setup - resolve component class in controller
     Route::get('admin/ai/providers/setup/{providerKey}', ProviderSetupController::class)
-        ->middleware('authz:admin.ai_provider.manage')
+        ->middleware('authz:admin.ai.provider.manage')
         ->name('admin.ai.providers.setup');
 
     Route::get('admin/ai/pricing-overrides', PricingOverrides::class)
-        ->middleware('authz:admin.ai_pricing_override.manage')
+        ->middleware('authz:admin.ai.pricing-override.manage')
         ->name('admin.ai.pricing-overrides');
 
     // OpenAI Codex OAuth callback (browser PKCE)
     Route::get('admin/ai/providers/openai-codex/auth/callback', OpenAiCodexOAuthCallbackController::class)
-        ->middleware('authz:admin.ai_provider.manage')
+        ->middleware('authz:admin.ai.provider.manage')
         ->name('admin.ai.providers.openai-codex.callback');
 
     Route::get('admin/ai/tools/{toolName?}', Tools::class)
-        ->middleware('authz:admin.ai_tool.manage')
+        ->middleware('authz:admin.ai.tool.manage')
         ->name('admin.ai.tools');
 
     Route::get('admin/ai/control-plane', ControlPlane::class)
-        ->middleware('authz:admin.ai_control_plane.view')
+        ->middleware('authz:admin.ai.control-plane.view')
         ->name('admin.ai.control-plane');
 
     Route::get('admin/ai/runs/{runId}', RunDetail::class)
-        ->middleware('authz:admin.ai_control_plane.view')
+        ->middleware('authz:admin.ai.control-plane.view')
         ->name('admin.ai.runs.show')
         ->where('runId', '[a-zA-Z0-9_\-]+');
 
     Route::get('admin/ai/runs/{runId}/wire-log/{entryNumber}', WireLogEntryController::class)
-        ->middleware('authz:admin.ai_control_plane.view')
+        ->middleware('authz:admin.ai.control-plane.view')
         ->name('admin.ai.runs.wire-log-entry')
         ->where('runId', '[a-zA-Z0-9_\-]+')
         ->whereNumber('entryNumber');

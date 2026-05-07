@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Process;
  * Bash CLI execution tool for Agents.
  *
  * Allows an agent to run arbitrary bash commands on behalf of the user.
- * This is the most powerful tool — gated by `ai.tool_bash.execute`.
+ * This is the most powerful tool — gated by `admin.ai.tool.bash.execute`.
  *
  * Implements StreamableTool to yield incremental stdout/stderr as the
  * command runs, enabling real-time output in the agent console UI.
@@ -55,7 +55,7 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_bash.execute';
+        return 'admin.ai.tool.bash.execute';
     }
 
     protected function metadata(): array

@@ -77,31 +77,30 @@ return [
         // [ 'id' => 'production',  'label' => 'Production',  'icon' => 'heroicon-o-cube' ],
 
         [
-            'id' => 'system',
+            'id' => 'admin.system',
             'label' => 'System',
             'icon' => 'heroicon-o-server-stack',
             'parent' => 'admin',
         ],
 
-        // System subgroups. IDs stay in pre-rename form (system.*) until
-        // Phase 7 renames the whole `system` subtree to `admin.system.*`.
+        // System subgroups.
         [
-            'id' => 'system.diagnostics',
+            'id' => 'admin.system.diagnostics',
             'label' => 'Diagnostics',
             'icon' => 'heroicon-o-signal',
-            'parent' => 'system',
+            'parent' => 'admin.system',
         ],
         [
-            'id' => 'system.database',
+            'id' => 'admin.system.database',
             'label' => 'Database',
             'icon' => 'heroicon-o-circle-stack',
-            'parent' => 'system',
+            'parent' => 'admin.system',
         ],
         [
-            'id' => 'system.integrations',
+            'id' => 'admin.system.integrations',
             'label' => 'Integrations',
             'icon' => 'heroicon-o-link',
-            'parent' => 'system',
+            'parent' => 'admin.system',
         ],
     ],
 ];

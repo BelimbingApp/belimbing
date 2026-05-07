@@ -55,7 +55,7 @@ class ActivePageSnapshotTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_active_page_snapshot.view';
+        return 'admin.ai.tool.active-page-snapshot.view';
     }
 
     protected function toolMetadata(): array

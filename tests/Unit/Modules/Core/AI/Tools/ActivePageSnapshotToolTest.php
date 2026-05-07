@@ -25,7 +25,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'active_page_snapshot',
-            'ai.tool_active_page_snapshot.view',
+            'admin.ai.tool.active-page-snapshot.view',
             [],
             null,
         );

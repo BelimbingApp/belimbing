@@ -79,8 +79,8 @@ All togglable via config: `log_http_requests`, `log_auth_events`, `log_console_c
 ## UI
 
 Two admin pages under the "Audit Log" parent menu:
-- `admin/audit/mutations` (route: `admin.audit.mutations`, capability: `admin.audit_log.list`) — Data Mutations with inline field-level diffs.
-- `admin/audit/actions` (route: `admin.audit.actions`, capability: `admin.audit_log.list`) — Actions log.
+- `admin/audit/mutations` (route: `admin.audit.mutations`, capability: `admin.audit.log.list`) — Data Mutations with inline field-level diffs.
+- `admin/audit/actions` (route: `admin.audit.actions`, capability: `admin.audit.log.list`) — Actions log.
 
 ## Migration Prefix
 

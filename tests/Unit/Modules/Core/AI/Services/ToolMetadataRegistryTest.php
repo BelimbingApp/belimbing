@@ -58,7 +58,7 @@ it('allows registering custom tool metadata', function () {
         explanation: 'Used only in tests',
         category: ToolCategory::DATA,
         riskClass: ToolRiskClass::READ_ONLY,
-        capability: 'ai.tool_custom.execute',
+        capability: 'admin.ai.tool.custom.execute',
         setupRequirements: [],
         testExamples: [],
         healthChecks: [],

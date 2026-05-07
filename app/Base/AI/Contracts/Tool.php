@@ -45,7 +45,7 @@ interface Tool
     public function parametersSchema(): array;
 
     /**
-     * Authz capability required to use this tool (e.g., 'ai.tool_artisan.execute').
+     * Authz capability required to use this tool (e.g., 'admin.ai.tool.artisan.execute').
      *
      * Returns null if the tool requires no special capability (auth-only).
      */

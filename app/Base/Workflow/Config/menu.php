@@ -6,11 +6,11 @@
 return [
     'items' => [
         [
-            'id' => 'admin.workflows',
+            'id' => 'admin.workflow',
             'label' => 'Workflows',
             'icon' => 'heroicon-o-arrow-path',
             'route' => 'admin.workflows.index',
-            'permission' => 'workflow.process.manage',
+            'permission' => 'admin.workflow.manage',
             'parent' => 'admin',
         ],
     ],

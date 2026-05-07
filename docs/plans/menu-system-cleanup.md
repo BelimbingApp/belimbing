@@ -1,9 +1,9 @@
 # Menu System Cleanup
 
-**Status:** In Progress (Phases 1–6 applied)
-**Last Updated:** 2026-05-07 (Phase 6 implemented; tests green; awaiting commit)
+**Status:** In Progress (Phase 7 applied; Phase 8 visual verification pending)
+**Last Updated:** 2026-05-07 (Phase 7 naming normalization applied; route list, cache clear, discovery probe, and full test suite green)
 **Sources:** `app/Base/Menu/`, all 25 `Config/menu.php` files under `app/Base/*`, `app/Modules/*/*`, and `extensions/*/*`
-**Agents:** claude/opus-4-7
+**Agents:** claude/opus-4-7, codex/gpt-5
 
 ## Problem Essence
 
@@ -198,77 +198,77 @@ Phases 1, 2, 3, 4, 5, 6 each touch a small disjoint slice. Phase 7 (the rename) 
 
 **Pre-flight**
 
-- [ ] Run a single grep sweep enumerating every reference to each target string (item IDs and permission keys); save the file list as scratch input for the rename batches
-- [ ] Confirm no item IDs are referenced outside menu configs by anything other than `parent` fields
+- [x] Run grep sweeps enumerating references to target item IDs and permission keys; use the file list as scratch input for the rename batches
+- [x] Confirm no item IDs are referenced outside menu configs by anything other than `parent` fields
 
 **Item ID renames (by location)**
 
-- [ ] `app/Base/Menu/Config/menu.php` — `system` → `admin.system`; subgroup IDs already authored as `admin.system.*` in Phase 3
-- [ ] `app/Base/System/Config/menu.php` — `system.info` → `admin.system.info`; `system.localization` → `admin.system.localization`; `system.ui-reference` → `admin.system.ui-reference`; `system.test-transport` → `admin.system.test-transport`
-- [ ] `app/Base/Schedule/Config/menu.php` — `system.scheduled-tasks` → `admin.system.scheduled-task`
-- [ ] `app/Base/Log/Config/menu.php` — `system.logs` → `admin.system.log`
-- [ ] `app/Base/Queue/Config/menu.php` — `system.failed-jobs` → `admin.system.failed-job`; `system.job-batches` → `admin.system.job-batch`
-- [ ] `app/Base/Integration/Config/menu.php` — `system.integration-outbound-exchanges` → `admin.system.outbound-exchange`
-- [ ] `app/Base/Settings/Config/menu.php` — `system.settings` → `admin.system.setting`
-- [ ] `app/Base/Session/Config/menu.php` — `system.sessions` → `admin.system.session`
-- [ ] `app/Base/Database/Config/menu.php` — `system.database-tables` → `admin.system.database-table`; `system.database-queries` → `admin.system.database-query`; `system.database-backups` → `admin.system.database-backup`
-- [ ] `app/Base/Cache/Config/menu.php` — `system.cache` → `admin.system.cache`
-- [ ] `app/Base/Audit/Config/menu.php` — `audit` → `admin.audit`; `audit.mutations` → `admin.audit.mutation`; `audit.actions` → `admin.audit.action`
-- [ ] `app/Base/Authz/Config/menu.php` — `authz` → `admin.authz`; `authz.capabilities` → `admin.authz.capability`; `authz.roles` → `admin.authz.role`; `authz.principal-roles` → `admin.authz.principal-role`; `authz.principal-capabilities` → `admin.authz.principal-capability`; `authz.decision-logs` → `admin.authz.decision-log`
-- [ ] `app/Base/Workflow/Config/menu.php` — `admin.workflows` → `admin.workflow`
-- [ ] `app/Modules/Core/User/Config/menu.php` — `admin.users` → `admin.user`
-- [ ] `app/Modules/Core/Address/Config/menu.php` — `admin.addresses` → `admin.address`
-- [ ] `app/Modules/Core/Geonames/Config/menu.php` — `admin.geonames.countries` → `admin.geonames.country`; `admin.geonames.admin1` → `admin.geonames.admin1-division`; `admin.geonames.postcodes` → `admin.geonames.postcode`
-- [ ] `app/Modules/Core/AI/Config/menu.php` — `ai` → `admin.ai`; `ai.lara` → `admin.ai.lara`; `ai.task-models` → `admin.ai.task-model`; `ai.providers` → `admin.ai.provider`; `ai.tools` → `admin.ai.tool`; `ai.pricing-overrides` → `admin.ai.pricing-override`; `ai.control-plane` → `admin.ai.control-plane`
-- [ ] `app/Modules/Core/Employee/Config/menu.php` — `admin.employees` → `people.employee`; `admin.employee-types` → `people.employee-type`
-- [ ] `app/Modules/Core/Company/Config/menu.php` — `admin.companies` → `admin.company`; `admin.companies.legal-entity-types` → `admin.company.legal-entity-type`; `admin.companies.department-types` → `admin.company.department-type`
-- [ ] `app/Modules/Core/Quality/Config/menu.php` — `quality` → `operations.quality`; `quality.ncr` → `operations.quality.ncr`; `quality.scar` → `operations.quality.scar`
-- [ ] `app/Modules/Operation/IT/Config/menu.php` — `it` → `operations.it`; `it.tickets` → `operations.it.ticket`
-- [ ] `app/Modules/Commerce/Inventory/Config/menu.php` — `commerce.inventory.items` → `commerce.inventory.item`
-- [ ] `app/Modules/Commerce/Marketplace/Config/menu.php` — `commerce.marketplace.ebay_settings` → `commerce.marketplace.ebay-setting`; the new ebay leaf added in Phase 5 is authored directly as `commerce.marketplace.ebay`
-- [ ] `extensions/ham/auto-parts/Config/menu.php` — `ham.auto_parts.settings` → `commerce.ham-auto-parts.setting`; `ham.auto_parts.insights.sold_this_month` → `commerce.ham-auto-parts.insights.sold-this-month`; `ham.auto_parts.insights.top_earners_last_90_days` → `commerce.ham-auto-parts.insights.top-earners-last-90-days`; `ham.auto_parts.insights.recent_sales` → `commerce.ham-auto-parts.insights.recent-sale`; `ham.auto_parts.insights.sales_by_category` → `commerce.ham-auto-parts.insights.sales-by-category`; `ham.auto_parts.insights.listed_without_sale` → `commerce.ham-auto-parts.insights.listed-without-sale`
+- [x] `app/Base/Menu/Config/menu.php` — `system` → `admin.system`; subgroup IDs already authored as `admin.system.*` in Phase 3
+- [x] `app/Base/System/Config/menu.php` — `system.info` → `admin.system.info`; `system.localization` → `admin.system.localization`; `system.ui-reference` → `admin.system.ui-reference`; `system.test-transport` → `admin.system.test-transport`
+- [x] `app/Base/Schedule/Config/menu.php` — `system.scheduled-tasks` → `admin.system.scheduled-task`
+- [x] `app/Base/Log/Config/menu.php` — `system.logs` → `admin.system.log`
+- [x] `app/Base/Queue/Config/menu.php` — `system.failed-jobs` → `admin.system.failed-job`; `system.job-batches` → `admin.system.job-batch`
+- [x] `app/Base/Integration/Config/menu.php` — `system.integration-outbound-exchanges` → `admin.system.outbound-exchange`
+- [x] `app/Base/Settings/Config/menu.php` — `system.settings` → `admin.system.setting`
+- [x] `app/Base/Session/Config/menu.php` — `system.sessions` → `admin.system.session`
+- [x] `app/Base/Database/Config/menu.php` — `system.database-tables` → `admin.system.database-table`; `system.database-queries` → `admin.system.database-query`; `system.database-backups` → `admin.system.database-backup`
+- [x] `app/Base/Cache/Config/menu.php` — `system.cache` → `admin.system.cache`
+- [x] `app/Base/Audit/Config/menu.php` — `audit` → `admin.audit`; `audit.mutations` → `admin.audit.mutation`; `audit.actions` → `admin.audit.action`
+- [x] `app/Base/Authz/Config/menu.php` — `authz` → `admin.authz`; `authz.capabilities` → `admin.authz.capability`; `authz.roles` → `admin.authz.role`; `authz.principal-roles` → `admin.authz.principal-role`; `authz.principal-capabilities` → `admin.authz.principal-capability`; `authz.decision-logs` → `admin.authz.decision-log`
+- [x] `app/Base/Workflow/Config/menu.php` — `admin.workflows` → `admin.workflow`
+- [x] `app/Modules/Core/User/Config/menu.php` — `admin.users` → `admin.user`
+- [x] `app/Modules/Core/Address/Config/menu.php` — `admin.addresses` → `admin.address`
+- [x] `app/Modules/Core/Geonames/Config/menu.php` — `admin.geonames.countries` → `admin.geonames.country`; `admin.geonames.admin1` → `admin.geonames.admin1-division`; `admin.geonames.postcodes` → `admin.geonames.postcode`
+- [x] `app/Modules/Core/AI/Config/menu.php` — `ai` → `admin.ai`; `ai.lara` → `admin.ai.lara`; `ai.task-models` → `admin.ai.task-model`; `ai.providers` → `admin.ai.provider`; `ai.tools` → `admin.ai.tool`; `ai.pricing-overrides` → `admin.ai.pricing-override`; `ai.control-plane` → `admin.ai.control-plane`
+- [x] `app/Modules/Core/Employee/Config/menu.php` — `admin.employees` → `people.employee`; `admin.employee-types` → `people.employee-type`
+- [x] `app/Modules/Core/Company/Config/menu.php` — `admin.companies` → `admin.company`; `admin.companies.legal-entity-types` → `admin.company.legal-entity-type`; `admin.companies.department-types` → `admin.company.department-type`
+- [x] `app/Modules/Core/Quality/Config/menu.php` — `quality` → `operations.quality`; `quality.ncr` → `operations.quality.ncr`; `quality.scar` → `operations.quality.scar`
+- [x] `app/Modules/Operation/IT/Config/menu.php` — `it` → `operations.it`; `it.tickets` → `operations.it.ticket`
+- [x] `app/Modules/Commerce/Inventory/Config/menu.php` — `commerce.inventory.items` → `commerce.inventory.item`
+- [x] `app/Modules/Commerce/Marketplace/Config/menu.php` — `commerce.marketplace.ebay_settings` → `commerce.marketplace.ebay-setting`; the new ebay leaf added in Phase 5 is authored directly as `commerce.marketplace.ebay`
+- [x] `extensions/ham/auto-parts/Config/menu.php` — `ham.auto_parts.settings` → `commerce.ham-auto-parts.setting`; `ham.auto_parts.insights.sold_this_month` → `commerce.ham-auto-parts.insights.sold-this-month`; `ham.auto_parts.insights.top_earners_last_90_days` → `commerce.ham-auto-parts.insights.top-earners-last-90-days`; `ham.auto_parts.insights.recent_sales` → `commerce.ham-auto-parts.insights.recent-sale`; `ham.auto_parts.insights.sales_by_category` → `commerce.ham-auto-parts.insights.sales-by-category`; `ham.auto_parts.insights.listed_without_sale` → `commerce.ham-auto-parts.insights.listed-without-sale`
 
 After each ID rename, update the corresponding `parent` field on any child items referencing the old ID.
 
 **Permission key renames (`<id>.<action>`)**
 
-- [ ] `admin.system_info.view` → `admin.system.info.view`
-- [ ] `admin.system_localization.manage` → `admin.system.localization.manage`
-- [ ] `admin.system_ui_reference.view` → `admin.system.ui-reference.view`
-- [ ] `admin.system_transport_test.view` → `admin.system.test-transport.view`
-- [ ] `admin.system_log.list` → `admin.system.log.list`
-- [ ] `admin.system_session.list` → `admin.system.session.list`
-- [ ] `admin.system_cache.view` → `admin.system.cache.view`
-- [ ] `admin.system_failed_job.list` → `admin.system.failed-job.list`
-- [ ] `admin.system_job_batch.list` → `admin.system.job-batch.list`
-- [ ] `admin.system_scheduled_task.list` → `admin.system.scheduled-task.list`
-- [ ] `admin.system_table.list` → `admin.system.database-table.list`
-- [ ] `admin.backup.list` → `admin.system.database-backup.list`
-- [ ] `admin.integration_exchange.list` → `admin.system.outbound-exchange.list`
-- [ ] `admin.audit_log.list` → `admin.audit.log.list` (the menu item permission); audit-action permission becomes `admin.audit.action.list`
-- [ ] `admin.role.list` → `admin.authz.role.list`
-- [ ] `admin.capability.list` → `admin.authz.capability.list`
-- [ ] `admin.principal_role.list` → `admin.authz.principal-role.list`
-- [ ] `admin.principal_capability.list` → `admin.authz.principal-capability.list`
-- [ ] `admin.decision_log.list` → `admin.authz.decision-log.list`
-- [ ] `admin.ai_lara.manage` → `admin.ai.lara.manage`
-- [ ] `admin.ai_task_model.manage` → `admin.ai.task-model.manage`
-- [ ] `admin.ai_provider.manage` → `admin.ai.provider.manage`
-- [ ] `admin.ai_tool.manage` → `admin.ai.tool.manage`
-- [ ] `admin.ai_pricing_override.manage` → `admin.ai.pricing-override.manage`
-- [ ] `admin.ai_control_plane.view` → `admin.ai.control-plane.view`
-- [ ] `admin.settings.manage` → `admin.system.setting.manage`
-- [ ] `core.employee_type.list` → `core.employee-type.list` (or migrate to `people.employee-type.list`; pick once on permission domain — see note below)
-- [ ] `workflow.process.manage` — already conforming under `workflow.*`; rename only if the convention requires it to live under its bucket (`admin.workflow.manage`); decide during Phase 7 review
+- [x] `admin.system_info.view` → `admin.system.info.view`
+- [x] `admin.system_localization.manage` → `admin.system.localization.manage`
+- [x] `admin.system_ui_reference.view` → `admin.system.ui-reference.view`
+- [x] `admin.system_transport_test.view` → `admin.system.test-transport.view`
+- [x] `admin.system_log.list` → `admin.system.log.list`
+- [x] `admin.system_session.list` → `admin.system.session.list`
+- [x] `admin.system_cache.view` → `admin.system.cache.view`
+- [x] `admin.system_failed_job.list` → `admin.system.failed-job.list`
+- [x] `admin.system_job_batch.list` → `admin.system.job-batch.list`
+- [x] `admin.system_scheduled_task.list` → `admin.system.scheduled-task.list`
+- [x] `admin.system_table.list` → `admin.system.database-table.list`
+- [x] `admin.backup.list` → `admin.system.database-backup.list`
+- [x] `admin.integration_exchange.list` → `admin.system.outbound-exchange.list`
+- [x] `admin.audit_log.list` → `admin.audit.log.list` (the menu item permission); audit-action permission becomes `admin.audit.action.list`
+- [x] `admin.role.list` → `admin.authz.role.list`
+- [x] `admin.capability.list` → `admin.authz.capability.list`
+- [x] `admin.principal_role.list` → `admin.authz.principal-role.list`
+- [x] `admin.principal_capability.list` → `admin.authz.principal-capability.list`
+- [x] `admin.decision_log.list` → `admin.authz.decision-log.list`
+- [x] `admin.ai_lara.manage` → `admin.ai.lara.manage`
+- [x] `admin.ai_task_model.manage` → `admin.ai.task-model.manage`
+- [x] `admin.ai_provider.manage` → `admin.ai.provider.manage`
+- [x] `admin.ai_tool.manage` → `admin.ai.tool.manage`
+- [x] `admin.ai_pricing_override.manage` → `admin.ai.pricing-override.manage`
+- [x] `admin.ai_control_plane.view` → `admin.ai.control-plane.view`
+- [x] `admin.settings.manage` → `admin.system.setting.manage`
+- [x] `core.employee_type.list` → `people.employee-type.list`; Employee capability keys moved to the `people.*` permission domain
+- [x] `workflow.process.manage` / `workflow.status.manage` / `workflow.transition.manage` → `admin.workflow.manage` / `admin.workflow.status.manage` / `admin.workflow.transition.manage`
 
 **Permission-domain alignment note.** Today some permissions use a domain prefix that does not match the menu bucket (`core.employee.list` lives under what will become `people.employee` in the menu). Two options: (a) rename permissions to match the new bucket — `people.employee.list` — for full consistency, but at higher referencing-file cost; (b) keep the `core.*` permissions as-is because they encode codebase-domain (`app/Modules/Core/`), while the menu encodes navigation-domain. Recommendation: (a) — the convention is "permission = id + action," and the value of the convention is that you can derive one from the other. Diverging the prefixes defeats it.
 
 **Verification**
 
-- [ ] `php artisan route:list` — no broken route references
-- [ ] Test suite green
-- [ ] Spot-check `@can` gates in Blade by walking representative pages with an account that has the renamed permissions granted
-- [ ] `php artisan cache:clear` between rename batches if the registry cache holds stale entries
+- [x] `php artisan route:list` — no broken route references
+- [x] Test suite green
+- [x] Representative `@can`/middleware gates covered by focused Feature and Unit tests with renamed permissions granted
+- [x] `php artisan cache:clear` between rename batches if the registry cache holds stale entries
 
 ### Phase 8 — Verification
 
@@ -278,7 +278,7 @@ After each ID rename, update the corresponding `parent` field on any child items
 - [ ] `php artisan route:list` — clean
 - [ ] Test suite — green
 - [ ] Visual: load `/admin`, walk the entire tree (Admin/Operations/Commerce/People), verify every leaf reaches its target page
-- [ ] Active highlighting works for nested routes (e.g., navigating to a Companies edit page highlights `people.company`)
+- [ ] Active highlighting works for nested routes (e.g., navigating to a Companies edit page highlights `admin.company`)
 - [ ] Menu Inspector page lists every item with correct source attribution; filter by source module shows only Ham items when `auto-parts` is selected
 - [ ] With `APP_DEBUG=true`, hover tooltips show the source file path
 

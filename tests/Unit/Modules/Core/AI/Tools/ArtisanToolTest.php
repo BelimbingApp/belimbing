@@ -25,7 +25,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'artisan',
-            'ai.tool_artisan.execute',
+            'admin.ai.tool.artisan.execute',
             ['command', 'timeout', 'background'],
             ['command'],
         );

@@ -1,7 +1,7 @@
 <?php
 
 // Workflow module administrative capabilities.
-// Process-specific transition capabilities (e.g., workflow.leave_application.approve)
+// Process-specific transition capabilities (e.g., operations.quality.ncr.review)
 // are declared by the owning business module, not here.
 
 return [
@@ -10,8 +10,8 @@ return [
     ],
 
     'capabilities' => [
-        'workflow.process.manage',
-        'workflow.status.manage',
-        'workflow.transition.manage',
+        'admin.workflow.manage',
+        'admin.workflow.status.manage',
+        'admin.workflow.transition.manage',
     ],
 ];

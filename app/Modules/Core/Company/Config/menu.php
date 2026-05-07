@@ -6,26 +6,26 @@
 return [
     'items' => [
         [
-            'id' => 'admin.companies',
+            'id' => 'admin.company',
             'label' => 'Companies',
             'icon' => 'heroicon-o-building-office',
             'route' => 'admin.companies.index',
-            'permission' => 'core.company.list',
+            'permission' => 'admin.company.list',
             'parent' => 'admin',
         ],
         [
-            'id' => 'admin.companies.legal-entity-types',
+            'id' => 'admin.company.legal-entity-type',
             'label' => 'Legal Entity Types',
             'icon' => 'heroicon-o-scale',
             'route' => 'admin.companies.legal-entity-types',
-            'parent' => 'admin.companies',
+            'parent' => 'admin.company',
         ],
         [
-            'id' => 'admin.companies.department-types',
+            'id' => 'admin.company.department-type',
             'label' => 'Department Types',
             'icon' => 'heroicon-o-rectangle-group',
             'route' => 'admin.companies.department-types',
-            'parent' => 'admin.companies',
+            'parent' => 'admin.company',
         ],
     ],
 ];

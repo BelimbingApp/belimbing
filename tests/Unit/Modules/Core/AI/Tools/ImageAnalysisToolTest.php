@@ -32,7 +32,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'image_analysis',
-            'ai.tool_image_analysis.execute',
+            'admin.ai.tool.image-analysis.execute',
             ['path', 'prompt'],
             ['path', 'prompt'],
         );

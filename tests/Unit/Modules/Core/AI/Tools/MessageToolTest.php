@@ -168,7 +168,7 @@ describe('tool metadata', function () {
         $this->assertToolMetadata(
             $this->tool,
             'message',
-            'ai.tool_message.execute',
+            'admin.ai.tool.message.execute',
             ['action', 'channel'],
             ['action', 'channel'],
         );

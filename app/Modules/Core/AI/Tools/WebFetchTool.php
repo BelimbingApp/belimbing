@@ -24,7 +24,7 @@ use App\Base\AI\Tools\ToolResult;
  * by default. Response size is capped to prevent memory exhaustion.
  * Redirect count is limited to prevent redirect loops.
  *
- * Gated by `ai.tool_web_fetch.execute` authz capability.
+ * Gated by `admin.ai.tool.web-fetch.execute` authz capability.
  */
 class WebFetchTool extends AbstractTool
 {
@@ -85,7 +85,7 @@ class WebFetchTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_web_fetch.execute';
+        return 'admin.ai.tool.web-fetch.execute';
     }
 
     protected function metadata(): array

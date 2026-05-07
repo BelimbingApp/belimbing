@@ -31,7 +31,7 @@ app/Base/Integration/
 2. **Observable by default** — non-LLM outbound external calls should go through `IntegrationGateway` instead of direct `Http` calls.
 3. **Explicit retry policy** — no blanket retries. Callers must opt in per operation when an exchange is safe to retry.
 4. **Mandatory redaction** — authorization headers, cookies, API keys, OAuth tokens, client secrets, passwords, and token-like fields stay redacted in stored payloads. Authz controls access, but it does not replace redaction.
-5. **Capability-gated inspection** — metadata listing (`admin.integration_exchange.list`), retained payload inspection (`admin.integration_payload.view`), and cleanup/delete (`admin.integration_exchange.delete`) are separate authz capabilities.
+5. **Capability-gated inspection** — metadata listing (`admin.system.outbound-exchange.list`), retained payload inspection (`admin.system.outbound-exchange.payload.view`), and cleanup/delete (`admin.system.outbound-exchange.delete`) are separate authz capabilities.
 6. **General ownership** — use `owner_type`/`owner_id` plus metadata instead of module-specific nullable foreign keys so Integration remains independent of adopting modules.
 
 ## Current Boundary

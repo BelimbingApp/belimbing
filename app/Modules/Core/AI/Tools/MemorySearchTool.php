@@ -23,7 +23,7 @@ use App\Modules\Core\Employee\Models\Employee;
  * the project `docs/` directory as a reference corpus when the agent
  * has no indexed memory yet.
  *
- * Gated by `ai.tool_memory_search.execute` authz capability.
+ * Gated by `admin.ai.tool.memory-search.execute` authz capability.
  */
 class MemorySearchTool extends AbstractTool
 {
@@ -122,7 +122,7 @@ class MemorySearchTool extends AbstractTool
 
     public function requiredCapability(): ?string
     {
-        return 'ai.tool_memory_search.execute';
+        return 'admin.ai.tool.memory-search.execute';
     }
 
     protected function toolMetadata(): array

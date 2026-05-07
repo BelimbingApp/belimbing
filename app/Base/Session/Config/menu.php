@@ -6,12 +6,12 @@
 return [
     'items' => [
         [
-            'id' => 'system.sessions',
+            'id' => 'admin.system.session',
             'label' => 'Sessions',
             'icon' => 'heroicon-o-finger-print',
             'route' => 'admin.system.sessions.index',
-            'permission' => 'admin.system_session.list',
-            'parent' => 'system.diagnostics',
+            'permission' => 'admin.system.session.list',
+            'parent' => 'admin.system.diagnostics',
         ],
     ],
 ];
