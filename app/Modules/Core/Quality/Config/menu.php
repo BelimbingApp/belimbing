@@ -14,6 +14,7 @@ return [
         [
             'id' => 'quality.ncr',
             'label' => 'NCR',
+            'icon' => 'heroicon-o-flag',
             'route' => 'quality.ncr.index',
             'permission' => 'quality.ncr.view',
             'parent' => 'quality',
@@ -21,6 +22,7 @@ return [
         [
             'id' => 'quality.scar',
             'label' => 'SCAR',
+            'icon' => 'heroicon-o-clipboard-document-check',
             'route' => 'quality.scar.index',
             'permission' => 'quality.scar.view',
             'parent' => 'quality',

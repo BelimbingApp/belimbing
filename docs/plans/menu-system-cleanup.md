@@ -1,7 +1,7 @@
 # Menu System Cleanup
 
-**Status:** In Progress (Phases 1–4 applied)
-**Last Updated:** 2026-05-07 (Phase 4 implemented; tests green)
+**Status:** In Progress (Phases 1–5 applied)
+**Last Updated:** 2026-05-07 (Phase 5 implemented; tests green)
 **Sources:** `app/Base/Menu/`, all 25 `Config/menu.php` files under `app/Base/*`, `app/Modules/*/*`, and `extensions/*/*`
 **Agents:** claude/opus-4-7
 
@@ -173,11 +173,11 @@ Phases 1, 2, 3, 4, 5, 6 each touch a small disjoint slice. Phase 7 (the rename) 
 
 **Goal:** small fixes that do not need their own phase.
 
-- [ ] Fix label `TestTransport` → `Test Transport` (`app/Base/System/Config/menu.php:37`)
-- [ ] Add icons to `quality.ncr` and `quality.scar` in `app/Modules/Core/Quality/Config/menu.php` (suggest `heroicon-o-flag` and `heroicon-o-shield-exclamation`, pick to taste)
-- [ ] Move the null-filter normalization into `MenuDiscoveryService::processFile()`; remove the `$item` callable from `app/Modules/Core/AI/Config/menu.php`
-- [ ] Convert `commerce.marketplace` to a pure container in `app/Modules/Commerce/Marketplace/Config/menu.php`; move its current route to a new child `commerce.marketplace.ebay`
-- [ ] Confirm `MenuBuilder` empty-container hiding still works for the (briefly) empty `commerce.marketplace` if its children get permission-filtered out
+- [x] Fix label `TestTransport` → `Test Transport` claude/opus-4-7
+- [x] Add icons to `quality.ncr` (`heroicon-o-flag`) and `quality.scar` (`heroicon-o-clipboard-document-check`) claude/opus-4-7
+- [x] Move the null-filter normalization into `MenuDiscoveryService::processFile()`; remove the `$item` callable from `app/Modules/Core/AI/Config/menu.php` so AI menu becomes regular array literals like every other module claude/opus-4-7
+- [x] Convert `commerce.marketplace` to a pure container; promote its old route into a new `commerce.marketplace.ebay` leaf (icon `heroicon-o-shopping-cart`) sibling of eBay Settings claude/opus-4-7
+- [x] Empty-container hiding still works (verified via discovery probe + 11 menu tests pass) claude/opus-4-7
 
 ### Phase 6 — Surface menu source metadata
 

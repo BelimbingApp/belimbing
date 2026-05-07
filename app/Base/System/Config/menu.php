@@ -31,7 +31,7 @@ return [
         ],
         [
             'id' => 'system.test-transport',
-            'label' => 'TestTransport',
+            'label' => 'Test Transport',
             'icon' => 'heroicon-o-play',
             'route' => 'admin.system.test-transport.index',
             'permission' => 'admin.system_transport_test.view',

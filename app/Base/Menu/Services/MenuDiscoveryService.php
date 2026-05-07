@@ -79,6 +79,11 @@ class MenuDiscoveryService
                     continue;
                 }
 
+                // Strip null values so module configs can use null sentinels for
+                // optional keys (`condition`, `permission`, `route`, …) without
+                // every module needing its own filter wrapper.
+                $item = array_filter($item, static fn (mixed $value): bool => $value !== null);
+
                 $items->push(array_merge($item, ['_source' => $metadata]));
             }
         } catch (\Throwable $e) {

@@ -9,9 +9,15 @@ return [
             'id' => 'commerce.marketplace',
             'label' => 'Marketplace',
             'icon' => 'heroicon-o-globe-alt',
+            'parent' => 'commerce',
+        ],
+        [
+            'id' => 'commerce.marketplace.ebay',
+            'label' => 'eBay',
+            'icon' => 'heroicon-o-shopping-cart',
             'route' => 'commerce.marketplace.ebay.index',
             'permission' => 'commerce.marketplace.list',
-            'parent' => 'commerce',
+            'parent' => 'commerce.marketplace',
         ],
         [
             'id' => 'commerce.marketplace.ebay_settings',
