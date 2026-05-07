@@ -201,5 +201,29 @@ describe('TurnEventStreamController', function () {
         expect($json)->toHaveKey('status', 'completed');
         expect($json)->toHaveKey('started_at');
         expect($json)->toHaveKey('created_at');
+        expect($json)->toHaveKey('cancel_requested_at', null);
+    });
+
+    it('exposes pending cancellation timestamp while a turn is still active', function () {
+        $fixture = createReplayFixture();
+        $this->actingAs($fixture['user']);
+
+        $turn = ChatTurn::query()->create([
+            'employee_id' => Employee::LARA_ID,
+            'session_id' => REPLAY_TEST_SESSION,
+            'acting_for_user_id' => $fixture['user']->id,
+            'status' => TurnStatus::Running,
+            'current_phase' => TurnPhase::AwaitingLlm,
+        ]);
+        $turn->requestCancel('User pressed stop');
+
+        $response = $this->getJson(route('ai.chat.turn.events', [
+            'turnId' => $turn->id,
+        ]));
+
+        $response->assertOk();
+
+        expect($response->json('status'))->toBe('running')
+            ->and($response->json('cancel_requested_at'))->toBe($turn->refresh()->cancel_requested_at?->toIso8601String());
     });
 });

@@ -48,7 +48,8 @@ trait HandlesStreaming
      *     label: string|null,
      *     started_at: string|null,
      *     created_at: string|null,
-     *     timer_anchor_at: string|null
+     *     timer_anchor_at: string|null,
+     *     cancel_requested_at: string|null
      * }|null Null when an orchestration shortcut handled the message or input was invalid
      */
     public function prepareStreamingRun(): ?array
@@ -119,6 +120,7 @@ trait HandlesStreaming
             'started_at' => $turn->started_at?->toIso8601String(),
             'created_at' => $turn->created_at?->toIso8601String(),
             'timer_anchor_at' => $turn->created_at?->toIso8601String(),
+            'cancel_requested_at' => null,
         ];
     }
 
@@ -132,6 +134,7 @@ trait HandlesStreaming
      *     started_at: string|null,
      *     created_at: string|null,
      *     timer_anchor_at: string|null,
+     *     cancel_requested_at: string|null,
      *     status: string
      * }>
      */
@@ -158,6 +161,7 @@ trait HandlesStreaming
                 'current_label',
                 'started_at',
                 'created_at',
+                'cancel_requested_at',
             ]);
 
         $bySession = [];
@@ -200,6 +204,7 @@ trait HandlesStreaming
                 'current_label',
                 'started_at',
                 'created_at',
+                'cancel_requested_at',
             ]);
     }
 
@@ -224,7 +229,8 @@ trait HandlesStreaming
      *     label: string|null,
      *     started_at: string|null,
      *     created_at: string|null,
-     *     timer_anchor_at: string|null
+     *     timer_anchor_at: string|null,
+     *     cancel_requested_at: string|null
      * }
      */
     private function formatActiveTurnPayload(ChatTurn $turn): array
@@ -243,6 +249,7 @@ trait HandlesStreaming
             'started_at' => $startedAt,
             'created_at' => $createdAt,
             'timer_anchor_at' => $startedAt ?? $createdAt,
+            'cancel_requested_at' => $turn->cancel_requested_at?->toIso8601String(),
         ];
     }
 

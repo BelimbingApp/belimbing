@@ -54,6 +54,7 @@ class TurnEventStreamController
             'current_label' => $turn->current_label,
             'started_at' => $turn->started_at?->toIso8601String(),
             'created_at' => $turn->created_at?->toIso8601String(),
+            'cancel_requested_at' => $turn->cancel_requested_at?->toIso8601String(),
         ]);
     }
 }

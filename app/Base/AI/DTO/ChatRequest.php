@@ -7,6 +7,7 @@ namespace App\Base\AI\DTO;
 
 use App\Base\AI\Contracts\LlmTransportTap;
 use App\Base\AI\Enums\AiApiType;
+use Closure;
 use InvalidArgumentException;
 
 class ChatRequest
@@ -28,6 +29,7 @@ class ChatRequest
         public readonly AiApiType $apiType = AiApiType::OpenAiChatCompletions,
         public readonly ?LlmTransportTap $transportTap = null,
         public readonly array $providerHeaders = [],
+        public readonly ?Closure $cancelRequested = null,
     ) {
         $this->executionControls = $executionControls ?? ExecutionControls::defaults();
 
@@ -40,5 +42,10 @@ class ChatRequest
         if ($this->messages === []) {
             throw new InvalidArgumentException('messages is required');
         }
+    }
+
+    public function isCancelRequested(): bool
+    {
+        return $this->cancelRequested !== null && (bool) ($this->cancelRequested)();
     }
 }

@@ -16,6 +16,7 @@ use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Enums\TurnPhase;
+use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -24,6 +25,7 @@ use App\Modules\Core\AI\Services\ControlPlane\RunRecorderStartInput;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\ControlPlane\WireLoggingTransportTap;
 use App\Modules\Core\AI\Values\CallUsage;
+use Closure;
 use Illuminate\Support\Str;
 
 /**
@@ -270,6 +272,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 $credentials,
                 $messages,
                 $systemPrompt,
+                $turnId,
                 $allowedToolNames,
             );
         } finally {
@@ -735,9 +738,10 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array $credentials,
         array $messages,
         ?string $systemPrompt,
+        ?string $turnId,
         ?array $allowedToolNames = null,
     ): \Generator {
-        $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt, $allowedToolNames);
+        $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt, $turnId, $allowedToolNames);
 
         if ($toolLoopState['removedTools'] !== []) {
             yield ['event' => 'status', 'data' => [
@@ -774,6 +778,16 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             if (isset($iterResult['runtime_error'])) {
                 $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
                 yield $this->streamRuntimeErrorEvent($runId, $config, $iterResult['runtime_error'], $toolLoopState);
+
+                return;
+            }
+
+            if (($iterResult['cancelled'] ?? false) === true) {
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+                yield ['event' => 'status', 'data' => [
+                    'phase' => TurnPhase::Cancelled->value,
+                    'run_id' => $runId,
+                ]];
 
                 return;
             }
@@ -939,7 +953,8 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
      *     retryAttempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
      *     hookMetadata: array<string, mixed>,
      *     removedTools: list<string>,
-     *     allowedToolNames: list<string>|null
+     *     allowedToolNames: list<string>|null,
+     *     cancelRequested: Closure|null
      * }
      */
     private function initializeToolLoopState(
@@ -947,6 +962,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         int $employeeId,
         array $messages,
         ?string $systemPrompt,
+        ?string $turnId,
         ?array $allowedToolNames = null,
     ): array {
         $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
@@ -975,7 +991,20 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             'hookMetadata' => $hookMetadata,
             'removedTools' => $removedTools,
             'allowedToolNames' => $allowedToolNames,
+            'cancelRequested' => $this->cancellationCallbackForTurn($turnId),
         ];
+    }
+
+    private function cancellationCallbackForTurn(?string $turnId): ?Closure
+    {
+        if (! is_string($turnId) || $turnId === '') {
+            return null;
+        }
+
+        return static fn (): bool => ChatTurn::query()
+            ->whereKey($turnId)
+            ->whereNotNull('cancel_requested_at')
+            ->exists();
     }
 
     /**

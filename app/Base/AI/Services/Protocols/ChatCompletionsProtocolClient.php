@@ -80,7 +80,7 @@ final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
         $finishReason = null;
         $lastMeaningfulOutputAt = hrtime(true);
 
-        foreach ($this->sseLines($response, $transportTap) as $line) {
+        foreach ($this->sseLines($request, $response, $transportTap) as $line) {
             if ($this->streamProgressTimedOut($lastMeaningfulOutputAt, $request)) {
                 yield $this->streamProgressTimeoutEvent($request, $startTime);
 
@@ -102,6 +102,12 @@ final class ChatCompletionsProtocolClient extends AbstractLlmProtocolClient
             if ($finishReason === '__done__') {
                 return;
             }
+        }
+
+        if ($request->isCancelRequested()) {
+            yield ['type' => 'cancelled'];
+
+            return;
         }
 
         yield $this->buildDoneEvent($finishReason ?? 'stop', null, $startTime, $mapping);

@@ -19,6 +19,7 @@
         replayUrlTemplate: @js(route('ai.chat.turn.events', ['turnId' => '__TURN__'])),
         terminalTurnStatuses: ['completed', 'failed', 'cancelled'],
         phaseLabels: @js($phaseLabels),
+        stoppingLabel: @js(__('Stopping… waiting for stream to stop')),
         _summaryPollTimer: null,
         SESSION_MIN: 160,
         SESSION_MAX: 320,
@@ -121,13 +122,17 @@
                 session_id: sessionId,
                 status: payload.status,
                 phase: payload.current_phase || summary.phase || null,
-                label: payload.current_label
-                    || this.labelForPhase(payload.current_phase, null)
-                    || summary.label
-                    || null,
+                label: (payload.cancel_requested_at || summary.stop_requested)
+                    ? this.stoppingLabel
+                    : (payload.current_label
+                        || this.labelForPhase(payload.current_phase, null)
+                        || summary.label
+                        || null),
                 started_at: payload.started_at || summary.started_at || null,
                 created_at: payload.created_at || summary.created_at || null,
                 timer_anchor_at: payload.started_at || payload.created_at || summary.timer_anchor_at || null,
+                cancel_requested_at: payload.cancel_requested_at || summary.cancel_requested_at || null,
+                stop_requested: !!(payload.cancel_requested_at || summary.stop_requested),
                 lastSeq: latestSeq,
             });
         },
@@ -527,10 +532,20 @@
                                         type="button"
                                         x-show="activeTurnSummaries['{{ $session->id }}']"
                                         x-cloak
-                                        x-on:click.stop="$wire.cancelActiveTurn(activeTurnSummaries['{{ $session->id }}']?.turnId)"
-                                        class="text-muted hover:text-ink p-1 shrink-0"
-                                        title="{{ __('Stop active turn') }}"
-                                        aria-label="{{ __('Stop active turn') }}"
+                                        x-on:click.stop="
+                                            const summary = activeTurnSummaries['{{ $session->id }}'];
+                                            if (!summary?.turnId || summary.stop_requested) return;
+                                            syncSummary('{{ $session->id }}', {
+                                                label: stoppingLabel,
+                                                stop_requested: true,
+                                                cancel_requested_at: new Date().toISOString(),
+                                            });
+                                            $wire.cancelActiveTurn(summary.turnId);
+                                        "
+                                        :disabled="!!activeTurnSummaries['{{ $session->id }}']?.stop_requested"
+                                        class="text-muted hover:text-ink disabled:opacity-60 disabled:cursor-not-allowed p-1 shrink-0"
+                                        :title="activeTurnSummaries['{{ $session->id }}']?.stop_requested ? '{{ __('Waiting for stream to stop') }}' : '{{ __('Stop active turn') }}'"
+                                        :aria-label="activeTurnSummaries['{{ $session->id }}']?.stop_requested ? '{{ __('Waiting for stream to stop') }}' : '{{ __('Stop active turn') }}'"
                                     >
                                         <x-icon name="heroicon-o-stop" class="w-3.5 h-3.5" />
                                     </button>
@@ -570,7 +585,7 @@
             <section class="flex-1 min-w-0 min-h-0 flex flex-col"
                 x-data="agentChatStream({
                     startingLabel: @js(__('Starting…')),
-                    stoppingLabel: @js(__('Stopping…')),
+                    stoppingLabel: @js(__('Stopping… waiting for stream to stop')),
                     waitingForWorkerLabel: @js(__('Waiting for worker…')),
                     turnFailedMessage: @js(__('Turn failed')),
                     connectionLostMessage: @js(__('Connection lost. Please try again.')),
@@ -903,6 +918,7 @@
                 <div
                     x-show="isBusy"
                     x-cloak
+                    aria-live="polite"
                     class="border-t border-border-default bg-surface-subtle/60 px-4 py-1.5 flex items-center gap-3 text-xs shrink-0"
                 >
                     <span class="w-2 h-2 bg-accent rounded-full animate-pulse shrink-0"></span>
@@ -915,10 +931,11 @@
                     <button
                         type="button"
                         @click="stopStreaming()"
-                        class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-border-default bg-surface-card text-muted hover:text-ink hover:border-accent/40 transition-colors shrink-0"
+                        :disabled="stopRequested"
+                        class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-border-default bg-surface-card text-muted hover:text-ink hover:border-accent/40 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shrink-0"
                     >
                         <x-icon name="heroicon-o-stop" class="w-3 h-3" />
-                        {{ __('Stop') }}
+                        <span x-text="stopRequested ? @js(__('Stopping…')) : @js(__('Stop'))"></span>
                     </button>
                 </div>
 
@@ -1103,6 +1120,10 @@
             return this.selectedTurnState?.toolsCollapsed || false;
         },
 
+        get stopRequested() {
+            return !!this.selectedTurnState?.stopRequested;
+        },
+
         createTurnState() {
             return {
                 streamEntries: [],
@@ -1123,6 +1144,8 @@
                 abortController: null,
                 fetchReader: null,
                 elapsedTimer: null,
+                stopRequested: false,
+                stopRequestedAt: null,
             };
         },
 
@@ -1589,8 +1612,15 @@
             }
             if (json.current_phase) {
                 state.turnPhase = json.current_phase;
-                state.turnLabel = json.current_label
-                    || this.labelForPhase(json.current_phase, json.current_phase);
+                state.turnLabel = (json.cancel_requested_at || state.stopRequested)
+                    ? this.stoppingLabel
+                    : (json.current_label
+                        || this.labelForPhase(json.current_phase, json.current_phase));
+            }
+            if (json.cancel_requested_at) {
+                state.stopRequested = true;
+                state.stopRequestedAt = json.cancel_requested_at;
+                state.turnLabel = this.stoppingLabel;
             }
 
             for (const event of (json.events || [])) {
@@ -1933,13 +1963,22 @@
                 return;
             }
 
-            const state = this.ensureTurnState(this.selectedTurnId);
+            const turnId = this.selectedTurnId;
+            const state = this.ensureTurnState(turnId);
             if (!state) {
                 return;
             }
 
+            if (state.stopRequested) {
+                return;
+            }
+
+            state.stopRequested = true;
+            state.stopRequestedAt = new Date().toISOString();
             state.turnLabel = this.stoppingLabel;
-            this.$wire.cancelActiveTurn(this.selectedTurnId);
+            this.$wire.cancelActiveTurn(turnId);
+            this.abortPersistentFetch(turnId);
+            this.startReplayPolling(turnId, state.scrollContainer);
         },
 
         scrollToBottom(container) {

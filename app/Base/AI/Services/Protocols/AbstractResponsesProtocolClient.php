@@ -89,7 +89,7 @@ abstract class AbstractResponsesProtocolClient extends AbstractLlmProtocolClient
 
         $lastMeaningfulOutputAt = hrtime(true);
 
-        foreach ($this->sseLines($response, $transportTap) as $line) {
+        foreach ($this->sseLines($request, $response, $transportTap) as $line) {
             if ($this->streamProgressTimedOut($lastMeaningfulOutputAt, $request)) {
                 yield $this->streamProgressTimeoutEvent($request, $startTime);
 
@@ -114,6 +114,12 @@ abstract class AbstractResponsesProtocolClient extends AbstractLlmProtocolClient
             if ($done) {
                 return;
             }
+        }
+
+        if ($request->isCancelRequested()) {
+            yield ['type' => 'cancelled'];
+
+            return;
         }
 
         yield $this->buildDoneEvent('stop', null, $startTime, $mapping);

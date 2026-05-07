@@ -73,6 +73,7 @@ final class AgenticToolLoopStreamReader
                 ? new WireLoggingTransportTap($this->wireLogger, $runId)
                 : null,
             providerHeaders: $credentials['headers'] ?? [],
+            cancelRequested: $toolLoopState['cancelRequested'] ?? null,
         ));
 
         $streamState = [
@@ -101,6 +102,10 @@ final class AgenticToolLoopStreamReader
                 return [
                     'runtime_error' => $this->runtimeErrorFromStreamEvent($event),
                 ];
+            }
+
+            if ($type === 'cancelled') {
+                return ['cancelled' => true];
             }
 
             $this->accumulateStreamEvent($event, $streamState);

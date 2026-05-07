@@ -209,7 +209,7 @@ class Chat extends Component
      *     messages: list<Message>,
      *     sessionUsage: mixed,
      *     hasPendingDelegations: bool,
-     *     activeTurnsBySession: array<string, array{turnId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, status: string}>
+     *     activeTurnsBySession: array<string, array{turnId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, cancel_requested_at: string|null, status: string}>
      * }
      */
     private function resolveRenderState(bool $agentActivated): array
@@ -480,7 +480,7 @@ class Chat extends Component
 
     /**
      * @param  list<Session>  $sessions
-     * @param  array<string, array{turnId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, status: string}>  $activeTurnsBySession
+     * @param  array<string, array{turnId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, cancel_requested_at: string|null, status: string}>  $activeTurnsBySession
      * @return array<string, array{turn_id: string, is_active: bool}>
      */
     private function sessionTurnTargets(array $sessions, array $activeTurnsBySession): array

@@ -123,6 +123,7 @@ class TurnStreamBridge
     {
         return match ($data['phase'] ?? '') {
             TurnPhase::AwaitingLlm->value => $this->onAwaitingLlmPhase($turn),
+            TurnPhase::Cancelled->value => [$this->publisher->phaseChanged($turn, TurnPhase::Cancelled, TurnPhase::Cancelled->label())->toSsePayload()],
             'thinking_delta' => $this->onThinkingDelta($turn, $data),
             'iteration_completed' => $this->onIterationCompleted($turn, $data),
             'tool_started' => $this->onToolStarted($turn, $data),

@@ -147,7 +147,7 @@ describe('LlmClient tool calling request payloads', function () {
 
 describe('LlmClient provider-specific request payloads', function () {
 
-    it('sets a stream body read timeout for LLM streams', function () {
+    it('sets a short stream body read wakeup for LLM streams', function () {
         $optionsSeen = [];
         $payload = <<<'SSE'
 data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}],"usage":null}
@@ -172,7 +172,26 @@ SSE;
         )));
 
         expect($optionsSeen['stream'] ?? null)->toBeTrue()
-            ->and($optionsSeen['read_timeout'] ?? null)->toBe(7);
+            ->and($optionsSeen['read_timeout'] ?? null)->toBe(2);
+    });
+
+    it('exposes the chat request cancellation callback', function () {
+        $cancelRequested = false;
+        $request = new ChatRequest(
+            TEST_API_BASE_URL,
+            'openai-key',
+            'gpt-5.4',
+            [['role' => 'user', 'content' => 'Hello']],
+            cancelRequested: static function () use (&$cancelRequested): bool {
+                return $cancelRequested;
+            },
+        );
+
+        expect($request->isCancelRequested())->toBeFalse();
+
+        $cancelRequested = true;
+
+        expect($request->isCancelRequested())->toBeTrue();
     });
 
     it('classifies heartbeat-only stream progress as a timeout', function () {

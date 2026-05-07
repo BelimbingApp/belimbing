@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Http;
 
 final class LlmClientSupport
 {
+    private const STREAM_READ_WAKEUP_SECONDS = 2;
+
     /**
      * @param  array<string, string>  $providerHeaders
      */
@@ -30,7 +32,7 @@ final class LlmClientSupport
         if ($stream) {
             $http = $http->withOptions([
                 'stream' => true,
-                'read_timeout' => max(1, $request->timeout),
+                'read_timeout' => min(max(1, $request->timeout), self::STREAM_READ_WAKEUP_SECONDS),
             ]);
         }
 

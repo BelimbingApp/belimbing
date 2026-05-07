@@ -135,7 +135,7 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
 
         $lastMeaningfulOutputAt = hrtime(true);
 
-        foreach ($this->sseLines($response, $transportTap, flushTrailingBuffer: true) as $line) {
+        foreach ($this->sseLines($request, $response, $transportTap, flushTrailingBuffer: true) as $line) {
             if ($this->streamProgressTimedOut($lastMeaningfulOutputAt, $request)) {
                 yield $this->streamProgressTimeoutEvent($request, $startTime);
 
@@ -161,6 +161,12 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
             if ($terminal) {
                 return;
             }
+        }
+
+        if ($request->isCancelRequested()) {
+            yield ['type' => 'cancelled'];
+
+            return;
         }
 
         yield $this->buildDoneEvent(

@@ -257,11 +257,13 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
      * @return Generator<int, string>
      */
     protected function sseLines(
+        ChatRequest $request,
         Response $response,
         ?LlmTransportTap $transportTap = null,
         bool $flushTrailingBuffer = false,
     ): Generator {
         yield from $this->sseLinesFromStream(
+            $request,
             $response->toPsrResponse()->getBody(),
             $transportTap,
             $flushTrailingBuffer,
@@ -272,6 +274,7 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
      * @return Generator<int, string>
      */
     private function sseLinesFromStream(
+        ChatRequest $request,
         StreamInterface $stream,
         ?LlmTransportTap $transportTap,
         bool $flushTrailingBuffer,
@@ -280,8 +283,37 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
         $firstByteRecorded = false;
 
         while (! $stream->eof()) {
-            $chunk = $stream->read(8192);
+            if ($request->isCancelRequested()) {
+                $stream->close();
+
+                return;
+            }
+
+            try {
+                $chunk = $stream->read(8192);
+            } catch (\RuntimeException $e) {
+                if (! $this->isStreamReadTimeout($e)) {
+                    throw $e;
+                }
+
+                if ($request->isCancelRequested()) {
+                    $stream->close();
+
+                    return;
+                }
+
+                yield '';
+
+                continue;
+            }
+
             if ($chunk === '') {
+                if ($request->isCancelRequested()) {
+                    $stream->close();
+
+                    return;
+                }
+
                 continue;
             }
 
