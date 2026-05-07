@@ -1,7 +1,7 @@
 # Menu System Cleanup
 
-**Status:** In Progress (Phase 7 applied; Phase 8 visual verification pending)
-**Last Updated:** 2026-05-07 (Phase 7 naming normalization applied; route list, cache clear, discovery probe, and full test suite green)
+**Status:** Complete (Phases 1–8 applied)
+**Last Updated:** 2026-05-07 (Phase 8 verified; route list, cache clear, discovery probe, full test suite, and browser menu walk green)
 **Sources:** `app/Base/Menu/`, all 25 `Config/menu.php` files under `app/Base/*`, `app/Modules/*/*`, and `extensions/*/*`
 **Agents:** claude/opus-4-7, codex/gpt-5
 
@@ -133,7 +133,7 @@ Phases 1, 2, 3, 4, 5, 6 each touch a small disjoint slice. Phase 7 (the rename) 
 - [x] Re-parent `admin.employees` and `admin.employee-types` (in `app/Modules/Core/Employee/Config/menu.php`) under `people` (parent change only in this phase; ID rename to `people.employee` / `people.employee-type` happens in Phase 7) claude/opus-4-7
 - [x] Companies stays under `admin` — no parent change in this phase claude/opus-4-7
 - [ ] Add a `people.licensee-company` menu entry (parent: `people`) per D10. **Deferred** during Phase 1: requires a new permission key (`people.licensee-company.view`) and authz registration; the existing `admin.setup.licensee` route is the natural target (its `Licensee::mount()` redirects to `admin.companies.show` when `Company::LICENSEE_ID` exists). Pick up as a small follow-up once we want a dedicated entry point.
-- [ ] Verify the rendered tree at `/admin` after a `php artisan cache:clear`: Operations contains Quality and IT; People contains Employees and Employee Types; Admin no longer contains Employees but still contains Companies, Users, Addresses, Geonames, AI, Authorization, Audit Log, Workflows, System; Commerce still resolves with Inventory disabled
+- [x] Verify the rendered tree after a `php artisan cache:clear`: Operations contains Quality and IT; People contains Employees and Employee Types; Admin no longer contains Employees but still contains Companies, Users, Addresses, Geonames, AI, Authorization, Audit Log, Workflows, System; Commerce resolves with Catalog, Inventory, Marketplace, and Ham Auto Parts
 
 ### Phase 2 — Delete the `position` field
 
@@ -156,7 +156,7 @@ Phases 1, 2, 3, 4, 5, 6 each touch a small disjoint slice. Phase 7 (the rename) 
 - [x] Re-parent the Outbound Exchanges item in `app/Base/Integration/Config/menu.php` and the Test Transport item in `app/Base/System/Config/menu.php` → `system.integrations` claude/opus-4-7
 - [x] Settings, Localization, UI Reference, System Info all stay/become direct children of `system` claude/opus-4-7
 - [x] Discovery probe + menu test suite (11 tests) green claude/opus-4-7
-- [ ] Visual check at `/admin/system/*` — every item still reachable; active highlighting still works
+- [x] Visual check at `/admin/system/*` — every item still reachable; active highlighting still works
 
 (IDs stay in pre-rename form during Phase 3; full rename to `admin.system.*` happens in Phase 7. Parent fields use the new subgroup IDs.)
 
@@ -274,13 +274,13 @@ After each ID rename, update the corresponding `parent` field on any child items
 
 **Goal:** end-to-end confidence after all phases.
 
-- [ ] `php artisan cache:clear`
-- [ ] `php artisan route:list` — clean
-- [ ] Test suite — green
-- [ ] Visual: load `/admin`, walk the entire tree (Admin/Operations/Commerce/People), verify every leaf reaches its target page
-- [ ] Active highlighting works for nested routes (e.g., navigating to a Companies edit page highlights `admin.company`)
-- [ ] Menu Inspector page lists every item with correct source attribution; filter by source module shows only Ham items when `auto-parts` is selected
-- [ ] With `APP_DEBUG=true`, hover tooltips show the source file path
+- [x] `php artisan cache:clear`
+- [x] `php artisan route:list` — clean
+- [x] Test suite — green
+- [x] Visual: load the admin shell, walk the entire tree (Admin/Operations/Commerce/People), verify every visible leaf reaches its target page
+- [x] Active highlighting works for nested routes (e.g., navigating to a Companies show page highlights `admin.company`)
+- [x] Menu Inspector page lists every item with correct source attribution; filter by source module shows only Ham items when `auto-parts` is selected
+- [x] With `APP_DEBUG=true`, hover tooltips show the source file path
 
 ## Risks and Notes
 
