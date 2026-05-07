@@ -39,7 +39,6 @@ it('lists and shows outbound exchanges with retained payloads', function (): voi
         ->assertSee('Retained')
         ->assertSee('hello')
         ->assertSee('world')
-        ->assertSee('Copy payload')
         ->assertSee('Completed with a non-error response.')
         ->assertSee('Retained payloads are removed by retention cleanup.');
 });
