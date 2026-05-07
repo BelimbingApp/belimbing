@@ -1,7 +1,7 @@
 # Menu System Cleanup
 
-**Status:** In Progress (Phases 1–5 applied)
-**Last Updated:** 2026-05-07 (Phase 5 implemented; tests green)
+**Status:** In Progress (Phases 1–6 applied)
+**Last Updated:** 2026-05-07 (Phase 6 implemented; tests green; awaiting commit)
 **Sources:** `app/Base/Menu/`, all 25 `Config/menu.php` files under `app/Base/*`, `app/Modules/*/*`, and `extensions/*/*`
 **Agents:** claude/opus-4-7
 
@@ -183,12 +183,14 @@ Phases 1, 2, 3, 4, 5, 6 each touch a small disjoint slice. Phase 7 (the rename) 
 
 **Goal:** make extension-vs-core source identifiable on demand without polluting the live sidebar.
 
-- [ ] Add `?string $sourceModule` and `?string $sourceFile` (or a single `?array $source`) to `MenuItem`; populate from the `_source` metadata in `MenuItem::fromArray`
-- [ ] Update `MenuRegistry::persist()` to include the source fields in the serialized cache shape; bump the cache key
-- [ ] Add a Menu Inspector page parented under `admin.system.diagnostics` (route, controller/Livewire component, Blade view) that lists every registered item — id, label, parent, source module, source file, permission, condition, computed visibility for the current user — with filtering by source module
-- [ ] Gate the Inspector behind a new permission (e.g., `admin.system.menu-inspector.view`)
-- [ ] Add an `APP_DEBUG`-gated `title=` tooltip on rendered menu items showing source file and module (template-only change in the menu Blade partial)
-- [ ] Document the diagnostic flow in the convention comment at the top of `app/Base/Menu/Config/menu.php`
+- [x] Added `?string $sourceModule` and `?string $sourceFile` to `MenuItem`, plus `isFromExtension()` convenience. Populated from `_source` metadata in `MenuItem::fromArray` claude/opus-4-7
+- [x] Updated `MenuRegistry::persist()` to include source fields in the serialized shape; bumped cache key to `blb.menu.registry.v3` claude/opus-4-7
+- [x] Built the Menu Inspector page: route `admin.system.menu-inspector.index`, Livewire component `App\Base\System\Livewire\MenuInspector\Index`, Blade view at `resources/core/views/livewire/admin/system/menu-inspector/index.blade.php`. Lists every registered item with id, label, parent, kind (container/leaf, extension badge), permission, condition, source module + file, and computed visibility for the current user. Supports search across id/label/permission/source-file plus source-module and core/extension filters claude/opus-4-7
+- [x] Registered the new permission `admin.system_menu_inspector.view` in `app/Base/System/Config/authz.php` and gated the route via `authz:` middleware. Permission key uses the existing underscore convention (matches its peers); will be normalized along with all the others in Phase 7 claude/opus-4-7
+- [x] Added the menu entry under `system.diagnostics` (icon: magnifying-glass) so the Inspector is discoverable from the sidebar claude/opus-4-7
+- [x] `APP_DEBUG`-gated tooltip in `resources/core/views/components/menu/item.blade.php`: when debug is on, the existing `title=` attribute on each menu item appends the item id, source module, and source file path. Off in production by default. claude/opus-4-7
+- [x] Convention header in `app/Base/Menu/Config/menu.php` now documents the diagnostic flow (Inspector page + debug tooltip) claude/opus-4-7
+- [x] Verified end-to-end: route registered, 69 items discovered with source attribution, validation OK, 11 menu tests pass claude/opus-4-7
 
 ### Phase 7 — Naming normalization (last on purpose)
 

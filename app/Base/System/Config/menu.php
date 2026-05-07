@@ -37,5 +37,13 @@ return [
             'permission' => 'admin.system_transport_test.view',
             'parent' => 'system.integrations',
         ],
+        [
+            'id' => 'system.menu-inspector',
+            'label' => 'Menu Inspector',
+            'icon' => 'heroicon-o-magnifying-glass',
+            'route' => 'admin.system.menu-inspector.index',
+            'permission' => 'admin.system_menu_inspector.view',
+            'parent' => 'system.diagnostics',
+        ],
     ],
 ];

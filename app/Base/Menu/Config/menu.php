@@ -37,6 +37,23 @@
  *                 Reservations for future buckets without a domain home yet
  *                 (finance, procurement, maintenance, production) live below
  *                 as commented-out entries until each gets its own anchor.
+ *
+ *   Diagnosing    Every MenuItem carries `sourceModule` and `sourceFile`
+ *   "where did    populated by MenuDiscoveryService. To answer "where is this
+ *    this come    declared?":
+ *    from?"
+ *                     Menu Inspector page  /admin/system/menu-inspector
+ *                                          lists every registered item with
+ *                                          its source, parent, permission,
+ *                                          condition, and computed visibility
+ *
+ *                     Debug tooltip        when APP_DEBUG=true, hovering a
+ *                                          menu item reveals its id, source
+ *                                          module, and source file path
+ *
+ *                 No permanent live-sidebar marker for extensions — diagnosis
+ *                 is one click (or one hover) away when you want it, and out
+ *                 of the way when you don't.
  */
 
 return [

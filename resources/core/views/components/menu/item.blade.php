@@ -8,6 +8,13 @@
         $iconName = $item->icon ?? 'heroicon-o-squares-2x2';
         // Top-level container items (like Administration, Business Operations) get accent color in rail view
         $isTopLevelContainer = $item->isContainer() && $item->parent === null;
+        // Debug-only tooltip: source attribution helps identify whether an item
+        // came from BLB core or an extension when something looks wrong.
+        $tooltip = __($item->label);
+        if (config('app.debug') && $item->sourceFile) {
+            $tooltip .= "\n[".$item->id.($item->sourceModule ? ' · '.$item->sourceModule : '').']'
+                ."\n".$item->sourceFile;
+        }
     @endphp
 
     @if($item->hasRoute())
@@ -19,7 +26,7 @@
             @if($item->route) wire:navigate @endif
             class="flex items-center justify-center w-full h-8 rounded-none transition {{ $isActive ? 'bg-surface-card text-ink' : 'text-link hover:bg-surface-subtle' }}"
             aria-label="{{ __($item->label) }}"
-            title="{{ __($item->label) }}"
+            title="{{ $tooltip }}"
         >
             <x-icon :name="$iconName" class="w-[1.125rem] h-[1.125rem]" />
         </a>
@@ -46,6 +53,7 @@
                 href="{{ $item->route ? route($item->route) : $item->url }}"
                 @if($item->route) wire:navigate @endif
                 class="truncate flex-1"
+                title="{{ $tooltip }}"
             >{{ __($item->label) }}</a>
 
             {{-- Pin/unpin toggle (visible on hover) --}}
@@ -69,7 +77,7 @@
             @click="expanded = !expanded"
             class="flex items-center justify-center w-full h-8 rounded-none transition {{ $isTopLevelContainer ? 'text-accent' : ($hasActiveChild ? 'text-ink' : 'text-link hover:bg-surface-subtle') }}"
             aria-label="{{ __($item->label) }}"
-            title="{{ __($item->label) }}"
+            title="{{ $tooltip }}"
         >
             <x-icon :name="$iconName" class="w-[1.125rem] h-[1.125rem]" />
         </button>
@@ -80,6 +88,7 @@
             x-cloak
             @click="expanded = !expanded"
             class="flex items-center gap-0.5 w-full px-1 py-px text-sm rounded-none cursor-pointer transition text-link {{ $hasActiveChild ? 'font-medium' : 'font-normal hover:bg-surface-subtle' }}"
+            title="{{ $tooltip }}"
         >
             <span class="text-[12px] shrink-0 text-link w-3 text-center" aria-hidden="true">
                 <span x-show="!expanded">&#x2BC8;</span>

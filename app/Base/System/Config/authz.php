@@ -7,6 +7,7 @@ return [
     'capabilities' => [
         'admin.system_info.view',
         'admin.system_localization.manage',
+        'admin.system_menu_inspector.view',
         'admin.system_transport_test.view',
         'admin.system_ui_reference.view',
     ],

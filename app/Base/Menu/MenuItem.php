@@ -16,12 +16,15 @@ readonly class MenuItem
         public ?string $parent = null,
         public ?string $permission = null,
         public ?string $condition = null,
+        public ?string $sourceModule = null,
+        public ?string $sourceFile = null,
     ) {}
 
     /**
      * Create MenuItem from array definition.
      *
-     * @param  array  $data  Menu item array from menu.php
+     * @param  array  $data  Menu item array from menu.php (may include `_source`
+     *                       metadata injected by MenuDiscoveryService)
      */
     public static function fromArray(array $data): self
     {
@@ -34,7 +37,17 @@ readonly class MenuItem
             parent: $data['parent'] ?? null,
             permission: $data['permission'] ?? null,
             condition: $data['condition'] ?? null,
+            sourceModule: $data['_source']['module_name'] ?? $data['sourceModule'] ?? null,
+            sourceFile: $data['_source']['file'] ?? $data['sourceFile'] ?? null,
         );
+    }
+
+    /**
+     * Whether this item was provided by an extension (vs core).
+     */
+    public function isFromExtension(): bool
+    {
+        return $this->sourceFile !== null && str_starts_with($this->sourceFile, 'extensions/');
     }
 
     /**

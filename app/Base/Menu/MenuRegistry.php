@@ -19,11 +19,11 @@ class MenuRegistry
     /**
      * Cache key for stored menu items.
      *
-     * Bumped to v2 when the `position` field was removed from MenuItem so a
-     * stale serialized payload from before the change does not blow up
-     * MenuItem::fromArray with an unexpected key.
+     * Bumped to v3 when source-attribution fields (sourceModule, sourceFile)
+     * were added to MenuItem; v2 dropped the dead position field. Rotate the
+     * suffix whenever the persisted shape changes.
      */
-    protected const CACHE_KEY = 'blb.menu.registry.v2';
+    protected const CACHE_KEY = 'blb.menu.registry.v3';
 
     public function __construct()
     {
@@ -147,6 +147,8 @@ class MenuRegistry
                 'parent' => $item->parent,
                 'permission' => $item->permission,
                 'condition' => $item->condition,
+                'sourceModule' => $item->sourceModule,
+                'sourceFile' => $item->sourceFile,
             ];
         })->all();
 
