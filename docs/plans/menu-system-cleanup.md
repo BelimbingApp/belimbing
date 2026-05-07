@@ -1,7 +1,7 @@
 # Menu System Cleanup
 
-**Status:** In Progress (Phases 1–3 applied)
-**Last Updated:** 2026-05-07 (Phase 3 implemented; tests green)
+**Status:** In Progress (Phases 1–4 applied)
+**Last Updated:** 2026-05-07 (Phase 4 implemented; tests green)
 **Sources:** `app/Base/Menu/`, all 25 `Config/menu.php` files under `app/Base/*`, `app/Modules/*/*`, and `extensions/*/*`
 **Agents:** claude/opus-4-7
 
@@ -164,9 +164,10 @@ Phases 1, 2, 3, 4, 5, 6 each touch a small disjoint slice. Phase 7 (the rename) 
 
 **Goal:** six Ham items under one container instead of cluttering Commerce root.
 
-- [ ] Add a `ham.auto-parts` container in `extensions/ham/auto-parts/Config/menu.php` parented to `commerce` (ID becomes `commerce.ham-auto-parts` in Phase 7)
-- [ ] Re-parent the existing six items from `parent: commerce` to the new container
-- [ ] Decide whether to introduce a nested insights container for the five insight items (defer unless the flat list looks crowded)
+- [x] Add a `ham.auto-parts` container in `extensions/ham/auto-parts/Config/menu.php` parented to `commerce` (ID becomes `commerce.ham-auto-parts` in Phase 7); icon `heroicon-o-wrench-screwdriver` claude/opus-4-7
+- [x] Re-parent the existing six items from `parent: commerce` to the new container claude/opus-4-7
+- [x] Renamed the Settings leaf label from "Ham Auto Parts" to "Settings" (the container now carries the brand) and gave it `heroicon-o-cog-6-tooth` claude/opus-4-7
+- [ ] **Deferred:** nested insights sub-container for the five insight items. Six items under one container is not crowded; defer unless visual review prompts otherwise.
 
 ### Phase 5 — Polish
 
