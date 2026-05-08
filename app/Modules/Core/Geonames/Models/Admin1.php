@@ -5,11 +5,32 @@
 
 namespace App\Modules\Core\Geonames\Models;
 
+use App\Base\Database\Exceptions\UnsupportedDatabaseDriverException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class Admin1 extends Model
 {
+    /**
+     * Build SQL to extract country ISO prefix from admin1 code (e.g. US.CA -> US).
+     */
+    public static function countryIsoSql(string $column = 'geonames_admin1.code'): string
+    {
+        $driver = DB::connection()->getDriverName();
+
+        return match ($driver) {
+            'sqlite' => "SUBSTR($column, 1, INSTR($column, '.') - 1)",
+            'mysql', 'mariadb' => "SUBSTRING_INDEX($column, '.', 1)",
+            'pgsql' => "SPLIT_PART($column, '.', 1)",
+            'sqlsrv' => "LEFT($column, CHARINDEX('.', $column + '.') - 1)",
+            default => throw UnsupportedDatabaseDriverException::forOperation(
+                driver: $driver,
+                operation: self::class.'::countryIsoSql',
+            ),
+        };
+    }
+
     /**
      * The table associated with the model.
      *
@@ -65,7 +86,8 @@ class Admin1 extends Model
         return $query
             ->selectRaw('geonames_admin1.*, geonames_countries.country as country_name, geonames_countries.iso as country_iso')
             ->leftJoin('geonames_countries', function ($join) {
-                $join->whereRaw("geonames_countries.iso = SPLIT_PART(geonames_admin1.code, '.', 1)");
+                $countryIsoSql = self::countryIsoSql('geonames_admin1.code');
+                $join->whereRaw("geonames_countries.iso = $countryIsoSql");
             });
     }
 }

@@ -11,7 +11,6 @@ use App\Modules\Core\Geonames\Database\Seeders\Admin1Seeder;
 use App\Modules\Core\Geonames\Models\Admin1;
 use App\Modules\Core\Geonames\Models\Country;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -79,8 +78,8 @@ class Index extends Component
             $query->forCountry($this->filterCountryIso);
         }
 
-        $importedCountries = DB::table('geonames_admin1')
-            ->selectRaw("SPLIT_PART(code, '.', 1) as iso")
+        $importedCountries = Admin1::query()
+            ->selectRaw(Admin1::countryIsoSql('code').' as iso')
             ->distinct()
             ->pluck('iso')
             ->sort()
