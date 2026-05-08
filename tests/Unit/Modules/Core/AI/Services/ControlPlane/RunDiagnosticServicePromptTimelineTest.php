@@ -218,10 +218,11 @@ it('collapses delta entries when collapseDelta is true', function (): void {
     $expanded = $service->buildPromptTimelineView($run->id, collapseDelta: false);
     $collapsed = $service->buildPromptTimelineView($run->id, collapseDelta: true);
 
+    // counts always reflect the true totals regardless of collapse state
     expect($expanded['meta_count'])->toBe(4)
         ->and($expanded['wire_count'])->toBe(3)
-        ->and($collapsed['meta_count'])->toBe(2)
-        ->and($collapsed['wire_count'])->toBe(1)
+        ->and($collapsed['meta_count'])->toBe(4)
+        ->and($collapsed['wire_count'])->toBe(3)
         ->and($collapsed['delta_collapsed'])->toBeTrue();
 });
 

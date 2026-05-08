@@ -524,9 +524,11 @@ class RunDiagnosticService
         }
 
         $metaEntries = [];
+        $totalMetaEntries = 0;
         $previousAt = null;
 
         foreach ($run->events as $event) {
+            $totalMetaEntries++;
             $isDelta = $event->event_type->isDelta();
 
             if ($collapseDelta && $isDelta) {
@@ -558,6 +560,9 @@ class RunDiagnosticService
 
         $wireEntries = [];
         $totalWireEntries = 0;
+        $collapsedCount = 0;
+        $collapsedFrom = 0;
+        $collapsedLastAt = '';
 
         foreach ($this->wireLogger->read($run->id) as $entry) {
             $totalWireEntries++;
@@ -565,7 +570,19 @@ class RunDiagnosticService
             $isDelta = $type === 'llm.stream_line';
 
             if ($collapseDelta && $isDelta) {
+                if ($collapsedCount === 0) {
+                    $collapsedFrom = $totalWireEntries;
+                }
+                $collapsedCount++;
+                $collapsedLastAt = is_string($entry['at'] ?? null) ? (string) $entry['at'] : $collapsedLastAt;
                 continue;
+            }
+
+            if ($collapsedCount > 0) {
+                $wireEntries[] = $this->collapsedDeltaEntry($collapsedFrom, $totalWireEntries - 1, $collapsedCount, $collapsedLastAt);
+                $collapsedCount = 0;
+                $collapsedFrom = 0;
+                $collapsedLastAt = '';
             }
 
             $wireEntries[] = [
@@ -583,6 +600,10 @@ class RunDiagnosticService
                 'seq' => null,
                 'entry_number' => $totalWireEntries,
             ];
+        }
+
+        if ($collapsedCount > 0) {
+            $wireEntries[] = $this->collapsedDeltaEntry($collapsedFrom, $collapsedFrom + $collapsedCount - 1, $collapsedCount, $collapsedLastAt);
         }
 
         $all = array_merge($metaEntries, $wireEntries);
@@ -608,8 +629,8 @@ class RunDiagnosticService
         return [
             'run' => $this->mapTurn($run),
             'timeline' => array_values($all),
-            'wire_count' => count($wireEntries),
-            'meta_count' => count($metaEntries),
+            'wire_count' => $totalWireEntries,
+            'meta_count' => $totalMetaEntries,
             'delta_collapsed' => $collapseDelta,
             'has_wire_log' => $totalWireEntries > 0,
         ];
@@ -628,6 +649,28 @@ class RunDiagnosticService
         }
 
         return ((int) $instant->format('U')) * 1000 + ((int) $instant->format('v'));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function collapsedDeltaEntry(int $from, int $to, int $count, string $lastAt): array
+    {
+        return [
+            'timestamp' => $lastAt,
+            'source' => 'wire',
+            'type' => 'stream_lines_collapsed',
+            'label' => __('Stream Deltas'),
+            'summary' => __('#:from – #:to (:count collapsed)', ['from' => $from, 'to' => $to, 'count' => $count]),
+            'severity' => 'default',
+            'is_delta' => true,
+            'gap_ms' => null,
+            'has_gap_warning' => false,
+            'is_stuck' => false,
+            'payload' => null,
+            'seq' => null,
+            'entry_number' => null,
+        ];
     }
 
     private function wireEntryLabel(string $type): string
@@ -692,14 +735,15 @@ class RunDiagnosticService
                 $payload['tool'] ?? null,
                 $payload['reason'] ?? null,
             ], fn (mixed $value): bool => is_string($value) && $value !== ''))),
+            'assistant.thinking_started' => (string) ($payload['description'] ?? ''),
             'assistant.output_delta', 'assistant.thinking_delta', 'tool.stdout_delta' => Str::limit((string) ($payload['delta'] ?? ''), 120),
-            'run.cancelled' => (string) ($payload['reason'] ?? __('Run cancelled')),
+            'run.cancelled' => (string) ($payload['reason'] ?? ''),
             'usage.updated' => __('Prompt: :prompt, Completion: :completion', [
                 'prompt' => (string) ($payload['prompt_tokens'] ?? 'n/a'),
                 'completion' => (string) ($payload['completion_tokens'] ?? 'n/a'),
             ]),
-            'heartbeat' => __('Heartbeat'),
-            default => $event->event_type->label(),
+            'heartbeat' => '',
+            default => '',
         };
     }
 }
