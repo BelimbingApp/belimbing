@@ -284,20 +284,6 @@ describe('TurnEventPublisher', function () {
             ->and($event->payload['elapsed_ms'])->toBe(5000);
     });
 
-    it('publishes recovery lifecycle', function () {
-        $publisher = app(TurnEventPublisher::class);
-        $turn = createTestTurn();
-        $turn->transitionTo(TurnStatus::Booting);
-        $turn->transitionTo(TurnStatus::Running);
-
-        $attempted = $publisher->recoveryAttempted($turn, 1, 'Provider timeout');
-        $succeeded = $publisher->recoverySucceeded($turn, 1);
-
-        expect($attempted->event_type)->toBe(TurnEventType::RecoveryAttempted)
-            ->and($attempted->payload['attempt'])->toBe(1)
-            ->and($succeeded->event_type)->toBe(TurnEventType::RecoverySucceeded);
-    });
-
     it('maintains strictly increasing seq across all events', function () {
         $publisher = app(TurnEventPublisher::class);
         $turn = createTestTurn();

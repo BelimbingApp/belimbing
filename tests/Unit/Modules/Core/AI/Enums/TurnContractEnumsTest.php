@@ -127,8 +127,8 @@ describe('TurnPhase', function () {
 // ------------------------------------------------------------------
 
 describe('TurnEventType', function () {
-    it('has twenty-two cases', function () {
-        expect(TurnEventType::cases())->toHaveCount(22);
+    it('has nineteen cases', function () {
+        expect(TurnEventType::cases())->toHaveCount(19);
     });
 
     it('uses dot-separated naming convention except for single-word events', function () {
@@ -160,13 +160,11 @@ describe('TurnEventType', function () {
 
     it('classifies severity for error events', function () {
         expect(TurnEventType::TurnFailed->severity())->toBe('error')
-            ->and(TurnEventType::RunFailed->severity())->toBe('error')
-            ->and(TurnEventType::RecoveryFailed->severity())->toBe('error');
+            ->and(TurnEventType::RunFailed->severity())->toBe('error');
     });
 
     it('classifies severity for warning events', function () {
-        expect(TurnEventType::ToolDenied->severity())->toBe('warning')
-            ->and(TurnEventType::RecoveryAttempted->severity())->toBe('warning');
+        expect(TurnEventType::ToolDenied->severity())->toBe('warning');
     });
 
     it('defaults to info severity for normal events', function () {
@@ -201,9 +199,6 @@ describe('TurnEventType', function () {
             ->toContain('tool.finished')
             ->toContain('tool.denied')
             ->toContain('usage.updated')
-            ->toContain('heartbeat')
-            ->toContain('recovery.attempted')
-            ->toContain('recovery.succeeded')
-            ->toContain('recovery.failed');
+            ->toContain('heartbeat');
     });
 });

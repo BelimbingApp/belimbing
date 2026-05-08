@@ -516,69 +516,7 @@ describe('TurnStreamBridge error handling', function () {
     });
 });
 
-// ------------------------------------------------------------------
-// TurnStreamBridge — recovery events
-// ------------------------------------------------------------------
-
-describe('TurnStreamBridge recovery events', function () {
-    it('maps recovery_attempted to RecoveryAttempted turn event', function () {
-        $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
-
-        $stream = runtimeStream([
-            ['event' => 'status', 'data' => [
-                'phase' => 'recovery_attempted',
-                'attempt' => 1,
-                'reason' => 'provider_fallback: API key invalid',
-                'run_id' => BRIDGE_TEST_RUN_ID,
-            ]],
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
-            ['event' => 'done', 'data' => ['content' => 'Ok', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
-        ]);
-
-        iterator_to_array($bridge->wrap($turn, $stream));
-
-        $types = turnEventTypes($turn);
-        expect($types)->toContain(TurnEventType::RecoveryAttempted);
-
-        $recovery = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
-            ->where('event_type', TurnEventType::RecoveryAttempted->value)
-            ->first();
-
-        expect($recovery)->not()->toBeNull()
-            ->and($recovery->payload['attempt'])->toBe(1)
-            ->and($recovery->payload['reason'])->toBe('provider_fallback: API key invalid');
-    });
-
-    it('maps recovery_succeeded to RecoverySucceeded turn event', function () {
-        $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
-
-        $stream = runtimeStream([
-            ['event' => 'status', 'data' => [
-                'phase' => 'recovery_attempted',
-                'attempt' => 1,
-                'reason' => 'retry: timeout',
-                'run_id' => BRIDGE_TEST_RUN_ID,
-            ]],
-            ['event' => 'status', 'data' => [
-                'phase' => 'recovery_succeeded',
-                'attempt' => 1,
-                'reason' => 'retry',
-                'run_id' => BRIDGE_TEST_RUN_ID,
-            ]],
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
-            ['event' => 'done', 'data' => ['content' => 'Done', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
-        ]);
-
-        iterator_to_array($bridge->wrap($turn, $stream));
-
-        $types = turnEventTypes($turn);
-        expect($types)->toContain(TurnEventType::RecoveryAttempted)
-            ->and($types)->toContain(TurnEventType::RecoverySucceeded);
-    });
-
+describe('TurnStreamBridge tool events', function () {
     it('captures tool result_length and error_payload in turn events', function () {
         $turn = createBridgeTurn();
         $bridge = app(TurnStreamBridge::class);

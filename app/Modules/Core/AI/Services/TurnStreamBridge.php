@@ -130,8 +130,6 @@ class TurnStreamBridge
             'tool_stdout' => $this->onToolStdout($turn, $data),
             'tool_finished' => $this->onToolFinished($turn, $data, $turnStartedAt),
             'tool_denied' => $this->onToolDenied($turn, $data),
-            'recovery_attempted' => $this->onRecoveryAttempted($turn, $data),
-            'recovery_succeeded' => $this->onRecoverySucceeded($turn, $data),
             default => [],
         };
     }
@@ -255,35 +253,6 @@ class TurnStreamBridge
                 (string) ($data['tool'] ?? ''),
                 (string) ($data['reason'] ?? 'denied'),
                 (string) ($data['source'] ?? 'hook'),
-            )->toSsePayload(),
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     * @return array<int, array<string, mixed>>
-     */
-    private function onRecoveryAttempted(ChatTurn $turn, array $data): array
-    {
-        return [
-            $this->publisher->recoveryAttempted(
-                $turn,
-                (int) ($data['attempt'] ?? 1),
-                $data['reason'] ?? null,
-            )->toSsePayload(),
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     * @return array<int, array<string, mixed>>
-     */
-    private function onRecoverySucceeded(ChatTurn $turn, array $data): array
-    {
-        return [
-            $this->publisher->recoverySucceeded(
-                $turn,
-                (int) ($data['attempt'] ?? 1),
             )->toSsePayload(),
         ];
     }

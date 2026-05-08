@@ -10,7 +10,6 @@ use App\Modules\Core\AI\Enums\TurnPhase;
 use App\Modules\Core\AI\Enums\TurnStatus;
 use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\ChatTurnEvent;
-use App\Modules\Core\AI\Services\Concerns\PublishesRecoveryEvents;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -34,8 +33,6 @@ use Illuminate\Support\Facades\DB;
  */
 class TurnEventPublisher
 {
-    use PublishesRecoveryEvents;
-
     /**
      * Publish a single event to a turn's event stream.
      *

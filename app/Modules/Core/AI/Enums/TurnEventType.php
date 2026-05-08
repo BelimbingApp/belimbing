@@ -89,16 +89,6 @@ enum TurnEventType: string
     /** Periodic heartbeat during quiet phases so the UI knows the turn is alive. */
     case Heartbeat = 'heartbeat';
 
-    // ── Recovery ─────────────────────────────────────────────────────
-    /** A retry or recovery attempt started. */
-    case RecoveryAttempted = 'recovery.attempted';
-
-    /** Recovery succeeded — execution continues. */
-    case RecoverySucceeded = 'recovery.succeeded';
-
-    /** Recovery exhausted — turn will fail. */
-    case RecoveryFailed = 'recovery.failed';
-
     /**
      * Whether this event type signals a terminal turn state.
      */
@@ -127,8 +117,8 @@ enum TurnEventType: string
     public function severity(): string
     {
         return match ($this) {
-            self::TurnFailed, self::RunFailed, self::RecoveryFailed => 'error',
-            self::ToolDenied, self::RecoveryAttempted => 'warning',
+            self::TurnFailed, self::RunFailed => 'error',
+            self::ToolDenied => 'warning',
             default => 'info',
         };
     }
@@ -158,9 +148,7 @@ enum TurnEventType: string
             self::ToolDenied => 'Tool Denied',
             self::UsageUpdated => 'Usage Updated',
             self::Heartbeat => 'Heartbeat',
-            self::RecoveryAttempted => 'Recovery Attempted',
-            self::RecoverySucceeded => 'Recovery Succeeded',
-            self::RecoveryFailed => 'Recovery Failed',
+
         };
     }
 }
