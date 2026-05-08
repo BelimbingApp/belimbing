@@ -11,9 +11,11 @@ use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\Services\RepositorySurfaceResolver;
+use App\Modules\Core\AI\Tools\Concerns\BuildsSurfaceToolPayload;
 
 class ReadTool extends AbstractTool
 {
+    use BuildsSurfaceToolPayload;
     use ProvidesToolMetadata;
 
     public function __construct(
@@ -119,18 +121,12 @@ class ReadTool extends AbstractTool
         if ($target === 'data') {
             $payload = [
                 'query' => $this->requireString($arguments, 'query'),
+                ...$this->copyPresentKeys($arguments, ['limit']),
             ];
-
-            if (array_key_exists('limit', $arguments)) {
-                $payload['limit'] = $arguments['limit'];
-            }
 
             return (new QueryDataTool)->execute($payload);
         }
 
-        return (new ReadFileTool($this->surfaces))->execute([
-            'file_path' => $this->requireString($arguments, 'file_path'),
-            'target_surface' => $this->optionalString($arguments, 'target_surface') ?? 'core',
-        ]);
+        return (new ReadFileTool($this->surfaces))->execute($this->surfaceFilePayload($arguments));
     }
 }

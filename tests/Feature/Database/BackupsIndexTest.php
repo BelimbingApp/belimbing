@@ -9,10 +9,14 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
+const BACKUPS_TEST_DISK = 'local';
+const BACKUPS_TEST_PREFIX = 'backups/local';
+const BACKUPS_TEST_MANIFEST_SUFFIX = '.manifest.json';
+
 beforeEach(function (): void {
     setupAuthzRoles();
-    Storage::fake('local');
-    config()->set('backup.disk', 'local');
+    Storage::fake(BACKUPS_TEST_DISK);
+    config()->set('backup.disk', BACKUPS_TEST_DISK);
     config()->set('backup.path_prefix', 'backups');
     config()->set('backup.encryption.mode', 'none');
 });
@@ -49,9 +53,9 @@ test('authenticated user without admin.system.database-backup.list capability is
 test('verify action reports OK when manifest sha matches artifact', function (): void {
     $this->actingAs(createAdminUser());
 
-    $disk = Storage::disk('local');
-    $artifactPath = 'backups/local/test.bak';
-    $manifestPath = 'backups/local/test.manifest.json';
+    $disk = Storage::disk(BACKUPS_TEST_DISK);
+    $artifactPath = BACKUPS_TEST_PREFIX.'/test.bak';
+    $manifestPath = BACKUPS_TEST_PREFIX.'/test'.BACKUPS_TEST_MANIFEST_SUFFIX;
     $payload = "fake-backup-bytes\n";
     $disk->put($artifactPath, $payload);
     $disk->put($manifestPath, json_encode(makeBackupManifestPayload('bk-test', $artifactPath, $payload)));
@@ -65,9 +69,9 @@ test('verify action reports OK when manifest sha matches artifact', function ():
 test('verify action flags failure when artifact bytes differ from manifest', function (): void {
     $this->actingAs(createAdminUser());
 
-    $disk = Storage::disk('local');
-    $artifactPath = 'backups/local/tampered.bak';
-    $manifestPath = 'backups/local/tampered.manifest.json';
+    $disk = Storage::disk(BACKUPS_TEST_DISK);
+    $artifactPath = BACKUPS_TEST_PREFIX.'/tampered.bak';
+    $manifestPath = BACKUPS_TEST_PREFIX.'/tampered'.BACKUPS_TEST_MANIFEST_SUFFIX;
     $artifactBytes = 'tampered-bytes';
     $disk->put($artifactPath, $artifactBytes);
     $disk->put($manifestPath, json_encode(makeBackupManifestPayload('bk-bad', $artifactPath, $artifactBytes, [
@@ -84,9 +88,9 @@ test('verify action flags failure when artifact bytes differ from manifest', fun
 test('delete action removes the manifest and artifact pair', function (): void {
     $this->actingAs(createAdminUser());
 
-    $disk = Storage::disk('local');
-    $artifactPath = 'backups/local/will-be-deleted.bak';
-    $manifestPath = 'backups/local/will-be-deleted.manifest.json';
+    $disk = Storage::disk(BACKUPS_TEST_DISK);
+    $artifactPath = BACKUPS_TEST_PREFIX.'/will-be-deleted.bak';
+    $manifestPath = BACKUPS_TEST_PREFIX.'/will-be-deleted'.BACKUPS_TEST_MANIFEST_SUFFIX;
     $artifactBytes = 'bytes';
     $disk->put($artifactPath, $artifactBytes);
     $disk->put($manifestPath, json_encode(makeBackupManifestPayload('bk-del', $artifactPath, $artifactBytes)));
@@ -163,14 +167,14 @@ test('runBackup completes in app-key mode and writes an encrypted artifact plus 
             ->call('runBackup')
             ->assertSet('statusVariant', 'success');
 
-        $files = Storage::disk('local')->allFiles('backups');
+        $files = Storage::disk(BACKUPS_TEST_DISK)->allFiles('backups');
         $artifacts = array_values(array_filter($files, fn ($f) => str_ends_with($f, '.bak.enc')));
         expect($artifacts)->toHaveCount(1);
 
-        $manifestPath = str_replace('.bak.enc', '.manifest.json', $artifacts[0]);
-        expect(Storage::disk('local')->exists($manifestPath))->toBeTrue();
+        $manifestPath = str_replace('.bak.enc', BACKUPS_TEST_MANIFEST_SUFFIX, $artifacts[0]);
+        expect(Storage::disk(BACKUPS_TEST_DISK)->exists($manifestPath))->toBeTrue();
 
-        $manifest = json_decode((string) Storage::disk('local')->get($manifestPath), true);
+        $manifest = json_decode((string) Storage::disk(BACKUPS_TEST_DISK)->get($manifestPath), true);
         expect(is_array($manifest))->toBeTrue()
             ->and($manifest['encryption_mode'] ?? null)->toBe('app-key');
     } finally {

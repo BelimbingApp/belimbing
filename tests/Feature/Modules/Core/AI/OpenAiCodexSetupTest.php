@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 const OAI_CODEX_BACKEND_BASE_URL = 'https://chatgpt.com/backend-api';
+const OAI_CODEX_MODELS_ENDPOINT_PATTERN = OAI_CODEX_BACKEND_BASE_URL.'/codex/models*';
 const OAI_CODEX_RECONNECT_HINT = 'Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.';
 const OAI_CODEX_DEFAULT_MODEL = 'gpt-5.4';
 
@@ -55,7 +56,7 @@ test('openai codex setup surfaces connected auth state and diagnostic action', f
     $user = createAdminUser();
 
     Http::fake([
-        OAI_CODEX_BACKEND_BASE_URL.'/codex/models*' => Http::response([
+        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
             'models' => [
                 ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
                 ['slug' => 'gpt-5.4-mini', 'display_name' => 'gpt-5.4-mini'],
@@ -81,7 +82,7 @@ test('openai codex setup surfaces connected auth state and diagnostic action', f
 
 test('openai codex setup sync does not invent a default model', function (): void {
     Http::fake([
-        OAI_CODEX_BACKEND_BASE_URL.'/codex/models*' => Http::response([
+        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
             'models' => [
                 ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
                 ['slug' => 'gpt-5.4-mini', 'display_name' => 'gpt-5.4-mini'],
@@ -113,7 +114,7 @@ test('openai codex setup sync does not invent a default model', function (): voi
 
 test('openai codex setup sync message reflects provider discovery sync', function (): void {
     Http::fake([
-        OAI_CODEX_BACKEND_BASE_URL.'/codex/models*' => Http::response([
+        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
             'models' => [
                 ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
                 ['slug' => 'gpt-5.4-mini', 'display_name' => 'gpt-5.4-mini'],
@@ -137,7 +138,7 @@ test('openai codex setup sync message reflects provider discovery sync', functio
 
 test('openai codex sync records outbound exchange for model discovery', function (): void {
     Http::fake([
-        OAI_CODEX_BACKEND_BASE_URL.'/codex/models*' => Http::response([
+        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
             'models' => [
                 ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
             ],
@@ -168,7 +169,7 @@ test('openai codex setup records successful verification diagnostics', function 
     $user = createAdminUser();
 
     Http::fake([
-        OAI_CODEX_BACKEND_BASE_URL.'/codex/models*' => Http::response([
+        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
             'models' => [
                 ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
             ],
@@ -210,7 +211,7 @@ test('openai codex setup marks provider expired when verification returns auth e
     $user = createAdminUser();
 
     Http::fake([
-        OAI_CODEX_BACKEND_BASE_URL.'/codex/models*' => Http::response([
+        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
             'models' => [
                 ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
             ],
@@ -399,7 +400,7 @@ test('openai codex setup shows reconnect guidance when verification returns a hi
     $user = createAdminUser();
 
     Http::fake([
-        OAI_CODEX_BACKEND_BASE_URL.'/codex/models*' => Http::response([
+        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
             'models' => [
                 ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
             ],

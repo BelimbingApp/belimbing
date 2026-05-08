@@ -9,6 +9,7 @@ use App\Base\Menu\Contracts\MenuAccessChecker;
 use App\Base\Menu\MenuItem;
 use App\Base\Menu\MenuRegistry;
 use App\Base\Menu\Services\MenuDiscoveryService;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -20,8 +21,6 @@ class Index extends Component
     public string $sourceFilter = 'all';
 
     public string $kindFilter = 'all';
-
-    public function updatingSearch(): void {}
 
     public function clearFilters(): void
     {
@@ -86,7 +85,7 @@ class Index extends Component
     /**
      * @return array<string, mixed>
      */
-    protected function row(MenuItem $item, MenuAccessChecker $checker, ?\Illuminate\Contracts\Auth\Authenticatable $user): array
+    protected function row(MenuItem $item, MenuAccessChecker $checker, ?Authenticatable $user): array
     {
         return [
             'id' => $item->id,

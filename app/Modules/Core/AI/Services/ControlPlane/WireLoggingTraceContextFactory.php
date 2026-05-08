@@ -47,7 +47,7 @@ final class WireLoggingTraceContextFactory implements LlmTraceContextFactory
 
     private function safeSource(string $source): string
     {
-        $safe = preg_replace('/[^a-zA-Z0-9_]+/', '_', $source) ?: 'llm';
+        $safe = preg_replace('/\W+/', '_', $source) ?: 'llm';
 
         return trim($safe, '_') ?: 'llm';
     }

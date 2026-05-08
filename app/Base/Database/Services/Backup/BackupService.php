@@ -30,6 +30,8 @@ use Throwable;
  */
 final class BackupService
 {
+    private const MANIFEST_SUFFIX = '.manifest.json';
+
     public function __construct(
         private readonly DatabaseManager $databaseManager,
         private readonly FilesystemManager $filesystemManager,
@@ -70,7 +72,7 @@ final class BackupService
         $timestamp = $startedAt->format('Ymd-His');
         $artifactBaseName = "{$timestamp}-{$backupId}.bak";
         $artifactName = $artifactBaseName.$encryption->extension();
-        $manifestName = "{$timestamp}-{$backupId}.manifest.json";
+        $manifestName = "{$timestamp}-{$backupId}".self::MANIFEST_SUFFIX;
 
         $artifactPath = "{$directory}/{$artifactName}";
         $manifestPath = "{$directory}/{$manifestName}";
@@ -199,7 +201,7 @@ final class BackupService
         $mismatches = [];
 
         foreach ($disk->files($directory) as $file) {
-            if (! str_ends_with($file, '.manifest.json')) {
+            if (! str_ends_with($file, self::MANIFEST_SUFFIX)) {
                 continue;
             }
 
@@ -248,7 +250,7 @@ final class BackupService
 
         $files = $disk->files($directory);
         foreach ($files as $file) {
-            if (str_ends_with($file, '.manifest.json') && str_contains($file, $backupId)) {
+            if (str_ends_with($file, self::MANIFEST_SUFFIX) && str_contains($file, $backupId)) {
                 $contents = (string) $disk->get($file);
                 $data = json_decode($contents, true);
                 if (! is_array($data)) {
@@ -277,7 +279,7 @@ final class BackupService
         $entries = [];
 
         foreach ($files as $file) {
-            if (! str_ends_with($file, '.manifest.json')) {
+            if (! str_ends_with($file, self::MANIFEST_SUFFIX)) {
                 continue;
             }
 

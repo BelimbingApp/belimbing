@@ -11,9 +11,11 @@ use App\Base\AI\Tools\AbstractTool;
 use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\Services\RepositorySurfaceResolver;
+use App\Modules\Core\AI\Tools\Concerns\BuildsSurfaceToolPayload;
 
 class EditTool extends AbstractTool
 {
+    use BuildsSurfaceToolPayload;
     use ProvidesToolMetadata;
 
     public function __construct(
@@ -137,16 +139,10 @@ class EditTool extends AbstractTool
         }
 
         $payload = [
-            'file_path' => $this->requireString($arguments, 'file_path'),
+            ...$this->surfaceFilePayload($arguments),
             'operation' => $this->requireEnum($arguments, 'operation', ['write', 'append', 'replace'], 'write'),
-            'target_surface' => $this->optionalString($arguments, 'target_surface') ?? 'core',
+            ...$this->copyPresentKeys($arguments, ['content', 'old_content', 'new_content']),
         ];
-
-        foreach (['content', 'old_content', 'new_content'] as $key) {
-            if (array_key_exists($key, $arguments)) {
-                $payload[$key] = $arguments[$key];
-            }
-        }
 
         return (new EditFileTool($this->surfaces))->execute($payload);
     }

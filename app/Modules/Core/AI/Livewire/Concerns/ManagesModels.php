@@ -7,7 +7,6 @@ namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Base\AI\Services\ModelCatalogService;
 use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\AI\Services\ModelDiscoveryService;
 
 /**
  * Model management state and actions for the provider manager component.
@@ -195,6 +194,8 @@ trait ManagesModels
      */
     public function updatedEditingExecutionControls(mixed $value = null, ?string $path = null): void
     {
+        unset($value, $path);
+
         if ($this->editingControlsModelId === null) {
             return;
         }

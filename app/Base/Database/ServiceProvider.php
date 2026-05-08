@@ -38,7 +38,7 @@ class ServiceProvider extends BaseServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/Config/backup.php', 'backup');
 
-        $this->app->singleton(EncryptionModeRegistry::class, function ($app) {
+        $this->app->singleton(EncryptionModeRegistry::class, function () {
             $registry = new EncryptionModeRegistry;
 
             $registry->register('none', fn (array $config) => new NoneEncryption);
