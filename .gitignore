@@ -36,6 +36,7 @@ package-lock.json
 /.zed
 
 # Project specific
+database/database.sqlite
 /.caddy
 /certs
 /auth.json

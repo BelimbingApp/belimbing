@@ -18,6 +18,9 @@ Belimbing is built on [Laravel](https://laravel.com/) and [Livewire](https://lar
 
 ## Prerequisites
 
+> **Native Windows:** This quickstart is for Linux and WSL2. For direct Windows
+> PowerShell setup, use [Native Windows Installation](./windows.md).
+
 Belimbing requires Linux; on Windows, it runs in [WSL2](https://learn.microsoft.com/en-us/windows/wsl/about). This guide assumes Debian-based Linux, with the `apt-get` package manager. Replace `apt-get` with your package manager of choice.
 
 Belimbing requires [Git](https://git-scm.com/), which is pre-installed on Linux, WSL2, and most MacOS systems. For information on how to install Git, see this [guide](https://github.com/git-guides/install-git).
