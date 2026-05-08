@@ -4,11 +4,11 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Modules\Core\AI\Http\Controllers\ChatAttachmentController;
-use App\Modules\Core\AI\Http\Controllers\ChatTurnStreamController;
+use App\Modules\Core\AI\Http\Controllers\RunStreamController;
 use App\Modules\Core\AI\Http\Controllers\MessagingWebhookController;
 use App\Modules\Core\AI\Http\Controllers\OpenAiCodexOAuthCallbackController;
 use App\Modules\Core\AI\Http\Controllers\ProviderSetupController;
-use App\Modules\Core\AI\Http\Controllers\TurnEventStreamController;
+use App\Modules\Core\AI\Http\Controllers\RunEventStreamController;
 use App\Modules\Core\AI\Http\Controllers\WireLogEntryController;
 use App\Modules\Core\AI\Livewire\ControlPlane;
 use App\Modules\Core\AI\Livewire\PricingOverrides;
@@ -27,10 +27,10 @@ Route::post('api/ai/messaging/webhook/{channel}/{accountId?}', MessagingWebhookC
 
 Route::middleware(['auth'])->group(function () {
     // Turn event replay (JSON for resume and gap-fill)
-    Route::get('api/ai/chat/turns/{turnId}/events', TurnEventStreamController::class)
+    Route::get('api/ai/chat/turns/{runId}/events', RunEventStreamController::class)
         ->name('ai.chat.turn.events');
     // Direct streaming for interactive chat turns (NDJSON)
-    Route::get('api/ai/chat/turns/{turnId}/stream', ChatTurnStreamController::class)
+    Route::get('api/ai/chat/turns/{runId}/stream', RunStreamController::class)
         ->name('ai.chat.turn.stream');
     // Session attachment retrieval (images/files referenced from transcript meta)
     Route::get('api/ai/chat/attachments/{employeeId}/{sessionId}/{attachmentId}', ChatAttachmentController::class)

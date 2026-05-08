@@ -114,11 +114,11 @@ Delta events (`assistant.thinking_delta`, `assistant.output_delta`, `tool.stdout
 
 ### Phase 1 — Remove recovery logic (YAGNI)
 
-- [x] Remove `TurnEventType` cases `RecoveryAttempted`, `RecoverySucceeded`, `RecoveryFailed` and their `severity()` / `label()` arms — claude-sonnet-4-6
+- [x] Remove `RunEventType` cases `RecoveryAttempted`, `RecoverySucceeded`, `RecoveryFailed` and their `severity()` / `label()` arms — claude-sonnet-4-6
 - [x] Delete `PublishesRecoveryEvents` trait — claude-sonnet-4-6
-- [x] Remove `use PublishesRecoveryEvents` from `TurnEventPublisher` — claude-sonnet-4-6
-- [x] Remove `onRecoveryAttempted()`, `onRecoverySucceeded()`, and dispatch cases from `TurnStreamBridge` — claude-sonnet-4-6
-- [x] Remove recovery tests from `TurnEventPublisherTest`, `TurnStreamBridgeTest`, `TurnContractEnumsTest`; update case count 22 → 19 — claude-sonnet-4-6
+- [x] Remove `use PublishesRecoveryEvents` from `RunEventPublisher` — claude-sonnet-4-6
+- [x] Remove `onRecoveryAttempted()`, `onRecoverySucceeded()`, and dispatch cases from `RunStreamBridge` — claude-sonnet-4-6
+- [x] Remove recovery tests from `RunEventPublisherTest`, `RunStreamBridgeTest`, `TurnContractEnumsTest`; update case count 22 → 19 — claude-sonnet-4-6
 
 ### Phase 2 — Unify execution envelope
 
@@ -149,10 +149,10 @@ Promote `ai_runs` to the universal AI execution envelope. Drop `ai_chat_turns` a
 **Code rename:**
 
 - `ChatTurn` model → drop. References that meant "the chat-side view of a run" become `AiRun` with chat-specific accessors when needed.
-- `ChatTurnEvent` model + `ai_chat_turn_events` table → `AiRunEvent` + `ai_run_events`, FK retargets to `ai_runs.id`.
+- `AiRunEvent` model + `ai_run_events` table → `AiRunEvent` + `ai_run_events`, FK retargets to `ai_runs.id`.
 - `ChatTurnRunner` keeps its name (it's still the chat-side runner) but now creates `AiRun` rows directly with `source='chat'` and threads the ULID into the runtime.
-- `TurnStatus`, `TurnPhase`, `TurnEventType` → `RunStatus`, `RunPhase`, `RunEventType` (or merged into existing `AiRunStatus` where the enum supersets cleanly).
-- `TurnEventPublisher`, `TurnStreamBridge`, `ChatTurnStreamController`, `TurnEventStreamController` rename their *Turn* prefix to *Run* in symbol names; SSE channel names follow.
+- `TurnStatus`, `RunPhase`, `RunEventType` → `RunStatus`, `RunPhase`, `RunEventType` (or merged into existing `AiRunStatus` where the enum supersets cleanly).
+- `RunEventPublisher`, `RunStreamBridge`, `RunStreamController`, `RunEventStreamController` rename their *Turn* prefix to *Run* in symbol names; SSE channel names follow.
 - `RunRecorder.start()` → `beginExecution(string $ulid, …)` — updates the existing envelope row instead of inserting.
 
 **Background-path changes:**
@@ -163,20 +163,20 @@ Promote `ai_runs` to the universal AI execution envelope. Drop `ai_chat_turns` a
 
 **Destructive evolution:**
 
-Per the BLB destructive-evolution principle, no migration path for existing rows. All `ai_runs`, `ai_run_calls`, `ai_chat_turns`, `ai_chat_turn_events`, `operation_dispatches.run_id`, and existing wire-log files (`storage/app/ai/wire-logs/run_*.jsonl`) are dropped/recreated. The pre-Phase-1 backups (DB `01kr2w72bssreaxjxy2gss0gqp`, `wire-logs-backup-pre-unified/`) are no longer useful for restore after this phase — delete them when Phase 2 lands.
+Per the BLB destructive-evolution principle, no migration path for existing rows. All `ai_runs`, `ai_run_calls`, `ai_chat_turns`, `ai_run_events`, `operation_dispatches.run_id`, and existing wire-log files (`storage/app/ai/wire-logs/run_*.jsonl`) are dropped/recreated. The pre-Phase-1 backups (DB `01kr2w72bssreaxjxy2gss0gqp`, `wire-logs-backup-pre-unified/`) are no longer useful for restore after this phase — delete them when Phase 2 lands.
 
 **Scope:**
 
-- [ ] Migration: extend `ai_runs` with lifecycle columns (`session_id` already there, add `current_phase`, `current_label`, `last_event_seq`, `cancel_requested_at`, `runtime_meta`); change `id` to ULID; drop `ai_chat_turns` and `ai_chat_turn_events` migrations; create `ai_run_events` migration with FK to `ai_runs.id`; update `ai_run_calls.run_id` to ULID FK while preserving every usage / raw usage / pricing / cost column; update `operation_dispatches.run_id` to ULID FK after `ai_runs` exists
-- [ ] Status enum: define unified `AiRunStatus` covering `queued → booting → running → succeeded / failed / cancelled / timed_out` with the same transition rules `TurnStatus` enforces today; drop `TurnStatus`
-- [ ] Models: drop `ChatTurn`; rename `ChatTurnEvent` → `AiRunEvent`; expand `AiRun` with chat-side helpers (`nextSeq`, `isCancelRequested`, `requestCancel`, `transitionTo`, `updatePhase`, `finalize`, `eventsAfter`); drop `current_run_id` accessor
-- [ ] Enums: rename `TurnPhase` → `RunPhase`, `TurnEventType` → `RunEventType`; collapse `turn.*` event prefixes to `run.*` per *Run event taxonomy*
-- [ ] Services: rename `TurnEventPublisher` → `RunEventPublisher`; rename `TurnStreamBridge` → `RunStreamBridge`; update `RunRecorder` to `beginExecution(ulid)` semantics; update `ChatRunPersister` to operate on `AiRun`; update `MessageManager`, `HealthAndPresenceService`, `RunDiagnosticService`, `RunInspectionService`, `LifecycleControlService`, `SweepStaleTurnsCommand`, `ReapOrphanRunsCommand`, `InspectRunCommand` to read the unified envelope
-- [ ] Runtime: `AgenticRuntime::run()` and `runStream()` accept `runId: $ulid` as a required parameter; remove internal `Str::random` ID generation; thread ULID through to `WireLogger` and `RunRecorder`
-- [ ] Caller mint sites: `ChatTurnRunner` (already creates the envelope), `RunAgentTaskJob`, `RunLaraTaskProfileJob`, `SpawnAgentSessionJob`, `SimpleTaskExecutor`, `TaskModelRecommendationService` — each mints the ULID upfront and inserts the envelope row before invoking the runtime
-- [ ] Controllers + Livewire: rename `ChatTurnStreamController` / `TurnEventStreamController` to `RunStreamController` / `RunEventStreamController`; update `Chat`, `ControlPlane`, and any Livewire components/concerns that reference `ChatTurn` or turn-prefixed symbols; SSE channel names follow
-- [ ] Wire log: `WireLogger.path()` takes ULID; remove any `run_` prefix logic; readable formatter and entry controller URLs use ULID
-- [ ] Tests: update fixtures, factories, and assertions across the AI test suite — `tests/AGENTS.md` quality bar applies; delete tests asserting the two-table split
+- [x] Migration: extend `ai_runs` with lifecycle columns (`session_id` already there, add `current_phase`, `current_label`, `last_event_seq`, `cancel_requested_at`, `runtime_meta`); change `id` to ULID; drop `ai_chat_turns` and `ai_chat_turn_events` migrations; create `ai_run_events` migration with FK to `ai_runs.id`; update `ai_run_calls.run_id` to ULID FK while preserving every usage / raw usage / pricing / cost column; update `operation_dispatches.run_id` to ULID FK after `ai_runs` exists
+- [x] Status enum: define unified `AiRunStatus` covering `queued → booting → running → succeeded / failed / cancelled / timed_out` with the same transition rules `TurnStatus` enforces today; drop `TurnStatus`
+- [x] Models: drop `ChatTurn`; rename `ChatTurnEvent` → `AiRunEvent`; expand `AiRun` with chat-side helpers (`nextSeq`, `isCancelRequested`, `requestCancel`, `transitionTo`, `updatePhase`, `finalize`, `eventsAfter`); keep `current_run_id` only as a compatibility key in existing inspector/chat view-models, backed by `AiRun.id`
+- [x] Enums: rename `TurnPhase` → `RunPhase`, `TurnEventType` → `RunEventType`; collapse `turn.*` event prefixes to `run.*` per *Run event taxonomy*
+- [x] Services: rename `TurnEventPublisher` → `RunEventPublisher`; rename `TurnStreamBridge` → `RunStreamBridge`; update `RunRecorder` to `beginExecution(ulid)` semantics; update `ChatRunPersister` to operate on `AiRun`; update the run inspector/control-plane diagnostic surfaces and stale-run sweeper to read the unified envelope while preserving the existing readable chunk parser
+- [x] Runtime: `AgenticRuntime::run()` and `runStream()` accept `runId: $ulid` as a required parameter; remove internal `Str::random` ID generation; thread ULID through to `WireLogger` and `RunRecorder`
+- [x] Caller mint sites: `ChatTurnRunner` (already creates the envelope), `RunAgentTaskJob`, `RunLaraTaskProfileJob`, `SpawnAgentSessionJob`, `SimpleTaskExecutor`, `TaskModelRecommendationService` — each mints the ULID upfront and inserts the envelope row before invoking the runtime
+- [x] Controllers + Livewire: rename `ChatTurnStreamController` / `TurnEventStreamController` to `RunStreamController` / `RunEventStreamController`; update `Chat`, `ControlPlane`, and any Livewire components/concerns that reference `ChatTurn` or turn-prefixed symbols; route names remain backwards-compatible for the existing UI
+- [x] Wire log: `WireLogger.path()` takes ULID; remove runtime `run_` prefix generation; readable formatter and entry controller URLs use the `AiRun.id` ULID
+- [x] Tests: update fixtures, factories, and assertions across the focused AI control-plane suite — `tests/AGENTS.md` quality bar applies; delete tests asserting the two-table split
 - [ ] Cleanup: remove `backup/pre-unified-entity` branch, DB backup `01kr2w72bssreaxjxy2gss0gqp`, and `storage/app/ai/wire-logs-backup-pre-unified/` once Phase 2 verifies green
 
 ### Phase 3 — Build the Prompt Timeline

@@ -4,57 +4,70 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Modules\Core\AI\DTO\Message;
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Enums\TurnStatus;
-use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\ChatRunPersister;
 use App\Modules\Core\AI\Services\MessageManager;
-use App\Modules\Core\AI\Services\TurnEventPublisher;
+use App\Modules\Core\AI\Services\RunEventPublisher;
+use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Mockery\MockInterface;
 
 const MAT_TEST_SESSION = 'sess_materializer_test';
-const MAT_TEST_RUN_ID = 'run_mat_test_001';
+const MAT_TEST_RUN_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAX';
 
 const MAT_ASSISTANT_OUTPUT = 'Hello world';
 
 const MAT_TOOL_DENIED_MESSAGE = 'Tool was denied';
 
 /**
- * Create a ChatTurn and advance it to a given state with events.
+ * Create a AiRun and advance it to a given state with events.
  */
-function createMaterializerTurn(): ChatTurn
+function createMaterializerTurn(): AiRun
 {
-    return ChatTurn::query()->create([
-        'employee_id' => Employee::query()->first()->id,
+    $employee = Employee::query()->first();
+
+    if ($employee === null) {
+        $company = Company::factory()->create();
+        $employee = Employee::factory()->create([
+            'company_id' => $company->id,
+            'status' => 'active',
+        ]);
+    }
+
+    return AiRun::query()->create([
+        'id' => MAT_TEST_RUN_ID,
+        'employee_id' => $employee->id,
+        'source' => 'chat',
+        'execution_mode' => 'interactive',
         'session_id' => MAT_TEST_SESSION,
-        'status' => TurnStatus::Queued,
-        'current_phase' => TurnPhase::WaitingForWorker,
+        'status' => AiRunStatus::Queued,
+        'current_phase' => RunPhase::WaitingForWorker,
     ]);
 }
 
 /**
  * Populate a turn with a standard happy-path event sequence.
  *
- * Mirrors the bridge flow: turnStarted (→Booting) → runStarted + transitionTo(Running)
- * → tool events → done → turnCompleted (→Completed).
+ * Mirrors the bridge flow: turnStarted (→Booting) → transitionTo(Running)
+ * → tool events → done → turnCompleted (→Succeeded).
  */
-function populateHappyPathEvents(ChatTurn $turn, TurnEventPublisher $pub): void
+function populateHappyPathEvents(AiRun $turn, RunEventPublisher $pub): void
 {
     $pub->turnStarted($turn);
-    $pub->runStarted($turn, MAT_TEST_RUN_ID);
-    $turn->transitionTo(TurnStatus::Running);
-    $pub->phaseChanged($turn, TurnPhase::AwaitingLlm, TurnPhase::AwaitingLlm->label());
+    $turn->transitionTo(AiRunStatus::Running);
+    $pub->phaseChanged($turn, RunPhase::AwaitingLlm, RunPhase::AwaitingLlm->label());
     $pub->thinkingStarted($turn);
-    $pub->phaseChanged($turn, TurnPhase::RunningTool, 'bash');
+    $pub->phaseChanged($turn, RunPhase::RunningTool, 'bash');
     $pub->toolStarted($turn, 'bash', '{"cmd":"ls"}', 0);
     $pub->toolFinished($turn, 'bash', 'success', '10 files', 150, 32);
-    $pub->phaseChanged($turn, TurnPhase::AwaitingLlm, TurnPhase::AwaitingLlm->label());
+    $pub->phaseChanged($turn, RunPhase::AwaitingLlm, RunPhase::AwaitingLlm->label());
     $pub->heartbeat($turn, 500);
-    $pub->phaseChanged($turn, TurnPhase::StreamingAnswer, 'Responding…');
+    $pub->phaseChanged($turn, RunPhase::StreamingAnswer, 'Responding…');
     $pub->outputDelta($turn, 'Hello ');
     $pub->outputDelta($turn, 'world');
-    $pub->phaseChanged($turn, TurnPhase::Finalizing, 'Finishing up…');
+    $pub->phaseChanged($turn, RunPhase::Finalizing, 'Finishing up…');
     $pub->usageUpdated($turn, ['prompt_tokens' => 100, 'completion_tokens' => 50]);
     $pub->outputBlockCommitted($turn, 'markdown', MAT_ASSISTANT_OUTPUT);
     $pub->turnCompleted($turn, ['run_id' => MAT_TEST_RUN_ID, 'elapsed_ms' => 1200]);
@@ -89,7 +102,7 @@ function mockMessageManager(): MockInterface
 /**
  * Mock expectations for {@see populateHappyPathEvents()} transcript materialization.
  */
-function expectMaterializerHappyPathAppendMocks(MockInterface $mm, ChatTurn $turn): void
+function expectMaterializerHappyPathAppendMocks(MockInterface $mm, AiRun $turn): void
 {
     $mm->shouldNotReceive('appendThinking');
 
@@ -132,7 +145,7 @@ function expectMaterializerHappyPathAppendMocks(MockInterface $mm, ChatTurn $tur
 describe('ChatRunPersister materializeFromTurn', function () {
     it('materializes a complete conversation transcript from turn events', function () {
         $turn = createMaterializerTurn();
-        $pub = app(TurnEventPublisher::class);
+        $pub = app(RunEventPublisher::class);
         populateHappyPathEvents($turn, $pub);
 
         $mm = mockMessageManager();
@@ -144,7 +157,7 @@ describe('ChatRunPersister materializeFromTurn', function () {
 
     it('includes extra meta in the assistant message', function () {
         $turn = createMaterializerTurn();
-        $pub = app(TurnEventPublisher::class);
+        $pub = app(RunEventPublisher::class);
         populateHappyPathEvents($turn, $pub);
 
         $mm = mockMessageManager();
@@ -176,11 +189,10 @@ describe('ChatRunPersister materializeFromTurn', function () {
 
     it('materializes error transcript for failed turns', function () {
         $turn = createMaterializerTurn();
-        $pub = app(TurnEventPublisher::class);
+        $pub = app(RunEventPublisher::class);
 
         $pub->turnStarted($turn);
-        $pub->runStarted($turn, MAT_TEST_RUN_ID);
-        $turn->transitionTo(TurnStatus::Running);
+        $turn->transitionTo(AiRunStatus::Running);
         $pub->turnFailed($turn, 'rate_limit', 'API rate limited');
 
         $mm = mockMessageManager();
@@ -205,12 +217,11 @@ describe('ChatRunPersister materializeFromTurn', function () {
 
     it('skips assistant message when turn has no content and no error', function () {
         $turn = createMaterializerTurn();
-        $pub = app(TurnEventPublisher::class);
+        $pub = app(RunEventPublisher::class);
 
         $pub->turnStarted($turn);
-        $pub->runStarted($turn, MAT_TEST_RUN_ID);
-        $turn->transitionTo(TurnStatus::Running);
-        $pub->phaseChanged($turn, TurnPhase::AwaitingLlm, TurnPhase::AwaitingLlm->label());
+        $turn->transitionTo(AiRunStatus::Running);
+        $pub->phaseChanged($turn, RunPhase::AwaitingLlm, RunPhase::AwaitingLlm->label());
         $pub->thinkingStarted($turn);
         $pub->turnCompleted($turn);
 
@@ -227,11 +238,10 @@ describe('ChatRunPersister materializeFromTurn tool transcripts', function () {
 
     it('materializes tool denied as hook action', function () {
         $turn = createMaterializerTurn();
-        $pub = app(TurnEventPublisher::class);
+        $pub = app(RunEventPublisher::class);
 
         $pub->turnStarted($turn);
-        $pub->runStarted($turn, MAT_TEST_RUN_ID);
-        $turn->transitionTo(TurnStatus::Running);
+        $turn->transitionTo(AiRunStatus::Running);
         $pub->toolDenied($turn, 'dangerous_tool', 'blocked by policy', 'hook');
         $pub->outputBlockCommitted($turn, 'markdown', MAT_TOOL_DENIED_MESSAGE);
         $pub->turnCompleted($turn);
@@ -271,11 +281,10 @@ describe('ChatRunPersister materializeFromTurn tool transcripts', function () {
 
     it('materializes tool error payload in tool result entry', function () {
         $turn = createMaterializerTurn();
-        $pub = app(TurnEventPublisher::class);
+        $pub = app(RunEventPublisher::class);
 
         $pub->turnStarted($turn);
-        $pub->runStarted($turn, MAT_TEST_RUN_ID);
-        $turn->transitionTo(TurnStatus::Running);
+        $turn->transitionTo(AiRunStatus::Running);
         $pub->toolStarted($turn, 'bash', '{"cmd":"rm -rf /"}', 0);
         $pub->toolFinished($turn, 'bash', 'error', 'Permission denied', 80, 17, [
             'code' => 'permission_denied',
@@ -306,11 +315,10 @@ describe('ChatRunPersister materializeFromTurn tool transcripts', function () {
 
     it('flushes thinking before persisting the subsequent tool entry', function () {
         $turn = createMaterializerTurn();
-        $pub = app(TurnEventPublisher::class);
+        $pub = app(RunEventPublisher::class);
 
         $pub->turnStarted($turn);
-        $pub->runStarted($turn, MAT_TEST_RUN_ID);
-        $turn->transitionTo(TurnStatus::Running);
+        $turn->transitionTo(AiRunStatus::Running);
         $pub->thinkingStarted($turn);
         $pub->thinkingDelta($turn, 'Need the current page before continuing.');
         $pub->iterationCompleted($turn, 'tool_calls', 0, 1);
@@ -343,11 +351,10 @@ describe('ChatRunPersister materializeFromTurn tool transcripts', function () {
 
     it('falls back to streamed output deltas when cancellation happens before a committed block', function () {
         $turn = createMaterializerTurn();
-        $pub = app(TurnEventPublisher::class);
+        $pub = app(RunEventPublisher::class);
 
         $pub->turnStarted($turn);
-        $pub->runStarted($turn, MAT_TEST_RUN_ID);
-        $turn->transitionTo(TurnStatus::Running);
+        $turn->transitionTo(AiRunStatus::Running);
         $pub->outputDelta($turn, 'Hello ');
         $pub->outputDelta($turn, 'world');
         $pub->turnCancelled($turn, 'User cancelled');

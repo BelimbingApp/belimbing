@@ -3,16 +3,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Enums\TurnStatus;
-use App\Modules\Core\AI\Models\ChatTurn;
-use App\Modules\Core\AI\Services\TurnEventPublisher;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Services\RunEventPublisher;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 
 const REPLAY_TEST_SESSION = 'sess_replay_test';
-const REPLAY_TEST_RUN = 'run_replay_001';
+const REPLAY_TEST_RUN = '01ARZ3NDEKTSV4RRFFQ69G5FAZ';
 
 /**
  * @return array{user: User, employee: Employee}
@@ -37,27 +37,29 @@ function createReplayFixture(): array
     ];
 }
 
-function createTurnWithReplayEvents(int $userId): ChatTurn
+function createTurnWithReplayEvents(int $userId): AiRun
 {
-    $turn = ChatTurn::query()->create([
+    $turn = AiRun::query()->create([
+        'id' => REPLAY_TEST_RUN,
         'employee_id' => Employee::LARA_ID,
+        'source' => 'chat',
+        'execution_mode' => 'interactive',
         'session_id' => REPLAY_TEST_SESSION,
         'acting_for_user_id' => $userId,
-        'status' => TurnStatus::Queued,
-        'current_phase' => TurnPhase::WaitingForWorker,
+        'status' => AiRunStatus::Queued,
+        'current_phase' => RunPhase::WaitingForWorker,
     ]);
 
-    $pub = app(TurnEventPublisher::class);
+    $pub = app(RunEventPublisher::class);
 
     $pub->turnStarted($turn);
-    $pub->runStarted($turn, REPLAY_TEST_RUN);
-    $turn->transitionTo(TurnStatus::Running);
-    $pub->phaseChanged($turn, TurnPhase::AwaitingLlm, TurnPhase::AwaitingLlm->label());
+    $turn->transitionTo(AiRunStatus::Running);
+    $pub->phaseChanged($turn, RunPhase::AwaitingLlm, RunPhase::AwaitingLlm->label());
     $pub->thinkingStarted($turn);
-    $pub->phaseChanged($turn, TurnPhase::RunningTool, 'bash');
+    $pub->phaseChanged($turn, RunPhase::RunningTool, 'bash');
     $pub->toolStarted($turn, 'bash', '{"cmd":"ls"}', 0);
     $pub->toolFinished($turn, 'bash', 'success', '10 files', 150, 32);
-    $pub->phaseChanged($turn, TurnPhase::StreamingAnswer, 'Responding…');
+    $pub->phaseChanged($turn, RunPhase::StreamingAnswer, 'Responding…');
     $pub->outputDelta($turn, 'Hello world');
     $pub->outputBlockCommitted($turn, 'markdown', 'Hello world');
     $pub->turnCompleted($turn, ['elapsed_ms' => 1200]);
@@ -65,7 +67,7 @@ function createTurnWithReplayEvents(int $userId): ChatTurn
     return $turn->refresh();
 }
 
-describe('TurnEventStreamController', function () {
+describe('RunEventStreamController', function () {
     it('returns all events for a completed turn as JSON', function () {
         $fixture = createReplayFixture();
         $this->actingAs($fixture['user']);
@@ -73,7 +75,7 @@ describe('TurnEventStreamController', function () {
         $turn = createTurnWithReplayEvents($fixture['user']->id);
 
         $response = $this->getJson(route('ai.chat.turn.events', [
-            'turnId' => $turn->id,
+            'runId' => $turn->id,
             'after_seq' => 0,
         ]));
 
@@ -81,21 +83,21 @@ describe('TurnEventStreamController', function () {
         $json = $response->json();
 
         expect($json)->toHaveKey('events');
-        expect($json)->toHaveKey('turn_id', $turn->id);
-        expect($json)->toHaveKey('status', 'completed');
+        expect($json)->toHaveKey('run_id', $turn->id);
+        expect($json)->toHaveKey('status', 'succeeded');
 
         $eventTypes = collect($json['events'])->pluck('event_type')->all();
 
         expect($eventTypes)
-            ->toContain('turn.started')
             ->toContain('run.started')
-            ->toContain('turn.phase_changed')
+            ->toContain('run.started')
+            ->toContain('run.phase_changed')
             ->toContain('assistant.thinking_started')
             ->toContain('tool.started')
             ->toContain('tool.finished')
             ->toContain('assistant.output_delta')
             ->toContain('assistant.output_block_committed')
-            ->toContain('turn.completed');
+            ->toContain('run.completed');
     });
 
     it('resumes from after_seq skipping earlier events', function () {
@@ -105,8 +107,8 @@ describe('TurnEventStreamController', function () {
         $turn = createTurnWithReplayEvents($fixture['user']->id);
 
         $response = $this->getJson(route('ai.chat.turn.events', [
-            'turnId' => $turn->id,
-            'after_seq' => 5,
+            'runId' => $turn->id,
+            'after_seq' => 4,
         ]));
 
         $response->assertOk();
@@ -117,18 +119,17 @@ describe('TurnEventStreamController', function () {
         $seqs = collect($events)->pluck('seq')->all();
 
         expect($eventTypes)
-            ->not->toContain('turn.started')
             ->not->toContain('run.started')
             ->toContain('tool.started')
             ->toContain('tool.finished')
-            ->toContain('turn.completed');
+            ->toContain('run.completed');
 
         expect($seqs)->not->toBeEmpty()
-            ->and($seqs[0])->toBe(6);
+            ->and($seqs[0])->toBe(5);
 
         foreach ($events as $event) {
-            expect($event['seq'])->toBeGreaterThan(5)
-                ->and($event['turn_id'])->toBe($turn->id);
+            expect($event['seq'])->toBeGreaterThan(4)
+                ->and($event['run_id'])->toBe($turn->id);
         }
     });
 
@@ -137,7 +138,7 @@ describe('TurnEventStreamController', function () {
         $this->actingAs($fixture['user']);
 
         $response = $this->get(route('ai.chat.turn.events', [
-            'turnId' => '01NONEXISTENT000000000000000',
+            'runId' => '01NONEXISTENT000000000000000',
         ]));
 
         $response->assertNotFound();
@@ -156,20 +157,20 @@ describe('TurnEventStreamController', function () {
         $this->actingAs($fixture['user']);
 
         $response = $this->get(route('ai.chat.turn.events', [
-            'turnId' => $turn->id,
+            'runId' => $turn->id,
         ]));
 
         $response->assertForbidden();
     });
 
-    it('includes seq and turn_id in every event', function () {
+    it('includes seq and run_id in every event', function () {
         $fixture = createReplayFixture();
         $this->actingAs($fixture['user']);
 
         $turn = createTurnWithReplayEvents($fixture['user']->id);
 
         $response = $this->getJson(route('ai.chat.turn.events', [
-            'turnId' => $turn->id,
+            'runId' => $turn->id,
         ]));
 
         $json = $response->json();
@@ -178,7 +179,7 @@ describe('TurnEventStreamController', function () {
         expect(count($events))->toBeGreaterThanOrEqual(10);
 
         foreach ($events as $event) {
-            expect($event['turn_id'])->toBe($turn->id);
+            expect($event['run_id'])->toBe($turn->id);
             expect($event)->toHaveKey('seq');
             expect($event)->toHaveKey('event_type');
             expect($event)->toHaveKey('occurred_at');
@@ -192,13 +193,13 @@ describe('TurnEventStreamController', function () {
         $turn = createTurnWithReplayEvents($fixture['user']->id);
 
         $response = $this->getJson(route('ai.chat.turn.events', [
-            'turnId' => $turn->id,
+            'runId' => $turn->id,
         ]));
 
         $json = $response->json();
 
-        expect($json)->toHaveKey('turn_id', $turn->id);
-        expect($json)->toHaveKey('status', 'completed');
+        expect($json)->toHaveKey('run_id', $turn->id);
+        expect($json)->toHaveKey('status', 'succeeded');
         expect($json)->toHaveKey('started_at');
         expect($json)->toHaveKey('created_at');
         expect($json)->toHaveKey('cancel_requested_at', null);
@@ -208,17 +209,17 @@ describe('TurnEventStreamController', function () {
         $fixture = createReplayFixture();
         $this->actingAs($fixture['user']);
 
-        $turn = ChatTurn::query()->create([
+        $turn = AiRun::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => REPLAY_TEST_SESSION,
             'acting_for_user_id' => $fixture['user']->id,
-            'status' => TurnStatus::Running,
-            'current_phase' => TurnPhase::AwaitingLlm,
+            'status' => AiRunStatus::Running,
+            'current_phase' => RunPhase::AwaitingLlm,
         ]);
         $turn->requestCancel('User pressed stop');
 
         $response = $this->getJson(route('ai.chat.turn.events', [
-            'turnId' => $turn->id,
+            'runId' => $turn->id,
         ]));
 
         $response->assertOk();

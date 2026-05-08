@@ -15,8 +15,8 @@ use App\Base\AI\Tools\ToolResult;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -26,6 +26,7 @@ use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\ControlPlane\WireLoggingTransportTap;
 use App\Modules\Core\AI\Values\CallUsage;
 use Closure;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -69,6 +70,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
      *
      * @param  list<Message>  $messages  Conversation history
      * @param  int  $employeeId  Agent employee ID
+     * @param  string  $runId  Pre-minted AiRun ULID
      * @param  string|null  $systemPrompt  System prompt
      * @param  string|null  $modelOverride  Optional model override (plain model id or composite `providerId:::modelId`)
      * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
@@ -82,6 +84,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
     public function run(// NOSONAR (parameter count): public runtime API keeps explicit optional knobs
         array $messages,
         int $employeeId,
+        string $runId,
         ?string $systemPrompt = null,
         ?string $modelOverride = null,
         ?ExecutionPolicy $policy = null,
@@ -94,7 +97,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         $this->sessionContext->set($sessionId);
 
         try {
-            $runId = 'run_'.Str::random(12);
             $policy ??= ExecutionPolicy::interactive();
 
             $this->runRecorder->start(new RunRecorderStartInput(
@@ -183,11 +185,11 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
      *
      * @param  list<Message>  $messages  Conversation history
      * @param  int  $employeeId  Agent employee ID
+     * @param  string  $runId  Pre-minted AiRun ULID
      * @param  string|null  $systemPrompt  System prompt
      * @param  string|null  $modelOverride  Optional model override; see {@see run()}
      * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
      * @param  string|null  $sessionId  Chat session ID for run ledger correlation
-     * @param  string|null  $turnId  Chat turn ULID for linking the run to a turn
      * @param  array<string, mixed>|null  $configOverride  Optional fully resolved config override
      * @param  list<string>|null  $allowedToolNames  Optional task-profile tool allowlist
      * @param  array<string, mixed>|null  $executionControlsOverride  Per-call execution controls overlay (e.g. session-scoped)
@@ -197,11 +199,11 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
     public function runStream(// NOSONAR (parameter count): streaming API mirrors run() plus turn correlation
         array $messages,
         int $employeeId,
+        string $runId,
         ?string $systemPrompt = null,
         ?string $modelOverride = null,
         ?ExecutionPolicy $policy = null,
         ?string $sessionId = null,
-        ?string $turnId = null,
         ?array $configOverride = null,
         ?array $allowedToolNames = null,
         ?array $executionControlsOverride = null,
@@ -210,7 +212,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         $this->sessionContext->set($sessionId);
 
         try {
-            $runId = 'run_'.Str::random(12);
             $policy ??= ExecutionPolicy::interactive();
 
             $this->runRecorder->start(new RunRecorderStartInput(
@@ -221,7 +222,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 sessionId: $sessionId,
                 actingForUserId: auth()->id(),
                 timeoutSeconds: $policy->timeoutSeconds,
-                turnId: $turnId,
             ));
 
             $config = $configOverride ?? $this->configResolver->resolveDefault($employeeId);
@@ -272,7 +272,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 $credentials,
                 $messages,
                 $systemPrompt,
-                $turnId,
                 $allowedToolNames,
             );
         } finally {
@@ -738,10 +737,9 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array $credentials,
         array $messages,
         ?string $systemPrompt,
-        ?string $turnId,
         ?array $allowedToolNames = null,
     ): \Generator {
-        $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt, $turnId, $allowedToolNames);
+        $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt, $allowedToolNames);
 
         if ($toolLoopState['removedTools'] !== []) {
             yield ['event' => 'status', 'data' => [
@@ -759,7 +757,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         while (true) {
             // Turn is blocked on the model round-trip for this loop iteration.
             yield ['event' => 'status', 'data' => [
-                'phase' => TurnPhase::AwaitingLlm->value,
+                'phase' => RunPhase::AwaitingLlm->value,
                 'run_id' => $runId,
                 'iteration' => $iteration,
             ]];
@@ -785,7 +783,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             if (($iterResult['cancelled'] ?? false) === true) {
                 $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
                 yield ['event' => 'status', 'data' => [
-                    'phase' => TurnPhase::Cancelled->value,
+                    'phase' => RunPhase::Cancelled->value,
                     'run_id' => $runId,
                 ]];
 
@@ -942,7 +940,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         }
 
         yield ['event' => 'status', 'data' => [
-            'phase' => TurnPhase::Cancelled->value,
+            'phase' => RunPhase::Cancelled->value,
             'run_id' => $runId,
             'provider_output_rendered' => trim($fullContent) !== '',
             'skipped_tool_call_count' => count($iterResult['tool_calls'] ?? []),
@@ -1009,7 +1007,6 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         int $employeeId,
         array $messages,
         ?string $systemPrompt,
-        ?string $turnId,
         ?array $allowedToolNames = null,
     ): array {
         $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
@@ -1038,20 +1035,21 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             'hookMetadata' => $hookMetadata,
             'removedTools' => $removedTools,
             'allowedToolNames' => $allowedToolNames,
-            'cancelRequested' => $this->cancellationCallbackForTurn($turnId),
+            'cancelRequested' => $this->cancellationCallbackForTurn($runId),
         ];
     }
 
-    private function cancellationCallbackForTurn(?string $turnId): ?Closure
+    private function cancellationCallbackForTurn(?string $runId): ?Closure
     {
-        if (! is_string($turnId) || $turnId === '') {
+        if (! is_string($runId) || $runId === '') {
             return null;
         }
 
-        return static fn (): bool => ChatTurn::query()
-            ->whereKey($turnId)
-            ->whereNotNull('cancel_requested_at')
-            ->exists();
+        return static fn (): bool => Schema::hasTable('ai_runs')
+            && AiRun::query()
+                ->whereKey($runId)
+                ->whereNotNull('cancel_requested_at')
+                ->exists();
     }
 
     /**

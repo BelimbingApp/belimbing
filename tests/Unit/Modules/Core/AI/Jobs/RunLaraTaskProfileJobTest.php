@@ -60,11 +60,13 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
         executionMode: ExecutionMode::Background,
     );
 
+    $capturedRunId = null;
     $runtime = Mockery::mock(AgenticRuntime::class);
     $runtime->shouldReceive('run')
         ->once()
-        ->withArgs(function (...$args): bool {
-            [$messages, $employeeId, $systemPrompt, $modelOverride, $policy, $sessionId, $configOverride, $allowedToolNames] = $args;
+        ->withArgs(function (...$args) use (&$capturedRunId): bool {
+            [$messages, $employeeId, $runId, $systemPrompt, $modelOverride, $policy, $sessionId, $configOverride, $allowedToolNames] = $args;
+            $capturedRunId = $runId;
 
             expect($policy)->not->toBeNull()
                 ->and($policy->mode)->toBe(ExecutionMode::Background);
@@ -78,11 +80,13 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
                 && $configOverride['model'] === 'gpt-coder'
                 && $allowedToolNames === ['bash'];
         })
-        ->andReturn([
-            'content' => 'Implemented the dashboard page.',
-            'run_id' => 'run_profile_001',
-            'meta' => ['model' => 'gpt-coder'],
-        ]);
+        ->andReturnUsing(function () use (&$capturedRunId): array {
+            return [
+                'content' => 'Implemented the dashboard page.',
+                'run_id' => $capturedRunId,
+                'meta' => ['model' => 'gpt-coder'],
+            ];
+        });
 
     $promptFactory = Mockery::mock(LaraPromptFactory::class);
     $promptFactory->shouldReceive('buildForCurrentUser')
@@ -127,7 +131,7 @@ it('runs the Lara coding task profile and clears auth and execution context', fu
     $dispatch->refresh();
 
     expect($dispatch->status)->toBe(OperationStatus::Succeeded)
-        ->and($dispatch->run_id)->toBe('run_profile_001')
+        ->and($dispatch->run_id)->toBe($capturedRunId)
         ->and($dispatch->result_summary)->toBe('Implemented the dashboard page.')
         ->and(data_get($dispatch->meta, 'task_profile'))->toBe('coding')
         ->and(Auth::check())->toBeFalse()
@@ -157,11 +161,13 @@ it('runs the Lara research task profile with the resolved research model', funct
         executionMode: ExecutionMode::Background,
     );
 
+    $capturedRunId2 = null;
     $runtime = Mockery::mock(AgenticRuntime::class);
     $runtime->shouldReceive('run')
         ->once()
-        ->withArgs(function (...$args): bool {
-            [$messages, $employeeId, $systemPrompt, $modelOverride, $policy, $sessionId, $configOverride, $allowedToolNames] = $args;
+        ->withArgs(function (...$args) use (&$capturedRunId2): bool {
+            [$messages, $employeeId, $runId, $systemPrompt, $modelOverride, $policy, $sessionId, $configOverride, $allowedToolNames] = $args;
+            $capturedRunId2 = $runId;
 
             expect($policy)->not->toBeNull()
                 ->and($policy->mode)->toBe(ExecutionMode::Background);
@@ -175,11 +181,13 @@ it('runs the Lara research task profile with the resolved research model', funct
                 && $configOverride['model'] === 'gpt-research'
                 && $allowedToolNames === ['guide', 'web_search', 'web_fetch'];
         })
-        ->andReturn([
-            'content' => 'Collected the latest provider docs changes.',
-            'run_id' => 'run_profile_002',
-            'meta' => ['model' => 'gpt-research'],
-        ]);
+        ->andReturnUsing(function () use (&$capturedRunId2): array {
+            return [
+                'content' => 'Collected the latest provider docs changes.',
+                'run_id' => $capturedRunId2,
+                'meta' => ['model' => 'gpt-research'],
+            ];
+        });
 
     $promptFactory = Mockery::mock(LaraPromptFactory::class);
     $promptFactory->shouldReceive('buildForCurrentUser')
@@ -224,7 +232,7 @@ it('runs the Lara research task profile with the resolved research model', funct
     $dispatch->refresh();
 
     expect($dispatch->status)->toBe(OperationStatus::Succeeded)
-        ->and($dispatch->run_id)->toBe('run_profile_002')
+        ->and($dispatch->run_id)->toBe($capturedRunId2)
         ->and($dispatch->result_summary)->toBe('Collected the latest provider docs changes.')
         ->and(data_get($dispatch->meta, 'task_profile'))->toBe('research');
 });

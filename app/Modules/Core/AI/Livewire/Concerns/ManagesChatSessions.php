@@ -299,9 +299,9 @@ trait ManagesChatSessions
             'agent-chat-session-selected',
             sessionId: $sessionId,
             activeTurnId: $activeTurn?->id,
-            activeTurnPhase: $activeTurn?->current_phase?->value,
+            activeRunPhase: $activeTurn?->current_phase?->value,
             activeTurnLabel: $activeTurn?->current_label ?? $activeTurn?->current_phase?->label(),
-            activeTurnStartedAt: $activeTurn?->started_at?->toIso8601String(),
+            activeRunStartedAt: $activeTurn?->started_at?->toIso8601String(),
             activeTurnCreatedAt: $activeTurn?->created_at?->toIso8601String(),
         );
     }

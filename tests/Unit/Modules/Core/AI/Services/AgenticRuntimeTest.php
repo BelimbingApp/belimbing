@@ -14,7 +14,7 @@ use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\Enums\ExecutionMode;
-use App\Modules\Core\AI\Enums\TurnPhase;
+use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -31,6 +31,7 @@ use App\Modules\Core\AI\Services\Runtime\RuntimeSessionContext;
 use App\Modules\Core\AI\Values\CallUsage;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Psr\Log\NullLogger;
 use Tests\Support\MakesRuntimeResponses;
 
@@ -253,7 +254,7 @@ function runAgenticConversation(
 ): array {
     return test()
         ->makeAgenticRuntime($llmClient, $configResolver ?? defaultAgenticConfigResolver(), $toolRegistry)
-        ->run([test()->makeMessage('user', $userMessage)], 1, $systemPrompt, null, $policy, null, null, $allowedToolNames);
+        ->run([test()->makeMessage('user', $userMessage)], 1, (string) Str::ulid(), $systemPrompt, null, $policy, null, null, $allowedToolNames);
 }
 
 describe('AgenticRuntime (sync)', function () {
@@ -268,7 +269,7 @@ describe('AgenticRuntime (sync)', function () {
         $result = runAgenticConversation($llmClient, userMessage: 'Hi', systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT);
 
         expect($result['content'])->toBe(AGENTIC_RUNTIME_HELLO_RESPONSE);
-        expect($result['run_id'])->toStartWith('run_');
+        expect($result['run_id'])->toHaveLength(26);
         expect($result['meta']['model'])->toBe('gpt-4');
         expect($result['meta']['provider_name'])->toBe('test-provider');
         expect($result['meta'])->not->toHaveKey('tool_actions');
@@ -329,6 +330,7 @@ describe('AgenticRuntime (sync)', function () {
         $result = $runtime->run(
             [$this->makeMessage('user', 'Hi')],
             1,
+            (string) Str::ulid(),
             AGENTIC_RUNTIME_SYSTEM_PROMPT,
         );
 
@@ -443,7 +445,7 @@ describe('AgenticRuntime (sync tool loop)', function () {
                     'completion_tokens' => $usage?->completionTokens,
                 ];
 
-                return str_starts_with($runId, 'run_')
+                return preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/i', $runId) === 1
                     && $provider === 'test-provider'
                     && $model === 'gpt-4'
                     && $usage !== null;
@@ -473,6 +475,7 @@ describe('AgenticRuntime (sync tool loop)', function () {
         $result = $runtime->run(
             [$this->makeMessage('user', 'Echo world')],
             1,
+            (string) Str::ulid(),
             AGENTIC_RUNTIME_SYSTEM_PROMPT,
         );
 
@@ -563,6 +566,7 @@ describe('AgenticRuntime (sync context and errors)', function () {
         $result = $runtime->run(
             [test()->makeMessage('user', 'Delegate this task')],
             1,
+            (string) Str::ulid(),
             AGENTIC_RUNTIME_SYSTEM_PROMPT,
             null,
             null,
@@ -682,6 +686,7 @@ describe('AgenticRuntime (streaming)', function () {
         $events = iterator_to_array($runtime->runStream(
             [test()->makeMessage('user', 'Hello')],
             1,
+            (string) Str::ulid(),
             AGENTIC_RUNTIME_SYSTEM_PROMPT,
         ));
 
@@ -720,15 +725,16 @@ describe('AgenticRuntime (streaming)', function () {
         $stream = $runtime->runStream(
             [test()->makeMessage('user', 'Hello')],
             1,
+            (string) Str::ulid(),
             AGENTIC_RUNTIME_SYSTEM_PROMPT,
         );
 
         $firstEvent = $stream->current();
 
         expect($firstEvent['event'])->toBe('status')
-            ->and($firstEvent['data']['phase'])->toBe(TurnPhase::AwaitingLlm->value)
+            ->and($firstEvent['data']['phase'])->toBe(RunPhase::AwaitingLlm->value)
             ->and($firstEvent['data']['iteration'])->toBe(0)
-            ->and($firstEvent['data']['run_id'])->toStartWith('run_');
+            ->and($firstEvent['data']['run_id'])->toHaveLength(26);
 
         $stream->next();
         $secondEvent = $stream->current();
@@ -789,6 +795,7 @@ describe('AgenticRuntime (error surfacing)', function () {
         $result = $runtime->run(
             [test()->makeMessage('user', 'Hi')],
             1,
+            (string) Str::ulid(),
             AGENTIC_RUNTIME_SYSTEM_PROMPT,
             'claude-opus-4.6',
         );

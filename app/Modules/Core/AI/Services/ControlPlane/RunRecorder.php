@@ -17,10 +17,10 @@ use App\Modules\Core\AI\Values\CallUsage;
 use App\Modules\Core\AI\Values\ResolvedRate;
 
 /**
- * Records AI run lifecycle events to the ai_runs ledger.
+ * Records AI run lifecycle details to the ai_runs ledger.
  *
  * All methods are idempotent:
- * - start() is insert-only — duplicate run_id is a no-op
+ * - start() / beginExecution() updates an existing envelope or creates one if missing
  * - complete() and fail() only transition from 'running' — calls on terminal rows are no-ops
  * - attachDispatch() is a nullable FK write — safe to call multiple times
  *
@@ -34,11 +34,14 @@ class RunRecorder
     ) {}
 
     /**
-     * Record the start of a new run.
-     *
-     * Insert-only — if the run_id already exists, this is a no-op.
+     * Record the start of execution on a run envelope.
      */
     public function start(RunRecorderStartInput $input): void
+    {
+        $this->beginExecution($input);
+    }
+
+    public function beginExecution(RunRecorderStartInput $input): void
     {
         AiRun::query()->firstOrCreate(
             ['id' => $input->runId],
@@ -46,14 +49,20 @@ class RunRecorder
                 'employee_id' => $input->employeeId,
                 'session_id' => $input->sessionId,
                 'acting_for_user_id' => $input->actingForUserId,
-                'turn_id' => $input->turnId,
                 'source' => $input->source,
                 'execution_mode' => $input->executionMode,
-                'status' => AiRunStatus::Running,
                 'timeout_seconds' => $input->timeoutSeconds,
-                'started_at' => now(),
             ],
-        );
+        )->update([
+            'employee_id' => $input->employeeId,
+            'session_id' => $input->sessionId,
+            'acting_for_user_id' => $input->actingForUserId,
+            'source' => $input->source,
+            'execution_mode' => $input->executionMode,
+            'status' => AiRunStatus::Running,
+            'timeout_seconds' => $input->timeoutSeconds,
+            'started_at' => now(),
+        ]);
     }
 
     /**

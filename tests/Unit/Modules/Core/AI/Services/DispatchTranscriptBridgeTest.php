@@ -2,6 +2,7 @@
 
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\DispatchTranscriptBridge;
 use App\Modules\Core\AI\Services\MessageManager;
@@ -55,6 +56,11 @@ function createDispatchTranscriptFixture(): array
 
 it('appends a completion follow-up to the Lara session transcript', function (): void {
     $fixture = createDispatchTranscriptFixture();
+
+    AiRun::unguarded(fn () => AiRun::query()->create([
+        'id' => 'run_dispatch_success',
+        'employee_id' => Employee::LARA_ID,
+    ]));
 
     $dispatch = OperationDispatch::unguarded(fn () => OperationDispatch::query()->create([
         'id' => 'op_transcript_success',

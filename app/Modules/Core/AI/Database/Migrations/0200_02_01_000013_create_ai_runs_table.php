@@ -18,15 +18,19 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('ai_runs', function (Blueprint $table): void {
-            $table->string('id')->primary();
+            $table->ulid('id')->primary();
             $table->foreignId('employee_id')->constrained('employees');
             $table->string('session_id')->nullable();
             $table->foreignId('acting_for_user_id')->nullable()->constrained('users');
             $table->string('dispatch_id')->nullable();
-            $table->ulid('turn_id')->nullable();
-            $table->string('source', 30);
-            $table->string('execution_mode', 20);
-            $table->string('status', 20)->default('running');
+            $table->string('source', 30)->default('chat');
+            $table->string('execution_mode', 20)->default('interactive');
+            $table->string('status', 20)->default('queued');
+            $table->string('current_phase', 30)->nullable();
+            $table->string('current_label')->nullable();
+            $table->unsignedBigInteger('last_event_seq')->nullable()->default(0);
+            $table->timestamp('cancel_requested_at')->nullable();
+            $table->json('runtime_meta')->nullable();
             $table->string('provider_name')->nullable();
             $table->string('model')->nullable();
             $table->unsignedInteger('timeout_seconds')->nullable();
@@ -53,15 +57,16 @@ return new class extends Migration
 
             $table->index('session_id');
             $table->index('dispatch_id');
-            $table->index('turn_id');
             $table->index('employee_id');
             $table->index('acting_for_user_id');
             $table->index('status');
             $table->index('created_at');
+        });
 
-            $table->foreign('turn_id')
+        Schema::table('ai_operation_dispatches', function (Blueprint $table): void {
+            $table->foreign('run_id')
                 ->references('id')
-                ->on('ai_chat_turns')
+                ->on('ai_runs')
                 ->nullOnDelete();
         });
     }
@@ -71,6 +76,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::table('ai_operation_dispatches', function (Blueprint $table): void {
+            $table->dropForeign(['run_id']);
+        });
+
         Schema::dropIfExists('ai_runs');
     }
 };

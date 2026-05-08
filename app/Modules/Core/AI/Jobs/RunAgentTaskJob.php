@@ -7,6 +7,8 @@ namespace App\Modules\Core\AI\Jobs;
 
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
@@ -20,6 +22,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 /**
  * Queue job that executes an agent task via AgenticRuntime.
@@ -108,12 +111,28 @@ class RunAgentTaskJob implements ShouldQueue
                 timestamp: new DateTimeImmutable,
             )];
 
+            $policy = ExecutionPolicy::background();
+            $runId = (string) Str::ulid();
+
+            AiRun::query()->create([
+                'id' => $runId,
+                'employee_id' => $dispatch->employee_id,
+                'session_id' => data_get($dispatch->meta, 'session_id'),
+                'acting_for_user_id' => $dispatch->acting_for_user_id,
+                'dispatch_id' => $dispatch->id,
+                'source' => 'background',
+                'execution_mode' => $policy->mode->value,
+                'status' => AiRunStatus::Queued,
+                'runtime_meta' => ['model_override' => data_get($dispatch->meta, 'model_override')],
+            ]);
+
             $result = $runtime->run(
                 messages: $messages,
                 employeeId: $dispatch->employee_id,
+                runId: $runId,
                 systemPrompt: $systemPrompt,
                 modelOverride: data_get($dispatch->meta, 'model_override'),
-                policy: ExecutionPolicy::background(),
+                policy: $policy,
                 sessionId: data_get($dispatch->meta, 'session_id'),
             );
 

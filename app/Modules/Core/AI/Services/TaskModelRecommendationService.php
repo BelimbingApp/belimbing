@@ -9,12 +9,15 @@ use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
+use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\ExecutionMode;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Modules\Core\AI\Services\Runtime\RuntimeInvocationContext;
 use App\Modules\Core\Company\Models\Company;
+use Illuminate\Support\Str;
 
 class TaskModelRecommendationService
 {
@@ -47,20 +50,34 @@ class TaskModelRecommendationService
             return ['error' => 'No active provider models are available for recommendation.'];
         }
 
+        $policy = new ExecutionPolicy(
+            mode: ExecutionMode::Interactive,
+            timeoutSeconds: 30,
+        );
+        $runId = (string) Str::ulid();
+
+        AiRun::query()->create([
+            'id' => $runId,
+            'employee_id' => $employeeId,
+            'acting_for_user_id' => auth()->id(),
+            'source' => 'core_ai_task_model_recommendation',
+            'execution_mode' => $policy->mode->value,
+            'status' => AiRunStatus::Queued,
+            'runtime_meta' => ['task_key' => $taskKey],
+        ]);
+
         $response = $this->agenticRuntime->run(
             messages: [[
                 'role' => 'user',
                 'content' => $this->buildPrompt($task->label, $task->type->value, $task->workloadDescription, $candidates),
             ]],
             employeeId: $employeeId,
+            runId: $runId,
             systemPrompt: 'Choose the single best model for the named Lara task from the provided candidates. '
                 .'Return strict JSON only: {"provider":"...","model":"...","reason":"..."} '
                 .'Use provider and model values exactly as listed in the candidates. '
                 .'Keep reason under 18 words.',
-            policy: new ExecutionPolicy(
-                mode: ExecutionMode::Interactive,
-                timeoutSeconds: 30,
-            ),
+            policy: $policy,
             configOverride: $config,
             allowedToolNames: [],
             executionControlsOverride: ['limits' => ['max_output_tokens' => 120]],

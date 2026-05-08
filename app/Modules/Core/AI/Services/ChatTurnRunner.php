@@ -9,22 +9,19 @@ use App\Modules\Core\AI\DTO\ChatTurnRuntimeContext;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\DTO\PageSnapshot;
-use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\ExecutionMode;
-use App\Modules\Core\AI\Enums\TurnStatus;
 use App\Modules\Core\AI\Models\AiRun;
-use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Modules\Core\Employee\Models\Employee;
 
 /**
- * Shared run logic for executing a chat turn through the agentic runtime.
+ * Shared run logic for executing a chat-originated run through the agentic runtime.
  *
- * Drives the streaming execution pipeline for a chat turn: hydrate
+ * Drives the streaming execution pipeline for a chat run: hydrate
  * context → resolve prompt → stream events → persist transcript.
  *
- * Callers are responsible for authentication and turn creation —
- * this service operates on an existing ChatTurn.
+ * Callers are responsible for authentication and run creation —
+ * this service operates on an existing AiRun.
  */
 class ChatTurnRunner
 {
@@ -32,8 +29,8 @@ class ChatTurnRunner
         private readonly AgenticRuntime $runtime,
         private readonly MessageManager $messageManager,
         private readonly ChatRunPersister $persister,
-        private readonly TurnStreamBridge $bridge,
-        private readonly TurnEventPublisher $turnPublisher,
+        private readonly RunStreamBridge $bridge,
+        private readonly RunEventPublisher $turnPublisher,
         private readonly SessionManager $sessionManager,
     ) {}
 
@@ -51,7 +48,7 @@ class ChatTurnRunner
     ];
 
     /**
-     * Execute a chat turn through the streaming runtime pipeline.
+     * Execute a chat run through the streaming runtime pipeline.
      *
      * Hydrates page context, resolves the prompt package and execution
      * policy, then drives the runtime stream. Each yielded event payload
@@ -59,10 +56,10 @@ class ChatTurnRunner
      * cancellation between events and materializes the transcript on
      * completion.
      *
-     * @param  ChatTurn  $turn  A turn in Queued/Booting status
+     * @param  AiRun  $turn  A run in Queued/Booting status
      * @param  callable(array<string, mixed>): void|null  $onEvent  Optional callback for each event payload
      */
-    public function run(ChatTurn $turn, ?callable $onEvent = null): void
+    public function run(AiRun $turn, ?callable $onEvent = null): void
     {
         $employeeId = (int) $turn->employee_id;
         $sessionId = (string) $turn->session_id;
@@ -98,18 +95,18 @@ class ChatTurnRunner
      * @param  callable(array<string, mixed>): void|null  $onEvent
      */
     private function executeRuntimeStream(
-        ChatTurn $turn,
+        AiRun $turn,
         ChatTurnRuntimeContext $runtimeContext,
         ?callable $onEvent,
     ): void {
         $runtimeStream = $this->runtime->runStream(
             $runtimeContext->messages,
             $runtimeContext->employeeId,
+            $turn->id,
             $runtimeContext->systemPrompt,
             $runtimeContext->modelOverride,
             $runtimeContext->policy,
             $runtimeContext->sessionId,
-            turnId: $turn->id,
             allowedToolNames: $runtimeContext->allowedToolNames,
             executionControlsOverride: $runtimeContext->executionControlsOverride,
         );
@@ -122,10 +119,6 @@ class ChatTurnRunner
 
         $turn->refresh();
 
-        if ($turn->status === TurnStatus::Cancelled) {
-            $this->markCurrentRunCancelled($turn->current_run_id);
-        }
-
         $this->persister->materializeFromTurn(
             $turn,
             $this->messageManager,
@@ -136,7 +129,7 @@ class ChatTurnRunner
     }
 
     private function handleRuntimeFailure(
-        ChatTurn $turn,
+        AiRun $turn,
         \Throwable $e,
         ChatTurnRuntimeContext $runtimeContext,
     ): void {
@@ -172,13 +165,13 @@ class ChatTurnRunner
     }
 
     /**
-     * Hydrate the request-scoped PageContextHolder from the turn's runtime_meta.
+     * Hydrate the request-scoped PageContextHolder from the run's runtime_meta.
      *
      * When a run originates from a page-aware context, the page snapshot
      * and consent level are stored in runtime_meta so the runtime can
      * access page-specific tools and prompts.
      */
-    private function hydratePageContext(ChatTurn $turn): void
+    private function hydratePageContext(AiRun $turn): void
     {
         $pageContext = data_get($turn->runtime_meta, 'page_context');
 
@@ -227,14 +220,14 @@ class ChatTurnRunner
     }
 
     /**
-     * Resolve execution policy from the turn's runtime_meta.
+     * Resolve execution policy from the run's runtime_meta.
      *
      * Reads `execution_mode` and converts to an ExecutionPolicy.
      * Falls back to interactive policy when absent.
      *
-     * @param  ChatTurn  $turn  The turn with runtime_meta
+     * @param  AiRun  $turn  The run with runtime_meta
      */
-    private function resolveExecutionPolicy(ChatTurn $turn): ExecutionPolicy
+    private function resolveExecutionPolicy(AiRun $turn): ExecutionPolicy
     {
         $modeValue = data_get($turn->runtime_meta, 'execution_mode');
 
@@ -247,25 +240,4 @@ class ChatTurnRunner
         return ExecutionPolicy::interactive();
     }
 
-    private function markCurrentRunCancelled(?string $runId): void
-    {
-        if (! is_string($runId) || $runId === '') {
-            return;
-        }
-
-        $run = AiRun::query()->find($runId);
-
-        if ($run === null || $run->status !== AiRunStatus::Running) {
-            return;
-        }
-
-        $run->status = AiRunStatus::Cancelled;
-        $run->finished_at = now();
-
-        if ($run->started_at !== null && $run->latency_ms === null) {
-            $run->latency_ms = max(0, $run->started_at->diffInMilliseconds($run->finished_at));
-        }
-
-        $run->save();
-    }
 }

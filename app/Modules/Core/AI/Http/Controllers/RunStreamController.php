@@ -5,28 +5,28 @@
 
 namespace App\Modules\Core\AI\Http\Controllers;
 
-use App\Modules\Core\AI\Enums\TurnStatus;
-use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\ChatTurnRunner;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-class ChatTurnStreamController
+class RunStreamController
 {
-    public function __invoke(Request $request, string $turnId): StreamedResponse
+    public function __invoke(Request $request, string $runId): StreamedResponse
     {
-        $turn = ChatTurn::query()->find($turnId);
+        $turn = AiRun::query()->find($runId);
 
         if ($turn === null) {
-            return $this->errorStream(404, 'Turn not found');
+            return $this->errorStream(404, 'Run not found');
         }
 
         if ((int) $turn->acting_for_user_id !== (int) auth()->id()) {
             return $this->errorStream(403, 'Forbidden');
         }
 
-        if ($turn->status !== TurnStatus::Queued) {
-            return $this->errorStream(409, 'Turn is not in queued state');
+        if ($turn->source !== 'chat' || $turn->status !== AiRunStatus::Queued) {
+            return $this->errorStream(409, 'Run is not a queued chat run');
         }
 
         return response()->stream(function () use ($turn): void {
@@ -34,7 +34,7 @@ class ChatTurnStreamController
         }, 200, $this->streamHeaders());
     }
 
-    private function writeTurnStream(ChatTurn $turn): void
+    private function writeTurnStream(AiRun $turn): void
     {
         set_time_limit(0);
         ignore_user_abort(true);

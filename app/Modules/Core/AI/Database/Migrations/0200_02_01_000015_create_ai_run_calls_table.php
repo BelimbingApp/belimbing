@@ -20,7 +20,7 @@ return new class extends Migration
     {
         Schema::create('ai_run_calls', function (Blueprint $table): void {
             $table->bigIncrements('id');
-            $table->string('run_id');
+            $table->ulid('run_id');
             $table->unsignedInteger('attempt_index');
             $table->string('provider')->nullable();
             $table->string('model')->nullable();

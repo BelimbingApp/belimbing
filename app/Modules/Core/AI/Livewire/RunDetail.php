@@ -58,7 +58,7 @@ class RunDetail extends Component
                 'wire_log_readable' => $runView['wire_log_readable'],
                 'wire_log_summary' => $runView['wire_log_summary'],
                 'wire_logging_enabled' => $runView['wire_logging_enabled'],
-                'turn_id' => $runView['turn_id'],
+                'run_id' => $runView['run_id'],
             ],
             'operationsBreadcrumb' => $this->operationsBreadcrumb(),
         ]);

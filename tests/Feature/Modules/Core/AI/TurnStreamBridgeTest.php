@@ -3,30 +3,44 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-use App\Modules\Core\AI\Enums\TurnEventType;
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Enums\TurnStatus;
-use App\Modules\Core\AI\Models\ChatTurn;
-use App\Modules\Core\AI\Models\ChatTurnEvent;
-use App\Modules\Core\AI\Services\TurnStreamBridge;
+use App\Modules\Core\AI\Enums\RunEventType;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Models\AiRunEvent;
+use App\Modules\Core\AI\Services\RunStreamBridge;
+use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 
-final class TurnStreamBridgeTestStreamFailure extends RuntimeException {}
+final class RunStreamBridgeTestStreamFailure extends RuntimeException {}
 
 const BRIDGE_TEST_SESSION = 'sess_bridge_test';
-const BRIDGE_TEST_RUN_ID = 'run_bridge_test1';
+const BRIDGE_TEST_RUN_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAY';
 const BRIDGE_TEST_LIST_ARGS = 'ls -la';
 
 /**
- * Create a ChatTurn in queued state for bridge testing.
+ * Create a AiRun in queued state for bridge testing.
  */
-function createBridgeTurn(): ChatTurn
+function createBridgeTurn(): AiRun
 {
-    return ChatTurn::query()->create([
-        'employee_id' => Employee::query()->first()->id,
+    $employee = Employee::query()->first();
+
+    if ($employee === null) {
+        $company = Company::factory()->create();
+        $employee = Employee::factory()->create([
+            'company_id' => $company->id,
+            'status' => 'active',
+        ]);
+    }
+
+    return AiRun::query()->create([
+        'id' => BRIDGE_TEST_RUN_ID,
+        'employee_id' => $employee->id,
+        'source' => 'chat',
+        'execution_mode' => 'interactive',
         'session_id' => BRIDGE_TEST_SESSION,
-        'status' => TurnStatus::Queued,
-        'current_phase' => TurnPhase::WaitingForWorker,
+        'status' => AiRunStatus::Queued,
+        'current_phase' => RunPhase::WaitingForWorker,
     ]);
 }
 
@@ -46,12 +60,12 @@ function runtimeStream(array $events): Generator
 /**
  * Collect turn event types for a turn in seq order.
  *
- * @return list<TurnEventType>
+ * @return list<RunEventType>
  */
-function turnEventTypes(ChatTurn $turn): array
+function turnEventTypes(AiRun $turn): array
 {
-    return ChatTurnEvent::query()
-        ->where('turn_id', $turn->id)
+    return AiRunEvent::query()
+        ->where('run_id', $turn->id)
         ->orderBy('seq')
         ->get()
         ->pluck('event_type')
@@ -59,67 +73,67 @@ function turnEventTypes(ChatTurn $turn): array
 }
 
 // ------------------------------------------------------------------
-// TurnStreamBridge — happy path
+// RunStreamBridge — happy path
 // ------------------------------------------------------------------
 
-describe('TurnStreamBridge', function () {
+describe('RunStreamBridge', function () {
     it('yields turn event SSE payloads instead of raw runtime events', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $input = [
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'delta', 'data' => ['text' => 'Hi']],
             ['event' => 'done', 'data' => ['content' => 'Hi there', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ];
 
         $output = iterator_to_array($bridge->wrap($turn, runtimeStream($input)), false);
 
-        // Each yielded payload must be an SSE payload with turn_id, seq, event_type
+        // Each yielded payload must be an SSE payload with run_id, seq, event_type
         expect(count($output))->toBeGreaterThan(3);
 
         foreach ($output as $payload) {
-            expect($payload)->toHaveKey('turn_id')
+            expect($payload)->toHaveKey('run_id')
                 ->and($payload)->toHaveKey('seq')
                 ->and($payload)->toHaveKey('event_type')
-                ->and($payload['turn_id'])->toBe($turn->id);
+                ->and($payload['run_id'])->toBe($turn->id);
         }
 
-        // First event should be turn.started
-        expect($output[0]['event_type'])->toBe('turn.started');
+        // First event should be run.started
+        expect($output[0]['event_type'])->toBe('run.started');
 
         // Should contain the key event types
         $types = array_column($output, 'event_type');
-        expect($types)->toContain('turn.started')
+        expect($types)->toContain('run.started')
             ->and($types)->toContain('run.started')
             ->and($types)->toContain('assistant.output_delta')
-            ->and($types)->toContain('turn.completed')
-            ->and($types)->toContain('turn.ready_for_input');
+            ->and($types)->toContain('run.completed')
+            ->and($types)->toContain('run.ready_for_input');
     });
 
     it('transitions turn through Queued → Booting → Running → Completed', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'done', 'data' => ['content' => 'Done', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ]);
 
         iterator_to_array($bridge->wrap($turn, $stream));
 
         $turn->refresh();
-        expect($turn->status)->toBe(TurnStatus::Completed)
+        expect($turn->status)->toBe(AiRunStatus::Succeeded)
             ->and($turn->started_at)->not()->toBeNull()
             ->and($turn->finished_at)->not()->toBeNull();
     });
 
-    it('emits turn.started, run.started, and turn.completed events', function () {
+    it('emits run.started, run.started, and run.completed events', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'done', 'data' => ['content' => 'Result', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ]);
 
@@ -127,18 +141,18 @@ describe('TurnStreamBridge', function () {
 
         $types = turnEventTypes($turn);
 
-        expect($types)->toContain(TurnEventType::TurnStarted)
-            ->and($types)->toContain(TurnEventType::RunStarted)
-            ->and($types)->toContain(TurnEventType::TurnCompleted)
-            ->and($types)->toContain(TurnEventType::TurnReadyForInput);
+        expect($types)->toContain(RunEventType::RunStarted)
+            ->and($types)->toContain(RunEventType::RunStarted)
+            ->and($types)->toContain(RunEventType::RunCompleted)
+            ->and($types)->toContain(RunEventType::RunReadyForInput);
     });
 
     it('maps awaiting_llm status to phase change and thinking event', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'done', 'data' => ['content' => 'Ok', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ]);
 
@@ -146,36 +160,36 @@ describe('TurnStreamBridge', function () {
 
         $types = turnEventTypes($turn);
 
-        expect($types)->toContain(TurnEventType::TurnPhaseChanged)
-            ->and($types)->toContain(TurnEventType::AssistantThinkingStarted);
+        expect($types)->toContain(RunEventType::RunPhaseChanged)
+            ->and($types)->toContain(RunEventType::AssistantThinkingStarted);
     });
 
     it('maps runtime cancellation status to a terminal cancelled turn event', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::Cancelled->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::Cancelled->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
         ]);
 
         $output = iterator_to_array($bridge->wrap($turn, $stream), false);
 
         $turn->refresh();
 
-        expect(array_column($output, 'event_type'))->toContain('turn.cancelled')
-            ->and($turn->status)->toBe(TurnStatus::Cancelled)
-            ->and($turn->current_phase)->toBe(TurnPhase::Cancelled);
+        expect(array_column($output, 'event_type'))->toContain('run.cancelled')
+            ->and($turn->status)->toBe(AiRunStatus::Cancelled)
+            ->and($turn->current_phase)->toBe(RunPhase::Cancelled);
     });
 });
 
-describe('TurnStreamBridge tool and streaming events', function () {
+describe('RunStreamBridge tool and streaming events', function () {
     it('maps tool_started and tool_finished with phase transitions', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'status', 'data' => [
                 'phase' => 'tool_started',
                 'tool' => 'bash',
@@ -198,15 +212,15 @@ describe('TurnStreamBridge tool and streaming events', function () {
 
         $types = turnEventTypes($turn);
 
-        expect($types)->toContain(TurnEventType::ToolStarted)
-            ->and($types)->toContain(TurnEventType::ToolFinished)
-            ->and($types)->toContain(TurnEventType::Heartbeat);
+        expect($types)->toContain(RunEventType::ToolStarted)
+            ->and($types)->toContain(RunEventType::ToolFinished)
+            ->and($types)->toContain(RunEventType::Heartbeat);
 
         // Tool started should have set phase to running_tool
-        $toolStartedEvent = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
+        $toolStartedEvent = AiRunEvent::query()
+            ->where('run_id', $turn->id)
             ->whereJsonContains('payload->tool', 'bash')
-            ->where('event_type', TurnEventType::ToolStarted->value)
+            ->where('event_type', RunEventType::ToolStarted->value)
             ->first();
 
         expect($toolStartedEvent)->not()->toBeNull()
@@ -215,10 +229,10 @@ describe('TurnStreamBridge tool and streaming events', function () {
 
     it('maps iteration_completed status to a durable assistant iteration event', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'status', 'data' => [
                 'phase' => 'iteration_completed',
                 'finish_reason' => 'tool_calls',
@@ -238,9 +252,9 @@ describe('TurnStreamBridge tool and streaming events', function () {
 
         iterator_to_array($bridge->wrap($turn, $stream));
 
-        $iterationEvent = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
-            ->where('event_type', TurnEventType::AssistantIterationCompleted->value)
+        $iterationEvent = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', RunEventType::AssistantIterationCompleted->value)
             ->first();
 
         expect($iterationEvent)->not()->toBeNull()
@@ -250,11 +264,11 @@ describe('TurnStreamBridge tool and streaming events', function () {
 
         $types = turnEventTypes($turn);
         $normalizedTypes = array_map(
-            static fn ($type) => $type instanceof TurnEventType ? $type->value : $type,
+            static fn ($type) => $type instanceof RunEventType ? $type->value : $type,
             $types,
         );
-        $iterationIndex = array_search(TurnEventType::AssistantIterationCompleted->value, $normalizedTypes, true);
-        $toolStartedIndex = array_search(TurnEventType::ToolStarted->value, $normalizedTypes, true);
+        $iterationIndex = array_search(RunEventType::AssistantIterationCompleted->value, $normalizedTypes, true);
+        $toolStartedIndex = array_search(RunEventType::ToolStarted->value, $normalizedTypes, true);
 
         expect($iterationIndex)->toBeInt()
             ->and($toolStartedIndex)->toBeInt()
@@ -262,14 +276,14 @@ describe('TurnStreamBridge tool and streaming events', function () {
     });
 });
 
-describe('TurnStreamBridge output and sequencing events', function () {
+describe('RunStreamBridge output and sequencing events', function () {
 
     it('maps tool_denied to a turn event', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'status', 'data' => [
                 'phase' => 'tool_denied',
                 'tool' => 'dangerous_tool',
@@ -283,11 +297,11 @@ describe('TurnStreamBridge output and sequencing events', function () {
         iterator_to_array($bridge->wrap($turn, $stream));
 
         $types = turnEventTypes($turn);
-        expect($types)->toContain(TurnEventType::ToolDenied);
+        expect($types)->toContain(RunEventType::ToolDenied);
 
-        $denied = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
-            ->where('event_type', TurnEventType::ToolDenied->value)
+        $denied = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', RunEventType::ToolDenied->value)
             ->first();
 
         expect($denied->payload['tool'])->toBe('dangerous_tool')
@@ -296,10 +310,10 @@ describe('TurnStreamBridge output and sequencing events', function () {
 
     it('maps delta events to output deltas with streaming phase', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'delta', 'data' => ['text' => 'Hello ']],
             ['event' => 'delta', 'data' => ['text' => 'world']],
             ['event' => 'done', 'data' => ['content' => 'Hello world', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
@@ -308,14 +322,14 @@ describe('TurnStreamBridge output and sequencing events', function () {
         iterator_to_array($bridge->wrap($turn, $stream));
 
         $types = turnEventTypes($turn);
-        $deltaCount = collect($types)->filter(fn ($t) => $t === TurnEventType::AssistantOutputDelta)->count();
+        $deltaCount = collect($types)->filter(fn ($t) => $t === RunEventType::AssistantOutputDelta)->count();
 
         expect($deltaCount)->toBe(2);
 
         // Phase should have been set to streaming_answer
-        $phaseEvents = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
-            ->where('event_type', TurnEventType::TurnPhaseChanged->value)
+        $phaseEvents = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', RunEventType::RunPhaseChanged->value)
             ->whereJsonContains('payload->phase', 'streaming_answer')
             ->get();
 
@@ -324,18 +338,18 @@ describe('TurnStreamBridge output and sequencing events', function () {
 
     it('emits output_block_committed on done with content', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'done', 'data' => ['content' => 'Final answer', 'run_id' => BRIDGE_TEST_RUN_ID, 'meta' => []]],
         ]);
 
         iterator_to_array($bridge->wrap($turn, $stream));
 
-        $block = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
-            ->where('event_type', TurnEventType::AssistantOutputBlockCommitted->value)
+        $block = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', RunEventType::AssistantOutputBlockCommitted->value)
             ->first();
 
         expect($block)->not()->toBeNull()
@@ -345,10 +359,10 @@ describe('TurnStreamBridge output and sequencing events', function () {
 
     it('emits usage_updated when done includes tokens', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'done', 'data' => [
                 'content' => 'Reply',
                 'run_id' => BRIDGE_TEST_RUN_ID,
@@ -358,9 +372,9 @@ describe('TurnStreamBridge output and sequencing events', function () {
 
         iterator_to_array($bridge->wrap($turn, $stream));
 
-        $usage = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
-            ->where('event_type', TurnEventType::UsageUpdated->value)
+        $usage = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', RunEventType::UsageUpdated->value)
             ->first();
 
         expect($usage)->not()->toBeNull()
@@ -370,10 +384,10 @@ describe('TurnStreamBridge output and sequencing events', function () {
 
     it('maintains strictly increasing seq across all events', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'status', 'data' => [
                 'phase' => 'tool_started', 'tool' => 'bash',
                 'args_summary' => 'pwd', 'tool_call_index' => 0,
@@ -390,8 +404,8 @@ describe('TurnStreamBridge output and sequencing events', function () {
 
         iterator_to_array($bridge->wrap($turn, $stream));
 
-        $seqs = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
+        $seqs = AiRunEvent::query()
+            ->where('run_id', $turn->id)
             ->orderBy('seq')
             ->pluck('seq')
             ->toArray();
@@ -406,13 +420,13 @@ describe('TurnStreamBridge output and sequencing events', function () {
 });
 
 // ------------------------------------------------------------------
-// TurnStreamBridge — error handling
+// RunStreamBridge — error handling
 // ------------------------------------------------------------------
 
-describe('TurnStreamBridge error handling', function () {
+describe('RunStreamBridge error handling', function () {
     it('maps runtime error events to turn failure', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
             ['event' => 'error', 'data' => [
@@ -425,12 +439,12 @@ describe('TurnStreamBridge error handling', function () {
         iterator_to_array($bridge->wrap($turn, $stream));
 
         $turn->refresh();
-        expect($turn->status)->toBe(TurnStatus::Failed)
-            ->and($turn->current_phase)->toBe(TurnPhase::Failed);
+        expect($turn->status)->toBe(AiRunStatus::Failed)
+            ->and($turn->current_phase)->toBe(RunPhase::Failed);
 
-        $failed = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
-            ->where('event_type', TurnEventType::TurnFailed->value)
+        $failed = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', RunEventType::RunFailed->value)
             ->first();
 
         expect($failed)->not()->toBeNull()
@@ -440,21 +454,21 @@ describe('TurnStreamBridge error handling', function () {
 
     it('fails the turn if stream ends without terminal event', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         // Stream that produces events but no done/error
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
         ]);
 
         iterator_to_array($bridge->wrap($turn, $stream));
 
         $turn->refresh();
-        expect($turn->status)->toBe(TurnStatus::Failed);
+        expect($turn->status)->toBe(AiRunStatus::Failed);
 
-        $failed = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
-            ->where('event_type', TurnEventType::TurnFailed->value)
+        $failed = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', RunEventType::RunFailed->value)
             ->first();
 
         expect($failed)->not()->toBeNull()
@@ -463,22 +477,22 @@ describe('TurnStreamBridge error handling', function () {
 
     it('fails the turn and rethrows when runtime throws an exception', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $throwingStream = (function () {
-            yield ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]];
-            throw new TurnStreamBridgeTestStreamFailure('LLM connection lost');
+            yield ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]];
+            throw new RunStreamBridgeTestStreamFailure('LLM connection lost');
         })();
 
         expect(fn () => iterator_to_array($bridge->wrap($turn, $throwingStream)))
-            ->toThrow(TurnStreamBridgeTestStreamFailure::class, 'LLM connection lost');
+            ->toThrow(RunStreamBridgeTestStreamFailure::class, 'LLM connection lost');
 
         $turn->refresh();
-        expect($turn->status)->toBe(TurnStatus::Failed);
+        expect($turn->status)->toBe(AiRunStatus::Failed);
 
-        $failed = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
-            ->where('event_type', TurnEventType::TurnFailed->value)
+        $failed = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', RunEventType::RunFailed->value)
             ->first();
 
         expect($failed)->not()->toBeNull()
@@ -487,7 +501,7 @@ describe('TurnStreamBridge error handling', function () {
 
     it('handles error without run_id gracefully', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         // Error before a run_id is ever seen — turn stays in Booting
         $stream = runtimeStream([
@@ -500,29 +514,29 @@ describe('TurnStreamBridge error handling', function () {
         iterator_to_array($bridge->wrap($turn, $stream));
 
         $turn->refresh();
-        expect($turn->status)->toBe(TurnStatus::Failed);
+        expect($turn->status)->toBe(AiRunStatus::Failed);
     });
 
     it('handles empty stream by failing the turn', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([]);
 
         iterator_to_array($bridge->wrap($turn, $stream));
 
         $turn->refresh();
-        expect($turn->status)->toBe(TurnStatus::Failed);
+        expect($turn->status)->toBe(AiRunStatus::Failed);
     });
 });
 
-describe('TurnStreamBridge tool events', function () {
+describe('RunStreamBridge tool events', function () {
     it('captures tool result_length and error_payload in turn events', function () {
         $turn = createBridgeTurn();
-        $bridge = app(TurnStreamBridge::class);
+        $bridge = app(RunStreamBridge::class);
 
         $stream = runtimeStream([
-            ['event' => 'status', 'data' => ['phase' => TurnPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
             ['event' => 'status', 'data' => [
                 'phase' => 'tool_started',
                 'tool' => 'bash',
@@ -545,9 +559,9 @@ describe('TurnStreamBridge tool events', function () {
 
         iterator_to_array($bridge->wrap($turn, $stream));
 
-        $toolFinished = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
-            ->where('event_type', TurnEventType::ToolFinished->value)
+        $toolFinished = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', RunEventType::ToolFinished->value)
             ->first();
 
         expect($toolFinished)->not()->toBeNull()

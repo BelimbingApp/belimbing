@@ -6,22 +6,21 @@
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Modules\Core\AI\Enums\AiRunStatus;
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Enums\TurnStatus;
+use App\Modules\Core\AI\Enums\ExecutionMode;
+use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Models\AiRun;
-use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Services\ChatRunPersister;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\PageContextResolver;
 use App\Modules\Core\AI\Services\SessionManager;
-use App\Modules\Core\AI\Services\TurnEventPublisher;
+use App\Modules\Core\AI\Services\RunEventPublisher;
 use App\Modules\Core\Employee\Models\Employee;
 
 /**
  * Handles streaming chat run preparation and finalization.
  *
- * Uses direct-streaming architecture: creates a ChatTurn with runtime_meta,
+ * Uses direct-streaming architecture: creates a AiRun with runtime_meta,
  * returns a stream URL so Alpine can open a persistent fetch connection.
  * The streaming controller runs the agentic runtime inline.
  */
@@ -34,13 +33,13 @@ trait HandlesStreaming
     /**
      * Prepare a streaming run: persist user message, create turn, return stream URL.
      *
-     * Creates a ChatTurn with runtime_meta containing model override, page
+     * Creates a AiRun with runtime_meta containing model override, page
      * context, and execution mode. Returns the turn ID and stream URL so
      * Alpine can open a persistent fetch connection to the streaming controller.
      *
      * @return array{
      *     status: 'started'|'session_busy',
-     *     turnId: string,
+     *     runId: string,
      *     session_id: string,
      *     streamUrl?: string,
      *     replayUrl: string,
@@ -96,12 +95,14 @@ trait HandlesStreaming
         $messageManager = app(MessageManager::class);
         $messageManager->appendUserMessage($this->employeeId, $this->selectedSessionId, $content, $userMeta);
 
-        $turn = ChatTurn::query()->create([
+        $turn = AiRun::query()->create([
             'employee_id' => $this->employeeId,
             'session_id' => $this->selectedSessionId,
             'acting_for_user_id' => auth()->id(),
-            'status' => TurnStatus::Queued,
-            'current_phase' => TurnPhase::WaitingForWorker,
+            'source' => 'chat',
+            'execution_mode' => ExecutionMode::Interactive->value,
+            'status' => AiRunStatus::Queued,
+            'current_phase' => RunPhase::WaitingForWorker,
             'runtime_meta' => [
                 'model_override' => $this->normalizeModelOverride($this->selectedModel),
                 'page_context' => $this->resolvePageContextForDispatch(),
@@ -111,12 +112,12 @@ trait HandlesStreaming
 
         return [
             'status' => 'started',
-            'turnId' => $turn->id,
-            'streamUrl' => route('ai.chat.turn.stream', ['turnId' => $turn->id]),
-            'replayUrl' => route('ai.chat.turn.events', ['turnId' => $turn->id]),
+            'runId' => $turn->id,
+            'streamUrl' => route('ai.chat.turn.stream', ['runId' => $turn->id]),
+            'replayUrl' => route('ai.chat.turn.events', ['runId' => $turn->id]),
             'session_id' => $this->selectedSessionId,
-            'phase' => TurnPhase::WaitingForWorker->value,
-            'label' => TurnPhase::WaitingForWorker->label(),
+            'phase' => RunPhase::WaitingForWorker->value,
+            'label' => RunPhase::WaitingForWorker->label(),
             'started_at' => $turn->started_at?->toIso8601String(),
             'created_at' => $turn->created_at?->toIso8601String(),
             'timer_anchor_at' => $turn->created_at?->toIso8601String(),
@@ -126,7 +127,7 @@ trait HandlesStreaming
 
     /**
      * @return array<string, array{
-     *     turnId: string,
+     *     runId: string,
      *     session_id: string,
      *     replayUrl: string,
      *     phase: string|null,
@@ -148,9 +149,10 @@ trait HandlesStreaming
 
         $actingForUserId = (int) $userId;
 
-        $activeTurns = ChatTurn::query()
+        $activeTurns = AiRun::query()
             ->where('employee_id', $this->employeeId)
             ->where('acting_for_user_id', $actingForUserId)
+            ->where('source', 'chat')
             ->whereIn('status', $this->activeTurnStatusValues())
             ->orderByDesc('created_at')
             ->get([
@@ -180,7 +182,7 @@ trait HandlesStreaming
         return $bySession;
     }
 
-    private function findActiveTurnForSession(string $sessionId): ?ChatTurn
+    private function findActiveTurnForSession(string $sessionId): ?AiRun
     {
         $userId = auth()->id();
 
@@ -190,10 +192,11 @@ trait HandlesStreaming
 
         $actingForUserId = (int) $userId;
 
-        return ChatTurn::query()
+        return AiRun::query()
             ->where('employee_id', $this->employeeId)
             ->where('session_id', $sessionId)
             ->where('acting_for_user_id', $actingForUserId)
+            ->where('source', 'chat')
             ->whereIn('status', $this->activeTurnStatusValues())
             ->orderByDesc('created_at')
             ->first([
@@ -214,15 +217,15 @@ trait HandlesStreaming
     private function activeTurnStatusValues(): array
     {
         return [
-            TurnStatus::Queued->value,
-            TurnStatus::Booting->value,
-            TurnStatus::Running->value,
+            AiRunStatus::Queued->value,
+            AiRunStatus::Booting->value,
+            AiRunStatus::Running->value,
         ];
     }
 
     /**
      * @return array{
-     *     turnId: string,
+     *     runId: string,
      *     session_id: string,
      *     replayUrl: string,
      *     phase: string|null,
@@ -233,7 +236,7 @@ trait HandlesStreaming
      *     cancel_requested_at: string|null
      * }
      */
-    private function formatActiveTurnPayload(ChatTurn $turn): array
+    private function formatActiveTurnPayload(AiRun $turn): array
     {
         $phase = $turn->current_phase?->value;
         $label = $turn->current_label ?? $turn->current_phase?->label();
@@ -241,9 +244,9 @@ trait HandlesStreaming
         $createdAt = $turn->created_at?->toIso8601String();
 
         return [
-            'turnId' => $turn->id,
+            'runId' => $turn->id,
             'session_id' => $turn->session_id,
-            'replayUrl' => route('ai.chat.turn.events', ['turnId' => $turn->id]),
+            'replayUrl' => route('ai.chat.turn.events', ['runId' => $turn->id]),
             'phase' => $phase,
             'label' => $label,
             'started_at' => $startedAt,
@@ -341,18 +344,18 @@ trait HandlesStreaming
     /**
      * Finalize a completed streaming run by refreshing component state.
      */
-    public function finalizeStreamingRun(?string $turnId = null, ?string $sessionId = null): void
+    public function finalizeStreamingRun(?string $runId = null, ?string $sessionId = null): void
     {
         $this->isLoading = false;
 
-        if (($sessionId === null || $sessionId === '') && is_string($turnId) && $turnId !== '') {
-            $sessionId = ChatTurn::query()->whereKey($turnId)->value('session_id');
+        if (($sessionId === null || $sessionId === '') && is_string($runId) && $runId !== '') {
+            $sessionId = AiRun::query()->whereKey($runId)->value('session_id');
         }
 
-        if (is_string($turnId) && $turnId !== '' && is_string($sessionId) && $sessionId !== '') {
-            $this->dispatch('agent-chat-response-ready', turnId: $turnId, sessionId: $sessionId);
-        } elseif (is_string($turnId) && $turnId !== '') {
-            $this->dispatch('agent-chat-response-ready', turnId: $turnId);
+        if (is_string($runId) && $runId !== '' && is_string($sessionId) && $sessionId !== '') {
+            $this->dispatch('agent-chat-response-ready', runId: $runId, sessionId: $sessionId);
+        } elseif (is_string($runId) && $runId !== '') {
+            $this->dispatch('agent-chat-response-ready', runId: $runId);
         } elseif (is_string($sessionId) && $sessionId !== '') {
             $this->dispatch('agent-chat-response-ready', sessionId: $sessionId);
         } else {
@@ -371,9 +374,9 @@ trait HandlesStreaming
      * so the streaming controller's runner detects it cooperatively on
      * the next event iteration.
      */
-    public function cancelActiveTurn(string $turnId): void
+    public function cancelActiveTurn(string $runId): void
     {
-        $turn = ChatTurn::query()->find($turnId);
+        $turn = AiRun::query()->find($runId);
 
         if ($turn === null || $turn->isTerminal()) {
             return;
@@ -393,31 +396,30 @@ trait HandlesStreaming
         $this->isLoading = false;
     }
 
-    private function shouldForceStopImmediately(ChatTurn $turn, bool $alreadyOrphaned = false): bool
+    private function shouldForceStopImmediately(AiRun $turn, bool $alreadyOrphaned = false): bool
     {
         if ($alreadyOrphaned) {
             return true;
         }
 
         return match ($turn->status) {
-            TurnStatus::Queued => true,
-            TurnStatus::Booting => $turn->current_phase === TurnPhase::WaitingForWorker
+            AiRunStatus::Queued => true,
+            AiRunStatus::Booting => $turn->current_phase === RunPhase::WaitingForWorker
                 && ($turn->created_at?->lte(now()->subSeconds(self::BOOTING_FORCE_STOP_SECONDS)) ?? false),
-            TurnStatus::Running => $turn->started_at?->lte(now()->subMinutes(self::STALE_RUNNING_STOP_MINUTES))
+            AiRunStatus::Running => $turn->started_at?->lte(now()->subMinutes(self::STALE_RUNNING_STOP_MINUTES))
                 ?? $turn->created_at?->lte(now()->subMinutes(self::STALE_RUNNING_STOP_MINUTES))
                 ?? false,
             default => false,
         };
     }
 
-    private function forceStopTurn(ChatTurn $turn): void
+    private function forceStopTurn(AiRun $turn): void
     {
         if ($turn->isTerminal()) {
             return;
         }
 
-        app(TurnEventPublisher::class)->turnCancelled($turn, 'User cancelled stale turn');
-        $this->markCurrentRunCancelled($turn->current_run_id);
+        app(RunEventPublisher::class)->turnCancelled($turn, 'User cancelled stale turn');
 
         app(ChatRunPersister::class)->materializeFromTurn(
             $turn->refresh(),
@@ -426,32 +428,11 @@ trait HandlesStreaming
             (string) $turn->session_id,
         );
 
-        $this->dispatch('agent-chat-response-ready', turnId: $turn->id, sessionId: $turn->session_id);
+        $this->dispatch('agent-chat-response-ready', runId: $turn->id, sessionId: $turn->session_id);
 
         if ($this->selectedSessionId !== null && $this->selectedSessionId === $turn->session_id) {
             $this->dispatch('agent-chat-focus-composer');
         }
     }
 
-    private function markCurrentRunCancelled(?string $runId): void
-    {
-        if (! is_string($runId) || $runId === '') {
-            return;
-        }
-
-        $run = AiRun::query()->find($runId);
-
-        if ($run === null || $run->status !== AiRunStatus::Running) {
-            return;
-        }
-
-        $run->status = AiRunStatus::Cancelled;
-        $run->finished_at = now();
-
-        if ($run->started_at !== null && $run->latency_ms === null) {
-            $run->latency_ms = max(0, $run->started_at->diffInMilliseconds($run->finished_at));
-        }
-
-        $run->save();
-    }
 }

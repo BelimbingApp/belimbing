@@ -6,51 +6,44 @@
 namespace App\Modules\Core\AI\Enums;
 
 /**
- * Discriminated event types for the chat turn event stream.
+ * Discriminated event types for the AI run event stream.
  *
- * Stored as the string backing value in `ai_chat_turn_events.event_type`.
+ * Stored as the string backing value in `ai_run_events.event_type`.
  * This enum is the durable contract key shared across:
  *   - DB persistence (event_type column)
  *   - SSE transport (event field)
  *   - UI discriminated union (TypeScript switch key)
  *
  * Events are append-only and immutable once written. The seq column
- * within a turn provides strict ordering for replay and resume.
+ * within a run provides strict ordering for replay and resume.
  *
  * Naming convention: `{domain}.{action}` using dot-separated families.
  *
  * Cross-reference: Claw Code's AssistantEvent enum in
  * `rust/crates/runtime/src/conversation.rs` (TextDelta, ToolUse, Usage,
  * MessageStop) — BLB's event taxonomy is richer because it covers the
- * full turn lifecycle, not just assistant streaming.
+ * full run lifecycle, not just assistant streaming.
  */
-enum TurnEventType: string
+enum RunEventType: string
 {
-    // ── Turn lifecycle ───────────────────────────────────────────────
-    /** Turn created and enqueued for execution. */
-    case TurnStarted = 'turn.started';
-
-    /** User-visible phase changed (thinking → running_tool, etc.). */
-    case TurnPhaseChanged = 'turn.phase_changed';
-
-    /** Turn reached a terminal success state — input is accepted again. */
-    case TurnCompleted = 'turn.completed';
-
-    /** Turn ended in error. Payload carries error_type and message. */
-    case TurnFailed = 'turn.failed';
-
-    /** Turn was cancelled by user or system. */
-    case TurnCancelled = 'turn.cancelled';
-
-    /** Turn is ready to accept the next user message. */
-    case TurnReadyForInput = 'turn.ready_for_input';
-
     // ── Run lifecycle ────────────────────────────────────────────────
-    /** An LLM run began within this turn (may retry → multiple runs). */
+    /** Run envelope created and enqueued for execution. */
     case RunStarted = 'run.started';
 
-    /** An LLM run failed (retry/fallback may follow). */
+    /** User-visible phase changed (thinking → running_tool, etc.). */
+    case RunPhaseChanged = 'run.phase_changed';
+
+    /** Run reached a terminal success state. */
+    case RunCompleted = 'run.completed';
+
+    /** Run ended in error. Payload carries error_type and message. */
     case RunFailed = 'run.failed';
+
+    /** Run was cancelled by user or system. */
+    case RunCancelled = 'run.cancelled';
+
+    /** Chat-originated run is ready to accept the next user message. */
+    case RunReadyForInput = 'run.ready_for_input';
 
     // ── Assistant output ─────────────────────────────────────────────
     /** Agent entered thinking/reasoning phase. */
@@ -86,16 +79,16 @@ enum TurnEventType: string
     case UsageUpdated = 'usage.updated';
 
     // ── Liveness ─────────────────────────────────────────────────────
-    /** Periodic heartbeat during quiet phases so the UI knows the turn is alive. */
+    /** Periodic heartbeat during quiet phases so the UI knows the run is alive. */
     case Heartbeat = 'heartbeat';
 
     /**
-     * Whether this event type signals a terminal turn state.
+     * Whether this event type signals a terminal run state.
      */
     public function isTerminal(): bool
     {
         return match ($this) {
-            self::TurnCompleted, self::TurnFailed, self::TurnCancelled => true,
+            self::RunCompleted, self::RunFailed, self::RunCancelled => true,
             default => false,
         };
     }
@@ -117,7 +110,7 @@ enum TurnEventType: string
     public function severity(): string
     {
         return match ($this) {
-            self::TurnFailed, self::RunFailed => 'error',
+            self::RunFailed => 'error',
             self::ToolDenied => 'warning',
             default => 'info',
         };
@@ -129,14 +122,12 @@ enum TurnEventType: string
     public function label(): string
     {
         return match ($this) {
-            self::TurnStarted => 'Turn Started',
-            self::TurnPhaseChanged => 'Phase Changed',
-            self::TurnCompleted => 'Turn Completed',
-            self::TurnFailed => 'Turn Failed',
-            self::TurnCancelled => 'Turn Cancelled',
-            self::TurnReadyForInput => 'Ready for Input',
             self::RunStarted => 'Run Started',
+            self::RunPhaseChanged => 'Phase Changed',
+            self::RunCompleted => 'Run Completed',
             self::RunFailed => 'Run Failed',
+            self::RunCancelled => 'Run Cancelled',
+            self::RunReadyForInput => 'Ready for Input',
             self::AssistantThinkingStarted => 'Thinking',
             self::AssistantThinkingDelta => 'Thinking Delta',
             self::AssistantIterationCompleted => 'Iteration Completed',

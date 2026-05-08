@@ -7,6 +7,8 @@ namespace App\Modules\Core\AI\Jobs;
 
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\DTO\Message;
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -22,6 +24,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class RunLaraTaskProfileJob implements ShouldQueue
 {
@@ -106,6 +109,21 @@ class RunLaraTaskProfileJob implements ShouldQueue
                 $promptFactory->buildForCurrentUser($dispatch->task),
             );
 
+            $policy = ExecutionPolicy::forMode($profile->executionMode);
+            $runId = (string) Str::ulid();
+
+            AiRun::query()->create([
+                'id' => $runId,
+                'employee_id' => Employee::LARA_ID,
+                'session_id' => data_get($dispatch->meta, 'session_id'),
+                'acting_for_user_id' => $dispatch->acting_for_user_id,
+                'dispatch_id' => $dispatch->id,
+                'source' => 'background',
+                'execution_mode' => $policy->mode->value,
+                'status' => AiRunStatus::Queued,
+                'runtime_meta' => ['task_profile' => $profile->taskKey],
+            ]);
+
             $result = $runtime->run(
                 messages: [new Message(
                     role: 'user',
@@ -113,8 +131,9 @@ class RunLaraTaskProfileJob implements ShouldQueue
                     timestamp: new DateTimeImmutable,
                 )],
                 employeeId: Employee::LARA_ID,
+                runId: $runId,
                 systemPrompt: $systemPrompt,
-                policy: ExecutionPolicy::forMode($profile->executionMode),
+                policy: $policy,
                 sessionId: data_get($dispatch->meta, 'session_id'),
                 configOverride: $resolvedConfig,
                 allowedToolNames: $profile->allowedToolNames,

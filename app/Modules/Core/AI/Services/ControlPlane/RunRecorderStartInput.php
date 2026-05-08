@@ -6,7 +6,7 @@
 namespace App\Modules\Core\AI\Services\ControlPlane;
 
 /**
- * Parameters for {@see RunRecorder::start()}.
+ * Parameters for beginning execution on an existing AiRun envelope.
  */
 final readonly class RunRecorderStartInput
 {
@@ -18,6 +18,5 @@ final readonly class RunRecorderStartInput
         public ?string $sessionId = null,
         public ?int $actingForUserId = null,
         public ?int $timeoutSeconds = null,
-        public ?string $turnId = null,
     ) {}
 }

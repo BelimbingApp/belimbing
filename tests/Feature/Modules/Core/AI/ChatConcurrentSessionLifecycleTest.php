@@ -4,12 +4,12 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Modules\Core\AI\DTO\Session;
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Enums\TurnStatus;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Livewire\Chat;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
@@ -104,23 +104,23 @@ it('shows active turns from multiple sessions in the session panel model', funct
 
     [$sessionA, $sessionB] = createTwoDistinctLaraSessions();
 
-    $turnA = ChatTurn::query()->create([
+    $turnA = AiRun::query()->create([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $sessionA->id,
         'acting_for_user_id' => $user->id,
-        'status' => TurnStatus::Running,
-        'current_phase' => TurnPhase::AwaitingLlm,
+        'status' => AiRunStatus::Running,
+        'current_phase' => RunPhase::AwaitingLlm,
         'current_label' => 'Analyzing session A',
         'created_at' => now()->subMinutes(6),
         'started_at' => now()->subMinutes(5),
     ]);
 
-    $turnB = ChatTurn::query()->create([
+    $turnB = AiRun::query()->create([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $sessionB->id,
         'acting_for_user_id' => $user->id,
-        'status' => TurnStatus::Running,
-        'current_phase' => TurnPhase::RunningTool,
+        'status' => AiRunStatus::Running,
+        'current_phase' => RunPhase::RunningTool,
         'current_label' => 'Running bash',
         'created_at' => now()->subMinutes(4),
         'started_at' => now()->subMinutes(3),
@@ -135,11 +135,11 @@ it('shows active turns from multiple sessions in the session panel model', funct
     $selectedSessionActiveTurn = $viewData['selectedSessionActiveTurn'] ?? null;
 
     expect($activeTurnsBySession)->toHaveCount(2)
-        ->and($activeTurnsBySession[$sessionA->id]['turnId'])->toBe($turnA->id)
+        ->and($activeTurnsBySession[$sessionA->id]['runId'])->toBe($turnA->id)
         ->and($activeTurnsBySession[$sessionA->id]['label'])->toBe('Analyzing session A')
-        ->and($activeTurnsBySession[$sessionB->id]['turnId'])->toBe($turnB->id)
+        ->and($activeTurnsBySession[$sessionB->id]['runId'])->toBe($turnB->id)
         ->and($activeTurnsBySession[$sessionB->id]['label'])->toBe('Running bash')
-        ->and($selectedSessionActiveTurn['turnId'])->toBe($turnA->id);
+        ->and($selectedSessionActiveTurn['runId'])->toBe($turnA->id);
 });
 
 it('stopping one stale turn does not cancel another active session turn', function (): void {
@@ -149,23 +149,23 @@ it('stopping one stale turn does not cancel another active session turn', functi
 
     [$sessionA, $sessionB] = createTwoDistinctLaraSessions();
 
-    $turnToStop = ChatTurn::query()->create([
+    $turnToStop = AiRun::query()->create([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $sessionA->id,
         'acting_for_user_id' => $user->id,
-        'status' => TurnStatus::Running,
-        'current_phase' => TurnPhase::AwaitingLlm,
+        'status' => AiRunStatus::Running,
+        'current_phase' => RunPhase::AwaitingLlm,
         'current_label' => 'Long running turn',
         'created_at' => now()->subMinutes(80),
         'started_at' => now()->subMinutes(70),
     ]);
 
-    $turnToKeep = ChatTurn::query()->create([
+    $turnToKeep = AiRun::query()->create([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $sessionB->id,
         'acting_for_user_id' => $user->id,
-        'status' => TurnStatus::Running,
-        'current_phase' => TurnPhase::RunningTool,
+        'status' => AiRunStatus::Running,
+        'current_phase' => RunPhase::RunningTool,
         'current_label' => 'Still active',
         'created_at' => now()->subMinutes(2),
         'started_at' => now()->subMinutes(1),
@@ -177,14 +177,14 @@ it('stopping one stale turn does not cancel another active session turn', functi
     $turnToKeep->refresh();
 
     $turnStoppedWithTerminalEvent = $turnToStop->events()
-        ->where('event_type', 'turn.cancelled')
+        ->where('event_type', 'run.cancelled')
         ->exists();
 
-    expect($turnToStop->status)->toBe(TurnStatus::Cancelled)
-        ->and($turnToStop->current_phase)->toBe(TurnPhase::Cancelled)
+    expect($turnToStop->status)->toBe(AiRunStatus::Cancelled)
+        ->and($turnToStop->current_phase)->toBe(RunPhase::Cancelled)
         ->and($turnStoppedWithTerminalEvent)->toBeTrue();
 
-    expect($turnToKeep->status)->toBe(TurnStatus::Running)
+    expect($turnToKeep->status)->toBe(AiRunStatus::Running)
         ->and($turnToKeep->cancel_requested_at)->toBeNull();
 });
 
@@ -195,24 +195,24 @@ it('keeps other session active state when one session reaches terminal status', 
 
     [$sessionA, $sessionB] = createTwoDistinctLaraSessions();
 
-    $completedTurn = ChatTurn::query()->create([
+    $completedTurn = AiRun::query()->create([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $sessionA->id,
         'acting_for_user_id' => $user->id,
-        'status' => TurnStatus::Completed,
-        'current_phase' => TurnPhase::Finalizing,
+        'status' => AiRunStatus::Succeeded,
+        'current_phase' => RunPhase::Finalizing,
         'current_label' => 'Done',
         'created_at' => now()->subMinutes(8),
         'started_at' => now()->subMinutes(7),
         'finished_at' => now()->subMinutes(6),
     ]);
 
-    $runningTurn = ChatTurn::query()->create([
+    $runningTurn = AiRun::query()->create([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $sessionB->id,
         'acting_for_user_id' => $user->id,
-        'status' => TurnStatus::Running,
-        'current_phase' => TurnPhase::AwaitingLlm,
+        'status' => AiRunStatus::Running,
+        'current_phase' => RunPhase::AwaitingLlm,
         'current_label' => 'Working on session B',
         'created_at' => now()->subMinutes(4),
         'started_at' => now()->subMinutes(3),
@@ -226,7 +226,7 @@ it('keeps other session active state when one session reaches terminal status', 
 
     expect($activeTurnsBySession)->toHaveCount(1)
         ->and(isset($activeTurnsBySession[$sessionA->id]))->toBeFalse()
-        ->and($activeTurnsBySession[$sessionB->id]['turnId'])->toBe($runningTurn->id);
+        ->and($activeTurnsBySession[$sessionB->id]['runId'])->toBe($runningTurn->id);
 
-    expect($completedTurn->status)->toBe(TurnStatus::Completed);
+    expect($completedTurn->status)->toBe(AiRunStatus::Succeeded);
 });

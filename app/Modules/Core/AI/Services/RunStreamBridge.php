@@ -5,49 +5,49 @@
 
 namespace App\Modules\Core\AI\Services;
 
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Enums\TurnStatus;
-use App\Modules\Core\AI\Models\ChatTurn;
-use App\Modules\Core\AI\Models\ChatTurnEvent;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Models\AiRunEvent;
 
 /**
- * Maps AgenticRuntime event streams to durable turn events.
+ * Maps AgenticRuntime event streams to durable run events.
  *
- * Wraps the runtime's Generator and publishes structured turn events via
- * TurnEventPublisher. Yields each persisted turn event payload,
+ * Wraps the runtime's Generator and publishes structured run events via
+ * RunEventPublisher. Yields each persisted run event payload,
  * providing a single unified event format for both live delivery
  * (via the streaming HTTP response) and replay-after-disconnect.
  *
  * The bridge:
- * 1. Transitions the turn Queued → Booting → Running as events arrive
- * 2. Maps each runtime event to one or more turn events
- * 3. Yields turn event payloads to the streaming controller
- * 4. Finalizes the turn on done/error
+ * 1. Transitions the run Queued → Booting → Running as events arrive
+ * 2. Maps each runtime event to one or more run events
+ * 3. Yields run event payloads to the streaming controller
+ * 4. Finalizes the run on done/error
  *
  * Callers that abandon the generator early (e.g., cancellation) must
- * handle terminal turn transitions themselves.
+ * handle terminal run transitions themselves.
  *
  * Cross-reference: Claw Code ConversationRuntime in
  * `rust/crates/runtime/src/conversation.rs` — the event loop that drives
  * AssistantEvent emission during a conversation turn.
  */
-class TurnStreamBridge
+class RunStreamBridge
 {
     public function __construct(
-        private readonly TurnEventPublisher $publisher,
+        private readonly RunEventPublisher $publisher,
     ) {}
 
     /**
-     * Wrap a runtime event stream and publish turn events.
+     * Wrap a runtime event stream and publish run events.
      *
-     * Yields turn event payloads (same format as TurnEventStreamController JSON
+     * Yields run event payloads (same format as RunEventStreamController JSON
      * response and the direct stream controller).
      *
-     * @param  ChatTurn  $turn  A freshly created turn in Queued status
+     * @param  AiRun  $turn  A freshly created run in Queued status
      * @param  \Generator<int, array{event: string, data: array<string, mixed>}>  $runtimeStream
-     * @return \Generator<int, array{turn_id: string, seq: int, event_type: string, payload: mixed, occurred_at: string}>
+     * @return \Generator<int, array{run_id: string, seq: int, event_type: string, payload: mixed, occurred_at: string}>
      */
-    public function wrap(ChatTurn $turn, \Generator $runtimeStream): \Generator
+    public function wrap(AiRun $turn, \Generator $runtimeStream): \Generator
     {
         $turnStartedAt = hrtime(true);
 
@@ -58,7 +58,7 @@ class TurnStreamBridge
             foreach ($runtimeStream as $event) {
                 $data = $event['data'];
 
-                yield from $this->maybeTransitionToRunning($turn, $data);
+                $this->maybeTransitionToRunning($turn, $data);
 
                 yield from match ($event['event']) {
                     'status' => $this->mapStatusEvent($turn, $data, $turnStartedAt),
@@ -78,7 +78,7 @@ class TurnStreamBridge
             throw $e;
         }
 
-        // If stream completed naturally without a terminal event, fail the turn.
+        // If stream completed naturally without a terminal event, fail the run.
         $turn->refresh();
 
         if (! $turn->isTerminal()) {
@@ -91,39 +91,36 @@ class TurnStreamBridge
     }
 
     /**
-     * Transition Booting → Running on first event with a run_id.
+     * Transition Booting → Running on first runtime event with a run_id.
      *
      * @param  array<string, mixed>  $data
-     * @return array<int, array<string, mixed>>
      */
-    private function maybeTransitionToRunning(ChatTurn $turn, array $data): array
+    private function maybeTransitionToRunning(AiRun $turn, array $data): void
     {
-        if ($turn->status !== TurnStatus::Booting) {
-            return [];
+        if ($turn->status !== AiRunStatus::Booting) {
+            return;
         }
 
         $runId = $data['run_id'] ?? null;
 
         if (! is_string($runId)) {
-            return [];
+            return;
         }
 
-        $turn->transitionTo(TurnStatus::Running);
-
-        return [$this->publisher->runStarted($turn, $runId)->toSsePayload()];
+        $turn->transitionTo(AiRunStatus::Running);
     }
 
     /**
-     * Map a runtime 'status' event to turn events.
+     * Map a runtime 'status' event to run events.
      *
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function mapStatusEvent(ChatTurn $turn, array $data, int $turnStartedAt): array
+    private function mapStatusEvent(AiRun $turn, array $data, int $turnStartedAt): array
     {
         return match ($data['phase'] ?? '') {
-            TurnPhase::AwaitingLlm->value => $this->onAwaitingLlmPhase($turn),
-            TurnPhase::Cancelled->value => [$this->publisher->turnCancelled($turn, 'User cancelled')->toSsePayload()],
+            RunPhase::AwaitingLlm->value => $this->onAwaitingLlmPhase($turn),
+            RunPhase::Cancelled->value => [$this->publisher->turnCancelled($turn, 'User cancelled')->toSsePayload()],
             'thinking_delta' => $this->onThinkingDelta($turn, $data),
             'iteration_completed' => $this->onIterationCompleted($turn, $data),
             'tool_started' => $this->onToolStarted($turn, $data),
@@ -139,12 +136,12 @@ class TurnStreamBridge
      *
      * @return array<int, array<string, mixed>>
      */
-    private function onAwaitingLlmPhase(ChatTurn $turn): array
+    private function onAwaitingLlmPhase(AiRun $turn): array
     {
-        $label = TurnPhase::AwaitingLlm->label();
+        $label = RunPhase::AwaitingLlm->label();
 
         return [
-            $this->publisher->phaseChanged($turn, TurnPhase::AwaitingLlm, $label)->toSsePayload(),
+            $this->publisher->phaseChanged($turn, RunPhase::AwaitingLlm, $label)->toSsePayload(),
             $this->publisher->thinkingStarted($turn)->toSsePayload(),
         ];
     }
@@ -153,7 +150,7 @@ class TurnStreamBridge
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function onThinkingDelta(ChatTurn $turn, array $data): array
+    private function onThinkingDelta(AiRun $turn, array $data): array
     {
         return [
             $this->publisher->thinkingDelta($turn, (string) ($data['delta'] ?? ''))->toSsePayload(),
@@ -164,7 +161,7 @@ class TurnStreamBridge
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function onIterationCompleted(ChatTurn $turn, array $data): array
+    private function onIterationCompleted(AiRun $turn, array $data): array
     {
         $finishReason = (string) ($data['finish_reason'] ?? '');
 
@@ -186,12 +183,12 @@ class TurnStreamBridge
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function onToolStarted(ChatTurn $turn, array $data): array
+    private function onToolStarted(AiRun $turn, array $data): array
     {
         $toolName = (string) ($data['tool'] ?? 'tool');
 
         return [
-            $this->publisher->phaseChanged($turn, TurnPhase::RunningTool, $toolName)->toSsePayload(),
+            $this->publisher->phaseChanged($turn, RunPhase::RunningTool, $toolName)->toSsePayload(),
             $this->publisher->toolStarted(
                 $turn,
                 $toolName,
@@ -205,7 +202,7 @@ class TurnStreamBridge
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function onToolStdout(ChatTurn $turn, array $data): array
+    private function onToolStdout(AiRun $turn, array $data): array
     {
         return [
             $this->publisher->toolStdoutDelta(
@@ -220,11 +217,11 @@ class TurnStreamBridge
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function onToolFinished(ChatTurn $turn, array $data, int $turnStartedAt): array
+    private function onToolFinished(AiRun $turn, array $data, int $turnStartedAt): array
     {
         $elapsedMs = (int) ((hrtime(true) - $turnStartedAt) / 1_000_000);
         $toolName = (string) ($data['tool'] ?? '');
-        $postToolLabel = TurnPhase::AwaitingLlm->label();
+        $postToolLabel = RunPhase::AwaitingLlm->label();
 
         return [
             $this->publisher->toolFinished(
@@ -236,7 +233,7 @@ class TurnStreamBridge
                 isset($data['result_length']) ? (int) $data['result_length'] : null,
                 is_array($data['error_payload'] ?? null) ? $data['error_payload'] : null,
             )->toSsePayload(),
-            $this->publisher->phaseChanged($turn, TurnPhase::AwaitingLlm, $postToolLabel)->toSsePayload(),
+            $this->publisher->phaseChanged($turn, RunPhase::AwaitingLlm, $postToolLabel)->toSsePayload(),
             $this->publisher->heartbeat($turn, $elapsedMs)->toSsePayload(),
         ];
     }
@@ -245,7 +242,7 @@ class TurnStreamBridge
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function onToolDenied(ChatTurn $turn, array $data): array
+    private function onToolDenied(AiRun $turn, array $data): array
     {
         return [
             $this->publisher->toolDenied(
@@ -258,17 +255,17 @@ class TurnStreamBridge
     }
 
     /**
-     * Map a runtime 'delta' event to an output delta turn event.
+     * Map a runtime 'delta' event to an output delta run event.
      *
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function mapDeltaEvent(ChatTurn $turn, array $data): array
+    private function mapDeltaEvent(AiRun $turn, array $data): array
     {
         $events = [];
 
-        if ($turn->current_phase !== TurnPhase::StreamingAnswer) {
-            $events[] = $this->publisher->phaseChanged($turn, TurnPhase::StreamingAnswer, 'Responding…')->toSsePayload();
+        if ($turn->current_phase !== RunPhase::StreamingAnswer) {
+            $events[] = $this->publisher->phaseChanged($turn, RunPhase::StreamingAnswer, 'Responding…')->toSsePayload();
         }
 
         $events[] = $this->publisher->outputDelta($turn, $data['text'] ?? '')->toSsePayload();
@@ -277,17 +274,17 @@ class TurnStreamBridge
     }
 
     /**
-     * Map a runtime 'done' event to turn completion events.
+     * Map a runtime 'done' event to run completion events.
      *
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function mapDoneEvent(ChatTurn $turn, array $data, int $turnStartedAt): array
+    private function mapDoneEvent(AiRun $turn, array $data, int $turnStartedAt): array
     {
         $elapsedMs = (int) ((hrtime(true) - $turnStartedAt) / 1_000_000);
         $events = [];
 
-        $events[] = $this->publisher->phaseChanged($turn, TurnPhase::Finalizing, 'Finishing up…')->toSsePayload();
+        $events[] = $this->publisher->phaseChanged($turn, RunPhase::Finalizing, 'Finishing up…')->toSsePayload();
 
         $meta = is_array($data['meta'] ?? null) ? $data['meta'] : [];
 
@@ -306,10 +303,10 @@ class TurnStreamBridge
             'elapsed_ms' => $elapsedMs,
         ])->toSsePayload();
 
-        // turnCompleted also publishes ReadyForInput — read it back
-        $readyEvent = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
-            ->where('event_type', 'turn.ready_for_input')
+        // turnCompleted also publishes ReadyForInput for chat — read it back.
+        $readyEvent = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', 'run.ready_for_input')
             ->orderByDesc('seq')
             ->first();
 
@@ -321,12 +318,12 @@ class TurnStreamBridge
     }
 
     /**
-     * Map a runtime 'error' event to a turn failure.
+     * Map a runtime 'error' event to a run failure.
      *
      * @param  array<string, mixed>  $data
      * @return array<int, array<string, mixed>>
      */
-    private function mapErrorEvent(ChatTurn $turn, array $data): array
+    private function mapErrorEvent(AiRun $turn, array $data): array
     {
         $meta = is_array($data['meta'] ?? null) ? $data['meta'] : [];
 

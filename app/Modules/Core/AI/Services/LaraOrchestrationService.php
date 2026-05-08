@@ -71,7 +71,7 @@ class LaraOrchestrationService
     {
         return [
             'assistant_content' => $assistantContent,
-            'run_id' => 'run_'.Str::random(12),
+            'run_id' => (string) Str::ulid(),
             'meta' => [
                 'orchestration' => $orchestrationMeta,
             ],

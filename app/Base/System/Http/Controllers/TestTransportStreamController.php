@@ -5,8 +5,8 @@
 
 namespace App\Base\System\Http\Controllers;
 
-use App\Modules\Core\AI\Models\ChatTurn;
-use App\Modules\Core\AI\Models\ChatTurnEvent;
+use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Models\AiRunEvent;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -18,7 +18,9 @@ class TestTransportStreamController
         $turnId = (string) $request->query('turn_id', '');
         $speed = max(1, (int) $request->query('speed', '1'));
 
-        $turn = ChatTurn::query()->find($turnId);
+        $turn = AiRun::query()
+            ->where('source', 'chat')
+            ->find($turnId);
 
         if ($turn === null) {
             return $this->ndjsonErrorStream(404, 'Turn not found');
@@ -28,8 +30,8 @@ class TestTransportStreamController
             return $this->ndjsonErrorStream(403, 'Forbidden');
         }
 
-        $events = ChatTurnEvent::query()
-            ->where('turn_id', $turnId)
+        $events = AiRunEvent::query()
+            ->where('run_id', $turnId)
             ->orderBy('seq')
             ->get();
 
@@ -39,7 +41,7 @@ class TestTransportStreamController
     }
 
     /**
-     * @param  Collection<int, ChatTurnEvent>  $events
+     * @param  Collection<int, AiRunEvent>  $events
      */
     private function writeReplayStream(Collection $events, int $speed): void
     {

@@ -10,11 +10,11 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\DTO\Session;
-use App\Modules\Core\AI\Enums\TurnPhase;
+use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesStreaming;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesChatSessions;
-use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\MessageManager;
@@ -209,7 +209,7 @@ class Chat extends Component
      *     messages: list<Message>,
      *     sessionUsage: mixed,
      *     hasPendingDelegations: bool,
-     *     activeTurnsBySession: array<string, array{turnId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, cancel_requested_at: string|null, status: string}>
+     *     activeTurnsBySession: array<string, array{runId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, cancel_requested_at: string|null, status: string}>
      * }
      */
     private function resolveRenderState(bool $agentActivated): array
@@ -358,11 +358,11 @@ class Chat extends Component
     {
         $labels = [];
 
-        foreach (TurnPhase::cases() as $phase) {
+        foreach (RunPhase::cases() as $phase) {
             $labels[$phase->value] = __($phase->label());
         }
 
-        // Not a phase; represents TurnStatus::Booting.
+        // Not a phase; represents AiRunStatus::Booting.
         $labels['booting'] = __('Starting…');
 
         return $labels;
@@ -480,8 +480,8 @@ class Chat extends Component
 
     /**
      * @param  list<Session>  $sessions
-     * @param  array<string, array{turnId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, cancel_requested_at: string|null, status: string}>  $activeTurnsBySession
-     * @return array<string, array{turn_id: string, is_active: bool}>
+     * @param  array<string, array{runId: string, session_id: string, replayUrl: string, phase: string|null, label: string|null, started_at: string|null, created_at: string|null, timer_anchor_at: string|null, cancel_requested_at: string|null, status: string}>  $activeTurnsBySession
+     * @return array<string, array{run_id: string, is_active: bool}>
      */
     private function sessionTurnTargets(array $sessions, array $activeTurnsBySession): array
     {
@@ -496,9 +496,10 @@ class Chat extends Component
             $sessions,
         );
 
-        $latestTurns = ChatTurn::query()
+        $latestTurns = AiRun::query()
             ->where('employee_id', $this->employeeId)
             ->where('acting_for_user_id', (int) $userId)
+            ->where('source', 'chat')
             ->whereIn('session_id', $sessionIds)
             ->orderByDesc('created_at')
             ->get(['id', 'session_id']);
@@ -510,10 +511,10 @@ class Chat extends Component
                 continue;
             }
 
-            $activeTurnId = $activeTurnsBySession[$turn->session_id]['turnId'] ?? null;
+            $activeTurnId = $activeTurnsBySession[$turn->session_id]['runId'] ?? null;
 
             $targets[$turn->session_id] = [
-                'turn_id' => $turn->id,
+                'run_id' => $turn->id,
                 'is_active' => is_string($activeTurnId) && $activeTurnId === $turn->id,
             ];
         }

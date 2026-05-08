@@ -13,7 +13,7 @@ use App\Modules\Core\AI\Enums\LifecycleAction;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesWireLogWindow;
 use App\Modules\Core\AI\Livewire\Concerns\MapsControlPlaneState;
 use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\ControlPlane\HealthAndPresenceService;
 use App\Modules\Core\AI\Services\ControlPlane\LifecycleControlService;
 use App\Modules\Core\AI\Services\ControlPlane\RunDiagnosticService;
@@ -88,7 +88,7 @@ class ControlPlane extends Component
     {
         $this->activeTab = $this->resolveTab((string) request()->query('tab', 'inspector'));
         $this->inspectRunId = (string) (request()->query('runId') ?? request()->query('inspectRunId') ?? '');
-        $this->inspectTurnId = (string) (request()->query('turnId') ?? '');
+        $this->inspectTurnId = (string) (request()->query('runId') ?? '');
         $this->lifecycleRetentionDays = app(WireLogger::class)->retentionDays();
 
         $this->loadAgentOptions();
@@ -160,9 +160,9 @@ class ControlPlane extends Component
         $this->inspectRun();
     }
 
-    public function inspectRecentTurn(string $turnId): void
+    public function inspectRecentTurn(string $runId): void
     {
-        $this->inspectTurnId = $turnId;
+        $this->inspectTurnId = $runId;
         $this->inspectTurn();
     }
 
@@ -230,22 +230,22 @@ class ControlPlane extends Component
         $now = now();
 
         $this->turnHealthCounts = [
-            'queued' => ChatTurn::query()->where('status', 'queued')->count(),
-            'booting' => ChatTurn::query()->where('status', 'booting')->count(),
-            'running' => ChatTurn::query()->where('status', 'running')->count(),
-            'stale_queued' => ChatTurn::query()
+            'queued' => AiRun::query()->where('status', 'queued')->count(),
+            'booting' => AiRun::query()->where('status', 'booting')->count(),
+            'running' => AiRun::query()->where('status', 'running')->count(),
+            'stale_queued' => AiRun::query()
                 ->whereIn('status', ['queued', 'booting'])
                 ->where('created_at', '<', $now->copy()->subMinutes(10))
                 ->count(),
-            'stale_running' => ChatTurn::query()
+            'stale_running' => AiRun::query()
                 ->where('status', 'running')
                 ->where('created_at', '<', $now->copy()->subMinutes(30))
                 ->count(),
-            'failed_last_hour' => ChatTurn::query()
+            'failed_last_hour' => AiRun::query()
                 ->where('status', 'failed')
                 ->where('finished_at', '>=', $now->copy()->subHour())
                 ->count(),
-            'completed_last_hour' => ChatTurn::query()
+            'completed_last_hour' => AiRun::query()
                 ->where('status', 'completed')
                 ->where('finished_at', '>=', $now->copy()->subHour())
                 ->count(),

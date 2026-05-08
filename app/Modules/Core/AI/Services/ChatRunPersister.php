@@ -6,40 +6,39 @@
 namespace App\Modules\Core\AI\Services;
 
 use App\Modules\Core\AI\DTO\ToolUseEntry;
-use App\Modules\Core\AI\Enums\TurnEventType;
+use App\Modules\Core\AI\Enums\RunEventType;
 use App\Modules\Core\AI\Models\AiRun;
-use App\Modules\Core\AI\Models\ChatTurn;
 
 /**
- * Materializes transcript entries from a completed turn's event stream.
+ * Materializes transcript entries from a completed chat run's event stream.
  *
- * The turn event stream (ai_chat_turn_events) is the live contract — the
- * source of truth during an active turn. This service reads those events
- * after the turn completes and writes the equivalent transcript entries
+ * The run event stream (ai_run_events) is the live contract — the
+ * source of truth during an active chat run. This service reads those events
+ * after the run completes and writes the equivalent transcript entries
  * via MessageManager so the conversation history is available for page
  * reload, context building, and search.
  *
  * Replaces the previous inline persistence pattern where ChatRunPersister
  * consumed raw runtime events during the stream. Now all persistence
- * flows through turn events first.
+ * flows through run events first.
  */
 class ChatRunPersister
 {
     /**
-     * Materialize transcript entries from a turn's durable event stream.
+     * Materialize transcript entries from a run's durable event stream.
      *
      * Reads the turn's events in seq order and writes thinking, tool call,
      * tool result, and assistant message entries to the transcript. Handles
-     * both successful and failed turns.
+     * both successful and failed runs.
      *
-     * @param  ChatTurn  $turn  The completed (or failed) turn
+     * @param  AiRun  $turn  The completed (or failed) chat run
      * @param  MessageManager  $mm  Message manager instance
      * @param  int  $employeeId  Agent employee ID
      * @param  string  $sessionId  Session UUID
      * @param  array<string, mixed>  $extraMeta  Extra metadata for the assistant message (e.g., prompt_package)
      */
     public function materializeFromTurn(
-        ChatTurn $turn,
+        AiRun $turn,
         MessageManager $mm,
         int $employeeId,
         string $sessionId,
@@ -68,6 +67,7 @@ class ChatRunPersister
             /** @var array<int, array{tool: string, args_summary: string, tool_call_index: int}> */
             public array $pendingToolCalls = [];
         };
+        $state->runId = $turn->id;
 
         foreach ($events as $event) {
             $payload = is_array($event->payload) ? $event->payload : [];
@@ -105,27 +105,27 @@ class ChatRunPersister
      * }  $state
      */
     private function applyTurnEventToMaterialization(
-        ChatTurn $turn,
+        AiRun $turn,
         MessageManager $mm,
         int $employeeId,
         string $sessionId,
-        TurnEventType $type,
+        RunEventType $type,
         array $payload,
         object $state,
     ): void {
         match ($type) {
-            TurnEventType::RunStarted => $this->materializeRunStarted($payload, $state),
-            TurnEventType::AssistantThinkingStarted => $this->materializeThinkingStarted($mm, $employeeId, $sessionId, $state),
-            TurnEventType::AssistantThinkingDelta => $this->materializeThinkingDelta($payload, $state),
-            TurnEventType::AssistantIterationCompleted => $this->materializeIterationCompleted($mm, $employeeId, $sessionId, $state),
-            TurnEventType::ToolStarted => $this->materializeToolStarted($payload, $state),
-            TurnEventType::ToolFinished => $this->materializeToolFinished($mm, $employeeId, $sessionId, $payload, $state),
-            TurnEventType::ToolDenied => $this->materializeToolDenied($mm, $employeeId, $sessionId, $payload, $state),
-            TurnEventType::AssistantOutputDelta => $this->materializeOutputDelta($payload, $state),
-            TurnEventType::AssistantOutputBlockCommitted => $this->materializeOutputCommitted($payload, $state),
-            TurnEventType::UsageUpdated => $this->materializeUsageUpdated($payload, $state),
-            TurnEventType::TurnCancelled => $this->materializeTurnCancelled($payload, $state),
-            TurnEventType::TurnFailed => $this->materializeTurnFailed($turn, $mm, $employeeId, $sessionId, $payload, $state),
+            RunEventType::RunStarted => $this->materializeRunStarted($payload, $state),
+            RunEventType::AssistantThinkingStarted => $this->materializeThinkingStarted($mm, $employeeId, $sessionId, $state),
+            RunEventType::AssistantThinkingDelta => $this->materializeThinkingDelta($payload, $state),
+            RunEventType::AssistantIterationCompleted => $this->materializeIterationCompleted($mm, $employeeId, $sessionId, $state),
+            RunEventType::ToolStarted => $this->materializeToolStarted($payload, $state),
+            RunEventType::ToolFinished => $this->materializeToolFinished($mm, $employeeId, $sessionId, $payload, $state),
+            RunEventType::ToolDenied => $this->materializeToolDenied($mm, $employeeId, $sessionId, $payload, $state),
+            RunEventType::AssistantOutputDelta => $this->materializeOutputDelta($payload, $state),
+            RunEventType::AssistantOutputBlockCommitted => $this->materializeOutputCommitted($payload, $state),
+            RunEventType::UsageUpdated => $this->materializeUsageUpdated($payload, $state),
+            RunEventType::RunCancelled => $this->materializeRunCancelled($payload, $state),
+            RunEventType::RunFailed => $this->materializeRunFailed($turn, $mm, $employeeId, $sessionId, $payload, $state),
             default => null,
         };
     }
@@ -136,7 +136,7 @@ class ChatRunPersister
      */
     private function materializeRunStarted(array $payload, object $state): void
     {
-        $state->runId = $payload['run_id'] ?? $state->runId;
+        $state->runId = is_string($payload['run_id'] ?? null) ? $payload['run_id'] : $state->runId;
     }
 
     /**
@@ -325,7 +325,7 @@ class ChatRunPersister
      * @param  array<string, mixed>  $payload
      * @param  object{stopNote: ?string}  $state
      */
-    private function materializeTurnCancelled(array $payload, object $state): void
+    private function materializeRunCancelled(array $payload, object $state): void
     {
         $reason = (string) ($payload['reason'] ?? '');
 
@@ -344,8 +344,8 @@ class ChatRunPersister
      * @param  array<string, mixed>  $payload
      * @param  object{runId: ?string, hadError: bool}  $state
      */
-    private function materializeTurnFailed(
-        ChatTurn $turn,
+    private function materializeRunFailed(
+        AiRun $turn,
         MessageManager $mm,
         int $employeeId,
         string $sessionId,
@@ -353,7 +353,7 @@ class ChatRunPersister
         object $state,
     ): void {
         // Discard any pending thinking block — the model never actually
-        // produced reasoning content when the turn fails immediately.
+        // produced reasoning content when the run fails immediately.
         $state->thinkingPending = false;
         $state->thinkingContent = '';
 
@@ -382,16 +382,16 @@ class ChatRunPersister
             $employeeId,
             $sessionId,
             $content,
-            $state->runId ?? $turn->current_run_id ?? 'run_unknown',
+            $state->runId ?? $turn->id,
             $errorMeta,
         );
     }
 
     /**
-     * Resolve the best assistant content captured during the turn.
+     * Resolve the best assistant content captured during the run.
      *
      * Uses the committed block when present; otherwise falls back to the
-     * accumulated output deltas so cancelled turns still preserve partial
+     * accumulated output deltas so cancelled runs still preserve partial
      * responses already shown to the user.
      *
      * @param  object{fullContent: string, streamedContent: string}  $state

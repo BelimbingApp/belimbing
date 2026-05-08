@@ -6,10 +6,12 @@
 namespace App\Modules\Core\AI\Enums;
 
 /**
- * Lifecycle states for LLM run records in the ai_runs ledger.
+ * Lifecycle states for universal AI run envelopes.
  */
 enum AiRunStatus: string
 {
+    case Queued = 'queued';
+    case Booting = 'booting';
     case Running = 'running';
     case Succeeded = 'succeeded';
     case Failed = 'failed';
@@ -21,7 +23,38 @@ enum AiRunStatus: string
      */
     public function isTerminal(): bool
     {
-        return $this !== self::Running;
+        return match ($this) {
+            self::Succeeded, self::Failed, self::Cancelled, self::TimedOut => true,
+            default => false,
+        };
+    }
+
+    /**
+     * Whether this status represents active or pending work.
+     */
+    public function isActive(): bool
+    {
+        return ! $this->isTerminal();
+    }
+
+    /**
+     * Valid state transitions.
+     *
+     * @return list<self>
+     */
+    public function allowedTransitions(): array
+    {
+        return match ($this) {
+            self::Queued => [self::Booting, self::Failed, self::Cancelled, self::TimedOut],
+            self::Booting => [self::Running, self::Failed, self::Cancelled, self::TimedOut],
+            self::Running => [self::Succeeded, self::Failed, self::Cancelled, self::TimedOut],
+            self::Succeeded, self::Failed, self::Cancelled, self::TimedOut => [],
+        };
+    }
+
+    public function canTransitionTo(self $target): bool
+    {
+        return in_array($target, $this->allowedTransitions(), true);
     }
 
     /**
@@ -30,6 +63,8 @@ enum AiRunStatus: string
     public function label(): string
     {
         return match ($this) {
+            self::Queued => 'Queued',
+            self::Booting => 'Booting',
             self::Running => 'Running',
             self::Succeeded => 'Succeeded',
             self::Failed => 'Failed',
@@ -44,6 +79,8 @@ enum AiRunStatus: string
     public function color(): string
     {
         return match ($this) {
+            self::Queued => 'default',
+            self::Booting => 'info',
             self::Running => 'info',
             self::Succeeded => 'success',
             self::Failed => 'danger',

@@ -5,29 +5,29 @@
 
 namespace App\Modules\Core\AI\Models;
 
-use App\Modules\Core\AI\Enums\TurnEventType;
+use App\Modules\Core\AI\Enums\RunEventType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * Chat Turn Event — one immutable entry in the turn's ordered event stream.
+ * AI Run Event — one immutable entry in the run's ordered event stream.
  *
  * Events are append-only: once written, they are never updated or deleted.
- * The (turn_id, seq) pair provides strict ordering for replay and resume.
+ * The (run_id, seq) pair provides strict ordering for replay and resume.
  *
- * The event_type column stores the string backing value of TurnEventType,
+ * The event_type column stores the string backing value of RunEventType,
  * which is the durable contract key shared across DB and UI layers.
  *
  * @property int $id Auto-increment PK
- * @property string $turn_id Parent turn ULID
- * @property int $seq Sequence number within the turn (application-assigned, strictly increasing)
- * @property TurnEventType $event_type Discriminated event type
+ * @property string $run_id Parent run ULID
+ * @property int $seq Sequence number within the run (application-assigned, strictly increasing)
+ * @property RunEventType $event_type Discriminated event type
  * @property array<string, mixed>|null $payload Event-specific data
  * @property Carbon|null $created_at When the event was persisted
- * @property-read ChatTurn $turn
+ * @property-read AiRun $run
  */
-class ChatTurnEvent extends Model
+class AiRunEvent extends Model
 {
     /**
      * @var bool
@@ -37,13 +37,13 @@ class ChatTurnEvent extends Model
     /**
      * @var string
      */
-    protected $table = 'ai_chat_turn_events';
+    protected $table = 'ai_run_events';
 
     /**
      * @var array<int, string>
      */
     protected $fillable = [
-        'turn_id',
+        'run_id',
         'seq',
         'event_type',
         'payload',
@@ -57,7 +57,7 @@ class ChatTurnEvent extends Model
     {
         return [
             'seq' => 'integer',
-            'event_type' => TurnEventType::class,
+            'event_type' => RunEventType::class,
             'payload' => 'json',
             'created_at' => 'datetime',
         ];
@@ -75,17 +75,17 @@ class ChatTurnEvent extends Model
     // ── Relationships ────────────────────────────────────────────────
 
     /**
-     * The turn this event belongs to.
+     * The run this event belongs to.
      */
-    public function turn(): BelongsTo
+    public function run(): BelongsTo
     {
-        return $this->belongsTo(ChatTurn::class, 'turn_id');
+        return $this->belongsTo(AiRun::class, 'run_id');
     }
 
     // ── Helpers ──────────────────────────────────────────────────────
 
     /**
-     * Whether this event signals the turn has reached a terminal state.
+     * Whether this event signals the run has reached a terminal state.
      */
     public function isTerminal(): bool
     {
@@ -103,14 +103,14 @@ class ChatTurnEvent extends Model
     /**
      * Format this event as the canonical client payload.
      *
-     * The canonical event envelope: {turn_id, seq, event_type, payload, occurred_at}.
+     * The canonical event envelope: {run_id, seq, event_type, payload, occurred_at}.
      *
-     * @return array{turn_id: string, seq: int, event_type: string, payload: mixed, occurred_at: string}
+     * @return array{run_id: string, seq: int, event_type: string, payload: mixed, occurred_at: string}
      */
     public function toSsePayload(): array
     {
         return [
-            'turn_id' => $this->turn_id,
+            'run_id' => $this->run_id,
             'seq' => $this->seq,
             'event_type' => $this->event_type->value,
             'payload' => $this->payload,

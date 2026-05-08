@@ -11,8 +11,7 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunCall;
-use App\Modules\Core\AI\Models\ChatTurn;
-use App\Modules\Core\AI\Models\ChatTurnEvent;
+use App\Modules\Core\AI\Models\AiRunEvent;
 use App\Modules\Core\AI\Values\CallUsage;
 use App\Modules\Core\Employee\Models\Employee;
 use DateTimeImmutable;
@@ -35,7 +34,7 @@ class RunDiagnosticService
     public function inspectRun(string $runId): ?AiRun
     {
         return AiRun::query()
-            ->with(['employee', 'turn', 'actingForUser'])
+            ->with(['employee', 'actingForUser'])
             ->find($runId);
     }
 
@@ -70,7 +69,7 @@ class RunDiagnosticService
      *         last_offset: int
      *     },
      *     wire_logging_enabled: bool,
-     *     turn_id: string|null
+     *     run_id: string|null
      * }|null
      */
     public function buildRunView(string $runId, int $wireLogOffset = 0, int $wireLogLimit = 100): ?array
@@ -106,7 +105,7 @@ class RunDiagnosticService
                 'last_offset' => $wireLogPreview['last_offset'],
             ],
             'wire_logging_enabled' => $this->wireLogger->enabled(),
-            'turn_id' => $run->turn_id,
+            'run_id' => $run->id,
         ];
     }
 
@@ -214,7 +213,7 @@ class RunDiagnosticService
     public function recentRunsQuery(string $search = ''): Builder
     {
         $query = AiRun::query()
-            ->with(['employee', 'turn'])
+            ->with(['employee'])
             ->orderByDesc('started_at')
             ->orderByDesc('created_at');
 
@@ -235,12 +234,13 @@ class RunDiagnosticService
 
         return array_merge($inspection, [
             'employee_name' => $run->employee?->displayName() ?? __('Unknown Agent'),
-            'turn_id' => $run->turn_id,
+            'run_id' => $run->id,
+            'turn_id' => $run->source === 'chat' ? $run->id : null,
             'status_label' => $run->status?->label(),
             'status_color' => $run->status?->color(),
-            'turn_status' => $run->turn?->status?->value,
-            'turn_status_label' => $run->turn?->status?->label(),
-            'turn_status_color' => $run->turn?->status?->color(),
+            'turn_status' => $run->source === 'chat' ? $run->status?->value : null,
+            'turn_status_label' => $run->source === 'chat' ? $run->status?->label() : null,
+            'turn_status_color' => $run->source === 'chat' ? $run->status?->color() : null,
             'wire_log_footprint_bytes' => $wireLogFootprintBytes,
             'wire_log_footprint_display' => Number::fileSize($wireLogFootprintBytes),
             'recorded_at_display' => $this->dateTimeDisplay->formatDateTime($inspection['recorded_at'] ?? null),
@@ -253,12 +253,12 @@ class RunDiagnosticService
      */
     public function recentTurns(int $limit = 20): array
     {
-        return ChatTurn::query()
+        return AiRun::query()
             ->with('employee')
             ->orderByDesc('created_at')
             ->limit($limit)
             ->get()
-            ->map(fn (ChatTurn $turn): array => $this->mapTurn($turn))
+            ->map(fn (AiRun $turn): array => $this->mapTurn($turn))
             ->values()
             ->all();
     }
@@ -269,11 +269,11 @@ class RunDiagnosticService
      *     timeline: list<array<string, mixed>>
      * }|null
      */
-    public function buildTurnView(string $turnId): ?array
+    public function buildTurnView(string $runId): ?array
     {
-        $turn = ChatTurn::query()
+        $turn = AiRun::query()
             ->with(['employee', 'events' => fn ($query) => $query->orderBy('seq')])
-            ->find($turnId);
+            ->find($runId);
 
         if ($turn === null) {
             return null;
@@ -501,10 +501,10 @@ class RunDiagnosticService
     /**
      * @return array<string, mixed>
      */
-    private function mapTurn(ChatTurn $turn): array
+    private function mapTurn(AiRun $turn): array
     {
         $terminalEvent = $turn->events()
-            ->whereIn('event_type', ['turn.completed', 'turn.failed', 'turn.cancelled'])
+            ->whereIn('event_type', ['run.completed', 'run.failed', 'run.cancelled'])
             ->latest('seq')
             ->first();
 
@@ -515,7 +515,7 @@ class RunDiagnosticService
         $cancelMode = match (true) {
             $turn->cancel_requested_at === null => null,
             str_contains($cancelReason, 'stale') => 'force_stopped',
-            $terminalEvent?->event_type?->value === 'turn.cancelled' => 'cooperative_cancel',
+            $terminalEvent?->event_type?->value === 'run.cancelled' => 'cooperative_cancel',
             default => 'cancel_requested',
         };
 
@@ -532,7 +532,7 @@ class RunDiagnosticService
             'current_phase_label' => $turn->current_phase?->label(),
             'current_label' => $turn->current_label,
             'last_event_seq' => $turn->last_event_seq,
-            'current_run_id' => $turn->current_run_id,
+            'current_run_id' => $turn->id,
             'started_at' => $turn->started_at?->toIso8601String(),
             'finished_at' => $turn->finished_at?->toIso8601String(),
             'created_at' => $turn->created_at?->toIso8601String(),
@@ -552,7 +552,7 @@ class RunDiagnosticService
     /**
      * @return array<string, mixed>
      */
-    private function mapTimelineEvent(ChatTurnEvent $event, ?Carbon $previousAt, ChatTurn $turn): array
+    private function mapTimelineEvent(AiRunEvent $event, ?Carbon $previousAt, AiRun $turn): array
     {
         $gapMs = $previousAt?->diffInMilliseconds($event->created_at) ?? null;
         $isGapWarning = $gapMs !== null && $gapMs > 30_000;
@@ -575,12 +575,12 @@ class RunDiagnosticService
         ];
     }
 
-    private function eventSummary(ChatTurnEvent $event): string
+    private function eventSummary(AiRunEvent $event): string
     {
         $payload = is_array($event->payload) ? $event->payload : [];
 
         return match ($event->event_type->value) {
-            'turn.phase_changed' => (string) ($payload['label'] ?? $payload['phase'] ?? __('Phase updated')),
+            'run.phase_changed' => (string) ($payload['label'] ?? $payload['phase'] ?? __('Phase updated')),
             'run.started' => trim(implode(' / ', array_filter([
                 $payload['run_id'] ?? null,
                 $payload['provider'] ?? null,
@@ -601,8 +601,7 @@ class RunDiagnosticService
                 $payload['reason'] ?? null,
             ], fn (mixed $value): bool => is_string($value) && $value !== ''))),
             'assistant.output_delta', 'assistant.thinking_delta', 'tool.stdout_delta' => Str::limit((string) ($payload['delta'] ?? ''), 120),
-            'turn.failed' => (string) ($payload['message'] ?? __('Turn failed')),
-            'turn.cancelled' => (string) ($payload['reason'] ?? __('Turn cancelled')),
+            'run.cancelled' => (string) ($payload['reason'] ?? __('Run cancelled')),
             'usage.updated' => __('Prompt: :prompt, Completion: :completion', [
                 'prompt' => (string) ($payload['prompt_tokens'] ?? 'n/a'),
                 'completion' => (string) ($payload['completion_tokens'] ?? 'n/a'),

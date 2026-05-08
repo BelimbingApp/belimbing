@@ -126,6 +126,8 @@ describe('inspectDispatchRun', function () {
     });
 
     it('returns inspections for runs linked to a dispatch', function () {
+        risCreateAiRun(RIS_RUN_ID, ['dispatch_id' => RIS_DISPATCH_ID]);
+
         OperationDispatch::unguarded(fn () => OperationDispatch::query()->create([
             'id' => RIS_DISPATCH_ID,
             'operation_type' => 'agent_task',
@@ -134,8 +136,6 @@ describe('inspectDispatchRun', function () {
             'status' => 'succeeded',
             'run_id' => RIS_RUN_ID,
         ]));
-
-        risCreateAiRun(RIS_RUN_ID, ['dispatch_id' => RIS_DISPATCH_ID]);
 
         $service = makeRunInspectionService();
         $result = $service->inspectDispatchRun(RIS_DISPATCH_ID);

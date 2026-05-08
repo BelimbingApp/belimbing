@@ -6,8 +6,11 @@
 namespace App\Modules\Core\AI\Services\Runtime;
 
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
+use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\ExecutionMode;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\ConfigResolver;
+use Illuminate\Support\Str;
 
 /**
  * Executor for Lara simple tasks.
@@ -55,10 +58,22 @@ final readonly class SimpleTaskExecutor
             mode: ExecutionMode::Interactive,
             timeoutSeconds: $timeout,
         );
+        $runId = (string) Str::ulid();
+
+        AiRun::query()->create([
+            'id' => $runId,
+            'employee_id' => $employeeId,
+            'session_id' => $sessionId,
+            'acting_for_user_id' => auth()->id(),
+            'source' => 'simple_task',
+            'execution_mode' => $policy->mode->value,
+            'status' => AiRunStatus::Queued,
+        ]);
 
         $result = $this->agenticRuntime->run(
             messages: $messages,
             employeeId: $employeeId,
+            runId: $runId,
             systemPrompt: $systemPrompt,
             policy: $policy,
             sessionId: $sessionId,

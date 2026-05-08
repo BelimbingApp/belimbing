@@ -9,18 +9,26 @@ use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunCall;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Values\CallUsage;
+use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
-const RR_RUN_ID = 'run_recorder_test_001';
+const RR_RUN_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 function rrSeedRun(string $runId = RR_RUN_ID): AiRun
 {
+    $company = Company::factory()->create();
+    $employee = Employee::factory()->create([
+        'company_id' => $company->id,
+        'status' => 'active',
+    ]);
+
     return AiRun::unguarded(fn () => AiRun::query()->create([
         'id' => $runId,
-        'employee_id' => 1,
+        'employee_id' => $employee->id,
         'session_id' => 'sess_test',
         'source' => 'chat',
         'execution_mode' => 'streaming',

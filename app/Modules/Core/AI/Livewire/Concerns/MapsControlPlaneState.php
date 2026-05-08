@@ -67,7 +67,7 @@ trait MapsControlPlaneState
      *         last_offset: int
      *     },
      *     wire_logging_enabled: bool,
-     *     turn_id: string|null
+     *     run_id: string|null
      * }|null  $runView
      * @return array<string, mixed>|null
      */
@@ -85,7 +85,7 @@ trait MapsControlPlaneState
             'wire_log_readable' => $runView['wire_log_readable'],
             'wire_log_summary' => $runView['wire_log_summary'],
             'wire_logging_enabled' => $runView['wire_logging_enabled'],
-            'turn_id' => $runView['turn_id'],
+            'run_id' => $runView['run_id'],
         ];
     }
 

@@ -3,13 +3,12 @@
 use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Enums\TurnStatus;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Livewire\Chat;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Models\AiRun;
-use App\Modules\Core\AI\Models\ChatTurn;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\MessageManager;
@@ -91,7 +90,7 @@ it('renders the streaming console as a named alpine controller', function (): vo
         ->toContain('const text = payload.delta || payload.text ||')
         ->toContain('onServerTurnReady($event.detail || {})')
         ->toContain('this.$wire.finalizeStreamingRun(finalizedTurnId, finalizedSessionId)')
-        ->toContain('repairAbandonedSelectedSession(turnId)')
+        ->toContain('repairAbandonedSelectedSession(runId)')
         ->toContain('selectedTurnId: null')
         ->toContain('turnRegistry: {}')
         ->toContain('ensureTurnState(turnId, patch = {})')
@@ -100,7 +99,7 @@ it('renders the streaming console as a named alpine controller', function (): vo
         ->toContain('restoreTurnState(turnId)')
         ->toContain('activeTurnSummaries:')
         ->toContain('startSummaryPolling()')
-        ->toContain('clearSummary($event.detail.sessionId, $event.detail?.turnId || null)');
+        ->toContain('clearSummary($event.detail.sessionId, $event.detail?.runId || null)');
 });
 
 it('polls the chat view while the selected Lara session has pending delegated work', function (): void {
@@ -155,13 +154,13 @@ it('re-hydrates session override and active turn state when selectedSessionId is
 
     app(SessionManager::class)->updateModelOverride(Employee::LARA_ID, $session->id, $compositeModelId);
 
-    $turn = ChatTurn::query()->create([
+    $turn = AiRun::query()->create([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $session->id,
         'acting_for_user_id' => $user->id,
-        'status' => TurnStatus::Queued,
-        'current_phase' => TurnPhase::WaitingForWorker,
-        'current_label' => TurnPhase::WaitingForWorker->label(),
+        'status' => AiRunStatus::Queued,
+        'current_phase' => RunPhase::WaitingForWorker,
+        'current_label' => RunPhase::WaitingForWorker->label(),
     ]);
 
     Livewire::test(Chat::class)
@@ -171,8 +170,8 @@ it('re-hydrates session override and active turn state when selectedSessionId is
             'agent-chat-session-selected',
             sessionId: $session->id,
             activeTurnId: $turn->id,
-            activeTurnPhase: TurnPhase::WaitingForWorker->value,
-            activeTurnLabel: TurnPhase::WaitingForWorker->label(),
+            activeRunPhase: RunPhase::WaitingForWorker->value,
+            activeTurnLabel: RunPhase::WaitingForWorker->label(),
         );
 });
 

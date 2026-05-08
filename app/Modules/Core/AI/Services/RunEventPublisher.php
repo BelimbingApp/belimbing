@@ -5,25 +5,25 @@
 
 namespace App\Modules\Core\AI\Services;
 
-use App\Modules\Core\AI\Enums\TurnEventType;
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Enums\TurnStatus;
-use App\Modules\Core\AI\Models\ChatTurn;
-use App\Modules\Core\AI\Models\ChatTurnEvent;
+use App\Modules\Core\AI\Enums\RunEventType;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Models\AiRunEvent;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Publishes structured events to a chat turn's append-only event stream.
+ * Publishes structured events to an AI run's append-only event stream.
  *
  * This is the primary live-write path for the coding-agent console UX.
  * Every meaningful runtime state change (phase transitions, tool execution,
  * assistant output deltas, retries, errors) flows through this publisher.
  *
  * ChatRunPersister is demoted to a transcript materializer that consumes
- * turn events after a turn completes — it no longer defines the live UX.
+ * run events after a chat run completes — it no longer defines the live UX.
  *
  * Each published event is assigned a strictly increasing seq within the
- * turn and persisted atomically. Fresh turns stream those events directly
+ * run and persisted atomically. Fresh chat runs stream those events directly
  * over the NDJSON response, while persisted events remain available for
  * HTTP replay via the `after_seq` resume contract.
  *
@@ -31,25 +31,25 @@ use Illuminate\Support\Facades\DB;
  * `rust/crates/telemetry/src/lib.rs` — record_turn_started(),
  * record_tool_started(), record_tool_finished(), record_turn_completed().
  */
-class TurnEventPublisher
+class RunEventPublisher
 {
     /**
-     * Publish a single event to a turn's event stream.
+     * Publish a single event to a run's event stream.
      *
      * Atomically allocates the next seq and inserts the event row.
      * Returns the created event for callers that need the seq.
      *
-     * @param  ChatTurn  $turn  The turn to publish to
-     * @param  TurnEventType  $eventType  Discriminated event type
+     * @param  AiRun  $turn  The run to publish to
+     * @param  RunEventType  $eventType  Discriminated event type
      * @param  array<string, mixed>|null  $payload  Event-specific data
      */
-    public function publish(ChatTurn $turn, TurnEventType $eventType, ?array $payload = null): ChatTurnEvent
+    public function publish(AiRun $turn, RunEventType $eventType, ?array $payload = null): AiRunEvent
     {
-        return DB::transaction(function () use ($turn, $eventType, $payload): ChatTurnEvent {
+        return DB::transaction(function () use ($turn, $eventType, $payload): AiRunEvent {
             $seq = $turn->nextSeq();
 
-            return ChatTurnEvent::query()->create([
-                'turn_id' => $turn->id,
+            return AiRunEvent::query()->create([
+                'run_id' => $turn->id,
                 'seq' => $seq,
                 'event_type' => $eventType->value,
                 'payload' => $payload,
@@ -58,30 +58,30 @@ class TurnEventPublisher
         });
     }
 
-    // ── Turn lifecycle ───────────────────────────────────────────────
+    // ── Run lifecycle ────────────────────────────────────────────────
 
     /**
-     * Emit turn.started and transition to Booting.
+     * Emit run.started and transition to Booting.
      */
-    public function turnStarted(ChatTurn $turn): ChatTurnEvent
+    public function turnStarted(AiRun $turn): AiRunEvent
     {
-        $event = $this->publish($turn, TurnEventType::TurnStarted, [
+        $event = $this->publish($turn, RunEventType::RunStarted, [
             'session_id' => $turn->session_id,
             'employee_id' => $turn->employee_id,
             'started_at' => now()->toIso8601String(),
         ]);
 
-        $turn->transitionTo(TurnStatus::Booting);
+        $turn->transitionTo(AiRunStatus::Booting);
 
         return $event;
     }
 
     /**
-     * Emit turn.phase_changed and update the turn's current phase.
+     * Emit run.phase_changed and update the run's current phase.
      */
-    public function phaseChanged(ChatTurn $turn, TurnPhase $phase, ?string $label = null): ChatTurnEvent
+    public function phaseChanged(AiRun $turn, RunPhase $phase, ?string $label = null): AiRunEvent
     {
-        $event = $this->publish($turn, TurnEventType::TurnPhaseChanged, [
+        $event = $this->publish($turn, RunEventType::RunPhaseChanged, [
             'phase' => $phase->value,
             'label' => $label,
         ]);
@@ -92,77 +92,49 @@ class TurnEventPublisher
     }
 
     /**
-     * Emit turn.completed, finalize the turn, and emit turn.ready_for_input.
+     * Emit run.completed, finalize the run, and emit run.ready_for_input for chat.
      */
-    public function turnCompleted(ChatTurn $turn, ?array $payload = null): ChatTurnEvent
+    public function turnCompleted(AiRun $turn, ?array $payload = null): AiRunEvent
     {
-        $event = $this->publish($turn, TurnEventType::TurnCompleted, $payload);
+        $event = $this->publish($turn, RunEventType::RunCompleted, $payload);
 
-        $turn->transitionTo(TurnStatus::Completed);
+        $turn->transitionTo(AiRunStatus::Succeeded);
 
-        $this->publish($turn, TurnEventType::TurnReadyForInput);
+        $this->publish($turn, RunEventType::RunReadyForInput);
 
         return $event;
     }
 
     /**
-     * Emit turn.failed and finalize the turn.
+     * Emit run.failed and finalize the run.
      */
-    public function turnFailed(ChatTurn $turn, string $errorType, string $message, ?array $meta = null): ChatTurnEvent
+    public function turnFailed(AiRun $turn, string $errorType, string $message, ?array $meta = null): AiRunEvent
     {
-        $event = $this->publish($turn, TurnEventType::TurnFailed, [
+        $event = $this->publish($turn, RunEventType::RunFailed, [
             'error_type' => $errorType,
             'message' => $message,
             'meta' => $meta,
         ]);
 
-        $turn->updatePhase(TurnPhase::Failed);
-        $turn->transitionTo(TurnStatus::Failed);
+        $turn->updatePhase(RunPhase::Failed);
+        $turn->transitionTo(AiRunStatus::Failed);
 
         return $event;
     }
 
     /**
-     * Emit turn.cancelled and finalize the turn.
+     * Emit run.cancelled and finalize the run.
      */
-    public function turnCancelled(ChatTurn $turn, ?string $reason = null): ChatTurnEvent
+    public function turnCancelled(AiRun $turn, ?string $reason = null): AiRunEvent
     {
-        $event = $this->publish($turn, TurnEventType::TurnCancelled, [
+        $event = $this->publish($turn, RunEventType::RunCancelled, [
             'reason' => $reason,
         ]);
 
-        $turn->updatePhase(TurnPhase::Cancelled);
-        $turn->transitionTo(TurnStatus::Cancelled);
+        $turn->updatePhase(RunPhase::Cancelled);
+        $turn->transitionTo(AiRunStatus::Cancelled);
 
         return $event;
-    }
-
-    // ── Run lifecycle ────────────────────────────────────────────────
-
-    /**
-     * Emit run.started when an LLM run begins within a turn.
-     */
-    public function runStarted(ChatTurn $turn, string $runId, ?string $provider = null, ?string $model = null): ChatTurnEvent
-    {
-        $turn->update(['current_run_id' => $runId]);
-
-        return $this->publish($turn, TurnEventType::RunStarted, [
-            'run_id' => $runId,
-            'provider' => $provider,
-            'model' => $model,
-        ]);
-    }
-
-    /**
-     * Emit run.failed when an LLM run fails (retry/fallback may follow).
-     */
-    public function runFailed(ChatTurn $turn, string $runId, string $errorType, string $message): ChatTurnEvent
-    {
-        return $this->publish($turn, TurnEventType::RunFailed, [
-            'run_id' => $runId,
-            'error_type' => $errorType,
-            'message' => $message,
-        ]);
     }
 
     // ── Assistant output ─────────────────────────────────────────────
@@ -170,9 +142,9 @@ class TurnEventPublisher
     /**
      * Emit assistant.thinking_started when the agent enters reasoning mode.
      */
-    public function thinkingStarted(ChatTurn $turn, ?string $description = null): ChatTurnEvent
+    public function thinkingStarted(AiRun $turn, ?string $description = null): AiRunEvent
     {
-        return $this->publish($turn, TurnEventType::AssistantThinkingStarted, $description !== null
+        return $this->publish($turn, RunEventType::AssistantThinkingStarted, $description !== null
             ? ['description' => $description]
             : null,
         );
@@ -181,9 +153,9 @@ class TurnEventPublisher
     /**
      * Emit assistant.thinking_delta for incremental reasoning text.
      */
-    public function thinkingDelta(ChatTurn $turn, string $delta): ChatTurnEvent
+    public function thinkingDelta(AiRun $turn, string $delta): AiRunEvent
     {
-        return $this->publish($turn, TurnEventType::AssistantThinkingDelta, [
+        return $this->publish($turn, RunEventType::AssistantThinkingDelta, [
             'delta' => $delta,
         ]);
     }
@@ -192,12 +164,12 @@ class TurnEventPublisher
      * Emit assistant.iteration_completed when a streamed LLM iteration ends.
      */
     public function iterationCompleted(
-        ChatTurn $turn,
+        AiRun $turn,
         string $finishReason,
         ?int $iteration = null,
         ?int $toolCallCount = null,
-    ): ChatTurnEvent {
-        return $this->publish($turn, TurnEventType::AssistantIterationCompleted, array_filter([
+    ): AiRunEvent {
+        return $this->publish($turn, RunEventType::AssistantIterationCompleted, array_filter([
             'finish_reason' => $finishReason,
             'iteration' => $iteration,
             'tool_call_count' => $toolCallCount,
@@ -207,9 +179,9 @@ class TurnEventPublisher
     /**
      * Emit assistant.output_delta for incremental response text.
      */
-    public function outputDelta(ChatTurn $turn, string $delta): ChatTurnEvent
+    public function outputDelta(AiRun $turn, string $delta): AiRunEvent
     {
-        return $this->publish($turn, TurnEventType::AssistantOutputDelta, [
+        return $this->publish($turn, RunEventType::AssistantOutputDelta, [
             'delta' => $delta,
         ]);
     }
@@ -217,9 +189,9 @@ class TurnEventPublisher
     /**
      * Emit assistant.output_block_committed for a complete content block.
      */
-    public function outputBlockCommitted(ChatTurn $turn, string $blockType, string $content): ChatTurnEvent
+    public function outputBlockCommitted(AiRun $turn, string $blockType, string $content): AiRunEvent
     {
-        return $this->publish($turn, TurnEventType::AssistantOutputBlockCommitted, [
+        return $this->publish($turn, RunEventType::AssistantOutputBlockCommitted, [
             'block_type' => $blockType,
             'content' => $content,
         ]);
@@ -230,9 +202,9 @@ class TurnEventPublisher
     /**
      * Emit tool.started when a tool invocation begins.
      */
-    public function toolStarted(ChatTurn $turn, string $toolName, ?string $argsSummary = null, ?int $toolCallIndex = null): ChatTurnEvent
+    public function toolStarted(AiRun $turn, string $toolName, ?string $argsSummary = null, ?int $toolCallIndex = null): AiRunEvent
     {
-        return $this->publish($turn, TurnEventType::ToolStarted, [
+        return $this->publish($turn, RunEventType::ToolStarted, [
             'tool' => $toolName,
             'args_summary' => $argsSummary,
             'tool_call_index' => $toolCallIndex,
@@ -242,9 +214,9 @@ class TurnEventPublisher
     /**
      * Emit tool.stdout_delta for incremental tool output.
      */
-    public function toolStdoutDelta(ChatTurn $turn, string $toolName, string $delta): ChatTurnEvent
+    public function toolStdoutDelta(AiRun $turn, string $toolName, string $delta): AiRunEvent
     {
-        return $this->publish($turn, TurnEventType::ToolStdoutDelta, [
+        return $this->publish($turn, RunEventType::ToolStdoutDelta, [
             'tool' => $toolName,
             'delta' => $delta,
         ]);
@@ -256,15 +228,15 @@ class TurnEventPublisher
      * @param  array<string, mixed>|null  $errorPayload  Structured error data when status is 'error'
      */
     public function toolFinished(
-        ChatTurn $turn,
+        AiRun $turn,
         string $toolName,
         string $status,
         ?string $resultPreview = null,
         ?int $durationMs = null,
         ?int $resultLength = null,
         ?array $errorPayload = null,
-    ): ChatTurnEvent {
-        return $this->publish($turn, TurnEventType::ToolFinished, array_filter([
+    ): AiRunEvent {
+        return $this->publish($turn, RunEventType::ToolFinished, array_filter([
             'tool' => $toolName,
             'status' => $status,
             'result_preview' => $resultPreview,
@@ -277,9 +249,9 @@ class TurnEventPublisher
     /**
      * Emit tool.denied when policy blocks a tool invocation.
      */
-    public function toolDenied(ChatTurn $turn, string $toolName, string $reason, string $source = 'hook'): ChatTurnEvent
+    public function toolDenied(AiRun $turn, string $toolName, string $reason, string $source = 'hook'): AiRunEvent
     {
-        return $this->publish($turn, TurnEventType::ToolDenied, [
+        return $this->publish($turn, RunEventType::ToolDenied, [
             'tool' => $toolName,
             'reason' => $reason,
             'source' => $source,
@@ -293,9 +265,9 @@ class TurnEventPublisher
      *
      * @param  array{prompt_tokens?: int, completion_tokens?: int, total_tokens?: int}  $usage
      */
-    public function usageUpdated(ChatTurn $turn, array $usage): ChatTurnEvent
+    public function usageUpdated(AiRun $turn, array $usage): AiRunEvent
     {
-        return $this->publish($turn, TurnEventType::UsageUpdated, $usage);
+        return $this->publish($turn, RunEventType::UsageUpdated, $usage);
     }
 
     // ── Liveness ─────────────────────────────────────────────────────
@@ -303,9 +275,9 @@ class TurnEventPublisher
     /**
      * Emit heartbeat so the client knows the turn is alive during quiet phases.
      */
-    public function heartbeat(ChatTurn $turn, ?int $elapsedMs = null): ChatTurnEvent
+    public function heartbeat(AiRun $turn, ?int $elapsedMs = null): AiRunEvent
     {
-        return $this->publish($turn, TurnEventType::Heartbeat, [
+        return $this->publish($turn, RunEventType::Heartbeat, [
             'elapsed_ms' => $elapsedMs,
         ]);
     }

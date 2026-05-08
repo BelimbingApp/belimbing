@@ -6,19 +6,19 @@
 namespace App\Modules\Core\AI\Enums;
 
 /**
- * User-visible phase within an active chat turn.
+ * User-visible phase within an active AI run.
  *
- * While TurnStatus tracks the coarse lifecycle (queued → running → terminal),
- * TurnPhase provides the fine-grained label the user sees in the busy signal.
+ * While AiRunStatus tracks the coarse lifecycle (queued → running → terminal),
+ * RunPhase provides the fine-grained label the user sees in the busy signal.
  *
  * {@see self::AwaitingLlm} is the phase while the runtime waits on an outbound
  * model request (initial response or the next step after tools). The runtime
- * emits richer `turn.phase_changed` labels via status descriptions.
+ * emits richer `run.phase_changed` labels via status descriptions.
  *
- * Phase transitions are emitted as `turn.phase_changed` events so the UI
+ * Phase transitions are emitted as `run.phase_changed` events so the UI
  * can update the status bar and activity indicator in real time.
  */
-enum TurnPhase: string
+enum RunPhase: string
 {
     case WaitingForWorker = 'waiting_for_worker';
     case AwaitingLlm = 'awaiting_llm';

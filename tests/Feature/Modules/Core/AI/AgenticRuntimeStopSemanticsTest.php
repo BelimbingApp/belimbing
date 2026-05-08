@@ -9,9 +9,9 @@ use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Tools\ToolResult;
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Enums\TurnStatus;
-use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Tests\Support\MakesRuntimeResponses;
@@ -41,11 +41,11 @@ it('renders provider output after Stop but does not execute new tool work', func
         'company_id' => $company->id,
         'status' => 'active',
     ]);
-    $turn = ChatTurn::query()->create([
+    $turn = AiRun::query()->create([
         'employee_id' => $employee->id,
         'session_id' => AGENTIC_RUNTIME_STOP_SESSION,
-        'status' => TurnStatus::Running,
-        'current_phase' => TurnPhase::AwaitingLlm,
+        'status' => AiRunStatus::Running,
+        'current_phase' => RunPhase::AwaitingLlm,
     ]);
     $turn->requestCancel('User pressed stop');
 
@@ -79,13 +79,13 @@ it('renders provider output after Stop but does not execute new tool work', func
     $events = iterator_to_array($runtime->runStream(
         [$this->makeMessage('user', 'Please use a tool')],
         $employee->id,
+        $turn->id,
         'You are Lara.',
         sessionId: AGENTIC_RUNTIME_STOP_SESSION,
-        turnId: $turn->id,
     ), false);
 
     expect(collect($events)->firstWhere('event', 'delta')['data']['text'] ?? null)->toBe(AGENTIC_RUNTIME_STOP_PROVIDER_TEXT)
-        ->and(collect($events)->where('event', 'status')->pluck('data.phase')->all())->toContain(TurnPhase::Cancelled->value)
+        ->and(collect($events)->where('event', 'status')->pluck('data.phase')->all())->toContain(RunPhase::Cancelled->value)
         ->and(collect($events)->where('event', 'status')->pluck('data.phase')->all())->not->toContain('tool_started')
         ->and(collect($events)->pluck('event')->all())->not->toContain('done')
         ->and($executionCount)->toBe(0);

@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Enums\TurnStatus;
-use App\Modules\Core\AI\Models\ChatTurn;
-use App\Modules\Core\AI\Models\ChatTurnEvent;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Models\AiRunEvent;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
@@ -29,15 +29,15 @@ describe('SweepStaleTurnsCommand', function () {
     });
 
     it('fails queued turns past the threshold', function () {
-        $turn = ChatTurn::query()->create([
+        $turn = AiRun::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => SWEEP_STALE_SESSION,
             'acting_for_user_id' => $this->actingForUserId,
-            'status' => TurnStatus::Queued,
-            'current_phase' => TurnPhase::WaitingForWorker,
+            'status' => AiRunStatus::Queued,
+            'current_phase' => RunPhase::WaitingForWorker,
         ]);
 
-        ChatTurn::query()->where('id', $turn->id)->update([
+        AiRun::query()->where('id', $turn->id)->update([
             'created_at' => now()->subMinutes(15),
         ]);
 
@@ -46,19 +46,19 @@ describe('SweepStaleTurnsCommand', function () {
             ->expectsOutputToContain(SWEEP_EXPECT_ONE_STALE_LINE);
 
         $turn->refresh();
-        expect($turn->status)->toBe(TurnStatus::Failed);
+        expect($turn->status)->toBe(AiRunStatus::Failed);
     });
 
     it('fails booting turns past the queued threshold', function () {
-        $turn = ChatTurn::query()->create([
+        $turn = AiRun::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => SWEEP_STALE_SESSION,
             'acting_for_user_id' => $this->actingForUserId,
-            'status' => TurnStatus::Booting,
-            'current_phase' => TurnPhase::AwaitingLlm,
+            'status' => AiRunStatus::Booting,
+            'current_phase' => RunPhase::AwaitingLlm,
         ]);
 
-        ChatTurn::query()->where('id', $turn->id)->update([
+        AiRun::query()->where('id', $turn->id)->update([
             'created_at' => now()->subMinutes(15),
         ]);
 
@@ -67,19 +67,19 @@ describe('SweepStaleTurnsCommand', function () {
             ->expectsOutputToContain(SWEEP_EXPECT_ONE_STALE_LINE);
 
         $turn->refresh();
-        expect($turn->status)->toBe(TurnStatus::Failed);
+        expect($turn->status)->toBe(AiRunStatus::Failed);
     });
 
     it('fails running turns past the running threshold', function () {
-        $turn = ChatTurn::query()->create([
+        $turn = AiRun::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => SWEEP_STALE_SESSION,
             'acting_for_user_id' => $this->actingForUserId,
-            'status' => TurnStatus::Running,
-            'current_phase' => TurnPhase::RunningTool,
+            'status' => AiRunStatus::Running,
+            'current_phase' => RunPhase::RunningTool,
         ]);
 
-        ChatTurn::query()->where('id', $turn->id)->update([
+        AiRun::query()->where('id', $turn->id)->update([
             'created_at' => now()->subMinutes(45),
         ]);
 
@@ -88,16 +88,16 @@ describe('SweepStaleTurnsCommand', function () {
             ->expectsOutputToContain(SWEEP_EXPECT_ONE_STALE_LINE);
 
         $turn->refresh();
-        expect($turn->status)->toBe(TurnStatus::Failed);
+        expect($turn->status)->toBe(AiRunStatus::Failed);
     });
 
     it('does not touch turns within the threshold', function () {
-        ChatTurn::query()->create([
+        AiRun::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => SWEEP_STALE_SESSION,
             'acting_for_user_id' => $this->actingForUserId,
-            'status' => TurnStatus::Queued,
-            'current_phase' => TurnPhase::WaitingForWorker,
+            'status' => AiRunStatus::Queued,
+            'current_phase' => RunPhase::WaitingForWorker,
         ]);
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--queued-minutes' => 10])
@@ -106,15 +106,15 @@ describe('SweepStaleTurnsCommand', function () {
     });
 
     it('does not touch completed turns', function () {
-        $turn = ChatTurn::query()->create([
+        $turn = AiRun::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => SWEEP_STALE_SESSION,
             'acting_for_user_id' => $this->actingForUserId,
-            'status' => TurnStatus::Completed,
-            'current_phase' => TurnPhase::Finalizing,
+            'status' => AiRunStatus::Succeeded,
+            'current_phase' => RunPhase::Finalizing,
         ]);
 
-        ChatTurn::query()->where('id', $turn->id)->update([
+        AiRun::query()->where('id', $turn->id)->update([
             'created_at' => now()->subMinutes(60),
         ]);
 
@@ -123,25 +123,25 @@ describe('SweepStaleTurnsCommand', function () {
             ->expectsOutputToContain('No stale turns');
     });
 
-    it('emits turn.failed event for each swept turn', function () {
-        $turn = ChatTurn::query()->create([
+    it('emits run.failed event for each swept turn', function () {
+        $turn = AiRun::query()->create([
             'employee_id' => Employee::LARA_ID,
             'session_id' => SWEEP_STALE_SESSION,
             'acting_for_user_id' => $this->actingForUserId,
-            'status' => TurnStatus::Queued,
-            'current_phase' => TurnPhase::WaitingForWorker,
+            'status' => AiRunStatus::Queued,
+            'current_phase' => RunPhase::WaitingForWorker,
         ]);
 
-        ChatTurn::query()->where('id', $turn->id)->update([
+        AiRun::query()->where('id', $turn->id)->update([
             'created_at' => now()->subMinutes(15),
         ]);
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--queued-minutes' => 10])
             ->assertSuccessful();
 
-        $failEvent = ChatTurnEvent::query()
-            ->where('turn_id', $turn->id)
-            ->where('event_type', 'turn.failed')
+        $failEvent = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', 'run.failed')
             ->first();
 
         expect($failEvent)->not->toBeNull();

@@ -3,138 +3,143 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-use App\Modules\Core\AI\Enums\TurnEventType;
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Enums\TurnStatus;
+use App\Modules\Core\AI\Enums\RunEventType;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Enums\AiRunStatus;
 
-const TURN_STATUS_TERMINAL_STATES = ['completed', 'failed', 'cancelled'];
+const TURN_STATUS_TERMINAL_STATES = ['succeeded', 'failed', 'cancelled', 'timed_out'];
 
 // ------------------------------------------------------------------
-// TurnStatus — lifecycle state machine
+// AiRunStatus — lifecycle state machine
 // ------------------------------------------------------------------
 
-describe('TurnStatus', function () {
-    it('has six cases', function () {
-        expect(TurnStatus::cases())->toHaveCount(6);
+describe('AiRunStatus', function () {
+    it('has seven cases', function () {
+        expect(AiRunStatus::cases())->toHaveCount(7);
     });
 
     it('identifies terminal states correctly', function () {
-        expect(TurnStatus::Queued->isTerminal())->toBeFalse()
-            ->and(TurnStatus::Booting->isTerminal())->toBeFalse()
-            ->and(TurnStatus::Running->isTerminal())->toBeFalse()
-            ->and(TurnStatus::Completed->isTerminal())->toBeTrue()
-            ->and(TurnStatus::Failed->isTerminal())->toBeTrue()
-            ->and(TurnStatus::Cancelled->isTerminal())->toBeTrue();
+        expect(AiRunStatus::Queued->isTerminal())->toBeFalse()
+            ->and(AiRunStatus::Booting->isTerminal())->toBeFalse()
+            ->and(AiRunStatus::Running->isTerminal())->toBeFalse()
+            ->and(AiRunStatus::Succeeded->isTerminal())->toBeTrue()
+            ->and(AiRunStatus::Failed->isTerminal())->toBeTrue()
+            ->and(AiRunStatus::Cancelled->isTerminal())->toBeTrue()
+            ->and(AiRunStatus::TimedOut->isTerminal())->toBeTrue();
     });
 
     it('provides inverse of terminal via isActive', function () {
-        foreach (TurnStatus::cases() as $case) {
+        foreach (AiRunStatus::cases() as $case) {
             expect($case->isActive())->toBe(! $case->isTerminal());
         }
     });
 
     it('enforces valid state transitions from queued', function () {
-        $queued = TurnStatus::Queued;
-        expect($queued->canTransitionTo(TurnStatus::Booting))->toBeTrue()
-            ->and($queued->canTransitionTo(TurnStatus::Failed))->toBeTrue()
-            ->and($queued->canTransitionTo(TurnStatus::Cancelled))->toBeTrue()
-            ->and($queued->canTransitionTo(TurnStatus::Running))->toBeFalse()
-            ->and($queued->canTransitionTo(TurnStatus::Completed))->toBeFalse();
+        $queued = AiRunStatus::Queued;
+        expect($queued->canTransitionTo(AiRunStatus::Booting))->toBeTrue()
+            ->and($queued->canTransitionTo(AiRunStatus::Failed))->toBeTrue()
+            ->and($queued->canTransitionTo(AiRunStatus::Cancelled))->toBeTrue()
+            ->and($queued->canTransitionTo(AiRunStatus::TimedOut))->toBeTrue()
+            ->and($queued->canTransitionTo(AiRunStatus::Running))->toBeFalse()
+            ->and($queued->canTransitionTo(AiRunStatus::Succeeded))->toBeFalse();
     });
 
     it('enforces valid state transitions from booting', function () {
-        $booting = TurnStatus::Booting;
-        expect($booting->canTransitionTo(TurnStatus::Running))->toBeTrue()
-            ->and($booting->canTransitionTo(TurnStatus::Failed))->toBeTrue()
-            ->and($booting->canTransitionTo(TurnStatus::Cancelled))->toBeTrue()
-            ->and($booting->canTransitionTo(TurnStatus::Queued))->toBeFalse()
-            ->and($booting->canTransitionTo(TurnStatus::Completed))->toBeFalse();
+        $booting = AiRunStatus::Booting;
+        expect($booting->canTransitionTo(AiRunStatus::Running))->toBeTrue()
+            ->and($booting->canTransitionTo(AiRunStatus::Failed))->toBeTrue()
+            ->and($booting->canTransitionTo(AiRunStatus::Cancelled))->toBeTrue()
+            ->and($booting->canTransitionTo(AiRunStatus::TimedOut))->toBeTrue()
+            ->and($booting->canTransitionTo(AiRunStatus::Queued))->toBeFalse()
+            ->and($booting->canTransitionTo(AiRunStatus::Succeeded))->toBeFalse();
     });
 
     it('enforces valid state transitions from running', function () {
-        $running = TurnStatus::Running;
-        expect($running->canTransitionTo(TurnStatus::Completed))->toBeTrue()
-            ->and($running->canTransitionTo(TurnStatus::Failed))->toBeTrue()
-            ->and($running->canTransitionTo(TurnStatus::Cancelled))->toBeTrue()
-            ->and($running->canTransitionTo(TurnStatus::Queued))->toBeFalse()
-            ->and($running->canTransitionTo(TurnStatus::Booting))->toBeFalse();
+        $running = AiRunStatus::Running;
+        expect($running->canTransitionTo(AiRunStatus::Succeeded))->toBeTrue()
+            ->and($running->canTransitionTo(AiRunStatus::Failed))->toBeTrue()
+            ->and($running->canTransitionTo(AiRunStatus::Cancelled))->toBeTrue()
+            ->and($running->canTransitionTo(AiRunStatus::TimedOut))->toBeTrue()
+            ->and($running->canTransitionTo(AiRunStatus::Queued))->toBeFalse()
+            ->and($running->canTransitionTo(AiRunStatus::Booting))->toBeFalse();
     });
 
     it('blocks transitions from terminal states', function () {
-        foreach ([TurnStatus::Completed, TurnStatus::Failed, TurnStatus::Cancelled] as $terminal) {
+        foreach ([AiRunStatus::Succeeded, AiRunStatus::Failed, AiRunStatus::Cancelled, AiRunStatus::TimedOut] as $terminal) {
             expect($terminal->allowedTransitions())->toBeEmpty();
 
-            foreach (TurnStatus::cases() as $target) {
+            foreach (AiRunStatus::cases() as $target) {
                 expect($terminal->canTransitionTo($target))->toBeFalse();
             }
         }
     });
 
     it('provides non-empty labels and colors for all cases', function () {
-        foreach (TurnStatus::cases() as $case) {
+        foreach (AiRunStatus::cases() as $case) {
             expect($case->label())->toBeString()->not()->toBeEmpty()
                 ->and($case->color())->toBeString()->not()->toBeEmpty();
         }
     });
 
     it('maps expected backing values', function () {
-        expect(TurnStatus::Queued->value)->toBe('queued')
-            ->and(TurnStatus::Booting->value)->toBe('booting')
-            ->and(TurnStatus::Running->value)->toBe('running')
-            ->and(TurnStatus::Completed->value)->toBe('completed')
-            ->and(TurnStatus::Failed->value)->toBe('failed')
-            ->and(TurnStatus::Cancelled->value)->toBe('cancelled');
+        expect(AiRunStatus::Queued->value)->toBe('queued')
+            ->and(AiRunStatus::Booting->value)->toBe('booting')
+            ->and(AiRunStatus::Running->value)->toBe('running')
+            ->and(AiRunStatus::Succeeded->value)->toBe('succeeded')
+            ->and(AiRunStatus::Failed->value)->toBe('failed')
+            ->and(AiRunStatus::Cancelled->value)->toBe('cancelled')
+            ->and(AiRunStatus::TimedOut->value)->toBe('timed_out');
     });
 });
 
 // ------------------------------------------------------------------
-// TurnPhase — user-visible sub-state
+// RunPhase — user-visible sub-state
 // ------------------------------------------------------------------
 
-describe('TurnPhase', function () {
+describe('RunPhase', function () {
     it('has seven cases', function () {
-        expect(TurnPhase::cases())->toHaveCount(7);
+        expect(RunPhase::cases())->toHaveCount(7);
     });
 
     it('marks active phases as busy', function () {
-        expect(TurnPhase::WaitingForWorker->isBusy())->toBeTrue()
-            ->and(TurnPhase::AwaitingLlm->isBusy())->toBeTrue()
-            ->and(TurnPhase::RunningTool->isBusy())->toBeTrue()
-            ->and(TurnPhase::StreamingAnswer->isBusy())->toBeTrue()
-            ->and(TurnPhase::Finalizing->isBusy())->toBeTrue()
-            ->and(TurnPhase::Failed->isBusy())->toBeFalse()
-            ->and(TurnPhase::Cancelled->isBusy())->toBeFalse();
+        expect(RunPhase::WaitingForWorker->isBusy())->toBeTrue()
+            ->and(RunPhase::AwaitingLlm->isBusy())->toBeTrue()
+            ->and(RunPhase::RunningTool->isBusy())->toBeTrue()
+            ->and(RunPhase::StreamingAnswer->isBusy())->toBeTrue()
+            ->and(RunPhase::Finalizing->isBusy())->toBeTrue()
+            ->and(RunPhase::Failed->isBusy())->toBeFalse()
+            ->and(RunPhase::Cancelled->isBusy())->toBeFalse();
     });
 
     it('provides non-empty labels and icons for all cases', function () {
-        foreach (TurnPhase::cases() as $case) {
+        foreach (RunPhase::cases() as $case) {
             expect($case->label())->toBeString()->not()->toBeEmpty()
                 ->and($case->icon())->toBeString()->not()->toBeEmpty();
         }
     });
 
     it('maps expected backing values', function () {
-        expect(TurnPhase::WaitingForWorker->value)->toBe('waiting_for_worker')
-            ->and(TurnPhase::AwaitingLlm->value)->toBe('awaiting_llm')
-            ->and(TurnPhase::RunningTool->value)->toBe('running_tool')
-            ->and(TurnPhase::StreamingAnswer->value)->toBe('streaming_answer')
-            ->and(TurnPhase::Finalizing->value)->toBe('finalizing');
+        expect(RunPhase::WaitingForWorker->value)->toBe('waiting_for_worker')
+            ->and(RunPhase::AwaitingLlm->value)->toBe('awaiting_llm')
+            ->and(RunPhase::RunningTool->value)->toBe('running_tool')
+            ->and(RunPhase::StreamingAnswer->value)->toBe('streaming_answer')
+            ->and(RunPhase::Finalizing->value)->toBe('finalizing');
     });
 });
 
 // ------------------------------------------------------------------
-// TurnEventType — event taxonomy contract
+// RunEventType — event taxonomy contract
 // ------------------------------------------------------------------
 
-describe('TurnEventType', function () {
+describe('RunEventType', function () {
     it('has nineteen cases', function () {
-        expect(TurnEventType::cases())->toHaveCount(19);
+        expect(RunEventType::cases())->toHaveCount(17);
     });
 
     it('uses dot-separated naming convention except for single-word events', function () {
         $singleWordAllowed = ['heartbeat'];
 
-        foreach (TurnEventType::cases() as $case) {
+        foreach (RunEventType::cases() as $case) {
             if (in_array($case->value, $singleWordAllowed, true)) {
                 continue;
             }
@@ -143,53 +148,50 @@ describe('TurnEventType', function () {
     });
 
     it('identifies terminal events correctly', function () {
-        expect(TurnEventType::TurnCompleted->isTerminal())->toBeTrue()
-            ->and(TurnEventType::TurnFailed->isTerminal())->toBeTrue()
-            ->and(TurnEventType::TurnCancelled->isTerminal())->toBeTrue()
-            ->and(TurnEventType::TurnStarted->isTerminal())->toBeFalse()
-            ->and(TurnEventType::AssistantOutputDelta->isTerminal())->toBeFalse()
-            ->and(TurnEventType::ToolStarted->isTerminal())->toBeFalse();
+        expect(RunEventType::RunCompleted->isTerminal())->toBeTrue()
+            ->and(RunEventType::RunFailed->isTerminal())->toBeTrue()
+            ->and(RunEventType::RunCancelled->isTerminal())->toBeTrue()
+            ->and(RunEventType::RunStarted->isTerminal())->toBeFalse()
+            ->and(RunEventType::AssistantOutputDelta->isTerminal())->toBeFalse()
+            ->and(RunEventType::ToolStarted->isTerminal())->toBeFalse();
     });
 
     it('identifies delta events correctly', function () {
-        expect(TurnEventType::AssistantOutputDelta->isDelta())->toBeTrue()
-            ->and(TurnEventType::ToolStdoutDelta->isDelta())->toBeTrue()
-            ->and(TurnEventType::TurnStarted->isDelta())->toBeFalse()
-            ->and(TurnEventType::ToolFinished->isDelta())->toBeFalse();
+        expect(RunEventType::AssistantOutputDelta->isDelta())->toBeTrue()
+            ->and(RunEventType::ToolStdoutDelta->isDelta())->toBeTrue()
+            ->and(RunEventType::RunStarted->isDelta())->toBeFalse()
+            ->and(RunEventType::ToolFinished->isDelta())->toBeFalse();
     });
 
     it('classifies severity for error events', function () {
-        expect(TurnEventType::TurnFailed->severity())->toBe('error')
-            ->and(TurnEventType::RunFailed->severity())->toBe('error');
+        expect(RunEventType::RunFailed->severity())->toBe('error');
     });
 
     it('classifies severity for warning events', function () {
-        expect(TurnEventType::ToolDenied->severity())->toBe('warning');
+        expect(RunEventType::ToolDenied->severity())->toBe('warning');
     });
 
     it('defaults to info severity for normal events', function () {
-        expect(TurnEventType::TurnStarted->severity())->toBe('info')
-            ->and(TurnEventType::AssistantOutputDelta->severity())->toBe('info')
-            ->and(TurnEventType::Heartbeat->severity())->toBe('info');
+        expect(RunEventType::RunStarted->severity())->toBe('info')
+            ->and(RunEventType::AssistantOutputDelta->severity())->toBe('info')
+            ->and(RunEventType::Heartbeat->severity())->toBe('info');
     });
 
     it('provides non-empty labels for all cases', function () {
-        foreach (TurnEventType::cases() as $case) {
+        foreach (RunEventType::cases() as $case) {
             expect($case->label())->toBeString()->not()->toBeEmpty();
         }
     });
 
     it('covers all expected event families', function () {
-        $values = array_map(fn ($c) => $c->value, TurnEventType::cases());
+        $values = array_map(fn ($c) => $c->value, RunEventType::cases());
 
-        expect($values)->toContain('turn.started')
-            ->toContain('turn.phase_changed')
-            ->toContain('turn.completed')
-            ->toContain('turn.failed')
-            ->toContain('turn.cancelled')
-            ->toContain('turn.ready_for_input')
-            ->toContain('run.started')
+        expect($values)->toContain('run.started')
+            ->toContain('run.phase_changed')
+            ->toContain('run.completed')
             ->toContain('run.failed')
+            ->toContain('run.cancelled')
+            ->toContain('run.ready_for_input')
             ->toContain('assistant.thinking_started')
             ->toContain('assistant.iteration_completed')
             ->toContain('assistant.output_delta')

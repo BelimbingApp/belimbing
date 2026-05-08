@@ -6,29 +6,38 @@
 namespace App\Modules\Core\AI\Models;
 
 use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Enums\RunEventType;
+use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * AI Run — canonical record of a single LLM execution.
+ * AI Run — universal execution envelope for AI work.
  *
- * Each row represents one invocation of AgenticRuntime (sync or streaming).
- * Contains provider path, timing, token usage, tool actions, retry/fallback
- * history, and error details. Never stores prompts, response bodies, or secrets.
+ * Each row represents one submitted unit of AI work: interactive chat,
+ * background tasks, orchestration sessions, or utility LLM calls. It owns the
+ * lifecycle state, wire-log key, ordered event stream, and aggregate usage.
+ * Never stores prompts, response bodies, or secrets.
  *
  * @property string $id
  * @property int $employee_id
  * @property string|null $session_id
  * @property int|null $acting_for_user_id
  * @property string|null $dispatch_id
- * @property string|null $turn_id
  * @property string $source
  * @property string $execution_mode
  * @property AiRunStatus $status
+ * @property RunPhase|null $current_phase
+ * @property string|null $current_label
+ * @property int|null $last_event_seq
+ * @property Carbon|null $cancel_requested_at
+ * @property array<string, mixed>|null $runtime_meta
  * @property string|null $provider_name
  * @property string|null $model
  * @property int|null $timeout_seconds
@@ -56,23 +65,12 @@ use Illuminate\Support\Carbon;
  * @property-read Employee $employee
  * @property-read User|null $actingForUser
  * @property-read OperationDispatch|null $dispatch
- * @property-read ChatTurn|null $turn
+ * @property-read Collection<int, AiRunEvent> $events
+ * @property-read Collection<int, AiRunCall> $calls
  */
 class AiRun extends Model
 {
-    /**
-     * Indicates if the IDs are auto-incrementing.
-     *
-     * @var bool
-     */
-    public $incrementing = false;
-
-    /**
-     * The "type" of the primary key ID.
-     *
-     * @var string
-     */
-    protected $keyType = 'string';
+    use HasUlids;
 
     /**
      * The table associated with the model.
@@ -92,10 +90,14 @@ class AiRun extends Model
         'session_id',
         'acting_for_user_id',
         'dispatch_id',
-        'turn_id',
         'source',
         'execution_mode',
         'status',
+        'current_phase',
+        'current_label',
+        'last_event_seq',
+        'cancel_requested_at',
+        'runtime_meta',
         'provider_name',
         'model',
         'timeout_seconds',
@@ -129,6 +131,10 @@ class AiRun extends Model
     {
         return [
             'status' => AiRunStatus::class,
+            'current_phase' => RunPhase::class,
+            'last_event_seq' => 'integer',
+            'cancel_requested_at' => 'datetime',
+            'runtime_meta' => 'json',
             'retry_attempts' => 'json',
             'tool_actions' => 'json',
             'meta' => 'json',
@@ -162,18 +168,127 @@ class AiRun extends Model
     }
 
     /**
-     * Get the user-facing chat turn that triggered this run.
-     */
-    public function turn(): BelongsTo
-    {
-        return $this->belongsTo(ChatTurn::class, 'turn_id');
-    }
-
-    /**
      * Per-LLM-call usage rows for this run.
      */
     public function calls(): HasMany
     {
         return $this->hasMany(AiRunCall::class, 'run_id')->orderBy('attempt_index');
+    }
+
+    /**
+     * Ordered event stream for this run.
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(AiRunEvent::class, 'run_id')->orderBy('seq');
+    }
+
+    /**
+     * Events after a given sequence number for SSE resume.
+     *
+     * @return HasMany<AiRunEvent, $this>
+     */
+    public function eventsAfter(int $afterSeq): HasMany
+    {
+        return $this->events()->where('seq', '>', $afterSeq);
+    }
+
+    public function isTerminal(): bool
+    {
+        return $this->status->isTerminal();
+    }
+
+    public function isCancelRequested(): bool
+    {
+        return $this->cancel_requested_at !== null;
+    }
+
+    public function requestCancel(string $reason = 'User pressed stop'): void
+    {
+        $this->cancel_requested_at = now();
+        $this->runtime_meta = array_merge($this->runtime_meta ?? [], [
+            'cancel_reason' => $reason,
+        ]);
+        $this->save();
+    }
+
+    public function isBusy(): bool
+    {
+        return $this->status->isActive();
+    }
+
+    /**
+     * Allocate the next event sequence number.
+     */
+    public function nextSeq(): int
+    {
+        if ($this->last_event_seq === null) {
+            $this->forceFill(['last_event_seq' => 0])->save();
+        }
+
+        $this->increment('last_event_seq');
+        $this->refresh();
+
+        return (int) $this->last_event_seq;
+    }
+
+    public function transitionTo(AiRunStatus $newStatus): void
+    {
+        if ($this->status === $newStatus) {
+            return;
+        }
+
+        if (! $this->status->canTransitionTo($newStatus)) {
+            throw new \InvalidArgumentException(
+                "Cannot transition run from {$this->status->value} to {$newStatus->value}"
+            );
+        }
+
+        $this->status = $newStatus;
+
+        if ($newStatus === AiRunStatus::Running && $this->started_at === null) {
+            $this->started_at = now();
+        }
+
+        if ($newStatus->isTerminal()) {
+            $finishedAt = now();
+            $this->finished_at = $finishedAt;
+
+            if ($this->latency_ms === null && $this->started_at !== null) {
+                $this->latency_ms = max(0, (int) $this->started_at->diffInMilliseconds($finishedAt));
+            }
+        }
+
+        $this->save();
+    }
+
+    public function updatePhase(RunPhase $phase, ?string $label = null): void
+    {
+        $this->current_phase = $phase;
+        $this->current_label = $label;
+        $this->save();
+    }
+
+    public function finalize(AiRunStatus $terminalStatus, ?array $payload = null): void
+    {
+        $eventType = match ($terminalStatus) {
+            AiRunStatus::Succeeded => RunEventType::RunCompleted,
+            AiRunStatus::Failed, AiRunStatus::TimedOut => RunEventType::RunFailed,
+            AiRunStatus::Cancelled => RunEventType::RunCancelled,
+            default => throw new \InvalidArgumentException(
+                "Cannot finalize with non-terminal status: {$terminalStatus->value}"
+            ),
+        };
+
+        $seq = $this->nextSeq();
+
+        AiRunEvent::query()->create([
+            'run_id' => $this->id,
+            'seq' => $seq,
+            'event_type' => $eventType->value,
+            'payload' => $payload,
+        ]);
+
+        $this->transitionTo($terminalStatus);
     }
 }

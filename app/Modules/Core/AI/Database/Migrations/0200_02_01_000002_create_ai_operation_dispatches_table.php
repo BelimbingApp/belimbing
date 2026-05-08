@@ -22,7 +22,7 @@ return new class extends Migration
             $table->nullableMorphs('entity');
             $table->text('task');
             $table->string('status', 20)->default('queued');
-            $table->string('run_id')->nullable();
+            $table->ulid('run_id')->nullable();
             $table->text('result_summary')->nullable();
             $table->text('error_message')->nullable();
             $table->json('meta')->nullable();

@@ -16,8 +16,8 @@
         _draftKey: 'blb-lara-draft-{{ auth()->id() }}',
         _sessionDragging: false,
         activeTurnSummaries: @js($activeTurnsBySession ?? []),
-        replayUrlTemplate: @js(route('ai.chat.turn.events', ['turnId' => '__TURN__'])),
-        terminalTurnStatuses: ['completed', 'failed', 'cancelled'],
+        replayUrlTemplate: @js(route('ai.chat.turn.events', ['runId' => '__TURN__'])),
+        terminalTurnStatuses: ['succeeded', 'failed', 'cancelled', 'timed_out'],
         phaseLabels: @js($phaseLabels),
         stoppingLabel: @js(__('Stopping… waiting for stream to stop')),
         _summaryPollTimer: null,
@@ -225,7 +225,7 @@
         }
     "
     @navigate.window="$wire.set('pageUrl', window.location.href)"
-    @agent-chat-response-ready.window="if ($event.detail?.sessionId) clearSummary($event.detail.sessionId, $event.detail?.turnId || null)"
+    @agent-chat-response-ready.window="if ($event.detail?.sessionId) clearSummary($event.detail.sessionId, $event.detail?.runId || null)"
     @agent-chat-focus-composer.window="$nextTick(() => $refs.agentComposer?.focus())"
     @agent-chat-opened.window="if ($event.detail?.prompt) { $wire.set('messageInput', $event.detail.prompt); $nextTick(() => $refs.agentComposer?.focus()); }"
 >
@@ -589,7 +589,7 @@
                     waitingForWorkerLabel: @js(__('Waiting for worker…')),
                     turnFailedMessage: @js(__('Turn failed')),
                     connectionLostMessage: @js(__('Connection lost. Please try again.')),
-                    replayUrlTemplate: @js(route('ai.chat.turn.events', ['turnId' => '__TURN__'])),
+                    replayUrlTemplate: @js(route('ai.chat.turn.events', ['runId' => '__TURN__'])),
                 })"
                 x-effect="window.dispatchEvent(new CustomEvent(isBusy ? 'agent-chat-busy' : 'agent-chat-idle'))"
                 x-on:agent-chat-response-ready.window="onServerTurnReady($event.detail || {})"
@@ -1414,8 +1414,8 @@
             }
         },
 
-        repairAbandonedSelectedSession(turnId) {
-            if (!turnId || this.selectedTurnId !== turnId) {
+        repairAbandonedSelectedSession(runId) {
+            if (!runId || this.selectedTurnId !== runId) {
                 return;
             }
 
@@ -1538,7 +1538,7 @@
                     return;
                 }
 
-                const isTerminal = ['completed', 'failed', 'cancelled'].includes(json.status);
+                const isTerminal = ['succeeded', 'failed', 'cancelled', 'timed_out'].includes(json.status);
                 if (isTerminal && this.selectedTurnId === turnId) {
                     this.repairAbandonedSelectedSession(turnId);
                     return;
@@ -1642,7 +1642,7 @@
 
         async handleTurnEvent(eventType, data, scrollContainer, turnId = null) {
             const seq = Number.parseInt(data?.seq ?? 0, 10) || 0;
-            const activeTurnId = turnId || data.turn_id || this.selectedTurnId;
+            const activeTurnId = turnId || data.run_id || this.selectedTurnId;
             const state = this.ensureTurnState(activeTurnId);
             if (!activeTurnId || !state) {
                 return;
@@ -1669,7 +1669,7 @@
         },
 
         processTurnEvent(eventType, data, scrollContainer, turnId = null) {
-            const activeTurnId = turnId || data.turn_id || this.selectedTurnId;
+            const activeTurnId = turnId || data.run_id || this.selectedTurnId;
             const state = this.ensureTurnState(activeTurnId);
             if (!activeTurnId || !state) {
                 return;
@@ -1678,11 +1678,11 @@
             if (data.seq) state.lastSeq = data.seq;
 
             switch (eventType) {
-                case 'turn.started':
+                case 'run.started':
                     this.onTurnStarted(data, activeTurnId);
                     break;
 
-                case 'turn.phase_changed':
+                case 'run.phase_changed':
                     this.onPhaseChanged(data, activeTurnId);
                     break;
 
@@ -1721,17 +1721,17 @@
                     this.flushDeltaBuffer(activeTurnId);
                     break;
 
-                case 'turn.completed':
-                case 'turn.ready_for_input':
+                case 'run.completed':
+                case 'run.ready_for_input':
                     this.removeThinkingEntries(activeTurnId);
                     this.finalizeTurnStream(activeTurnId);
                     return;
 
-                case 'turn.failed':
+                case 'run.failed':
                     this.onTurnFailed(data, activeTurnId);
                     return;
 
-                case 'turn.cancelled':
+                case 'run.cancelled':
                     this.finalizeTurnStream(activeTurnId);
                     return;
             }

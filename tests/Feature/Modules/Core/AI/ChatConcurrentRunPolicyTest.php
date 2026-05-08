@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
-use App\Modules\Core\AI\Enums\TurnPhase;
-use App\Modules\Core\AI\Enums\TurnStatus;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Livewire\Chat;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\AI\Models\ChatTurn;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Company\Models\Company;
@@ -85,12 +85,12 @@ it('rejects same-session submit when an active turn already exists', function ()
 
     $session = app(SessionManager::class)->create(Employee::LARA_ID);
 
-    $activeTurn = ChatTurn::query()->create([
+    $activeTurn = AiRun::query()->create([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $session->id,
         'acting_for_user_id' => $user->id,
-        'status' => TurnStatus::Running,
-        'current_phase' => TurnPhase::AwaitingLlm,
+        'status' => AiRunStatus::Running,
+        'current_phase' => RunPhase::AwaitingLlm,
         'current_label' => 'Analyzing context…',
         'created_at' => now()->subMinutes(3),
         'started_at' => now()->subMinutes(2),
@@ -104,14 +104,14 @@ it('rejects same-session submit when an active turn already exists', function ()
 
     expect($result)->not->toBeNull()
         ->and($result['status'])->toBe('session_busy')
-        ->and($result['turnId'])->toBe($activeTurn->id)
+        ->and($result['runId'])->toBe($activeTurn->id)
         ->and($result['session_id'])->toBe($session->id)
-        ->and($result['phase'])->toBe(TurnPhase::AwaitingLlm->value)
+        ->and($result['phase'])->toBe(RunPhase::AwaitingLlm->value)
         ->and($result['label'])->toBe('Analyzing context…')
         ->and($result['streamUrl'] ?? null)->toBeNull()
         ->and($component->instance()->messageInput)->toBe('Can you continue?');
 
-    expect(ChatTurn::query()
+    expect(AiRun::query()
         ->where('session_id', $session->id)
         ->where('acting_for_user_id', $user->id)
         ->count())->toBe(1);
@@ -127,12 +127,12 @@ it('allows a different user to start a run even when another user has an active 
     $this->actingAs($userB);
     $session = app(SessionManager::class)->create(Employee::LARA_ID);
 
-    ChatTurn::query()->create([
+    AiRun::query()->create([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $session->id,
         'acting_for_user_id' => $userA->id,
-        'status' => TurnStatus::Running,
-        'current_phase' => TurnPhase::AwaitingLlm,
+        'status' => AiRunStatus::Running,
+        'current_phase' => RunPhase::AwaitingLlm,
         'current_label' => 'Busy elsewhere',
     ]);
 
@@ -144,12 +144,12 @@ it('allows a different user to start a run even when another user has an active 
 
     expect($result)->not->toBeNull()
         ->and($result['status'])->toBe('started')
-        ->and($result['turnId'])->toBeString()
-        ->and($result['turnId'])->not->toBeEmpty()
+        ->and($result['runId'])->toBeString()
+        ->and($result['runId'])->not->toBeEmpty()
         ->and($result['streamUrl'])->toBeString()
         ->and($result['session_id'])->toBe($session->id);
 
-    expect(ChatTurn::query()
+    expect(AiRun::query()
         ->where('session_id', $session->id)
         ->where('acting_for_user_id', $userB->id)
         ->count())->toBe(1);
@@ -170,8 +170,8 @@ it('returns durable timer metadata when starting a new turn', function (): void 
 
     expect($result)->not->toBeNull()
         ->and($result['status'])->toBe('started')
-        ->and($result['phase'])->toBe(TurnPhase::WaitingForWorker->value)
-        ->and($result['label'])->toBe(TurnPhase::WaitingForWorker->label())
+        ->and($result['phase'])->toBe(RunPhase::WaitingForWorker->value)
+        ->and($result['label'])->toBe(RunPhase::WaitingForWorker->label())
         ->and($result['created_at'])->toBeString()
         ->and($result['timer_anchor_at'])->toBe($result['created_at'])
         ->and($result['replayUrl'])->toContain('/api/ai/chat/turns/')
