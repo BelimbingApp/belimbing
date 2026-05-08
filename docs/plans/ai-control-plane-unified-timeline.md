@@ -1,9 +1,9 @@
 # ai-control-plane-unified-timeline
 
-**Status:** Phase 1 Complete — Phase 2 Designing
+**Status:** Phase 1 Complete — Phase 2 Designing (entity unification; background + chat share one envelope)
 **Last Updated:** 2026-05-08
 **Sources:** `backup/pre-unified-entity` branch (snapshot before Phase 1); DB backup `01kr2w72bssreaxjxy2gss0gqp`; wire log backup `storage/app/ai/wire-logs-backup-pre-unified/` (26 files, 75 MB — delete after Phase 2 is confirmed stable)
-**Agents:** claude/sonnet-4-6
+**Agents:** claude/sonnet-4-6, amp/opus-4-7, codex/gpt-5.5-medium
 
 ## Problem Essence
 
@@ -11,35 +11,51 @@ The control plane's Run Inspector and Turn Inspector tabs force operators to nav
 
 ## Desired Outcome
 
-A unified Prompt Timeline view that interleaves turn meta-events (DB) and wire log entries (disk) onto one chronological axis, so an operator can diagnose any prompt end-to-end without switching tabs. The Turn Inspector tab becomes a Session Inspector, giving session-scoped entry into individual prompt timelines.
+A unified Prompt Timeline view that interleaves run meta-events (DB) and wire log entries (disk) onto one chronological axis, so an operator can diagnose any prompt end-to-end without switching tabs. Every AI execution — interactive chat, background job, orchestration session — flows through a single execution envelope, so the same timeline surface diagnoses chat and non-chat work without per-source plumbing.
 
 ## Design Decisions
 
 ### Mental model
 
+`AiRun` is the universal execution envelope for any LLM call in the system. It carries the full lifecycle (queue → boot → execute → terminal), all telemetry (tokens, cost, retries, tools, error), and is the FK target for events, wire logs, and per-call usage rows. The source column distinguishes who minted it. `session_id` is optional execution/session correlation: chat commonly sets it, and background work may set it when it participates in a multi-turn or transcript-backed workflow.
+
 ```
-Session
-└── Prompt  →  Turn (meta-run)           ← queue, cancel, phase, SSE stream
-               └── Run (LLM execution)   ← wire log, transcript, token usage
-                    └── AiRunCall ×N     ← individual LLM API call iterations
+                       ╭───────────────────────────────╮
+                       │  AiRun (universal envelope)   │
+                       │  ULID id  •  source: chat /   │
+                       │             background /      │
+                       │             orchestration     │
+                       ╰─┬───────────┬──────────┬──────╯
+                         │           │          │
+                  AiRunEvent ×N   wire log    AiRunCall ×N
+                  (DB, ordered)   (JSONL)     (per LLM call)
+
+  Chat path:        ChatTurnRunner ─────────▶ AiRun (source=chat, session_id set)
+  Background path:  RunAgentTaskJob   ─┐
+                    RunLaraTaskProf…  ─┤───▶ AiRun (source=background, dispatch_id set)
+                    SpawnAgentSession ─┤
+                    SimpleTaskExecutor ┘
 ```
 
-Turn is the lifecycle envelope — it exists before the run starts (queued/booting), narrates run sub-events, and closes after the run closes. Run is the execution record, created only when a worker begins the LLM call. In the normal path a prompt maps 1:1:1.
+The envelope is minted by the caller before execution begins. The runtime receives the ULID and updates the existing row as execution proceeds. Chat lifecycle fields (`current_phase`, `current_label`, `last_event_seq`) are nullable and populated only when the caller emits lifecycle events. Background paths can leave those fields null and use `dispatch_id` and/or `session_id` for correlation. Lifecycle events are an opt-in concern — only the chat path emits them today.
 
-### Turn event taxonomy
+### Run event taxonomy
 
-**Meta-only** (not on the wire, not in the run — kept in the unified timeline):
-- `turn.started`, `turn.phase_changed`, `turn.completed`, `turn.failed`, `turn.cancelled`, `turn.ready_for_input`
-- `run.started`, `run.failed`
+After unification the `turn.*` and `run.*` event prefixes collapse: there is one envelope, so events are namespaced under `run.*`. The old `run.started` / `run.failed` markers (which signalled the LLM execution starting *inside* a turn) drop out — the envelope's own status transitions cover them.
+
+**Meta-only** (envelope lifecycle and out-of-band signals, kept in the unified timeline):
+- `run.started`, `run.phase_changed`, `run.completed`, `run.failed`, `run.cancelled`, `run.ready_for_input`
 - `heartbeat`
 - `tool.denied` (policy rejection before tool ran)
 
-**Already captured by the run** (wire log or transcript — shown via wire log entries, not repeated as meta markers):
+**Already captured on the wire** (shown via wire log entries, not repeated as meta markers):
 - `assistant.thinking_delta`, `assistant.thinking_started`, `assistant.iteration_completed`
 - `assistant.output_delta`, `assistant.output_block_committed`
 - `tool.started`, `tool.finished` (wire log `tool_use` / `tool_result` blocks)
 - `tool.stdout_delta` (tool result content in transcript)
 - `usage.updated` (wire log final chunk)
+
+Usage accounting is DB-first, not event-first. Provider usage and cost are persisted in `ai_run_calls` per LLM call and aggregated onto `ai_runs` for billing, reporting, and session totals. Timeline filtering can hide or omit `usage.updated` markers, but Phase 2 must not drop the DB usage columns, raw provider usage payload, per-call rows, or aggregate refresh behavior.
 
 ### Recovery events — removed (YAGNI)
 
@@ -47,28 +63,24 @@ Turn is the lifecycle envelope — it exists before the run starts (queued/booti
 
 ### Unified timeline layout
 
-Turn meta-events (DB) and wire log entries (disk) are interleaved by timestamp. They do not bracket each other cleanly — meta-events fire during wire activity at arbitrary points. Both sources are normalised to `{timestamp, source, type, payload}` and sorted chronologically.
+Run meta-events (DB) and wire log entries (disk) are interleaved by timestamp. They do not bracket each other cleanly — meta-events fire during wire activity at arbitrary points. Both sources are normalised to `{timestamp, source, type, payload}` and sorted chronologically.
 
 ```
-[Prompt] ──────────────────────────────────────────────────────────
-  ↓ [META] turn.started        queued              +0ms
-  ↓ [META] turn.phase_changed  booting             +120ms
-  ↓ [META] run.started         run_abc123          +340ms  → run detail
+[Prompt — AiRun 01HKQ7…] ─────────────────────────────────────────
+  ↓ [META] run.started         queued              +0ms
+  ↓ [META] run.phase_changed   booting             +120ms
   ═ [WIRE] → REQUEST           messages[12]        +380ms
-  ↓ [META] turn.phase_changed  awaiting LLM        +385ms
+  ↓ [META] run.phase_changed   awaiting LLM        +385ms
   ═ [WIRE] ← chunk             thinking delta      +410ms
   ═ [WIRE] ← chunk             thinking delta      +450ms
   ↓ [META] heartbeat           elapsed 500ms       +500ms
   ═ [WIRE] ← chunk             tool_use: bash      +900ms
-  ↓ [META] tool.started        bash / ls -la       +902ms
   ═ [WIRE] → tool_result       stdout preview      +1200ms
-  ↓ [META] tool.finished       bash / ok           +1202ms
-  ↓ [META] turn.phase_changed  streaming answer    +1210ms
+  ↓ [META] run.phase_changed   streaming answer    +1210ms
   ═ [WIRE] ← chunk             output delta        +1250ms
-  ↓ [META] usage.updated       prompt 312 / comp 88 +1290ms
   ═ [WIRE] ← RESPONSE complete 512 tok / 88ms      +1300ms
-  ↓ [META] turn.completed                          +1320ms
-  ↓ [META] turn.ready_for_input                    +1325ms
+  ↓ [META] run.completed                           +1320ms
+  ↓ [META] run.ready_for_input                     +1325ms
 ───────────────────────────────────────────────────────────────────
 ```
 
@@ -76,9 +88,9 @@ Turn meta-events (DB) and wire log entries (disk) are interleaved by timestamp. 
 
 ### Two-source merge
 
-Wire log entries live on disk (files via `WireLogger`). Turn events live in DB (`ai_chat_turn_events`). `buildRunView` must be extended (or a new `buildPromptTimelineView` introduced) to fetch both, normalise to a common shape, and merge by timestamp.
+Wire log entries live on disk (files via `WireLogger`, keyed by run ULID). Run events live in DB (`ai_run_events`). `buildPromptTimelineView(string $runId)` fetches both, normalises to a common shape, and merges by timestamp.
 
-Some turn events reliably fall outside the wire log's time range — `turn.started`, `turn.phase_changed` (queued/booting), `run.started` precede the first HTTP request; `turn.completed` and `turn.ready_for_input` follow the last response — forming a natural prologue and epilogue. All other meta-events interleave within the wire segment.
+Some meta events reliably fall outside the wire log's time range — `run.started`, `run.phase_changed` (queued/booting) precede the first HTTP request; `run.completed` and `run.ready_for_input` follow the last response — forming a natural prologue and epilogue. All other meta-events interleave within the wire segment. Background runs typically have no meta events at all, so their timeline is just the wire segment.
 
 ### Gap diagnostics
 
@@ -90,13 +102,13 @@ Delta events (`assistant.thinking_delta`, `assistant.output_delta`, `tool.stdout
 
 ### Tabs after refactor
 
-| Tab | Before | After |
-|---|---|---|
-| Run Inspector | Drill by run ID, wire log + transcript | Retained as deep-dive surface, reached via Prompt Timeline |
-| Turn Inspector | Drill by turn ID, full event timeline | Becomes Session Inspector |
-| Prompt Timeline | Does not exist | New: unified meta + wire log view |
-| Health & Presence | Unchanged | Unchanged |
-| Lifecycle Controls | Unchanged | Unchanged |
+| Tab | Before | After (Phase 3) | Phase 4 (optional) |
+|---|---|---|---|
+| Run Inspector | Drill by run ID, wire log + transcript | Retained as deep-dive surface, reached via Prompt Timeline | Unchanged |
+| Turn Inspector | Drill by turn ID, full event timeline | Unchanged | Becomes Session Inspector |
+| Prompt Timeline | Does not exist | New: unified meta + wire log view (chat runs) | Surfaces background runs too |
+| Health & Presence | Unchanged | Unchanged | Unchanged |
+| Lifecycle Controls | Unchanged | Unchanged | Unchanged |
 
 ## Phases
 
@@ -108,64 +120,85 @@ Delta events (`assistant.thinking_delta`, `assistant.output_delta`, `tool.stdout
 - [x] Remove `onRecoveryAttempted()`, `onRecoverySucceeded()`, and dispatch cases from `TurnStreamBridge` — claude-sonnet-4-6
 - [x] Remove recovery tests from `TurnEventPublisherTest`, `TurnStreamBridgeTest`, `TurnContractEnumsTest`; update case count 22 → 19 — claude-sonnet-4-6
 
-### Phase 2 — Merge Turn and Run into one unified entity
+### Phase 2 — Unify execution envelope
 
-Since one prompt always produces one turn and one run (1:1:1 invariant, recovery removed in Phase 1), the two-table design adds indirection without benefit. With destructive migration evolution we can redesign from scratch as though they were always one thing.
+Promote `ai_runs` to the universal AI execution envelope. Drop `ai_chat_turns` and absorb its lifecycle fields onto `ai_runs`. Every LLM call — interactive chat, background job, orchestration session — flows through one entity with one ID format (ULID), one status enum, and one wire-log naming scheme. This is the storage prerequisite for the Prompt Timeline (Phase 3) treating chat and non-chat work uniformly.
 
-**Design:**
+**Target shape:**
 
-One entity carries the full prompt lifecycle — pre-execution state (queued/booting), runtime execution state (running), and terminal state (completed/failed/cancelled), plus all run-specific data (provider, model, tokens, latency, error). The entity is created at prompt submission with a ULID; the runtime receives that ULID rather than generating its own `run_<random12>` ID.
+`ai_runs` keeps every column it has today (`dispatch_id`, `source`, `execution_mode`, `provider_name`, `model`, all token / cost / pricing columns, `call_count`, `retry_attempts`, `tool_actions`, `error_*`, `meta`, `started_at`, `finished_at`) and gains lifecycle columns lifted from `ChatTurn`:
 
-```
-ai_chat_turns (unified)
-  id              ULID — primary key, used by wire log, turn events, run calls
-  employee_id
-  session_id
-  acting_for_user_id
-  status          queued → booting → running → completed / failed / cancelled
-  current_phase   fine-grained phase label for UI busy signal
-  current_label
-  last_event_seq  SSE resume pointer
-  cancel_requested_at
-  runtime_meta    model override, page context, execution mode
-  source          chat / background / …
-  execution_mode
-  timeout_seconds
-  error_type
-  error_message
-  latency_ms
-  meta            provider, model, token counts, tool actions (populated on completion)
-  started_at
-  finished_at
-  created_at / updated_at
-```
+- `session_id` — already present, stays nullable; populated by chat and by background work that belongs to a session or transcript-backed workflow
+- `current_phase`, `current_label` — nullable, populated by lifecycle-event emitters, currently the chat path
+- `last_event_seq` — nullable, populated only when events are emitted
+- `cancel_requested_at`, `runtime_meta` — nullable, populated only by chat path
+- `acting_for_user_id` — already present
 
-`current_run_id` is removed — it was a self-pointer.
+`ai_run_calls` remains the accounting ledger for per-call usage: prompt/completion/cached/reasoning/total tokens, raw provider usage payloads, rate-limit metadata, pricing source/version, and cost columns. `ai_runs` keeps the aggregate columns refreshed from those rows. Usage may appear in the wire log and transcript for diagnostics, but DB rows are the billing/reporting source of truth.
 
-Wire log files: `storage/app/ai/wire-logs/{ulid}.jsonl` — `WireLogger.path()` takes the entity ULID directly.
+`status` becomes a superset enum: `queued → booting → running → succeeded / failed / cancelled / timed_out`. Background paths skip `queued`/`booting` and start at `running` (no fake states until a non-chat surface needs them). `current_run_id` on `ChatTurn` disappears — the run *is* the envelope.
 
-**What collapses:**
-- `ai_runs` table and `AiRun` model — absorbed into `ai_chat_turns` / `ChatTurn`
-- `run_<random12>` ID generation in `AgenticRuntime` — replaced by the entity ULID threaded in from `ChatTurnRunner`
-- `RunRecorder.start()` insert — becomes an update on the existing entity row when execution begins
-- `current_run_id` column
-- The `turn_id → current_run_id` lookup needed by Phase 3 (Prompt Timeline)
+**ID and naming:**
 
-**What is unchanged:**
-- `ChatTurnEvent` and SSE stream — same FK, same contracts
-- `AiRunCall` — `run_id` column renamed to reference unified entity ULID
-- Lifecycle states and phase tracking
-- `chatWithRetry` silent in-run retry
-- **Activity Transcript UI** — `activity-transcript-card.blade.php`, transcript reading, message rendering; the data source is the transcript file (keyed by session), not the run row
-- **Wire Log UI** — entries view, readable view (`WireLogReadableFormatter`), raw entry streaming (`WireLogEntryController`), anomaly detection, stream-block rendering; wire log files change only their naming key (ULID instead of `run_<random12>`), all parsing and rendering logic is untouched
+- Primary key is ULID for every row. The `run_<random12>` format is dropped.
+- The caller (chat runner / background job / executor) mints the ULID before invoking the runtime.
+- `WireLogger.path()` accepts the run ULID directly: `storage/app/ai/wire-logs/{ulid}.jsonl`.
+- `AiRunCall.run_id` is a ULID FK to `ai_runs.id`.
+- `OperationDispatch.run_id` becomes a ULID FK to `ai_runs.id`.
+
+**Code rename:**
+
+- `ChatTurn` model → drop. References that meant "the chat-side view of a run" become `AiRun` with chat-specific accessors when needed.
+- `ChatTurnEvent` model + `ai_chat_turn_events` table → `AiRunEvent` + `ai_run_events`, FK retargets to `ai_runs.id`.
+- `ChatTurnRunner` keeps its name (it's still the chat-side runner) but now creates `AiRun` rows directly with `source='chat'` and threads the ULID into the runtime.
+- `TurnStatus`, `TurnPhase`, `TurnEventType` → `RunStatus`, `RunPhase`, `RunEventType` (or merged into existing `AiRunStatus` where the enum supersets cleanly).
+- `TurnEventPublisher`, `TurnStreamBridge`, `ChatTurnStreamController`, `TurnEventStreamController` rename their *Turn* prefix to *Run* in symbol names; SSE channel names follow.
+- `RunRecorder.start()` → `beginExecution(string $ulid, …)` — updates the existing envelope row instead of inserting.
+
+**Background-path changes:**
+
+- `RunAgentTaskJob`, `RunLaraTaskProfileJob`, `SpawnAgentSessionJob`, `SimpleTaskExecutor`, `TaskModelRecommendationService` mint the run ULID at job/dispatch construction (or at the executor entry point) and pass it to `AgenticRuntime::run(..., runId: $ulid)`.
+- `AgenticRuntime::run()` and `runStream()` lose their internal `run_<random12>` generation; both take the ULID as a required parameter.
+- `OperationDispatch` linkage stays via `dispatch_id` on `ai_runs`, written at envelope creation by the dispatching job (no separate `attachDispatch()` round-trip needed).
+
+**Destructive evolution:**
+
+Per the BLB destructive-evolution principle, no migration path for existing rows. All `ai_runs`, `ai_run_calls`, `ai_chat_turns`, `ai_chat_turn_events`, `operation_dispatches.run_id`, and existing wire-log files (`storage/app/ai/wire-logs/run_*.jsonl`) are dropped/recreated. The pre-Phase-1 backups (DB `01kr2w72bssreaxjxy2gss0gqp`, `wire-logs-backup-pre-unified/`) are no longer useful for restore after this phase — delete them when Phase 2 lands.
 
 **Scope:**
-- [ ] Merge `ai_runs` columns into `ai_chat_turns` migration; remove `create_ai_runs_table` migration
-- [ ] Merge `AiRun` model into `ChatTurn`; remove `AiRun` class
-- [ ] `AgenticRuntime.runStream()` — accept `turnId` parameter; use it as the run ID instead of generating one
-- [ ] `ChatTurnRunner` — thread entity ULID through to `AgenticRuntime`
-- [ ] `RunRecorder.start()` — update existing entity row rather than insert; collapse into `ChatTurn` methods or keep as updater
-- [ ] `WireLogger.path()` — accepts entity ULID (no format change needed, just the source of the ID)
-- [ ] Update `ai_run_calls` migration — `run_id` references unified entity
-- [ ] Update all service/query references that join or look up `ai_runs` separately — `RunDiagnosticService`, `ChatRunPersister`, `HealthAndPresenceService`, `MessageManager`, `ReapOrphanRunsCommand`
-- [ ] Update tests
+
+- [ ] Migration: extend `ai_runs` with lifecycle columns (`session_id` already there, add `current_phase`, `current_label`, `last_event_seq`, `cancel_requested_at`, `runtime_meta`); change `id` to ULID; drop `ai_chat_turns` and `ai_chat_turn_events` migrations; create `ai_run_events` migration with FK to `ai_runs.id`; update `ai_run_calls.run_id` to ULID FK while preserving every usage / raw usage / pricing / cost column; update `operation_dispatches.run_id` to ULID FK after `ai_runs` exists
+- [ ] Status enum: define unified `AiRunStatus` covering `queued → booting → running → succeeded / failed / cancelled / timed_out` with the same transition rules `TurnStatus` enforces today; drop `TurnStatus`
+- [ ] Models: drop `ChatTurn`; rename `ChatTurnEvent` → `AiRunEvent`; expand `AiRun` with chat-side helpers (`nextSeq`, `isCancelRequested`, `requestCancel`, `transitionTo`, `updatePhase`, `finalize`, `eventsAfter`); drop `current_run_id` accessor
+- [ ] Enums: rename `TurnPhase` → `RunPhase`, `TurnEventType` → `RunEventType`; collapse `turn.*` event prefixes to `run.*` per *Run event taxonomy*
+- [ ] Services: rename `TurnEventPublisher` → `RunEventPublisher`; rename `TurnStreamBridge` → `RunStreamBridge`; update `RunRecorder` to `beginExecution(ulid)` semantics; update `ChatRunPersister` to operate on `AiRun`; update `MessageManager`, `HealthAndPresenceService`, `RunDiagnosticService`, `RunInspectionService`, `LifecycleControlService`, `SweepStaleTurnsCommand`, `ReapOrphanRunsCommand`, `InspectRunCommand` to read the unified envelope
+- [ ] Runtime: `AgenticRuntime::run()` and `runStream()` accept `runId: $ulid` as a required parameter; remove internal `Str::random` ID generation; thread ULID through to `WireLogger` and `RunRecorder`
+- [ ] Caller mint sites: `ChatTurnRunner` (already creates the envelope), `RunAgentTaskJob`, `RunLaraTaskProfileJob`, `SpawnAgentSessionJob`, `SimpleTaskExecutor`, `TaskModelRecommendationService` — each mints the ULID upfront and inserts the envelope row before invoking the runtime
+- [ ] Controllers + Livewire: rename `ChatTurnStreamController` / `TurnEventStreamController` to `RunStreamController` / `RunEventStreamController`; update `Chat`, `ControlPlane`, and any Livewire components/concerns that reference `ChatTurn` or turn-prefixed symbols; SSE channel names follow
+- [ ] Wire log: `WireLogger.path()` takes ULID; remove any `run_` prefix logic; readable formatter and entry controller URLs use ULID
+- [ ] Tests: update fixtures, factories, and assertions across the AI test suite — `tests/AGENTS.md` quality bar applies; delete tests asserting the two-table split
+- [ ] Cleanup: remove `backup/pre-unified-entity` branch, DB backup `01kr2w72bssreaxjxy2gss0gqp`, and `storage/app/ai/wire-logs-backup-pre-unified/` once Phase 2 verifies green
+
+### Phase 3 — Build the Prompt Timeline
+
+With the envelope unified in Phase 2, the timeline view collapses to a straight composition: load events for a run ULID, read its wire log, merge by timestamp.
+
+**Scope:**
+
+- [ ] Build `buildPromptTimelineView(string $runId): array` — loads `AiRun` + ordered `AiRunEvent`s, reads the wire log via `WireLogger`, normalises both sources to `{timestamp, source, type, payload}`, returns the chronologically merged stream. Honour the prologue/epilogue split per *Two-source merge*.
+- [ ] Apply `gap_ms` and stuck-run detection to meta-event markers only (per *Gap diagnostics*).
+- [ ] Add a delta-collapse toggle hiding `assistant.thinking_delta`, `assistant.output_delta`, `tool.stdout_delta` (per *Filtering*).
+- [ ] Land a Prompt Timeline tab in the control plane Livewire surface. Render `[META]` entries with the visual treatment in *Unified timeline layout*. Link the run header to the Run Inspector deep-dive.
+- [ ] Restrict the tab's run picker to `source='chat'` for this phase (background runs are visible in Phase 4).
+- [ ] Tests: unit coverage for `buildPromptTimelineView` (chronological merge, prologue/epilogue ordering, delta collapse, run with no meta events); a Livewire feature test exercising the tab end-to-end.
+
+### Phase 4 — Operator surface for non-chat runs (optional)
+
+Once Phase 3 ships and the timeline is the primary diagnostic surface, lift the chat-only restriction and rename the legacy tab.
+
+**Scope:**
+
+- [ ] Drop the `source='chat'` filter on the Prompt Timeline run picker; surface background and orchestration runs alongside chat runs
+- [ ] Rename Turn Inspector → Session Inspector; rescope it to session-level navigation that lists run envelopes per session and links into the Prompt Timeline
+- [ ] Decide whether background paths should emit minimal lifecycle events (`run.started`, `run.completed`, `run.failed`) for symmetric timeline rendering, or whether their wire-log-only timeline is acceptable
+- [ ] Update `Tabs after refactor` to reflect the final state
