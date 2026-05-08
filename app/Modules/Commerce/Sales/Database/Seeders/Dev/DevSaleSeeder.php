@@ -16,6 +16,8 @@ use Illuminate\Support\Carbon;
 
 class DevSaleSeeder extends DevSeeder
 {
+    private const TITLE_HEADLIGHT = '2008 Honda Civic driver side headlight';
+
     protected array $dependencies = [
         DevInventoryItemSeeder::class,
     ];
@@ -122,7 +124,7 @@ class DevSaleSeeder extends DevSeeder
                 'external_order_id' => 'DEMO-ORDER-1001',
                 'buyer' => 'demo-buyer-aiden',
                 'sku' => 'ITEM-DEMO-HEADLIGHT',
-                'title' => '2008 Honda Civic driver side headlight',
+                'title' => self::TITLE_HEADLIGHT,
                 'quantity' => 1,
                 'sale_amount' => 52000,
                 'cost_basis_amount' => 18000,
@@ -158,7 +160,7 @@ class DevSaleSeeder extends DevSeeder
                 'external_order_id' => 'DEMO-ORDER-1004',
                 'buyer' => 'demo-buyer-dani',
                 'sku' => 'ITEM-DEMO-HEADLIGHT',
-                'title' => '2008 Honda Civic driver side headlight',
+                'title' => self::TITLE_HEADLIGHT,
                 'quantity' => 1,
                 'sale_amount' => 50000,
                 'cost_basis_amount' => 18000,
@@ -194,7 +196,7 @@ class DevSaleSeeder extends DevSeeder
                 'external_order_id' => 'DEMO-ORDER-1007',
                 'buyer' => 'demo-buyer-gabe',
                 'sku' => 'ITEM-DEMO-HEADLIGHT',
-                'title' => '2008 Honda Civic driver side headlight',
+                'title' => self::TITLE_HEADLIGHT,
                 'quantity' => 1,
                 'sale_amount' => 49500,
                 'cost_basis_amount' => 18000,

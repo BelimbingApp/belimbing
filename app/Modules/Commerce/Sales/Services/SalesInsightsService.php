@@ -25,13 +25,15 @@ use Illuminate\Support\Facades\DB;
  */
 class SalesInsightsService
 {
+    private const SELECT_SALE_COUNT = 'COUNT(*) as sale_count';
+
     public function soldInPeriod(int $companyId, Carbon $from, Carbon $to, string $currencyCode): SalesPeriodSummary
     {
         $row = Sale::query()
             ->where('company_id', $companyId)
             ->where('currency_code', $currencyCode)
             ->whereBetween('sold_at', [$from, $to])
-            ->selectRaw('COUNT(*) as sale_count')
+            ->selectRaw(self::SELECT_SALE_COUNT)
             ->selectRaw('COALESCE(SUM(quantity), 0) as unit_count')
             ->selectRaw('COALESCE(SUM(sale_amount), 0) as total_revenue')
             ->selectRaw('COALESCE(SUM(cost_basis_amount), 0) as total_cost')
@@ -68,7 +70,7 @@ class SalesInsightsService
             ->whereBetween('sold_at', [$from, $to])
             ->groupBy('item_id')
             ->select('item_id')
-            ->selectRaw('COUNT(*) as sale_count')
+            ->selectRaw(self::SELECT_SALE_COUNT)
             ->selectRaw('COALESCE(SUM(quantity), 0) as unit_count')
             ->selectRaw('COALESCE(SUM(sale_amount), 0) as total_revenue')
             ->selectRaw('COALESCE(SUM(cost_basis_amount), 0) as total_cost')

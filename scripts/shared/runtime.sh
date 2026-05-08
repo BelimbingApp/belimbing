@@ -29,6 +29,7 @@ fi
 is_interrupt_status() {
     local status=$1
     [[ "$status" -eq 130 || "$status" -eq 131 ]]
+    return $?
 }
 
 # Run a command that is allowed to fail, but abort the current script when the

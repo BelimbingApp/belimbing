@@ -45,6 +45,44 @@ $agentPowerUserAdditionalCapabilities = [
     'admin.ai.tool.write-js.execute',
 ];
 
+$capabilities = array_values(array_unique([
+    ...$agentOperatorCapabilities,
+    ...$agentPowerUserAdditionalCapabilities,
+
+    'messaging.account.manage',
+    'messaging.account.grant',
+    'messaging.account.revoke',
+    'messaging.whatsapp.send',
+    'messaging.whatsapp.react',
+    'messaging.whatsapp.media',
+    'messaging.telegram.send',
+    'messaging.telegram.react',
+    'messaging.telegram.edit',
+    'messaging.telegram.delete',
+    'messaging.telegram.poll',
+    'messaging.linkedin.send',
+    'messaging.signal.send',
+    'messaging.imessage.send',
+    'messaging.slack.send',
+    'messaging.email.send',
+    'messaging.sms.send',
+    'messaging.any.search',
+
+    // Grants access to Lara provisioning and activation.
+    'admin.ai.lara.manage',
+    // Grants access to Lara task-model selection and recommendations.
+    'admin.ai.task-model.manage',
+    // Grants access to provider catalog, credentials, and model sync flows.
+    'admin.ai.provider.manage',
+    // Grants access to AI pricing override management.
+    'admin.ai.pricing-override.manage',
+    // Grants access to AI tool catalog and per-tool workspaces.
+    'admin.ai.tool.manage',
+    // Grants access to the operator-facing AI diagnostics surfaces:
+    // the control plane itself plus standalone run drill-down pages.
+    'admin.ai.control-plane.view',
+]));
+
 return [
     'domains' => [
         'ai' => 'AI and agent capabilities',
@@ -52,74 +90,7 @@ return [
     ],
 
     'capabilities' => [
-        'admin.ai.chat-attachment.manage',
-        'admin.ai.chat-model.manage',
-        'admin.ai.agent.view',
-        'admin.ai.agent.execute',
-        'admin.ai.tool.active-page-snapshot.view',
-        'admin.ai.tool.artisan.execute',
-        'admin.ai.tool.bash.execute',
-        'admin.ai.tool.browser.execute',
-        'admin.ai.tool.browser-evaluate.execute',
-        'admin.ai.tool.delegate.execute',
-        'admin.ai.tool.edit-data.execute',
-        'admin.ai.tool.edit-file.execute',
-        'admin.ai.tool.delegation-status.execute',
-        'admin.ai.tool.edit.execute',
-        'admin.ai.tool.guide.execute',
-        'admin.ai.tool.memory-get.execute',
-        'admin.ai.tool.memory-search.execute',
-        'admin.ai.tool.navigate.execute',
-        'admin.ai.tool.notification.execute',
-        'admin.ai.tool.query-data.execute',
-        'admin.ai.tool.read.execute',
-        'admin.ai.tool.read-file.execute',
-        'admin.ai.tool.schedule.execute',
-        'admin.ai.tool.search.execute',
-        'admin.ai.tool.search-files.execute',
-        'admin.ai.tool.system-info.execute',
-        'admin.ai.tool.web-fetch.execute',
-        'admin.ai.tool.message.execute',
-        'admin.ai.tool.document-analysis.execute',
-        'admin.ai.tool.image-analysis.execute',
-        'admin.ai.tool.web-search.execute',
-        'admin.ai.tool.agent-list.execute',
-        'admin.ai.tool.ticket-update.execute',
-        'admin.ai.tool.write-js.execute',
-        'admin.ai.tool.workspace.view',
-        'admin.ai.tool.workspace.manage',
-        'messaging.account.manage',
-        'messaging.account.grant',
-        'messaging.account.revoke',
-        'messaging.whatsapp.send',
-        'messaging.whatsapp.react',
-        'messaging.whatsapp.media',
-        'messaging.telegram.send',
-        'messaging.telegram.react',
-        'messaging.telegram.edit',
-        'messaging.telegram.delete',
-        'messaging.telegram.poll',
-        'messaging.linkedin.send',
-        'messaging.signal.send',
-        'messaging.imessage.send',
-        'messaging.slack.send',
-        'messaging.email.send',
-        'messaging.sms.send',
-        'messaging.any.search',
-
-        // Grants access to Lara provisioning and activation.
-        'admin.ai.lara.manage',
-        // Grants access to Lara task-model selection and recommendations.
-        'admin.ai.task-model.manage',
-        // Grants access to provider catalog, credentials, and model sync flows.
-        'admin.ai.provider.manage',
-        // Grants access to AI pricing override management.
-        'admin.ai.pricing-override.manage',
-        // Grants access to AI tool catalog and per-tool workspaces.
-        'admin.ai.tool.manage',
-        // Grants access to the operator-facing AI diagnostics surfaces:
-        // the control plane itself plus standalone run drill-down pages.
-        'admin.ai.control-plane.view',
+        ...$capabilities,
     ],
 
     'roles' => [

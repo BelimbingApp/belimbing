@@ -2,15 +2,25 @@
 
 use App\Base\Database\Services\Backup\RetentionPolicy;
 
+const RETENTION_POLICY_MANIFEST_SUFFIX = '.manifest.json';
+
 function rpEntry(int $finishedAtUnix, string $id = ''): array
 {
     $id = $id !== '' ? $id : 'b-'.$finishedAtUnix;
 
     return [
-        'manifest_path' => "p/{$id}.manifest.json",
+        'manifest_path' => "p/{$id}".RETENTION_POLICY_MANIFEST_SUFFIX,
         'artifact_path' => "p/{$id}.bak",
         'finished_at_unix' => $finishedAtUnix,
     ];
+}
+
+function rpIds(array $entries): array
+{
+    return array_map(
+        fn ($e) => substr(basename($e['manifest_path']), 0, -strlen(RETENTION_POLICY_MANIFEST_SUFFIX)),
+        $entries
+    );
 }
 
 it('returns nothing when keep_days is zero', function (): void {
@@ -37,8 +47,7 @@ it('drops only entries older than keep_days', function (): void {
 
     $expired = $policy->selectExpired($entries, $now);
 
-    $ids = array_map(fn ($e) => substr(basename($e['manifest_path']), 0, -strlen('.manifest.json')), $expired);
-    expect($ids)->toBe(['over-30', 'over-100']);
+    expect(rpIds($expired))->toBe(['over-30', 'over-100']);
 });
 
 it('always preserves keep_count newest regardless of age', function (): void {
@@ -55,9 +64,7 @@ it('always preserves keep_count newest regardless of age', function (): void {
     ];
 
     $expired = $policy->selectExpired($entries, $now);
-    $ids = array_map(fn ($e) => substr(basename($e['manifest_path']), 0, -strlen('.manifest.json')), $expired);
-
-    expect($ids)->toBe(['d', 'e']);
+    expect(rpIds($expired))->toBe(['d', 'e']);
 });
 
 it('skips entries with unknown finished_at', function (): void {
@@ -70,7 +77,5 @@ it('skips entries with unknown finished_at', function (): void {
     ];
 
     $expired = $policy->selectExpired($entries, $now);
-    $ids = array_map(fn ($e) => substr(basename($e['manifest_path']), 0, -strlen('.manifest.json')), $expired);
-
-    expect($ids)->toBe(['old']);
+    expect(rpIds($expired))->toBe(['old']);
 });
