@@ -37,19 +37,18 @@ class ControlPlane extends Component
 
     public string $recentRunsSearch = '';
 
-    public string $inspectTurnId = '';
+    public string $inspectTimelineRunId = '';
+
+    public bool $timelineCollapseDelta = true;
+
+    public string $timelineError = '';
 
     public int $healthAgentId = Employee::LARA_ID;
 
     /** @var list<array{id: int, label: string}> */
     public array $agentOptions = [];
 
-    /** @var list<array<string, mixed>> */
-    public array $recentTurns = [];
-
     public string $inspectionError = '';
-
-    public string $turnInspectionError = '';
 
     /** @var list<array<string, mixed>> */
     public array $toolSnapshots = [];
@@ -61,7 +60,7 @@ class ControlPlane extends Component
     public ?array $agentSnapshot = null;
 
     /** @var array<string, int>|null */
-    public ?array $turnHealthCounts = null;
+    public ?array $runHealthCounts = null;
 
     public string $lifecycleAction = '';
 
@@ -87,8 +86,14 @@ class ControlPlane extends Component
     public function mount(): void
     {
         $this->activeTab = $this->resolveTab((string) request()->query('tab', 'inspector'));
-        $this->inspectRunId = (string) (request()->query('runId') ?? request()->query('inspectRunId') ?? '');
-        $this->inspectTurnId = (string) (request()->query('runId') ?? '');
+        $requestRunId = (string) (request()->query('runId') ?? request()->query('inspectRunId') ?? '');
+
+        if ($this->activeTab === 'timeline') {
+            $this->inspectTimelineRunId = $requestRunId;
+        } else {
+            $this->inspectRunId = $requestRunId;
+        }
+
         $this->lifecycleRetentionDays = app(WireLogger::class)->retentionDays();
 
         $this->loadAgentOptions();
@@ -96,13 +101,11 @@ class ControlPlane extends Component
         $this->refreshHealthSnapshots();
         $this->loadRecentLifecycleRequests();
 
-        if ($this->inspectRunId !== '') {
+        if ($this->activeTab === 'timeline' && $this->inspectTimelineRunId !== '') {
+            $this->inspectTimeline();
+        } elseif ($this->inspectRunId !== '') {
             $this->resetWireLogWindow();
             $this->inspectRun();
-        }
-
-        if ($this->inspectTurnId !== '') {
-            $this->inspectTurn();
         }
     }
 
@@ -137,22 +140,6 @@ class ControlPlane extends Component
         $this->recentRunsCollapsed = true;
     }
 
-    public function inspectTurn(): void
-    {
-        $this->activeTab = 'turns';
-        $this->turnInspectionError = '';
-
-        if ($this->inspectTurnId === '') {
-            $this->turnInspectionError = __('Turn ID is required.');
-
-            return;
-        }
-
-        if (app(RunDiagnosticService::class)->buildTurnView($this->inspectTurnId) === null) {
-            $this->turnInspectionError = __('Turn not found.');
-        }
-    }
-
     public function inspectRecentRun(string $runId): void
     {
         $this->inspectRunId = $runId;
@@ -160,16 +147,35 @@ class ControlPlane extends Component
         $this->inspectRun();
     }
 
-    public function inspectRecentTurn(string $runId): void
+    public function inspectTimeline(): void
     {
-        $this->inspectTurnId = $runId;
-        $this->inspectTurn();
+        $this->activeTab = 'timeline';
+        $this->timelineError = '';
+
+        if ($this->inspectTimelineRunId === '') {
+            $this->timelineError = __('Run ID is required.');
+
+            return;
+        }
+
+        if (app(RunDiagnosticService::class)->buildPromptTimelineView($this->inspectTimelineRunId) === null) {
+            $this->timelineError = __('Run not found.');
+        }
+    }
+
+    public function toggleTimelineDelta(): void
+    {
+        $this->timelineCollapseDelta = ! $this->timelineCollapseDelta;
+    }
+
+    public function inspectTimelineFromRun(string $runId): void
+    {
+        $this->inspectTimelineRunId = $runId;
+        $this->inspectTimeline();
     }
 
     public function refreshInspectorLists(): void
     {
-        $service = app(RunDiagnosticService::class);
-        $this->recentTurns = $service->recentTurns();
         $this->resetPage();
     }
 
@@ -183,7 +189,7 @@ class ControlPlane extends Component
         $this->loadToolSnapshots();
         $this->loadProviderSnapshots();
         $this->loadAgentSnapshot();
-        $this->loadTurnHealthCounts();
+        $this->loadRunHealthCounts();
     }
 
     public function loadToolSnapshots(): void
@@ -225,11 +231,11 @@ class ControlPlane extends Component
         );
     }
 
-    public function loadTurnHealthCounts(): void
+    public function loadRunHealthCounts(): void
     {
         $now = now();
 
-        $this->turnHealthCounts = [
+        $this->runHealthCounts = [
             'queued' => AiRun::query()->where('status', 'queued')->count(),
             'booting' => AiRun::query()->where('status', 'booting')->count(),
             'running' => AiRun::query()->where('status', 'running')->count(),
@@ -318,19 +324,38 @@ class ControlPlane extends Component
                 wireLogLimit: $this->wireLogLimit,
             )
             : null;
-        $turnView = $this->inspectTurnId !== ''
-            ? $diagnostics->buildTurnView($this->inspectTurnId)
-            : null;
+
+        $timelineViews = $this->buildTimelineViews($diagnostics);
 
         return view('livewire.admin.ai.control-plane', [
             'activeTab' => $this->activeTab,
             'recentRuns' => $recentRuns,
             'runView' => $this->mapRunView($runView),
-            'turnView' => $turnView,
+            'inspectorTimeline' => $timelineViews['inspector'],
+            'timelineView' => $timelineViews['timeline'],
             'wireLogDiskUsageBytes' => $diagnostics->wireLogDiskUsageBytes(),
             'selectedLifecycleAction' => $this->resolveLifecycleAction(),
             'operationsBreadcrumb' => $this->operationsBreadcrumb(),
         ]);
+    }
+
+    /**
+     * @return array{inspector: array<string, mixed>|null, timeline: array<string, mixed>|null}
+     */
+    private function buildTimelineViews(RunDiagnosticService $diagnostics): array
+    {
+        $viewsByRunId = [];
+
+        foreach (array_filter([$this->inspectRunId, $this->inspectTimelineRunId]) as $runId) {
+            if (! array_key_exists($runId, $viewsByRunId)) {
+                $viewsByRunId[$runId] = $diagnostics->buildPromptTimelineView($runId, $this->timelineCollapseDelta);
+            }
+        }
+
+        return [
+            'inspector' => $this->inspectRunId !== '' ? $viewsByRunId[$this->inspectRunId] : null,
+            'timeline' => $this->inspectTimelineRunId !== '' ? $viewsByRunId[$this->inspectTimelineRunId] : null,
+        ];
     }
 
     private function loadAgentOptions(): void

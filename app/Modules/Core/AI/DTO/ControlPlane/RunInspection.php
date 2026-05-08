@@ -142,13 +142,15 @@ final readonly class RunInspection
      */
     public static function fromAiRun(AiRun $run): self
     {
+        [$provider, $model] = self::resolveProviderModel($run);
+
         return new self(
             runId: $run->id,
             employeeId: $run->employee_id,
             sessionId: $run->session_id ?? '',
             dispatchId: $run->dispatch_id,
-            provider: $run->provider_name ?? 'unknown',
-            model: $run->model ?? 'unknown',
+            provider: $provider,
+            model: $model,
             outcome: match ($run->status) {
                 AiRunStatus::Succeeded => 'success',
                 AiRunStatus::Failed, AiRunStatus::TimedOut => 'error',
@@ -182,6 +184,48 @@ final readonly class RunInspection
             callCount: $run->call_count ?? 0,
             calls: self::normalizeCalls($run),
         );
+    }
+
+    /**
+     * Resolve provider and model for display, falling back to the terminal event payload
+     * when the run's own columns are null (e.g. the run failed before writing back usage).
+     *
+     * @return array{0: string, 1: string}
+     */
+    private static function resolveProviderModel(AiRun $run): array
+    {
+        $provider = $run->provider_name;
+        $model = $run->model;
+
+        if ($provider !== null && $model !== null) {
+            return [$provider, $model];
+        }
+
+        // Fall back to the terminal event's meta.llm payload.
+        $terminalEvent = $run->events()
+            ->whereIn('event_type', ['run.completed', 'run.failed', 'run.cancelled'])
+            ->latest('seq')
+            ->first(['payload']);
+
+        if ($terminalEvent !== null) {
+            $payload = is_array($terminalEvent->payload) ? $terminalEvent->payload : [];
+            $llm = is_array($payload['meta']['llm'] ?? null) ? $payload['meta']['llm'] : [];
+            $provider ??= (string) ($llm['provider'] ?? $payload['meta']['provider_name'] ?? $payload['provider_name'] ?? '');
+            $model ??= (string) ($llm['model'] ?? $payload['meta']['model'] ?? $payload['model'] ?? '');
+        }
+
+        // Last resort: parse model name from runtime_meta.model_override ("providerRef:::modelId").
+        if ($model === null || $model === '') {
+            $override = (string) ($run->runtime_meta['model_override'] ?? '');
+            if (str_contains($override, ':::')) {
+                $model = trim(explode(':::', $override, 2)[1]);
+            }
+        }
+
+        return [
+            $provider !== '' ? $provider : 'unknown',
+            $model !== '' ? $model : 'unknown',
+        ];
     }
 
     private static function resolveEmployeeDisplayName(AiRun $run): ?string

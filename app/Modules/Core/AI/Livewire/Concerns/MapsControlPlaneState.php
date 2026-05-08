@@ -15,7 +15,7 @@ trait MapsControlPlaneState
 {
     private function resolveTab(string $tab): string
     {
-        return in_array($tab, ['inspector', 'turns', 'health', 'lifecycle'], true)
+        return in_array($tab, ['inspector', 'timeline', 'health', 'lifecycle'], true)
             ? $tab
             : 'inspector';
     }

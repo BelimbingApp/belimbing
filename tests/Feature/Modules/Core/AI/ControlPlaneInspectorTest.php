@@ -4,9 +4,11 @@
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Enums\RunEventType;
 use App\Modules\Core\AI\Livewire\ControlPlane;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunCall;
+use App\Modules\Core\AI\Models\AiRunEvent;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Support\Facades\File;
@@ -14,6 +16,7 @@ use Livewire\Livewire;
 
 const CONTROL_PLANE_OVERSIZED_RUN_ID = 'run_control_plane_oversized';
 const CONTROL_PLANE_WINDOWED_RUN_ID = 'run_control_plane_windowed';
+const CONTROL_PLANE_TIMELINE_RUN_ID = 'run_control_plane_timeline';
 const CONTROL_PLANE_LICENSEE_NAME = 'Test Licensee';
 const CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH = 'app/ai/wire-logs';
 const CONTROL_PLANE_WIRE_LOG_EXTENSION = '.jsonl';
@@ -33,6 +36,7 @@ beforeEach(function (): void {
 afterEach(function (): void {
     File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_OVERSIZED_RUN_ID.CONTROL_PLANE_WIRE_LOG_EXTENSION));
     File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_WINDOWED_RUN_ID.CONTROL_PLANE_WIRE_LOG_EXTENSION));
+    File::delete(storage_path(CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH.'/'.CONTROL_PLANE_TIMELINE_RUN_ID.CONTROL_PLANE_WIRE_LOG_EXTENSION));
 
     if (isset($this->originalStoragePath) && is_string($this->originalStoragePath)) {
         app()->useStoragePath($this->originalStoragePath);
@@ -215,6 +219,31 @@ it('tracks manually selected control plane tabs in Livewire state', function ():
         ->assertSet('activeTab', 'health')
         ->call('setActiveTab', 'unknown')
         ->assertSet('activeTab', 'inspector');
+});
+
+it('loads a timeline run from query parameters without falling back to the inspector tab', function (): void {
+    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    Employee::provisionLara();
+
+    $user = createAdminUser();
+
+    createControlPlaneRun(CONTROL_PLANE_TIMELINE_RUN_ID);
+    AiRunEvent::unguarded(fn () => AiRunEvent::query()->create([
+        'run_id' => CONTROL_PLANE_TIMELINE_RUN_ID,
+        'seq' => 1,
+        'event_type' => RunEventType::RunStarted,
+        'payload' => null,
+        'created_at' => now(),
+    ]));
+
+    Livewire::actingAs($user)
+        ->withQueryParams(['tab' => 'timeline', 'runId' => CONTROL_PLANE_TIMELINE_RUN_ID])
+        ->test(ControlPlane::class)
+        ->assertSet('activeTab', 'timeline')
+        ->assertSet('inspectTimelineRunId', CONTROL_PLANE_TIMELINE_RUN_ID)
+        ->assertSet('inspectRunId', '')
+        ->assertSee('Run Started')
+        ->assertSee('1 meta events, 0 wire entries');
 });
 
 const CONTROL_PLANE_READABLE_RUN_ID = 'run_control_plane_readable';

@@ -2,13 +2,15 @@
 
 use App\Modules\Core\AI\Enums\LifecycleAction;
 use App\Modules\Core\AI\Livewire\ControlPlane;
+use Illuminate\Support\Number;
 
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 /** @var ControlPlane $this */
 /** @var array<string, mixed>|null $runView */
-/** @var array<string, mixed>|null $turnView */
+/** @var array<string, mixed>|null $inspectorTimeline */
+/** @var array<string, mixed>|null $timelineView */
 /** @var LifecycleAction|null $selectedLifecycleAction */
 /** @var array{label: string, url: string|null}|null $operationsBreadcrumb */
 $controlPlaneContext = request()->only(['from', 'returnTo']);
@@ -18,7 +20,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
 
     <x-ui.page-header
         :title="__('Operator Control Plane')"
-        :subtitle="__('Inspect recent runs and turns, review health signals, and manage AI lifecycle operations from one operator surface.')"
+        :subtitle="__('Inspect runs and their unified prompt timelines, review health signals, and manage AI lifecycle operations from one operator surface.')"
     >
         <x-slot name="actions">
             @if ($operationsBreadcrumb)
@@ -37,7 +39,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
         </x-slot>
         <x-slot name="help">
             <div class="space-y-3 text-sm text-muted">
-                <p>{{ __('This page is for operator diagnostics. It exposes recent runtime activity, per-run transcripts, turn timelines, provider and tool health, and destructive lifecycle actions.') }}</p>
+                <p>{{ __('This page is for operator diagnostics. It exposes recent runtime activity, per-run transcripts and prompt timelines, provider and tool health, and destructive lifecycle actions.') }}</p>
                 <p>{{ __('Run inspection now centers on direct run IDs and recent activity instead of employee-scoped session lookups, so cross-agent admin drill-down remains accurate.') }}</p>
             </div>
         </x-slot>
@@ -46,7 +48,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
     <x-ui.tabs
         :tabs="[
             ['id' => 'inspector', 'label' => __('Run Inspector'), 'icon' => 'heroicon-o-magnifying-glass'],
-            ['id' => 'turns', 'label' => __('Turn Inspector'), 'icon' => 'heroicon-o-chat-bubble-left-right'],
+            ['id' => 'timeline', 'label' => __('Prompt Timeline'), 'icon' => 'heroicon-o-queue-list'],
             ['id' => 'health', 'label' => __('Health & Presence'), 'icon' => 'heroicon-o-heart'],
             ['id' => 'lifecycle', 'label' => __('Lifecycle Controls'), 'icon' => 'heroicon-o-arrow-path'],
         ]"
@@ -74,6 +76,32 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                         'triggeringPrompt' => $runView['triggering_prompt'],
                     ])
 
+                    @if ($inspectorTimeline)
+                        <x-ui.card>
+                            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <h3 class="text-sm font-medium text-ink">{{ __('Prompt Timeline') }}</h3>
+                                    <p class="mt-1 text-xs text-muted">
+                                        {{ __(':meta meta events, :wire wire entries', ['meta' => $inspectorTimeline['meta_count'], 'wire' => $inspectorTimeline['wire_count']]) }}
+                                        @if (! $inspectorTimeline['has_wire_log'])
+                                            &mdash; {{ __('No wire log for this run.') }}
+                                        @endif
+                                    </p>
+                                </div>
+                                <x-ui.button wire:click="toggleTimelineDelta" variant="secondary" size="sm">
+                                    @if ($timelineCollapseDelta)
+                                        {{ __('Show Deltas') }}
+                                    @else
+                                        {{ __('Collapse Deltas') }}
+                                    @endif
+                                </x-ui.button>
+                            </div>
+                            @include('livewire.admin.ai.control-plane.partials.prompt-timeline', [
+                                'timeline' => $inspectorTimeline['timeline'],
+                            ])
+                        </x-ui.card>
+                    @endif
+
                     <x-ui.card id="wire-log-panel">
                         <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
                             <h3 class="text-sm font-medium text-ink">{{ __('Wire Log') }}</h3>
@@ -93,148 +121,60 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
             </div>
         </x-ui.tab>
 
-        <x-ui.tab id="turns">
+        <x-ui.tab id="timeline">
             <div class="space-y-section-gap">
                 <x-ui.card>
                     <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
                         <div class="space-y-4">
                             <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                                 <x-ui.input
-                                    id="inspect-turn-id"
-                                    wire:model="inspectTurnId"
-                                    :label="__('Turn ID')"
+                                    id="inspect-timeline-run-id"
+                                    wire:model="inspectTimelineRunId"
+                                    :label="__('Run ID')"
                                     :placeholder="__('01H...')"
                                 />
                                 <div class="flex items-end">
-                                    <x-ui.button wire:click="inspectTurn" variant="primary" size="sm">
-                                        {{ __('Inspect Turn') }}
+                                    <x-ui.button wire:click="inspectTimeline" variant="primary" size="sm">
+                                        {{ __('Load Timeline') }}
                                     </x-ui.button>
                                 </div>
                             </div>
 
-                            @if ($turnInspectionError)
-                                <x-ui.alert variant="warning">{{ $turnInspectionError }}</x-ui.alert>
+                            @if ($timelineError)
+                                <x-ui.alert variant="warning">{{ $timelineError }}</x-ui.alert>
                             @endif
                         </div>
 
                         <div class="rounded-2xl border border-border-default bg-surface-subtle p-card-inner">
-                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Recent Turns') }}</p>
-                            <p class="mt-2 text-sm text-muted">{{ __('Use the list below to jump directly into queue, cancellation, and timeline diagnostics.') }}</p>
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Prompt Timeline') }}</p>
+                            <p class="mt-2 text-sm text-muted">{{ __('Interleaves DB meta-events [META] and wire-log entries [WIRE] in chronological order for a single run.') }}</p>
                         </div>
                     </div>
                 </x-ui.card>
 
-                <x-ui.card>
-                    <div class="mb-4 flex items-center justify-between gap-3">
-                        <div>
-                            <h3 class="text-sm font-medium text-ink">{{ __('Recent Turns') }}</h3>
-                            <p class="mt-1 text-xs text-muted">{{ __('Newest turns first, with direct access to the current run when present.') }}</p>
-                        </div>
-                        <x-ui.button wire:click="refreshInspectorLists" variant="secondary" size="sm">
-                            {{ __('Refresh') }}
-                        </x-ui.button>
-                    </div>
-
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-border-default text-sm">
-                            <thead class="bg-surface-subtle/80">
-                                <tr>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Turn') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Agent') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Cancel') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Action') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-border-default bg-surface-card">
-                                @forelse ($recentTurns as $turn)
-                                    <tr wire:key="recent-turn-{{ $turn['id'] }}" class="hover:bg-surface-subtle/60 transition-colors">
-                                        <td class="px-table-cell-x py-table-cell-y">
-                                            <p class="font-mono text-xs text-ink">{{ Str::limit($turn['id'], 24, '...') }}</p>
-                                            <p class="mt-1 text-xs text-muted tabular-nums">{{ $turn['created_at'] }}</p>
-                                        </td>
-                                        <td class="px-table-cell-x py-table-cell-y text-ink">{{ $turn['employee_name'] }}</td>
-                                        <td class="px-table-cell-x py-table-cell-y">
-                                            <x-ui.badge :variant="$turn['status_color']">{{ $turn['status_label'] }}</x-ui.badge>
-                                        </td>
-                                        <td class="px-table-cell-x py-table-cell-y">
-                                            @if ($turn['cancel_mode_label'])
-                                                <x-ui.badge variant="warning">{{ $turn['cancel_mode_label'] }}</x-ui.badge>
-                                            @else
-                                                <span class="text-muted">---</span>
-                                            @endif
-                                        </td>
-                                        <td class="px-table-cell-x py-table-cell-y text-right">
-                                            <x-ui.button wire:click="inspectRecentTurn('{{ $turn['id'] }}')" variant="secondary" size="sm">
-                                                {{ __('Inspect') }}
-                                            </x-ui.button>
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="5" class="px-table-cell-x py-table-cell-y text-sm text-muted">{{ __('No turns have been recorded yet.') }}</td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
-                </x-ui.card>
-
-                @if ($turnView)
+                @if ($timelineView)
                     <x-ui.card>
-                        <h3 class="mb-4 text-sm font-medium text-ink">{{ __('Turn Details') }}</h3>
-                        <dl class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                             <div>
-                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Turn ID') }}</dt>
-                                <dd class="mt-1 font-mono text-xs text-ink">{{ $turnView['turn']['id'] }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</dt>
-                                <dd class="mt-1"><x-ui.badge :variant="$turnView['turn']['status_color']">{{ $turnView['turn']['status_label'] }}</x-ui.badge></dd>
-                            </div>
-                            <div>
-                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Current Phase') }}</dt>
-                                <dd class="mt-1 text-sm text-ink">{{ $turnView['turn']['current_phase_label'] ?? '---' }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Current Run') }}</dt>
-                                <dd class="mt-1">
-                                    @if ($turnView['turn']['current_run_id'])
-                                        <a
-                                            href="{{ route('admin.ai.control-plane', array_merge($controlPlaneContext, ['tab' => 'inspector', 'runId' => $turnView['turn']['current_run_id']])) }}"
-                                            wire:navigate
-                                            class="font-mono text-xs text-accent hover:underline"
-                                        >
-                                            {{ $turnView['turn']['current_run_id'] }}
-                                        </a>
-                                    @else
-                                        <span class="text-muted">---</span>
+                                <h3 class="text-sm font-medium text-ink">{{ __('Prompt Timeline') }}</h3>
+                                <p class="mt-1 text-xs text-muted">
+                                    {{ __(':meta meta events, :wire wire entries', ['meta' => $timelineView['meta_count'], 'wire' => $timelineView['wire_count']]) }}
+                                    @if (! $timelineView['has_wire_log'])
+                                        &mdash; {{ __('No wire log for this run.') }}
                                     @endif
-                                </dd>
+                                </p>
                             </div>
-                            <div>
-                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Agent') }}</dt>
-                                <dd class="mt-1 text-sm text-ink">{{ $turnView['turn']['employee_name'] }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Cancel Mode') }}</dt>
-                                <dd class="mt-1 text-sm text-ink">{{ $turnView['turn']['cancel_mode_label'] ?? '---' }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Cancel Requested') }}</dt>
-                                <dd class="mt-1 text-sm text-ink tabular-nums">{{ $turnView['turn']['cancel_requested_at'] ?? '---' }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Terminal Event') }}</dt>
-                                <dd class="mt-1 text-sm text-ink tabular-nums">{{ $turnView['turn']['cancel_terminal_at'] ?? '---' }}</dd>
-                            </div>
-                        </dl>
-                    </x-ui.card>
+                            <x-ui.button wire:click="toggleTimelineDelta" variant="secondary" size="sm">
+                                @if ($timelineCollapseDelta)
+                                    {{ __('Show Deltas') }}
+                                @else
+                                    {{ __('Collapse Deltas') }}
+                                @endif
+                            </x-ui.button>
+                        </div>
 
-                    <x-ui.card>
-                        <h3 class="mb-4 text-sm font-medium text-ink">{{ __('Timeline') }}</h3>
-                        @include('livewire.admin.ai.control-plane.partials.turn-timeline', [
-                            'timeline' => $turnView['timeline'],
+                        @include('livewire.admin.ai.control-plane.partials.prompt-timeline', [
+                            'timeline' => $timelineView['timeline'],
                         ])
                     </x-ui.card>
                 @endif
@@ -246,31 +186,31 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                 <x-ui.card>
                     <div class="mb-4 flex items-center justify-between gap-3">
                         <div>
-                            <h3 class="text-sm font-medium text-ink">{{ __('Turn Queue Health') }}</h3>
-                            <p class="mt-1 text-xs text-muted">{{ __('Queue saturation, stale turns, and recent failures are surfaced separately so operators can distinguish load from breakage.') }}</p>
+                            <h3 class="text-sm font-medium text-ink">{{ __('Run Queue Health') }}</h3>
+                            <p class="mt-1 text-xs text-muted">{{ __('Queue saturation, stale runs, and recent failures are surfaced separately so operators can distinguish load from breakage.') }}</p>
                         </div>
                         <x-ui.button wire:click="refreshHealthSnapshots" variant="secondary" size="sm">
                             {{ __('Refresh') }}
                         </x-ui.button>
                     </div>
 
-                    @if ($turnHealthCounts)
+                    @if ($runHealthCounts)
                         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             <div class="rounded-2xl border border-border-default bg-surface-card p-card-inner">
-                                <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Active Turns') }}</p>
-                                <p class="mt-2 text-2xl font-medium tracking-tight text-ink">{{ $turnHealthCounts['queued'] + $turnHealthCounts['booting'] + $turnHealthCounts['running'] }}</p>
+                                <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Active Runs') }}</p>
+                                <p class="mt-2 text-2xl font-medium tracking-tight text-ink">{{ $runHealthCounts['queued'] + $runHealthCounts['booting'] + $runHealthCounts['running'] }}</p>
                             </div>
                             <div class="rounded-2xl border border-border-default bg-surface-card p-card-inner">
-                                <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Stale Turns') }}</p>
-                                <p class="mt-2 text-2xl font-medium tracking-tight {{ ($turnHealthCounts['stale_queued'] + $turnHealthCounts['stale_running']) > 0 ? 'text-danger' : 'text-ink' }}">{{ $turnHealthCounts['stale_queued'] + $turnHealthCounts['stale_running'] }}</p>
+                                <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Stale Runs') }}</p>
+                                <p class="mt-2 text-2xl font-medium tracking-tight {{ ($runHealthCounts['stale_queued'] + $runHealthCounts['stale_running']) > 0 ? 'text-danger' : 'text-ink' }}">{{ $runHealthCounts['stale_queued'] + $runHealthCounts['stale_running'] }}</p>
                             </div>
                             <div class="rounded-2xl border border-border-default bg-surface-card p-card-inner">
                                 <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Completed Last Hour') }}</p>
-                                <p class="mt-2 text-2xl font-medium tracking-tight text-success">{{ $turnHealthCounts['completed_last_hour'] }}</p>
+                                <p class="mt-2 text-2xl font-medium tracking-tight text-success">{{ $runHealthCounts['completed_last_hour'] }}</p>
                             </div>
                             <div class="rounded-2xl border border-border-default bg-surface-card p-card-inner">
                                 <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Failed Last Hour') }}</p>
-                                <p class="mt-2 text-2xl font-medium tracking-tight {{ $turnHealthCounts['failed_last_hour'] > 0 ? 'text-warning' : 'text-ink' }}">{{ $turnHealthCounts['failed_last_hour'] }}</p>
+                                <p class="mt-2 text-2xl font-medium tracking-tight {{ $runHealthCounts['failed_last_hour'] > 0 ? 'text-warning' : 'text-ink' }}">{{ $runHealthCounts['failed_last_hour'] }}</p>
                             </div>
                         </div>
                     @endif

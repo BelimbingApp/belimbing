@@ -16,7 +16,6 @@ use App\Modules\Core\AI\Values\CallUsage;
 use App\Modules\Core\Employee\Models\Employee;
 use DateTimeImmutable;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Number;
 use Illuminate\Support\Str;
 
@@ -246,51 +245,6 @@ class RunDiagnosticService
             'recorded_at_display' => $this->dateTimeDisplay->formatDateTime($inspection['recorded_at'] ?? null),
             'started_at_display' => $this->dateTimeDisplay->formatDateTime($inspection['started_at'] ?? null),
         ]);
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    public function recentTurns(int $limit = 20): array
-    {
-        return AiRun::query()
-            ->with('employee')
-            ->orderByDesc('created_at')
-            ->limit($limit)
-            ->get()
-            ->map(fn (AiRun $turn): array => $this->mapTurn($turn))
-            ->values()
-            ->all();
-    }
-
-    /**
-     * @return array{
-     *     turn: array<string, mixed>,
-     *     timeline: list<array<string, mixed>>
-     * }|null
-     */
-    public function buildTurnView(string $runId): ?array
-    {
-        $turn = AiRun::query()
-            ->with(['employee', 'events' => fn ($query) => $query->orderBy('seq')])
-            ->find($runId);
-
-        if ($turn === null) {
-            return null;
-        }
-
-        $timeline = [];
-        $previousAt = null;
-
-        foreach ($turn->events as $event) {
-            $timeline[] = $this->mapTimelineEvent($event, $previousAt, $turn);
-            $previousAt = $event->created_at;
-        }
-
-        return [
-            'turn' => $this->mapTurn($turn),
-            'timeline' => $timeline,
-        ];
     }
 
     public function wireLogDiskUsageBytes(): int
@@ -550,29 +504,167 @@ class RunDiagnosticService
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{
+     *     run: array<string, mixed>,
+     *     timeline: list<array<string, mixed>>,
+     *     wire_count: int,
+     *     meta_count: int,
+     *     delta_collapsed: bool,
+     *     has_wire_log: bool,
+     * }|null
      */
-    private function mapTimelineEvent(AiRunEvent $event, ?Carbon $previousAt, AiRun $turn): array
+    public function buildPromptTimelineView(string $runId, bool $collapseDelta = false): ?array
     {
-        $gapMs = $previousAt?->diffInMilliseconds($event->created_at) ?? null;
-        $isGapWarning = $gapMs !== null && $gapMs > 30_000;
-        $isStuck = ! $turn->isTerminal()
-            && $event->seq === $turn->last_event_seq
-            && $event->created_at?->lt(now()->subSeconds(30));
+        $run = AiRun::query()
+            ->with(['employee', 'events' => fn ($query) => $query->orderBy('seq')])
+            ->find($runId);
+
+        if ($run === null) {
+            return null;
+        }
+
+        $metaEntries = [];
+        $previousAt = null;
+
+        foreach ($run->events as $event) {
+            $isDelta = $event->event_type->isDelta();
+
+            if ($collapseDelta && $isDelta) {
+                continue;
+            }
+
+            $gapMs = $previousAt?->diffInMilliseconds($event->created_at) ?? null;
+
+            $metaEntries[] = [
+                'timestamp' => $event->created_at?->toIso8601String() ?? '',
+                'source' => 'meta',
+                'type' => $event->event_type->value,
+                'label' => $event->event_type->label(),
+                'summary' => $this->eventSummary($event),
+                'severity' => $event->event_type->severity(),
+                'is_delta' => $isDelta,
+                'gap_ms' => $gapMs,
+                'has_gap_warning' => $gapMs !== null && $gapMs > 30_000,
+                'is_stuck' => ! $run->isTerminal()
+                    && $event->seq === $run->last_event_seq
+                    && $event->created_at?->lt(now()->subSeconds(30)),
+                'payload' => $event->payload,
+                'seq' => $event->seq,
+                'entry_number' => null,
+            ];
+
+            $previousAt = $event->created_at;
+        }
+
+        $wireEntries = [];
+        $totalWireEntries = 0;
+
+        foreach ($this->wireLogger->read($run->id) as $entry) {
+            $totalWireEntries++;
+            $type = (string) ($entry['type'] ?? 'unknown');
+            $isDelta = $type === 'llm.stream_line';
+
+            if ($collapseDelta && $isDelta) {
+                continue;
+            }
+
+            $wireEntries[] = [
+                'timestamp' => is_string($entry['at'] ?? null) ? (string) $entry['at'] : '',
+                'source' => 'wire',
+                'type' => $type,
+                'label' => $this->wireEntryLabel($type),
+                'summary' => $this->wireEntrySummary($type, $entry),
+                'severity' => $type === 'llm.error' ? 'error' : 'info',
+                'is_delta' => $isDelta,
+                'gap_ms' => null,
+                'has_gap_warning' => false,
+                'is_stuck' => false,
+                'payload' => $entry,
+                'seq' => null,
+                'entry_number' => $totalWireEntries,
+            ];
+        }
+
+        $all = array_merge($metaEntries, $wireEntries);
+
+        usort($all, function (array $a, array $b): int {
+            $cmp = $this->timelineTimestampOrder((string) $a['timestamp'])
+                <=> $this->timelineTimestampOrder((string) $b['timestamp']);
+
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+
+            if ($a['source'] !== $b['source']) {
+                return $a['source'] === 'meta' ? -1 : 1;
+            }
+
+            $aOrder = $a['seq'] ?? $a['entry_number'] ?? 0;
+            $bOrder = $b['seq'] ?? $b['entry_number'] ?? 0;
+
+            return $aOrder <=> $bOrder;
+        });
 
         return [
-            'seq' => $event->seq,
-            'event_type' => $event->event_type->value,
-            'label' => $event->event_type->label(),
-            'severity' => $event->event_type->severity(),
-            'summary' => $this->eventSummary($event),
-            'payload' => $event->payload,
-            'created_at' => $event->created_at?->toIso8601String(),
-            'gap_ms' => $gapMs,
-            'has_gap_warning' => $isGapWarning,
-            'is_stuck' => $isStuck,
-            'run_id' => is_string($event->payload['run_id'] ?? null) ? $event->payload['run_id'] : null,
+            'run' => $this->mapTurn($run),
+            'timeline' => array_values($all),
+            'wire_count' => count($wireEntries),
+            'meta_count' => count($metaEntries),
+            'delta_collapsed' => $collapseDelta,
+            'has_wire_log' => $totalWireEntries > 0,
         ];
+    }
+
+    private function timelineTimestampOrder(string $timestamp): int
+    {
+        if ($timestamp === '') {
+            return PHP_INT_MAX;
+        }
+
+        try {
+            $instant = new DateTimeImmutable($timestamp);
+        } catch (\Throwable) {
+            return PHP_INT_MAX;
+        }
+
+        return ((int) $instant->format('U')) * 1000 + ((int) $instant->format('v'));
+    }
+
+    private function wireEntryLabel(string $type): string
+    {
+        return match ($type) {
+            'llm.request' => __('LLM Request'),
+            'llm.first_byte' => __('First Byte'),
+            'llm.response_status' => __('Response Status'),
+            'llm.response_body' => __('Response Body'),
+            'llm.stream_line' => __('Stream Delta'),
+            'llm.complete' => __('LLM Complete'),
+            'llm.error' => __('LLM Error'),
+            default => __(ucwords(str_replace(['.', '_'], ' ', $type))),
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $entry
+     */
+    private function wireEntrySummary(string $type, array $entry): string
+    {
+        return match ($type) {
+            'llm.request' => trim(implode(' / ', array_filter([
+                is_array($entry['request'] ?? null) ? ($entry['request']['model'] ?? null) : null,
+                is_array($entry['request']['messages'] ?? null)
+                    ? __(':n messages', ['n' => count((array) $entry['request']['messages'])])
+                    : null,
+            ], fn (mixed $v): bool => is_string($v) && $v !== ''))),
+            'llm.response_status' => isset($entry['status_code']) ? (string) $entry['status_code'] : '',
+            'llm.response_body' => isset($entry['status_code']) ? (string) $entry['status_code'] : '',
+            'llm.stream_line' => Str::limit((string) ($entry['raw_line'] ?? ''), 120),
+            'llm.error' => (string) ($entry['message'] ?? __('LLM error')),
+            'llm.complete' => is_array($entry['context'] ?? null) && $entry['context'] !== []
+                ? Str::limit(json_encode($entry['context'], JSON_UNESCAPED_SLASHES) ?: '', 120)
+                : '',
+            default => '',
+        };
     }
 
     private function eventSummary(AiRunEvent $event): string

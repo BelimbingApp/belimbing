@@ -211,27 +211,11 @@ $formatCents = static fn (?int $cents): string => $cents !== null
         </div>
     </div>
 
-    {{-- Dispatch and session context --}}
+    {{-- Session and dispatch context --}}
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Session') }}</span>
-            <p class="text-sm text-ink mt-1 font-mono tabular-nums">{{ $run['session_id'] }}</p>
-        </div>
-        <div>
-            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Turn') }}</span>
-            <p class="mt-1 text-sm text-ink">
-                @if(! empty($run['turn_id']))
-                    <a
-                        href="{{ route('admin.ai.control-plane', array_merge($controlPlaneContext, ['tab' => 'turns', 'turnId' => $run['turn_id']])) }}"
-                        wire:navigate
-                        class="font-mono text-xs text-accent hover:underline"
-                    >
-                        {{ $run['turn_id'] }}
-                    </a>
-                @else
-                    <span class="text-muted">—</span>
-                @endif
-            </p>
+            <p class="text-sm text-ink mt-1 font-mono tabular-nums">{{ $run['session_id'] ?: '—' }}</p>
         </div>
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Dispatch') }}</span>

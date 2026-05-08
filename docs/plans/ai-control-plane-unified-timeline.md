@@ -1,9 +1,9 @@
 # ai-control-plane-unified-timeline
 
-**Status:** Phase 1 Complete — Phase 2 Designing (entity unification; background + chat share one envelope)
+**Status:** Phase 3 Complete (with documented deviations)
 **Last Updated:** 2026-05-08
 **Sources:** `backup/pre-unified-entity` branch (snapshot before Phase 1); DB backup `01kr2w72bssreaxjxy2gss0gqp`; wire log backup `storage/app/ai/wire-logs-backup-pre-unified/` (26 files, 75 MB — delete after Phase 2 is confirmed stable)
-**Agents:** claude/sonnet-4-6, amp/opus-4-7, codex/gpt-5.5-medium
+**Agents:** claude/sonnet-4-6, amp/opus-4-7, codex/gpt-5.5-medium, amp/gpt-5.5-medium
 
 ## Problem Essence
 
@@ -102,11 +102,13 @@ Delta events (`assistant.thinking_delta`, `assistant.output_delta`, `tool.stdout
 
 ### Tabs after refactor
 
-| Tab | Before | After (Phase 3) | Phase 4 (optional) |
+> **Note (post-implementation):** Phase 3 originally intended to add Prompt Timeline as a 5th tab next to an unchanged Turn Inspector. The shipped change collapsed that early — Turn Inspector was removed and Prompt Timeline took its tab slot — so the surface is now 4 tabs. The table reflects what shipped.
+
+| Tab | Before | After (Phase 3 — shipped) | Phase 4 (optional) |
 |---|---|---|---|
-| Run Inspector | Drill by run ID, wire log + transcript | Retained as deep-dive surface, reached via Prompt Timeline | Unchanged |
-| Turn Inspector | Drill by turn ID, full event timeline | Unchanged | Becomes Session Inspector |
-| Prompt Timeline | Does not exist | New: unified meta + wire log view (chat runs) | Surfaces background runs too |
+| Run Inspector | Drill by run ID, wire log + transcript | Retained as deep-dive surface; embeds Prompt Timeline inline and keeps the Wire Log card for readable/raw transport drill-down | Unchanged |
+| Turn Inspector | Drill by turn ID, full event timeline | **Removed** — collapsed early into Prompt Timeline | (removed) |
+| Prompt Timeline | Does not exist | **New** — replaces Turn Inspector tab; chat + non-chat run IDs accepted (no source filter) | Surfaces background runs explicitly via picker filters |
 | Health & Presence | Unchanged | Unchanged | Unchanged |
 | Lifecycle Controls | Unchanged | Unchanged | Unchanged |
 
@@ -185,12 +187,34 @@ With the envelope unified in Phase 2, the timeline view collapses to a straight 
 
 **Scope:**
 
-- [ ] Build `buildPromptTimelineView(string $runId): array` — loads `AiRun` + ordered `AiRunEvent`s, reads the wire log via `WireLogger`, normalises both sources to `{timestamp, source, type, payload}`, returns the chronologically merged stream. Honour the prologue/epilogue split per *Two-source merge*.
-- [ ] Apply `gap_ms` and stuck-run detection to meta-event markers only (per *Gap diagnostics*).
-- [ ] Add a delta-collapse toggle hiding `assistant.thinking_delta`, `assistant.output_delta`, `tool.stdout_delta` (per *Filtering*).
-- [ ] Land a Prompt Timeline tab in the control plane Livewire surface. Render `[META]` entries with the visual treatment in *Unified timeline layout*. Link the run header to the Run Inspector deep-dive.
-- [ ] Restrict the tab's run picker to `source='chat'` for this phase (background runs are visible in Phase 4).
-- [ ] Tests: unit coverage for `buildPromptTimelineView` (chronological merge, prologue/epilogue ordering, delta collapse, run with no meta events); a Livewire feature test exercising the tab end-to-end.
+- [x] Build `buildPromptTimelineView(string $runId, bool $collapseDelta = false): ?array` — loads `AiRun` + ordered `AiRunEvent`s, reads the wire log via `WireLogger::read()`, normalises both sources to the unified entry shape `{timestamp, source, type, label, summary, severity, is_delta, gap_ms, has_gap_warning, is_stuck, payload, seq, entry_number}`, returns the chronologically merged stream — claude-sonnet-4-6
+- [x] Apply `gap_ms` and stuck-run detection to meta-event markers only (per *Gap diagnostics*) — claude-sonnet-4-6
+- [x] Add a delta-collapse toggle: hides `RunEventType::isDelta()` meta events and `llm.stream_line` wire entries; wired to `$timelineCollapseDelta` / `toggleTimelineDelta()` on `ControlPlane` — claude-sonnet-4-6
+- [x] Land a Prompt Timeline tab in `ControlPlane` (`heroicon-o-queue-list`); `[META]` and `[WIRE]` entries render with distinct semantic-token badges, gap/stuck warnings on meta only, collapsible payloads available in the timeline (`partials/prompt-timeline.blade.php`) — claude-sonnet-4-6, amp/gpt-5.5-medium — **Deviation:** shipped as a 4-tab layout that **replaces** Turn Inspector instead of adding a 5th tab. Run Inspector now embeds the Prompt Timeline inline while retaining the Wire Log card and `wireLogDiskUsageBytes` indicator for readable/raw transport drill-down.
+- [x] Do not restrict the tab's run picker to `source='chat'`; the unified envelope makes all run IDs valid, while Phase 4 remains responsible for a richer non-chat picker UX — claude-sonnet-4-6, amp/gpt-5.5-medium
+- [x] Tests: 10 isolated unit tests for `buildPromptTimelineView` covering null-for-unknown-run, empty timeline, meta-only, chronological merge with wire entries, `llm.request` summary, delta collapse, collapsed-gap semantics, mixed-offset timestamp sorting, error severity, 1-based entry numbering (`RunDiagnosticServicePromptTimelineTest.php`) — claude-sonnet-4-6, amp/gpt-5.5-medium
+- [x] Livewire feature coverage for the Prompt Timeline query-parameter entry point, plus retained Run Inspector wire-log coverage for readable/raw drill-down and pagination — amp/gpt-5.5-medium
+
+**Phase 3 follow-ups (surfaced during post-implementation review):**
+
+- [x] Restore Wire Log card in Run Inspector so the readable transcript view, per-attempt anomaly summary, `wireLogStartEntry` / `wireLogLimit` paging, and per-entry deep-link route remain reachable — amp/gpt-5.5-medium
+- [x] Fix `gap_ms` reset across collapsed deltas in `buildPromptTimelineView` so the next visible meta event measures from the last visible meta event, not a hidden delta — amp/gpt-5.5-medium
+- [x] Replace `strcmp($a['timestamp'], $b['timestamp'])` sort with a parsed-instant comparison so mixed `Z` / offset timestamps sort chronologically — amp/gpt-5.5-medium
+- [x] De-duplicate `buildPromptTimelineView` calls per render by caching per-run results inside `ControlPlane::render()` — amp/gpt-5.5-medium
+- [x] Fix `tab=timeline&runId=...` mounting so chat/control-plane links load the Prompt Timeline tab instead of being forced back to Run Inspector — amp/gpt-5.5-medium
+- [x] Remove dead code: `RunDiagnosticService::buildTurnView()`, `RunDiagnosticService::recentTurns()`, and `partials/turn-timeline.blade.php`. The `partials/wire-log-readable/` directory is not removed because it contains active readable-wire-log subpartials — amp/gpt-5.5-medium
+
+### ID Standardization — `turnId` → `runId`
+
+After Phase 3 shipped, a naming inconsistency was discovered: PHP returned `turnId` keys in `prepareStreamingRun()` and `formatActiveTurnPayload()` while Alpine JS used `selectedTurnId`, `currentTurnId`, and `turnRegistry` on the client side. This caused a regression where the stream URL was never opened (Alpine read `result.turnId` which was undefined once PHP was renamed in Phase 2).
+
+**Scope:**
+
+- [x] `HandlesStreaming::prepareStreamingRun()` return key: `turnId` → `runId` — claude-sonnet-4-6
+- [x] `HandlesStreaming::formatActiveTurnPayload()` return key: `turnId` → `runId` — claude-sonnet-4-6
+- [x] PHPDoc shapes in `HandlesStreaming` and `Chat`: `turnId: string` → `runId: string` — claude-sonnet-4-6
+- [x] Alpine `agentChatStream` data: `selectedTurnId` → `selectedRunId`, `currentTurnId` → `currentRunId`, `turnRegistry` → `runRegistry` — claude-sonnet-4-6
+- [x] All JS methods and references inside `chat.blade.php` updated to use `runId`-based naming throughout — claude-sonnet-4-6
 
 ### Phase 4 — Operator surface for non-chat runs (optional)
 
@@ -198,7 +222,7 @@ Once Phase 3 ships and the timeline is the primary diagnostic surface, lift the 
 
 **Scope:**
 
-- [ ] Drop the `source='chat'` filter on the Prompt Timeline run picker; surface background and orchestration runs alongside chat runs
-- [ ] Rename Turn Inspector → Session Inspector; rescope it to session-level navigation that lists run envelopes per session and links into the Prompt Timeline
+- [ ] Drop the `source='chat'` filter on the Prompt Timeline run picker; surface background and orchestration runs alongside chat runs (note: today no source filter is applied — this is now about an explicit picker UX rather than lifting a guard)
+- [ ] Decide whether a Session Inspector surface is still needed for session-level navigation (lists run envelopes per session, links into the Prompt Timeline) — the old Turn Inspector is already gone, so this is a green-field decision rather than a rename
 - [ ] Decide whether background paths should emit minimal lifecycle events (`run.started`, `run.completed`, `run.failed`) for symmetric timeline rendering, or whether their wire-log-only timeline is acceptable
 - [ ] Update `Tabs after refactor` to reflect the final state

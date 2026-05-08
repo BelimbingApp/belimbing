@@ -43,8 +43,8 @@
             return Math.floor(elapsedSeconds / 60) + 'm ' + (elapsedSeconds % 60) + 's';
         },
 
-        replayUrlFor(turnId, afterSeq = 0) {
-            return this.replayUrlTemplate.replace('__TURN__', turnId) + '?after_seq=' + afterSeq;
+        replayUrlFor(runId, afterSeq = 0) {
+            return this.replayUrlTemplate.replace('__TURN__', runId) + '?after_seq=' + afterSeq;
         },
 
         labelForPhase(phase, fallback = null) {
@@ -67,13 +67,13 @@
             };
         },
 
-        clearSummary(sessionId, turnId = null) {
+        clearSummary(sessionId, runId = null) {
             const current = (this.activeTurnSummaries ?? {})[sessionId] || null;
             if (!current) {
                 return;
             }
 
-            if (turnId && current.turnId && current.turnId !== turnId) {
+            if (runId && current.runId && current.runId !== runId) {
                 return;
             }
 
@@ -94,18 +94,18 @@
         },
 
         async refreshSummary(sessionId, summary) {
-            if (!summary?.turnId) {
+            if (!summary?.runId) {
                 this.clearSummary(sessionId);
                 return;
             }
 
             const afterSeq = summary.lastSeq || 0;
-            const response = await fetch(this.replayUrlFor(summary.turnId, afterSeq), {
+            const response = await fetch(this.replayUrlFor(summary.runId, afterSeq), {
                 credentials: 'same-origin',
             });
 
             if (!response.ok) {
-                this.clearSummary(sessionId, summary.turnId);
+                this.clearSummary(sessionId, summary.runId);
                 return;
             }
 
@@ -113,12 +113,12 @@
             const latestSeq = (payload.events || []).reduce((max, event) => Math.max(max, Number.parseInt(event?.seq ?? 0, 10) || 0), afterSeq);
 
             if (this.terminalTurnStatuses.includes(payload.status)) {
-                this.clearSummary(sessionId, summary.turnId);
+                this.clearSummary(sessionId, summary.runId);
                 return;
             }
 
             this.syncSummary(sessionId, {
-                turnId: summary.turnId,
+                runId: summary.runId,
                 session_id: sessionId,
                 status: payload.status,
                 phase: payload.current_phase || summary.phase || null,
@@ -145,7 +145,7 @@
             const poll = () => {
                 Object.entries(this.activeTurnSummaries ?? {}).forEach(([sessionId, summary]) => {
                     this.refreshSummary(sessionId, summary).catch(() => {
-                        this.clearSummary(sessionId, summary?.turnId || null);
+                        this.clearSummary(sessionId, summary?.runId || null);
                     });
                 });
             };
@@ -503,12 +503,12 @@
                                         @if ($canAccessControlPlane && isset($sessionTurnTargets[$session->id]))
                                             <div class="mt-0.5">
                                                 <a
-                                                    href="{{ route('admin.ai.control-plane', ['tab' => 'turns', 'turnId' => $sessionTurnTargets[$session->id]['turn_id']]) }}"
+                                                    href="{{ route('admin.ai.control-plane', ['tab' => 'timeline', 'runId' => $sessionTurnTargets[$session->id]['run_id']]) }}"
                                                     wire:navigate
                                                     class="text-[10px] text-accent hover:underline"
                                                 >
                                                     {{ $sessionTurnTargets[$session->id]['is_active'] ? __('Current Turn') : __('Last Turn') }}:
-                                                    <span class="font-mono">{{ \Illuminate\Support\Str::limit($sessionTurnTargets[$session->id]['turn_id'], 14, '...') }}</span>
+                                                    <span class="font-mono">{{ \Illuminate\Support\Str::limit($sessionTurnTargets[$session->id]['run_id'], 14, '...') }}</span>
                                                 </a>
                                             </div>
                                         @endif
@@ -534,13 +534,13 @@
                                         x-cloak
                                         x-on:click.stop="
                                             const summary = activeTurnSummaries['{{ $session->id }}'];
-                                            if (!summary?.turnId || summary.stop_requested) return;
+                                            if (!summary?.runId || summary.stop_requested) return;
                                             syncSummary('{{ $session->id }}', {
                                                 label: stoppingLabel,
                                                 stop_requested: true,
                                                 cancel_requested_at: new Date().toISOString(),
                                             });
-                                            $wire.cancelActiveTurn(summary.turnId);
+                                            $wire.cancelActiveTurn(summary.runId);
                                         "
                                         :disabled="!!activeTurnSummaries['{{ $session->id }}']?.stop_requested"
                                         class="text-muted hover:text-ink disabled:opacity-60 disabled:cursor-not-allowed p-1 shrink-0"
@@ -587,7 +587,7 @@
                     startingLabel: @js(__('Starting…')),
                     stoppingLabel: @js(__('Stopping… waiting for stream to stop')),
                     waitingForWorkerLabel: @js(__('Waiting for worker…')),
-                    turnFailedMessage: @js(__('Turn failed')),
+                    runFailedMessage: @js(__('Turn failed')),
                     connectionLostMessage: @js(__('Connection lost. Please try again.')),
                     replayUrlTemplate: @js(route('ai.chat.turn.events', ['runId' => '__TURN__'])),
                 })"
@@ -601,7 +601,7 @@
                     x-init="
                         $nextTick(() => $el.scrollTop = $el.scrollHeight);
                         const selectedTurn = @js($selectedSessionActiveTurn);
-                        if (selectedTurn?.turnId) {
+                        if (selectedTurn?.runId) {
                             $nextTick(() => resumeKnownTurn(selectedTurn, $el));
                         }
                     "
@@ -922,7 +922,7 @@
                     class="border-t border-border-default bg-surface-subtle/60 px-4 py-1.5 flex items-center gap-3 text-xs shrink-0"
                 >
                     <span class="w-2 h-2 bg-accent rounded-full animate-pulse shrink-0"></span>
-                    <span class="text-muted truncate" x-text="turnLabel || '{{ __('Processing…') }}'"></span>
+                    <span class="text-muted truncate" x-text="runLabel || '{{ __('Processing…') }}'"></span>
                     <span class="tabular-nums text-muted/70 shrink-0" x-text="
                         elapsedSeconds < 60
                             ? elapsedSeconds + 's'
@@ -968,7 +968,7 @@
                             </x-ui.button>
                             @if ($canAccessControlPlane && $selectedSessionTurnTarget)
                                 <a
-                                    href="{{ route('admin.ai.control-plane', ['tab' => 'turns', 'turnId' => $selectedSessionTurnTarget['turn_id']]) }}"
+                                    href="{{ route('admin.ai.control-plane', ['tab' => 'timeline', 'runId' => $selectedSessionTurnTarget['run_id']]) }}"
                                     wire:navigate
                                     class="inline-flex items-center gap-1 rounded-full border border-border-default bg-surface-card px-2 py-1 text-[11px] text-accent hover:border-accent/40 hover:bg-surface-subtle"
                                 >
@@ -1028,10 +1028,10 @@
             try {
                 const result = await this.$wire.prepareStreamingRun();
 
-                if (result?.status === 'session_busy' && result.turnId) {
+                if (result?.status === 'session_busy' && result.runId) {
                     this.pendingMessage = null;
                     await this.resumeKnownTurn({
-                        turnId: result.turnId,
+                        runId: result.runId,
                         phase: result.phase,
                         label: result.label,
                         started_at: result.started_at,
@@ -1041,19 +1041,19 @@
                     return;
                 }
 
-                if (result && result.turnId && result.streamUrl) {
-                    this.resetTurnState();
+                if (result && result.runId && result.streamUrl) {
+                    this.resetRunState();
                     this.pendingMessage = null;
-                    this.restoreTurnState(result.turnId) || this.ensureTurnState(result.turnId);
-                    this.selectedTurnId = result.turnId;
-                    this.ensureTurnState(result.turnId, {
+                    this.restoreRunState(result.runId) || this.ensureRunState(result.runId);
+                    this.selectedRunId = result.runId;
+                    this.ensureRunState(result.runId, {
                         streamEntries: [],
-                        turnPhase: result.phase || 'waiting_for_worker',
-                        turnLabel: result.label || this.waitingForWorkerLabel,
+                        runPhase: result.phase || 'waiting_for_worker',
+                        runLabel: result.label || this.waitingForWorkerLabel,
                         scrollContainer,
                     });
-                    this.startElapsedTimer(result.turnId, result.started_at || result.created_at || null);
-                    this.startPersistentFetch(result.turnId, result.streamUrl, scrollContainer);
+                    this.startElapsedTimer(result.runId, result.started_at || result.created_at || null);
+                    this.startPersistentFetch(result.runId, result.streamUrl, scrollContainer);
                     textarea.value = '';
                     textarea.style.height = 'auto';
                     localStorage.removeItem(this.draftKey);
@@ -1065,7 +1065,7 @@
                 textarea.style.height = 'auto';
                 localStorage.removeItem(this.draftKey);
             } catch (e) {
-                this.ensureTurnState(this.selectedTurnId)?.streamEntries.push({
+                this.ensureRunState(this.selectedRunId)?.streamEntries.push({
                     type: 'error',
                     message: e?.message || 'Failed to start streaming run',
                 });
@@ -1078,58 +1078,58 @@
     Alpine.data('agentChatStream', (config = {}) => ({
         pendingMessage: null,
         followTail: true,
-        selectedTurnId: null,
-        turnRegistry: {},
+        selectedRunId: null,
+        runRegistry: {},
 
         startingLabel: config.startingLabel ?? 'Starting…',
         stoppingLabel: config.stoppingLabel ?? 'Stopping…',
         waitingForWorkerLabel: config.waitingForWorkerLabel ?? 'Waiting for worker…',
-        turnFailedMessage: config.turnFailedMessage ?? 'Turn failed',
+        runFailedMessage: config.runFailedMessage ?? 'Turn failed',
         connectionLostMessage: config.connectionLostMessage ?? 'Connection lost. Please try again.',
         replayUrlTemplate: config.replayUrlTemplate ?? '',
 
         get isBusy() {
-            return !!this.pendingMessage || !!this.selectedTurnId;
+            return !!this.pendingMessage || !!this.selectedRunId;
         },
 
-        get selectedTurnState() {
-            if (!this.selectedTurnId) {
+        get selectedRunState() {
+            if (!this.selectedRunId) {
                 return null;
             }
 
-            return this.turnRegistry[this.selectedTurnId] || null;
+            return this.runRegistry[this.selectedRunId] || null;
         },
 
         get streamEntries() {
-            return this.selectedTurnState?.streamEntries || [];
+            return this.selectedRunState?.streamEntries || [];
         },
 
-        get turnPhase() {
-            return this.selectedTurnState?.turnPhase || null;
+        get runPhase() {
+            return this.selectedRunState?.runPhase || null;
         },
 
-        get turnLabel() {
-            return this.selectedTurnState?.turnLabel || null;
+        get runLabel() {
+            return this.selectedRunState?.runLabel || null;
         },
 
         get elapsedSeconds() {
-            return this.selectedTurnState?.elapsedSeconds || 0;
+            return this.selectedRunState?.elapsedSeconds || 0;
         },
 
         get toolsCollapsed() {
-            return this.selectedTurnState?.toolsCollapsed || false;
+            return this.selectedRunState?.toolsCollapsed || false;
         },
 
         get stopRequested() {
-            return !!this.selectedTurnState?.stopRequested;
+            return !!this.selectedRunState?.stopRequested;
         },
 
-        createTurnState() {
+        createRunState() {
             return {
                 streamEntries: [],
-                turnPhase: null,
-                turnLabel: null,
-                turnStartedAt: null,
+                runPhase: null,
+                runLabel: null,
+                runStartedAt: null,
                 elapsedSeconds: 0,
                 lastSeq: 0,
                 toolMap: {},
@@ -1149,83 +1149,83 @@
             };
         },
 
-        ensureTurnState(turnId, patch = {}) {
-            if (!turnId) {
+        ensureRunState(runId, patch = {}) {
+            if (!runId) {
                 return null;
             }
 
-            const state = this.turnRegistry[turnId] || this.createTurnState();
+            const state = this.runRegistry[runId] || this.createRunState();
             Object.assign(state, patch);
 
-            if (!this.turnRegistry[turnId]) {
-                this.turnRegistry = {
-                    ...this.turnRegistry,
-                    [turnId]: state,
+            if (!this.runRegistry[runId]) {
+                this.runRegistry = {
+                    ...this.runRegistry,
+                    [runId]: state,
                 };
             }
 
             return state;
         },
 
-        snapshotActiveTurnState() {
-            if (!this.selectedTurnId || !this.selectedTurnState) {
+        snapshotActiveRunState() {
+            if (!this.selectedRunId || !this.selectedRunState) {
                 return;
             }
 
-            this.turnRegistry = {
-                ...this.turnRegistry,
-                [this.selectedTurnId]: this.selectedTurnState,
+            this.runRegistry = {
+                ...this.runRegistry,
+                [this.selectedRunId]: this.selectedRunState,
             };
         },
 
-        restoreTurnState(turnId) {
-            if (!this.turnRegistry[turnId]) {
+        restoreRunState(runId) {
+            if (!this.runRegistry[runId]) {
                 return false;
             }
 
-            this.selectedTurnId = turnId;
+            this.selectedRunId = runId;
 
             return true;
         },
 
-        forgetTurnState(turnId) {
-            if (!turnId || !this.turnRegistry[turnId]) {
+        forgetRunState(runId) {
+            if (!runId || !this.runRegistry[runId]) {
                 return;
             }
 
-            this.teardownTurnState(turnId);
+            this.teardownRunState(runId);
 
-            const nextRegistry = { ...this.turnRegistry };
-            delete nextRegistry[turnId];
-            this.turnRegistry = nextRegistry;
+            const nextRegistry = { ...this.runRegistry };
+            delete nextRegistry[runId];
+            this.runRegistry = nextRegistry;
         },
 
-        resetTurnState(dropCurrentRegistry = false) {
-            const currentTurnId = this.selectedTurnId;
+        resetRunState(dropCurrentRegistry = false) {
+            const currentRunId = this.selectedRunId;
 
-            if (!currentTurnId) {
+            if (!currentRunId) {
                 return;
             }
 
             if (dropCurrentRegistry) {
-                this.forgetTurnState(currentTurnId);
+                this.forgetRunState(currentRunId);
             } else {
-                this.snapshotActiveTurnState();
-                this.teardownTurnState(currentTurnId);
+                this.snapshotActiveRunState();
+                this.teardownRunState(currentRunId);
             }
 
-            this.selectedTurnId = null;
+            this.selectedRunId = null;
         },
 
-        teardownTurnState(turnId) {
-            const state = this.turnRegistry[turnId] || null;
+        teardownRunState(runId) {
+            const state = this.runRegistry[runId] || null;
             if (!state) {
                 return;
             }
 
-            this.abortPersistentFetch(turnId);
-            this.stopReplayPolling(turnId);
-            this.flushDeltaBuffer(turnId);
+            this.abortPersistentFetch(runId);
+            this.stopReplayPolling(runId);
+            this.flushDeltaBuffer(runId);
             state.deltaBuffer = '';
             state.scrollContainer = null;
             state.replayPromise = null;
@@ -1237,8 +1237,8 @@
             }
         },
 
-        flushDeltaBuffer(turnId = null) {
-            const state = this.ensureTurnState(turnId || this.selectedTurnId);
+        flushDeltaBuffer(runId = null) {
+            const state = this.ensureRunState(runId || this.selectedRunId);
             if (!state) {
                 return;
             }
@@ -1264,8 +1264,8 @@
             state.deltaBuffer = '';
         },
 
-        startElapsedTimer(turnId, serverStartedAt = null) {
-            const state = this.ensureTurnState(turnId);
+        startElapsedTimer(runId, serverStartedAt = null) {
+            const state = this.ensureRunState(runId);
             if (!state) {
                 return;
             }
@@ -1275,76 +1275,76 @@
                 state.elapsedTimer = null;
             }
 
-            state.turnStartedAt = serverStartedAt
+            state.runStartedAt = serverStartedAt
                 ? new Date(serverStartedAt).getTime()
                 : Date.now();
 
-            state.elapsedSeconds = Math.max(0, Math.floor((Date.now() - state.turnStartedAt) / 1000));
+            state.elapsedSeconds = Math.max(0, Math.floor((Date.now() - state.runStartedAt) / 1000));
             state.elapsedTimer = setInterval(() => {
-                const liveState = this.turnRegistry[turnId];
-                if (!liveState || !liveState.turnStartedAt) {
+                const liveState = this.runRegistry[runId];
+                if (!liveState || !liveState.runStartedAt) {
                     return;
                 }
 
-                liveState.elapsedSeconds = Math.max(0, Math.floor((Date.now() - liveState.turnStartedAt) / 1000));
+                liveState.elapsedSeconds = Math.max(0, Math.floor((Date.now() - liveState.runStartedAt) / 1000));
             }, 1000);
         },
 
         async resumeKnownTurn(activeTurn, scrollContainer) {
-            if (!activeTurn?.turnId) {
+            if (!activeTurn?.runId) {
                 return;
             }
 
-            const turnId = activeTurn.turnId;
+            const runId = activeTurn.runId;
             const timerAnchor = activeTurn.started_at || activeTurn.created_at || null;
             const phase = activeTurn.phase || null;
             const label = activeTurn.label
                 || this.labelForPhase(phase, null)
                 || this.waitingForWorkerLabel;
 
-            if (this.selectedTurnId !== turnId) {
-                this.resetTurnState();
-                this.ensureTurnState(turnId);
-                this.restoreTurnState(turnId);
+            if (this.selectedRunId !== runId) {
+                this.resetRunState();
+                this.ensureRunState(runId);
+                this.restoreRunState(runId);
             }
 
-            const state = this.ensureTurnState(turnId, {
-                turnPhase: phase,
-                turnLabel: label,
+            const state = this.ensureRunState(runId, {
+                runPhase: phase,
+                runLabel: label,
                 scrollContainer,
             });
 
             if (timerAnchor) {
-                this.startElapsedTimer(turnId, timerAnchor);
+                this.startElapsedTimer(runId, timerAnchor);
             }
 
             if (state && (state.abortController || state.replayPollTimer)) {
                 return;
             }
 
-            await this.resumeTurnStream(turnId, scrollContainer);
+            await this.resumeTurnStream(runId, scrollContainer);
         },
 
         async onSessionSelected(detail, scrollContainer) {
             const selectedTurn = {
-                turnId: detail?.activeTurnId || null,
+                runId: detail?.activeTurnId || null,
                 phase: detail?.activeTurnPhase || null,
                 label: detail?.activeTurnLabel || null,
                 started_at: detail?.activeTurnStartedAt || null,
                 created_at: detail?.activeTurnCreatedAt || null,
             };
 
-            if (!selectedTurn.turnId) {
+            if (!selectedTurn.runId) {
                 this.pendingMessage = null;
-                this.resetTurnState();
+                this.resetRunState();
                 return;
             }
 
             await this.resumeKnownTurn(selectedTurn, scrollContainer);
         },
 
-        stopReplayPolling(turnId = null) {
-            const state = this.ensureTurnState(turnId || this.selectedTurnId);
+        stopReplayPolling(runId = null) {
+            const state = this.ensureRunState(runId || this.selectedRunId);
             if (!state?.replayPollTimer) {
                 return;
             }
@@ -1353,23 +1353,23 @@
             state.replayPollTimer = null;
         },
 
-        startReplayPolling(turnId, scrollContainer) {
-            const state = this.ensureTurnState(turnId);
-            if (!turnId || !state || state.replayPollTimer) {
+        startReplayPolling(runId, scrollContainer) {
+            const state = this.ensureRunState(runId);
+            if (!runId || !state || state.replayPollTimer) {
                 return;
             }
 
             const poll = () => {
-                if (this.selectedTurnId !== turnId || !this.turnRegistry[turnId]) {
-                    this.stopReplayPolling(turnId);
+                if (this.selectedRunId !== runId || !this.runRegistry[runId]) {
+                    this.stopReplayPolling(runId);
 
                     return;
                 }
 
-                this.requestReplay(state.lastSeq, scrollContainer, turnId).catch(() => {
-                    this.stopReplayPolling(turnId);
+                this.requestReplay(state.lastSeq, scrollContainer, runId).catch(() => {
+                    this.stopReplayPolling(runId);
                     state.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
-                    this.finalizeTurnStream(turnId);
+                    this.finalizeTurnStream(runId);
                 });
             };
 
@@ -1377,14 +1377,14 @@
             poll();
         },
 
-        finalizeTurnStream(turnId = null) {
-            const finalizedTurnId = turnId || this.selectedTurnId;
+        finalizeTurnStream(runId = null) {
+            const finalizedTurnId = runId || this.selectedRunId;
             const finalizedSessionId = this.$wire.selectedSessionId || null;
 
-            if (finalizedTurnId && this.selectedTurnId === finalizedTurnId) {
-                this.resetTurnState(true);
+            if (finalizedTurnId && this.selectedRunId === finalizedTurnId) {
+                this.resetRunState(true);
             } else if (finalizedTurnId) {
-                this.forgetTurnState(finalizedTurnId);
+                this.forgetRunState(finalizedTurnId);
             }
 
             this.$wire.finalizeStreamingRun(finalizedTurnId, finalizedSessionId);
@@ -1400,31 +1400,31 @@
 
             this.pendingMessage = null;
 
-            const serverTurnId = detail?.turnId || null;
+            const serverTurnId = detail?.runId || null;
             if (!serverTurnId) {
                 return;
             }
 
-            if (this.selectedTurnId && this.selectedTurnId !== serverTurnId) {
+            if (this.selectedRunId && this.selectedRunId !== serverTurnId) {
                 return;
             }
 
-            if (this.selectedTurnId === serverTurnId) {
-                this.resetTurnState(true);
+            if (this.selectedRunId === serverTurnId) {
+                this.resetRunState(true);
             }
         },
 
         repairAbandonedSelectedSession(runId) {
-            if (!runId || this.selectedTurnId !== runId) {
+            if (!runId || this.selectedRunId !== runId) {
                 return;
             }
 
             this.pendingMessage = null;
-            this.resetTurnState(true);
+            this.resetRunState(true);
         },
 
-        abortPersistentFetch(turnId = null) {
-            const state = this.ensureTurnState(turnId || this.selectedTurnId);
+        abortPersistentFetch(runId = null) {
+            const state = this.ensureRunState(runId || this.selectedRunId);
             if (!state?.abortController) {
                 return;
             }
@@ -1434,13 +1434,13 @@
             state.fetchReader = null;
         },
 
-        async startPersistentFetch(turnId, streamUrl, scrollContainer) {
-            const state = this.ensureTurnState(turnId, { scrollContainer });
+        async startPersistentFetch(runId, streamUrl, scrollContainer) {
+            const state = this.ensureRunState(runId, { scrollContainer });
             if (!state) {
                 return;
             }
 
-            this.abortPersistentFetch(turnId);
+            this.abortPersistentFetch(runId);
             state.abortController = new AbortController();
 
             try {
@@ -1462,7 +1462,7 @@
                     }
 
                     state.streamEntries.push({ type: 'error', message: errorMessage });
-                    this.finalizeTurnStream(turnId);
+                    this.finalizeTurnStream(runId);
 
                     return;
                 }
@@ -1476,7 +1476,7 @@
 
                     if (done) break;
 
-                    if (this.selectedTurnId !== turnId) break;
+                    if (this.selectedRunId !== runId) break;
 
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split('\n');
@@ -1489,22 +1489,22 @@
                             const data = JSON.parse(line);
 
                             if (data._stream_complete) {
-                                if (this.selectedTurnId !== turnId) return;
+                                if (this.selectedRunId !== runId) return;
 
-                                this.removeThinkingEntries(turnId);
-                                this.finalizeTurnStream(turnId);
+                                this.removeThinkingEntries(runId);
+                                this.finalizeTurnStream(runId);
 
                                 return;
                             }
 
                             if (data.error && !data.event_type) {
                                 state.streamEntries.push({ type: 'error', message: data.error });
-                                this.finalizeTurnStream(turnId);
+                                this.finalizeTurnStream(runId);
 
                                 return;
                             }
 
-                            await this.handleTurnEvent(data.event_type, data, scrollContainer, turnId);
+                            await this.handleTurnEvent(data.event_type, data, scrollContainer, runId);
                         } catch {
                             // Skip malformed lines
                         }
@@ -1512,52 +1512,52 @@
                 }
 
                 // Stream ended without _stream_complete — treat as normal completion
-                if (this.selectedTurnId === turnId) {
-                    this.removeThinkingEntries(turnId);
-                    this.finalizeTurnStream(turnId);
+                if (this.selectedRunId === runId) {
+                    this.removeThinkingEntries(runId);
+                    this.finalizeTurnStream(runId);
                 }
             } catch (e) {
                 if (e.name === 'AbortError') return;
 
-                if (this.selectedTurnId === turnId) {
+                if (this.selectedRunId === runId) {
                     state.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
-                    this.finalizeTurnStream(turnId);
+                    this.finalizeTurnStream(runId);
                 }
             }
         },
 
-        async resumeTurnStream(turnId, scrollContainer) {
-            this.selectedTurnId = turnId;
+        async resumeTurnStream(runId, scrollContainer) {
+            this.selectedRunId = runId;
             this.followTail = true;
-            this.ensureTurnState(turnId, { scrollContainer });
+            this.ensureRunState(runId, { scrollContainer });
 
             try {
-                const json = await this.replayTurnEvents(0, scrollContainer, turnId);
+                const json = await this.replayTurnEvents(0, scrollContainer, runId);
                 if (!json) {
-                    this.repairAbandonedSelectedSession(turnId);
+                    this.repairAbandonedSelectedSession(runId);
                     return;
                 }
 
                 const isTerminal = ['succeeded', 'failed', 'cancelled', 'timed_out'].includes(json.status);
-                if (isTerminal && this.selectedTurnId === turnId) {
-                    this.repairAbandonedSelectedSession(turnId);
+                if (isTerminal && this.selectedRunId === runId) {
+                    this.repairAbandonedSelectedSession(runId);
                     return;
                 }
 
                 if (!isTerminal) {
-                    this.startReplayPolling(turnId, scrollContainer);
+                    this.startReplayPolling(runId, scrollContainer);
                 }
             } catch {
-                const state = this.ensureTurnState(turnId);
+                const state = this.ensureRunState(runId);
                 state?.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
-                this.finalizeTurnStream(turnId);
+                this.finalizeTurnStream(runId);
             }
         },
 
-        async requestReplay(afterSeq, scrollContainer, turnId = null) {
+        async requestReplay(afterSeq, scrollContainer, runId = null) {
             const normalizedAfterSeq = Math.max(0, Number.parseInt(afterSeq ?? 0, 10) || 0);
-            const activeTurnId = turnId || this.selectedTurnId;
-            const state = this.ensureTurnState(activeTurnId);
+            const activeTurnId = runId || this.selectedRunId;
+            const state = this.ensureRunState(activeTurnId);
             if (!activeTurnId || !state) {
                 return null;
             }
@@ -1577,19 +1577,19 @@
                     state.pendingReplayAfterSeq = null;
                     await this.replayTurnEvents(nextAfterSeq, scrollContainer, activeTurnId);
                     nextAfterSeq = state.pendingReplayAfterSeq;
-                } while (nextAfterSeq !== null && this.selectedTurnId === activeTurnId);
+                } while (nextAfterSeq !== null && this.selectedRunId === activeTurnId);
             })();
 
             return state.replayPromise.finally(() => {
-                if (this.turnRegistry[activeTurnId]) {
-                    this.turnRegistry[activeTurnId].replayPromise = null;
-                    this.turnRegistry[activeTurnId].pendingReplayAfterSeq = null;
+                if (this.runRegistry[activeTurnId]) {
+                    this.runRegistry[activeTurnId].replayPromise = null;
+                    this.runRegistry[activeTurnId].pendingReplayAfterSeq = null;
                 }
             });
         },
 
-        async replayTurnEvents(afterSeq, scrollContainer, turnId = null) {
-            const replayTurnId = turnId || this.selectedTurnId;
+        async replayTurnEvents(afterSeq, scrollContainer, runId = null) {
+            const replayTurnId = runId || this.selectedRunId;
             if (!replayTurnId) return null;
 
             const replayUrl = this.replayUrlTemplate.replace('__TURN__', replayTurnId) + '?after_seq=' + afterSeq;
@@ -1598,21 +1598,21 @@
 
             const json = await resp.json();
 
-            if (this.selectedTurnId !== replayTurnId) {
+            if (this.selectedRunId !== replayTurnId) {
                 return null;
             }
 
-            const state = this.ensureTurnState(replayTurnId);
+            const state = this.ensureRunState(replayTurnId);
             if (!state) {
                 return null;
             }
 
-            if (!state.turnStartedAt && (json.started_at || json.created_at)) {
+            if (!state.runStartedAt && (json.started_at || json.created_at)) {
                 this.startElapsedTimer(replayTurnId, json.started_at || json.created_at);
             }
             if (json.current_phase) {
-                state.turnPhase = json.current_phase;
-                state.turnLabel = (json.cancel_requested_at || state.stopRequested)
+                state.runPhase = json.current_phase;
+                state.runLabel = (json.cancel_requested_at || state.stopRequested)
                     ? this.stoppingLabel
                     : (json.current_label
                         || this.labelForPhase(json.current_phase, json.current_phase));
@@ -1620,7 +1620,7 @@
             if (json.cancel_requested_at) {
                 state.stopRequested = true;
                 state.stopRequestedAt = json.cancel_requested_at;
-                state.turnLabel = this.stoppingLabel;
+                state.runLabel = this.stoppingLabel;
             }
 
             for (const event of (json.events || [])) {
@@ -1632,7 +1632,7 @@
 
                 this.processTurnEvent(event.event_type, event, scrollContainer, replayTurnId);
 
-                if (this.selectedTurnId !== replayTurnId) {
+                if (this.selectedRunId !== replayTurnId) {
                     break;
                 }
             }
@@ -1640,15 +1640,15 @@
             return json;
         },
 
-        async handleTurnEvent(eventType, data, scrollContainer, turnId = null) {
+        async handleTurnEvent(eventType, data, scrollContainer, runId = null) {
             const seq = Number.parseInt(data?.seq ?? 0, 10) || 0;
-            const activeTurnId = turnId || data.run_id || this.selectedTurnId;
-            const state = this.ensureTurnState(activeTurnId);
+            const activeTurnId = runId || data.run_id || this.selectedRunId;
+            const state = this.ensureRunState(activeTurnId);
             if (!activeTurnId || !state) {
                 return;
             }
 
-            this.selectedTurnId = activeTurnId;
+            this.selectedRunId = activeTurnId;
 
             if (seq && seq > state.lastSeq + 1) {
                 try {
@@ -1668,9 +1668,9 @@
             this.processTurnEvent(eventType, data, scrollContainer, activeTurnId);
         },
 
-        processTurnEvent(eventType, data, scrollContainer, turnId = null) {
-            const activeTurnId = turnId || data.run_id || this.selectedTurnId;
-            const state = this.ensureTurnState(activeTurnId);
+        processTurnEvent(eventType, data, scrollContainer, runId = null) {
+            const activeTurnId = runId || data.run_id || this.selectedRunId;
+            const state = this.ensureRunState(activeTurnId);
             if (!activeTurnId || !state) {
                 return;
             }
@@ -1739,35 +1739,35 @@
             this.scrollToBottom(scrollContainer);
         },
 
-        onTurnStarted(data, turnId) {
+        onTurnStarted(data, runId) {
             const payload = data?.payload || data || {};
             const serverStartedAt = payload.started_at || null;
-            const state = this.ensureTurnState(turnId);
+            const state = this.ensureRunState(runId);
             if (!state) {
                 return;
             }
 
             if (serverStartedAt) {
-                this.startElapsedTimer(turnId, serverStartedAt);
-            } else if (!state.turnStartedAt) {
-                this.startElapsedTimer(turnId);
+                this.startElapsedTimer(runId, serverStartedAt);
+            } else if (!state.runStartedAt) {
+                this.startElapsedTimer(runId);
             }
-            state.turnPhase = 'booting';
-            state.turnLabel = this.startingLabel;
+            state.runPhase = 'booting';
+            state.runLabel = this.startingLabel;
         },
 
-        onPhaseChanged(data, turnId) {
+        onPhaseChanged(data, runId) {
             const phase = data.payload?.phase || data.phase;
             const label = data.payload?.label
                 || data.label
                 || this.labelForPhase(phase, phase);
-            const state = this.ensureTurnState(turnId);
+            const state = this.ensureRunState(runId);
             if (!state) {
                 return;
             }
 
-            state.turnPhase = phase;
-            state.turnLabel = label;
+            state.runPhase = phase;
+            state.runLabel = label;
 
             // Update the most recent thinking entry description when we have a richer label.
             if (phase === 'awaiting_llm' && label && label !== this.phaseLabels.awaiting_llm) {
@@ -1780,17 +1780,17 @@
             }
         },
 
-        onThinkingStarted(data, turnId) {
+        onThinkingStarted(data, runId) {
             const payload = data?.payload || data || {};
             const description = payload.description || null;
-            this.ensureTurnState(turnId)?.streamEntries.push({ type: 'thinking', active: true, description, thinkingContent: '' });
+            this.ensureRunState(runId)?.streamEntries.push({ type: 'thinking', active: true, description, thinkingContent: '' });
         },
 
-        onThinkingDelta(data, turnId) {
+        onThinkingDelta(data, runId) {
             const payload = data?.payload || data || {};
             const delta = payload.delta || '';
             if (!delta) return;
-            const state = this.ensureTurnState(turnId);
+            const state = this.ensureRunState(runId);
             if (!state) {
                 return;
             }
@@ -1812,13 +1812,13 @@
             entry.thinkingContent = (entry.thinkingContent || '') + delta;
         },
 
-        onToolStarted(data, turnId) {
-            const state = this.ensureTurnState(turnId);
+        onToolStarted(data, runId) {
+            const state = this.ensureRunState(runId);
             if (!state) {
                 return;
             }
 
-            this.deactivateThinking(turnId);
+            this.deactivateThinking(runId);
 
             if (state.completedToolCount > 0 && !state.toolsCollapsed) {
                 state.toolsCollapsed = true;
@@ -1839,10 +1839,10 @@
             });
         },
 
-        onToolFinished(data, turnId) {
+        onToolFinished(data, runId) {
             const payload = data.payload || data;
             const toolKey = payload.tool_call_index ?? -1;
-            const state = this.ensureTurnState(turnId);
+            const state = this.ensureRunState(runId);
             if (!state) {
                 return;
             }
@@ -1862,12 +1862,12 @@
             state.completedToolCount++;
         },
 
-        onToolStdoutDelta(data, turnId) {
+        onToolStdoutDelta(data, runId) {
             const payload = data.payload || data;
             const toolName = payload.tool || '';
             const delta = payload.delta || '';
             if (!delta) return;
-            const state = this.ensureTurnState(turnId);
+            const state = this.ensureRunState(runId);
             if (!state) {
                 return;
             }
@@ -1885,9 +1885,9 @@
             }
         },
 
-        onToolDenied(data, turnId) {
+        onToolDenied(data, runId) {
             const payload = data.payload || data;
-            this.ensureTurnState(turnId)?.streamEntries.push({
+            this.ensureRunState(runId)?.streamEntries.push({
                 type: 'hook_action',
                 stage: 'pre_tool_use',
                 action: 'tool_denied',
@@ -1897,13 +1897,13 @@
             });
         },
 
-        onOutputDelta(data, turnId) {
-            const state = this.ensureTurnState(turnId);
+        onOutputDelta(data, runId) {
+            const state = this.ensureRunState(runId);
             if (!state) {
                 return;
             }
 
-            this.deactivateThinking(turnId);
+            this.deactivateThinking(runId);
 
             const payload = data.payload || data;
             const text = payload.delta || payload.text || '';
@@ -1913,26 +1913,26 @@
 
             const hasBoundary = /\n/.test(text);
             if (hasBoundary) {
-                this.flushDeltaBuffer(turnId);
+                this.flushDeltaBuffer(runId);
 
                 return;
             }
 
             if (state.deltaFlushTimer) clearTimeout(state.deltaFlushTimer);
-            state.deltaFlushTimer = setTimeout(() => this.flushDeltaBuffer(turnId), 80);
+            state.deltaFlushTimer = setTimeout(() => this.flushDeltaBuffer(runId), 80);
         },
 
-        onTurnFailed(data, turnId) {
+        onTurnFailed(data, runId) {
             const payload = data.payload || data;
-            this.ensureTurnState(turnId)?.streamEntries.push({
+            this.ensureRunState(runId)?.streamEntries.push({
                 type: 'error',
-                message: payload.message || this.turnFailedMessage,
+                message: payload.message || this.runFailedMessage,
             });
-            this.finalizeTurnStream(turnId);
+            this.finalizeTurnStream(runId);
         },
 
-        deactivateThinking(turnId = null) {
-            const state = this.ensureTurnState(turnId || this.selectedTurnId);
+        deactivateThinking(runId = null) {
+            const state = this.ensureRunState(runId || this.selectedRunId);
             if (!state) {
                 return;
             }
@@ -1945,8 +1945,8 @@
             }
         },
 
-        removeThinkingEntries(turnId = null) {
-            const state = this.ensureTurnState(turnId || this.selectedTurnId);
+        removeThinkingEntries(runId = null) {
+            const state = this.ensureRunState(runId || this.selectedRunId);
             if (!state) {
                 return;
             }
@@ -1959,12 +1959,12 @@
         stopStreaming() {
             this.pendingMessage = null;
 
-            if (!this.selectedTurnId) {
+            if (!this.selectedRunId) {
                 return;
             }
 
-            const turnId = this.selectedTurnId;
-            const state = this.ensureTurnState(turnId);
+            const runId = this.selectedRunId;
+            const state = this.ensureRunState(runId);
             if (!state) {
                 return;
             }
@@ -1975,9 +1975,9 @@
 
             state.stopRequested = true;
             state.stopRequestedAt = new Date().toISOString();
-            state.turnLabel = this.stoppingLabel;
-            this.$wire.cancelActiveTurn(turnId);
-            this.startReplayPolling(turnId, state.scrollContainer);
+            state.runLabel = this.stoppingLabel;
+            this.$wire.cancelActiveTurn(runId);
+            this.startReplayPolling(runId, state.scrollContainer);
         },
 
         scrollToBottom(container) {
