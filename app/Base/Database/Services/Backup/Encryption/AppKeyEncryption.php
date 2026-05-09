@@ -250,29 +250,52 @@ final class AppKeyEncryption implements EncryptionMode
     private function pullSecretstreamChunksUntilFinal($in, $out, &$state, string $sourcePath, string $destinationPath): bool
     {
         while (true) {
-            $lenBytes = @fread($in, 4);
-            if ($lenBytes === false || $lenBytes === '') {
+            $lenBytes = $this->readNextSecretstreamChunkLengthPrefix($in, $sourcePath);
+            if ($lenBytes === null) {
                 return false;
-            }
-            if (strlen($lenBytes) !== 4) {
-                throw BackupException::decryptionFailed("Truncated chunk length in {$sourcePath}");
             }
 
             $chunkLen = (int) unpack('N', $lenBytes)[1];
             $cipher = $this->readExactCipherBytesFromStream($in, $chunkLen, $sourcePath);
 
-            $result = sodium_crypto_secretstream_xchacha20poly1305_pull($state, $cipher);
-            if ($result === false) {
-                throw BackupException::decryptionFailed('Chunk decryption failed; artifact corrupt or tampered');
-            }
-
-            [$plain, $tag] = $result;
-            $this->fwriteAll($out, $plain, $destinationPath);
-
-            if ($tag === SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_FINAL) {
+            if ($this->writeOneDecryptedSecretstreamChunk($state, $cipher, $out, $destinationPath)) {
                 return true;
             }
         }
+    }
+
+    /**
+     * @param  resource  $in
+     */
+    private function readNextSecretstreamChunkLengthPrefix($in, string $sourcePath): ?string
+    {
+        $lenBytes = @fread($in, 4);
+        if ($lenBytes === false || $lenBytes === '') {
+            return null;
+        }
+
+        if (strlen($lenBytes) !== 4) {
+            throw BackupException::decryptionFailed("Truncated chunk length in {$sourcePath}");
+        }
+
+        return $lenBytes;
+    }
+
+    /**
+     * @param  resource  $out
+     * @param  mixed  $state
+     */
+    private function writeOneDecryptedSecretstreamChunk(&$state, string $cipher, $out, string $destinationPath): bool
+    {
+        $result = sodium_crypto_secretstream_xchacha20poly1305_pull($state, $cipher);
+        if ($result === false) {
+            throw BackupException::decryptionFailed('Chunk decryption failed; artifact corrupt or tampered');
+        }
+
+        [$plain, $tag] = $result;
+        $this->fwriteAll($out, $plain, $destinationPath);
+
+        return $tag === SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_FINAL;
     }
 
     /**

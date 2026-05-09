@@ -156,8 +156,9 @@ data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}],"usage":null}
 data: [DONE]
 SSE;
 
-        Http::fake(function (...$args) use (&$optionsSeen, $payload) {
-            $optionsSeen = $args[1] ?? [];
+        Http::fake(function ($request, array $options) use (&$optionsSeen, $payload) {
+            $optionsSeen = $options;
+            expect($request->url())->toContain('/chat/completions');
 
             return Http::response($payload, 200, ['Content-Type' => LLM_SSE_CONTENT_TYPE]);
         });

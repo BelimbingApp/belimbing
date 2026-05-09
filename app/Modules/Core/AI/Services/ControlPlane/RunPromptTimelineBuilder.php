@@ -153,13 +153,7 @@ final class RunPromptTimelineBuilder
         $type = (string) ($entry['type'] ?? 'unknown');
         $isDelta = $type === 'llm.stream_line';
 
-        if ($collapseDelta && $isDelta) {
-            if ($collapsedCount === 0) {
-                $collapsedFrom = $totalWireEntries;
-            }
-            $collapsedCount++;
-            $collapsedLastAt = is_string($entry['at'] ?? null) ? (string) $entry['at'] : $collapsedLastAt;
-
+        if ($this->accumulateCollapsedDeltaScanLine($entry, $collapseDelta, $isDelta, $totalWireEntries, $collapsedCount, $collapsedFrom, $collapsedLastAt)) {
             return;
         }
 
@@ -185,6 +179,28 @@ final class RunPromptTimelineBuilder
             'seq' => null,
             'entry_number' => $totalWireEntries,
         ];
+    }
+
+    private function accumulateCollapsedDeltaScanLine(
+        array $entry,
+        bool $collapseDelta,
+        bool $isDelta,
+        int $totalWireEntries,
+        int &$collapsedCount,
+        int &$collapsedFrom,
+        string &$collapsedLastAt,
+    ): bool {
+        if (! $collapseDelta || ! $isDelta) {
+            return false;
+        }
+
+        if ($collapsedCount === 0) {
+            $collapsedFrom = $totalWireEntries;
+        }
+        $collapsedCount++;
+        $collapsedLastAt = is_string($entry['at'] ?? null) ? (string) $entry['at'] : $collapsedLastAt;
+
+        return true;
     }
 
     private function timelineTimestampOrder(string $timestamp): int
