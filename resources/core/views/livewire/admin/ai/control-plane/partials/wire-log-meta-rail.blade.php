@@ -1,7 +1,4 @@
 <?php
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /** @var array<string, mixed> $rail */
 $counts = is_array($rail['counts_by_type'] ?? null) ? $rail['counts_by_type'] : [];
 $phaseProgression = is_array($rail['phase_progression'] ?? null) ? $rail['phase_progression'] : [];

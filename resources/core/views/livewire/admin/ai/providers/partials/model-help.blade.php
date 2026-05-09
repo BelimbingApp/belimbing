@@ -1,7 +1,4 @@
 <?php
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /**
  * Shared help content explaining the model table (Access column, costs).
  * Included in both the main Providers page and the ProviderSetup page-header help slot.

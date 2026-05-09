@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Base\Workflow\Livewire\Workflows\Index as WorkflowsIndex;
 use App\Base\Workflow\Livewire\Workflows\Show as WorkflowsShow;
 use Illuminate\Support\Facades\Route;

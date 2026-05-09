@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Modules\Core\Company\Livewire\Companies\Create;
 use App\Modules\Core\Company\Livewire\Companies\Departments;
 use App\Modules\Core\Company\Livewire\Companies\DepartmentTypes;

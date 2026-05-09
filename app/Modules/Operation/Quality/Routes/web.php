@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Modules\Operation\Quality\Livewire\Ncr\Create as NcrCreate;
 use App\Modules\Operation\Quality\Livewire\Ncr\Index as NcrIndex;
 use App\Modules\Operation\Quality\Livewire\Ncr\Show as NcrShow;

@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Modules\Core\Employee\Livewire\Employees\Create as EmployeesCreate;
 use App\Modules\Core\Employee\Livewire\Employees\Index as EmployeesIndex;
 use App\Modules\Core\Employee\Livewire\Employees\Show as EmployeesShow;

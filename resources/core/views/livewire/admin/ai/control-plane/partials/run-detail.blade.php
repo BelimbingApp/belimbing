@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /** @var array<string, mixed> $run */
 $controlPlaneContext = request()->only(['from', 'returnTo']);
 $formatCents = static fn (?int $cents): string => $cents !== null

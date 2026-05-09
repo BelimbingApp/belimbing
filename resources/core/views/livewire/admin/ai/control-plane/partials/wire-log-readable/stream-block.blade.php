@@ -1,7 +1,4 @@
 <?php
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /** @var array<string, mixed> $block */
 /** @var string $runId */
 $durationLabel = isset($block['duration_ms']) && $block['duration_ms'] !== null

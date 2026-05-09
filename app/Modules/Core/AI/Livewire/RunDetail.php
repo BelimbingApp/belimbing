@@ -1,7 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 //
 // Standalone run detail page - deep-linkable view of a single AI run.
 

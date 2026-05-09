@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Base\Database\Concerns\RegistersSeeders;
 use App\Modules\Core\Company\Database\Seeders\DepartmentTypeSeeder;
 use Illuminate\Database\Migrations\Migration;

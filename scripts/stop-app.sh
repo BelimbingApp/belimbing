@@ -1,8 +1,4 @@
 #!/bin/bash
-
-# SPDX-License-Identifier: AGPL-3.0-only
-# (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 # Stop Belimbing Development Environment Services
 # Usage: ./scripts/stop-app.sh [ENVIRONMENT]
 #

@@ -1,7 +1,4 @@
 <?php
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /** @var list<\App\Modules\Core\AI\DTO\Message> $transcript */
 ?>
 <div class="space-y-4">

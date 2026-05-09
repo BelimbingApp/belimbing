@@ -1,8 +1,3 @@
-<?php
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-?>
-
 <div class="space-y-3 text-sm text-muted">
     <div>
         <p class="font-medium text-ink">{{ __('How Belimbing signs in') }}</p>

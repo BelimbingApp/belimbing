@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 namespace App\Modules\Commerce\Catalog\Models;
 
 use App\Modules\Commerce\Catalog\Database\Factories\AttributeFactory;

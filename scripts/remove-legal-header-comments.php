@@ -7,113 +7,38 @@ declare(strict_types=1);
  * Removes the standard BLB legal header from source files:
  * one blank line (when present) plus SPDX + copyright comment lines.
  *
- * Handles // (PHP, Blade, etc.) and # (shell) comment styles.
+ * Handles // (PHP, Blade, etc.) and # (shell) comment styles, including when
+ * there is no empty line between <?php (or the shebang) and the SPDX line, and
+ * an optional UTF-8 BOM at the start of the file.
  *
- * Usage:
- *   php scripts/remove-legal-header-comments.php           # apply changes
- *   php scripts/remove-legal-header-comments.php --dry-run # print paths only
+ * Usage: php scripts/remove-legal-header-comments.php
+ *
+ * Only files whose SPDX + copyright lines appear within the first few lines are
+ * considered; the rest are skipped without reading the whole file.
  */
-$dryRun = in_array('--dry-run', $argv, true);
-$repoRoot = dirname(__DIR__);
 
-$relativeRoots = ['app', 'resources', 'extensions', 'scripts'];
-$skipDirBasenames = ['.git', 'node_modules', 'vendor', '.svn'];
-
-$spdxLine = 'SPDX-License-Identifier: AGPL-3.0-only';
-$copyrightNeedle = '(c) Ng Kiat Siong';
-
-$extensions = [
-    'php', 'blade.php', 'css', 'scss', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'vue',
-    'sh', 'bash', 'ps1', 'json', 'md', 'yaml', 'yml', 'xml', 'html', 'txt', 'stub',
-];
-
-$buildPatterns = static function (string $lead) use ($spdxLine, $copyrightNeedle): array {
-    $spdx = preg_quote($lead.$spdxLine, '/');
-    $copy = preg_quote($lead.$copyrightNeedle, '/').'[^\r\n]*';
-
-    // Blank line before SPDX + two comment lines (trailing newline after copyright)
-    $withBlankBefore = '/\r?\n\r?\n'.$spdx."\r?\n".$copy."\r?\n/u";
-
-    // Same block without a blank line before SPDX (e.g. <?php then SPDX; shebang then SPDX)
-    $withoutBlankBefore = '/\r?\n'.$spdx."\r?\n".$copy."\r?\n/u";
-
-    return [$withBlankBefore, $withoutBlankBefore];
-};
-
-/** @var array<int, array{0: string, 1: string}> */
-$patternGroups = [
-    $buildPatterns('// '),
-    $buildPatterns('# '),
-];
-
-$changedFiles = 0;
-
-foreach ($relativeRoots as $rel) {
-    $root = $repoRoot.DIRECTORY_SEPARATOR.$rel;
-    if (! is_dir($root)) {
-        fwrite(STDERR, "Skip missing directory: {$rel}\n");
-
-        continue;
+/**
+ * Reads at most the first $lineCount lines (including line terminators) for a cheap match probe.
+ */
+function readFirstLines(string $path, int $lineCount): ?string
+{
+    $handle = fopen($path, 'rb');
+    if ($handle === false) {
+        return null;
     }
 
-    $iterator = new RecursiveIteratorIterator(
-        new RecursiveCallbackFilterIterator(
-            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
-            static function (SplFileInfo $current) use ($skipDirBasenames): bool {
-                if (! $current->isDir()) {
-                    return true;
-                }
-
-                return ! in_array($current->getBasename(), $skipDirBasenames, true);
-            }
-        ),
-        RecursiveIteratorIterator::LEAVES_ONLY
-    );
-
-    /** @var SplFileInfo $file */
-    foreach ($iterator as $file) {
-        if (! $file->isFile()) {
-            continue;
+    $buffer = '';
+    for ($i = 0; $i < $lineCount; $i++) {
+        $line = fgets($handle);
+        if ($line === false) {
+            break;
         }
-
-        $path = $file->getPathname();
-        if (! shouldProcessFile($path, $extensions)) {
-            continue;
-        }
-
-        $original = file_get_contents($path);
-        if ($original === false || $original === '') {
-            continue;
-        }
-
-        if (! str_contains($original, $spdxLine) || ! str_contains($original, $copyrightNeedle)) {
-            continue;
-        }
-
-        $updated = stripLegalHeaders($original, $patternGroups);
-        if ($updated === $original) {
-            continue;
-        }
-
-        if ($dryRun) {
-            echo $path."\n";
-            $changedFiles++;
-
-            continue;
-        }
-
-        if (file_put_contents($path, $updated) !== false) {
-            $changedFiles++;
-        } else {
-            fwrite(STDERR, "Failed to write: {$path}\n");
-        }
+        $buffer .= $line;
     }
-}
 
-if ($dryRun) {
-    echo "Dry run: {$changedFiles} file(s) would be modified.\n";
-} else {
-    echo "Updated {$changedFiles} file(s).\n";
+    fclose($handle);
+
+    return $buffer;
 }
 
 /**
@@ -132,22 +57,134 @@ function shouldProcessFile(string $path, array $extensions): bool
     return false;
 }
 
-/**
- * @param  array<int, array{0: string, 1: string}>  $patternGroups
- */
-function stripLegalHeaders(string $content, array $patternGroups): string
+function detectEol(string $content): string
 {
-    $prev = null;
-    $out = $content;
-    $guard = 0;
-    while ($out !== $prev && $guard < 32) {
-        $prev = $out;
-        foreach ($patternGroups as [$withBlank, $withoutBlank]) {
-            $out = preg_replace($withBlank, "\n", $out) ?? $out;
-            $out = preg_replace($withoutBlank, "\n", $out) ?? $out;
-        }
-        $guard++;
+    return str_contains($content, "\r\n") ? "\r\n" : "\n";
+}
+
+function stripLegalHeaders(string $content, string $spdxLine, string $copyrightNeedle): string
+{
+    $eol = detectEol($content);
+
+    $phpSpdx = preg_quote('// '.$spdxLine, '/');
+    $phpCopy = preg_quote('// '.$copyrightNeedle, '/').'[^\r\n]*';
+    $hashSpdx = preg_quote('# '.$spdxLine, '/');
+    $hashCopy = preg_quote('# '.$copyrightNeedle, '/').'[^\r\n]*';
+
+    // Blade/comment-only PHP preamble: remove the entire wrapper block and one trailing blank line.
+    $out = preg_replace(
+        '/\A(\xEF\xBB\xBF)?<\?php[ \t]*\R(?:\R)?'.$phpSpdx.'\R'.$phpCopy.'\R\?>[ \t]*(?:\R){1,2}/u',
+        '$1',
+        $content
+    ) ?? $content;
+
+    if ($out !== $content) {
+        return $out;
     }
 
+    // PHP preamble at file start: keep <?php, remove only the leading legal header block.
+    $out = preg_replace(
+        '/\A(\xEF\xBB\xBF)?<\?php[ \t]*\R(?:\R)?'.$phpSpdx.'\R'.$phpCopy.'\R(?:\R)?/u',
+        '$1<?php'.$eol,
+        $content
+    ) ?? $content;
+
+    if ($out !== $content) {
+        return $out;
+    }
+
+    // Shell: keep the shebang, remove the leading legal header block after it.
+    $out = preg_replace(
+        '/\A(\xEF\xBB\xBF)?(#![^\r\n]*)\R(?:\R)?'.$hashSpdx.'\R'.$hashCopy.'\R(?:\R)?/u',
+        '$1$2'.$eol,
+        $out
+    ) ?? $out;
+
     return $out;
+}
+
+function runRemoveLegalHeaderComments(): void
+{
+    $repoRoot = dirname(__DIR__);
+
+    $headerPeekLineCount = 10;
+
+    $relativeRoots = ['app', 'resources', 'extensions', 'scripts'];
+    $skipDirBasenames = ['.git', 'node_modules', 'vendor', '.svn'];
+
+    $spdxLine = 'SPDX-License-Identifier: AGPL-3.0-only';
+    $copyrightNeedle = '(c) Ng Kiat Siong';
+
+    $extensions = [
+        'php', 'blade.php', 'css', 'scss', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'vue',
+        'sh', 'bash', 'ps1', 'json', 'md', 'yaml', 'yml', 'xml', 'html', 'txt', 'stub',
+    ];
+
+    $changedFiles = 0;
+
+    foreach ($relativeRoots as $rel) {
+        $root = $repoRoot.DIRECTORY_SEPARATOR.$rel;
+        if (! is_dir($root)) {
+            fwrite(STDERR, "Skip missing directory: {$rel}\n");
+
+            continue;
+        }
+
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveCallbackFilterIterator(
+                new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
+                static function (SplFileInfo $current) use ($skipDirBasenames): bool {
+                    if (! $current->isDir()) {
+                        return true;
+                    }
+
+                    return ! in_array($current->getBasename(), $skipDirBasenames, true);
+                }
+            ),
+            RecursiveIteratorIterator::LEAVES_ONLY
+        );
+
+        /** @var SplFileInfo $file */
+        foreach ($iterator as $file) {
+            if (! $file->isFile()) {
+                continue;
+            }
+
+            $path = $file->getPathname();
+            if (! shouldProcessFile($path, $extensions)) {
+                continue;
+            }
+
+            $prefix = readFirstLines($path, $headerPeekLineCount);
+            if ($prefix === null || $prefix === '') {
+                continue;
+            }
+
+            if (! str_contains($prefix, $spdxLine) || ! str_contains($prefix, $copyrightNeedle)) {
+                continue;
+            }
+
+            $original = file_get_contents($path);
+            if ($original === false || $original === '') {
+                continue;
+            }
+
+            $updated = stripLegalHeaders($original, $spdxLine, $copyrightNeedle);
+            if ($updated === $original) {
+                continue;
+            }
+
+            if (file_put_contents($path, $updated) !== false) {
+                $changedFiles++;
+            } else {
+                fwrite(STDERR, "Failed to write: {$path}\n");
+            }
+        }
+    }
+
+    echo "Updated {$changedFiles} file(s).\n";
+}
+
+if (PHP_SAPI === 'cli' && isset($_SERVER['argv'][0]) && @realpath($_SERVER['argv'][0]) === @realpath(__FILE__)) {
+    runRemoveLegalHeaderComments();
 }

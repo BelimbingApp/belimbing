@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 namespace App\Modules\Operation\Quality\Database\Seeders\Dev\Concerns;
 
 use App\Modules\Core\User\Models\User;

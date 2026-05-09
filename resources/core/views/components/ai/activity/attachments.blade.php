@@ -1,8 +1,3 @@
-<?php
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-?>
-
 @props([
     /** @var list<array{id: string, kind: string, mime_type: string, original_name: string, size: int|null, url: string}> */
     'attachments',

@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Base\System\Enums\UiReferenceSection;
 use App\Base\System\Http\Controllers\TestTransportStreamController;
 use App\Base\System\Livewire\Info\Index;

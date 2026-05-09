@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Base\Queue\Livewire\FailedJobs\Index as FailedJobsIndex;
 use App\Base\Queue\Livewire\JobBatches\Index as JobBatchesIndex;
 use Illuminate\Support\Facades\Route;

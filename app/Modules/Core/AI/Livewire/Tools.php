@@ -1,7 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 //
 // Tool Workspace orchestrator — routes between catalog and per-tool workspace.
 

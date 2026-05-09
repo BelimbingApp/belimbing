@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Base\Audit\Livewire\AuditLog\Actions as AuditActions;
 use App\Base\Audit\Livewire\AuditLog\Mutations as AuditMutations;
 use Illuminate\Support\Facades\Route;

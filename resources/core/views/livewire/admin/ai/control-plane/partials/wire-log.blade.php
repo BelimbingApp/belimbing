@@ -1,7 +1,4 @@
 <?php
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /** @var list<array<string, mixed>> $entries */
 /** @var array{footprint_bytes: int, total_entries: int, visible_entries: int, offset: int, limit: int, range_start: int, range_end: int, omitted_before: int, omitted_after: int, has_previous: bool, has_next: bool, last_offset: int}|null $summary */
 /** @var array<string, mixed> $readable */

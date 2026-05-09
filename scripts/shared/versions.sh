@@ -1,6 +1,4 @@
 #!/bin/bash
-# SPDX-License-Identifier: AGPL-3.0-only
-# (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 #
 # Belimbing Version Management
 # Single source of truth for all software versions used across setup scripts

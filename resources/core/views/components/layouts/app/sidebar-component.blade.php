@@ -1,8 +1,3 @@
-<?php
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-?>
-
 <aside class="w-64 min-h-full bg-surface-subtle border-r border-border-default flex flex-col sidebar-container">
     <!-- Logo/Branding -->
     <div class="p-4 border-b border-border-default">

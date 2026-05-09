@@ -1,7 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 //
 // Operator Control Plane - unified view for run inspection, health, and lifecycle controls.
 

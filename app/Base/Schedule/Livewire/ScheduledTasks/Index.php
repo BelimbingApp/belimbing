@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 namespace App\Base\Schedule\Livewire\ScheduledTasks;
 
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;

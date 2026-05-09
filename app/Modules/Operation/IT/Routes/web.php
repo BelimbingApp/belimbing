@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Modules\Operation\IT\Livewire\Tickets\Create;
 use App\Modules\Operation\IT\Livewire\Tickets\Index;
 use App\Modules\Operation\IT\Livewire\Tickets\Show;

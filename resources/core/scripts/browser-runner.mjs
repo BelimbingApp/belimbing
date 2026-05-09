@@ -10,9 +10,6 @@
  * If headful launch fails (e.g. X server unavailable after sleep/resume),
  * the runner automatically retries in headless mode and flags the fallback
  * in the result so the caller knows visibility was lost.
- *
- * SPDX-License-Identifier: AGPL-3.0-only
- * (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
  */
 
 import { chromium } from 'playwright';

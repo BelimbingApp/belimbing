@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 $agentOperatorCapabilities = [
     'admin.ai.chat-attachment.manage',
     'admin.ai.agent.view',

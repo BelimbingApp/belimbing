@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Base\Authz\Livewire\Capabilities\Index as CapabilitiesIndex;
 use App\Base\Authz\Livewire\DecisionLogs\Index as DecisionLogsIndex;
 use App\Base\Authz\Livewire\PrincipalCapabilities\Index as PrincipalCapabilitiesIndex;

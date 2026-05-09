@@ -1,7 +1,3 @@
-<?php
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-?>
 @php
     // Included via @include — avoid @props (component-only). Callers pass context, providers, models.
     $selectedProviderId = $selectedProviderId ?? null;

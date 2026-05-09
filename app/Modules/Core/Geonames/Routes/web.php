@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Modules\Core\Geonames\Livewire\Admin1\Index as Admin1Index;
 use App\Modules\Core\Geonames\Livewire\Countries\Index as CountriesIndex;
 use App\Modules\Core\Geonames\Livewire\Postcodes\Index as PostcodesIndex;

@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Modules\Commerce\Marketplace\Ebay\Http\Controllers\EbayOAuthCallbackController;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings;

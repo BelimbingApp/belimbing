@@ -1,7 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 //
 // Full-page component for setting up a single AI provider connection.
 // Handles shared setup concerns (credential entry, validation, connect, and

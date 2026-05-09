@@ -1,7 +1,4 @@
 <?php
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /** @var \App\Modules\Core\AI\Livewire\Providers\CopilotProxySetup $this */
 ?>
 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
