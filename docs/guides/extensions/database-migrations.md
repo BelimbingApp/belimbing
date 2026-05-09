@@ -61,9 +61,6 @@ Create a migration file in your extension's `Database/Migrations/` directory:
 ```php
 <?php
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Your Name
-
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -139,9 +136,6 @@ Create a `ServiceProvider.php` at your module's root directory:
 
 ```php
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Your Name
 
 namespace Extensions\SbGroup\Quality;
 
@@ -310,9 +304,6 @@ extensions/sb-group/
 ```php
 <?php
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 SB Group
-
 namespace Extensions\SbGroup\Quality;
 
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
@@ -330,9 +321,6 @@ class ServiceProvider extends BaseServiceProvider
 
 ```php
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 SB Group
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;

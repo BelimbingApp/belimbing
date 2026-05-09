@@ -33,9 +33,6 @@ PHP class (`app/Modules/Core/Geonames/Livewire/Admin1/Index.php`):
 ```php
 <?php
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 namespace App\Modules\Core\Geonames\Livewire\Admin1;
 
 use Livewire\Component;

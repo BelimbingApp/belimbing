@@ -69,10 +69,7 @@ Use semantic spacing from `resources/core/css/tokens.css` (role-based, not densi
 
 For Blade/Livewire view files that use a PHP preamble:
 
-1. **Always include legal header comments**:
-	- `// SPDX-License-Identifier: AGPL-3.0-only`
-	- project copyright notice
-2. **Use `@var` only when it adds real type context**:
+1. **Use `@var` only when it adds real type context**:
 	- Livewire views: annotate `$this` with the Livewire class
 	- Blade components/views with `@props`: add `@var` only for complex/non-obvious types where `@props` alone is insufficient
 	- Do **not** add placeholder annotations such as `/** @var $this */` without a type
@@ -82,9 +79,6 @@ Livewire example:
 
 ```php
 <?php
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /** @var \App\Modules\Core\AI\Livewire\LaraChatOverlay $this */
 ?>
 ```
@@ -93,9 +87,6 @@ Blade component example (only when extra type clarity is useful):
 
 ```php
 <?php
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /** @var array<int, mixed> $menuTree */
 /** @var array<string, mixed> $menuItemsFlat */
 ?>

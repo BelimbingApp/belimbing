@@ -23,9 +23,6 @@ An extension can add new relationship types to the `company` config:
 ```php
 <?php
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Your Name
-
 namespace Extensions\SbGroup\Quality;
 
 use Illuminate\Support\ServiceProvider;
@@ -347,9 +344,6 @@ extensions/sb-group/quality/
 ```php
 <?php
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Your Name
-
 namespace Extensions\SbGroup\Quality;
 
 use Illuminate\Support\ServiceProvider;
@@ -394,9 +388,6 @@ class ServiceProvider extends ServiceProvider
 
 ```php
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (c) 2026 Your Name
 
 return [
     'relationship_types' => [
