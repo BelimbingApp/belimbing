@@ -63,7 +63,7 @@ class FilesystemSkillPackLoader
                 continue;
             }
 
-            $roots += $this->extensionRootsUnderBase($basePath);
+            $roots = array_merge($roots, $this->extensionRootsUnderBase($basePath));
         }
 
         return $roots;
