@@ -1,6 +1,6 @@
 # Lara: Collapse Primary/Backup Into Provider Priority
 
-**Status:** Complete (Phases 1–5)
+**Status:** Completed
 **Last Updated:** 2026-05-03
 **Agents:** claude/opus-4-7
 **Sources:** `app/Modules/Core/AI/Livewire/Setup/Lara.php`, `resources/core/views/livewire/admin/setup/lara.blade.php`, `app/Modules/Core/AI/Livewire/Providers/Providers.php`, `resources/core/views/livewire/admin/ai/providers/providers.blade.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Services/AgentRuntime.php`, `app/Modules/Core/AI/Tools/WebSearchTool.php`, `app/Modules/Core/AI/Services/Workspace/WorkspaceResolver.php`, `app/Modules/Core/AI/Enums/WorkspaceFileSlot.php`, `app/Modules/Core/AI/Resources/lara/system_prompt.md`, `app/Modules/Core/AI/Livewire/Concerns/ManagesChatSessions.php`, `app/Modules/Core/AI/Livewire/Chat.php`, `app/Modules/Core/User/Models/User.php`, `docs/plans/lara-task-models.md`
