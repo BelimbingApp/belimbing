@@ -63,18 +63,30 @@ class FilesystemSkillPackLoader
                 continue;
             }
 
-            foreach (glob($basePath.'/*', GLOB_ONLYDIR) ?: [] as $path) {
-                $slug = basename($path);
-                if (in_array($slug, ['custom', 'vendor'], true)) {
-                    foreach (glob($path.'/*', GLOB_ONLYDIR) ?: [] as $nested) {
-                        $roots[basename($nested)] = $nested;
-                    }
+            $roots = array_merge($roots, $this->extensionRootsUnderBase($basePath));
+        }
 
-                    continue;
+        return $roots;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function extensionRootsUnderBase(string $basePath): array
+    {
+        $roots = [];
+
+        foreach (glob($basePath.'/*', GLOB_ONLYDIR) ?: [] as $path) {
+            $slug = basename($path);
+            if (in_array($slug, ['custom', 'vendor'], true)) {
+                foreach (glob($path.'/*', GLOB_ONLYDIR) ?: [] as $nested) {
+                    $roots[basename($nested)] = $nested;
                 }
 
-                $roots[$slug] = $path;
+                continue;
             }
+
+            $roots[$slug] = $path;
         }
 
         return $roots;

@@ -39,34 +39,7 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
         $reasoningBlocks = [];
 
         foreach ($data['content'] ?? [] as $block) {
-            if (! is_array($block)) {
-                continue;
-            }
-
-            $type = $block['type'] ?? null;
-
-            if ($type === 'text') {
-                $content .= (string) ($block['text'] ?? '');
-
-                continue;
-            }
-
-            if ($type === 'tool_use') {
-                $toolCalls[] = [
-                    'id' => (string) ($block['id'] ?? ''),
-                    'type' => 'function',
-                    'function' => [
-                        'name' => (string) ($block['name'] ?? ''),
-                        'arguments' => $this->encodeToolInput($block['input'] ?? []),
-                    ],
-                ];
-
-                continue;
-            }
-
-            if (in_array($type, ['thinking', 'redacted_thinking'], true)) {
-                $reasoningBlocks[] = $block;
-            }
+            $this->accumulateAnthropicContentBlock($block, $content, $toolCalls, $reasoningBlocks);
         }
 
         $hasToolCalls = $toolCalls !== [];
@@ -435,6 +408,46 @@ final class AnthropicMessagesProtocolClient extends AbstractLlmProtocolClient
         $terminal = true;
 
         yield from [];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $toolCalls
+     * @param  list<array<string, mixed>>  $reasoningBlocks
+     */
+    private function accumulateAnthropicContentBlock(
+        mixed $block,
+        string &$content,
+        array &$toolCalls,
+        array &$reasoningBlocks,
+    ): void {
+        if (! is_array($block)) {
+            return;
+        }
+
+        $type = $block['type'] ?? null;
+
+        if ($type === 'text') {
+            $content .= (string) ($block['text'] ?? '');
+
+            return;
+        }
+
+        if ($type === 'tool_use') {
+            $toolCalls[] = [
+                'id' => (string) ($block['id'] ?? ''),
+                'type' => 'function',
+                'function' => [
+                    'name' => (string) ($block['name'] ?? ''),
+                    'arguments' => $this->encodeToolInput($block['input'] ?? []),
+                ],
+            ];
+
+            return;
+        }
+
+        if (in_array($type, ['thinking', 'redacted_thinking'], true)) {
+            $reasoningBlocks[] = $block;
+        }
     }
 
     private function encodeToolInput(mixed $input): string

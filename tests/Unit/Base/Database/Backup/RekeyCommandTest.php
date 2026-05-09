@@ -100,7 +100,7 @@ it('skips a manifest whose fingerprint already matches the current key (idempote
 
     $originalContent = Storage::disk('local')->get($manifestPath);
 
-    $this->artisan("blb:db:backup:rekey --commit")->assertExitCode(0);
+    $this->artisan('blb:db:backup:rekey --commit')->assertExitCode(0);
 
     // Manifest content must not have changed.
     expect(Storage::disk('local')->get($manifestPath))->toBe($originalContent);
@@ -112,7 +112,7 @@ it('is idempotent: second rekey pass skips all', function (): void {
 
     rkPlantManifest('backup-idem', $wrappedDek, $dekNonce, $oldFp);
 
-    $newKey = rkSetKey();
+    rkSetKey();
 
     // First pass: re-wraps.
     $this->artisan("blb:db:backup:rekey --old-key={$oldKey} --commit")
@@ -161,7 +161,7 @@ it('dry-run by default: does not write manifest changes', function (): void {
 });
 
 it('ignores non-app-key manifests on the disk', function (): void {
-    $currentKey = rkSetKey();
+    rkSetKey();
 
     // Plant a none-mode manifest with a stale fingerprint.
     Storage::disk('local')->put('backups/testing/old-none.manifest.json', (string) json_encode([

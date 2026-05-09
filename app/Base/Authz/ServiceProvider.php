@@ -19,6 +19,7 @@ use App\Base\Authz\Services\AuthzMenuAccessChecker;
 use App\Base\Authz\Services\DatabaseDecisionLogger;
 use App\Base\Authz\Services\ImpersonationManager;
 use App\Base\Menu\Contracts\MenuAccessChecker;
+use Illuminate\Contracts\Config\Repository;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -84,33 +85,38 @@ class ServiceProvider extends BaseServiceProvider
 
         foreach ($patterns as $pattern) {
             foreach (glob($pattern) ?: [] as $file) {
-                if (realpath($file) === $basePath) {
-                    continue;
-                }
-
-                $moduleConfig = require $file;
-
-                if (isset($moduleConfig['domains'])) {
-                    $config->set('authz.domains', array_merge(
-                        $config->get('authz.domains', []),
-                        $moduleConfig['domains']
-                    ));
-                }
-
-                if (isset($moduleConfig['capabilities'])) {
-                    $config->set('authz.capabilities', array_merge(
-                        $config->get('authz.capabilities', []),
-                        $moduleConfig['capabilities']
-                    ));
-                }
-
-                if (isset($moduleConfig['roles'])) {
-                    $config->set('authz.roles', array_merge(
-                        $config->get('authz.roles', []),
-                        $moduleConfig['roles']
-                    ));
-                }
+                $this->mergeAuthzConfigFile($file, $basePath, $config);
             }
+        }
+    }
+
+    private function mergeAuthzConfigFile(string $file, string|false $basePath, Repository $config): void
+    {
+        if (is_string($basePath) && realpath($file) === $basePath) {
+            return;
+        }
+
+        $moduleConfig = require $file;
+
+        if (isset($moduleConfig['domains'])) {
+            $config->set('authz.domains', array_merge(
+                $config->get('authz.domains', []),
+                $moduleConfig['domains']
+            ));
+        }
+
+        if (isset($moduleConfig['capabilities'])) {
+            $config->set('authz.capabilities', array_merge(
+                $config->get('authz.capabilities', []),
+                $moduleConfig['capabilities']
+            ));
+        }
+
+        if (isset($moduleConfig['roles'])) {
+            $config->set('authz.roles', array_merge(
+                $config->get('authz.roles', []),
+                $moduleConfig['roles']
+            ));
         }
     }
 }

@@ -41,8 +41,8 @@ abstract class AbstractResponsesProtocolClient extends AbstractLlmProtocolClient
         $hasToolCalls = $toolCalls !== [];
         $usage = $data['usage'] ?? [];
 
-        $result = $content === '' && ! $hasToolCalls
-            ? [
+        if ($content === '' && ! $hasToolCalls) {
+            $result = [
                 'runtime_error' => AiRuntimeError::fromType(
                     AiErrorType::EmptyResponse,
                     "Model \"{$model}\" produced no text content",
@@ -50,12 +50,14 @@ abstract class AbstractResponsesProtocolClient extends AbstractLlmProtocolClient
                     latencyMs: $latencyMs,
                 ),
                 'latency_ms' => $latencyMs,
-            ]
-            : [
+            ];
+        } else {
+            $result = [
                 'content' => $content,
                 'usage' => LlmUsageNormalizer::fromProviderArray(is_array($usage) ? $usage : null),
                 'latency_ms' => $latencyMs,
             ];
+        }
 
         if ($hasToolCalls) {
             $result['tool_calls'] = $toolCalls;

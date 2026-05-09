@@ -105,33 +105,13 @@ class MigrateCommand extends IlluminateMigrateCommand
                     return;
                 }
 
-                $existingRegistry = [];
-                if ($this->option('unstable') && Schema::hasTable('base_database_tables')) {
-                    $existingRegistry = TableRegistry::query()->pluck('table_name')->all();
-                }
+                $existingRegistry = $this->snapshotTableRegistryIfUnstable();
 
                 // Auto-discover, register, and reconcile tables from migration files
                 $reconciliation = TableRegistry::reconcile();
                 $this->reportRemovedRegistryEntries($reconciliation['removed']);
 
-                if ($this->option('unstable') && Schema::hasTable('base_database_tables')) {
-                    $newTables = array_values(array_diff(
-                        TableRegistry::query()->pluck('table_name')->all(),
-                        $existingRegistry,
-                    ));
-
-                    $newTables = array_values(array_diff($newTables, TableRegistry::INFRASTRUCTURE_TABLES));
-
-                    if ($newTables !== []) {
-                        TableRegistry::query()
-                            ->whereIn('table_name', $newTables)
-                            ->update([
-                                'is_stable' => false,
-                                'stabilized_at' => null,
-                                'stabilized_by' => null,
-                            ]);
-                    }
-                }
+                $this->flagNewTablesAsUnstableIfRequested($existingRegistry);
 
                 // Handle seeding with module-aware auto-discovery
                 if ($this->option('seed')) {
@@ -150,6 +130,47 @@ class MigrateCommand extends IlluminateMigrateCommand
                 }
             },
         );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function snapshotTableRegistryIfUnstable(): array
+    {
+        if ($this->option('unstable') && Schema::hasTable('base_database_tables')) {
+            return TableRegistry::query()->pluck('table_name')->all();
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  list<string>  $existingRegistry
+     */
+    private function flagNewTablesAsUnstableIfRequested(array $existingRegistry): void
+    {
+        if (! $this->option('unstable') || ! Schema::hasTable('base_database_tables')) {
+            return;
+        }
+
+        $newTables = array_values(array_diff(
+            TableRegistry::query()->pluck('table_name')->all(),
+            $existingRegistry,
+        ));
+
+        $newTables = array_values(array_diff($newTables, TableRegistry::INFRASTRUCTURE_TABLES));
+
+        if ($newTables === []) {
+            return;
+        }
+
+        TableRegistry::query()
+            ->whereIn('table_name', $newTables)
+            ->update([
+                'is_stable' => false,
+                'stabilized_at' => null,
+                'stabilized_by' => null,
+            ]);
     }
 
     /**
