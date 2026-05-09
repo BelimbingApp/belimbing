@@ -1,8 +1,8 @@
 # ai-control-plane-unified-timeline
 
-**Status:** Phase 4 Complete (Option C: consolidated on Run Inspector / Wire Log)
+**Status:** Completed
 **Last Updated:** 2026-05-09
-**Sources:** `backup/pre-unified-entity` branch (snapshot before Phase 1); DB backup `01kr2w72bssreaxjxy2gss0gqp`; wire log backup `storage/app/ai/wire-logs-backup-pre-unified/` (26 files, 75 MB — delete after Phase 2 is confirmed stable)
+**Sources:** Historical pre-Phase-1 backups were removed after Phase 2 verified stable: `backup/pre-unified-entity`, DB backup `01kr2w72bssreaxjxy2gss0gqp`, and `storage/app/ai/wire-logs-backup-pre-unified/`.
 **Agents:** claude/sonnet-4-6, amp/opus-4-7, codex/gpt-5.5-medium, amp/gpt-5.5-medium
 
 ## Problem Essence
@@ -179,7 +179,7 @@ Per the BLB destructive-evolution principle, no migration path for existing rows
 - [x] Controllers + Livewire: rename `ChatTurnStreamController` / `TurnEventStreamController` to `RunStreamController` / `RunEventStreamController`; update `Chat`, `ControlPlane`, and any Livewire components/concerns that reference `ChatTurn` or turn-prefixed symbols; route names remain backwards-compatible for the existing UI
 - [x] Wire log: `WireLogger.path()` takes ULID; remove runtime `run_` prefix generation; readable formatter and entry controller URLs use the `AiRun.id` ULID
 - [x] Tests: update fixtures, factories, and assertions across the focused AI control-plane suite — `tests/AGENTS.md` quality bar applies; delete tests asserting the two-table split
-- [ ] Cleanup: remove `backup/pre-unified-entity` branch, DB backup `01kr2w72bssreaxjxy2gss0gqp`, and `storage/app/ai/wire-logs-backup-pre-unified/` once Phase 2 verifies green
+- [x] Cleanup: remove `backup/pre-unified-entity` branch, DB backup `01kr2w72bssreaxjxy2gss0gqp`, and `storage/app/ai/wire-logs-backup-pre-unified/` once Phase 2 verifies green
 
 ### Phase 3 — Build the Prompt Timeline
 
