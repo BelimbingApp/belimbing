@@ -120,41 +120,15 @@ final class RunPromptTimelineBuilder
 
         foreach ($this->wireLogger->read($runId) as $entry) {
             $totalWireEntries++;
-            $type = (string) ($entry['type'] ?? 'unknown');
-            $isDelta = $type === 'llm.stream_line';
-
-            if ($collapseDelta && $isDelta) {
-                if ($collapsedCount === 0) {
-                    $collapsedFrom = $totalWireEntries;
-                }
-                $collapsedCount++;
-                $collapsedLastAt = is_string($entry['at'] ?? null) ? (string) $entry['at'] : $collapsedLastAt;
-
-                continue;
-            }
-
-            if ($collapsedCount > 0) {
-                $wireEntries[] = $this->collapsedDeltaEntry($collapsedFrom, $totalWireEntries - 1, $collapsedCount, $collapsedLastAt);
-                $collapsedCount = 0;
-                $collapsedFrom = 0;
-                $collapsedLastAt = '';
-            }
-
-            $wireEntries[] = [
-                'timestamp' => is_string($entry['at'] ?? null) ? (string) $entry['at'] : '',
-                'source' => 'wire',
-                'type' => $type,
-                'label' => $this->wireEntryLabel($type),
-                'summary' => $this->wireEntrySummary($type, $entry),
-                'severity' => $type === 'llm.error' ? 'error' : 'info',
-                'is_delta' => $isDelta,
-                'gap_ms' => null,
-                'has_gap_warning' => false,
-                'is_stuck' => false,
-                'payload' => $entry,
-                'seq' => null,
-                'entry_number' => $totalWireEntries,
-            ];
+            $this->appendWireLogLineToTimeline(
+                $entry,
+                $collapseDelta,
+                $totalWireEntries,
+                $wireEntries,
+                $collapsedCount,
+                $collapsedFrom,
+                $collapsedLastAt,
+            );
         }
 
         if ($collapsedCount > 0) {
@@ -162,6 +136,55 @@ final class RunPromptTimelineBuilder
         }
 
         return [$wireEntries, $totalWireEntries];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $wireEntries
+     */
+    private function appendWireLogLineToTimeline(
+        array $entry,
+        bool $collapseDelta,
+        int $totalWireEntries,
+        array &$wireEntries,
+        int &$collapsedCount,
+        int &$collapsedFrom,
+        string &$collapsedLastAt,
+    ): void {
+        $type = (string) ($entry['type'] ?? 'unknown');
+        $isDelta = $type === 'llm.stream_line';
+
+        if ($collapseDelta && $isDelta) {
+            if ($collapsedCount === 0) {
+                $collapsedFrom = $totalWireEntries;
+            }
+            $collapsedCount++;
+            $collapsedLastAt = is_string($entry['at'] ?? null) ? (string) $entry['at'] : $collapsedLastAt;
+
+            return;
+        }
+
+        if ($collapsedCount > 0) {
+            $wireEntries[] = $this->collapsedDeltaEntry($collapsedFrom, $totalWireEntries - 1, $collapsedCount, $collapsedLastAt);
+            $collapsedCount = 0;
+            $collapsedFrom = 0;
+            $collapsedLastAt = '';
+        }
+
+        $wireEntries[] = [
+            'timestamp' => is_string($entry['at'] ?? null) ? (string) $entry['at'] : '',
+            'source' => 'wire',
+            'type' => $type,
+            'label' => $this->wireEntryLabel($type),
+            'summary' => $this->wireEntrySummary($type, $entry),
+            'severity' => $type === 'llm.error' ? 'error' : 'info',
+            'is_delta' => $isDelta,
+            'gap_ms' => null,
+            'has_gap_warning' => false,
+            'is_stuck' => false,
+            'payload' => $entry,
+            'seq' => null,
+            'entry_number' => $totalWireEntries,
+        ];
     }
 
     private function timelineTimestampOrder(string $timestamp): int

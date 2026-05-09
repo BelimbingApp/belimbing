@@ -47,21 +47,22 @@ $tooltipId = filled($tooltip) ? 'badge-tooltip-'.\Illuminate\Support\Str::lower(
         @resize.window="open && position()"
         @scroll.window="open && position()"
     >
-        <span
+        <button
+            type="button"
             x-ref="trigger"
-            role="button"
-            tabindex="0"
             @mouseenter="show()"
             @mouseleave="open = false"
             @focus="show()"
             @blur="open = false"
+            @keydown.enter.prevent="show()"
+            @keydown.space.prevent="show()"
             aria-describedby="{{ $tooltipId }}"
-            class="inline-flex rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0"
+            class="inline-flex cursor-default appearance-none rounded-full border-0 bg-transparent p-0 text-left font-[inherit] text-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-0"
         >
             <span {{ $attributes->merge(['class' => $badgeClasses]) }}>
                 {{ $slot }}
             </span>
-        </span>
+        </button>
 
         <template x-teleport="body">
             <span

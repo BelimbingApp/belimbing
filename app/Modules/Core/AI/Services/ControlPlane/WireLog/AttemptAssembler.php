@@ -313,28 +313,27 @@ final class AttemptAssembler
      */
     private function finishReasonFromStreamLineEntry(array $entry): ?string
     {
+        $out = null;
         $type = is_string($entry['type'] ?? null) ? $entry['type'] : '';
 
-        if ($type !== 'llm.stream_line') {
-            return null;
+        if ($type === 'llm.stream_line') {
+            $decoded = is_array($entry['decoded_payload'] ?? null) ? $entry['decoded_payload'] : null;
+            $rawLine = is_string($decoded['raw_line'] ?? null) ? $decoded['raw_line'] : '';
+
+            if (str_starts_with($rawLine, StreamAssembler::SSE_DATA_PREFIX) && $rawLine !== StreamAssembler::SSE_DONE_LINE) {
+                $payload = BlbJson::decodeArray(substr($rawLine, strlen(StreamAssembler::SSE_DATA_PREFIX)));
+
+                if (is_array($payload)) {
+                    $candidate = $payload['choices'][0]['finish_reason'] ?? null;
+
+                    if (is_string($candidate) && $candidate !== '') {
+                        $out = $candidate;
+                    }
+                }
+            }
         }
 
-        $decoded = is_array($entry['decoded_payload'] ?? null) ? $entry['decoded_payload'] : null;
-        $rawLine = is_string($decoded['raw_line'] ?? null) ? $decoded['raw_line'] : '';
-
-        if (! str_starts_with($rawLine, StreamAssembler::SSE_DATA_PREFIX) || $rawLine === StreamAssembler::SSE_DONE_LINE) {
-            return null;
-        }
-
-        $payload = BlbJson::decodeArray(substr($rawLine, strlen(StreamAssembler::SSE_DATA_PREFIX)));
-
-        if (! is_array($payload)) {
-            return null;
-        }
-
-        $candidate = $payload['choices'][0]['finish_reason'] ?? null;
-
-        return is_string($candidate) && $candidate !== '' ? $candidate : null;
+        return $out;
     }
 
     /**

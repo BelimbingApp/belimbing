@@ -235,26 +235,31 @@ final class AppKeyEncryption implements EncryptionMode
         $state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($headerBytes, $dek);
         sodium_memzero($dek);
 
-        $sawFinal = false;
+        $sawFinal = $this->pullSecretstreamChunksUntilFinal($in, $out, $state, $sourcePath, $destinationPath);
 
+        if (! $sawFinal) {
+            throw BackupException::decryptionFailed('Artifact truncated: TAG_FINAL not reached');
+        }
+    }
+
+    /**
+     * @param  resource  $in
+     * @param  resource  $out
+     * @param  mixed  $state
+     */
+    private function pullSecretstreamChunksUntilFinal($in, $out, &$state, string $sourcePath, string $destinationPath): bool
+    {
         while (true) {
             $lenBytes = @fread($in, 4);
             if ($lenBytes === false || $lenBytes === '') {
-                break; // EOF
+                return false;
             }
             if (strlen($lenBytes) !== 4) {
                 throw BackupException::decryptionFailed("Truncated chunk length in {$sourcePath}");
             }
 
             $chunkLen = (int) unpack('N', $lenBytes)[1];
-            $cipher = '';
-            while (strlen($cipher) < $chunkLen) {
-                $part = @fread($in, $chunkLen - strlen($cipher));
-                if ($part === false || $part === '') {
-                    throw BackupException::decryptionFailed("Truncated chunk body in {$sourcePath}");
-                }
-                $cipher .= $part;
-            }
+            $cipher = $this->readExactCipherBytesFromStream($in, $chunkLen, $sourcePath);
 
             $result = sodium_crypto_secretstream_xchacha20poly1305_pull($state, $cipher);
             if ($result === false) {
@@ -265,14 +270,26 @@ final class AppKeyEncryption implements EncryptionMode
             $this->fwriteAll($out, $plain, $destinationPath);
 
             if ($tag === SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_FINAL) {
-                $sawFinal = true;
-                break;
+                return true;
             }
         }
+    }
 
-        if (! $sawFinal) {
-            throw BackupException::decryptionFailed('Artifact truncated: TAG_FINAL not reached');
+    /**
+     * @param  resource  $in
+     */
+    private function readExactCipherBytesFromStream($in, int $chunkLen, string $sourcePath): string
+    {
+        $cipher = '';
+        while (strlen($cipher) < $chunkLen) {
+            $part = @fread($in, $chunkLen - strlen($cipher));
+            if ($part === false || $part === '') {
+                throw BackupException::decryptionFailed("Truncated chunk body in {$sourcePath}");
+            }
+            $cipher .= $part;
         }
+
+        return $cipher;
     }
 
     /**

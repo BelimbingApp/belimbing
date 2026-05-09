@@ -17,7 +17,6 @@ use Generator;
 use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
-use Psr\Http\Message\StreamInterface;
 
 abstract class AbstractLlmProtocolClient implements LlmProtocolClient
 {
@@ -262,119 +261,14 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
         ?LlmTransportTap $transportTap = null,
         bool $flushTrailingBuffer = false,
     ): Generator {
-        yield from $this->sseLinesFromStream(
+        $reader = new ProtocolSseStreamReader(fn (\RuntimeException $e): bool => $this->isStreamReadTimeout($e));
+
+        yield from $reader->linesFromStream(
             $request,
             $response->toPsrResponse()->getBody(),
             $transportTap,
             $flushTrailingBuffer,
         );
-    }
-
-    /**
-     * @return Generator<int, string>
-     */
-    private function sseLinesFromStream(
-        ChatRequest $request,
-        StreamInterface $stream,
-        ?LlmTransportTap $transportTap,
-        bool $flushTrailingBuffer,
-    ): Generator {
-        $buffer = '';
-        $firstByteRecorded = false;
-
-        while (! $stream->eof()) {
-            try {
-                $chunk = $stream->read(8192);
-            } catch (\RuntimeException $e) {
-                $timeoutOutcome = $this->sseStreamReadTimeoutOutcome($request, $stream, $e);
-
-                if ($timeoutOutcome === 'rethrow') {
-                    throw $e;
-                }
-
-                if ($timeoutOutcome === 'stop') {
-                    return;
-                }
-
-                yield '';
-
-                continue;
-            }
-
-            if ($chunk === '') {
-                continue;
-            }
-
-            if (! $firstByteRecorded) {
-                $transportTap?->firstByte();
-                $firstByteRecorded = true;
-            }
-
-            yield from $this->yieldSseLinesFromBufferAppend($chunk, $buffer, $transportTap);
-        }
-
-        yield from $this->yieldFlushTrailingSseBuffer($buffer, $flushTrailingBuffer, $transportTap);
-    }
-
-    /**
-     * @return 'rethrow'|'yield_empty'|'stop'
-     */
-    private function sseStreamReadTimeoutOutcome(
-        ChatRequest $request,
-        StreamInterface $stream,
-        \RuntimeException $e,
-    ): string {
-        if (! $this->isStreamReadTimeout($e)) {
-            return 'rethrow';
-        }
-
-        if ($request->isCancelRequested()) {
-            $stream->close();
-
-            return 'stop';
-        }
-
-        return 'yield_empty';
-    }
-
-    /**
-     * @return Generator<int, string>
-     */
-    private function yieldSseLinesFromBufferAppend(
-        string $chunk,
-        string &$buffer,
-        ?LlmTransportTap $transportTap,
-    ): Generator {
-        $buffer .= $chunk;
-        $lines = explode("\n", $buffer);
-        $buffer = (string) array_pop($lines);
-
-        foreach ($lines as $line) {
-            $trimmedLine = trim($line);
-            $transportTap?->streamLine($trimmedLine);
-
-            yield $trimmedLine;
-        }
-    }
-
-    /**
-     * @return Generator<int, string>
-     */
-    private function yieldFlushTrailingSseBuffer(
-        string $buffer,
-        bool $flushTrailingBuffer,
-        ?LlmTransportTap $transportTap,
-    ): Generator {
-        if (! $flushTrailingBuffer || trim($buffer) === '') {
-            return;
-        }
-
-        foreach (explode("\n", $buffer) as $line) {
-            $trimmedLine = trim($line);
-            $transportTap?->streamLine($trimmedLine);
-
-            yield $trimmedLine;
-        }
     }
 
     protected function streamProgressTimedOut(int $lastMeaningfulOutputAt, ChatRequest $request): bool

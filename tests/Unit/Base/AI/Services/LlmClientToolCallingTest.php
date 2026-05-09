@@ -156,8 +156,8 @@ data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}],"usage":null}
 data: [DONE]
 SSE;
 
-        Http::fake(function ($_request, array $options) use (&$optionsSeen, $payload) {
-            $optionsSeen = $options;
+        Http::fake(function (...$args) use (&$optionsSeen, $payload) {
+            $optionsSeen = $args[1] ?? [];
 
             return Http::response($payload, 200, ['Content-Type' => LLM_SSE_CONTENT_TYPE]);
         });
