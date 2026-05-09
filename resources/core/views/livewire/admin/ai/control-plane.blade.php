@@ -9,8 +9,6 @@ use Illuminate\Support\Number;
 
 /** @var ControlPlane $this */
 /** @var array<string, mixed>|null $runView */
-/** @var array<string, mixed>|null $inspectorTimeline */
-/** @var array<string, mixed>|null $timelineView */
 /** @var LifecycleAction|null $selectedLifecycleAction */
 /** @var array{label: string, url: string|null}|null $operationsBreadcrumb */
 $controlPlaneContext = request()->only(['from', 'returnTo']);
@@ -20,7 +18,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
 
     <x-ui.page-header
         :title="__('Operator Control Plane')"
-        :subtitle="__('Inspect runs and their unified prompt timelines, review health signals, and manage AI lifecycle operations from one operator surface.')"
+        :subtitle="__('Inspect runs end-to-end via the Wire Log card, review health signals, and manage AI lifecycle operations from one operator surface.')"
     >
         <x-slot name="actions">
             @if ($operationsBreadcrumb)
@@ -39,8 +37,8 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
         </x-slot>
         <x-slot name="help">
             <div class="space-y-3 text-sm text-muted">
-                <p>{{ __('This page is for operator diagnostics. It exposes recent runtime activity, per-run transcripts and prompt timelines, provider and tool health, and destructive lifecycle actions.') }}</p>
-                <p>{{ __('Run inspection now centers on direct run IDs and recent activity instead of employee-scoped session lookups, so cross-agent admin drill-down remains accurate.') }}</p>
+                <p>{{ __('This page is for operator diagnostics. The Run Inspector card consolidates run details, transcript, and the Wire Log card (readable + raw) into a single drill-down surface for any run.') }}</p>
+                <p>{{ __('Lifecycle milestones (run started, phase changes, terminal markers, tool denials, long heartbeat gaps) are surfaced as structural anchors next to the wire content rather than interleaved as fake transport rows.') }}</p>
             </div>
         </x-slot>
     </x-ui.page-header>
@@ -48,7 +46,6 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
     <x-ui.tabs
         :tabs="[
             ['id' => 'inspector', 'label' => __('Run Inspector'), 'icon' => 'heroicon-o-magnifying-glass'],
-            ['id' => 'timeline', 'label' => __('Prompt Timeline'), 'icon' => 'heroicon-o-queue-list'],
             ['id' => 'health', 'label' => __('Health & Presence'), 'icon' => 'heroicon-o-heart'],
             ['id' => 'lifecycle', 'label' => __('Lifecycle Controls'), 'icon' => 'heroicon-o-arrow-path'],
         ]"
@@ -76,32 +73,6 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                         'triggeringPrompt' => $runView['triggering_prompt'],
                     ])
 
-                    @if ($inspectorTimeline)
-                        <x-ui.card>
-                            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                    <h3 class="text-sm font-medium text-ink">{{ __('Prompt Timeline') }}</h3>
-                                    <p class="mt-1 text-xs text-muted">
-                                        {{ __(':meta meta events, :wire wire entries', ['meta' => $inspectorTimeline['meta_count'], 'wire' => $inspectorTimeline['wire_count']]) }}
-                                        @if (! $inspectorTimeline['has_wire_log'])
-                                            &mdash; {{ __('No wire log for this run.') }}
-                                        @endif
-                                    </p>
-                                </div>
-                                <x-ui.button wire:click="toggleTimelineDelta" variant="secondary" size="sm">
-                                    @if ($timelineCollapseDelta)
-                                        {{ __('Show Deltas') }}
-                                    @else
-                                        {{ __('Collapse Deltas') }}
-                                    @endif
-                                </x-ui.button>
-                            </div>
-                            @include('livewire.admin.ai.control-plane.partials.prompt-timeline', [
-                                'timeline' => $inspectorTimeline['timeline'],
-                            ])
-                        </x-ui.card>
-                    @endif
-
                     <x-ui.card id="wire-log-panel">
                         <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
                             <h3 class="text-sm font-medium text-ink">{{ __('Wire Log') }}</h3>
@@ -115,66 +86,8 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                             'summary' => $runView['wire_log_summary'],
                             'wireLoggingEnabled' => $runView['wire_logging_enabled'],
                             'runId' => $inspectRunId,
-                        ])
-                    </x-ui.card>
-                @endif
-            </div>
-        </x-ui.tab>
-
-        <x-ui.tab id="timeline">
-            <div class="space-y-section-gap">
-                <x-ui.card>
-                    <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
-                        <div class="space-y-4">
-                            <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                                <x-ui.input
-                                    id="inspect-timeline-run-id"
-                                    wire:model="inspectTimelineRunId"
-                                    :label="__('Run ID')"
-                                    :placeholder="__('01H...')"
-                                />
-                                <div class="flex items-end">
-                                    <x-ui.button wire:click="inspectTimeline" variant="primary" size="sm">
-                                        {{ __('Load Timeline') }}
-                                    </x-ui.button>
-                                </div>
-                            </div>
-
-                            @if ($timelineError)
-                                <x-ui.alert variant="warning">{{ $timelineError }}</x-ui.alert>
-                            @endif
-                        </div>
-
-                        <div class="rounded-2xl border border-border-default bg-surface-subtle p-card-inner">
-                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Prompt Timeline') }}</p>
-                            <p class="mt-2 text-sm text-muted">{{ __('Interleaves DB meta-events [META] and wire-log entries [WIRE] in chronological order for a single run.') }}</p>
-                        </div>
-                    </div>
-                </x-ui.card>
-
-                @if ($timelineView)
-                    <x-ui.card>
-                        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <h3 class="text-sm font-medium text-ink">{{ __('Prompt Timeline') }}</h3>
-                                <p class="mt-1 text-xs text-muted">
-                                    {{ __(':meta meta events, :wire wire entries', ['meta' => $timelineView['meta_count'], 'wire' => $timelineView['wire_count']]) }}
-                                    @if (! $timelineView['has_wire_log'])
-                                        &mdash; {{ __('No wire log for this run.') }}
-                                    @endif
-                                </p>
-                            </div>
-                            <x-ui.button wire:click="toggleTimelineDelta" variant="secondary" size="sm">
-                                @if ($timelineCollapseDelta)
-                                    {{ __('Show Deltas') }}
-                                @else
-                                    {{ __('Collapse Deltas') }}
-                                @endif
-                            </x-ui.button>
-                        </div>
-
-                        @include('livewire.admin.ai.control-plane.partials.prompt-timeline', [
-                            'timeline' => $timelineView['timeline'],
+                            'lifecycleMilestones' => $runView['lifecycle_milestones'] ?? [],
+                            'lifecycleRail' => $runView['lifecycle_rail'] ?? null,
                         ])
                     </x-ui.card>
                 @endif

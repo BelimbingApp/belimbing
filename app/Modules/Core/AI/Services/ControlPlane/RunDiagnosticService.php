@@ -11,6 +11,7 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunCall;
+use App\Modules\Core\AI\Services\ControlPlane\WireLog\MetaMilestoneAnnotator;
 use App\Modules\Core\AI\Values\CallUsage;
 use App\Modules\Core\Employee\Models\Employee;
 use DateTimeImmutable;
@@ -26,6 +27,7 @@ class RunDiagnosticService
     public function __construct(
         private readonly WireLogger $wireLogger,
         private readonly WireLogReadableFormatter $wireLogFormatter,
+        private readonly MetaMilestoneAnnotator $milestoneAnnotator,
         private readonly DateTimeDisplayService $dateTimeDisplay,
     ) {}
 
@@ -41,33 +43,13 @@ class RunDiagnosticService
      *     inspection: RunInspection,
      *     transcript: list<Message>,
      *     triggering_prompt: Message|null,
-     *     wire_log_entries: list<array{
-     *         entry_number: int,
-     *         at: string|null,
-     *         type: string|null,
-     *         payload_pretty: string,
-     *         payload_truncated: bool,
-     *         preview_status: string,
-     *         raw_line: string,
-     *         decoded_payload: array<string, mixed>|null
-     *     }>,
+     *     wire_log_entries: list<array<string, mixed>>,
      *     wire_log_readable: array<string, mixed>,
-     *     wire_log_summary: array{
-     *         footprint_bytes: int,
-     *         total_entries: int,
-     *         visible_entries: int,
-     *         offset: int,
-     *         limit: int,
-     *         range_start: int,
-     *         range_end: int,
-     *         omitted_before: int,
-     *         omitted_after: int,
-     *         has_previous: bool,
-     *         has_next: bool,
-     *         last_offset: int
-     *     },
+     *     wire_log_summary: array<string, mixed>,
      *     wire_logging_enabled: bool,
-     *     run_id: string|null
+     *     run_id: string|null,
+     *     lifecycle_milestones: list<array<string, mixed>>,
+     *     lifecycle_rail: array<string, mixed>
      * }|null
      */
     public function buildRunView(string $runId, int $wireLogOffset = 0, int $wireLogLimit = 100): ?array
@@ -82,11 +64,19 @@ class RunDiagnosticService
 
         $readable = $this->wireLogFormatter->format($wireLogPreview['entries']);
 
+        $milestones = $this->milestoneAnnotator->annotate($run);
+        $rail = $this->milestoneAnnotator->buildRail($run, $milestones);
+
+        $entries = $this->milestoneAnnotator->markEntriesWithMilestones(
+            $wireLogPreview['entries'],
+            $milestones,
+        );
+
         return [
             'inspection' => RunInspection::fromAiRun($run),
             'transcript' => $this->runTranscript($run),
             'triggering_prompt' => $this->triggeringPrompt($run),
-            'wire_log_entries' => $wireLogPreview['entries'],
+            'wire_log_entries' => $entries,
             'wire_log_readable' => $this->enrichReadableAttemptsWithCalls($readable, $run),
             'wire_log_summary' => [
                 'footprint_bytes' => $wireLogPreview['footprint_bytes'],
@@ -104,6 +94,8 @@ class RunDiagnosticService
             ],
             'wire_logging_enabled' => $this->wireLogger->enabled(),
             'run_id' => $run->id,
+            'lifecycle_milestones' => $milestones,
+            'lifecycle_rail' => $rail,
         ];
     }
 
@@ -449,84 +441,5 @@ class RunDiagnosticService
         }
 
         return '';
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function mapTurn(AiRun $turn): array
-    {
-        $terminalEvent = $turn->events()
-            ->whereIn('event_type', ['run.completed', 'run.failed', 'run.cancelled'])
-            ->latest('seq')
-            ->first();
-
-        $cancelReason = is_array($terminalEvent?->payload ?? null)
-            ? (string) ($terminalEvent->payload['reason'] ?? '')
-            : '';
-
-        $cancelMode = match (true) {
-            $turn->cancel_requested_at === null => null,
-            str_contains($cancelReason, 'stale') => 'force_stopped',
-            $terminalEvent?->event_type?->value === 'run.cancelled' => 'cooperative_cancel',
-            default => 'cancel_requested',
-        };
-
-        return [
-            'id' => $turn->id,
-            'employee_id' => $turn->employee_id,
-            'employee_name' => $turn->employee?->displayName() ?? __('Unknown Agent'),
-            'session_id' => $turn->session_id,
-            'acting_for_user_id' => $turn->acting_for_user_id,
-            'status' => $turn->status->value,
-            'status_label' => $turn->status->label(),
-            'status_color' => $turn->status->color(),
-            'current_phase' => $turn->current_phase?->value,
-            'current_phase_label' => $turn->current_phase?->label(),
-            'current_label' => $turn->current_label,
-            'last_event_seq' => $turn->last_event_seq,
-            'current_run_id' => $turn->id,
-            'started_at' => $turn->started_at?->toIso8601String(),
-            'finished_at' => $turn->finished_at?->toIso8601String(),
-            'created_at' => $turn->created_at?->toIso8601String(),
-            'cancel_requested_at' => $turn->cancel_requested_at?->toIso8601String(),
-            'cancel_mode' => $cancelMode,
-            'cancel_mode_label' => match ($cancelMode) {
-                'force_stopped' => __('Force-stopped'),
-                'cooperative_cancel' => __('Cooperative cancel'),
-                'cancel_requested' => __('Cancel requested'),
-                default => null,
-            },
-            'cancel_terminal_at' => $terminalEvent?->created_at?->toIso8601String(),
-            'event_count' => $turn->events()->count(),
-        ];
-    }
-
-    /**
-     * @return array{
-     *     run: array<string, mixed>,
-     *     timeline: list<array<string, mixed>>,
-     *     wire_count: int,
-     *     meta_count: int,
-     *     delta_collapsed: bool,
-     *     has_wire_log: bool,
-     * }|null
-     */
-    public function buildPromptTimelineView(string $runId, bool $collapseDelta = false): ?array
-    {
-        $run = AiRun::query()
-            ->with(['employee', 'events' => fn ($query) => $query->orderBy('seq')])
-            ->find($runId);
-
-        if ($run === null) {
-            return null;
-        }
-
-        $composed = (new RunPromptTimelineBuilder($this->wireLogger))->compose($run, $collapseDelta);
-
-        return [
-            'run' => $this->mapTurn($run),
-            ...$composed,
-        ];
     }
 }

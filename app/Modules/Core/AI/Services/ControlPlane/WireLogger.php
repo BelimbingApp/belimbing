@@ -6,7 +6,6 @@
 namespace App\Modules\Core\AI\Services\ControlPlane;
 
 use App\Base\Support\File as BlbFile;
-use App\Base\Support\Json as BlbJson;
 
 class WireLogger
 {
@@ -21,6 +20,13 @@ class WireLogger
     private const PREVIEW_LINE_BYTES = 64 * 1024;
 
     private const RAW_ENTRY_CHUNK_BYTES = 8 * 1024;
+
+    /**
+     * Hard ceiling for how many additional consecutive `llm.stream_line` rows
+     * the preview window will absorb past `$limit` to keep a stream block
+     * intact. Once exceeded, trailing deltas collapse into a single placeholder.
+     */
+    private const STREAM_BLOCK_EXTENSION_CAP = 200;
 
     public function enabled(): bool
     {
@@ -51,36 +57,6 @@ class WireLogger
             ], $entry), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n",
             FILE_APPEND | LOCK_EX,
         );
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    public function read(string $runId): array
-    {
-        $path = $this->path($runId);
-
-        if (! file_exists($path)) {
-            return [];
-        }
-
-        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-
-        if ($lines === false) {
-            return [];
-        }
-
-        $entries = [];
-
-        foreach ($lines as $line) {
-            $decoded = BlbJson::decodeArray($line);
-
-            if ($decoded !== null) {
-                $entries[] = $decoded;
-            }
-        }
-
-        return $entries;
     }
 
     /**
@@ -264,6 +240,10 @@ class WireLogger
         $lastEntries = [];
         $totalEntries = 0;
         $extendStreamBlock = false;
+        $extensionCount = 0;
+        $collapsedCount = 0;
+        $collapsedFromEntry = 0;
+        $collapsedToEntry = 0;
         $previewer = new WireLogEntryPreviewer;
 
         try {
@@ -282,10 +262,18 @@ class WireLogger
                     $entries,
                     $lastEntries,
                     $extendStreamBlock,
+                    $extensionCount,
+                    $collapsedCount,
+                    $collapsedFromEntry,
+                    $collapsedToEntry,
                 );
             }
         } finally {
             fclose($handle);
+        }
+
+        if ($collapsedCount > 0) {
+            $entries[] = $this->collapsedStreamPlaceholder($collapsedFromEntry, $collapsedToEntry, $collapsedCount);
         }
 
         if ($totalEntries > 0 && $offset >= $totalEntries) {
@@ -316,6 +304,10 @@ class WireLogger
         array &$entries,
         array &$lastEntries,
         bool &$extendStreamBlock,
+        int &$extensionCount,
+        int &$collapsedCount,
+        int &$collapsedFromEntry,
+        int &$collapsedToEntry,
     ): void {
         $lastEntries[] = $previewEntry;
 
@@ -330,6 +322,7 @@ class WireLogger
         if (count($entries) < $limit) {
             $entries[] = $previewEntry;
             $extendStreamBlock = count($entries) >= $limit && $this->isStreamLinePreviewEntry($previewEntry);
+            $extensionCount = 0;
 
             return;
         }
@@ -341,10 +334,29 @@ class WireLogger
         if (! $this->isStreamLinePreviewEntry($previewEntry)) {
             $extendStreamBlock = false;
 
+            if ($collapsedCount > 0) {
+                $entries[] = $this->collapsedStreamPlaceholder($collapsedFromEntry, $collapsedToEntry, $collapsedCount);
+                $collapsedCount = 0;
+                $collapsedFromEntry = 0;
+                $collapsedToEntry = 0;
+            }
+
             return;
         }
 
-        $entries[] = $previewEntry;
+        if ($extensionCount < self::STREAM_BLOCK_EXTENSION_CAP) {
+            $entries[] = $previewEntry;
+            $extensionCount++;
+
+            return;
+        }
+
+        if ($collapsedCount === 0) {
+            $collapsedFromEntry = $totalEntries;
+        }
+
+        $collapsedToEntry = $totalEntries;
+        $collapsedCount++;
     }
 
     /**
@@ -353,6 +365,32 @@ class WireLogger
     private function isStreamLinePreviewEntry(array $entry): bool
     {
         return ($entry['type'] ?? null) === 'llm.stream_line';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function collapsedStreamPlaceholder(int $fromEntry, int $toEntry, int $count): array
+    {
+        $summary = __(
+            'Collapsed :count consecutive stream deltas (#:from – #:to). The full sequence is preserved on disk; raise the page size or jump to the entry to inspect them individually.',
+            ['count' => $count, 'from' => $fromEntry, 'to' => $toEntry],
+        );
+
+        return [
+            'entry_number' => $fromEntry,
+            'from_entry_number' => $fromEntry,
+            'to_entry_number' => $toEntry,
+            'count' => $count,
+            'at' => null,
+            'type' => 'stream_lines_collapsed',
+            'summary_preview' => $summary,
+            'payload_pretty' => $summary,
+            'payload_truncated' => false,
+            'preview_status' => 'collapsed',
+            'raw_line' => '',
+            'decoded_payload' => null,
+        ];
     }
 
     /**
