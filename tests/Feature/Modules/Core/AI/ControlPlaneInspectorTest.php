@@ -221,7 +221,7 @@ it('tracks manually selected control plane tabs in Livewire state', function ():
         ->assertSet('activeTab', 'inspector');
 });
 
-it('loads a timeline run from query parameters without falling back to the inspector tab', function (): void {
+it('treats the retired tab=timeline query as the Run Inspector and surfaces lifecycle milestones', function (): void {
     Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
     Employee::provisionLara();
 
@@ -232,18 +232,17 @@ it('loads a timeline run from query parameters without falling back to the inspe
         'run_id' => CONTROL_PLANE_TIMELINE_RUN_ID,
         'seq' => 1,
         'event_type' => RunEventType::RunStarted,
-        'payload' => null,
+        'payload' => ['provider' => 'anthropic', 'model' => 'claude-sonnet-4-6'],
         'created_at' => now(),
     ]));
 
     Livewire::actingAs($user)
         ->withQueryParams(['tab' => 'timeline', 'runId' => CONTROL_PLANE_TIMELINE_RUN_ID])
         ->test(ControlPlane::class)
-        ->assertSet('activeTab', 'timeline')
-        ->assertSet('inspectTimelineRunId', CONTROL_PLANE_TIMELINE_RUN_ID)
-        ->assertSet('inspectRunId', '')
-        ->assertSee('Run Started')
-        ->assertSee('1 meta events, 0 wire entries');
+        ->assertSet('activeTab', 'inspector')
+        ->assertSet('inspectRunId', CONTROL_PLANE_TIMELINE_RUN_ID)
+        ->assertSee('Lifecycle milestones')
+        ->assertSee('Run Started');
 });
 
 const CONTROL_PLANE_READABLE_RUN_ID = 'run_control_plane_readable';

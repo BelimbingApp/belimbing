@@ -1,10 +1,10 @@
 <?php
 
 use App\Base\Integration\Models\OutboundExchange;
+use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Enums\RunPhase;
-use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Livewire\Chat;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
@@ -233,7 +233,7 @@ it('records a titling run, outbound exchange, and wire logs when wire logging is
         ->and($exchange->request_body['value']['messages'])->not->toBeEmpty()
         ->and($exchange->response_body['value']['choices'][0]['message']['content'])->toBe('"Quarterly Revenue Summary"');
 
-    $entries = $wireLogger->read($run->id);
+    $entries = $wireLogger->preview($run->id, 0, 500)['entries'];
     $entryTypes = array_column($entries, 'type');
 
     expect($entryTypes)

@@ -11,7 +11,7 @@ use App\Modules\Core\AI\DTO\ControlPlane\RunInspection;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunCall;
-use App\Modules\Core\AI\Models\AiRunEvent;
+use App\Modules\Core\AI\Services\ControlPlane\WireLog\MetaMilestoneAnnotator;
 use App\Modules\Core\AI\Values\CallUsage;
 use App\Modules\Core\Employee\Models\Employee;
 use DateTimeImmutable;
@@ -27,6 +27,7 @@ class RunDiagnosticService
     public function __construct(
         private readonly WireLogger $wireLogger,
         private readonly WireLogReadableFormatter $wireLogFormatter,
+        private readonly MetaMilestoneAnnotator $milestoneAnnotator,
         private readonly DateTimeDisplayService $dateTimeDisplay,
     ) {}
 
@@ -42,33 +43,13 @@ class RunDiagnosticService
      *     inspection: RunInspection,
      *     transcript: list<Message>,
      *     triggering_prompt: Message|null,
-     *     wire_log_entries: list<array{
-     *         entry_number: int,
-     *         at: string|null,
-     *         type: string|null,
-     *         payload_pretty: string,
-     *         payload_truncated: bool,
-     *         preview_status: string,
-     *         raw_line: string,
-     *         decoded_payload: array<string, mixed>|null
-     *     }>,
+     *     wire_log_entries: list<array<string, mixed>>,
      *     wire_log_readable: array<string, mixed>,
-     *     wire_log_summary: array{
-     *         footprint_bytes: int,
-     *         total_entries: int,
-     *         visible_entries: int,
-     *         offset: int,
-     *         limit: int,
-     *         range_start: int,
-     *         range_end: int,
-     *         omitted_before: int,
-     *         omitted_after: int,
-     *         has_previous: bool,
-     *         has_next: bool,
-     *         last_offset: int
-     *     },
+     *     wire_log_summary: array<string, mixed>,
      *     wire_logging_enabled: bool,
-     *     run_id: string|null
+     *     run_id: string|null,
+     *     lifecycle_milestones: list<array<string, mixed>>,
+     *     lifecycle_rail: array<string, mixed>
      * }|null
      */
     public function buildRunView(string $runId, int $wireLogOffset = 0, int $wireLogLimit = 100): ?array
@@ -83,11 +64,19 @@ class RunDiagnosticService
 
         $readable = $this->wireLogFormatter->format($wireLogPreview['entries']);
 
+        $milestones = $this->milestoneAnnotator->annotate($run);
+        $rail = $this->milestoneAnnotator->buildRail($run, $milestones);
+
+        $entries = $this->milestoneAnnotator->markEntriesWithMilestones(
+            $wireLogPreview['entries'],
+            $milestones,
+        );
+
         return [
             'inspection' => RunInspection::fromAiRun($run),
             'transcript' => $this->runTranscript($run),
             'triggering_prompt' => $this->triggeringPrompt($run),
-            'wire_log_entries' => $wireLogPreview['entries'],
+            'wire_log_entries' => $entries,
             'wire_log_readable' => $this->enrichReadableAttemptsWithCalls($readable, $run),
             'wire_log_summary' => [
                 'footprint_bytes' => $wireLogPreview['footprint_bytes'],
@@ -105,6 +94,8 @@ class RunDiagnosticService
             ],
             'wire_logging_enabled' => $this->wireLogger->enabled(),
             'run_id' => $run->id,
+            'lifecycle_milestones' => $milestones,
+            'lifecycle_rail' => $rail,
         ];
     }
 
@@ -450,300 +441,5 @@ class RunDiagnosticService
         }
 
         return '';
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function mapTurn(AiRun $turn): array
-    {
-        $terminalEvent = $turn->events()
-            ->whereIn('event_type', ['run.completed', 'run.failed', 'run.cancelled'])
-            ->latest('seq')
-            ->first();
-
-        $cancelReason = is_array($terminalEvent?->payload ?? null)
-            ? (string) ($terminalEvent->payload['reason'] ?? '')
-            : '';
-
-        $cancelMode = match (true) {
-            $turn->cancel_requested_at === null => null,
-            str_contains($cancelReason, 'stale') => 'force_stopped',
-            $terminalEvent?->event_type?->value === 'run.cancelled' => 'cooperative_cancel',
-            default => 'cancel_requested',
-        };
-
-        return [
-            'id' => $turn->id,
-            'employee_id' => $turn->employee_id,
-            'employee_name' => $turn->employee?->displayName() ?? __('Unknown Agent'),
-            'session_id' => $turn->session_id,
-            'acting_for_user_id' => $turn->acting_for_user_id,
-            'status' => $turn->status->value,
-            'status_label' => $turn->status->label(),
-            'status_color' => $turn->status->color(),
-            'current_phase' => $turn->current_phase?->value,
-            'current_phase_label' => $turn->current_phase?->label(),
-            'current_label' => $turn->current_label,
-            'last_event_seq' => $turn->last_event_seq,
-            'current_run_id' => $turn->id,
-            'started_at' => $turn->started_at?->toIso8601String(),
-            'finished_at' => $turn->finished_at?->toIso8601String(),
-            'created_at' => $turn->created_at?->toIso8601String(),
-            'cancel_requested_at' => $turn->cancel_requested_at?->toIso8601String(),
-            'cancel_mode' => $cancelMode,
-            'cancel_mode_label' => match ($cancelMode) {
-                'force_stopped' => __('Force-stopped'),
-                'cooperative_cancel' => __('Cooperative cancel'),
-                'cancel_requested' => __('Cancel requested'),
-                default => null,
-            },
-            'cancel_terminal_at' => $terminalEvent?->created_at?->toIso8601String(),
-            'event_count' => $turn->events()->count(),
-        ];
-    }
-
-    /**
-     * @return array{
-     *     run: array<string, mixed>,
-     *     timeline: list<array<string, mixed>>,
-     *     wire_count: int,
-     *     meta_count: int,
-     *     delta_collapsed: bool,
-     *     has_wire_log: bool,
-     * }|null
-     */
-    public function buildPromptTimelineView(string $runId, bool $collapseDelta = false): ?array
-    {
-        $run = AiRun::query()
-            ->with(['employee', 'events' => fn ($query) => $query->orderBy('seq')])
-            ->find($runId);
-
-        if ($run === null) {
-            return null;
-        }
-
-        $metaEntries = [];
-        $totalMetaEntries = 0;
-        $previousAt = null;
-
-        foreach ($run->events as $event) {
-            $totalMetaEntries++;
-            $isDelta = $event->event_type->isDelta();
-
-            if ($collapseDelta && $isDelta) {
-                continue;
-            }
-
-            $gapMs = $previousAt?->diffInMilliseconds($event->created_at) ?? null;
-
-            $metaEntries[] = [
-                'timestamp' => $event->created_at?->toIso8601String() ?? '',
-                'source' => 'meta',
-                'type' => $event->event_type->value,
-                'label' => $event->event_type->label(),
-                'summary' => $this->eventSummary($event),
-                'severity' => $event->event_type->severity(),
-                'is_delta' => $isDelta,
-                'gap_ms' => $gapMs,
-                'has_gap_warning' => $gapMs !== null && $gapMs > 30_000,
-                'is_stuck' => ! $run->isTerminal()
-                    && $event->seq === $run->last_event_seq
-                    && $event->created_at?->lt(now()->subSeconds(30)),
-                'payload' => $event->payload,
-                'seq' => $event->seq,
-                'entry_number' => null,
-            ];
-
-            $previousAt = $event->created_at;
-        }
-
-        $wireEntries = [];
-        $totalWireEntries = 0;
-        $collapsedCount = 0;
-        $collapsedFrom = 0;
-        $collapsedLastAt = '';
-
-        foreach ($this->wireLogger->read($run->id) as $entry) {
-            $totalWireEntries++;
-            $type = (string) ($entry['type'] ?? 'unknown');
-            $isDelta = $type === 'llm.stream_line';
-
-            if ($collapseDelta && $isDelta) {
-                if ($collapsedCount === 0) {
-                    $collapsedFrom = $totalWireEntries;
-                }
-                $collapsedCount++;
-                $collapsedLastAt = is_string($entry['at'] ?? null) ? (string) $entry['at'] : $collapsedLastAt;
-                continue;
-            }
-
-            if ($collapsedCount > 0) {
-                $wireEntries[] = $this->collapsedDeltaEntry($collapsedFrom, $totalWireEntries - 1, $collapsedCount, $collapsedLastAt);
-                $collapsedCount = 0;
-                $collapsedFrom = 0;
-                $collapsedLastAt = '';
-            }
-
-            $wireEntries[] = [
-                'timestamp' => is_string($entry['at'] ?? null) ? (string) $entry['at'] : '',
-                'source' => 'wire',
-                'type' => $type,
-                'label' => $this->wireEntryLabel($type),
-                'summary' => $this->wireEntrySummary($type, $entry),
-                'severity' => $type === 'llm.error' ? 'error' : 'info',
-                'is_delta' => $isDelta,
-                'gap_ms' => null,
-                'has_gap_warning' => false,
-                'is_stuck' => false,
-                'payload' => $entry,
-                'seq' => null,
-                'entry_number' => $totalWireEntries,
-            ];
-        }
-
-        if ($collapsedCount > 0) {
-            $wireEntries[] = $this->collapsedDeltaEntry($collapsedFrom, $collapsedFrom + $collapsedCount - 1, $collapsedCount, $collapsedLastAt);
-        }
-
-        $all = array_merge($metaEntries, $wireEntries);
-
-        usort($all, function (array $a, array $b): int {
-            $cmp = $this->timelineTimestampOrder((string) $a['timestamp'])
-                <=> $this->timelineTimestampOrder((string) $b['timestamp']);
-
-            if ($cmp !== 0) {
-                return $cmp;
-            }
-
-            if ($a['source'] !== $b['source']) {
-                return $a['source'] === 'meta' ? -1 : 1;
-            }
-
-            $aOrder = $a['seq'] ?? $a['entry_number'] ?? 0;
-            $bOrder = $b['seq'] ?? $b['entry_number'] ?? 0;
-
-            return $aOrder <=> $bOrder;
-        });
-
-        return [
-            'run' => $this->mapTurn($run),
-            'timeline' => array_values($all),
-            'wire_count' => $totalWireEntries,
-            'meta_count' => $totalMetaEntries,
-            'delta_collapsed' => $collapseDelta,
-            'has_wire_log' => $totalWireEntries > 0,
-        ];
-    }
-
-    private function timelineTimestampOrder(string $timestamp): int
-    {
-        if ($timestamp === '') {
-            return PHP_INT_MAX;
-        }
-
-        try {
-            $instant = new DateTimeImmutable($timestamp);
-        } catch (\Throwable) {
-            return PHP_INT_MAX;
-        }
-
-        return ((int) $instant->format('U')) * 1000 + ((int) $instant->format('v'));
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function collapsedDeltaEntry(int $from, int $to, int $count, string $lastAt): array
-    {
-        return [
-            'timestamp' => $lastAt,
-            'source' => 'wire',
-            'type' => 'stream_lines_collapsed',
-            'label' => __('Stream Deltas'),
-            'summary' => __('#:from – #:to (:count collapsed)', ['from' => $from, 'to' => $to, 'count' => $count]),
-            'severity' => 'default',
-            'is_delta' => true,
-            'gap_ms' => null,
-            'has_gap_warning' => false,
-            'is_stuck' => false,
-            'payload' => null,
-            'seq' => null,
-            'entry_number' => null,
-        ];
-    }
-
-    private function wireEntryLabel(string $type): string
-    {
-        return match ($type) {
-            'llm.request' => __('LLM Request'),
-            'llm.first_byte' => __('First Byte'),
-            'llm.response_status' => __('Response Status'),
-            'llm.response_body' => __('Response Body'),
-            'llm.stream_line' => __('Stream Delta'),
-            'llm.complete' => __('LLM Complete'),
-            'llm.error' => __('LLM Error'),
-            default => __(ucwords(str_replace(['.', '_'], ' ', $type))),
-        };
-    }
-
-    /**
-     * @param  array<string, mixed>  $entry
-     */
-    private function wireEntrySummary(string $type, array $entry): string
-    {
-        return match ($type) {
-            'llm.request' => trim(implode(' / ', array_filter([
-                is_array($entry['request'] ?? null) ? ($entry['request']['model'] ?? null) : null,
-                is_array($entry['request']['messages'] ?? null)
-                    ? __(':n messages', ['n' => count((array) $entry['request']['messages'])])
-                    : null,
-            ], fn (mixed $v): bool => is_string($v) && $v !== ''))),
-            'llm.response_status' => isset($entry['status_code']) ? (string) $entry['status_code'] : '',
-            'llm.response_body' => isset($entry['status_code']) ? (string) $entry['status_code'] : '',
-            'llm.stream_line' => Str::limit((string) ($entry['raw_line'] ?? ''), 120),
-            'llm.error' => (string) ($entry['message'] ?? __('LLM error')),
-            'llm.complete' => is_array($entry['context'] ?? null) && $entry['context'] !== []
-                ? Str::limit(json_encode($entry['context'], JSON_UNESCAPED_SLASHES) ?: '', 120)
-                : '',
-            default => '',
-        };
-    }
-
-    private function eventSummary(AiRunEvent $event): string
-    {
-        $payload = is_array($event->payload) ? $event->payload : [];
-
-        return match ($event->event_type->value) {
-            'run.phase_changed' => (string) ($payload['label'] ?? $payload['phase'] ?? __('Phase updated')),
-            'run.started' => trim(implode(' / ', array_filter([
-                $payload['run_id'] ?? null,
-                $payload['provider'] ?? null,
-                $payload['model'] ?? null,
-            ], fn (mixed $value): bool => is_string($value) && $value !== ''))),
-            'run.failed' => (string) ($payload['message'] ?? __('Run failed')),
-            'tool.started' => trim(implode(' - ', array_filter([
-                $payload['tool'] ?? null,
-                $payload['args_summary'] ?? null,
-            ], fn (mixed $value): bool => is_string($value) && $value !== ''))),
-            'tool.finished' => trim(implode(' - ', array_filter([
-                $payload['tool'] ?? null,
-                $payload['status'] ?? null,
-                isset($payload['result_preview']) ? Str::limit((string) $payload['result_preview'], 120) : null,
-            ], fn (mixed $value): bool => is_string($value) && $value !== ''))),
-            'tool.denied' => trim(implode(' - ', array_filter([
-                $payload['tool'] ?? null,
-                $payload['reason'] ?? null,
-            ], fn (mixed $value): bool => is_string($value) && $value !== ''))),
-            'assistant.thinking_started' => (string) ($payload['description'] ?? ''),
-            'assistant.output_delta', 'assistant.thinking_delta', 'tool.stdout_delta' => Str::limit((string) ($payload['delta'] ?? ''), 120),
-            'run.cancelled' => (string) ($payload['reason'] ?? ''),
-            'usage.updated' => __('Prompt: :prompt, Completion: :completion', [
-                'prompt' => (string) ($payload['prompt_tokens'] ?? 'n/a'),
-                'completion' => (string) ($payload['completion_tokens'] ?? 'n/a'),
-            ]),
-            'heartbeat' => '',
-            default => '',
-        };
     }
 }

@@ -37,12 +37,6 @@ class ControlPlane extends Component
 
     public string $recentRunsSearch = '';
 
-    public string $inspectTimelineRunId = '';
-
-    public bool $timelineCollapseDelta = true;
-
-    public string $timelineError = '';
-
     public int $healthAgentId = Employee::LARA_ID;
 
     /** @var list<array{id: int, label: string}> */
@@ -86,13 +80,7 @@ class ControlPlane extends Component
     public function mount(): void
     {
         $this->activeTab = $this->resolveTab((string) request()->query('tab', 'inspector'));
-        $requestRunId = (string) (request()->query('runId') ?? request()->query('inspectRunId') ?? '');
-
-        if ($this->activeTab === 'timeline') {
-            $this->inspectTimelineRunId = $requestRunId;
-        } else {
-            $this->inspectRunId = $requestRunId;
-        }
+        $this->inspectRunId = (string) (request()->query('runId') ?? request()->query('inspectRunId') ?? '');
 
         $this->lifecycleRetentionDays = app(WireLogger::class)->retentionDays();
 
@@ -101,9 +89,7 @@ class ControlPlane extends Component
         $this->refreshHealthSnapshots();
         $this->loadRecentLifecycleRequests();
 
-        if ($this->activeTab === 'timeline' && $this->inspectTimelineRunId !== '') {
-            $this->inspectTimeline();
-        } elseif ($this->inspectRunId !== '') {
+        if ($this->inspectRunId !== '') {
             $this->resetWireLogWindow();
             $this->inspectRun();
         }
@@ -145,33 +131,6 @@ class ControlPlane extends Component
         $this->inspectRunId = $runId;
         $this->resetWireLogWindow();
         $this->inspectRun();
-    }
-
-    public function inspectTimeline(): void
-    {
-        $this->activeTab = 'timeline';
-        $this->timelineError = '';
-
-        if ($this->inspectTimelineRunId === '') {
-            $this->timelineError = __('Run ID is required.');
-
-            return;
-        }
-
-        if (app(RunDiagnosticService::class)->buildPromptTimelineView($this->inspectTimelineRunId) === null) {
-            $this->timelineError = __('Run not found.');
-        }
-    }
-
-    public function toggleTimelineDelta(): void
-    {
-        $this->timelineCollapseDelta = ! $this->timelineCollapseDelta;
-    }
-
-    public function inspectTimelineFromRun(string $runId): void
-    {
-        $this->inspectTimelineRunId = $runId;
-        $this->inspectTimeline();
     }
 
     public function refreshInspectorLists(): void
@@ -325,37 +284,14 @@ class ControlPlane extends Component
             )
             : null;
 
-        $timelineViews = $this->buildTimelineViews($diagnostics);
-
         return view('livewire.admin.ai.control-plane', [
             'activeTab' => $this->activeTab,
             'recentRuns' => $recentRuns,
             'runView' => $this->mapRunView($runView),
-            'inspectorTimeline' => $timelineViews['inspector'],
-            'timelineView' => $timelineViews['timeline'],
             'wireLogDiskUsageBytes' => $diagnostics->wireLogDiskUsageBytes(),
             'selectedLifecycleAction' => $this->resolveLifecycleAction(),
             'operationsBreadcrumb' => $this->operationsBreadcrumb(),
         ]);
-    }
-
-    /**
-     * @return array{inspector: array<string, mixed>|null, timeline: array<string, mixed>|null}
-     */
-    private function buildTimelineViews(RunDiagnosticService $diagnostics): array
-    {
-        $viewsByRunId = [];
-
-        foreach (array_filter([$this->inspectRunId, $this->inspectTimelineRunId]) as $runId) {
-            if (! array_key_exists($runId, $viewsByRunId)) {
-                $viewsByRunId[$runId] = $diagnostics->buildPromptTimelineView($runId, $this->timelineCollapseDelta);
-            }
-        }
-
-        return [
-            'inspector' => $this->inspectRunId !== '' ? $viewsByRunId[$this->inspectRunId] : null,
-            'timeline' => $this->inspectTimelineRunId !== '' ? $viewsByRunId[$this->inspectTimelineRunId] : null,
-        ];
     }
 
     private function loadAgentOptions(): void

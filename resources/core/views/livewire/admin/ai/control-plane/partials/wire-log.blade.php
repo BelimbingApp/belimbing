@@ -6,7 +6,11 @@
 /** @var array{footprint_bytes: int, total_entries: int, visible_entries: int, offset: int, limit: int, range_start: int, range_end: int, omitted_before: int, omitted_after: int, has_previous: bool, has_next: bool, last_offset: int}|null $summary */
 /** @var array<string, mixed> $readable */
 /** @var string $runId */
+/** @var list<array<string, mixed>> $lifecycleMilestones */
+/** @var array<string, mixed>|null $lifecycleRail */
 $anomalies = $readable['anomalies'] ?? [];
+$lifecycleMilestones = $lifecycleMilestones ?? [];
+$lifecycleRail = $lifecycleRail ?? null;
 ?>
 <div
     class="space-y-3"
@@ -74,6 +78,12 @@ $anomalies = $readable['anomalies'] ?? [];
     })"
     x-on:wire-log-focus-entry.window="focusEntry($event.detail.entryNumber)"
 >
+    @if ($lifecycleMilestones !== [])
+        @include('livewire.admin.ai.control-plane.partials.wire-log-milestones', [
+            'milestones' => $lifecycleMilestones,
+        ])
+    @endif
+
     @if (! $wireLoggingEnabled)
         <x-ui.alert variant="info">
             {{ __('Wire logging is disabled. Enable AI wire logging to capture raw transport requests, responses, and full tool payloads for future runs.') }}
@@ -187,7 +197,7 @@ $anomalies = $readable['anomalies'] ?? [];
             @endif
         </div>
 
-        <div x-show="mode === 'readable'" x-cloak>
+        <div x-show="mode === 'readable'" x-cloak class="space-y-3">
             @include('livewire.admin.ai.control-plane.partials.wire-log-readable', [
                 'readable' => $readable,
                 'runId' => $runId,
@@ -195,38 +205,62 @@ $anomalies = $readable['anomalies'] ?? [];
         </div>
 
         <div x-show="mode === 'raw'" x-cloak class="space-y-3">
+            @if ($lifecycleRail !== null && ($lifecycleRail['total'] ?? 0) > 0)
+                @include('livewire.admin.ai.control-plane.partials.wire-log-meta-rail', [
+                    'rail' => $lifecycleRail,
+                ])
+            @endif
+
             @foreach ($entries as $index => $entry)
-            <details class="rounded-2xl border border-border-default bg-surface-card p-card-inner" @if ($index === 0) open @endif>
-                <summary class="flex cursor-pointer flex-col gap-1 text-sm text-ink sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                    <span class="min-w-0">
-                        <span class="font-medium">
-                            {{ $entry['type'] ?? __('Unknown entry') }}
-                            <span class="ml-2 text-xs font-normal text-muted">{{ __('#:number', ['number' => $entry['entry_number'] ?? (($summary['offset'] ?? 0) + $index + 1)]) }}</span>
-                        </span>
-                        <span class="ml-2 text-xs text-muted">{{ $entry['summary_preview'] ?? '{}' }}</span>
-                    </span>
-                    <x-ui.datetime :value="$entry['at'] ?? null" class="shrink-0 text-xs text-muted tabular-nums" />
-                </summary>
-                @if (($entry['preview_status'] ?? 'full') === 'line_omitted')
-                    <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                        <p class="text-warning">{{ $entry['payload_pretty'] ?? '{}' }}</p>
-                        <x-ui.button
-                            as="a"
-                            href="{{ route('admin.ai.runs.wire-log-entry', ['runId' => $runId, 'entryNumber' => $entry['entry_number'] ?? (($summary['offset'] ?? 0) + $index + 1)]) }}"
-                            target="_blank"
-                            rel="noreferrer"
-                            variant="ghost"
-                            size="sm"
-                        >
-                            {{ __('Open Raw') }}
-                        </x-ui.button>
+                @if (($entry['type'] ?? null) === 'stream_lines_collapsed')
+                    <div class="rounded-2xl border border-dashed border-border-default bg-surface-subtle px-card-inner py-3 text-xs text-muted">
+                        <p class="font-medium text-ink">
+                            {{ __('Stream deltas collapsed') }}
+                            <span class="ml-2 font-normal text-muted">{{ __('#:from – #:to (:count entries)', ['from' => $entry['from_entry_number'] ?? '', 'to' => $entry['to_entry_number'] ?? '', 'count' => $entry['count'] ?? 0]) }}</span>
+                        </p>
+                        <p class="mt-1">{{ $entry['summary_preview'] ?? '' }}</p>
                     </div>
+                @else
+                    <details class="rounded-2xl border border-border-default bg-surface-card p-card-inner" @if ($index === 0) open @endif>
+                        <summary class="flex cursor-pointer flex-col gap-1 text-sm text-ink sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                            <span class="min-w-0">
+                                <span class="font-medium">
+                                    {{ $entry['type'] ?? __('Unknown entry') }}
+                                    <span class="ml-2 text-xs font-normal text-muted">{{ __('#:number', ['number' => $entry['entry_number'] ?? (($summary['offset'] ?? 0) + $index + 1)]) }}</span>
+                                </span>
+                                @if (! empty($entry['meta_milestones']) && is_array($entry['meta_milestones']))
+                                    @foreach ($entry['meta_milestones'] as $milestone)
+                                        <x-ui.badge :variant="$milestone['severity'] ?? 'info'" class="ml-2 align-middle">
+                                            <span class="font-mono text-[9px] font-bold uppercase tracking-wider">{{ __('META') }}</span>
+                                            <span class="ml-1">{{ $milestone['label'] ?? $milestone['type'] ?? '' }}</span>
+                                        </x-ui.badge>
+                                    @endforeach
+                                @endif
+                                <span class="ml-2 text-xs text-muted">{{ $entry['summary_preview'] ?? '{}' }}</span>
+                            </span>
+                            <x-ui.datetime :value="$entry['at'] ?? null" class="shrink-0 text-xs text-muted tabular-nums" />
+                        </summary>
+                        @if (($entry['preview_status'] ?? 'full') === 'line_omitted')
+                            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                                <p class="text-warning">{{ $entry['payload_pretty'] ?? '{}' }}</p>
+                                <x-ui.button
+                                    as="a"
+                                    href="{{ route('admin.ai.runs.wire-log-entry', ['runId' => $runId, 'entryNumber' => $entry['entry_number'] ?? (($summary['offset'] ?? 0) + $index + 1)]) }}"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    variant="ghost"
+                                    size="sm"
+                                >
+                                    {{ __('Open Raw') }}
+                                </x-ui.button>
+                            </div>
+                        @endif
+                        @if (($entry['preview_status'] ?? 'full') !== 'line_omitted')
+                            <pre class="mt-3 overflow-x-auto rounded-2xl bg-surface-subtle p-3 text-[11px] text-muted">{{ $entry['payload_pretty'] ?? '{}' }}</pre>
+                        @endif
+                    </details>
                 @endif
-                @if (($entry['preview_status'] ?? 'full') !== 'line_omitted')
-                    <pre class="mt-3 overflow-x-auto rounded-2xl bg-surface-subtle p-3 text-[11px] text-muted">{{ $entry['payload_pretty'] ?? '{}' }}</pre>
-                @endif
-            </details>
-        @endforeach
+            @endforeach
         </div>
     @endif
 </div>

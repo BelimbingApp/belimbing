@@ -503,7 +503,7 @@
                                         @if ($canAccessControlPlane && isset($sessionTurnTargets[$session->id]))
                                             <div class="mt-0.5">
                                                 <a
-                                                    href="{{ route('admin.ai.control-plane', ['tab' => 'timeline', 'runId' => $sessionTurnTargets[$session->id]['run_id']]) }}"
+                                                    href="{{ route('admin.ai.control-plane', ['tab' => 'inspector', 'runId' => $sessionTurnTargets[$session->id]['run_id']]) }}"
                                                     wire:navigate
                                                     class="text-[10px] text-accent hover:underline"
                                                 >
@@ -968,7 +968,7 @@
                             </x-ui.button>
                             @if ($canAccessControlPlane && $selectedSessionTurnTarget)
                                 <a
-                                    href="{{ route('admin.ai.control-plane', ['tab' => 'timeline', 'runId' => $selectedSessionTurnTarget['run_id']]) }}"
+                                    href="{{ route('admin.ai.control-plane', ['tab' => 'inspector', 'runId' => $selectedSessionTurnTarget['run_id']]) }}"
                                     wire:navigate
                                     class="inline-flex items-center gap-1 rounded-full border border-border-default bg-surface-card px-2 py-1 text-[11px] text-accent hover:border-accent/40 hover:bg-surface-subtle"
                                 >

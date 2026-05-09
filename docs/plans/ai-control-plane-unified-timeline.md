@@ -1,7 +1,7 @@
 # ai-control-plane-unified-timeline
 
-**Status:** Phase 3 Complete (with documented deviations) — Phase 4 under consideration
-**Last Updated:** 2026-05-08
+**Status:** Phase 4 Complete (Option C: consolidated on Run Inspector / Wire Log)
+**Last Updated:** 2026-05-09
 **Sources:** `backup/pre-unified-entity` branch (snapshot before Phase 1); DB backup `01kr2w72bssreaxjxy2gss0gqp`; wire log backup `storage/app/ai/wire-logs-backup-pre-unified/` (26 files, 75 MB — delete after Phase 2 is confirmed stable)
 **Agents:** claude/sonnet-4-6, amp/opus-4-7, codex/gpt-5.5-medium, amp/gpt-5.5-medium
 
@@ -102,13 +102,13 @@ Delta events (`assistant.thinking_delta`, `assistant.output_delta`, `tool.stdout
 
 ### Tabs after refactor
 
-> **Note (post-implementation):** Phase 3 originally intended to add Prompt Timeline as a 5th tab next to an unchanged Turn Inspector. The shipped change collapsed that early — Turn Inspector was removed and Prompt Timeline took its tab slot — so the surface is now 4 tabs. The table reflects what shipped.
+> **Note (post-implementation):** Phase 3 originally intended to add Prompt Timeline as a 5th tab next to an unchanged Turn Inspector. The shipped change collapsed that early — Turn Inspector was removed and Prompt Timeline took its tab slot — so the surface was 4 tabs through Phase 3. Phase 4 (Option C) retired the Prompt Timeline tab and consolidated lifecycle milestones into the Run Inspector / Wire Log card, leaving **3 control-plane drill-down tabs** (Run Inspector, Health & Presence, Lifecycle Controls).
 
-| Tab | Before | After (Phase 3 — shipped) | Phase 4 (optional) |
+| Tab | Before | After (Phase 3 — shipped) | After Phase 4 (planned) |
 |---|---|---|---|
-| Run Inspector | Drill by run ID, wire log + transcript | Retained as deep-dive surface; embeds Prompt Timeline inline and keeps the Wire Log card for readable/raw transport drill-down | Unchanged |
+| Run Inspector | Drill by run ID, wire log + transcript | Retained as deep-dive surface; embeds Prompt Timeline inline and keeps the Wire Log card for readable/raw transport drill-down | **Single drill-down surface.** Embedded Prompt Timeline removed; Wire Log card is the canonical view, annotated with `AiRunEvent` lifecycle milestones in both readable and raw modes |
 | Turn Inspector | Drill by turn ID, full event timeline | **Removed** — collapsed early into Prompt Timeline | (removed) |
-| Prompt Timeline | Does not exist | **New** — replaces Turn Inspector tab; chat + non-chat run IDs accepted (no source filter) | TBD pending Phase 4 memory-safety decision |
+| Prompt Timeline | Does not exist | **New** — replaces Turn Inspector tab; chat + non-chat run IDs accepted (no source filter) | **Removed.** Merged-list surface retired; meta milestones move into the Wire Log card. Tab slot freed (or repurposed in Phase 5) |
 | Health & Presence | Unchanged | Unchanged | Unchanged |
 | Lifecycle Controls | Unchanged | Unchanged | Unchanged |
 
@@ -216,79 +216,59 @@ After Phase 3 shipped, a naming inconsistency was discovered: PHP returned `turn
 - [x] Alpine `agentChatStream` data: `selectedTurnId` → `selectedRunId`, `currentTurnId` → `currentRunId`, `turnRegistry` → `runRegistry` — claude-sonnet-4-6
 - [x] All JS methods and references inside `chat.blade.php` updated to use `runId`-based naming throughout — claude-sonnet-4-6
 
-### Phase 4 — Timeline memory safety and Wire Log consolidation
+### Phase 4 — Consolidate on Run Inspector / Wire Log (Option C)
 
-**Status:** Under consideration — problem documented, solution not yet chosen.
+**Status:** Complete.
 
-#### Problem
+#### Decision
 
-`buildPromptTimelineView()` calls `WireLogger::read()`, which slurps the entire JSONL file into a PHP array before merging with meta events. For a long-running agent a single run can produce tens of thousands of `llm.stream_line` entries. The Wire Log card faced this same crash when it rendered all entries at once; it solved it by introducing `WireLogger::preview()` — a file-offset window that decodes only N lines per request. The Timeline has no equivalent guard and will eventually crash PHP on a sufficiently large run.
+The Prompt Timeline experiment proved the merged raw timeline is the wrong abstraction for this workload. We **retire the Prompt Timeline as a separate surface** and **consolidate diagnostics on Run Inspector / Wire Log**, annotating it with bounded `AiRunEvent` lifecycle milestones. The two-source storage split (DB = bounded lifecycle facts, JSONL = unbounded transport log) stays — the mismatch was at the *surface*, not at storage.
 
-Meta events are not the problem. Even the most active run produces at most hundreds of `AiRunEvent` rows — loading them fully is always safe. The danger is exclusively in the wire JSONL.
+**Why not the alternatives:** Option A (paginate wire by file offset, overlay meta) keeps the same misleading "one merged list" model with fuzzy boundary placement. Option B (streaming JSONL iterator + cursor) is the right primitive *if* exact merged chronology is ever a real product requirement, but right now it solves a memory problem more than a product problem and adds machinery without a clear payoff. Option D (dual-panel layout) preserves the split visually instead of simplifying it. Unifying storage to a single source (DB-only or JSONL-only) was considered and rejected: DB-only ingests tens of thousands of `llm.stream_line` rows per long run and pollutes the operational store; JSONL-only loses cheap control-plane queries (recent runs, stuck-run detection, billing aggregates) and contradicts the DB-first usage accounting rule.
 
-#### Constraints
+#### Outcomes
 
-1. **Two heterogeneous sources.** Wire entries are indexed by JSONL file line position; meta events are indexed by DB `seq` / `created_at`. A merged chronological view cannot be paginated by file offset alone — to show "page 3" (wire lines 200–300) you would need to know which meta events fall in that time window, but their timestamps are unknown until you read those lines.
-2. **Stream deltas dominate volume.** `llm.stream_line` entries make up the bulk of any large JSONL file. With `collapseDelta=true` they are currently skipped via `continue`, but `WireLogger::read()` still materialises every line before the caller can skip anything.
-3. **True chronological order requires the full merge.** Any windowing scheme that splits the merged stream into pages breaks global ordering — a meta event at time T may fall in wire page 5's time range but is invisible until the user navigates there.
+- Single drill-down surface — Run Inspector embeds the Wire Log card (readable + raw) and is the canonical answer to "what happened in this run?"
+- `AiRunEvent` lifecycle milestones are visible alongside wire content without claiming exact full-log chronological interleave
+- No operator path can crash PHP by reading an unbounded JSONL — `WireLogger::read()` is removed from operator code; `preview()` is hard-capped even on long delta bursts
+- Tab count drops back to 3 control-plane drill-down surfaces (Run Inspector, Health & Presence, Lifecycle Controls); the freed tab slot is left empty for now and revisited in Phase 5
 
-#### Options
+#### Honesty in copy
 
-**Option A — Load meta fully, paginate wire by file offset (approximate order)**
+The Wire Log card surfaces are labelled honestly:
 
-Continue reading meta events in full (safe). Feed wire entries through the existing `preview()` window. Overlay the meta events that fall within the current wire window's timestamp range. Events outside the window are shown as a prologue/epilogue.
+- **Readable** — reconstructed diagnostic transcript (via `StreamAssembler`) with lifecycle milestones injected as structural anchors between attempts / stream blocks
+- **Raw** — paginated transport view with a compact meta rail summarising lifecycle events for the run, plus in-window highlighting of meta events whose timestamps fall inside the current `preview()` window
+- We do **not** imply exact full-log merged chronology between meta and wire entries
 
-- Reuses existing pagination infrastructure with minimal change.
-- Order is approximate: a meta event whose timestamp falls between two wire pages is shown at the boundary, not precisely in-sequence.
-- Relatively low implementation risk.
+#### Scope
 
-**Option B — Streaming JSONL iterator, skip deltas, stop after N visible entries**
+- [x] Retire the merged-list service: delete `RunDiagnosticService::buildPromptTimelineView()` and its private helpers (`collapsedDeltaEntry`, `timelineTimestampOrder`, `wireEntryLabel`, `wireEntrySummary` — keep the wire entry labelling helpers if needed by readable mode), and drop `RunDiagnosticServicePromptTimelineTest.php` — amp/gpt-5.5-medium
+- [x] Remove `partials/prompt-timeline.blade.php` and any `prompt-timeline*` partials it pulls in — amp/gpt-5.5-medium
+- [x] Strip Prompt Timeline state and methods from `ControlPlane`: `inspectTimelineRunId`, `timelineCollapseDelta`, `timelineError`, `inspectTimeline`, `toggleTimelineDelta`, `inspectTimelineFromRun`, the `timeline` branch of `mount()`/`updatedActiveTab()`, the `inspectorTimeline` / `timelineView` view-model entries, and the `buildTimelineViews()` helper — amp/gpt-5.5-medium
+- [x] Remove the `timeline` tab from `control-plane.blade.php` and any links/buttons that route into it (chat, control-plane row actions); replace those entry points with Run Inspector links keyed by run ULID — amp/gpt-5.5-medium
+- [x] Inject lifecycle milestones into Wire Log readable mode: add a service method on `RunDiagnosticService` (or a focused collaborator under `Services/ControlPlane/WireLog/`) that loads ordered `AiRunEvent` rows for a run and annotates the `StreamAssembler` output with structural milestones (`run.started`, `run.phase_changed`, terminal markers, `tool.denied`, heartbeats with `gap_ms` warnings); milestones render as a distinct semantic-token block, not interleaved as fake transport rows — amp/gpt-5.5-medium
+- [x] Add a compact meta rail to Wire Log raw mode: render a top-of-card summary of meta events for the run (count by type, terminal status, phase progression) and visually mark wire entries whose surrounding window contains meta events; this rail is always safe because meta event count is bounded — amp/gpt-5.5-medium
+- [x] Delete `WireLogger::read()` (operator-facing path); confirm no remaining callers other than tests, then drop the method and its tests. If a small internal helper is needed by the milestone injector, expose only a bounded `eachEntry(callable $visitor): void` generator-style API that decodes one JSONL line at a time without building a full array — amp/gpt-5.5-medium
+- [x] Cap `WireLogger::preview()`'s "extend through stream block" behaviour so a pathological consecutive `llm.stream_line` burst cannot grow the working set past a hard ceiling — collapse trailing deltas in the page into a single summarised placeholder when the cap is hit (mirrors the existing `PREVIEW_ENTRY_LIMIT_MAX` intent) — amp/gpt-5.5-medium
+- [x] Tests: drop `RunDiagnosticServicePromptTimelineTest`; add coverage for (a) milestone injection into readable output, (b) the meta-rail summary in raw mode, (c) the `preview()` delta-burst cap behaviour, (d) the Run Inspector view-model returning milestones for a run with both events and wire entries; existing Wire Log readable/raw and pagination tests stay — amp/gpt-5.5-medium
+- [x] Cleanup: remove dead helpers, dead translation keys (`Run ID is required.` if only the timeline used it), and any blade partials no longer referenced; update the `Tabs after refactor` table preamble note to reflect 3 drill-down tabs — amp/gpt-5.5-medium
 
-Replace `WireLogger::read()` with a line-by-line generator. The generator skips `llm.stream_line` entries when `collapseDelta=true` and stops after emitting N non-delta entries. The working set stays small regardless of file size. Meta events are loaded fully and merged against the streamed wire entries.
+#### Risks and guardrails
 
-- Gives true chronological order for the visible window.
-- Does not support random-access pagination (no "jump to entry 500") without a separate file offset index.
-- Generator replaces the array contract of `read()` — callers need updating.
-- Higher implementation cost; good long-term foundation.
-
-**Option C — Eliminate the Timeline card; extend Wire Log to include meta events**
-
-Remove `buildPromptTimelineView()` and the Prompt Timeline card entirely. Extend the Wire Log card (which already has safe pagination) to interleave meta events alongside wire entries. The Wire Log's readable mode (via `StreamAssembler`) is already a higher-level view immune to the line-count problem; meta event milestones could be injected as structural anchors.
-
-- One card instead of two — removes the dual-surface confusion.
-- The readable mode (`StreamAssembler`) is already the best view for most diagnostic needs; adding meta milestones there is lower-risk than a new merged raw view.
-- The raw mode loses strict chronological ordering between meta and wire entries (same page-boundary problem as Option A).
-- Eliminates Timeline-specific code (`buildPromptTimelineView`, `prompt-timeline.blade.php`, related Livewire state).
-
-**Option D — Dual-panel layout in one card (meta rail + paginated wire)**
-
-Show meta events as a fixed left-rail timeline (always loaded, always visible). Show wire entries in a paginated right panel. The two panels share a time axis visually but are not interleaved in a single list.
-
-- Avoids the merge-pagination problem entirely by keeping the sources visually adjacent but separate.
-- May require significant new layout work.
-- Operators lose single-scroll chronological reading but gain stable navigation.
-
-#### Decision criteria
-
-- If **strict chronological order** across both sources matters for diagnosis: Option B is the only correct solution, at the cost of implementation work.
-- If **approximate order** is acceptable and speed of delivery matters: Option A or C.
-- If the **Wire Log readable mode** already answers 80 % of diagnostic questions and the Timeline is mostly used for the raw merged view: Option C (consolidate) is the most pragmatic.
-
-#### Open questions
-
-1. Does the Readable mode need meta event milestones to be diagnostically complete, or is the raw merged chronological view essential?
-2. Is random-access pagination (jump to entry N) a requirement for long-run diagnosis, or is sequential streaming sufficient?
-3. Should the JSONL file grow without bound, or should `WireLogger` rotate / cap file size at write time as a complementary safety measure?
+- **Risk:** removing the Prompt Timeline tab will look like backing out of Phase 3. **Guardrail:** frame in commit/release notes as destructive evolution — the Prompt Timeline experiment validated the merged view's UX cost and discovered a memory hazard; the lessons (meta milestones + wire-first surface) are kept, the unsafe surface is dropped.
+- **Risk:** operators who relied on the merged raw stream lose strict chronological reading. **Guardrail:** readable mode already answers most diagnostic questions; the meta rail in raw mode preserves "what lifecycle events occurred" without faking interleave; if exact merged chronology becomes a real recurring need, Option B (cursor-based merged reader with a JSONL byte-offset index) is the correct next step — not storage unification.
+- **Risk:** `preview()`'s stream-block extension cap could hide useful deltas. **Guardrail:** the placeholder shows the suppressed range and count, mirroring the existing collapsed-delta UX; readable mode remains the authoritative reconstruction.
 
 ---
 
 ### Phase 5 — Operator surface for non-chat runs (optional)
 
-Once Phase 3 ships and the timeline is the primary diagnostic surface, lift the chat-only restriction and rename the legacy tab.
+After Phase 4, Run Inspector is the single drill-down surface. Phase 5 hardens the experience for non-chat runs and decides whether to repurpose the freed tab slot.
 
 **Scope:**
 
-- [ ] Drop the `source='chat'` filter on the Prompt Timeline run picker; surface background and orchestration runs alongside chat runs (note: today no source filter is applied — this is now about an explicit picker UX rather than lifting a guard)
-- [ ] Decide whether a Session Inspector surface is still needed for session-level navigation (lists run envelopes per session, links into the Prompt Timeline) — the old Turn Inspector is already gone, so this is a green-field decision rather than a rename
-- [ ] Decide whether background paths should emit minimal lifecycle events (`run.started`, `run.completed`, `run.failed`) for symmetric timeline rendering, or whether their wire-log-only timeline is acceptable
-- [ ] Update `Tabs after refactor` to reflect the final state
+- [ ] Confirm Run Inspector accepts non-chat run ULIDs cleanly (no `source='chat'` assumption in lookups, view-models, or links from chat / control-plane lists); add a focused test for a `source='background'` run rendering with empty meta rail and full wire content
+- [ ] Decide whether a Session Inspector surface is still needed for session-level navigation (lists run envelopes per session, links into Run Inspector); if yes, this is the natural occupant of the freed tab slot from Phase 4
+- [ ] Decide whether background paths should emit minimal lifecycle events (`run.started`, `run.completed`, `run.failed`) so the meta rail stays useful for non-chat runs, or whether their wire-log-only diagnostics are acceptable
+- [ ] Update `Tabs after refactor` to reflect the final state once Phase 5 lands

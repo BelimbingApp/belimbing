@@ -15,7 +15,7 @@ trait MapsControlPlaneState
 {
     private function resolveTab(string $tab): string
     {
-        return in_array($tab, ['inspector', 'timeline', 'health', 'lifecycle'], true)
+        return in_array($tab, ['inspector', 'health', 'lifecycle'], true)
             ? $tab
             : 'inspector';
     }
@@ -86,6 +86,8 @@ trait MapsControlPlaneState
             'wire_log_summary' => $runView['wire_log_summary'],
             'wire_logging_enabled' => $runView['wire_logging_enabled'],
             'run_id' => $runView['run_id'],
+            'lifecycle_milestones' => $runView['lifecycle_milestones'] ?? [],
+            'lifecycle_rail' => $runView['lifecycle_rail'] ?? null,
         ];
     }
 
