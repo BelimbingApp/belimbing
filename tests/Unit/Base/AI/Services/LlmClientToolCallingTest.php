@@ -25,6 +25,7 @@ const TEST_API_BASE_URL = 'https://api.example.com/v1';
 const LLM_TOOL_CALLING_GREETING = 'Hello!';
 const LLM_TOOL_CALLING_MOONSHOT_MODEL = 'moonshotai/kimi-k2.5';
 const LLM_TOOL_CALLING_WEATHER_TOOL_DESCRIPTION = 'Look up weather by city.';
+const LLM_SSE_CONTENT_TYPE = 'text/event-stream';
 
 function fakeChatCompletionText(string $text = 'Hi'): void
 {
@@ -155,10 +156,10 @@ data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}],"usage":null}
 data: [DONE]
 SSE;
 
-        Http::fake(function ($request, array $options) use (&$optionsSeen, $payload) {
+        Http::fake(function ($_request, array $options) use (&$optionsSeen, $payload) {
             $optionsSeen = $options;
 
-            return Http::response($payload, 200, ['Content-Type' => 'text/event-stream']);
+            return Http::response($payload, 200, ['Content-Type' => LLM_SSE_CONTENT_TYPE]);
         });
 
         $client = new LlmClient;
@@ -193,6 +194,9 @@ SSE;
 
         expect($request->isCancelRequested())->toBeTrue();
     });
+});
+
+describe('LlmClient stream behaviour and provider request shaping', function () {
 
     it('classifies heartbeat-only stream progress as a timeout', function () {
         $protocol = new class extends AbstractLlmProtocolClient
@@ -257,7 +261,7 @@ data: [DONE]
 SSE;
 
         Http::fake([
-            '*/chat/completions' => Http::response($payload, 200, ['Content-Type' => 'text/event-stream']),
+            '*/chat/completions' => Http::response($payload, 200, ['Content-Type' => LLM_SSE_CONTENT_TYPE]),
         ]);
 
         $client = new LlmClient;
@@ -278,6 +282,9 @@ SSE;
                 && ($body['stream_options']['include_usage'] ?? null) === true;
         });
     });
+});
+
+describe('LlmClient provider headers and Moonshot sampling', function () {
 
     it('maps GitHub Copilot IDE headers through provider request mapping', function () {
         fakeChatCompletionText();
@@ -769,7 +776,7 @@ data: {"type":"message_stop"}
 SSE;
 
         Http::fake([
-            '*/messages' => Http::response($payload, 200, ['Content-Type' => 'text/event-stream']),
+            '*/messages' => Http::response($payload, 200, ['Content-Type' => LLM_SSE_CONTENT_TYPE]),
         ]);
 
         $client = new LlmClient;

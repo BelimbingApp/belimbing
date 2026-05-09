@@ -296,15 +296,22 @@ class LifecycleControlService
     {
         $stats = $this->pricingSnapshotRefresher->stats();
         $lastRefreshed = $stats['last_refreshed_at'] ?? null;
-        $current = $stats['snapshot_date'] !== null
-            ? __('Current LiteLLM snapshot: :models model(s), :rows row(s), dated :date (:age day(s) old). Last refreshed: :refreshed.', [
+
+        if ($stats['snapshot_date'] !== null) {
+            $refreshedLabel = is_string($lastRefreshed) && $lastRefreshed !== ''
+                ? $lastRefreshed
+                : __('unknown');
+
+            $current = __('Current LiteLLM snapshot: :models model(s), :rows row(s), dated :date (:age day(s) old). Last refreshed: :refreshed.', [
                 'models' => number_format((int) $stats['model_count']),
                 'rows' => number_format((int) $stats['row_count']),
                 'date' => $stats['snapshot_date'],
                 'age' => $stats['age_days'],
-                'refreshed' => is_string($lastRefreshed) && $lastRefreshed !== '' ? $lastRefreshed : __('unknown'),
-            ])
-            : __('No LiteLLM pricing snapshot has been imported yet.');
+                'refreshed' => $refreshedLabel,
+            ]);
+        } else {
+            $current = __('No LiteLLM pricing snapshot has been imported yet.');
+        }
 
         return new LifecyclePreview(
             action: LifecycleAction::RefreshPricingSnapshot,

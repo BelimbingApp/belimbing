@@ -49,6 +49,7 @@ $tooltipId = filled($tooltip) ? 'badge-tooltip-'.\Illuminate\Support\Str::lower(
     >
         <span
             x-ref="trigger"
+            role="button"
             tabindex="0"
             @mouseenter="show()"
             @mouseleave="open = false"

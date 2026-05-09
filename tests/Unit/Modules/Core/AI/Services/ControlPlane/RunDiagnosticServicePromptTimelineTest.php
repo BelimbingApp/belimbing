@@ -39,10 +39,10 @@ beforeEach(function (): void {
             $total = 0;
 
             foreach (glob($this->root.'/*.jsonl') ?: [] as $path) {
-                $size = @filesize($path);
+                $bytes = @filesize($path);
 
-                if ($size !== false) {
-                    $total += $size;
+                if (is_int($bytes)) {
+                    $total += $bytes;
                 }
             }
 
@@ -75,12 +75,18 @@ function ptlMakeRun(string $runId, array $overrides = []): AiRun
 
 function ptlAddEvent(AiRun $run, RunEventType $type, int $seq, array $payload = [], Carbon|string|null $createdAt = null): AiRunEvent
 {
+    $created = match (true) {
+        $createdAt instanceof Carbon => $createdAt,
+        $createdAt !== null => Carbon::parse($createdAt),
+        default => now()->addMilliseconds($seq * 100),
+    };
+
     return AiRunEvent::unguarded(fn () => AiRunEvent::query()->create([
         'run_id' => $run->id,
         'seq' => $seq,
         'event_type' => $type,
         'payload' => $payload ?: null,
-        'created_at' => $createdAt instanceof Carbon ? $createdAt : ($createdAt !== null ? Carbon::parse($createdAt) : now()->addMilliseconds($seq * 100)),
+        'created_at' => $created,
     ]));
 }
 

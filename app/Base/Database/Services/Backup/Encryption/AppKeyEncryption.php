@@ -143,6 +143,51 @@ final class AppKeyEncryption implements EncryptionMode
 
     public function decryptFile(string $sourcePath, string $destinationPath, ?Manifest $manifest = null): void
     {
+        $dek = $this->unwrapDekForArtifact($manifest);
+
+        if (! is_file($sourcePath)) {
+            sodium_memzero($dek);
+            throw BackupException::artifactNotFound($sourcePath);
+        }
+
+        if (file_exists($destinationPath)) {
+            sodium_memzero($dek);
+            throw BackupException::restoreFailed("Destination already exists: {$destinationPath}");
+        }
+
+        $in = @fopen($sourcePath, 'rb');
+        if ($in === false) {
+            sodium_memzero($dek);
+            throw BackupException::decryptionFailed("Could not open artifact: {$sourcePath}");
+        }
+
+        $out = @fopen($destinationPath, 'wb');
+        if ($out === false) {
+            fclose($in);
+            sodium_memzero($dek);
+            throw BackupException::decryptionFailed("Could not open destination: {$destinationPath}");
+        }
+        @chmod($destinationPath, 0600);
+
+        try {
+            $this->pullSecretstreamFileToPlaintext($in, $out, $dek, $sourcePath, $destinationPath);
+        } catch (SodiumException $e) {
+            @unlink($destinationPath);
+            throw BackupException::decryptionFailed($e->getMessage(), $e);
+        } catch (BackupException $e) {
+            @unlink($destinationPath);
+            throw $e;
+        } finally {
+            fclose($in);
+            fclose($out);
+        }
+    }
+
+    /**
+     * @throws BackupException
+     */
+    private function unwrapDekForArtifact(?Manifest $manifest): string
+    {
         if ($manifest === null || $manifest->wrappedDek === null || $manifest->dekNonce === null) {
             throw BackupException::decryptionFailed(
                 'app-key decryption requires manifest context (wrapped_dek, dek_nonce). Pass the sidecar manifest to decryptFile().'
@@ -171,86 +216,62 @@ final class AppKeyEncryption implements EncryptionMode
             throw BackupException::decryptionFailed('DEK authentication failed; wrong APP_KEY or tampered manifest');
         }
 
-        if (! is_file($sourcePath)) {
-            sodium_memzero($dek);
-            throw BackupException::artifactNotFound($sourcePath);
+        return $dek;
+    }
+
+    /**
+     * @param  resource  $in
+     * @param  resource  $out
+     *
+     * @throws BackupException
+     */
+    private function pullSecretstreamFileToPlaintext($in, $out, string $dek, string $sourcePath, string $destinationPath): void
+    {
+        $headerBytes = @fread($in, SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES);
+        if (! is_string($headerBytes) || strlen($headerBytes) !== SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES) {
+            throw BackupException::decryptionFailed("Artifact too short or unreadable: {$sourcePath}");
         }
 
-        if (file_exists($destinationPath)) {
-            sodium_memzero($dek);
-            throw BackupException::restoreFailed("Destination already exists: {$destinationPath}");
-        }
+        $state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($headerBytes, $dek);
+        sodium_memzero($dek);
 
-        $in = @fopen($sourcePath, 'rb');
-        if ($in === false) {
-            sodium_memzero($dek);
-            throw BackupException::decryptionFailed("Could not open artifact: {$sourcePath}");
-        }
+        $sawFinal = false;
 
-        $out = @fopen($destinationPath, 'wb');
-        if ($out === false) {
-            fclose($in);
-            sodium_memzero($dek);
-            throw BackupException::decryptionFailed("Could not open destination: {$destinationPath}");
-        }
-        @chmod($destinationPath, 0600);
-
-        try {
-            $headerBytes = @fread($in, SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES);
-            if (! is_string($headerBytes) || strlen($headerBytes) !== SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES) {
-                throw BackupException::decryptionFailed("Artifact too short or unreadable: {$sourcePath}");
+        while (true) {
+            $lenBytes = @fread($in, 4);
+            if ($lenBytes === false || $lenBytes === '') {
+                break; // EOF
+            }
+            if (strlen($lenBytes) !== 4) {
+                throw BackupException::decryptionFailed("Truncated chunk length in {$sourcePath}");
             }
 
-            $state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($headerBytes, $dek);
-            sodium_memzero($dek);
-
-            $sawFinal = false;
-
-            while (true) {
-                $lenBytes = @fread($in, 4);
-                if ($lenBytes === false || $lenBytes === '') {
-                    break; // EOF
+            $chunkLen = (int) unpack('N', $lenBytes)[1];
+            $cipher = '';
+            while (strlen($cipher) < $chunkLen) {
+                $part = @fread($in, $chunkLen - strlen($cipher));
+                if ($part === false || $part === '') {
+                    throw BackupException::decryptionFailed("Truncated chunk body in {$sourcePath}");
                 }
-                if (strlen($lenBytes) !== 4) {
-                    throw BackupException::decryptionFailed("Truncated chunk length in {$sourcePath}");
-                }
-
-                $chunkLen = (int) unpack('N', $lenBytes)[1];
-                $cipher = '';
-                while (strlen($cipher) < $chunkLen) {
-                    $part = @fread($in, $chunkLen - strlen($cipher));
-                    if ($part === false || $part === '') {
-                        throw BackupException::decryptionFailed("Truncated chunk body in {$sourcePath}");
-                    }
-                    $cipher .= $part;
-                }
-
-                $result = sodium_crypto_secretstream_xchacha20poly1305_pull($state, $cipher);
-                if ($result === false) {
-                    throw BackupException::decryptionFailed('Chunk decryption failed; artifact corrupt or tampered');
-                }
-
-                [$plain, $tag] = $result;
-                $this->fwriteAll($out, $plain, $destinationPath);
-
-                if ($tag === SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_FINAL) {
-                    $sawFinal = true;
-                    break;
-                }
+                $cipher .= $part;
             }
 
-            if (! $sawFinal) {
-                throw BackupException::decryptionFailed('Artifact truncated: TAG_FINAL not reached');
+            $result = sodium_crypto_secretstream_xchacha20poly1305_pull($state, $cipher);
+            if ($result === false) {
+                throw BackupException::decryptionFailed('Chunk decryption failed; artifact corrupt or tampered');
             }
-        } catch (SodiumException $e) {
-            @unlink($destinationPath);
-            throw BackupException::decryptionFailed($e->getMessage(), $e);
-        } catch (BackupException $e) {
-            @unlink($destinationPath);
-            throw $e;
-        } finally {
-            fclose($in);
-            fclose($out);
+
+            [$plain, $tag] = $result;
+            $this->fwriteAll($out, $plain, $destinationPath);
+
+            if ($tag === SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_FINAL) {
+                $sawFinal = true;
+                break;
+            }
+        }
+
+        if (! $sawFinal) {
+            throw BackupException::decryptionFailed('Artifact truncated: TAG_FINAL not reached');
         }
     }
 

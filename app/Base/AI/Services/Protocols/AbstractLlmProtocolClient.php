@@ -286,13 +286,13 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
             try {
                 $chunk = $stream->read(8192);
             } catch (\RuntimeException $e) {
-                if (! $this->isStreamReadTimeout($e)) {
+                $timeoutOutcome = $this->sseStreamReadTimeoutOutcome($request, $stream, $e);
+
+                if ($timeoutOutcome === 'rethrow') {
                     throw $e;
                 }
 
-                if ($request->isCancelRequested()) {
-                    $stream->close();
-
+                if ($timeoutOutcome === 'stop') {
                     return;
                 }
 
@@ -310,18 +310,61 @@ abstract class AbstractLlmProtocolClient implements LlmProtocolClient
                 $firstByteRecorded = true;
             }
 
-            $buffer .= $chunk;
-            $lines = explode("\n", $buffer);
-            $buffer = (string) array_pop($lines);
-
-            foreach ($lines as $line) {
-                $trimmedLine = trim($line);
-                $transportTap?->streamLine($trimmedLine);
-
-                yield $trimmedLine;
-            }
+            yield from $this->yieldSseLinesFromBufferAppend($chunk, $buffer, $transportTap);
         }
 
+        yield from $this->yieldFlushTrailingSseBuffer($buffer, $flushTrailingBuffer, $transportTap);
+    }
+
+    /**
+     * @return 'rethrow'|'yield_empty'|'stop'
+     */
+    private function sseStreamReadTimeoutOutcome(
+        ChatRequest $request,
+        StreamInterface $stream,
+        \RuntimeException $e,
+    ): string {
+        if (! $this->isStreamReadTimeout($e)) {
+            return 'rethrow';
+        }
+
+        if ($request->isCancelRequested()) {
+            $stream->close();
+
+            return 'stop';
+        }
+
+        return 'yield_empty';
+    }
+
+    /**
+     * @return Generator<int, string>
+     */
+    private function yieldSseLinesFromBufferAppend(
+        string $chunk,
+        string &$buffer,
+        ?LlmTransportTap $transportTap,
+    ): Generator {
+        $buffer .= $chunk;
+        $lines = explode("\n", $buffer);
+        $buffer = (string) array_pop($lines);
+
+        foreach ($lines as $line) {
+            $trimmedLine = trim($line);
+            $transportTap?->streamLine($trimmedLine);
+
+            yield $trimmedLine;
+        }
+    }
+
+    /**
+     * @return Generator<int, string>
+     */
+    private function yieldFlushTrailingSseBuffer(
+        string $buffer,
+        bool $flushTrailingBuffer,
+        ?LlmTransportTap $transportTap,
+    ): Generator {
         if (! $flushTrailingBuffer || trim($buffer) === '') {
             return;
         }

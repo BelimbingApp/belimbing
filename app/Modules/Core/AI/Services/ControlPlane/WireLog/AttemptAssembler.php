@@ -298,26 +298,7 @@ final class AttemptAssembler
         $finishReason = null;
 
         foreach ($entries as $entry) {
-            $type = is_string($entry['type'] ?? null) ? $entry['type'] : '';
-
-            if ($type !== 'llm.stream_line') {
-                continue;
-            }
-
-            $decoded = is_array($entry['decoded_payload'] ?? null) ? $entry['decoded_payload'] : null;
-            $rawLine = is_string($decoded['raw_line'] ?? null) ? $decoded['raw_line'] : '';
-
-            if (! str_starts_with($rawLine, StreamAssembler::SSE_DATA_PREFIX) || $rawLine === StreamAssembler::SSE_DONE_LINE) {
-                continue;
-            }
-
-            $payload = BlbJson::decodeArray(substr($rawLine, strlen(StreamAssembler::SSE_DATA_PREFIX)));
-
-            if (! is_array($payload)) {
-                continue;
-            }
-
-            $candidate = $payload['choices'][0]['finish_reason'] ?? null;
+            $candidate = $this->finishReasonFromStreamLineEntry($entry);
 
             if (is_string($candidate) && $candidate !== '') {
                 $finishReason = $candidate;
@@ -325,6 +306,35 @@ final class AttemptAssembler
         }
 
         return $finishReason;
+    }
+
+    /**
+     * @param  array<string, mixed>  $entry
+     */
+    private function finishReasonFromStreamLineEntry(array $entry): ?string
+    {
+        $type = is_string($entry['type'] ?? null) ? $entry['type'] : '';
+
+        if ($type !== 'llm.stream_line') {
+            return null;
+        }
+
+        $decoded = is_array($entry['decoded_payload'] ?? null) ? $entry['decoded_payload'] : null;
+        $rawLine = is_string($decoded['raw_line'] ?? null) ? $decoded['raw_line'] : '';
+
+        if (! str_starts_with($rawLine, StreamAssembler::SSE_DATA_PREFIX) || $rawLine === StreamAssembler::SSE_DONE_LINE) {
+            return null;
+        }
+
+        $payload = BlbJson::decodeArray(substr($rawLine, strlen(StreamAssembler::SSE_DATA_PREFIX)));
+
+        if (! is_array($payload)) {
+            return null;
+        }
+
+        $candidate = $payload['choices'][0]['finish_reason'] ?? null;
+
+        return is_string($candidate) && $candidate !== '' ? $candidate : null;
     }
 
     /**

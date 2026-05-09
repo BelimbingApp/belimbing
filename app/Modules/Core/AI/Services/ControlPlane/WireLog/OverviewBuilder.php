@@ -22,33 +22,13 @@ final class OverviewBuilder
      */
     public function buildOverview(array $entries, array $attempts, array $anomalies, callable $diffMs): array
     {
-        $streamChunks = 0;
-        $errorCount = 0;
-        $toolCallCount = 0;
-
-        foreach ($entries as $entry) {
-            $type = is_string($entry['type'] ?? null) ? $entry['type'] : '';
-
-            if ($type === 'llm.stream_line') {
-                $streamChunks++;
-            }
-
-            if ($type === 'llm.error') {
-                $errorCount++;
-            }
-        }
+        ['stream_chunks' => $streamChunks, 'error_count' => $errorCount] = $this->countStreamHealthFromEntries($entries);
 
         $finalAttempt = $attempts !== [] ? $attempts[count($attempts) - 1] : null;
         $finishReason = $finalAttempt['finish_reason'] ?? null;
         $finalOutcome = $finalAttempt['outcome'] ?? 'pending';
 
-        foreach ($attempts as $attempt) {
-            foreach ($attempt['sections'] as $section) {
-                if (($section['kind'] ?? null) === 'stream_block') {
-                    $toolCallCount += count($section['tool_calls']);
-                }
-            }
-        }
+        $toolCallCount = $this->countToolCallsFromAttempts($attempts);
 
         $firstAt = EntryAtBounds::firstAt($entries);
         $lastAt = EntryAtBounds::lastAt($entries);
@@ -62,9 +42,9 @@ final class OverviewBuilder
 
         if ($totalDurationMs !== null && $totalDurationMs > 0) {
             $chunksPerSecond = round($streamChunks * 1000 / $totalDurationMs, 2);
-            $tokensPerSecondApprox = $contentLength > 0
-                ? round(($contentLength / 4) * 1000 / $totalDurationMs, 2)
-                : null;
+            if ($contentLength > 0) {
+                $tokensPerSecondApprox = round(($contentLength / 4) * 1000 / $totalDurationMs, 2);
+            }
         }
 
         return [
@@ -113,50 +93,156 @@ final class OverviewBuilder
         }
 
         foreach ($entries as $entry) {
+            $this->applyEntryToTimingMarkers($markers, $entry, $firstAt, $diffMs);
+        }
+
+        return $markers;
+    }
+
+    /**
+     * @param  array{first_byte: int|null, first_content: int|null, first_reasoning: int|null, first_tool_call: int|null}  $markers
+     * @param  array<string, mixed>  $entry
+     */
+    private function applyEntryToTimingMarkers(array &$markers, array $entry, string $firstAt, callable $diffMs): void
+    {
+        $type = is_string($entry['type'] ?? null) ? $entry['type'] : '';
+        $at = is_string($entry['at'] ?? null) ? $entry['at'] : null;
+
+        if ($at === null) {
+            return;
+        }
+
+        $this->maybeSetFirstByteMarker($markers, $type, $firstAt, $at, $diffMs);
+
+        if ($type !== 'llm.stream_line') {
+            return;
+        }
+
+        $delta = $this->streamDelta($entry);
+        if ($delta === null) {
+            return;
+        }
+
+        $this->maybeSetFirstContentMarker($markers, $delta, $firstAt, $at, $diffMs);
+        $this->maybeSetFirstReasoningMarker($markers, $delta, $firstAt, $at, $diffMs);
+        $this->maybeSetFirstToolCallMarker($markers, $delta, $firstAt, $at, $diffMs);
+    }
+
+    /**
+     * @param  array{first_byte: int|null, first_content: int|null, first_reasoning: int|null, first_tool_call: int|null}  $markers
+     */
+    private function maybeSetFirstByteMarker(
+        array &$markers,
+        string $type,
+        string $firstAt,
+        string $at,
+        callable $diffMs,
+    ): void {
+        if ($markers['first_byte'] === null && in_array($type, ['llm.first_byte', 'llm.response_body', 'llm.stream_line'], true)) {
+            $markers['first_byte'] = $diffMs($firstAt, $at);
+        }
+    }
+
+    /**
+     * @param  array{first_byte: int|null, first_content: int|null, first_reasoning: int|null, first_tool_call: int|null}  $markers
+     * @param  array<string, mixed>  $delta
+     */
+    private function maybeSetFirstContentMarker(
+        array &$markers,
+        array $delta,
+        string $firstAt,
+        string $at,
+        callable $diffMs,
+    ): void {
+        if ($markers['first_content'] === null && is_string($delta['content'] ?? null) && $delta['content'] !== '') {
+            $markers['first_content'] = $diffMs($firstAt, $at);
+        }
+    }
+
+    /**
+     * @param  array{first_byte: int|null, first_content: int|null, first_reasoning: int|null, first_tool_call: int|null}  $markers
+     * @param  array<string, mixed>  $delta
+     */
+    private function maybeSetFirstReasoningMarker(
+        array &$markers,
+        array $delta,
+        string $firstAt,
+        string $at,
+        callable $diffMs,
+    ): void {
+        if ($markers['first_reasoning'] === null && is_string($delta['reasoning_content'] ?? null) && $delta['reasoning_content'] !== '') {
+            $markers['first_reasoning'] = $diffMs($firstAt, $at);
+        }
+    }
+
+    /**
+     * @param  array{first_byte: int|null, first_content: int|null, first_reasoning: int|null, first_tool_call: int|null}  $markers
+     * @param  array<string, mixed>  $delta
+     */
+    private function maybeSetFirstToolCallMarker(
+        array &$markers,
+        array $delta,
+        string $firstAt,
+        string $at,
+        callable $diffMs,
+    ): void {
+        if ($markers['first_tool_call'] !== null) {
+            return;
+        }
+
+        $toolCalls = $delta['tool_calls'] ?? null;
+
+        if (! is_array($toolCalls) || ! isset($toolCalls[0]) || ! is_array($toolCalls[0])) {
+            return;
+        }
+
+        $name = $toolCalls[0]['function']['name'] ?? null;
+
+        if (is_string($name) && $name !== '') {
+            $markers['first_tool_call'] = $diffMs($firstAt, $at);
+        }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $entries
+     * @return array{stream_chunks: int, error_count: int}
+     */
+    private function countStreamHealthFromEntries(array $entries): array
+    {
+        $streamChunks = 0;
+        $errorCount = 0;
+
+        foreach ($entries as $entry) {
             $type = is_string($entry['type'] ?? null) ? $entry['type'] : '';
-            $at = is_string($entry['at'] ?? null) ? $entry['at'] : null;
 
-            if ($at === null) {
-                continue;
+            if ($type === 'llm.stream_line') {
+                $streamChunks++;
             }
 
-            if ($markers['first_byte'] === null && in_array($type, ['llm.first_byte', 'llm.response_body', 'llm.stream_line'], true)) {
-                $markers['first_byte'] = $diffMs($firstAt, $at);
+            if ($type === 'llm.error') {
+                $errorCount++;
             }
+        }
 
-            if ($type !== 'llm.stream_line') {
-                continue;
-            }
+        return ['stream_chunks' => $streamChunks, 'error_count' => $errorCount];
+    }
 
-            $delta = $this->streamDelta($entry);
-            if ($delta === null) {
-                continue;
-            }
+    /**
+     * @param  list<array<string, mixed>>  $attempts
+     */
+    private function countToolCallsFromAttempts(array $attempts): int
+    {
+        $toolCallCount = 0;
 
-            if ($markers['first_content'] === null && is_string($delta['content'] ?? null) && $delta['content'] !== '') {
-                $markers['first_content'] = $diffMs($firstAt, $at);
-            }
-
-            if ($markers['first_reasoning'] === null && is_string($delta['reasoning_content'] ?? null) && $delta['reasoning_content'] !== '') {
-                $markers['first_reasoning'] = $diffMs($firstAt, $at);
-            }
-
-            if ($markers['first_tool_call'] !== null) {
-                continue;
-            }
-
-            $toolCalls = $delta['tool_calls'] ?? null;
-
-            if (is_array($toolCalls) && isset($toolCalls[0]) && is_array($toolCalls[0])) {
-                $name = $toolCalls[0]['function']['name'] ?? null;
-
-                if (is_string($name) && $name !== '') {
-                    $markers['first_tool_call'] = $diffMs($firstAt, $at);
+        foreach ($attempts as $attempt) {
+            foreach ($attempt['sections'] as $section) {
+                if (($section['kind'] ?? null) === 'stream_block') {
+                    $toolCallCount += count($section['tool_calls']);
                 }
             }
         }
 
-        return $markers;
+        return $toolCallCount;
     }
 
     /**

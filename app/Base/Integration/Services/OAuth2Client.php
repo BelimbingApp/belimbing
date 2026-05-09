@@ -62,11 +62,13 @@ class OAuth2Client
                 'redirect_uri' => $redirectUri,
             ],
             operation: 'oauth2.authorization_code.exchange',
-            system: $system,
-            provider: $provider,
-            ownerType: $ownerType,
-            ownerId: $ownerId,
-            metadata: $metadata,
+            context: new OAuth2TokenRequestContext(
+                system: $system,
+                provider: $provider,
+                ownerType: $ownerType,
+                ownerId: $ownerId,
+                metadata: $metadata,
+            ),
         );
     }
 
@@ -101,11 +103,13 @@ class OAuth2Client
             clientSecret: $clientSecret,
             payload: $payload,
             operation: 'oauth2.refresh_token.exchange',
-            system: $system,
-            provider: $provider,
-            ownerType: $ownerType,
-            ownerId: $ownerId,
-            metadata: $metadata,
+            context: new OAuth2TokenRequestContext(
+                system: $system,
+                provider: $provider,
+                ownerType: $ownerType,
+                ownerId: $ownerId,
+                metadata: $metadata,
+            ),
         );
     }
 
@@ -119,28 +123,24 @@ class OAuth2Client
         string $clientSecret,
         array $payload,
         string $operation,
-        string $system,
-        ?string $provider,
-        ?string $ownerType,
-        ?int $ownerId,
-        array $metadata,
+        OAuth2TokenRequestContext $context,
     ): array {
         $response = $this->integration->send(new IntegrationRequest(
-            system: $system,
+            system: $context->system,
             operation: $operation,
             method: 'POST',
             endpoint: $tokenEndpoint,
             protocol: 'oauth2',
             protocolOperation: 'POST token',
-            provider: $provider ?? $this->providerNameFromEndpoint($tokenEndpoint),
+            provider: $context->provider ?? $this->providerNameFromEndpoint($tokenEndpoint),
             body: $payload,
-            ownerType: $ownerType,
-            ownerId: $ownerId,
+            ownerType: $context->ownerType,
+            ownerId: $context->ownerId,
             timeoutSeconds: 30,
             asJson: false,
             asForm: true,
             basicAuth: [$clientId, $clientSecret],
-            metadata: $metadata,
+            metadata: $context->metadata,
         ));
 
         if (! $response->successful()) {
