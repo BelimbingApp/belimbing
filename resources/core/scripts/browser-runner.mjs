@@ -188,12 +188,28 @@ async function handleScreenshot(page, args) {
 }
 
 async function handlePdf(page, args) {
+    const timeoutMs = Number.isInteger(args.timeout_ms) && args.timeout_ms > 0 ? args.timeout_ms : 15000;
+
     if (args.url) {
-        await page.goto(args.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.goto(args.url, { waitUntil: 'networkidle', timeout: timeoutMs });
     }
 
-    // PDF generation requires headless mode in Chromium
-    const buffer = await page.pdf({ format: 'A4' });
+    const pdfOptions = {
+        format: typeof args.format === 'string' ? args.format : 'A4',
+        printBackground: args.print_background !== false,
+    };
+
+    if (typeof args.output_path === 'string' && args.output_path.length > 0) {
+        pdfOptions.path = args.output_path;
+        const buffer = await page.pdf(pdfOptions);
+        return success('pdf', {
+            output_path: args.output_path,
+            size_bytes: buffer.length,
+            status: 'exported',
+        });
+    }
+
+    const buffer = await page.pdf(pdfOptions);
     return success('pdf', {
         pdf_base64: buffer.toString('base64'),
         size_bytes: buffer.length,
