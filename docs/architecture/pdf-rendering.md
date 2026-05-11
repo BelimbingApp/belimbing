@@ -94,6 +94,43 @@ The caller is responsible for **what** to do with the artifact: stream to HTTP, 
 
 ---
 
+## Concurrency model
+
+PDF rendering is **CPU- and memory-bound at the Chromium subprocess**, not at PHP. Phase 1 measured cold render at ~3.95 s and warm renders at ~1.9 s median on a Windows dev host with ~64 KB output per payslip. Per-Chromium RSS is ~150–300 MB depending on document size and embedded resources.
+
+### Queue worker pool is the concurrency primitive
+
+`App\Base\Pdf\Jobs\RenderPdfJob` (a `ShouldQueue` job) is the unit of parallelism. Each running queue worker handles one PDF at a time, each render spawns its own Chromium, and the host's queue-worker count is the upper bound on concurrent renders. There is no in-process browser pool that survives across renders.
+
+This is deliberate. A persistent Chromium pool would save ~2 s per render of cold-start cost but introduce a long-lived, shared subprocess that complicates Octane worker recycling, makes per-request memory accounting unclear, and adds an entire failure mode (orphaned/zombied browsers). Chromium cold start is acceptable overhead given typical Malaysian SMB payroll volumes; if it stops being acceptable, the escape valves in the plan (Gotenberg microservice, or an in-process page pool) are the right next step, not a custom in-house pool.
+
+### Sizing the worker pool
+
+| Constraint | Rule |
+|---|---|
+| Host memory budget | `max_workers ≈ floor((available_memory_mb − app_overhead) / 300)` using the conservative 300 MB per Chromium |
+| Host CPU | `max_workers ≤ cpu_cores` — Chromium is single-core per page, but the OS scheduler still benefits from headroom |
+| Wall time for a 500-employee monthly run | `~500 × 1.9 s / max_workers` — at 4 workers, ~4 minutes; at 8 workers, ~2 minutes |
+| Queue back-pressure | The same `queue:work` flags that govern other BLB jobs apply; PDF jobs are not special-cased |
+
+For a 16 GB / 8-core production host, a starting point of 4–6 PDF workers leaves room for the rest of the app. Tune against real measurements per environment.
+
+### Per-company throttling
+
+`App\Modules\Core\AI\Services\Browser\BrowserPoolManager` already tracks a per-company context budget (`ai.tools.browser.max_contexts_per_company`, default 3) for the AI browser tool. It records **logical contexts** in memory — not OS processes — and that is the right level of abstraction. PDF rendering does not currently consult `BrowserPoolManager`; the queue worker count is the bound, and per-company fairness is left to queue-level mechanisms (separate queues per tenant, queue prioritization, etc.) if it becomes needed.
+
+If a future requirement is "no single tenant should hog more than N parallel PDF renders," the cleanest implementation is for `RenderPdfJob::handle` to acquire a `BrowserPoolManager` context for the tenant before invoking the renderer and release it after. The Phase 1 spike intentionally does not do this — it would couple `Base/Pdf` to `Modules/Core/AI` and introduce a behavior the renderer's contract does not require.
+
+### What does NOT live in this pool
+
+- **Long-running Chromium daemons.** Each render spawns and tears down its own Chromium.
+- **Cross-render page state.** Cookies, storage, history are scoped per render.
+- **Process reuse across companies.** The queue worker is shared, but each render is isolated.
+
+If any of these become a real requirement, they belong with an explicit escape hatch (Gotenberg, persistent Playwright server) rather than with the renderer.
+
+---
+
 ## Auth model (recap)
 
 The signed render URL carries an opaque token id. The actual claims (view name, view data, user id, template/data versions) live in the cache keyed by that token id with a TTL matching the URL signature expiry. The URL signature prevents tampering; the token's single-use consumption prevents replay; the actor impersonation is server-side and never crosses the HTTP boundary.

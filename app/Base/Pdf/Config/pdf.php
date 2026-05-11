@@ -10,4 +10,8 @@ return [
         'format' => env('BLB_PDF_PAPER_FORMAT', 'A4'),
         'print_background' => (bool) env('BLB_PDF_PRINT_BACKGROUND', true),
     ],
+    'qpdf' => [
+        'binary' => env('BLB_PDF_QPDF_BINARY'),
+        'timeout_seconds' => (int) env('BLB_PDF_QPDF_TIMEOUT', 60),
+    ],
 ];

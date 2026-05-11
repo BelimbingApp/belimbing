@@ -1,6 +1,6 @@
 # people/04_pdf-generation-strategy
 
-**Status:** Phase 1 in progress — auth model, artifact shape, and licensing audit accepted
+**Status:** Phase 2 complete (architecturally) — renderer, post-processor, queue job, concurrency narrative landed; only qpdf availability rollout remains operational
 **Last Updated:** 2026-05-11
 **Sources:**
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — payslip and statutory output requirements (Phases on payslip PDF, report exports, ESS document delivery)
@@ -93,10 +93,10 @@ Goal: confirm constraints, settle the security model, and prove the existing pro
 Goal: turn the hardened spike into a stable surface module authors can call without knowing about Chromium, Playwright, or qpdf.
 
 - [x] Promote the Phase 1 implementation into a `PdfRenderer` service with the contract described above, including a Blade-view rendering path for templates that should not be exposed as routes. claude-code/claude-opus-4-7 — `renderView` (signed-URL/authenticated path) and `renderInline` (PHP-rendered Blade via `page.setContent`) both ship on `PdfRenderer`; Node `handlePdf` accepts either `url` or `html`.
-- [ ] Define the concurrency story for `PlaywrightRunner` under PDF load (process reuse vs. per-command spawn, per-company limits, queue back-pressure) using the Phase 1 measurements; update `BrowserPoolManager` if its ledger needs to track real processes rather than logical contexts.
-- [ ] Wire `PdfPostProcessor` for the post-processing operations Phase 1 verified, exposing only the named operations needed by Payroll Phase 1 outputs.
+- [x] Define the concurrency story for `PlaywrightRunner` under PDF load (process reuse vs. per-command spawn, per-company limits, queue back-pressure) using the Phase 1 measurements; update `BrowserPoolManager` if its ledger needs to track real processes rather than logical contexts. claude-code/claude-opus-4-7 — documented in `docs/architecture/pdf-rendering.md` ("Concurrency model"): queue worker pool is the primitive (one Chromium spawn per render, no persistent pool), worker-count sizing rules grounded in Phase 1 bench, per-company throttling deferred behind `BrowserPoolManager` with the integration path written down. No `BrowserPoolManager` code changes needed for Phase 2.
+- [x] Wire `PdfPostProcessor` for the post-processing operations Phase 1 verified, exposing only the named operations needed by Payroll Phase 1 outputs. claude-code/claude-opus-4-7 — `PdfPostProcessor::protectWithPassword` ships with AES-256 encryption via the injected `QpdfRunner` (configurable binary path, lazy availability check). Empty passwords refused; qpdf failures surface as `PdfPostProcessException`; the original artifact is left on disk and a new artifact with `(encrypted)` data-version suffix is produced.
 - [x] Define the `resources/views/pdf/...` convention and document it under `docs/architecture/` or the appropriate module guide once the shape is stable. claude-code/claude-opus-4-7 — convention landed at `resources/core/views/pdf/<module>/<template>.blade.php` with licensee override semantics; documented in `docs/architecture/pdf-rendering.md` alongside the renderer surface, auth model, artifact contract, and out-of-scope list.
-- [ ] Add an Octane- and queue-friendly job wrapper so batch payslip runs do not block request workers.
+- [x] Add an Octane- and queue-friendly job wrapper so batch payslip runs do not block request workers. claude-code/claude-opus-4-7 — `App\Base\Pdf\Jobs\RenderPdfJob` (`ShouldQueue`) accepts view/data/actor/template-version/data-version/optional password/render-mode/free-form metadata; dispatches `App\Base\Pdf\Events\PdfArtifactRendered` so callers listen without coupling to the renderer.
 
 ### Phase 3 — Wire Payroll outputs onto the renderer
 
