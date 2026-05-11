@@ -247,6 +247,7 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 
 - [x] Confirm the ownership boundary: `belimbingapp/belimbing` owns Payroll Core, `BelimbingApp/blb-payroll-my` owns Malaysia statutory behavior, and `kiatng/blb-sbg` owns private SBG customization. {amp/gpt-5.1-codex}
 - [x] Define the first country-pack contract in prose: statutory profiles, pay-item classification, calculators, statutory data, exports, validation fixtures, and explanation/audit output. {amp/gpt-5.1-codex}
+- [x] Codify the Payroll Country Pack v0 extension contract and singleton registry in Payroll Core so country packs expose manifest, profile-schema, pay-item-classifier, calculator, and export facets without concrete country dependencies. {amp/gpt-5.1-codex}
 - [x] State the no-leak rule before implementation: Payroll Core must not depend on EPF/SOCSO/PCB classes, Malaysia table names, or Malaysia-specific columns. {amp/gpt-5.1-codex}
 
 ### Phase 1 — Payroll Core skeleton
