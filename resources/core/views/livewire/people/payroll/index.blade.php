@@ -79,12 +79,14 @@
                                             </td>
                                             <td class="px-table-cell-x py-table-cell-y">
                                                 <div class="flex flex-wrap justify-end gap-2">
-                                                    @if (! $run->isClosed())
+                                                    @if ($canManage && ! $run->isClosed())
                                                         <x-ui.button size="sm" variant="ghost" wire:click="calculateRun({{ $run->id }})">{{ __('Calculate') }}</x-ui.button>
                                                         <x-ui.button size="sm" variant="ghost" wire:click="reviewRun({{ $run->id }})">{{ __('Review') }}</x-ui.button>
                                                         <x-ui.button size="sm" variant="ghost" wire:click="approveRun({{ $run->id }})">{{ __('Approve') }}</x-ui.button>
                                                         <x-ui.button size="sm" variant="ghost" wire:click="closeRun({{ $run->id }})">{{ __('Close') }}</x-ui.button>
                                                         <x-ui.button size="sm" variant="ghost" wire:click="voidRun({{ $run->id }})">{{ __('Void') }}</x-ui.button>
+                                                    @elseif (! $canManage)
+                                                        <span class="text-xs text-muted">{{ __('View only') }}</span>
                                                     @else
                                                         <span class="text-xs text-muted">{{ __('Locked') }}</span>
                                                     @endif
@@ -177,6 +179,47 @@
                     </div>
                 </div>
             @elseif ($tab === 'pay-items')
+                @if ($canManage)
+                    <div class="mb-6 grid gap-6 xl:grid-cols-2">
+                        <x-ui.card :title="__('Create Pay Item')">
+                            <form wire:submit="createPayItem" class="space-y-4">
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    <x-ui.input id="payroll-pay-item-code" wire:model="payItemCode" label="{{ __('Code') }}" required :error="$errors->first('payItemCode')" />
+                                    <x-ui.input id="payroll-pay-item-name" wire:model="payItemName" label="{{ __('Name') }}" required :error="$errors->first('payItemName')" />
+                                </div>
+                                <x-ui.select id="payroll-pay-item-input-type" wire:model="payItemInputType" label="{{ __('Input Type') }}" :error="$errors->first('payItemInputType')">
+                                    <option value="earning">{{ __('Earning') }}</option>
+                                    <option value="deduction">{{ __('Deduction') }}</option>
+                                    <option value="reimbursement">{{ __('Reimbursement') }}</option>
+                                </x-ui.select>
+                                <x-ui.button type="submit" variant="primary">{{ __('Create Pay Item') }}</x-ui.button>
+                            </form>
+                        </x-ui.card>
+
+                        <x-ui.card :title="__('Add Classification')">
+                            <form wire:submit="createClassification" class="space-y-4">
+                                <x-ui.select id="payroll-classification-pay-item" wire:model="classificationPayItemId" label="{{ __('Pay Item') }}" required :error="$errors->first('classificationPayItemId')">
+                                    <option value="">{{ __('Select a pay item') }}</option>
+                                    @foreach ($payItems as $item)
+                                        <option value="{{ $item->id }}">{{ $item->code }} — {{ $item->name }}</option>
+                                    @endforeach
+                                </x-ui.select>
+                                <div class="grid gap-4 md:grid-cols-3">
+                                    <x-ui.input id="payroll-classification-country" wire:model="classificationCountryIso" label="{{ __('Country') }}" :error="$errors->first('classificationCountryIso')" />
+                                    <x-ui.input id="payroll-classification-key" wire:model="classificationKey" label="{{ __('Key') }}" required :error="$errors->first('classificationKey')" />
+                                    <x-ui.input id="payroll-classification-value" wire:model="classificationValue" label="{{ __('Value') }}" required :error="$errors->first('classificationValue')" />
+                                </div>
+                                <div class="grid gap-4 md:grid-cols-3">
+                                    <x-ui.input id="payroll-classification-effective-from" type="date" wire:model="classificationEffectiveFrom" label="{{ __('Effective From') }}" required :error="$errors->first('classificationEffectiveFrom')" />
+                                    <x-ui.input id="payroll-classification-source-pack" wire:model="classificationSourcePack" label="{{ __('Source Pack') }}" required :error="$errors->first('classificationSourcePack')" />
+                                    <x-ui.input id="payroll-classification-source-version" wire:model="classificationSourceVersion" label="{{ __('Source Version') }}" required :error="$errors->first('classificationSourceVersion')" />
+                                </div>
+                                <x-ui.button type="submit" variant="primary">{{ __('Save Classification') }}</x-ui.button>
+                            </form>
+                        </x-ui.card>
+                    </div>
+                @endif
+
                 <div class="overflow-x-auto -mx-card-inner px-card-inner">
                     <table class="min-w-full divide-y divide-border-default text-sm">
                         <thead class="bg-surface-subtle/80">
@@ -211,6 +254,42 @@
                     </table>
                 </div>
             @elseif ($tab === 'profiles')
+                @if ($canManage)
+                    <div class="mb-6 grid gap-6 xl:grid-cols-2">
+                        <x-ui.card :title="__('Save Employer Profile')">
+                            <form wire:submit="createEmployerProfile" class="space-y-4">
+                                <div class="grid gap-4 md:grid-cols-3">
+                                    <x-ui.input id="payroll-employer-profile-country" wire:model="employerProfileCountryIso" label="{{ __('Country') }}" required :error="$errors->first('employerProfileCountryIso')" />
+                                    <x-ui.input id="payroll-employer-profile-source-pack" wire:model="employerProfileSourcePack" label="{{ __('Source Pack') }}" required :error="$errors->first('employerProfileSourcePack')" />
+                                    <x-ui.input id="payroll-employer-profile-source-version" wire:model="employerProfileSourceVersion" label="{{ __('Source Version') }}" required :error="$errors->first('employerProfileSourceVersion')" />
+                                </div>
+                                <x-ui.input id="payroll-employer-profile-effective-from" type="date" wire:model="employerProfileEffectiveFrom" label="{{ __('Effective From') }}" required :error="$errors->first('employerProfileEffectiveFrom')" />
+                                <x-ui.textarea id="payroll-employer-profile-data" wire:model="employerProfileData" label="{{ __('Profile JSON') }}" rows="8" required :error="$errors->first('employerProfileData')" />
+                                <x-ui.button type="submit" variant="primary">{{ __('Save Employer Profile') }}</x-ui.button>
+                            </form>
+                        </x-ui.card>
+
+                        <x-ui.card :title="__('Save Employee Profile')">
+                            <form wire:submit="createEmployeeProfile" class="space-y-4">
+                                <x-ui.select id="payroll-employee-profile-employee" wire:model="employeeProfileEmployeeId" label="{{ __('Employee') }}" required :error="$errors->first('employeeProfileEmployeeId')">
+                                    <option value="">{{ __('Select an employee') }}</option>
+                                    @foreach ($employees as $employee)
+                                        <option value="{{ $employee->id }}">{{ $employee->employee_number }} — {{ $employee->displayName() }}</option>
+                                    @endforeach
+                                </x-ui.select>
+                                <div class="grid gap-4 md:grid-cols-3">
+                                    <x-ui.input id="payroll-employee-profile-country" wire:model="employeeProfileCountryIso" label="{{ __('Country') }}" required :error="$errors->first('employeeProfileCountryIso')" />
+                                    <x-ui.input id="payroll-employee-profile-source-pack" wire:model="employeeProfileSourcePack" label="{{ __('Source Pack') }}" required :error="$errors->first('employeeProfileSourcePack')" />
+                                    <x-ui.input id="payroll-employee-profile-source-version" wire:model="employeeProfileSourceVersion" label="{{ __('Source Version') }}" required :error="$errors->first('employeeProfileSourceVersion')" />
+                                </div>
+                                <x-ui.input id="payroll-employee-profile-effective-from" type="date" wire:model="employeeProfileEffectiveFrom" label="{{ __('Effective From') }}" required :error="$errors->first('employeeProfileEffectiveFrom')" />
+                                <x-ui.textarea id="payroll-employee-profile-data" wire:model="employeeProfileData" label="{{ __('Profile JSON') }}" rows="8" required :error="$errors->first('employeeProfileData')" />
+                                <x-ui.button type="submit" variant="primary">{{ __('Save Employee Profile') }}</x-ui.button>
+                            </form>
+                        </x-ui.card>
+                    </div>
+                @endif
+
                 <div class="grid gap-6 xl:grid-cols-2">
                     <x-ui.card :title="__('Employer Profiles')">
                         <div class="space-y-3">
@@ -250,6 +329,47 @@
                     </x-ui.card>
                 </div>
             @else
+                @if ($canManage)
+                    <div class="mb-6 grid gap-6 xl:grid-cols-2">
+                        <x-ui.card :title="__('Save Rule Set')">
+                            <form wire:submit="createRuleSet" class="space-y-4">
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    <x-ui.input id="payroll-rule-set-country" wire:model="ruleSetCountryIso" label="{{ __('Country') }}" required :error="$errors->first('ruleSetCountryIso')" />
+                                    <x-ui.input id="payroll-rule-set-rule-key" wire:model="ruleSetRuleKey" label="{{ __('Rule Key') }}" required :error="$errors->first('ruleSetRuleKey')" />
+                                </div>
+                                <x-ui.input id="payroll-rule-set-name" wire:model="ruleSetName" label="{{ __('Name') }}" required :error="$errors->first('ruleSetName')" />
+                                <div class="grid gap-4 md:grid-cols-3">
+                                    <x-ui.input id="payroll-rule-set-source-pack" wire:model="ruleSetSourcePack" label="{{ __('Source Pack') }}" required :error="$errors->first('ruleSetSourcePack')" />
+                                    <x-ui.input id="payroll-rule-set-source-version" wire:model="ruleSetSourceVersion" label="{{ __('Source Version') }}" required :error="$errors->first('ruleSetSourceVersion')" />
+                                    <x-ui.input id="payroll-rule-set-effective-from" type="date" wire:model="ruleSetEffectiveFrom" label="{{ __('Effective From') }}" required :error="$errors->first('ruleSetEffectiveFrom')" />
+                                </div>
+                                <x-ui.textarea id="payroll-rule-set-rounding-policy" wire:model="ruleSetRoundingPolicy" label="{{ __('Rounding Policy JSON') }}" rows="3" :error="$errors->first('ruleSetRoundingPolicy')" />
+                                <x-ui.button type="submit" variant="primary">{{ __('Save Rule Set') }}</x-ui.button>
+                            </form>
+                        </x-ui.card>
+
+                        <x-ui.card :title="__('Add Rule Row')">
+                            <form wire:submit="createRuleRow" class="space-y-4">
+                                <x-ui.select id="payroll-rule-row-rule-set" wire:model="ruleRowRuleSetId" label="{{ __('Rule Set') }}" required :error="$errors->first('ruleRowRuleSetId')">
+                                    <option value="">{{ __('Select a rule set') }}</option>
+                                    @foreach ($ruleSets as $ruleSet)
+                                        <option value="{{ $ruleSet->id }}">{{ $ruleSet->country_iso }} · {{ $ruleSet->rule_key }} · {{ $ruleSet->source_version }}</option>
+                                    @endforeach
+                                </x-ui.select>
+                                <x-ui.input id="payroll-rule-row-key" wire:model="ruleRowKey" label="{{ __('Row Key') }}" :error="$errors->first('ruleRowKey')" />
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    <x-ui.input id="payroll-rule-row-min-wage" wire:model="ruleRowMinWage" label="{{ __('Min Wage') }}" :error="$errors->first('ruleRowMinWage')" />
+                                    <x-ui.input id="payroll-rule-row-max-wage" wire:model="ruleRowMaxWage" label="{{ __('Max Wage') }}" :error="$errors->first('ruleRowMaxWage')" />
+                                    <x-ui.input id="payroll-rule-row-employee-rate" wire:model="ruleRowEmployeeRate" label="{{ __('Employee Rate') }}" :error="$errors->first('ruleRowEmployeeRate')" />
+                                    <x-ui.input id="payroll-rule-row-employer-rate" wire:model="ruleRowEmployerRate" label="{{ __('Employer Rate') }}" :error="$errors->first('ruleRowEmployerRate')" />
+                                    <x-ui.input id="payroll-rule-row-levy-rate" wire:model="ruleRowLevyRate" label="{{ __('Levy Rate') }}" :error="$errors->first('ruleRowLevyRate')" />
+                                </div>
+                                <x-ui.button type="submit" variant="primary">{{ __('Add Rule Row') }}</x-ui.button>
+                            </form>
+                        </x-ui.card>
+                    </div>
+                @endif
+
                 <div class="space-y-4">
                     @forelse ($ruleSets as $ruleSet)
                         <div class="rounded-2xl border border-border-default p-4" wire:key="rule-set-{{ $ruleSet->id }}">
