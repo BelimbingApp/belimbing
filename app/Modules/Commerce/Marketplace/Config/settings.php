@@ -1,4 +1,5 @@
 <?php
+
 return [
     'editable' => [
         'marketplace_ebay' => [
@@ -42,26 +43,47 @@ return [
                     'scope' => 'company',
                     'encrypted' => true,
                     'placeholder' => 'Leave blank to keep current secret',
-                    'help' => 'Stored encrypted. Leave blank when saving unrelated settings.',
+                    'help' => 'Stored encrypted. Use the eye control to verify a newly typed secret before saving.',
                     'rules' => ['nullable', 'string', 'max:500'],
                 ],
                 [
                     'key' => 'marketplace.ebay.redirect_uri',
                     'label' => 'Redirect URI',
-                    'type' => 'text',
-                    'scope' => 'company',
-                    'placeholder' => 'https://example.test/commerce/marketplace/ebay/oauth/callback',
-                    'help' => 'Must match an accepted redirect URI on the eBay developer app.',
-                    'rules' => ['nullable', 'string', 'max:500'],
+                    'type' => 'readonly',
+                    'value_route' => 'commerce.marketplace.ebay.oauth.callback',
+                    'help' => 'Copy this BLB-generated URI into the eBay developer app accepted redirect URLs.',
                 ],
                 [
                     'key' => 'marketplace.ebay.scopes',
                     'label' => 'OAuth scopes',
-                    'type' => 'textarea',
+                    'type' => 'checkbox-list',
                     'scope' => 'company',
-                    'default' => "https://api.ebay.com/oauth/api_scope/sell.inventory\nhttps://api.ebay.com/oauth/api_scope/sell.fulfillment",
-                    'help' => 'One scope per line. Inventory handles listings/offers; Fulfillment handles order reads.',
-                    'rules' => ['nullable', 'string', 'max:2000'],
+                    'default' => [
+                        'https://api.ebay.com/oauth/api_scope/sell.inventory',
+                        'https://api.ebay.com/oauth/api_scope/sell.account',
+                        'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+                        'https://api.ebay.com/oauth/api_scope/commerce.taxonomy',
+                    ],
+                    'help' => 'Select the API families BLB will request during seller OAuth.',
+                    'options' => [
+                        'https://api.ebay.com/oauth/api_scope/sell.inventory' => [
+                            'label' => 'Sell Inventory',
+                            'help' => 'Read and write inventory items, offers, listing publication, and listing state.',
+                        ],
+                        'https://api.ebay.com/oauth/api_scope/sell.account' => [
+                            'label' => 'Sell Account',
+                            'help' => 'Read and manage business policies and inventory locations used by offers.',
+                        ],
+                        'https://api.ebay.com/oauth/api_scope/sell.fulfillment' => [
+                            'label' => 'Sell Fulfillment',
+                            'help' => 'Read orders so BLB can reconcile sales and mark inventory sold.',
+                        ],
+                        'https://api.ebay.com/oauth/api_scope/commerce.taxonomy' => [
+                            'label' => 'Commerce Taxonomy',
+                            'help' => 'Read category trees, category suggestions, required aspects, and fitment metadata.',
+                        ],
+                    ],
+                    'rules' => ['required', 'array', 'min:1'],
                 ],
             ],
         ],

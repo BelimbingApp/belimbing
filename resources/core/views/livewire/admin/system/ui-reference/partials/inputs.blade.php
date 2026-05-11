@@ -112,6 +112,14 @@
                     wire:model.live="dateValue"
                     :label="__('Datetime Input')"
                 />
+
+                <x-ui.secret-input
+                    id="ui-reference-secret"
+                    :label="__('Secret Input')"
+                    value="sample-client-secret"
+                    :help="__('Use for credentials that may need reveal-on-entry verification without exposing saved secrets by default.')"
+                    has-value
+                />
             </div>
         </x-ui.card>
 

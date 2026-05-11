@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Ebay;
 
 use App\Base\Settings\Contracts\SettingsService;
@@ -36,7 +37,7 @@ class EbayConfiguration
             'marketplace_id' => strtoupper((string) $this->settings->get('marketplace.ebay.marketplace_id', 'EBAY_US', $scope)),
             'client_id' => $this->nullableSetting('marketplace.ebay.client_id', $scope),
             'client_secret' => $this->nullableSetting('marketplace.ebay.client_secret', $scope),
-            'redirect_uri' => $this->nullableSetting('marketplace.ebay.redirect_uri', $scope),
+            'redirect_uri' => route('commerce.marketplace.ebay.oauth.callback'),
             'scopes' => $this->scopes($scope),
             'api_base_url' => $environment === 'live' ? 'https://api.ebay.com' : 'https://api.sandbox.ebay.com',
             'auth_url' => $environment === 'live' ? 'https://auth.ebay.com/oauth2/authorize' : 'https://auth.sandbox.ebay.com/oauth2/authorize',
@@ -48,7 +49,7 @@ class EbayConfiguration
     {
         $config = $this->forCompany($companyId);
 
-        foreach (['client_id', 'client_secret', 'redirect_uri'] as $key) {
+        foreach (['client_id', 'client_secret'] as $key) {
             if ($config[$key] === null || $config[$key] === '') {
                 throw MarketplaceOperationException::missingConfiguration(self::CHANNEL, 'marketplace.ebay.'.$key);
             }
