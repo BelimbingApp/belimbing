@@ -1,9 +1,10 @@
 <?php
+
 namespace App\Base\Database\Console\Commands;
 
 use App\Base\Database\Services\Backup\Encryption\AppKeyEncryption;
-use App\Base\Database\Services\Backup\Manifest;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Filesystem\FilesystemManager;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -36,29 +37,12 @@ final class RekeyCommand extends Command
         $diskName = (string) ($config['disk'] ?? 'local');
         $disk = $fsm->disk($diskName);
 
-        // Derive KEK + fingerprint for current APP_KEY.
-        $currentRawKey = $this->decodeKeyOption((string) config('app.key', ''), 'current APP_KEY');
-        if ($currentRawKey === null) {
-            // decodeKeyOption already printed an operator-facing error.
+        $keys = $this->resolveRekeyMaterial();
+        if ($keys === null) {
             return self::FAILURE;
         }
-        $currentKek = AppKeyEncryption::deriveKekFromRaw($currentRawKey);
-        $currentFingerprint = base64_encode(AppKeyEncryption::fingerprintFromKek($currentKek));
-        sodium_memzero($currentRawKey);
 
-        // Optionally decode old APP_KEY.
-        $oldKek = null;
-        $oldKeyOpt = $this->option('old-key');
-        if ($oldKeyOpt !== null && $oldKeyOpt !== '') {
-            $oldRaw = $this->decodeKeyOption((string) $oldKeyOpt, '--old-key');
-            if ($oldRaw === null) {
-                sodium_memzero($currentKek);
-
-                return self::FAILURE;
-            }
-            $oldKek = AppKeyEncryption::deriveKekFromRaw($oldRaw);
-            sodium_memzero($oldRaw);
-        }
+        [$currentKek, $oldKek, $currentFingerprint] = $keys;
 
         $commit = (bool) $this->option('commit');
         $prefix = trim((string) ($config['path_prefix'] ?? 'backups'), '/');
@@ -74,66 +58,14 @@ final class RekeyCommand extends Command
                 continue;
             }
 
-            $raw = $disk->get($file);
-            if ($raw === null) {
-                $this->components->warn("Could not read {$file} — skipping.");
-                continue;
-            }
-
-            $data = json_decode($raw, true);
-            if (! is_array($data) || ($data['encryption_mode'] ?? '') !== 'app-key') {
-                continue; // Not an app-key manifest.
-            }
-
-            $backupId = (string) ($data['backup_id'] ?? $file);
-            $manifestFingerprint = (string) ($data['kek_fingerprint'] ?? '');
-
-            // Already on the current key — idempotent skip.
-            if ($manifestFingerprint !== '' && $manifestFingerprint === $currentFingerprint) {
+            $outcome = $this->processManifestFile($disk, $file, $currentKek, $oldKek, $currentFingerprint, $commit);
+            if ($outcome === 'skipped') {
                 $skipped++;
-                continue;
+            } elseif ($outcome === 'rekeyed') {
+                $rekeyed++;
+            } elseif (is_string($outcome)) {
+                $stuck[] = $outcome;
             }
-
-            $wrappedDek = isset($data['wrapped_dek']) ? base64_decode((string) $data['wrapped_dek'], strict: true) : false;
-            $dekNonce = isset($data['dek_nonce']) ? base64_decode((string) $data['dek_nonce'], strict: true) : false;
-
-            if ($wrappedDek === false || $dekNonce === false) {
-                $this->components->warn("Manifest {$backupId} has corrupt or missing wrapped_dek/dek_nonce.");
-                $stuck[] = $backupId;
-                continue;
-            }
-
-            // Try current KEK first (idempotent safety), then old KEK.
-            $dek = @sodium_crypto_secretbox_open($wrappedDek, $dekNonce, $currentKek);
-            if ($dek === false && $oldKek !== null) {
-                $dek = @sodium_crypto_secretbox_open($wrappedDek, $dekNonce, $oldKek);
-            }
-
-            if ($dek === false) {
-                $this->components->warn("Cannot unwrap DEK for {$backupId} with current or old key.");
-                $stuck[] = $backupId;
-                continue;
-            }
-
-            // Re-wrap with a fresh nonce under the current KEK.
-            $newNonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-            $newWrapped = sodium_crypto_secretbox($dek, $newNonce, $currentKek);
-            sodium_memzero($dek);
-
-            $newFingerprint = $currentFingerprint;
-
-            $data['wrapped_dek'] = base64_encode($newWrapped);
-            $data['dek_nonce'] = base64_encode($newNonce);
-            $data['kek_fingerprint'] = $newFingerprint;
-
-            if ($commit) {
-                $disk->put($file, (string) json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-                $this->components->twoColumnDetail('Re-keyed', $backupId);
-            } else {
-                $this->components->twoColumnDetail('Would re-key', $backupId);
-            }
-
-            $rekeyed++;
         }
 
         sodium_memzero($currentKek);
@@ -141,6 +73,134 @@ final class RekeyCommand extends Command
             sodium_memzero($oldKek);
         }
 
+        return $this->finishRekeySummary($skipped, $rekeyed, $stuck, $commit);
+    }
+
+    /**
+     * @return array{0: string, 1: string|null, 2: string}|null [currentKek, oldKek|null, currentFingerprint]
+     */
+    private function resolveRekeyMaterial(): ?array
+    {
+        $currentRawKey = $this->decodeKeyOption((string) config('app.key', ''), 'current APP_KEY');
+        if ($currentRawKey === null) {
+            return null;
+        }
+
+        $currentKek = AppKeyEncryption::deriveKekFromRaw($currentRawKey);
+        $currentFingerprint = base64_encode(AppKeyEncryption::fingerprintFromKek($currentKek));
+        sodium_memzero($currentRawKey);
+
+        $oldKek = null;
+        $oldKeyOpt = $this->option('old-key');
+        if ($oldKeyOpt !== null && $oldKeyOpt !== '') {
+            $oldRaw = $this->decodeKeyOption((string) $oldKeyOpt, '--old-key');
+            if ($oldRaw === null) {
+                sodium_memzero($currentKek);
+
+                return null;
+            }
+            $oldKek = AppKeyEncryption::deriveKekFromRaw($oldRaw);
+            sodium_memzero($oldRaw);
+        }
+
+        return [$currentKek, $oldKek, $currentFingerprint];
+    }
+
+    /**
+     * @return 'skipped'|'rekeyed'|null|string null = no-op; string = stuck backup id
+     */
+    private function processManifestFile(
+        Filesystem $disk,
+        string $file,
+        string $currentKek,
+        ?string $oldKek,
+        string $currentFingerprint,
+        bool $commit,
+    ): ?string {
+        $raw = $disk->get($file);
+        if ($raw === null) {
+            $this->components->warn("Could not read {$file} — skipping.");
+
+            return null;
+        }
+
+        $data = json_decode($raw, true);
+        if (! is_array($data) || ($data['encryption_mode'] ?? '') !== 'app-key') {
+            return null;
+        }
+
+        $backupId = (string) ($data['backup_id'] ?? $file);
+        $manifestFingerprint = (string) ($data['kek_fingerprint'] ?? '');
+
+        if ($manifestFingerprint !== '' && $manifestFingerprint === $currentFingerprint) {
+            return 'skipped';
+        }
+
+        $wrappedDek = isset($data['wrapped_dek']) ? base64_decode((string) $data['wrapped_dek'], strict: true) : false;
+        $dekNonce = isset($data['dek_nonce']) ? base64_decode((string) $data['dek_nonce'], strict: true) : false;
+
+        if ($wrappedDek === false || $dekNonce === false) {
+            $this->components->warn("Manifest {$backupId} has corrupt or missing wrapped_dek/dek_nonce.");
+
+            return $backupId;
+        }
+
+        $dek = $this->unwrapDek($wrappedDek, $dekNonce, $currentKek, $oldKek);
+        if ($dek === false) {
+            $this->components->warn("Cannot unwrap DEK for {$backupId} with current or old key.");
+
+            return $backupId;
+        }
+
+        $this->persistRewrappedManifest($disk, $file, $data, $dek, $currentKek, $currentFingerprint, $commit, $backupId);
+
+        return 'rekeyed';
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function persistRewrappedManifest(
+        Filesystem $disk,
+        string $file,
+        array $data,
+        string $dek,
+        string $currentKek,
+        string $currentFingerprint,
+        bool $commit,
+        string $backupId,
+    ): void {
+        $newNonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $newWrapped = sodium_crypto_secretbox($dek, $newNonce, $currentKek);
+        sodium_memzero($dek);
+
+        $data['wrapped_dek'] = base64_encode($newWrapped);
+        $data['dek_nonce'] = base64_encode($newNonce);
+        $data['kek_fingerprint'] = $currentFingerprint;
+
+        if ($commit) {
+            $disk->put($file, (string) json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            $this->components->twoColumnDetail('Re-keyed', $backupId);
+        } else {
+            $this->components->twoColumnDetail('Would re-key', $backupId);
+        }
+    }
+
+    private function unwrapDek(string $wrappedDek, string $dekNonce, string $currentKek, ?string $oldKek): string|false
+    {
+        $dek = @sodium_crypto_secretbox_open($wrappedDek, $dekNonce, $currentKek);
+        if ($dek === false && $oldKek !== null) {
+            $dek = @sodium_crypto_secretbox_open($wrappedDek, $dekNonce, $oldKek);
+        }
+
+        return $dek;
+    }
+
+    /**
+     * @param  list<string>  $stuck
+     */
+    private function finishRekeySummary(int $skipped, int $rekeyed, array $stuck, bool $commit): int
+    {
         $this->newLine();
         $this->components->twoColumnDetail('Skipped (already current)', (string) $skipped);
         $this->components->twoColumnDetail('Re-keyed', (string) $rekeyed);

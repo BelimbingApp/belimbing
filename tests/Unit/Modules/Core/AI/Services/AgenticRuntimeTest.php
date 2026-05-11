@@ -344,206 +344,209 @@ describe('AgenticRuntime (sync)', function () {
 });
 
 describe('AgenticRuntime (sync tool loop)', function () {
+    describe('tool discovery and execution', function () {
+        it('omits disallowed tools from the LLM request', function () {
+            $llmClient = Mockery::mock(LlmClient::class);
+            $llmClient->shouldReceive('chat')
+                ->once()
+                ->withArgs(function ($request): bool {
+                    return $request->tools === null;
+                })
+                ->andReturn([
+                    'content' => 'Coding profile response',
+                    'latency_ms' => 120,
+                    'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 8],
+                ]);
 
-    it('omits disallowed tools from the LLM request', function () {
-        $llmClient = Mockery::mock(LlmClient::class);
-        $llmClient->shouldReceive('chat')
-            ->once()
-            ->withArgs(function ($request): bool {
-                return $request->tools === null;
-            })
-            ->andReturn([
-                'content' => 'Coding profile response',
-                'latency_ms' => 120,
-                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 8],
-            ]);
-
-        $result = runAgenticConversation(
-            $llmClient,
-            toolRegistry: $this->makeToolRegistry(buildEchoTool()),
-            allowedToolNames: [],
-        );
-
-        expect($result['content'])->toBe('Coding profile response');
-    });
-
-    it('executes tool calls and feeds results back to LLM', function () {
-        $llmClient = Mockery::mock(LlmClient::class);
-
-        // First call: LLM wants to call a tool
-        $llmClient->shouldReceive('chat')->once()->andReturn(
-            $this->makeToolCallResponse('call_001', 'echo_tool', '{"input": "world"}')
-        );
-
-        // Second call: LLM produces final response after receiving tool result
-        $llmClient->shouldReceive('chat')->once()->andReturn(
-            $this->makeFinalResponse('The echo result was: executed:echo_tool:world')
-        );
-
-        $result = runAgenticConversation(
-            $llmClient,
-            toolRegistry: $this->makeToolRegistry(buildEchoTool()),
-            userMessage: 'Echo world',
-            systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
-        );
-
-        expect($result['content'])->toContain('executed:echo_tool:world');
-        expect($result['meta']['tool_actions'])->toHaveCount(1);
-        expect($result['meta']['tool_actions'][0]['tool'])->toBe('echo_tool');
-        expect($result['meta']['tool_actions'][0]['arguments'])->toBe(['input' => 'world']);
-    });
-
-    it('continues sync tool loops until the model stops calling tools', function () {
-        $llmClient = Mockery::mock(LlmClient::class);
-        $llmClient->shouldReceive('chat')
-            ->times(24)
-            ->andReturn($this->makeToolCallResponse('call_001', 'echo_tool', '{"input": "world"}'));
-        $llmClient->shouldReceive('chat')
-            ->once()
-            ->andReturn($this->makeFinalResponse('The echo result was: executed:echo_tool:world'));
-
-        $result = runAgenticConversation(
-            $llmClient,
-            toolRegistry: $this->makeToolRegistry(buildEchoTool()),
-            userMessage: 'Loop forever',
-            systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
-        );
-
-        expect($result['content'])->toContain('executed:echo_tool:world')
-            ->and($result['meta']['tool_actions'])->toHaveCount(24);
-    });
-
-    it('records one usage call per successful synchronous tool-loop iteration', function () {
-        $llmClient = Mockery::mock(LlmClient::class);
-        $llmClient->shouldReceive('chat')->once()->andReturn(
-            $this->makeToolCallResponse('call_001', 'echo_tool', '{"input": "world"}')
-        );
-        $llmClient->shouldReceive('chat')->once()->andReturn(
-            $this->makeFinalResponse('The echo result was: executed:echo_tool:world')
-        );
-
-        $recorded = [];
-        $runRecorder = Mockery::mock(RunRecorder::class)->shouldIgnoreMissing();
-        $runRecorder->shouldReceive('recordCall')
-            ->twice()
-            ->withArgs(function (
-                string $runId,
-                int $attemptIndex,
-                ?string $provider,
-                ?string $model,
-                ?string $finishReason,
-                ?int $latencyMs,
-                ?CallUsage $usage,
-            ) use (&$recorded): bool {
-                $recorded[] = [
-                    'attempt_index' => $attemptIndex,
-                    'provider' => $provider,
-                    'model' => $model,
-                    'finish_reason' => $finishReason,
-                    'latency_ms' => $latencyMs,
-                    'prompt_tokens' => $usage?->promptTokens,
-                    'completion_tokens' => $usage?->completionTokens,
-                ];
-
-                return preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/i', $runId) === 1
-                    && $provider === 'test-provider'
-                    && $model === 'gpt-4'
-                    && $usage !== null;
-            })
-            ->andReturnNull();
-
-        $runtime = new AgenticRuntime(
-            defaultAgenticConfigResolver(),
-            $llmClient,
-            $this->makeToolRegistry(buildEchoTool()),
-            $this->makePassthroughCredentialResolver(),
-            new RuntimeMessageBuilder,
-            new RuntimeResponseFactory,
-            new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
-            $runRecorder,
-            new AgenticToolLoopStreamReader(
+            $result = runAgenticConversation(
                 $llmClient,
+                toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+                allowedToolNames: [],
+            );
+
+            expect($result['content'])->toBe('Coding profile response');
+        });
+
+        it('executes tool calls and feeds results back to LLM', function () {
+            $llmClient = Mockery::mock(LlmClient::class);
+
+            $llmClient->shouldReceive('chat')->once()->andReturn(
+                $this->makeToolCallResponse('call_001', 'echo_tool', '{"input": "world"}')
+            );
+
+            $llmClient->shouldReceive('chat')->once()->andReturn(
+                $this->makeFinalResponse('The echo result was: executed:echo_tool:world')
+            );
+
+            $result = runAgenticConversation(
+                $llmClient,
+                toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+                userMessage: 'Echo world',
+                systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            );
+
+            expect($result['content'])->toContain('executed:echo_tool:world');
+            expect($result['meta']['tool_actions'])->toHaveCount(1);
+            expect($result['meta']['tool_actions'][0]['tool'])->toBe('echo_tool');
+            expect($result['meta']['tool_actions'][0]['arguments'])->toBe(['input' => 'world']);
+        });
+
+        it('continues sync tool loops until the model stops calling tools', function () {
+            $llmClient = Mockery::mock(LlmClient::class);
+            $llmClient->shouldReceive('chat')
+                ->times(24)
+                ->andReturn($this->makeToolCallResponse('call_001', 'echo_tool', '{"input": "world"}'));
+            $llmClient->shouldReceive('chat')
+                ->once()
+                ->andReturn($this->makeFinalResponse('The echo result was: executed:echo_tool:world'));
+
+            $result = runAgenticConversation(
+                $llmClient,
+                toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+                userMessage: 'Loop forever',
+                systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            );
+
+            expect($result['content'])->toContain('executed:echo_tool:world')
+                ->and($result['meta']['tool_actions'])->toHaveCount(24);
+        });
+    });
+
+    describe('per-call usage recording', function () {
+        it('records one usage call per successful synchronous tool-loop iteration', function () {
+            $llmClient = Mockery::mock(LlmClient::class);
+            $llmClient->shouldReceive('chat')->once()->andReturn(
+                $this->makeToolCallResponse('call_001', 'echo_tool', '{"input": "world"}')
+            );
+            $llmClient->shouldReceive('chat')->once()->andReturn(
+                $this->makeFinalResponse('The echo result was: executed:echo_tool:world')
+            );
+
+            $recorded = [];
+            $runRecorder = Mockery::mock(RunRecorder::class)->shouldIgnoreMissing();
+            $runRecorder->shouldReceive('recordCall')
+                ->twice()
+                ->withArgs(function (
+                    string $runId,
+                    int $attemptIndex,
+                    ?string $provider,
+                    ?string $model,
+                    ?string $finishReason,
+                    ?int $latencyMs,
+                    ?CallUsage $usage,
+                ) use (&$recorded): bool {
+                    $recorded[] = [
+                        'attempt_index' => $attemptIndex,
+                        'provider' => $provider,
+                        'model' => $model,
+                        'finish_reason' => $finishReason,
+                        'latency_ms' => $latencyMs,
+                        'prompt_tokens' => $usage?->promptTokens,
+                        'completion_tokens' => $usage?->completionTokens,
+                    ];
+
+                    return preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/i', $runId) === 1
+                        && $provider === 'test-provider'
+                        && $model === 'gpt-4'
+                        && $usage !== null;
+                })
+                ->andReturnNull();
+
+            $runtime = new AgenticRuntime(
+                defaultAgenticConfigResolver(),
+                $llmClient,
+                $this->makeToolRegistry(buildEchoTool()),
+                $this->makePassthroughCredentialResolver(),
+                new RuntimeMessageBuilder,
+                new RuntimeResponseFactory,
+                new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
+                $runRecorder,
+                new AgenticToolLoopStreamReader(
+                    $llmClient,
+                    Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
+                    app(AgenticExecutionControlResolver::class),
+                    $runRecorder,
+                ),
+                app(RuntimeSessionContext::class),
                 Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
                 app(AgenticExecutionControlResolver::class),
-                $runRecorder,
-            ),
-            app(RuntimeSessionContext::class),
-            Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
-            app(AgenticExecutionControlResolver::class),
-        );
+            );
 
-        $result = $runtime->run(
-            [$this->makeMessage('user', 'Echo world')],
-            1,
-            (string) Str::ulid(),
-            AGENTIC_RUNTIME_SYSTEM_PROMPT,
-        );
+            $result = $runtime->run(
+                [$this->makeMessage('user', 'Echo world')],
+                1,
+                (string) Str::ulid(),
+                AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            );
 
-        expect($result['content'])->toContain('executed:echo_tool:world')
-            ->and($recorded)->toHaveCount(2)
-            ->and($recorded[0])->toMatchArray([
-                'attempt_index' => 0,
-                'finish_reason' => 'tool_calls',
-                'latency_ms' => 200,
-                'prompt_tokens' => 20,
-                'completion_tokens' => 15,
-            ])
-            ->and($recorded[1])->toMatchArray([
-                'attempt_index' => 1,
-                'finish_reason' => 'stop',
-                'latency_ms' => 150,
-                'prompt_tokens' => 30,
-                'completion_tokens' => 10,
-            ]);
+            expect($result['content'])->toContain('executed:echo_tool:world')
+                ->and($recorded)->toHaveCount(2)
+                ->and($recorded[0])->toMatchArray([
+                    'attempt_index' => 0,
+                    'finish_reason' => 'tool_calls',
+                    'latency_ms' => 200,
+                    'prompt_tokens' => 20,
+                    'completion_tokens' => 15,
+                ])
+                ->and($recorded[1])->toMatchArray([
+                    'attempt_index' => 1,
+                    'finish_reason' => 'stop',
+                    'latency_ms' => 150,
+                    'prompt_tokens' => 30,
+                    'completion_tokens' => 10,
+                ]);
+        });
     });
 
-    it('preserves assistant reasoning_content across tool loop iterations', function () {
-        $llmClient = Mockery::mock(LlmClient::class);
+    describe('reasoning across tool steps', function () {
+        it('preserves assistant reasoning_content across tool loop iterations', function () {
+            $llmClient = Mockery::mock(LlmClient::class);
 
-        $llmClient->shouldReceive('chat')->once()->andReturn([
-            'content' => null,
-            'reasoning_content' => 'Need the tool result before answering.',
-            'latency_ms' => 200,
-            'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 15],
-            'tool_calls' => [
-                [
-                    'id' => 'call_reasoning_001',
-                    'type' => 'function',
-                    'function' => [
-                        'name' => 'echo_tool',
-                        'arguments' => '{"input":"world"}',
+            $llmClient->shouldReceive('chat')->once()->andReturn([
+                'content' => null,
+                'reasoning_content' => 'Need the tool result before answering.',
+                'latency_ms' => 200,
+                'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 15],
+                'tool_calls' => [
+                    [
+                        'id' => 'call_reasoning_001',
+                        'type' => 'function',
+                        'function' => [
+                            'name' => 'echo_tool',
+                            'arguments' => '{"input":"world"}',
+                        ],
                     ],
                 ],
-            ],
-        ]);
+            ]);
 
-        $llmClient->shouldReceive('chat')
-            ->once()
-            ->withArgs(function ($request): bool {
-                $assistantMessages = array_values(array_filter(
-                    $request->messages,
-                    static fn (array $message): bool => ($message['role'] ?? null) === 'assistant'
-                ));
+            $llmClient->shouldReceive('chat')
+                ->once()
+                ->withArgs(function ($request): bool {
+                    $assistantMessages = array_values(array_filter(
+                        $request->messages,
+                        static fn (array $message): bool => ($message['role'] ?? null) === 'assistant'
+                    ));
 
-                if ($assistantMessages === []) {
-                    return false;
-                }
+                    if ($assistantMessages === []) {
+                        return false;
+                    }
 
-                $assistantMessage = $assistantMessages[0];
+                    $assistantMessage = $assistantMessages[0];
 
-                return ($assistantMessage['reasoning_content'] ?? null) === 'Need the tool result before answering.'
-                    && ($assistantMessage['tool_calls'][0]['id'] ?? null) === 'call_reasoning_001';
-            })
-            ->andReturn($this->makeFinalResponse('The echo result was: executed:echo_tool:world'));
+                    return ($assistantMessage['reasoning_content'] ?? null) === 'Need the tool result before answering.'
+                        && ($assistantMessage['tool_calls'][0]['id'] ?? null) === 'call_reasoning_001';
+                })
+                ->andReturn($this->makeFinalResponse('The echo result was: executed:echo_tool:world'));
 
-        $result = runAgenticConversation(
-            $llmClient,
-            toolRegistry: $this->makeToolRegistry(buildEchoTool()),
-            userMessage: 'Echo world',
-            systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
-        );
+            $result = runAgenticConversation(
+                $llmClient,
+                toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+                userMessage: 'Echo world',
+                systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            );
 
-        expect($result['content'])->toContain('executed:echo_tool:world');
+            expect($result['content'])->toContain('executed:echo_tool:world');
+        });
     });
 });
 

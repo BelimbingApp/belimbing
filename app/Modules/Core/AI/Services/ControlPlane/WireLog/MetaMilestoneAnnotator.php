@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\ControlPlane\WireLog;
 
 use App\Modules\Core\AI\Enums\RunEventType;
@@ -151,6 +152,38 @@ class MetaMilestoneAnnotator
             return $wireEntries;
         }
 
+        $milestoneInstants = $this->milestoneInstantsFromMilestones($milestones);
+
+        if ($milestoneInstants === []) {
+            return $wireEntries;
+        }
+
+        $entryInstants = $this->entryInstantsFromWireEntries($wireEntries);
+
+        foreach ($wireEntries as $i => $entry) {
+            $entryAt = $entryInstants[$i] ?? null;
+
+            if ($entryAt === null) {
+                continue;
+            }
+
+            $nextEntryAt = $this->nextNonNullEntryInstant($entryInstants, $i);
+            $matches = $this->milestonesMatchingEntryWindow($milestoneInstants, $entryAt, $nextEntryAt);
+
+            if ($matches !== []) {
+                $wireEntries[$i]['meta_milestones'] = $matches;
+            }
+        }
+
+        return $wireEntries;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $milestones
+     * @return list<array{unix_ms: int|null, type: string, label: string, severity: string}>
+     */
+    private function milestoneInstantsFromMilestones(array $milestones): array
+    {
         $milestoneInstants = [];
 
         foreach ($milestones as $milestone) {
@@ -168,57 +201,63 @@ class MetaMilestoneAnnotator
             ];
         }
 
-        if ($milestoneInstants === []) {
-            return $wireEntries;
-        }
+        return $milestoneInstants;
+    }
 
-        $entryInstants = array_map(function (array $entry): ?int {
+    /**
+     * @param  list<array<string, mixed>>  $wireEntries
+     * @return list<int|null>
+     */
+    private function entryInstantsFromWireEntries(array $wireEntries): array
+    {
+        return array_map(function (array $entry): ?int {
             $at = $entry['at'] ?? null;
 
             return is_string($at) && $at !== '' ? $this->parseUnixMs($at) : null;
         }, $wireEntries);
+    }
 
-        foreach ($wireEntries as $i => $entry) {
-            $entryAt = $entryInstants[$i] ?? null;
-
-            if ($entryAt === null) {
-                continue;
-            }
-
-            $nextEntryAt = null;
-            for ($j = $i + 1; $j < count($entryInstants); $j++) {
-                if ($entryInstants[$j] !== null) {
-                    $nextEntryAt = $entryInstants[$j];
-                    break;
-                }
-            }
-
-            $matches = [];
-
-            foreach ($milestoneInstants as $milestone) {
-                $instant = $milestone['unix_ms'];
-
-                if ($instant === null || $instant < $entryAt) {
-                    continue;
-                }
-
-                if ($nextEntryAt !== null && $instant >= $nextEntryAt) {
-                    continue;
-                }
-
-                $matches[] = [
-                    'type' => $milestone['type'],
-                    'label' => $milestone['label'],
-                    'severity' => $milestone['severity'],
-                ];
-            }
-
-            if ($matches !== []) {
-                $wireEntries[$i]['meta_milestones'] = $matches;
+    /**
+     * @param  list<int|null>  $entryInstants
+     */
+    private function nextNonNullEntryInstant(array $entryInstants, int $fromIndex): ?int
+    {
+        for ($j = $fromIndex + 1; $j < count($entryInstants); $j++) {
+            if ($entryInstants[$j] !== null) {
+                return $entryInstants[$j];
             }
         }
 
-        return $wireEntries;
+        return null;
+    }
+
+    /**
+     * @param  list<array{unix_ms: int|null, type: string, label: string, severity: string}>  $milestoneInstants
+     * @return list<array{type: string, label: string, severity: string}>
+     */
+    private function milestonesMatchingEntryWindow(array $milestoneInstants, int $entryAt, ?int $nextEntryAt): array
+    {
+        $matches = [];
+
+        foreach ($milestoneInstants as $milestone) {
+            $instant = $milestone['unix_ms'];
+
+            if ($instant === null || $instant < $entryAt) {
+                continue;
+            }
+
+            if ($nextEntryAt !== null && $instant >= $nextEntryAt) {
+                continue;
+            }
+
+            $matches[] = [
+                'type' => $milestone['type'],
+                'label' => $milestone['label'],
+                'severity' => $milestone['severity'],
+            ];
+        }
+
+        return $matches;
     }
 
     private function parseUnixMs(string $iso): ?int

@@ -81,10 +81,10 @@
                                                 <div class="flex flex-wrap justify-end gap-2">
                                                     @if ($canManage && ! $run->isClosed())
                                                         <x-ui.button size="sm" variant="ghost" wire:click="calculateRun({{ $run->id }})">{{ __('Calculate') }}</x-ui.button>
-                                                        <x-ui.button size="sm" variant="ghost" wire:click="reviewRun({{ $run->id }})">{{ __('Review') }}</x-ui.button>
-                                                        <x-ui.button size="sm" variant="ghost" wire:click="approveRun({{ $run->id }})">{{ __('Approve') }}</x-ui.button>
-                                                        <x-ui.button size="sm" variant="ghost" wire:click="closeRun({{ $run->id }})">{{ __('Close') }}</x-ui.button>
-                                                        <x-ui.button size="sm" variant="ghost" wire:click="voidRun({{ $run->id }})">{{ __('Void') }}</x-ui.button>
+                                                        <x-ui.button size="sm" variant="ghost" wire:click="transitionPayrollRun('review', {{ $run->id }})">{{ __('Review') }}</x-ui.button>
+                                                        <x-ui.button size="sm" variant="ghost" wire:click="transitionPayrollRun('approve', {{ $run->id }})">{{ __('Approve') }}</x-ui.button>
+                                                        <x-ui.button size="sm" variant="ghost" wire:click="transitionPayrollRun('close', {{ $run->id }})">{{ __('Close') }}</x-ui.button>
+                                                        <x-ui.button size="sm" variant="ghost" wire:click="transitionPayrollRun('void', {{ $run->id }})">{{ __('Void') }}</x-ui.button>
                                                     @elseif (! $canManage)
                                                         <span class="text-xs text-muted">{{ __('View only') }}</span>
                                                     @else

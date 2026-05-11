@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Payslip {{ $payslip['period'] ?? '' }}</title>
+<title>Payslip {{ $payslip['period']['code'] ?? '' }}</title>
 <style>
 @page { size: A4; margin: 18mm 16mm; }
 body { font-family: 'Helvetica', 'Arial', sans-serif; color: #111; font-size: 11pt; }
@@ -23,25 +23,24 @@ footer { margin-top: 22pt; font-size: 8pt; color: #777; border-top: 1px solid #d
 <header>
     <div>
         <h1>{{ $employer['name'] ?? 'Belimbing Employer' }}</h1>
-        <div class="muted">Payslip for {{ $payslip['period'] ?? '—' }}</div>
+        <div class="muted">Payslip for {{ $payslip['period']['name'] ?? ($payslip['period']['code'] ?? '—') }}</div>
     </div>
     <div class="muted" style="text-align: right;">
-        <div>Payroll Run #{{ $payslip['run_id'] ?? '—' }}</div>
-        <div>Generated: {{ $payslip['generated_at'] ?? now()->toIso8601String() }}</div>
+        <div>Employee #{{ $payslip['employee']['number'] ?? '—' }}</div>
+        <div>Generated: {{ now()->toIso8601String() }}</div>
     </div>
 </header>
 
 <div class="grid">
     <div>
         <div class="section-title">Employee</div>
-        <div>{{ $employee['name'] ?? (auth()->user()->name ?? 'Unknown') }}</div>
-        <div class="muted">{{ $employee['identifier'] ?? '' }}</div>
-        <div class="muted">Rendered as user #{{ auth()->id() ?? '—' }}</div>
+        <div>{{ $payslip['employee']['name'] ?? 'Unknown' }}</div>
+        <div class="muted">{{ $payslip['employee']['number'] ?? '' }}</div>
     </div>
     <div>
         <div class="section-title">Pay Period</div>
-        <div>{{ $payslip['period_start'] ?? '—' }} → {{ $payslip['period_end'] ?? '—' }}</div>
-        <div class="muted">Pay date: {{ $payslip['pay_date'] ?? '—' }}</div>
+        <div>{{ $payslip['period']['starts_on'] ?? '—' }} to {{ $payslip['period']['ends_on'] ?? '—' }}</div>
+        <div class="muted">Pay date: {{ $payslip['period']['pay_date'] ?? '—' }}</div>
     </div>
 </div>
 
@@ -51,15 +50,17 @@ footer { margin-top: 22pt; font-size: 8pt; color: #777; border-top: 1px solid #d
         <tr><th>Item</th><th class="amount">Amount (MYR)</th></tr>
     </thead>
     <tbody>
-        @foreach ($earnings ?? [] as $line)
+        @forelse (($payslip['sections']['earnings'] ?? []) as $line)
             <tr>
                 <td>{{ $line['label'] }}</td>
                 <td class="amount">{{ number_format((float) $line['amount'], 2) }}</td>
             </tr>
-        @endforeach
+        @empty
+            <tr><td colspan="2" class="muted">No earnings</td></tr>
+        @endforelse
     </tbody>
     <tfoot>
-        <tr><td>Gross</td><td class="amount">{{ number_format((float) ($totals['gross'] ?? 0), 2) }}</td></tr>
+        <tr><td>Gross</td><td class="amount">{{ number_format((float) ($payslip['summary']['gross_pay'] ?? 0), 2) }}</td></tr>
     </tfoot>
 </table>
 
@@ -69,7 +70,7 @@ footer { margin-top: 22pt; font-size: 8pt; color: #777; border-top: 1px solid #d
         <tr><th>Item</th><th class="amount">Amount (MYR)</th></tr>
     </thead>
     <tbody>
-        @foreach ($deductions ?? [] as $line)
+        @foreach (array_merge($payslip['sections']['employee_deductions'] ?? [], $payslip['sections']['employee_contributions'] ?? [], $payslip['sections']['taxes'] ?? []) as $line)
             <tr>
                 <td>{{ $line['label'] }}</td>
                 <td class="amount">{{ number_format((float) $line['amount'], 2) }}</td>
@@ -77,19 +78,45 @@ footer { margin-top: 22pt; font-size: 8pt; color: #777; border-top: 1px solid #d
         @endforeach
     </tbody>
     <tfoot>
-        <tr><td>Total deductions</td><td class="amount">{{ number_format((float) ($totals['deductions'] ?? 0), 2) }}</td></tr>
+        <tr><td>Total deductions</td><td class="amount">{{ number_format((float) ($payslip['summary']['total_deductions'] ?? 0), 2) }}</td></tr>
     </tfoot>
 </table>
+
+@if (($payslip['sections']['reimbursements'] ?? []) !== [])
+<div class="section-title">Reimbursements</div>
+<table>
+    <thead><tr><th>Item</th><th class="amount">Amount ({{ $payslip['currency'] ?? 'MYR' }})</th></tr></thead>
+    <tbody>
+        @foreach (($payslip['sections']['reimbursements'] ?? []) as $line)
+            <tr><td>{{ $line['label'] }}</td><td class="amount">{{ number_format((float) $line['amount'], 2) }}</td></tr>
+        @endforeach
+    </tbody>
+    <tfoot><tr><td>Total reimbursements</td><td class="amount">{{ number_format((float) ($payslip['summary']['total_reimbursements'] ?? 0), 2) }}</td></tr></tfoot>
+</table>
+@endif
+
+@if (($payslip['sections']['employer_contributions'] ?? []) !== [] || ($payslip['sections']['employer_levies'] ?? []) !== [])
+<div class="section-title">Employer Contributions And Levies</div>
+<table>
+    <thead><tr><th>Item</th><th class="amount">Amount ({{ $payslip['currency'] ?? 'MYR' }})</th></tr></thead>
+    <tbody>
+        @foreach (array_merge($payslip['sections']['employer_contributions'] ?? [], $payslip['sections']['employer_levies'] ?? []) as $line)
+            <tr><td>{{ $line['label'] }}</td><td class="amount">{{ number_format((float) $line['amount'], 2) }}</td></tr>
+        @endforeach
+    </tbody>
+    <tfoot><tr><td>Total employer statutory cost</td><td class="amount">{{ number_format((float) (($payslip['summary']['employer_contributions'] ?? 0) + ($payslip['summary']['employer_levies'] ?? 0)), 2) }}</td></tr></tfoot>
+</table>
+@endif
 
 <div class="section-title">Net pay</div>
 <table>
     <tbody>
-        <tr><td>Net pay</td><td class="amount">{{ number_format((float) ($totals['net'] ?? 0), 2) }}</td></tr>
+        <tr><td>Net pay</td><td class="amount">{{ number_format((float) ($payslip['summary']['net_pay'] ?? 0), 2) }}</td></tr>
     </tbody>
 </table>
 
 <footer>
-    Phase 1 spike — template and data shape are placeholders. Real payslip data wiring lands in Phase 3.
+    Generated from immutable payroll result lines. Employer contributions and levies are shown for disclosure and are not deducted from net pay.
 </footer>
 </body>
 </html>
