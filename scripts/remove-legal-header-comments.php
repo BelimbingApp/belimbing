@@ -103,6 +103,69 @@ function stripLegalHeaders(string $content, string $spdxLine, string $copyrightN
     return $out;
 }
 
+/**
+ * @param  list<string>  $skipDirBasenames
+ * @return RecursiveIteratorIterator<int, SplFileInfo>
+ */
+function legalHeaderSourceFileIterator(string $root, array $skipDirBasenames): RecursiveIteratorIterator
+{
+    return new RecursiveIteratorIterator(
+        new RecursiveCallbackFilterIterator(
+            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
+            static function (SplFileInfo $current) use ($skipDirBasenames): bool {
+                if (! $current->isDir()) {
+                    return true;
+                }
+
+                return ! in_array($current->getBasename(), $skipDirBasenames, true);
+            }
+        ),
+        RecursiveIteratorIterator::LEAVES_ONLY
+    );
+}
+
+/**
+ * @param  list<string>  $extensions
+ */
+function tryStripLegalHeaderFromFile(
+    string $path,
+    string $spdxLine,
+    string $copyrightNeedle,
+    int $headerPeekLineCount,
+    array $extensions,
+): bool {
+    if (! shouldProcessFile($path, $extensions)) {
+        return false;
+    }
+
+    $prefix = readFirstLines($path, $headerPeekLineCount);
+    if ($prefix === null || $prefix === '') {
+        return false;
+    }
+
+    if (! str_contains($prefix, $spdxLine) || ! str_contains($prefix, $copyrightNeedle)) {
+        return false;
+    }
+
+    $original = file_get_contents($path);
+    if ($original === false || $original === '') {
+        return false;
+    }
+
+    $updated = stripLegalHeaders($original, $spdxLine, $copyrightNeedle);
+    if ($updated === $original) {
+        return false;
+    }
+
+    if (file_put_contents($path, $updated) === false) {
+        fwrite(STDERR, "Failed to write: {$path}\n");
+
+        return false;
+    }
+
+    return true;
+}
+
 function runRemoveLegalHeaderComments(): void
 {
     $repoRoot = dirname(__DIR__);
@@ -130,19 +193,7 @@ function runRemoveLegalHeaderComments(): void
             continue;
         }
 
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveCallbackFilterIterator(
-                new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
-                static function (SplFileInfo $current) use ($skipDirBasenames): bool {
-                    if (! $current->isDir()) {
-                        return true;
-                    }
-
-                    return ! in_array($current->getBasename(), $skipDirBasenames, true);
-                }
-            ),
-            RecursiveIteratorIterator::LEAVES_ONLY
-        );
+        $iterator = legalHeaderSourceFileIterator($root, $skipDirBasenames);
 
         /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
@@ -151,33 +202,8 @@ function runRemoveLegalHeaderComments(): void
             }
 
             $path = $file->getPathname();
-            if (! shouldProcessFile($path, $extensions)) {
-                continue;
-            }
-
-            $prefix = readFirstLines($path, $headerPeekLineCount);
-            if ($prefix === null || $prefix === '') {
-                continue;
-            }
-
-            if (! str_contains($prefix, $spdxLine) || ! str_contains($prefix, $copyrightNeedle)) {
-                continue;
-            }
-
-            $original = file_get_contents($path);
-            if ($original === false || $original === '') {
-                continue;
-            }
-
-            $updated = stripLegalHeaders($original, $spdxLine, $copyrightNeedle);
-            if ($updated === $original) {
-                continue;
-            }
-
-            if (file_put_contents($path, $updated) !== false) {
+            if (tryStripLegalHeaderFromFile($path, $spdxLine, $copyrightNeedle, $headerPeekLineCount, $extensions)) {
                 $changedFiles++;
-            } else {
-                fwrite(STDERR, "Failed to write: {$path}\n");
             }
         }
     }

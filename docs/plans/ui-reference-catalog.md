@@ -3,7 +3,7 @@
 **Agent:** Codex
 **Status:** In Progress
 **Last Updated:** 2026-04-27
-**Sources:** `docs/todo/ui-reference-catalog.md`, `resources/core/views/AGENTS.md`, `resources/core/css/tokens.css`, `docs/guides/theming.md`, `resources/core/views/livewire/admin/system/ui-reference/partials/data-display.blade.php`, https://github.com/google-labs-code/design.md
+**Sources:** `docs/todo/ui-reference-catalog.md`, `resources/core/views/AGENTS.md`, `resources/core/css/tokens.css`, `docs/guides/theming.md`, `resources/core/views/livewire/admin/system/ui-reference/partials/data-display.blade.php`, `resources/core/views/components/ui/secret-input.blade.php`, https://github.com/google-labs-code/design.md
 
 ## Problem Essence
 
@@ -124,7 +124,7 @@ The catalog pages should be grouped logically, with a structure close to:
 Sample intended coverage for each grouping:
 
 - **Foundations:** color tokens, typography scale, spacing rhythm, shape and elevation rules, icon language, and motion principles
-- **Inputs:** text input, search input, textarea, select, combobox, datetime, checkbox, radio, and comparison demos such as select versus combobox versus free text
+- **Inputs:** text input, secret input, search input, textarea, select, combobox, datetime, checkbox, radio, and comparison demos such as select versus combobox versus free text
 - **Feedback:** flash notifications, inline alerts, validation states, form-level error summaries, loading indicators, empty states, and other status surfaces
 - **Actions:** primary, secondary, ghost, and danger buttons, icon actions, grouped actions, destructive entry points, and loading or disabled action states
 - **Navigation:** tabs as the canonical home, page-header navigation affordances, pagination, filter bars, section switchers, and keyboard-focus treatment for navigation controls
