@@ -1,6 +1,6 @@
 # people/04_pdf-generation-strategy
 
-**Status:** Phase 2 complete (architecturally) — renderer, post-processor, queue job, concurrency narrative landed; only qpdf availability rollout remains operational
+**Status:** Phases 2 and 4 complete (architecturally). Phase 3 (Payroll wiring) is the only remaining feature work; qpdf availability rollout across deployment targets remains operational.
 **Last Updated:** 2026-05-11
 **Sources:**
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — payslip and statutory output requirements (Phases on payslip PDF, report exports, ESS document delivery)
@@ -112,6 +112,6 @@ Goal: deliver the payroll-specific PDFs called out in `02_payroll-malaysia-top-l
 
 Goal: have a written, ready-to-execute fallback if the in-process path hits a wall, without paying its cost prematurely.
 
-- [ ] Document `pdf-lib`-on-Node as the AcroForm-filling escape hatch, with a one-page note describing how it would integrate alongside the existing Node runtime — but do not implement until a concrete LHDN AcroForm requirement appears.
-- [ ] Document Gotenberg as the throughput escape hatch, including which Phase 3 metric (e.g., payslip-rendering p95 under batch load) would trigger adopting it.
-- [ ] Revisit this plan if either escape hatch is taken, and update the Public Contract section accordingly so the renderer’s shape stays honest.
+- [x] Document `pdf-lib`-on-Node as the AcroForm-filling escape hatch, with a one-page note describing how it would integrate alongside the existing Node runtime — but do not implement until a concrete LHDN AcroForm requirement appears. claude-code/claude-opus-4-7 — landed in `docs/architecture/pdf-rendering.md` ("Escape hatches → pdf-lib"). Integration sketch covers Node-runner action, PHP `AcroFormFiller` service, reuse of `PdfArtifactWriter`/queue-job/lineage patterns. Not implemented.
+- [x] Document Gotenberg as the throughput escape hatch, including which Phase 3 metric (e.g., payslip-rendering p95 under batch load) would trigger adopting it. claude-code/claude-opus-4-7 — landed in `docs/architecture/pdf-rendering.md` ("Escape hatches → Gotenberg"). Trigger conditions table written down (p95 > 5 s sustained, OOM evictions, cold-start dominance, recycle frequency). Renderer surface stays unchanged; only the rendering step swaps from local subprocess to HTTP round-trip.
+- [x] Revisit this plan if either escape hatch is taken, and update the Public Contract section accordingly so the renderer’s shape stays honest. claude-code/claude-opus-4-7 — explicit revisit checklist landed at the end of the "Escape hatches" section: Public Contract review, Concurrency model update, Sources/License-compatibility audit for the new dependency. The renderer contract is built to survive either substitution without forcing callers to change.

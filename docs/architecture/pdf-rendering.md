@@ -139,6 +139,51 @@ The TTL is short by design — see `BLB_PDF_SIGNED_URL_TTL` (default 60 s) in `d
 
 ---
 
+## Escape hatches
+
+Two escape hatches are documented but **not implemented**. Either is a real plan revision if taken — see `docs/plans/people/04_pdf-generation-strategy.md`.
+
+### pdf-lib (Node) — for filling LHDN-issued AcroForm templates
+
+When BLB needs to overlay employer data onto an **official PDF template** that LHDN (or any agency) distributes — not produce a BLB-authored visual replica — the AcroForm fields in that template must be filled in-place. The renderer cannot do this; it produces PDFs from HTML, not by editing existing PDFs.
+
+`pdf-lib` (MIT, https://pdf-lib.js.org/) is the cheapest open-source option that fits BLB's stack: it runs under the same Node runtime that already hosts `browser-runner.mjs` and Playwright, and its license is permissive against `AGPL-3.0-only`. The integration shape:
+
+- Add an `acroform` action to `resources/core/scripts/browser-runner.mjs` that loads a source PDF, fills named fields from a JSON payload, and writes the result to `output_path`.
+- Add a PHP service `App\Base\Pdf\Services\AcroFormFiller` (working name) that calls `PlaywrightRunner::execute('acroform', [...])` and returns a `PdfArtifact` via the same `PdfArtifactWriter`.
+- Reuse the same disk, lineage metadata, and queue-job patterns as the renderer.
+
+This is **not** Phase 1–4 work. It is only adopted when a concrete LHDN AcroForm requirement appears that can't be satisfied by a BLB-authored visual template. As of the current plan, every visual form (EA, CP8A, PCB2) is rendered as a BLB-authored Blade template, not an AcroForm overlay.
+
+### Gotenberg — for offloading Chromium-based rendering
+
+When the queue-worker concurrency model in this document stops meeting throughput requirements — measured against `RenderPdfJob` p95 under realistic batch load — Gotenberg (MIT, https://gotenberg.dev/) is the right next step. It is a Dockerized Chromium PDF microservice exposing an HTTP API; BLB sends HTML and receives a PDF byte stream over the network.
+
+Trigger conditions worth writing down so the decision is not eyeballed:
+
+| Signal | Threshold suggesting Gotenberg adoption |
+|---|---|
+| `RenderPdfJob` p95 wall time under batch load | > 5 s sustained at a representative production host's worker count |
+| Host RSS pressure during payroll batch runs | Workers being OOM-killed or evicted by the OS more than once per batch |
+| Cold-start dominance | Cold-start time becoming > 50% of total render time for short documents, repeatedly |
+| Operational complaints | Octane workers being recycled mid-render frequently enough to require runbooks |
+
+If adopted, the renderer surface does **not** change: `PdfRenderer::renderInline` and `renderView` still return `PdfArtifact`. What changes is the implementation of the rendering step: instead of spawning Chromium locally via `PlaywrightRunner`, an HTTP client posts to Gotenberg and reads back the PDF stream. The Phase 2 queue worker continues to be the unit of work; it just spends its time on an HTTP round-trip instead of a subprocess.
+
+Operationally, Gotenberg is a separate container or systemd unit with its own scaling story. That is its main cost — the operational moving part — and the reason it stays out of the Phase 1–2 surface.
+
+### Plan revisit trigger
+
+If either escape hatch is taken, `docs/plans/people/04_pdf-generation-strategy.md` must be revised:
+
+- Update **Public Contract** (renderer return shape may need a streaming variant if Gotenberg's HTTP body is large).
+- Update **Concurrency model** in this document (Gotenberg moves the concurrency budget off the BLB host).
+- Add a row to **Sources** referencing the new dependency and verify its license against `AGPL-3.0-only` per the License Compatibility section of the plan.
+
+The renderer's external contract is built to survive either substitution without forcing callers to change. Phase 3 wiring (Payroll → `RenderPdfJob`) is therefore safe to do without first deciding whether either escape hatch will be needed.
+
+---
+
 ## What is explicitly out of scope
 
 - **Arbitrary user-driven PDF editing.** BLB produces PDFs from templates; it does not let users open and edit an existing PDF.
