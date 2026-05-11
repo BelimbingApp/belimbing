@@ -1,6 +1,8 @@
 <?php
 
 use App\Base\Foundation\Exceptions\BlbDataContractException;
+use App\Base\Pdf\Events\PdfArtifactRendered;
+use App\Base\Pdf\ValueObjects\PdfArtifact;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\People\Payroll\Contracts\CalculatesPayrollRun;
@@ -21,6 +23,7 @@ use App\Modules\People\Payroll\Models\PayrollEmployerStatutoryProfile;
 use App\Modules\People\Payroll\Models\PayrollInput;
 use App\Modules\People\Payroll\Models\PayrollPayItem;
 use App\Modules\People\Payroll\Models\PayrollPayItemClassification;
+use App\Modules\People\Payroll\Models\PayrollPdfArtifact;
 use App\Modules\People\Payroll\Models\PayrollPeriod;
 use App\Modules\People\Payroll\Models\PayrollResultLine;
 use App\Modules\People\Payroll\Models\PayrollRun;
@@ -32,6 +35,7 @@ use App\Modules\People\Payroll\Services\PayrollBankPaymentExportBuilder;
 use App\Modules\People\Payroll\Services\PayrollCountryPackRegistry;
 use App\Modules\People\Payroll\Services\PayrollEmployerCostReportBuilder;
 use App\Modules\People\Payroll\Services\PayrollLockAuditReportBuilder;
+use App\Modules\People\Payroll\Services\PayrollOperationalCsvExportBuilder;
 use App\Modules\People\Payroll\Services\PayrollPayslipBuilder;
 use App\Modules\People\Payroll\Services\PayrollPdfReportJobFactory;
 use App\Modules\People\Payroll\Services\PayrollRunCalculator;
@@ -1228,6 +1232,63 @@ test('malaysia country pack advertises bank payment placeholder export', functio
         ]);
 });
 
+test('operational payroll reports can be exported as csv', function (): void {
+    [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-CSV-REPORTS');
+
+    foreach ([
+        [PayrollResultLine::TYPE_EARNING, 'basic_salary', 'Basic Salary', '3000.0000', 'payroll-core-input-copy', 'v0'],
+        [PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION, 'my_epf_employee', 'EPF Employee Contribution', '330.0000', 'epf_contribution_schedule', '2026.dev'],
+        [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', 'EPF Employer Contribution', '390.0000', 'epf_contribution_schedule', '2026.dev'],
+        [PayrollResultLine::TYPE_NET_PAY, 'net_pay', 'Net Pay', '2670.0000', 'payroll-core-neutral-net-pay', 'v0'],
+    ] as [$type, $code, $label, $amount, $sourceRule, $sourceVersion]) {
+        PayrollResultLine::query()->create([
+            'payroll_run_id' => $run->id,
+            'payroll_run_participant_id' => $participant->id,
+            'employee_id' => $employee->id,
+            'line_type' => $type,
+            'code' => $code,
+            'label' => $label,
+            'amount' => $amount,
+            'currency' => 'MYR',
+            'source_rule' => $sourceRule,
+            'source_version' => $sourceVersion,
+        ]);
+    }
+    $participant->forceFill([
+        'gross_pay' => '3000.0000',
+        'total_deductions' => '330.0000',
+        'net_pay' => '2670.0000',
+    ])->save();
+    $run->markReviewed();
+
+    $exports = app(PayrollOperationalCsvExportBuilder::class);
+    $summary = $exports->payrollSummary($run->refresh());
+    $statutory = $exports->statutoryContributions($run->refresh());
+    $employerCost = $exports->employerCost($run->refresh());
+    $lockAudit = $exports->lockAudit($run->refresh());
+
+    expect($summary)->toMatchArray([
+        'filename' => 'payroll-summary-MY-2026-01-CSV-REPORTS.csv',
+        'format' => 'csv',
+        'report_type' => 'payroll-summary',
+        'headers' => ['payroll_run_code', 'period_code', 'employee_number', 'employee_name', 'gross_pay', 'employee_deductions', 'employee_contributions', 'taxes', 'reimbursements', 'net_pay'],
+        'totals' => ['rows' => 1],
+    ])
+        ->and($summary['rows'][0])->toMatchArray([
+            'payroll_run_code' => 'MY-2026-01-CSV-REPORTS',
+            'gross_pay' => '3000.0000',
+            'net_pay' => '2670.0000',
+        ])
+        ->and($summary['content'])->toContain('gross_pay')
+        ->and($summary['content'])->toContain('2670.0000')
+        ->and($statutory['content'])->toContain('my_epf_employee')
+        ->and($statutory['content'])->toContain('epf_contribution_schedule')
+        ->and($employerCost['content'])->toContain('total_employer_cost')
+        ->and($employerCost['content'])->toContain('3390.0000')
+        ->and($lockAudit['content'])->toContain('reviewed')
+        ->and($lockAudit['content'])->toContain('Payroll run reviewed.');
+});
+
 test('payroll pdf report factory builds inline render jobs with lineage metadata', function (): void {
     [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-PDF-JOBS');
 
@@ -1279,6 +1340,53 @@ test('payroll pdf report factory builds inline render jobs with lineage metadata
         ->metadata->toMatchArray(['report_type' => 'payroll_lock_audit', 'payroll_run_id' => $run->id]);
 });
 
+test('rendered payroll pdf artifacts are persisted from render events', function (): void {
+    [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-PDF-ARTIFACT');
+    $participant->forceFill(['net_pay' => '1000.0000'])->save();
+    $run->close();
+
+    $job = app(PayrollPdfReportJobFactory::class)->payslip($participant->refresh());
+    $artifact = new PdfArtifact(
+        disk: 'local',
+        path: 'pdf-artifacts/payroll/payslip-MY-2026-01-PDF-ARTIFACT.pdf',
+        templateVersion: 'payroll-payslip@v1',
+        dataVersion: 'payroll_run_participant_id='.$participant->id,
+        bytes: 12345,
+        sha256: str_repeat('a', 64),
+        producedBy: null,
+        producedAt: new DateTimeImmutable('2026-01-31T12:00:00+00:00'),
+    );
+
+    event(new PdfArtifactRendered($job, $artifact));
+    event(new PdfArtifactRendered($job, $artifact));
+
+    $persisted = PayrollPdfArtifact::query()->orderBy('id')->firstOrFail();
+
+    expect(PayrollPdfArtifact::query()->where('disk', 'local')->where('path', 'pdf-artifacts/payroll/payslip-MY-2026-01-PDF-ARTIFACT.pdf')->count())->toBe(2)
+        ->and($persisted)->toMatchArray([
+            'payroll_run_id' => $run->id,
+            'payroll_run_participant_id' => $participant->id,
+            'employee_id' => $employee->id,
+            'report_type' => 'payslip',
+            'disk' => 'local',
+            'path' => 'pdf-artifacts/payroll/payslip-MY-2026-01-PDF-ARTIFACT.pdf',
+            'template_version' => 'payroll-payslip@v1',
+            'data_version' => 'payroll_run_participant_id='.$participant->id,
+            'bytes' => 12345,
+            'sha256' => str_repeat('a', 64),
+            'produced_by' => null,
+        ])
+        ->and($persisted->produced_at?->toIso8601String())->toBe('2026-01-31T12:00:00+00:00')
+        ->and($persisted->metadata)->toMatchArray([
+            'report_type' => 'payslip',
+            'payroll_run_id' => $run->id,
+            'payroll_run_participant_id' => $participant->id,
+            'employee_id' => $employee->id,
+        ])
+        ->and($run->pdfArtifacts()->first()?->is($persisted))->toBeTrue()
+        ->and($participant->pdfArtifacts()->first()?->is($persisted))->toBeTrue();
+});
+
 test('closed payroll runs cannot be recalculated', function (): void {
     [$run, $participant, $employee] = createPayrollCoreRun();
     PayrollInput::query()->create([
@@ -1323,6 +1431,7 @@ test('payroll core tables are registered for stability management', function ():
         'payroll_inputs',
         'payroll_result_lines',
         'payroll_run_audit_events',
+        'payroll_pdf_artifacts',
         'payroll_pay_items',
         'payroll_pay_item_classifications',
         'payroll_employer_statutory_profiles',
