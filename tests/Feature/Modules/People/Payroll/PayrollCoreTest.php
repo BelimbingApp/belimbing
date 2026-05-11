@@ -5,10 +5,13 @@ use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\People\Payroll\Exceptions\ClosedPayrollRunException;
 use App\Modules\People\Payroll\Models\PayrollCalendar;
 use App\Modules\People\Payroll\Models\PayrollInput;
+use App\Modules\People\Payroll\Models\PayrollPayItem;
+use App\Modules\People\Payroll\Models\PayrollPayItemClassification;
 use App\Modules\People\Payroll\Models\PayrollPeriod;
 use App\Modules\People\Payroll\Models\PayrollResultLine;
 use App\Modules\People\Payroll\Models\PayrollRun;
 use App\Modules\People\Payroll\Models\PayrollRunParticipant;
+use App\Modules\People\Payroll\Services\PayItemClassifier;
 use App\Modules\People\Payroll\Services\PayrollPayslipBuilder;
 use App\Modules\People\Payroll\Services\PayrollRunCalculator;
 
@@ -262,10 +265,78 @@ test('payroll core tables are registered for stability management', function ():
         'payroll_inputs',
         'payroll_result_lines',
         'payroll_run_audit_events',
+        'payroll_pay_items',
+        'payroll_pay_item_classifications',
     ] as $tableName) {
         $this->assertDatabaseHas('base_database_tables', [
             'table_name' => $tableName,
             'module_name' => 'Payroll',
         ]);
     }
+});
+
+test('pay item classifications resolve by country and effective date without country columns in core inputs', function (): void {
+    $company = Company::query()->findOrFail(Company::LICENSEE_ID);
+    $payItem = PayrollPayItem::query()->create([
+        'company_id' => $company->id,
+        'code' => 'basic_salary',
+        'name' => 'Basic Salary',
+        'input_type' => PayrollInput::TYPE_EARNING,
+        'status' => 'active',
+    ]);
+
+    PayrollPayItemClassification::query()->create([
+        'payroll_pay_item_id' => $payItem->id,
+        'country_iso' => null,
+        'classification_key' => 'payroll_input_family',
+        'classification_value' => 'regular_earning',
+        'effective_from' => '2026-01-01',
+        'source_pack' => 'payroll-core',
+        'source_version' => 'v0',
+    ]);
+    PayrollPayItemClassification::query()->create([
+        'payroll_pay_item_id' => $payItem->id,
+        'country_iso' => 'MY',
+        'classification_key' => 'statutory_wage_base',
+        'classification_value' => 'ordinary_wage',
+        'effective_from' => '2026-01-01',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.1',
+        'metadata' => ['reason' => 'Malaysia pack owns statutory treatment.'],
+    ]);
+    PayrollPayItemClassification::query()->create([
+        'payroll_pay_item_id' => $payItem->id,
+        'country_iso' => 'MY',
+        'classification_key' => 'statutory_wage_base',
+        'classification_value' => 'ordinary_wage_v2',
+        'effective_from' => '2026-07-01',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.2',
+    ]);
+
+    $january = app(PayItemClassifier::class)->classificationsFor($payItem, 'my', '2026-01-31');
+    $july = app(PayItemClassifier::class)->classificationsFor($payItem, 'MY', '2026-07-31');
+    $singapore = app(PayItemClassifier::class)->classificationsFor($payItem, 'SG', '2026-07-31');
+
+    expect($january)
+        ->toHaveKey('payroll_input_family')
+        ->toHaveKey('statutory_wage_base')
+        ->and($january['payroll_input_family'])->toMatchArray([
+            'value' => 'regular_earning',
+            'country_iso' => null,
+            'source_pack' => 'payroll-core',
+        ])
+        ->and($january['statutory_wage_base'])->toMatchArray([
+            'value' => 'ordinary_wage',
+            'country_iso' => 'MY',
+            'source_pack' => 'belimbing/payroll-my',
+            'source_version' => '2026.1',
+            'metadata' => ['reason' => 'Malaysia pack owns statutory treatment.'],
+        ])
+        ->and($july['statutory_wage_base'])->toMatchArray([
+            'value' => 'ordinary_wage_v2',
+            'source_version' => '2026.2',
+        ])
+        ->and($singapore)->toHaveKey('payroll_input_family')
+        ->and($singapore)->not()->toHaveKey('statutory_wage_base');
 });

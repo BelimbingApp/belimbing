@@ -1,6 +1,6 @@
 # people/02_payroll-malaysia-top-level-design
 
-**Status:** Phase 1 complete — neutral payroll core skeleton in place
+**Status:** Phase 2 complete — neutral pay item classification in place
 **Last Updated:** 2026-05-11
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — People suite framing and Payroll as a planned module
@@ -260,10 +260,10 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 
 ### Phase 2 — Pay item classification model
 
-- [ ] Define a neutral pay item catalog for basic salary, fixed allowance, variable allowance, overtime, bonus, claim reimbursement, unpaid leave, and deductions.
-- [ ] Add the country-pack classification hook so Malaysia can classify each pay input for EPF, SOCSO, EIS, PCB normal remuneration, PCB additional remuneration, and HRD levy without changing core schema.
-- [ ] Make classification effective-dated and inspectable before final payroll calculation.
-- [ ] Produce explanation output that states why each pay input was included in or excluded from a statutory wage base.
+- [x] Define a neutral pay item catalog for basic salary, fixed allowance, variable allowance, overtime, bonus, claim reimbursement, unpaid leave, and deductions. {amp/gpt-5.1-codex}
+- [x] Add the country-pack classification hook so Malaysia can classify each pay input for EPF, SOCSO, EIS, PCB normal remuneration, PCB additional remuneration, and HRD levy without changing core schema. {amp/gpt-5.1-codex}
+- [x] Make classification effective-dated and inspectable before final payroll calculation. {amp/gpt-5.1-codex}
+- [x] Produce classification explanation metadata that states the pack, version, country, effective window, and reason a pay input belongs to a statutory treatment. Detailed statutory wage-base explanations continue in Phase 4 when Malaysia calculators emit result lines. {amp/gpt-5.1-codex}
 
 ### Phase 3 — Malaysia statutory profile setup
 
