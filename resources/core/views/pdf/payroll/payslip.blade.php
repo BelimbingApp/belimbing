@@ -110,6 +110,9 @@ footer { margin-top: 22pt; font-size: 8pt; color: #777; border-top: 1px solid #d
 
 <div class="section-title">Net pay</div>
 <table>
+    <thead>
+        <tr><th>Item</th><th class="amount">Amount (MYR)</th></tr>
+    </thead>
     <tbody>
         <tr><td>Net pay</td><td class="amount">{{ number_format((float) ($payslip['summary']['net_pay'] ?? 0), 2) }}</td></tr>
     </tbody>

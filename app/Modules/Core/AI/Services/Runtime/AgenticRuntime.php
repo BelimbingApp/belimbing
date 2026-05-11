@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Runtime;
 
 use App\Base\AI\DTO\AiRuntimeError;
@@ -95,7 +96,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         try {
             $policy ??= ExecutionPolicy::interactive();
 
-            $this->runRecorder->start(new RunRecorderStartInput(
+            $this->runRecorder->beginExecution(new RunRecorderStartInput(
                 runId: $runId,
                 employeeId: $employeeId,
                 source: $context?->source ?? 'chat',
@@ -210,7 +211,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         try {
             $policy ??= ExecutionPolicy::interactive();
 
-            $this->runRecorder->start(new RunRecorderStartInput(
+            $this->runRecorder->beginExecution(new RunRecorderStartInput(
                 runId: $runId,
                 employeeId: $employeeId,
                 source: $context?->source ?? 'stream',

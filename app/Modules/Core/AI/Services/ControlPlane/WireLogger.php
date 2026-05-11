@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\ControlPlane;
 
 use App\Base\Support\File as BlbFile;
@@ -232,14 +233,18 @@ class WireLogger
             return null;
         }
 
-        $entries = [];
-        $lastEntries = [];
-        $totalEntries = 0;
-        $extendStreamBlock = false;
-        $extensionCount = 0;
-        $collapsedCount = 0;
-        $collapsedFromEntry = 0;
-        $collapsedToEntry = 0;
+        $state = [
+            'entries' => [],
+            'last_entries' => [],
+            'total_entries' => 0,
+            'offset' => $offset,
+            'limit' => $limit,
+            'extend_stream_block' => false,
+            'extension_count' => 0,
+            'collapsed_count' => 0,
+            'collapsed_from_entry' => 0,
+            'collapsed_to_entry' => 0,
+        ];
         $previewer = new WireLogEntryPreviewer;
 
         try {
@@ -248,111 +253,108 @@ class WireLogger
                     continue;
                 }
 
-                $totalEntries++;
-                $previewEntry = $previewer->previewEntry($totalEntries, $line['line'], $line['truncated']);
-                $this->acceptPreviewEntry(
-                    $previewEntry,
-                    $totalEntries,
-                    $offset,
-                    $limit,
-                    $entries,
-                    $lastEntries,
-                    $extendStreamBlock,
-                    $extensionCount,
-                    $collapsedCount,
-                    $collapsedFromEntry,
-                    $collapsedToEntry,
-                );
+                $state['total_entries']++;
+                $previewEntry = $previewer->previewEntry($state['total_entries'], $line['line'], $line['truncated']);
+                $this->acceptPreviewEntry($previewEntry, $state);
             }
         } finally {
             fclose($handle);
         }
 
-        if ($collapsedCount > 0) {
-            $entries[] = $this->collapsedStreamPlaceholder($collapsedFromEntry, $collapsedToEntry, $collapsedCount);
+        if ($state['collapsed_count'] > 0) {
+            $state['entries'][] = $this->collapsedStreamPlaceholder(
+                $state['collapsed_from_entry'],
+                $state['collapsed_to_entry'],
+                $state['collapsed_count'],
+            );
         }
 
-        if ($totalEntries > 0 && $offset >= $totalEntries) {
+        if ($state['total_entries'] > 0 && $state['offset'] >= $state['total_entries']) {
             return [
-                'entries' => $lastEntries,
-                'total_entries' => $totalEntries,
-                'effective_offset' => max(0, $totalEntries - $limit),
+                'entries' => $state['last_entries'],
+                'total_entries' => $state['total_entries'],
+                'effective_offset' => max(0, $state['total_entries'] - $state['limit']),
             ];
         }
 
         return [
-            'entries' => $entries,
-            'total_entries' => $totalEntries,
-            'effective_offset' => $offset,
+            'entries' => $state['entries'],
+            'total_entries' => $state['total_entries'],
+            'effective_offset' => $state['offset'],
         ];
     }
 
     /**
      * @param  array<string, mixed>  $previewEntry
-     * @param  list<array<string, mixed>>  $entries
-     * @param  list<array<string, mixed>>  $lastEntries
+     * @param  array{
+     *     entries: list<array<string, mixed>>,
+     *     last_entries: list<array<string, mixed>>,
+     *     total_entries: int,
+     *     offset: int,
+     *     limit: int,
+     *     extend_stream_block: bool,
+     *     extension_count: int,
+     *     collapsed_count: int,
+     *     collapsed_from_entry: int,
+     *     collapsed_to_entry: int
+     * }  $state
      */
     private function acceptPreviewEntry(
         array $previewEntry,
-        int $totalEntries,
-        int $offset,
-        int $limit,
-        array &$entries,
-        array &$lastEntries,
-        bool &$extendStreamBlock,
-        int &$extensionCount,
-        int &$collapsedCount,
-        int &$collapsedFromEntry,
-        int &$collapsedToEntry,
+        array &$state,
     ): void {
-        $lastEntries[] = $previewEntry;
+        $state['last_entries'][] = $previewEntry;
 
-        if (count($lastEntries) > $limit) {
-            array_shift($lastEntries);
+        if (count($state['last_entries']) > $state['limit']) {
+            array_shift($state['last_entries']);
         }
 
-        if ($totalEntries <= $offset) {
+        if ($state['total_entries'] <= $state['offset']) {
             return;
         }
 
-        if (count($entries) < $limit) {
-            $entries[] = $previewEntry;
-            $extendStreamBlock = count($entries) >= $limit && $this->isStreamLinePreviewEntry($previewEntry);
-            $extensionCount = 0;
+        if (count($state['entries']) < $state['limit']) {
+            $state['entries'][] = $previewEntry;
+            $state['extend_stream_block'] = count($state['entries']) >= $state['limit'] && $this->isStreamLinePreviewEntry($previewEntry);
+            $state['extension_count'] = 0;
 
             return;
         }
 
-        if (! $extendStreamBlock) {
+        if (! $state['extend_stream_block']) {
             return;
         }
 
         if (! $this->isStreamLinePreviewEntry($previewEntry)) {
-            $extendStreamBlock = false;
+            $state['extend_stream_block'] = false;
 
-            if ($collapsedCount > 0) {
-                $entries[] = $this->collapsedStreamPlaceholder($collapsedFromEntry, $collapsedToEntry, $collapsedCount);
-                $collapsedCount = 0;
-                $collapsedFromEntry = 0;
-                $collapsedToEntry = 0;
+            if ($state['collapsed_count'] > 0) {
+                $state['entries'][] = $this->collapsedStreamPlaceholder(
+                    $state['collapsed_from_entry'],
+                    $state['collapsed_to_entry'],
+                    $state['collapsed_count'],
+                );
+                $state['collapsed_count'] = 0;
+                $state['collapsed_from_entry'] = 0;
+                $state['collapsed_to_entry'] = 0;
             }
 
             return;
         }
 
-        if ($extensionCount < self::STREAM_BLOCK_EXTENSION_CAP) {
-            $entries[] = $previewEntry;
-            $extensionCount++;
+        if ($state['extension_count'] < self::STREAM_BLOCK_EXTENSION_CAP) {
+            $state['entries'][] = $previewEntry;
+            $state['extension_count']++;
 
             return;
         }
 
-        if ($collapsedCount === 0) {
-            $collapsedFromEntry = $totalEntries;
+        if ($state['collapsed_count'] === 0) {
+            $state['collapsed_from_entry'] = $state['total_entries'];
         }
 
-        $collapsedToEntry = $totalEntries;
-        $collapsedCount++;
+        $state['collapsed_to_entry'] = $state['total_entries'];
+        $state['collapsed_count']++;
     }
 
     /**

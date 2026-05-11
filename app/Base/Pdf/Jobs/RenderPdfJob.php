@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Pdf\Jobs;
 
 use App\Base\Pdf\Events\PdfArtifactRendered;
@@ -20,6 +21,7 @@ class RenderPdfJob implements ShouldQueue
     use SerializesModels;
 
     public const MODE_INLINE = 'inline';
+
     public const MODE_VIEW = 'view';
 
     /**
@@ -39,11 +41,13 @@ class RenderPdfJob implements ShouldQueue
 
     public function handle(PdfRenderer $renderer, PdfPostProcessor $postProcessor): void
     {
+        $actor = $this->actorUserId !== null ? User::query()->find($this->actorUserId) : null;
+
         $artifact = $this->renderMode === self::MODE_VIEW
             ? $renderer->renderView(
                 view: $this->view,
                 data: $this->data,
-                actor: $this->actorUserId ? User::query()->find($this->actorUserId) : null,
+                actor: $actor,
                 templateVersion: $this->templateVersion,
                 dataVersion: $this->dataVersion,
             )
