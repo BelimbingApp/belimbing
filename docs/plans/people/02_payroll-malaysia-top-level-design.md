@@ -1,6 +1,6 @@
 # people/02_payroll-malaysia-top-level-design
 
-**Status:** Phase 2 complete — neutral pay item classification in place
+**Status:** Phase 4 in progress — statutory rule-table substrate in place
 **Last Updated:** 2026-05-11
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — People suite framing and Payroll as a planned module
@@ -267,14 +267,14 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 
 ### Phase 3 — Malaysia statutory profile setup
 
-- [ ] Capture employer statutory profile fields for EPF, SOCSO, LHDN, HRD Corp applicability, and future zakat authority metadata.
-- [ ] Capture employee statutory profile fields for citizenship/PR/foreign-worker status, age category, EPF number, SOCSO number, tax number, tax residency, PCB profile inputs, and future zakat authorization.
-- [ ] Make statutory profile changes effective-dated so profile updates do not mutate closed payroll runs.
-- [ ] Resolve each employee's statutory category for a payroll period through the Malaysia pack.
+- [x] Capture employer statutory profile payloads for EPF, SOCSO, LHDN, HRD Corp applicability, and future zakat authority metadata without adding Malaysia-specific core columns. `BelimbingApp/blb-payroll-my` owns the field schema and validation semantics. {amp/gpt-5.1-codex}
+- [x] Capture employee statutory profile payloads for citizenship/PR/foreign-worker status, age category, EPF number, SOCSO number, tax number, tax residency, PCB profile inputs, and future zakat authorization without adding Malaysia-specific core columns. `BelimbingApp/blb-payroll-my` owns the field schema and validation semantics. {amp/gpt-5.1-codex}
+- [x] Make statutory profile changes effective-dated so profile updates do not mutate closed payroll runs. {amp/gpt-5.1-codex}
+- [x] Resolve employer and employee statutory profile snapshots for a payroll period by country and country-pack version; the Malaysia pack will turn those snapshots into statutory categories during Phase 4 calculators. {amp/gpt-5.1-codex}
 
 ### Phase 4 — Malaysia EPF, SOCSO, EIS, and HRD levy
 
-- [ ] Add effective-dated statutory table storage for contribution schedules, wage bands, wage ceilings, rates, and rounding rules.
+- [x] Add effective-dated statutory table storage for contribution schedules, wage bands, wage ceilings, rates, and rounding rules. {amp/gpt-5.1-codex}
 - [ ] Implement EPF, SOCSO, EIS, and HRD levy calculators in the Malaysia pack before PCB.
 - [ ] Write result ledger lines for employee contribution, employer contribution, and employer levy amounts.
 - [ ] Store calculation explanations: wage base, employee category, statutory version, cap/bracket/table row used, and rounding rule.

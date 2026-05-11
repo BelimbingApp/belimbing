@@ -4,6 +4,8 @@ use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\People\Payroll\Exceptions\ClosedPayrollRunException;
 use App\Modules\People\Payroll\Models\PayrollCalendar;
+use App\Modules\People\Payroll\Models\PayrollEmployeeStatutoryProfile;
+use App\Modules\People\Payroll\Models\PayrollEmployerStatutoryProfile;
 use App\Modules\People\Payroll\Models\PayrollInput;
 use App\Modules\People\Payroll\Models\PayrollPayItem;
 use App\Modules\People\Payroll\Models\PayrollPayItemClassification;
@@ -11,9 +13,13 @@ use App\Modules\People\Payroll\Models\PayrollPeriod;
 use App\Modules\People\Payroll\Models\PayrollResultLine;
 use App\Modules\People\Payroll\Models\PayrollRun;
 use App\Modules\People\Payroll\Models\PayrollRunParticipant;
+use App\Modules\People\Payroll\Models\PayrollStatutoryRuleRow;
+use App\Modules\People\Payroll\Models\PayrollStatutoryRuleSet;
 use App\Modules\People\Payroll\Services\PayItemClassifier;
 use App\Modules\People\Payroll\Services\PayrollPayslipBuilder;
 use App\Modules\People\Payroll\Services\PayrollRunCalculator;
+use App\Modules\People\Payroll\Services\StatutoryProfileResolver;
+use App\Modules\People\Payroll\Services\StatutoryRuleSetResolver;
 
 function createPayrollCoreRun(string $runCode = 'MY-2026-01-MAIN'): array
 {
@@ -267,6 +273,10 @@ test('payroll core tables are registered for stability management', function ():
         'payroll_run_audit_events',
         'payroll_pay_items',
         'payroll_pay_item_classifications',
+        'payroll_employer_statutory_profiles',
+        'payroll_employee_statutory_profiles',
+        'payroll_statutory_rule_sets',
+        'payroll_statutory_rule_rows',
     ] as $tableName) {
         $this->assertDatabaseHas('base_database_tables', [
             'table_name' => $tableName,
@@ -339,4 +349,141 @@ test('pay item classifications resolve by country and effective date without cou
         ])
         ->and($singapore)->toHaveKey('payroll_input_family')
         ->and($singapore)->not()->toHaveKey('statutory_wage_base');
+});
+
+test('statutory profile resolver selects effective employer and employee profiles without Malaysia-specific columns', function (): void {
+    $company = Company::query()->findOrFail(Company::LICENSEE_ID);
+    $employee = Employee::factory()->create(['company_id' => $company->id]);
+
+    PayrollEmployerStatutoryProfile::query()->create([
+        'company_id' => $company->id,
+        'country_iso' => 'MY',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.1',
+        'effective_from' => '2026-01-01',
+        'effective_to' => '2026-06-30',
+        'profile_data' => [
+            'epf_employer_number' => 'EPF-OLD',
+            'socso_employer_number' => 'SOCSO-001',
+            'hrd_levy_applicable' => false,
+        ],
+        'validation_messages' => [],
+    ]);
+    PayrollEmployerStatutoryProfile::query()->create([
+        'company_id' => $company->id,
+        'country_iso' => 'MY',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.2',
+        'effective_from' => '2026-07-01',
+        'profile_data' => [
+            'epf_employer_number' => 'EPF-NEW',
+            'socso_employer_number' => 'SOCSO-001',
+            'hrd_levy_applicable' => true,
+        ],
+        'validation_messages' => [['level' => 'warning', 'message' => 'HRD levy requires monthly headcount confirmation.']],
+    ]);
+    PayrollEmployeeStatutoryProfile::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'country_iso' => 'MY',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.1',
+        'effective_from' => '2026-01-01',
+        'profile_data' => [
+            'citizenship_status' => 'citizen',
+            'tax_residency' => 'resident',
+            'epf_number' => 'KWSP-123',
+            'zakat_salary_deduction_authorized' => false,
+        ],
+    ]);
+
+    $resolver = app(StatutoryProfileResolver::class);
+    $januaryEmployerProfile = $resolver->employerProfile($company, 'my', '2026-01-31');
+    $julyEmployerProfile = $resolver->employerProfile($company->id, 'MY', '2026-07-31');
+    $employeeProfile = $resolver->employeeProfile($employee, 'MY', '2026-01-31');
+
+    expect($januaryEmployerProfile)
+        ->not()->toBeNull()
+        ->source_version->toBe('2026.1')
+        ->and($januaryEmployerProfile->profile_data)->toMatchArray([
+            'epf_employer_number' => 'EPF-OLD',
+            'hrd_levy_applicable' => false,
+        ])
+        ->and($julyEmployerProfile)
+        ->not()->toBeNull()
+        ->source_version->toBe('2026.2')
+        ->and($julyEmployerProfile->profile_data)->toMatchArray([
+            'epf_employer_number' => 'EPF-NEW',
+            'hrd_levy_applicable' => true,
+        ])
+        ->and($julyEmployerProfile->validation_messages)->toBe([
+            ['level' => 'warning', 'message' => 'HRD levy requires monthly headcount confirmation.'],
+        ])
+        ->and($employeeProfile)
+        ->not()->toBeNull()
+        ->source_pack->toBe('belimbing/payroll-my')
+        ->and($employeeProfile->profile_data)->toMatchArray([
+            'citizenship_status' => 'citizen',
+            'tax_residency' => 'resident',
+            'epf_number' => 'KWSP-123',
+        ])
+        ->and($resolver->employeeProfile($employee, 'SG', '2026-01-31'))->toBeNull();
+});
+
+test('statutory rule sets resolve effective contribution tables with ordered rows', function (): void {
+    PayrollStatutoryRuleSet::query()->create([
+        'country_iso' => 'MY',
+        'rule_key' => 'epf_contribution_schedule',
+        'name' => 'EPF contribution schedule 2026 H1',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.1',
+        'effective_from' => '2026-01-01',
+        'effective_to' => '2026-06-30',
+        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
+    ]);
+    $secondHalfRuleSet = PayrollStatutoryRuleSet::query()->create([
+        'country_iso' => 'MY',
+        'rule_key' => 'epf_contribution_schedule',
+        'name' => 'EPF contribution schedule 2026 H2',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.2',
+        'effective_from' => '2026-07-01',
+        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
+        'metadata' => ['official_reference' => 'country-pack-maintained'],
+    ]);
+    PayrollStatutoryRuleRow::query()->create([
+        'payroll_statutory_rule_set_id' => $secondHalfRuleSet->id,
+        'sort_order' => 20,
+        'row_key' => 'band-2',
+        'min_wage' => '5000.0100',
+        'max_wage' => null,
+        'employee_rate' => '0.11000000',
+        'employer_rate' => '0.12000000',
+        'row_data' => ['category' => 'standard'],
+    ]);
+    PayrollStatutoryRuleRow::query()->create([
+        'payroll_statutory_rule_set_id' => $secondHalfRuleSet->id,
+        'sort_order' => 10,
+        'row_key' => 'band-1',
+        'min_wage' => '0.0000',
+        'max_wage' => '5000.0000',
+        'employee_rate' => '0.11000000',
+        'employer_rate' => '0.13000000',
+        'row_data' => ['category' => 'standard'],
+    ]);
+
+    $ruleSet = app(StatutoryRuleSetResolver::class)->resolve('my', 'epf_contribution_schedule', '2026-07-31');
+
+    expect($ruleSet)
+        ->not()->toBeNull()
+        ->source_pack->toBe('belimbing/payroll-my')
+        ->source_version->toBe('2026.2')
+        ->and($ruleSet->rounding_policy)->toBe(['mode' => 'ceiling', 'precision' => '0.01'])
+        ->and($ruleSet->metadata)->toBe(['official_reference' => 'country-pack-maintained'])
+        ->and($ruleSet->rows)->toHaveCount(2)
+        ->and($ruleSet->rows->pluck('row_key')->all())->toBe(['band-1', 'band-2'])
+        ->and($ruleSet->rows->first()->max_wage)->toBe('5000.0000')
+        ->and($ruleSet->rows->first()->employee_rate)->toBe('0.11000000');
+
+    expect(app(StatutoryRuleSetResolver::class)->resolve('MY', 'missing_rule', '2026-07-31'))->toBeNull();
 });
