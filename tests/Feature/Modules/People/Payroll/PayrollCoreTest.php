@@ -2,6 +2,16 @@
 
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\People\Payroll\Contracts\CalculatesPayrollRun;
+use App\Modules\People\Payroll\Contracts\ClassifiesPayrollPayItems;
+use App\Modules\People\Payroll\Contracts\PayrollCountryPack;
+use App\Modules\People\Payroll\Contracts\ProvidesPayrollExports;
+use App\Modules\People\Payroll\Contracts\ProvidesPayrollProfileSchemas;
+use App\Modules\People\Payroll\Data\CountryPackManifest;
+use App\Modules\People\Payroll\Data\PayrollCalculationContext;
+use App\Modules\People\Payroll\Data\PayrollCalculationResult;
+use App\Modules\People\Payroll\Data\PayrollProposedResultLine;
+use App\Modules\People\Payroll\Data\ProfileSchema;
 use App\Modules\People\Payroll\Exceptions\ClosedPayrollRunException;
 use App\Modules\People\Payroll\Models\PayrollCalendar;
 use App\Modules\People\Payroll\Models\PayrollEmployeeStatutoryProfile;
@@ -16,10 +26,101 @@ use App\Modules\People\Payroll\Models\PayrollRunParticipant;
 use App\Modules\People\Payroll\Models\PayrollStatutoryRuleRow;
 use App\Modules\People\Payroll\Models\PayrollStatutoryRuleSet;
 use App\Modules\People\Payroll\Services\PayItemClassifier;
+use App\Modules\People\Payroll\Services\PayrollCountryPackRegistry;
 use App\Modules\People\Payroll\Services\PayrollPayslipBuilder;
 use App\Modules\People\Payroll\Services\PayrollRunCalculator;
 use App\Modules\People\Payroll\Services\StatutoryProfileResolver;
 use App\Modules\People\Payroll\Services\StatutoryRuleSetResolver;
+use Illuminate\Support\Carbon;
+
+function createPayrollCoreTestCountryPack(string $countryIso = 'SG'): PayrollCountryPack
+{
+    return new class($countryIso) implements CalculatesPayrollRun, ClassifiesPayrollPayItems, PayrollCountryPack, ProvidesPayrollExports, ProvidesPayrollProfileSchemas
+    {
+        public function __construct(private readonly string $countryIso) {}
+
+        public function manifest(): CountryPackManifest
+        {
+            return new CountryPackManifest(
+                countryIso: $this->countryIso,
+                packIdentifier: 'test/payroll-'.strtolower($this->countryIso),
+                packVersion: 'test.1',
+                supportedCoreContracts: [PayrollCountryPackRegistry::CORE_CONTRACT_VERSION],
+                statutoryDataVersions: ['test.1'],
+            );
+        }
+
+        public function profileSchemas(): ProvidesPayrollProfileSchemas
+        {
+            return $this;
+        }
+
+        public function employerSchema(): ProfileSchema
+        {
+            return new ProfileSchema($this->countryIso, 'employer', 'test', 'test.1', []);
+        }
+
+        public function employeeSchema(): ProfileSchema
+        {
+            return new ProfileSchema($this->countryIso, 'employee', 'test', 'test.1', []);
+        }
+
+        public function payItemClassifier(): ClassifiesPayrollPayItems
+        {
+            return $this;
+        }
+
+        public function classificationsFor(PayrollPayItem $payItem, Carbon|string $onDate): array
+        {
+            return [];
+        }
+
+        public function calculator(): CalculatesPayrollRun
+        {
+            return $this;
+        }
+
+        public function calculate(PayrollCalculationContext $context): PayrollCalculationResult
+        {
+            return new PayrollCalculationResult(
+                resultLines: [
+                    new PayrollProposedResultLine(
+                        lineType: PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION,
+                        code: 'test_employee_contribution',
+                        label: 'Test Employee Contribution',
+                        amount: '110.0000',
+                        currency: $context->run->currency,
+                        sourceRule: 'test-contribution-rule',
+                        sourceVersion: 'test.1',
+                        explanation: ['pay_date' => $context->payDate()],
+                    ),
+                    new PayrollProposedResultLine(
+                        lineType: PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION,
+                        code: 'test_employer_contribution',
+                        label: 'Test Employer Contribution',
+                        amount: '130.0000',
+                        currency: $context->run->currency,
+                        sourceRule: 'test-contribution-rule',
+                        sourceVersion: 'test.1',
+                        explanation: ['country_iso' => $context->countryIso()],
+                    ),
+                ],
+                warnings: [['level' => 'info', 'message' => 'Test warning.']],
+                metadata: ['pack_identifier' => 'test/payroll-'.strtolower($this->countryIso)],
+            );
+        }
+
+        public function exports(): ProvidesPayrollExports
+        {
+            return $this;
+        }
+
+        public function definitions(): array
+        {
+            return [];
+        }
+    };
+}
 
 function createPayrollCoreRun(string $runCode = 'MY-2026-01-MAIN'): array
 {
@@ -144,6 +245,58 @@ test('neutral payroll core calculates gross deductions reimbursements and net pa
         'payroll_run_id' => $run->id,
         'action' => 'calculated',
     ]);
+});
+
+test('payroll core persists registered country pack result lines before net pay', function (): void {
+    app(PayrollCountryPackRegistry::class)->register(createPayrollCoreTestCountryPack('SG'));
+    [$run, $participant, $employee] = createPayrollCoreRun('SG-2026-01-MAIN');
+    $run->calendar->forceFill(['country_iso' => 'SG'])->save();
+
+    PayrollInput::query()->create([
+        'payroll_run_id' => $run->id,
+        'payroll_run_participant_id' => $participant->id,
+        'employee_id' => $employee->id,
+        'pay_item_code' => 'basic_salary',
+        'label' => 'Basic Salary',
+        'input_type' => PayrollInput::TYPE_EARNING,
+        'amount' => '1000.0000',
+        'currency' => 'MYR',
+    ]);
+
+    app(PayrollRunCalculator::class)->calculate($run->refresh());
+
+    expect($participant->refresh())
+        ->gross_pay->toBe('1000.0000')
+        ->total_deductions->toBe('110.0000')
+        ->net_pay->toBe('890.0000');
+
+    $resultLines = PayrollResultLine::query()
+        ->where('payroll_run_participant_id', $participant->id)
+        ->orderBy('id')
+        ->get();
+
+    expect($resultLines->pluck('code')->all())->toBe([
+        'basic_salary',
+        'test_employee_contribution',
+        'test_employer_contribution',
+        'net_pay',
+    ])
+        ->and($resultLines->firstWhere('code', 'test_employee_contribution')->line_type)
+        ->toBe(PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION)
+        ->and($resultLines->firstWhere('code', 'test_employer_contribution')->line_type)
+        ->toBe(PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION)
+        ->and($resultLines->firstWhere('code', 'net_pay')->explanation)
+        ->toMatchArray([
+            'total_deductions' => '110.0000',
+            'country_pack' => ['pack_identifier' => 'test/payroll-sg'],
+            'country_pack_warnings' => [['level' => 'info', 'message' => 'Test warning.']],
+        ])
+        ->and($run->refresh()->auditEvents()->latest('id')->first()->payload['country_pack'])
+        ->toMatchArray([
+            'country_iso' => 'SG',
+            'pack_identifier' => 'test/payroll-sg',
+            'pack_version' => 'test.1',
+        ]);
 });
 
 test('payroll run lifecycle records review approval close and void audit events', function (): void {
