@@ -1,9 +1,11 @@
 # people/02_payroll-malaysia-top-level-design
 
-**Status:** Phase 4 in progress — country-pack contract and Malaysia skeleton in place
+**Status:** Phase 4 in progress — country-pack calculation orchestration in place
 **Last Updated:** 2026-05-11
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — People suite framing and Payroll as a planned module
+- `docs/plans/people/04_pdf-generation-strategy.md` — PDF rendering infrastructure (complete); supplies `RenderPdfJob`, `PdfRenderer`, `PdfPostProcessor`, and the artifact contract that Phases 5 and 9 consume
+- `docs/architecture/pdf-rendering.md` — renderer surface, template convention, concurrency model, escape hatches
 - `docs/plans/people/03_payroll-hr2000-ipayroll-parity-benchmark.md` — HR2000 i-Payroll parity benchmark
 - `docs/architecture/file-structure.md` — module placement and extension boundaries
 - KWSP/EPF employer mandatory contribution guidance — https://www.kwsp.gov.my/en/employer/responsibilities/mandatory-contribution
@@ -277,6 +279,7 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 
 - [x] Add effective-dated statutory table storage for contribution schedules, wage bands, wage ceilings, rates, and rounding rules. {amp/gpt-5.1-codex}
 - [x] Add an internal extension-shaped Malaysia country-pack skeleton registered through the Payroll Country Pack v0 contract, with manifest metadata, employer/employee profile schemas, pay-item classification adapter, skeleton calculator, and planned statutory export definitions. {amp/gpt-5.1-codex}
+- [x] Wire Payroll Core calculation orchestration to registered country packs: build per-participant calculation context, resolve statutory profile snapshots and pay-item classifications, persist proposed country-pack result lines, include employee statutory deductions in net pay, and audit the pack version used. {amp/gpt-5.1-codex}
 - [ ] Implement EPF, SOCSO, EIS, and HRD levy calculators in the Malaysia pack before PCB.
 - [ ] Write result ledger lines for employee contribution, employer contribution, and employer levy amounts.
 - [ ] Store calculation explanations: wage base, employee category, statutory version, cap/bracket/table row used, and rounding rule.
@@ -284,11 +287,14 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 
 ### Phase 5 — Payroll outputs baseline
 
-- [ ] Produce payslip PDF or printable payslip view.
-- [ ] Produce payroll summary, employee statutory contribution, and employer cost reports.
+**PDF infrastructure ready for consumption.** `docs/plans/people/04_pdf-generation-strategy.md` is complete; `App\Base\Pdf\Jobs\RenderPdfJob` is the queue-friendly entry point for every visual PDF below, and the `App\Base\Pdf\Events\PdfArtifactRendered` event is the hook for persisting artifact lineage against `PayrollRun` / `PayrollRunParticipant` (template version, data version, sha256, produced_by, produced_at — exactly what this plan's Phase 4 audit requirements need). See also `docs/architecture/pdf-rendering.md` for the renderer surface, the `resources/core/views/pdf/payroll/...` template convention, and the concurrency model.
+
+- [ ] Produce payslip PDF for a closed payroll run via `RenderPdfJob` against `resources/core/views/pdf/payroll/payslip.blade.php` (template authored as a Phase 1 stub by the PDF plan; production data shape and template polish belong to this phase). Persist the resulting `PdfArtifact` (disk, path, sha256, template/data versions) against the payslip record so closed runs have immutable PDF lineage.
+- [ ] Produce payroll summary, employee statutory contribution, and employer cost reports as their own Blade templates under `resources/core/views/pdf/payroll/`. Use `PdfRenderer::renderInline` for static reports (no auth dependency); `renderView` only where a report depends on per-user state.
 - [ ] Generate the first SBG-needed bank payment export or a clearly marked bank-export placeholder while the exact bank format is confirmed.
-- [ ] Export operational reports to practical formats such as PDF, CSV/XLSX, and statutory text files where applicable.
+- [ ] Export operational reports to practical formats such as PDF, CSV/XLSX, and statutory text files where applicable. PDF goes through `RenderPdfJob`; statutory text files (CP39, EPF, SOCSO, EIS, bank GIRO) are plain-text emitters in the Malaysia country pack and do **not** touch the PDF pipeline.
 - [ ] Provide a payroll lock/audit report for review before and after closing a run.
+- [ ] Bulk-job throughput validation: run a 500-employee monthly payroll batch through `RenderPdfJob` and record p95 wall time, peak memory, and OOM eviction count. If those numbers cross the Gotenberg trigger thresholds in `docs/architecture/pdf-rendering.md`, escalate to the escape hatch instead of tuning the in-process path further.
 
 ### Phase 6 — Claims as payroll input
 
@@ -313,10 +319,10 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 
 ### Phase 9 — Self-Service documents
 
-- [ ] Let employees view and download payslips from Self-Service.
-- [ ] Add employee access to annual tax/statutory documents once those outputs exist.
+- [ ] Let employees view and download payslips from Self-Service. The closed-run payslip `PdfArtifact` from Phase 5 is the source; ESS streams from the artifact's disk + path.
+- [ ] Add employee access to annual tax/statutory documents once those outputs exist. Visual EA/CP8A/PCB2 forms render through `RenderPdfJob` against BLB-authored Blade templates at `resources/core/views/pdf/payroll/{ea-form,cp8a,pcb2}.blade.php` — the layouts satisfy the published LHDN specifications, not overlays on LHDN-issued AcroForm PDFs. (If filling LHDN-issued AcroForms ever becomes a hard requirement, the `pdf-lib` escape hatch documented in `docs/architecture/pdf-rendering.md` is the right next step — not Phase 9 work as planned.)
 - [ ] Let payroll admins publish documents to employees through the portal.
-- [ ] Add e-mail notification and PDF passwording only if SBG or parity validation makes them necessary.
+- [ ] Password-encrypted PDF distribution: dispatch `RenderPdfJob` with the `password` field set. `PdfPostProcessor::protectWithPassword` applies AES-256 automatically via the injected `QpdfRunner`. Whether to enable this is conditional on SBG or parity validation actually requiring it — keep the policy decision separate from the technical capability. qpdf binary must be installed on the rendering host; see `docs/guides/pdf-rendering.md`.
 
 ### Phase 10 — Extension hardening and second-country proof
 

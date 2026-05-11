@@ -1,6 +1,6 @@
 # people/03_payroll-hr2000-ipayroll-parity-benchmark
 
-**Status:** Phase 4 in progress — country-pack contract and Malaysia skeleton in place
+**Status:** Phase 4 in progress — country-pack calculation orchestration in place
 **Last Updated:** 2026-05-11
 **Sources:**
 - HR2000 i-Payroll official writeup PDF — https://www.hr2000.com.my/downloads/writeup.ipayroll.pdf
@@ -108,12 +108,12 @@ Current People/Payroll plans already cover the broad module map and country-pack
 - [x] **Phase 1 — Core payroll parity:** ensure `02` Phase 1 covers HR2000's basic payroll-cycle expectations: pay periods, multiple pay inputs, historical run retention, run approval/locking, result lines, and basic payslips. {amp/gpt-5.1-codex}
 - [x] **Phase 2 — Classification parity:** ensure `02` Phase 2 covers the HR2000 gap hidden behind “auto statutory calculation”: every pay item must have inspectable statutory treatment before final calculation. {amp/gpt-5.1-codex}
 - [x] **Phase 3 — Profile parity:** ensure `02` Phase 3 captures employer and employee statutory setup needed before Malaysia statutory calculations can be credible. {amp/gpt-5.1-codex}
-- [ ] **Phase 4 — Contribution parity:** ensure `02` Phase 4 covers EPF, SOCSO, EIS, and HRD levy before PCB, with explanation and validation output. Effective-dated statutory rule-table storage and the registered Malaysia country-pack skeleton are in place; contribution calculators and result-line explanations remain open.
-- [ ] **Phase 5 — Output/control parity:** ensure `02` Phase 5 covers HR2000's baseline operational outputs: payslips, statutory contribution reports, employer cost reports, bank exports, practical report exports, payroll lock reports, and audit evidence.
+- [ ] **Phase 4 — Contribution parity:** ensure `02` Phase 4 covers EPF, SOCSO, EIS, and HRD levy before PCB, with explanation and validation output. Effective-dated statutory rule-table storage, registered Malaysia country-pack skeleton, and core country-pack calculation orchestration are in place; Malaysia contribution calculators and statutory line explanations remain open.
+- [ ] **Phase 5 — Output/control parity:** ensure `02` Phase 5 covers HR2000's baseline operational outputs: payslips, statutory contribution reports, employer cost reports, bank exports, practical report exports, payroll lock reports, and audit evidence. PDF rendering infrastructure is in place per `04_pdf-generation-strategy.md` (`App\Base\Pdf\Jobs\RenderPdfJob` as the queue-friendly entry point); HR2000-parity items that need PDF (payslip, statutory reports, employer cost report) consume that infrastructure rather than introducing a parallel engine.
 - [ ] **Phase 6 — Claims parity:** use HR2000's e-Claim workflow as the first payroll-adjacent module target: claim entitlement, attachment, approval, payroll reimbursement, and claim reporting.
 - [ ] **Phase 7 — Attendance/overtime parity:** use HR2000's e-TMS/e-Overtime as a staged target: approved overtime should feed payroll early; rotating shifts, conditional allowances, mobile/geofence, and device binding are follow-ups unless SBG confirms day-one need.
 - [ ] **Phase 8 — PCB/zakat parity:** treat PCB, zakat, and any formal LHDN verification question as a later statutory phase after contribution calculations and explanations are proven.
-- [ ] **Phase 9 — Self-Service document parity:** match HR2000's ESS document access with portal-first payslip and annual-document access; e-mail/PDF passwording remain conditional parity items.
+- [ ] **Phase 9 — Self-Service document parity:** match HR2000's ESS document access with portal-first payslip and annual-document access; e-mail/PDF passwording remain conditional parity items. The technical capability for password-encrypted PDF is shipped (`App\Base\Pdf\Services\PdfPostProcessor::protectWithPassword`, AES-256 via qpdf) — the parity decision is whether to enable it, not whether to build it.
 - [ ] **Phase 10 — SBG validation and later parity:** validate native mobile, geofencing, org/payroll charts, in-app training videos, broad legacy exports, and e-Appraisal with SBG before promoting them from later parity enhancers into implementation scope.
 
 ## Open Questions

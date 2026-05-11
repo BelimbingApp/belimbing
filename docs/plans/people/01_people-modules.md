@@ -8,6 +8,8 @@
 - `app/Modules/Core/Company/` — company hierarchy used for scoping
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Payroll architecture and Malaysia country-pack research
 - `docs/plans/people/03_payroll-hr2000-ipayroll-parity-benchmark.md` — HR2000 i-Payroll parity benchmark
+- `docs/plans/people/04_pdf-generation-strategy.md` — PDF rendering infrastructure (complete); Payroll and Self-Service consume `App\Base\Pdf\Jobs\RenderPdfJob` for every visual document
+- `docs/architecture/pdf-rendering.md` — renderer surface, template convention (`resources/core/views/pdf/<module>/...`), concurrency model
 - `docs/plans/AGENTS.md` — plan conventions
 **Agents:** claude-code/opus-4.6, amp/gpt-5.1-codex
 

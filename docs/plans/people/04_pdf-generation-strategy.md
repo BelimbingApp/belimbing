@@ -1,6 +1,6 @@
 # people/04_pdf-generation-strategy
 
-**Status:** Phases 2 and 4 complete (architecturally). Phase 3 (Payroll wiring) is the only remaining feature work; qpdf availability rollout across deployment targets remains operational.
+**Status:** Complete. PDF infrastructure (`app/Base/Pdf/`) is the single source of truth for visual PDFs across BLB. Phase 3 (Payroll wiring) is **delegated to `02_payroll-malaysia-top-level-design.md`** under Phases 5 (operational outputs) and 9 (Self-Service documents); the renderer surface is stable and ready to consume. Only operational item still open: qpdf binary rollout to each deployment target — install instructions at `docs/guides/pdf-rendering.md`.
 **Last Updated:** 2026-05-11
 **Sources:**
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — payslip and statutory output requirements (Phases on payslip PDF, report exports, ESS document delivery)
@@ -98,15 +98,17 @@ Goal: turn the hardened spike into a stable surface module authors can call with
 - [x] Define the `resources/views/pdf/...` convention and document it under `docs/architecture/` or the appropriate module guide once the shape is stable. claude-code/claude-opus-4-7 — convention landed at `resources/core/views/pdf/<module>/<template>.blade.php` with licensee override semantics; documented in `docs/architecture/pdf-rendering.md` alongside the renderer surface, auth model, artifact contract, and out-of-scope list.
 - [x] Add an Octane- and queue-friendly job wrapper so batch payslip runs do not block request workers. claude-code/claude-opus-4-7 — `App\Base\Pdf\Jobs\RenderPdfJob` (`ShouldQueue`) accepts view/data/actor/template-version/data-version/optional password/render-mode/free-form metadata; dispatches `App\Base\Pdf\Events\PdfArtifactRendered` so callers listen without coupling to the renderer.
 
-### Phase 3 — Wire Payroll outputs onto the renderer
+### Phase 3 — Wire Payroll outputs onto the renderer — **DELEGATED**
 
-Goal: deliver the payroll-specific PDFs called out in `02_payroll-malaysia-top-level-design.md` and the HR2000 parity benchmark.
+This phase is no longer tracked here. Payroll-specific wiring (payslip PDF, statutory reports, visual EA/CP8A/PCB2 forms, ESS password protection, bulk throughput validation) is owned by `02_payroll-malaysia-top-level-design.md` (Phases 5 and 9) and `03_payroll-hr2000-ipayroll-parity-benchmark.md` (Phases 5 and 9). Those plans now reference `App\Base\Pdf\Jobs\RenderPdfJob`, `PdfRenderer`, `PdfPostProcessor`, and the artifact contract directly.
 
-- [ ] Payslip PDF for a closed payroll run, with the lineage metadata Phase 4 of the Malaysia plan requires.
-- [ ] Payroll summary, employee statutory contribution, and employer cost reports.
-- [ ] Visual EA/CP8A and PCB2 forms rendered as BLB-authored Blade templates that satisfy the published LHDN layout, not overlays on LHDN-issued PDFs.
-- [ ] Password-encrypted PDF distribution for ESS, gated on whether SBG or parity validation actually requires it (matches the conditional language in the Malaysia plan).
-- [ ] Bulk-job throughput validation against a realistic employer size (e.g., 500-employee monthly run) so Gotenberg’s necessity can be evaluated against evidence.
+The public surface available to those plans:
+
+- `App\Base\Pdf\Jobs\RenderPdfJob` — `ShouldQueue` entry point; takes `(view, data, actorUserId, templateVersion, dataVersion, password?, renderMode, metadata)` and dispatches `App\Base\Pdf\Events\PdfArtifactRendered` on completion.
+- `App\Base\Pdf\Services\PdfRenderer::renderInline` / `::renderView` — synchronous callers when a queue trip is unnecessary or undesired.
+- `App\Base\Pdf\Services\PdfPostProcessor::protectWithPassword` — applied automatically by the job when `password` is set.
+- Templates at `resources/core/views/pdf/<module>/<template>.blade.php` per the convention in `docs/architecture/pdf-rendering.md`.
+- Bench harness at `tests/Feature/Base/Pdf/PdfRendererBenchTest.php` (opt-in via `BLB_PDF_BENCH=1`) for the bulk-throughput validation step.
 
 ### Phase 4 — Escape-hatch and scaling readiness
 
