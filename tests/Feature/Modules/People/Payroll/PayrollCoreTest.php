@@ -299,9 +299,19 @@ test('payroll core persists registered country pack result lines before net pay'
         ]);
 });
 
-test('malaysia pack calculates epf contributions from classified statutory wages', function (): void {
+test('malaysia pack calculates epf socso eis and hrd levy from classified statutory wages', function (): void {
     [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-EPF');
     $company = Company::query()->findOrFail(Company::LICENSEE_ID);
+
+    PayrollEmployerStatutoryProfile::query()->create([
+        'company_id' => $company->id,
+        'country_iso' => 'MY',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.dev',
+        'effective_from' => '2026-01-01',
+        'profile_data' => ['hrd_levy_applicable' => true],
+        'validation_messages' => [],
+    ]);
 
     $basicSalary = PayrollPayItem::query()->create([
         'company_id' => $company->id,
@@ -355,6 +365,59 @@ test('malaysia pack calculates epf contributions from classified statutory wages
         'employee_rate' => '0.11000000',
         'employer_rate' => '0.13000000',
     ]);
+    $socsoRuleSet = PayrollStatutoryRuleSet::query()->create([
+        'country_iso' => 'MY',
+        'rule_key' => 'socso_contribution_schedule',
+        'name' => 'SOCSO dev test schedule',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.dev',
+        'effective_from' => '2026-01-01',
+        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
+    ]);
+    PayrollStatutoryRuleRow::query()->create([
+        'payroll_statutory_rule_set_id' => $socsoRuleSet->id,
+        'sort_order' => 10,
+        'row_key' => 'standard',
+        'min_wage' => '0.0000',
+        'max_wage' => null,
+        'employee_rate' => '0.00500000',
+        'employer_rate' => '0.01750000',
+    ]);
+    $eisRuleSet = PayrollStatutoryRuleSet::query()->create([
+        'country_iso' => 'MY',
+        'rule_key' => 'eis_contribution_schedule',
+        'name' => 'EIS dev test schedule',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.dev',
+        'effective_from' => '2026-01-01',
+        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
+    ]);
+    PayrollStatutoryRuleRow::query()->create([
+        'payroll_statutory_rule_set_id' => $eisRuleSet->id,
+        'sort_order' => 10,
+        'row_key' => 'standard',
+        'min_wage' => '0.0000',
+        'max_wage' => null,
+        'employee_rate' => '0.00200000',
+        'employer_rate' => '0.00200000',
+    ]);
+    $hrdLevyRuleSet = PayrollStatutoryRuleSet::query()->create([
+        'country_iso' => 'MY',
+        'rule_key' => 'hrd_levy_schedule',
+        'name' => 'HRD levy dev test schedule',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.dev',
+        'effective_from' => '2026-01-01',
+        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
+    ]);
+    PayrollStatutoryRuleRow::query()->create([
+        'payroll_statutory_rule_set_id' => $hrdLevyRuleSet->id,
+        'sort_order' => 10,
+        'row_key' => 'standard',
+        'min_wage' => '0.0000',
+        'max_wage' => null,
+        'levy_rate' => '0.01000000',
+    ]);
 
     PayrollInput::query()->create([
         'payroll_run_id' => $run->id,
@@ -387,6 +450,26 @@ test('malaysia pack calculates epf contributions from classified statutory wages
         ->where('payroll_run_participant_id', $participant->id)
         ->where('code', 'my_epf_employer')
         ->firstOrFail();
+    $employeeSocso = PayrollResultLine::query()
+        ->where('payroll_run_participant_id', $participant->id)
+        ->where('code', 'my_socso_employee')
+        ->firstOrFail();
+    $employerSocso = PayrollResultLine::query()
+        ->where('payroll_run_participant_id', $participant->id)
+        ->where('code', 'my_socso_employer')
+        ->firstOrFail();
+    $employeeEis = PayrollResultLine::query()
+        ->where('payroll_run_participant_id', $participant->id)
+        ->where('code', 'my_eis_employee')
+        ->firstOrFail();
+    $employerEis = PayrollResultLine::query()
+        ->where('payroll_run_participant_id', $participant->id)
+        ->where('code', 'my_eis_employer')
+        ->firstOrFail();
+    $hrdLevy = PayrollResultLine::query()
+        ->where('payroll_run_participant_id', $participant->id)
+        ->where('code', 'my_hrd_levy')
+        ->firstOrFail();
 
     expect($employeeEpf)
         ->line_type->toBe(PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION)
@@ -394,6 +477,13 @@ test('malaysia pack calculates epf contributions from classified statutory wages
         ->and($employerEpf)
         ->line_type->toBe(PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION)
         ->amount->toBe('390.0000')
+        ->and($employeeSocso)->amount->toBe('15.0000')
+        ->and($employerSocso)->amount->toBe('52.5000')
+        ->and($employeeEis)->amount->toBe('6.0000')
+        ->and($employerEis)->amount->toBe('6.0000')
+        ->and($hrdLevy)
+        ->line_type->toBe(PayrollResultLine::TYPE_EMPLOYER_LEVY)
+        ->amount->toBe('30.0000')
         ->and($employeeEpf->explanation)->toMatchArray([
             'wage_base' => '3000.0000',
             'rule_row_key' => 'standard',
@@ -401,9 +491,9 @@ test('malaysia pack calculates epf contributions from classified statutory wages
         ])
         ->and($participant->refresh())
         ->gross_pay->toBe('3000.0000')
-        ->total_deductions->toBe('330.0000')
+        ->total_deductions->toBe('351.0000')
         ->total_reimbursements->toBe('80.0000')
-        ->net_pay->toBe('2750.0000');
+        ->net_pay->toBe('2729.0000');
 });
 
 test('payroll run lifecycle records review approval close and void audit events', function (): void {

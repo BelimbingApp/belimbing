@@ -1,6 +1,6 @@
 # people/02_payroll-malaysia-top-level-design
 
-**Status:** Phase 4 in progress — Malaysia EPF contribution calculator in place
+**Status:** Phase 4 in progress — Malaysia EPF, SOCSO, EIS, and HRD levy calculators in place
 **Last Updated:** 2026-05-11
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — People suite framing and Payroll as a planned module
@@ -280,10 +280,9 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 - [x] Add effective-dated statutory table storage for contribution schedules, wage bands, wage ceilings, rates, and rounding rules. {amp/gpt-5.1-codex}
 - [x] Add an internal extension-shaped Malaysia country-pack skeleton registered through the Payroll Country Pack v0 contract, with manifest metadata, employer/employee profile schemas, pay-item classification adapter, skeleton calculator, and planned statutory export definitions. {amp/gpt-5.1-codex}
 - [x] Wire Payroll Core calculation orchestration to registered country packs: build per-participant calculation context, resolve statutory profile snapshots and pay-item classifications, persist proposed country-pack result lines, include employee statutory deductions in net pay, and audit the pack version used. {amp/gpt-5.1-codex}
-- [x] Implement the first Malaysia EPF calculator using classified statutory wage bases and effective-dated rule-table rows, emitting employee and employer contribution lines before PCB. {amp/gpt-5.1-codex}
-- [ ] Implement SOCSO, EIS, and HRD levy calculators in the Malaysia pack before PCB.
-- [ ] Write result ledger lines for all remaining employee contribution, employer contribution, and employer levy amounts.
-- [ ] Complete calculation explanations across EPF/SOCSO/EIS/HRD: wage base, employee category, statutory version, cap/bracket/table row used, and rounding rule. EPF now records wage base, rule set/row, rates, rounding policy, profile IDs, pack, and share. {amp/gpt-5.1-codex}
+- [x] Implement Malaysia EPF, SOCSO, EIS, and HRD levy calculators using classified statutory wage bases and effective-dated rule-table rows before PCB. EPF/SOCSO/EIS emit employee and employer contribution lines; HRD emits employer levy lines when the employer statutory profile marks HRD levy applicable. {amp/gpt-5.1-codex}
+- [x] Write result ledger lines for employee contribution, employer contribution, and employer levy amounts for EPF/SOCSO/EIS/HRD. {amp/gpt-5.1-codex}
+- [ ] Complete calculation explanations across EPF/SOCSO/EIS/HRD: wage base, employee category, statutory version, cap/bracket/table row used, and rounding rule. Current lines record wage base, rule set/row, rates, rounding policy, profile IDs, pack, and share; employee category remains open. {amp/gpt-5.1-codex}
 - [ ] Show statutory deductions/contributions on the payslip and employer-cost reports.
 
 ### Phase 5 — Payroll outputs baseline
