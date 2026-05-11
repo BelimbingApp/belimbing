@@ -92,10 +92,10 @@ Goal: confirm constraints, settle the security model, and prove the existing pro
 
 Goal: turn the hardened spike into a stable surface module authors can call without knowing about Chromium, Playwright, or qpdf.
 
-- [ ] Promote the Phase 1 implementation into a `PdfRenderer` service with the contract described above, including a Blade-view rendering path for templates that should not be exposed as routes.
+- [x] Promote the Phase 1 implementation into a `PdfRenderer` service with the contract described above, including a Blade-view rendering path for templates that should not be exposed as routes. claude-code/claude-opus-4-7 — `renderView` (signed-URL/authenticated path) and `renderInline` (PHP-rendered Blade via `page.setContent`) both ship on `PdfRenderer`; Node `handlePdf` accepts either `url` or `html`.
 - [ ] Define the concurrency story for `PlaywrightRunner` under PDF load (process reuse vs. per-command spawn, per-company limits, queue back-pressure) using the Phase 1 measurements; update `BrowserPoolManager` if its ledger needs to track real processes rather than logical contexts.
 - [ ] Wire `PdfPostProcessor` for the post-processing operations Phase 1 verified, exposing only the named operations needed by Payroll Phase 1 outputs.
-- [ ] Define the `resources/views/pdf/...` convention and document it under `docs/architecture/` or the appropriate module guide once the shape is stable.
+- [x] Define the `resources/views/pdf/...` convention and document it under `docs/architecture/` or the appropriate module guide once the shape is stable. claude-code/claude-opus-4-7 — convention landed at `resources/core/views/pdf/<module>/<template>.blade.php` with licensee override semantics; documented in `docs/architecture/pdf-rendering.md` alongside the renderer surface, auth model, artifact contract, and out-of-scope list.
 - [ ] Add an Octane- and queue-friendly job wrapper so batch payslip runs do not block request workers.
 
 ### Phase 3 — Wire Payroll outputs onto the renderer

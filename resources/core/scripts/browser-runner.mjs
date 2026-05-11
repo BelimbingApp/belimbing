@@ -190,8 +190,12 @@ async function handleScreenshot(page, args) {
 async function handlePdf(page, args) {
     const timeoutMs = Number.isInteger(args.timeout_ms) && args.timeout_ms > 0 ? args.timeout_ms : 15000;
 
-    if (args.url) {
+    if (typeof args.html === 'string' && args.html.length > 0) {
+        await page.setContent(args.html, { waitUntil: 'networkidle', timeout: timeoutMs });
+    } else if (args.url) {
         await page.goto(args.url, { waitUntil: 'networkidle', timeout: timeoutMs });
+    } else {
+        return error('pdf', 'Missing required parameter: provide either html or url', 'missing_param');
     }
 
     const pdfOptions = {

@@ -106,6 +106,44 @@ it('writes a PdfArtifact to the configured disk and returns lineage metadata', f
     expect(Storage::disk('local')->get($artifact->path))->toBe($fakePdfBytes);
 });
 
+it('renders a Blade view inline through page.setContent without a signed URL', function () {
+    $fakePdfBytes = "%PDF-1.4\ninline-spike-bytes\n%%EOF";
+
+    $runner = Mockery::mock(PlaywrightRunner::class);
+    $runner->shouldReceive('execute')
+        ->once()
+        ->with('pdf', Mockery::on(function (array $args) use ($fakePdfBytes) {
+            expect($args)->toHaveKeys(['html', 'output_path', 'format', 'print_background', 'timeout_ms']);
+            expect($args)->not->toHaveKey('url');
+            expect($args['html'])->toContain('Inline Employer');
+            file_put_contents($args['output_path'], $fakePdfBytes);
+            return true;
+        }))
+        ->andReturn(['ok' => true, 'action' => 'pdf']);
+
+    $this->app->instance(PlaywrightRunner::class, $runner);
+
+    $artifact = app(PdfRenderer::class)->renderInline(
+        view: 'pdf.payroll.payslip',
+        data: [
+            'employer' => ['name' => 'Inline Employer'],
+            'totals' => ['gross' => 1000, 'deductions' => 0, 'net' => 1000],
+        ],
+        templateVersion: 'payslip@v1',
+        dataVersion: 'inline-fixture',
+        producedBy: 42,
+    );
+
+    expect($artifact->disk)->toBe('local');
+    expect($artifact->path)->toEndWith('.pdf');
+    expect($artifact->templateVersion)->toBe('payslip@v1');
+    expect($artifact->dataVersion)->toBe('inline-fixture');
+    expect($artifact->producedBy)->toBe(42);
+    expect($artifact->sha256)->toBe(hash('sha256', $fakePdfBytes));
+
+    Storage::disk('local')->assertExists($artifact->path);
+});
+
 it('throws PdfRenderException when the runner reports failure', function () {
     $runner = Mockery::mock(PlaywrightRunner::class);
     $runner->shouldReceive('execute')
