@@ -38,6 +38,7 @@ Migration filenames use the timestamp prefix to encode execution order. The year
 | `0200` | Modules/Core Layer1 | Required business foundations loaded before operational and commerce workflows. |
 | `0300` | Modules/Operation Layer1 | Operational modules. |
 | `0310` | Modules/Commerce Layer1 | Commerce modules. |
+| `0320` | Modules/People Layer1 | People workflows that depend on Core employee/company foundations. |
 | `2026+` | Extensions | Licensee or vendor extensions using real calendar years. |
 
 ### Module Identification (MM_DD)
@@ -144,6 +145,12 @@ This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to preven
 | `0310_01_03_*` | Catalog | Company, Inventory |
 | `0310_01_05_*` | Marketplace | Company, Inventory, Integration |
 | `0310_01_07_*` | Sales | Company, Inventory, Marketplace |
+
+### People
+
+| Prefix | Module | Dependencies |
+|--------|--------|--------------|
+| `0320_01_01_*` | Payroll | Company, Employee |
 
 The registry table is the dependency graph. Do not duplicate module dependencies in a separate diagram; update the table when ownership, prefix, or dependency order changes.
 

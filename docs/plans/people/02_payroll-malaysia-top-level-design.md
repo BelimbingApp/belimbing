@@ -1,6 +1,6 @@
 # people/02_payroll-malaysia-top-level-design
 
-**Status:** Phased — extension-shaped country packs
+**Status:** Phase 1 complete — neutral payroll core skeleton in place
 **Last Updated:** 2026-05-11
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — People suite framing and Payroll as a planned module
@@ -183,6 +183,38 @@ Do not decide table names yet, but the model should preserve these invariants:
 - Pay item classifications are effective-dated and country-specific.
 - Closed run results are immutable; corrections are new facts, not destructive edits.
 
+## Public Contract
+
+The first implementation boundary is the **Payroll Country Pack v0 contract**. It is intentionally small: large enough to keep Malaysia statutory behavior out of Payroll Core, but not so broad that BLB promises a stable third-party extension API before the first country has proven the seams.
+
+Payroll Core promises to provide country packs with a normalized calculation context:
+
+- pay entity, country, currency, pay period, pay date, and contribution/submission month metadata;
+- employer payroll profile and employee payroll profile as effective-dated snapshots;
+- approved payroll participants for the run;
+- normalized pay inputs with neutral pay item codes, amounts, quantities, source module references, and source effective dates;
+- prior run/result history needed for arrears, reversals, year-to-date values, or statutory cumulative calculations;
+- a result writer that accepts structured result lines without allowing country packs to mutate closed runs directly.
+
+A Payroll Country Pack must provide these capabilities:
+
+- **Identity and compatibility:** country code, pack identifier, pack version, supported Payroll Core contract version, statutory data version list, and migration/import notes.
+- **Employer statutory profile schema:** country-specific fields the employer/pay entity must maintain, with effective dates and validation rules.
+- **Employee statutory profile schema:** country-specific fields each employee must maintain, with effective dates and validation rules.
+- **Pay item classification:** effective-dated classification of neutral pay inputs into statutory wage bases, tax treatments, contribution bases, levy bases, exclusions, and informational categories.
+- **Calculators:** deterministic calculators that return employee deductions, employee contributions, employer contributions, employer levies, taxes, reimbursements, informational lines, warnings, and blocking validation errors.
+- **Statutory data resolution:** lookup of effective-dated rates, tables, brackets, caps, rounding policies, and file-format versions by pay period/payment date.
+- **Explanation output:** human-readable and machine-readable explanations for each statutory line, including wage base, employee/employer category, statutory data version, cap/table/bracket used, and rounding rule.
+- **Exports and documents:** metadata and generators for country-specific monthly submissions, bank/statutory files where owned by the pack, annual employee documents, and administrator reports.
+- **Validation fixtures:** official or curated examples that prove calculators and exports behave as intended for common and edge cases.
+
+The contract explicitly forbids these shortcuts:
+
+- Payroll Core must not contain EPF, SOCSO, EIS, PCB, zakat, HRD Corp, or other country-specific columns or concrete service dependencies.
+- Country packs must not write directly into closed payroll results; they return proposed result lines for Payroll Core to persist.
+- SBG-specific rules in `kiatng/blb-sbg` must not fork or copy Malaysia statutory calculators from `BelimbingApp/blb-payroll-my`; they must use configuration or narrow extension hooks unless the rule belongs upstream for all Malaysian employers.
+- Formal compliance claims such as LHDN endorsement must not be implied by the contract. The contract supports official formulas, effective-dated statutory data, and validation fixtures; endorsement/verification is a separate operational status.
+
 ## Future-Country Accommodation
 
 The hard boundary is country of employment/pay entity, not UI menu placement. A BLB tenant might mostly operate in Malaysia today, then hire in Singapore later. The core should support:
@@ -213,18 +245,18 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 
 ### Phase 0 — Boundary and contract lock
 
-- [ ] Confirm the ownership boundary: `belimbingapp/belimbing` owns Payroll Core, `BelimbingApp/blb-payroll-my` owns Malaysia statutory behavior, and `kiatng/blb-sbg` owns private SBG customization.
-- [ ] Define the first country-pack contract in prose: statutory profiles, pay-item classification, calculators, statutory data, exports, validation fixtures, and explanation/audit output.
-- [ ] State the no-leak rule before implementation: Payroll Core must not depend on EPF/SOCSO/PCB classes, Malaysia table names, or Malaysia-specific columns.
+- [x] Confirm the ownership boundary: `belimbingapp/belimbing` owns Payroll Core, `BelimbingApp/blb-payroll-my` owns Malaysia statutory behavior, and `kiatng/blb-sbg` owns private SBG customization. {amp/gpt-5.1-codex}
+- [x] Define the first country-pack contract in prose: statutory profiles, pay-item classification, calculators, statutory data, exports, validation fixtures, and explanation/audit output. {amp/gpt-5.1-codex}
+- [x] State the no-leak rule before implementation: Payroll Core must not depend on EPF/SOCSO/PCB classes, Malaysia table names, or Malaysia-specific columns. {amp/gpt-5.1-codex}
 
 ### Phase 1 — Payroll Core skeleton
 
-- [ ] Create country-neutral payroll calendars and pay periods.
-- [ ] Create the payroll run lifecycle: draft, calculated, reviewed, approved, closed, and later voided/reversed.
-- [ ] Model run participants and neutral pay inputs for salary, allowance, deduction, overtime, unpaid leave, claim reimbursement, bonus/additional remuneration, and one-off adjustments.
-- [ ] Store immutable result ledger lines for earnings, employee deductions, employee contributions, employer contributions, employer levies, taxes, reimbursements, and net pay.
-- [ ] Generate a basic payslip from result lines without Malaysia statutory logic.
-- [ ] Capture audit history for calculation attempts and approval/close actions.
+- [x] Create country-neutral payroll calendars and pay periods. {amp/gpt-5.1-codex}
+- [x] Create the payroll run lifecycle: draft, calculated, reviewed, approved, closed, and voided. Reversal remains a later accounting/output concern once closed-run correction flows are designed. {amp/gpt-5.1-codex}
+- [x] Model run participants and neutral pay inputs for salary, allowance, deduction, overtime, unpaid leave, claim reimbursement, bonus/additional remuneration, and one-off adjustments. {amp/gpt-5.1-codex}
+- [x] Store immutable result ledger lines for earnings, employee deductions, employee contributions, employer contributions, employer levies, taxes, reimbursements, and net pay. {amp/gpt-5.1-codex}
+- [x] Generate a basic payslip snapshot from result lines without Malaysia statutory logic. {amp/gpt-5.1-codex}
+- [x] Capture audit history for calculation, review, approval, close, and void actions. {amp/gpt-5.1-codex}
 
 ### Phase 2 — Pay item classification model
 

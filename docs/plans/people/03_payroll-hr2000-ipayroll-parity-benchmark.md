@@ -1,6 +1,6 @@
 # people/03_payroll-hr2000-ipayroll-parity-benchmark
 
-**Status:** Research — mapped to payroll phases
+**Status:** Phase 1 complete — core payroll parity skeleton in place
 **Last Updated:** 2026-05-11
 **Sources:**
 - HR2000 i-Payroll official writeup PDF — https://www.hr2000.com.my/downloads/writeup.ipayroll.pdf
@@ -104,8 +104,8 @@ Current People/Payroll plans already cover the broad module map and country-pack
 
 ## Phases
 
-- [ ] **Phase 0 — Boundary parity:** keep HR2000 benchmarking at the operational-job level and preserve BLB's repo boundaries: Payroll Core in `belimbingapp/belimbing`, Malaysia statutory behavior in `BelimbingApp/blb-payroll-my`, and SBG customization in `kiatng/blb-sbg`.
-- [ ] **Phase 1 — Core payroll parity:** ensure `02` Phase 1 covers HR2000's basic payroll-cycle expectations: pay periods, multiple pay inputs, historical run retention, run approval/locking, result lines, and basic payslips.
+- [x] **Phase 0 — Boundary parity:** keep HR2000 benchmarking at the operational-job level and preserve BLB's repo boundaries: Payroll Core in `belimbingapp/belimbing`, Malaysia statutory behavior in `BelimbingApp/blb-payroll-my`, and SBG customization in `kiatng/blb-sbg`. {amp/gpt-5.1-codex}
+- [x] **Phase 1 — Core payroll parity:** ensure `02` Phase 1 covers HR2000's basic payroll-cycle expectations: pay periods, multiple pay inputs, historical run retention, run approval/locking, result lines, and basic payslips. {amp/gpt-5.1-codex}
 - [ ] **Phase 2 — Classification parity:** ensure `02` Phase 2 covers the HR2000 gap hidden behind “auto statutory calculation”: every pay item must have inspectable statutory treatment before final calculation.
 - [ ] **Phase 3 — Profile parity:** ensure `02` Phase 3 captures employer and employee statutory setup needed before Malaysia statutory calculations can be credible.
 - [ ] **Phase 4 — Contribution parity:** ensure `02` Phase 4 covers EPF, SOCSO, EIS, and HRD levy before PCB, with explanation and validation output.
