@@ -299,6 +299,113 @@ test('payroll core persists registered country pack result lines before net pay'
         ]);
 });
 
+test('malaysia pack calculates epf contributions from classified statutory wages', function (): void {
+    [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-EPF');
+    $company = Company::query()->findOrFail(Company::LICENSEE_ID);
+
+    $basicSalary = PayrollPayItem::query()->create([
+        'company_id' => $company->id,
+        'code' => 'basic_salary',
+        'name' => 'Basic Salary',
+        'input_type' => PayrollInput::TYPE_EARNING,
+        'status' => 'active',
+    ]);
+    PayrollPayItemClassification::query()->create([
+        'payroll_pay_item_id' => $basicSalary->id,
+        'country_iso' => 'MY',
+        'classification_key' => 'statutory_wage_base',
+        'classification_value' => 'ordinary_wage',
+        'effective_from' => '2026-01-01',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.dev',
+    ]);
+
+    $travelClaim = PayrollPayItem::query()->create([
+        'company_id' => $company->id,
+        'code' => 'travel_claim',
+        'name' => 'Travel Claim',
+        'input_type' => PayrollInput::TYPE_REIMBURSEMENT,
+        'status' => 'active',
+    ]);
+    PayrollPayItemClassification::query()->create([
+        'payroll_pay_item_id' => $travelClaim->id,
+        'country_iso' => 'MY',
+        'classification_key' => 'statutory_wage_base',
+        'classification_value' => 'excluded',
+        'effective_from' => '2026-01-01',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.dev',
+    ]);
+
+    $ruleSet = PayrollStatutoryRuleSet::query()->create([
+        'country_iso' => 'MY',
+        'rule_key' => 'epf_contribution_schedule',
+        'name' => 'EPF dev test schedule',
+        'source_pack' => 'belimbing/payroll-my',
+        'source_version' => '2026.dev',
+        'effective_from' => '2026-01-01',
+        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
+    ]);
+    PayrollStatutoryRuleRow::query()->create([
+        'payroll_statutory_rule_set_id' => $ruleSet->id,
+        'sort_order' => 10,
+        'row_key' => 'standard',
+        'min_wage' => '0.0000',
+        'max_wage' => null,
+        'employee_rate' => '0.11000000',
+        'employer_rate' => '0.13000000',
+    ]);
+
+    PayrollInput::query()->create([
+        'payroll_run_id' => $run->id,
+        'payroll_run_participant_id' => $participant->id,
+        'employee_id' => $employee->id,
+        'pay_item_code' => 'basic_salary',
+        'label' => 'Basic Salary',
+        'input_type' => PayrollInput::TYPE_EARNING,
+        'amount' => '3000.0000',
+        'currency' => 'MYR',
+    ]);
+    PayrollInput::query()->create([
+        'payroll_run_id' => $run->id,
+        'payroll_run_participant_id' => $participant->id,
+        'employee_id' => $employee->id,
+        'pay_item_code' => 'travel_claim',
+        'label' => 'Travel Claim',
+        'input_type' => PayrollInput::TYPE_REIMBURSEMENT,
+        'amount' => '80.0000',
+        'currency' => 'MYR',
+    ]);
+
+    app(PayrollRunCalculator::class)->calculate($run->refresh());
+
+    $employeeEpf = PayrollResultLine::query()
+        ->where('payroll_run_participant_id', $participant->id)
+        ->where('code', 'my_epf_employee')
+        ->firstOrFail();
+    $employerEpf = PayrollResultLine::query()
+        ->where('payroll_run_participant_id', $participant->id)
+        ->where('code', 'my_epf_employer')
+        ->firstOrFail();
+
+    expect($employeeEpf)
+        ->line_type->toBe(PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION)
+        ->amount->toBe('330.0000')
+        ->and($employerEpf)
+        ->line_type->toBe(PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION)
+        ->amount->toBe('390.0000')
+        ->and($employeeEpf->explanation)->toMatchArray([
+            'wage_base' => '3000.0000',
+            'rule_row_key' => 'standard',
+            'share' => 'employee',
+        ])
+        ->and($participant->refresh())
+        ->gross_pay->toBe('3000.0000')
+        ->total_deductions->toBe('330.0000')
+        ->total_reimbursements->toBe('80.0000')
+        ->net_pay->toBe('2750.0000');
+});
+
 test('payroll run lifecycle records review approval close and void audit events', function (): void {
     [$reviewedRun] = createPayrollCoreRun('MY-2026-01-REVIEWED');
     $reviewedRun->markReviewed();
