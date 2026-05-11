@@ -290,6 +290,53 @@
                     </div>
                 @endif
 
+                <div class="mb-6 grid gap-6 xl:grid-cols-2">
+                    @forelse ($countryPacks as $countryPack)
+                        <x-ui.card :title="__('Country Pack: :country', ['country' => $countryPack['country_iso']])">
+                            <div class="space-y-4 text-sm">
+                                <div>
+                                    <div class="font-medium text-ink">{{ $countryPack['pack_identifier'] }}</div>
+                                    <div class="text-xs text-muted">{{ __('Version') }} {{ $countryPack['pack_version'] }} · {{ __('Data') }} {{ implode(', ', $countryPack['statutory_data_versions']) }}</div>
+                                </div>
+
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <div class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Employer fields') }}</div>
+                                        <ul class="space-y-1 text-xs text-muted">
+                                            @foreach ($countryPack['employer_schema']->fields as $field)
+                                                <li class="flex items-start justify-between gap-3">
+                                                    <span>{{ $field['label'] }} <span class="font-mono text-muted/80">{{ $field['key'] }}</span></span>
+                                                    @if ($field['required'] ?? false)
+                                                        <x-ui.badge variant="warning">{{ __('Required') }}</x-ui.badge>
+                                                    @endif
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+
+                                    <div>
+                                        <div class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Employee fields') }}</div>
+                                        <ul class="space-y-1 text-xs text-muted">
+                                            @foreach ($countryPack['employee_schema']->fields as $field)
+                                                <li class="flex items-start justify-between gap-3">
+                                                    <span>{{ $field['label'] }} <span class="font-mono text-muted/80">{{ $field['key'] }}</span></span>
+                                                    @if ($field['required'] ?? false)
+                                                        <x-ui.badge variant="warning">{{ __('Required') }}</x-ui.badge>
+                                                    @endif
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </x-ui.card>
+                    @empty
+                        <x-ui.card>
+                            <p class="text-sm text-muted">{{ __('No payroll country packs are registered.') }}</p>
+                        </x-ui.card>
+                    @endforelse
+                </div>
+
                 <div class="grid gap-6 xl:grid-cols-2">
                     <x-ui.card :title="__('Employer Profiles')">
                         <div class="space-y-3">

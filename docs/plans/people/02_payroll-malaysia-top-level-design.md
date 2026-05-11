@@ -1,6 +1,6 @@
 # people/02_payroll-malaysia-top-level-design
 
-**Status:** Phase 4 in progress — statutory rule-table substrate in place
+**Status:** Phase 4 in progress — country-pack contract and Malaysia skeleton in place
 **Last Updated:** 2026-05-11
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — People suite framing and Payroll as a planned module
@@ -276,6 +276,7 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 ### Phase 4 — Malaysia EPF, SOCSO, EIS, and HRD levy
 
 - [x] Add effective-dated statutory table storage for contribution schedules, wage bands, wage ceilings, rates, and rounding rules. {amp/gpt-5.1-codex}
+- [x] Add an internal extension-shaped Malaysia country-pack skeleton registered through the Payroll Country Pack v0 contract, with manifest metadata, employer/employee profile schemas, pay-item classification adapter, skeleton calculator, and planned statutory export definitions. {amp/gpt-5.1-codex}
 - [ ] Implement EPF, SOCSO, EIS, and HRD levy calculators in the Malaysia pack before PCB.
 - [ ] Write result ledger lines for employee contribution, employer contribution, and employer levy amounts.
 - [ ] Store calculation explanations: wage base, employee category, statutory version, cap/bracket/table row used, and rounding rule.

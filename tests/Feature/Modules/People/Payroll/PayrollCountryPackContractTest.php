@@ -164,3 +164,21 @@ test('payroll country pack registry is a singleton service for extension registr
 
     expect($first)->toBe($second);
 });
+
+test('malaysia payroll country pack is registered with profile schemas and planned exports', function (): void {
+    $pack = app(PayrollCountryPackRegistry::class)->forCountry('my');
+    $manifest = $pack->manifest();
+
+    expect($manifest->packIdentifier)->toBe('belimbing/payroll-my')
+        ->and($manifest->metadata['repository'])->toBe('BelimbingApp/blb-payroll-my')
+        ->and($pack->profileSchemas()->employerSchema()->fields)
+        ->toContain(['key' => 'epf_employer_number', 'label' => 'EPF employer number', 'required' => true])
+        ->and($pack->profileSchemas()->employeeSchema()->fields)
+        ->toContain(['key' => 'citizenship_status', 'label' => 'Citizenship status', 'required' => true])
+        ->and(collect($pack->exports()->definitions())->pluck('key')->all())
+        ->toBe([
+            'epf_monthly_contribution',
+            'socso_eis_monthly_contribution',
+            'pcb_cp39_monthly_submission',
+        ]);
+});

@@ -1,6 +1,6 @@
 # people/03_payroll-hr2000-ipayroll-parity-benchmark
 
-**Status:** Phase 4 in progress — statutory rule-table substrate in place
+**Status:** Phase 4 in progress — country-pack contract and Malaysia skeleton in place
 **Last Updated:** 2026-05-11
 **Sources:**
 - HR2000 i-Payroll official writeup PDF — https://www.hr2000.com.my/downloads/writeup.ipayroll.pdf
@@ -108,7 +108,7 @@ Current People/Payroll plans already cover the broad module map and country-pack
 - [x] **Phase 1 — Core payroll parity:** ensure `02` Phase 1 covers HR2000's basic payroll-cycle expectations: pay periods, multiple pay inputs, historical run retention, run approval/locking, result lines, and basic payslips. {amp/gpt-5.1-codex}
 - [x] **Phase 2 — Classification parity:** ensure `02` Phase 2 covers the HR2000 gap hidden behind “auto statutory calculation”: every pay item must have inspectable statutory treatment before final calculation. {amp/gpt-5.1-codex}
 - [x] **Phase 3 — Profile parity:** ensure `02` Phase 3 captures employer and employee statutory setup needed before Malaysia statutory calculations can be credible. {amp/gpt-5.1-codex}
-- [ ] **Phase 4 — Contribution parity:** ensure `02` Phase 4 covers EPF, SOCSO, EIS, and HRD levy before PCB, with explanation and validation output. Effective-dated statutory rule-table storage is in place; country-pack calculators and result-line explanations remain open.
+- [ ] **Phase 4 — Contribution parity:** ensure `02` Phase 4 covers EPF, SOCSO, EIS, and HRD levy before PCB, with explanation and validation output. Effective-dated statutory rule-table storage and the registered Malaysia country-pack skeleton are in place; contribution calculators and result-line explanations remain open.
 - [ ] **Phase 5 — Output/control parity:** ensure `02` Phase 5 covers HR2000's baseline operational outputs: payslips, statutory contribution reports, employer cost reports, bank exports, practical report exports, payroll lock reports, and audit evidence.
 - [ ] **Phase 6 — Claims parity:** use HR2000's e-Claim workflow as the first payroll-adjacent module target: claim entitlement, attachment, approval, payroll reimbursement, and claim reporting.
 - [ ] **Phase 7 — Attendance/overtime parity:** use HR2000's e-TMS/e-Overtime as a staged target: approved overtime should feed payroll early; rotating shifts, conditional allowances, mobile/geofence, and device binding are follow-ups unless SBG confirms day-one need.
