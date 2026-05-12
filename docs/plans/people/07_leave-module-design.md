@@ -9,6 +9,7 @@
 - `docs/plans/people/05_sbg-ipayroll-settings-gap-bridge.md` — People Settings foundation (work calendar/exceptions, reference data, employment groups, employee account access, profile change requests, notification delivery log) that Leave consumes rather than re-implements
 - `docs/plans/people/06_ipayroll-employee-module-gap-bridge.md` — Employee workbench naming, payroll data readiness, work-profile dependencies that Leave entitlement and approval routing depend on
 - `docs/plans/people/04_pdf-generation-strategy.md` — `App\Base\Pdf\Jobs\RenderPdfJob` is the queue-friendly entry point for any printable Leave document (year planner, balance statement, leave history report)
+- `docs/plans/people/sbg_leave_ref/` — SBG's live HR2000 e-Leave configuration export: leave types, leave groups (FM/FW/MM/SINGLE), leave policies per type, leave entitlement bands, and balance/application snapshots. Primary parity source for Phase 7 and for shaping the policy/entitlement schema.
 - `app/Modules/People/Settings/Models/PeopleCalendarException.php` — existing work-calendar exception model Leave should consume
 - `app/Modules/People/Payroll/Models/PayrollInput.php` and `PayrollPayItem.php` — neutral pay-input contract through which approved unpaid leave and leave-encashment payouts feed payroll
 - `app/Modules/Core/Employee/` — canonical employee identity, supervisor/reporting line, employment dates that drive entitlement accrual and approval routing
@@ -29,7 +30,8 @@ A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size 
 | Component | Responsibility | Primary owner |
 |-----------|----------------|---------------|
 | Leave type catalog | Neutral identity for each leave (e.g. annual, sick, hospitalization, maternity, paternity, marriage, compassionate, unpaid, replacement, special) with paid/unpaid, gender/eligibility hints, default unit (days/half-days/hours), default approval depth, and whether it interacts with Payroll. Country pack owns statutory semantics; SBG/private packs add company-specific types. | Leave Core; statutory hints from country pack |
-| Entitlement policy | Effective-dated rules that, given an employee work profile and a year, produce a target entitlement: years-of-service bands, accrual frequency (annual lump, monthly accrual, anniversary), prorate for joiners/leavers, eligibility window, and country-pack overrides for statutory minima. | Leave Core schema; Malaysia pack provides Employment Act minima as seed policies |
+| Entitlement policy | Effective-dated rules that, given an employee work profile and a year, produce a target entitlement: years-of-service bands, accrual frequency (annual lump, monthly accrual, anniversary, earned-until-month-N), prorate for joiners/leavers, eligibility window, rounding rule, bring-forward (cap, expiry month, anchor), and country-pack overrides for statutory minima. | Leave Core schema; Malaysia pack provides Employment Act minima as seed policies |
+| Leave assignment (profile) | Named bundle of `(leave_type, entitlement_policy, request_policy)` rows assigned to an employee cohort. Determines which leaves an employee can apply for, under which entitlement table, under which request policy. Cohorts are demographic (gender, marital status, citizenship) and/or employment (group, grade, location). Mirrors HR2000's "Leave Group" concept (e.g. SBG's FM/FW/MM/SINGLE) without copying its name. | Leave Core |
 | Balance ledger | Append-only entries that produce current balance per employee per leave type per year: opening, accrual, taken, cancelled, adjusted, carried-forward, expired, encashed. Each entry references its source (policy run, request, adjustment, carry-forward job). | Leave Core |
 | Request lifecycle | Draft → submitted → approved/rejected/cancelled → applied → optionally withdrawn-after-approval. Half/full day, multi-day spans, attachments, max-days-per-application validation, advance-leave gating, overlap detection, calendar exception awareness. | Leave Core |
 | Approval routing | Multi-tier approval driven by employee supervisor chain, employment group, leave type, and policy. Reuses or wraps the existing Workflow module rather than inventing a parallel engine. | Leave Core consuming Workflow |
@@ -58,7 +60,13 @@ A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size 
 
 **No leave-on-behalf without an audit trail.** HR2000 supports applying leave on behalf of employees. BLB allows this only through an explicit on-behalf flow that records the actor, the employee, the reason, and the employee notification. The same audit shape `EmployeeProfileChangeRequest` already uses.
 
-**Half-day and hourly are first-class units, not workarounds.** Some SBG leave types (e.g. medical appointment) are commonly half-day; future country packs may need hourly leave. Leave Core stores requested duration as a typed unit (full-day, half-day-AM, half-day-PM, hours) and converts to days against the resolved work calendar for balance deduction. This avoids the "0.5 day hack" pattern.
+**Half-day and hourly are first-class units, not workarounds.** Some SBG leave types are half-day (e.g. medical appointment) and SBG already runs an hourly leave type (`T/S` time-slip, 2-hour blocks) in production today. Hourly is therefore a v1 requirement, not future-proofing. Leave Core stores requested duration as a typed unit (full-day, half-day-AM, half-day-PM, hours) with a configurable hour quantum per policy, and converts to days against the resolved work calendar for balance deduction. This avoids the "0.5 day hack" pattern.
+
+**Demographic eligibility is data, not code.** SBG's HR2000 groups (FM = female married, FW = foreign worker, MM = male married, SINGLE) show that leave eligibility is driven by gender, marital status, and citizenship/foreign-worker status, not only by employment group. The work-profile snapshot the country pack consumes therefore declares these as named, optional, sensitive fields; the country pack defines which leave types predicate on which fields (e.g. maternity → female; paternity → male married; AL-FW band → foreign-worker). Leave Core never branches on these values directly.
+
+**Unpaid leave and unauthorized absence are distinct neutral codes.** HR2000 separates `UPL` (employee-requested unpaid leave) from `ABS` (absent without leave, disciplinary). Both classify to the unpaid-leave PayrollInput type but carry different audit posture and approval semantics (ABS is typically recorded by HR, not applied for). Leave Core exposes both as neutral codes (`unpaid_leave`, `unauthorized_absence`) and the country pack maps them to the same payroll classification.
+
+**No HR2000 sentinel values in BLB schema.** HR2000 uses `99.00` for "no upper bound" on service-band tables and `99` for "no max per application". BLB uses `NULL = unlimited` semantics on the relevant columns; importers translate `99`/`99.00` to `NULL` on ingest. The plan does not propagate sentinels into Core tables.
 
 **Leave-Module ownership of medical certificate / hospitalization evidence is shallow.** Attachments are stored against the request (using whatever attachment infrastructure the Workflow/Documents layer provides). Leave Core does not OCR, validate, or interpret medical documents in v1 — it records that an attachment exists, its type tag, and who uploaded it.
 
@@ -68,10 +76,27 @@ A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size 
 
 **Leave Core promises country packs a normalized leave context per request or per entitlement run:**
 - pay-entity, country/state, currency, leave year, evaluation date;
-- employee identity and effective-dated work profile snapshot (hire date, employment group, work calendar, pay basis, gender/eligibility-relevant fields the country pack declares);
+- employee identity and effective-dated work profile snapshot: hire date, confirmation date, employment group, work calendar, pay basis, plus the demographic fields the country pack declares as eligibility-relevant (currently: gender, marital status, citizenship/foreign-worker status);
+- the employee's active leave assignment (which `(leave_type, entitlement_policy, request_policy)` triples apply);
 - prior leave ledger entries needed for accrual, carry-forward, expiry, and cumulative cap calculations;
-- pending and approved request history within the relevant period;
+- pending and approved request history within the relevant period, projected as both `consumed_balance` (approved/applied) and `encumbered_balance` (consumed + pending) views;
 - a write API that records ledger entries, attaches policy version IDs, and refuses to mutate frozen periods.
+
+**Leave Core's request-policy schema includes (each effective-dated, all optional with documented defaults):**
+- `earned_calculation_method`: `annual_lump_no_prorate` | `monthly_accrual` | `earned_until_month_N` | `anniversary`;
+- `entitlement_rounding`: `none` | `nearest_1_day` | `nearest_half_day`;
+- `bring_forward`: `{cap_days, expiry_month, anchor: year_start | anniversary}`;
+- `allow_negative_balance`: bool (approver-overridable balance shortfall);
+- `include_pending_as_taken`: bool (drives encumbered-balance projection);
+- `allow_multiple_applications_per_day`: bool (needed for hourly/time-slip);
+- `no_cross_month_split`: bool (forces month-boundary split, relevant for monthly payroll);
+- `compulsory_attachment`: bool (mandatory evidence, e.g. MC/HL/MTL);
+- `daytype_exclusions`: `{holiday, off_day, rest_day}` independent booleans for days-deducted calculation;
+- `day_of_week_unit_overrides`: map of `day_of_week → full_day | half_day` (e.g. Saturday = half for AL);
+- `advance_notice`: `{standard_days, short_notice: {allowed, tag, annual_cap, disallow_today}}`;
+- `back_date`: `{allowed, max_days, tag, daytype_exclusions}`;
+- `max_days_per_application`: nullable int (`NULL` = unlimited);
+- `replacement_expiry`: `{rule: earn_date_plus_days | year_end | leave_end_plus_days, value}` for replacement-leave types only.
 
 **A Leave Country Pack must provide:**
 - **Identity and compatibility:** country code, pack identifier, pack version, supported Leave Core contract version, statutory data version list.
@@ -98,6 +123,8 @@ A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size 
 - **Risk: leave-to-payroll double-counting.** Guardrail: each unpaid-leave or encashment `PayrollInput` row carries the leave request ID; Payroll inputs reject duplicates with the same source reference within the same period.
 - **Risk: public-holiday tables go stale.** Guardrail: Malaysia pack ships holiday data with explicit year coverage; Leave UI surfaces "no published holidays for year X" rather than silently treating all days as workdays.
 - **Risk: parity scope creep.** Guardrail: HR2000 features beyond the parity table (e.g. complex shift-aware leave, bidding, leave-trade marketplaces) stay out of v1 unless SBG validates day-one need.
+- **Risk: HR2000 sentinel values (99-year service band, 99-day max per application) leak into BLB schema.** Guardrail: importers translate `99`/`99.00` to `NULL` (unlimited); Core columns use nullable upper bounds; no magic numbers.
+- **Risk: demographic eligibility leakage.** Guardrail: gender, marital status, and citizenship fields are declared by the country pack and stored on the work-profile snapshot; Leave Core never branches on them and never logs them outside the snapshot they belong to.
 
 ## Phases
 
@@ -110,10 +137,12 @@ A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size 
 
 ### Phase 1 — Leave Core skeleton
 
-- [ ] Create the neutral leave type catalog (paid/unpaid, default unit, default approval depth, payroll-interacting flag).
-- [ ] Create effective-dated entitlement policy storage with service-band rows, proration rules, and accrual frequency.
-- [ ] Create the append-only balance ledger with entry types: opening, accrual, taken, cancelled, adjusted, carried-forward, expired, encashed.
-- [ ] Create the request lifecycle (draft → submitted → approved/rejected/cancelled → applied → withdrawn) with half-day, multi-day, attachments, max-days-per-application, advance-leave, and overlap-detection rules.
+- [ ] Create the neutral leave type catalog (paid/unpaid, default unit including `hours` with quantum, default approval depth, payroll-interacting flag, compulsory-attachment flag). Seed distinct codes for `unpaid_leave` and `unauthorized_absence`.
+- [ ] Create effective-dated entitlement policy storage with service-band rows (nullable upper bound), proration rules, accrual frequency (`annual_lump_no_prorate` | `monthly_accrual` | `earned_until_month_N` | `anniversary`), rounding, and bring-forward parameters (`cap_days`, `expiry_month`, `anchor`).
+- [ ] Create effective-dated request-policy storage covering the schema enumerated in the Public Contract (negative-balance, pending-as-taken, multi-application-per-day, no-cross-month, daytype exclusions, day-of-week unit overrides, advance-notice with short-notice/emergency sub-policy, back-date with sub-policy, max-days-per-application nullable).
+- [ ] Create the `LeaveAssignment` entity binding employee cohort → `(leave_type, entitlement_policy, request_policy)` triples; cohort predicate accepts demographic fields declared by the country pack.
+- [ ] Create the append-only balance ledger with entry types: opening, accrual, taken, cancelled, adjusted, carried-forward, expired, encashed. Expose both `consumed_balance` and `encumbered_balance` projections.
+- [ ] Create the request lifecycle (draft → submitted → approved/rejected/cancelled → applied → withdrawn) with half-day, hourly, multi-day, attachments, max-days-per-application, advance-leave, back-date, and overlap-detection rules.
 - [ ] Capture audit history for each request transition and each ledger write.
 
 ### Phase 2 — Calendar and country-pack integration
@@ -131,18 +160,20 @@ A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size 
 
 ### Phase 4 — Malaysia leave country pack (first pack)
 
-- [ ] Ship statutory leave types: annual, sick, hospitalization, maternity (98 days), paternity (7 days), gazetted public holidays.
+- [ ] Ship statutory leave types only: annual, sick, hospitalization, maternity (98 days), paternity (7 days), gazetted public holidays. Non-statutory employer leave (marriage, compassionate, exam, time-slip, replacement variants) ships in the SBG private pack in Phase 7, not here.
 - [ ] Ship statutory entitlement policies as Employment-Act minima with service-band tables.
 - [ ] Ship federal and state public-holiday calendars for the current year, with import path for future years.
 - [ ] Ship blocking validation rules for Act-floor violations, with explanation output.
+- [ ] Declare which work-profile demographic fields the pack consumes (gender for maternity, marital status where required, citizenship/foreign-worker for AL-FW band).
 - [ ] Decide initial pack home (`blb-payroll-my` or `blb-people-my`) per Phase 0 outcome and register it through the country-pack registry.
 
 ### Phase 5 — Replacement, carry-forward, encashment, and payroll handoff
 
-- [ ] Implement replacement-leave earning when working a holiday and replacement-leave expiry job.
-- [ ] Implement year-end carry-forward with cap, expiry window, and dry-run output.
+- [ ] Implement replacement-leave earning when working a holiday and replacement-leave expiry job. Support per-type expiry rule (`earn_date + N_days` is the SBG default at 365 days from leave-end-date; alternates: `year_end`, `leave_end_plus_days`).
+- [ ] Implement year-end carry-forward driven by `bring_forward.{cap_days, expiry_month, anchor}` policy fields (e.g. SBG AL-LOCAL: cap 7, expiry March), with dry-run output and explicit ledger expiry entries.
 - [ ] Implement leave-encashment generation as ledger entries plus matching `PayrollInput` rows.
-- [ ] Generate `PayrollInput` rows for unpaid leave with leave-request back-reference; verify Malaysia pack classifies them correctly for EPF/SOCSO/EIS/PCB.
+- [ ] Generate `PayrollInput` rows for unpaid leave (both `unpaid_leave` and `unauthorized_absence` codes) with leave-request back-reference; verify Malaysia pack classifies them correctly for EPF/SOCSO/EIS/PCB.
+- [ ] Honour `no_cross_month_split` policy when requests straddle a month boundary so payroll-period attribution is unambiguous.
 - [ ] Reconcile balance ledger against Payroll inputs as part of payroll lock/audit report.
 
 ### Phase 6 — Self-service and reports
@@ -154,7 +185,9 @@ A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size 
 
 ### Phase 7 — Migration and SBG validation
 
-- [ ] Define HR2000 e-Leave import contract: leave types mapping, opening balances per employee/type/year, historical request log (optional, scoped), pending requests in flight.
+- [ ] Define HR2000 e-Leave import contract: leave types mapping, opening balances per employee/type/year, historical request log (optional, scoped), pending requests in flight. Translate HR2000 sentinels (`99`/`99.00`) to `NULL` on ingest.
+- [ ] Seed the SBG private pack (`kiatng/blb-sbg`) with the non-statutory SBG types observed in the reference export: marriage (MRL), compassionate (CL), exam (EXAM), time-slip (T/S, hourly), replacement variants (RL and RPL), and SBG's higher-than-floor AL service bands (AL-LOCAL 12/14/16/21) plus the FW band (AL-FW 8/12/16).
+- [ ] Seed the SBG `LeaveAssignment` cohorts equivalent to HR2000 groups (FM / FW / MM / SINGLE) using demographic predicates (gender, marital status, citizenship).
 - [ ] Run dry-run import against SBG export with reconciliation report.
 - [ ] Validate Malaysia pack against SBG's actual leave operation for one full year cycle (entitlement, accrual, year-end carry-forward, expiry, encashment, payroll handoff).
 - [ ] Confirm which SBG-specific rules belong in `kiatng/blb-sbg` versus upstream in the Malaysia pack.
@@ -168,3 +201,7 @@ A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size 
 - Confirm whether Leave reporting needs a state-by-state public-holiday view in v1 or whether a single pay-entity state is sufficient for SBG.
 - Confirm how Leave attachments interact with the Documents/Workflow attachment infrastructure to avoid a Leave-private upload surface.
 - Confirm whether HR2000's "burn leave" maps to forced annual-leave consumption (e.g. shutdown days) or to expired carry-forward, since the BLB modelling differs.
+- Confirm semantic difference between SBG's two replacement-leave types `RL` and `RPL` (the latter flags "daily-use alternative workflow" in the HR2000 export) — single neutral `replacement_leave` with a policy switch, or two distinct neutral codes?
+- Confirm whether SBG needs `unauthorized_absence` (HR2000 `ABS`) as a distinct neutral code or can collapse it onto `unpaid_leave` with an audit tag.
+- Confirm whether SBG's hourly `T/S` time-slip leave must ship at go-live with full hourly support, or can launch as half-day approximation in v1.
+- Confirm SBG's preferred `earned_calculation_method` per leave type (the HR2000 export shows "Full 12 Month And Prorate Not Required" for most, "Leave Earned Until December" for AL) and whether the latter is a true monthly accrual or a year-start lump with mid-year proration cap.

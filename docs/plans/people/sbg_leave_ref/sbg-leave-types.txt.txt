@@ -1,0 +1,21 @@
+COMPANY       :SB TAPE GROUP SDN BHD (846030-A)                                   Dat:12-May-2026 (Tue) 09Page:1
+REPORT TITLE  :LEAVE TYPE REPORT
+
+
+NO TYPE CODTYPE DESCRIPTIONDETECT TIDETECT NDETECT    [R-Leave] AdmB/F BALANCE PAID DAY (DAILY USE ALTERNATIVE WORK-FLOW
+                                            REPLACEME
+                                            NT LEAVE
+
+1  ABS     ABSENT          False    True    False     False        True        False           False
+2  AL      ANNUAL LEAVE    False    False   False     False        True        True            False
+3  CL      COMPASSIONATE LEFalse    False   False     False        True        False           False
+4  EXAM LEAEXAM LEAVE      False    False   False     False        True        False           False
+5  HL      HOSPITALIZATION False    False   False     False        True        True            False
+6  MC      MEDICAL LEAVE   False    False   False     False        True        True            False
+7  MRL     MARRIAGE LEAVE  False    False   False     False        True        False           False
+8  MTL     MATERNITY LEAVE False    False   False     False        True        False           False
+9  PTL     PATERNITY LEAVE False    False   False     False        True        False           False
+10 RL      REPLACEMENT LEAVFalse    False   False     False        True        False           False
+11 T/S     TIME SLIP 2 HOURTrue     False   False     False        True        False           False
+12 UPL     UNPAID LEAVE    False    True    False     False        True        False           False
+13 RPL     REPLACEMENT LEAVFalse    False   True      False        True        False           True

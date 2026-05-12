@@ -1,0 +1,802 @@
+COMPANY        :SB TAPE GROUP SDN BHD (846030-A)     Dat:12-May-2026 (Tue) 11Page:1
+REPORT TITLE   :LEAVE POLICY REPORT
+
+
+NO   GROUP CODE  GROUP DESCRIPTION
+
+
+1    ABS         ABSENT
+
+
+A   Setting
+
+A1  Allow applicant to apply leave  False A10 Allow approver to approve iTrueave balance is insufficient
+
+A2  Split Application For Following True  A11 Maximum day per leave appli99tion
+
+A3  No Cross Month Application      True  A12 Allow to apply leave after Immediately
+
+A4  Allow applicant to apply leave oFalse A13lAllow applicant to use prevFalseyear bring forward leave only
+
+                                                                         Full 12
+                                                                         Month And
+                                                                         Prorate Not
+A5  Include Pending As Taken        True  A14 Earned Calculation Method  Required
+
+    Allow applicant select day /
+A6  period for each leave date      True  A15 Leave entitlement rounding No Rounding
+
+A7  Allow applicant to apply half daTrue.5A16yDeduct As Full Day         True
+
+    Compulsory Attach supporting
+    documents(e.g Medical
+A8  Certificate)                    False A17 Day Of Week Detect As Full SAT
+
+A9  Allow applicant to apply more thTrueeaA18balance
+
+B   DayType
+
+    Exclude Day Type for Leave
+B1  Day(s) calculation : Holiday    False B3  Exclude Day Type for Leave False) calculation : Off day
+
+B2  Exclude Day Type for Leave Day(sFalsecB4ation : Rest day
+
+C   Advance Notice
+
+C1  Allow applicant to apply leave iFalseaC6e Allow Short Notice?        True
+
+C2  Advance Notice Days Required    3     C7  Tag                        EMERGENCY LEAVE
+
+C3  Exclude DayType : Holiday       True  C8  Detect As Emergency?       True
+
+C4  Exclude DayType : Rest day      True  C9  No. Of Emergency Applicatio0 Allowed (0=No Limit)
+
+C5  Exclude DayType : Off Day       True  C10 Disallow Today Application False
+
+D   Back Date
+
+D1  Allow applicant to submit backdaFalseeD6e Tag                        EMERGENCY LEAVE
+
+D2  Back-Date Days                  0     D7  Detect As Emergency?       True
+
+D3  Exclude DayType : Holiday       False D8  Backdated Maximum Day Allow30
+
+D4  Exclude DayType : Rest day      False D9
+
+D5  Exclude DayType : Off Day       False D10
+
+COMPANY        :SB TAPE GROUP SDN BHD (846030-A)     Dat:12-May-2026 (Tue) 11Page:2
+REPORT TITLE   :LEAVE POLICY REPORT
+
+
+NO   GROUP CODE  GROUP DESCRIPTION
+
+
+2    AL          AL
+
+
+A   Setting
+
+A1  Allow applicant to apply leave  True  A10 Allow approver to approve iFalseve balance is insufficient
+
+A2  Split Application For Following True  A11 Maximum day per leave appli99tion
+
+A3  No Cross Month Application      False A12 Allow to apply leave after After Confirmation
+
+A4  Allow applicant to apply leave oFalse A13lAllow applicant to use prevFalseyear bring forward leave only
+
+                                                                         Leave Earned
+                                                                         Until
+A5  Include Pending As Taken        True  A14 Earned Calculation Method  December
+
+    Allow applicant select day /
+A6  period for each leave date      True  A15 Leave entitlement rounding Round Nearest 1 day
+
+A7  Allow applicant to apply half daTrue.5A16yDeduct As Full Day         True
+
+    Compulsory Attach supporting
+    documents(e.g Medical
+A8  Certificate)                    False A17 Day Of Week Detect As Full SAT
+
+A9  Allow applicant to apply more thFalseaA18balance
+
+B   DayType
+
+    Exclude Day Type for Leave
+B1  Day(s) calculation : Holiday    True  B3  Exclude Day Type for Leave Trues) calculation : Off day
+
+B2  Exclude Day Type for Leave Day(sTruelcB4ation : Rest day
+
+C   Advance Notice
+
+C1  Allow applicant to apply leave iTruevaC6e Allow Short Notice?        True
+
+C2  Advance Notice Days Required    3     C7  Tag                        EMERGENCY LEAVE
+
+C3  Exclude DayType : Holiday       True  C8  Detect As Emergency?       True
+
+C4  Exclude DayType : Rest day      True  C9  No. Of Emergency Applicatio0 Allowed (0=No Limit)
+
+C5  Exclude DayType : Off Day       True  C10 Disallow Today Application False
+
+D   Back Date
+
+D1  Allow applicant to submit backdaTrueleD6e Tag                        EMERGENCY LEAVE
+
+D2  Back-Date Days                  0     D7  Detect As Emergency?       True
+
+D3  Exclude DayType : Holiday       False D8  Backdated Maximum Day Allow30
+
+D4  Exclude DayType : Rest day      False D9
+
+D5  Exclude DayType : Off Day       False D10
+
+COMPANY        :SB TAPE GROUP SDN BHD (846030-A)     Dat:12-May-2026 (Tue) 11Page:3
+REPORT TITLE   :LEAVE POLICY REPORT
+
+
+NO   GROUP CODE  GROUP DESCRIPTION
+
+
+3    CL          COMPASSIONATE
+
+
+A   Setting
+
+A1  Allow applicant to apply leave  True  A10 Allow approver to approve iFalseve balance is insufficient
+
+A2  Split Application For Following True  A11 Maximum day per leave appli3ation
+
+A3  No Cross Month Application      False A12 Allow to apply leave after After Confirmation
+
+A4  Allow applicant to apply leave oFalse A13lAllow applicant to use prevFalseyear bring forward leave only
+
+                                                                         Full 12
+                                                                         Month And
+                                                                         Prorate Not
+A5  Include Pending As Taken        True  A14 Earned Calculation Method  Required
+
+    Allow applicant select day /
+A6  period for each leave date      True  A15 Leave entitlement rounding No Rounding
+
+A7  Allow applicant to apply half daFalse5A16yDeduct As Full Day         False
+
+    Compulsory Attach supporting
+    documents(e.g Medical
+A8  Certificate)                    True  A17 Day Of Week Detect As Full Day
+
+A9  Allow applicant to apply more thFalseaA18balance
+
+B   DayType
+
+    Exclude Day Type for Leave
+B1  Day(s) calculation : Holiday    True  B3  Exclude Day Type for Leave Trues) calculation : Off day
+
+B2  Exclude Day Type for Leave Day(sTruelcB4ation : Rest day
+
+C   Advance Notice
+
+C1  Allow applicant to apply leave iFalseaC6e Allow Short Notice?        True
+
+C2  Advance Notice Days Required    0     C7  Tag
+
+C3  Exclude DayType : Holiday       False C8  Detect As Emergency?       False
+
+C4  Exclude DayType : Rest day      False C9  No. Of Emergency Applicatio0 Allowed (0=No Limit)
+
+C5  Exclude DayType : Off Day       False C10 Disallow Today Application False
+
+D   Back Date
+
+D1  Allow applicant to submit backdaTrueleD6e Tag                        LATE SUBMISSION
+
+D2  Back-Date Days                  14    D7  Detect As Emergency?       False
+
+D3  Exclude DayType : Holiday       False D8  Backdated Maximum Day Allow30
+
+D4  Exclude DayType : Rest day      False D9
+
+D5  Exclude DayType : Off Day       False D10
+
+COMPANY        :SB TAPE GROUP SDN BHD (846030-A)     Dat:12-May-2026 (Tue) 11Page:4
+REPORT TITLE   :LEAVE POLICY REPORT
+
+
+NO   GROUP CODE  GROUP DESCRIPTION
+
+
+4    EXAM        EXAM
+
+
+A   Setting
+
+A1  Allow applicant to apply leave  True  A10 Allow approver to approve iFalseve balance is insufficient
+
+A2  Split Application For Following True  A11 Maximum day per leave appli4ation
+
+A3  No Cross Month Application      False A12 Allow to apply leave after After Confirmation
+
+A4  Allow applicant to apply leave oFalse A13lAllow applicant to use prevFalseyear bring forward leave only
+
+                                                                         Full 12
+                                                                         Month And
+                                                                         Prorate Not
+A5  Include Pending As Taken        True  A14 Earned Calculation Method  Required
+
+    Allow applicant select day /
+A6  period for each leave date      True  A15 Leave entitlement rounding No Rounding
+
+A7  Allow applicant to apply half daTrue.5A16yDeduct As Full Day         False
+
+    Compulsory Attach supporting
+    documents(e.g Medical
+A8  Certificate)                    True  A17 Day Of Week Detect As Full Day
+
+A9  Allow applicant to apply more thFalseaA18balance
+
+B   DayType
+
+    Exclude Day Type for Leave
+B1  Day(s) calculation : Holiday    True  B3  Exclude Day Type for Leave Trues) calculation : Off day
+
+B2  Exclude Day Type for Leave Day(sTruelcB4ation : Rest day
+
+C   Advance Notice
+
+C1  Allow applicant to apply leave iTruevaC6e Allow Short Notice?        False
+
+C2  Advance Notice Days Required    7     C7  Tag
+
+C3  Exclude DayType : Holiday       False C8  Detect As Emergency?       False
+
+C4  Exclude DayType : Rest day      False C9  No. Of Emergency Applicatio0 Allowed (0=No Limit)
+
+C5  Exclude DayType : Off Day       False C10 Disallow Today Application False
+
+D   Back Date
+
+D1  Allow applicant to submit backdaFalseeD6e Tag
+
+D2  Back-Date Days                  0     D7  Detect As Emergency?       False
+
+D3  Exclude DayType : Holiday       False D8  Backdated Maximum Day Allow0
+
+D4  Exclude DayType : Rest day      False D9
+
+D5  Exclude DayType : Off Day       False D10
+
+COMPANY        :SB TAPE GROUP SDN BHD (846030-A)     Dat:12-May-2026 (Tue) 11Page:5
+REPORT TITLE   :LEAVE POLICY REPORT
+
+
+NO   GROUP CODE  GROUP DESCRIPTION
+
+
+5    HPL         HOSPITALIZE
+
+
+A   Setting
+
+A1  Allow applicant to apply leave  True  A10 Allow approver to approve iFalseve balance is insufficient
+
+A2  Split Application For Following True  A11 Maximum day per leave appli60tion
+
+A3  No Cross Month Application      False A12 Allow to apply leave after Immediately
+
+A4  Allow applicant to apply leave oTruee A13lAllow applicant to use prevFalseyear bring forward leave only
+
+                                                                         Full 12
+                                                                         Month And
+                                                                         Prorate Not
+A5  Include Pending As Taken        True  A14 Earned Calculation Method  Required
+
+    Allow applicant select day /
+A6  period for each leave date      True  A15 Leave entitlement rounding No Rounding
+
+A7  Allow applicant to apply half daFalse5A16yDeduct As Full Day         False
+
+    Compulsory Attach supporting
+    documents(e.g Medical
+A8  Certificate)                    True  A17 Day Of Week Detect As Full Day
+
+A9  Allow applicant to apply more thFalseaA18balance
+
+B   DayType
+
+    Exclude Day Type for Leave
+B1  Day(s) calculation : Holiday    False B3  Exclude Day Type for Leave False) calculation : Off day
+
+B2  Exclude Day Type for Leave Day(sFalsecB4ation : Rest day
+
+C   Advance Notice
+
+C1  Allow applicant to apply leave iTruevaC6e Allow Short Notice?        True
+
+C2  Advance Notice Days Required    14    C7  Tag
+
+C3  Exclude DayType : Holiday       False C8  Detect As Emergency?       False
+
+C4  Exclude DayType : Rest day      False C9  No. Of Emergency Applicatio0 Allowed (0=No Limit)
+
+C5  Exclude DayType : Off Day       False C10 Disallow Today Application False
+
+D   Back Date
+
+D1  Allow applicant to submit backdaTrueleD6e Tag
+
+D2  Back-Date Days                  0     D7  Detect As Emergency?       False
+
+D3  Exclude DayType : Holiday       False D8  Backdated Maximum Day Allow30
+
+D4  Exclude DayType : Rest day      False D9
+
+D5  Exclude DayType : Off Day       False D10
+
+COMPANY        :SB TAPE GROUP SDN BHD (846030-A)     Dat:12-May-2026 (Tue) 11Page:6
+REPORT TITLE   :LEAVE POLICY REPORT
+
+
+NO   GROUP CODE  GROUP DESCRIPTION
+
+
+6    MC          MC
+
+
+A   Setting
+
+A1  Allow applicant to apply leave  True  A10 Allow approver to approve iFalseve balance is insufficient
+
+A2  Split Application For Following True  A11 Maximum day per leave appli22tion
+
+A3  No Cross Month Application      False A12 Allow to apply leave after Immediately
+
+A4  Allow applicant to apply leave oFalse A13lAllow applicant to use prevFalseyear bring forward leave only
+
+                                                                         Full 12
+                                                                         Month And
+                                                                         Prorate Not
+A5  Include Pending As Taken        True  A14 Earned Calculation Method  Required
+
+    Allow applicant select day /
+A6  period for each leave date      True  A15 Leave entitlement rounding No Rounding
+
+A7  Allow applicant to apply half daTrue.5A16yDeduct As Full Day         False
+
+    Compulsory Attach supporting
+    documents(e.g Medical
+A8  Certificate)                    True  A17 Day Of Week Detect As Full Day
+
+A9  Allow applicant to apply more thFalseaA18balance
+
+B   DayType
+
+    Exclude Day Type for Leave
+B1  Day(s) calculation : Holiday    False B3  Exclude Day Type for Leave False) calculation : Off day
+
+B2  Exclude Day Type for Leave Day(sFalsecB4ation : Rest day
+
+C   Advance Notice
+
+C1  Allow applicant to apply leave iFalseaC6e Allow Short Notice?        True
+
+C2  Advance Notice Days Required    0     C7  Tag
+
+C3  Exclude DayType : Holiday       False C8  Detect As Emergency?       False
+
+C4  Exclude DayType : Rest day      False C9  No. Of Emergency Applicatio0 Allowed (0=No Limit)
+
+C5  Exclude DayType : Off Day       False C10 Disallow Today Application False
+
+D   Back Date
+
+D1  Allow applicant to submit backdaTrueleD6e Tag                        LATE SUBMISSION
+
+D2  Back-Date Days                  7     D7  Detect As Emergency?       False
+
+D3  Exclude DayType : Holiday       False D8  Backdated Maximum Day Allow30
+
+D4  Exclude DayType : Rest day      False D9
+
+D5  Exclude DayType : Off Day       False D10
+
+COMPANY        :SB TAPE GROUP SDN BHD (846030-A)     Dat:12-May-2026 (Tue) 11Page:7
+REPORT TITLE   :LEAVE POLICY REPORT
+
+
+NO   GROUP CODE  GROUP DESCRIPTION
+
+
+7    MRL         MARRIAGE
+
+
+A   Setting
+
+A1  Allow applicant to apply leave  True  A10 Allow approver to approve iFalseve balance is insufficient
+
+A2  Split Application For Following False A11 Maximum day per leave appli3ation
+
+A3  No Cross Month Application      False A12 Allow to apply leave after After Confirmation
+
+A4  Allow applicant to apply leave oTruee A13lAllow applicant to use prevFalseyear bring forward leave only
+
+                                                                         Full 12
+                                                                         Month And
+                                                                         Prorate Not
+A5  Include Pending As Taken        True  A14 Earned Calculation Method  Required
+
+    Allow applicant select day /
+A6  period for each leave date      True  A15 Leave entitlement rounding No Rounding
+
+A7  Allow applicant to apply half daFalse5A16yDeduct As Full Day         False
+
+    Compulsory Attach supporting
+    documents(e.g Medical
+A8  Certificate)                    True  A17 Day Of Week Detect As Full Day
+
+A9  Allow applicant to apply more thFalseaA18balance
+
+B   DayType
+
+    Exclude Day Type for Leave
+B1  Day(s) calculation : Holiday    True  B3  Exclude Day Type for Leave Trues) calculation : Off day
+
+B2  Exclude Day Type for Leave Day(sTruelcB4ation : Rest day
+
+C   Advance Notice
+
+C1  Allow applicant to apply leave iTruevaC6e Allow Short Notice?        False
+
+C2  Advance Notice Days Required    7     C7  Tag
+
+C3  Exclude DayType : Holiday       False C8  Detect As Emergency?       False
+
+C4  Exclude DayType : Rest day      False C9  No. Of Emergency Applicatio0 Allowed (0=No Limit)
+
+C5  Exclude DayType : Off Day       False C10 Disallow Today Application False
+
+D   Back Date
+
+D1  Allow applicant to submit backdaTrueleD6e Tag
+
+D2  Back-Date Days                  0     D7  Detect As Emergency?       False
+
+D3  Exclude DayType : Holiday       False D8  Backdated Maximum Day Allow14
+
+D4  Exclude DayType : Rest day      False D9
+
+D5  Exclude DayType : Off Day       False D10
+
+COMPANY        :SB TAPE GROUP SDN BHD (846030-A)     Dat:12-May-2026 (Tue) 11Page:8
+REPORT TITLE   :LEAVE POLICY REPORT
+
+
+NO   GROUP CODE  GROUP DESCRIPTION
+
+
+8    MTL         MATERNITY
+
+
+A   Setting
+
+A1  Allow applicant to apply leave  True  A10 Allow approver to approve iFalseve balance is insufficient
+
+A2  Split Application For Following False A11 Maximum day per leave appli98tion
+
+A3  No Cross Month Application      False A12 Allow to apply leave after After Confirmation
+
+A4  Allow applicant to apply leave oTruee A13lAllow applicant to use prevFalseyear bring forward leave only
+
+                                                                         Full 12
+                                                                         Month And
+                                                                         Prorate Not
+A5  Include Pending As Taken        True  A14 Earned Calculation Method  Required
+
+    Allow applicant select day /
+A6  period for each leave date      True  A15 Leave entitlement rounding No Rounding
+
+A7  Allow applicant to apply half daFalse5A16yDeduct As Full Day         False
+
+    Compulsory Attach supporting
+    documents(e.g Medical
+A8  Certificate)                    True  A17 Day Of Week Detect As Full Day
+
+A9  Allow applicant to apply more thFalseaA18balance
+
+B   DayType
+
+    Exclude Day Type for Leave
+B1  Day(s) calculation : Holiday    False B3  Exclude Day Type for Leave False) calculation : Off day
+
+B2  Exclude Day Type for Leave Day(sFalsecB4ation : Rest day
+
+C   Advance Notice
+
+C1  Allow applicant to apply leave iTruevaC6e Allow Short Notice?        True
+
+C2  Advance Notice Days Required    14    C7  Tag
+
+C3  Exclude DayType : Holiday       False C8  Detect As Emergency?       False
+
+C4  Exclude DayType : Rest day      False C9  No. Of Emergency Applicatio0 Allowed (0=No Limit)
+
+C5  Exclude DayType : Off Day       False C10 Disallow Today Application False
+
+D   Back Date
+
+D1  Allow applicant to submit backdaTrueleD6e Tag
+
+D2  Back-Date Days                  0     D7  Detect As Emergency?       False
+
+D3  Exclude DayType : Holiday       False D8  Backdated Maximum Day Allow60
+
+D4  Exclude DayType : Rest day      False D9
+
+D5  Exclude DayType : Off Day       False D10
+
+COMPANY        :SB TAPE GROUP SDN BHD (846030-A)     Dat:12-May-2026 (Tue) 11Page:9
+REPORT TITLE   :LEAVE POLICY REPORT
+
+
+NO   GROUP CODE  GROUP DESCRIPTION
+
+
+9    PTL         PATERNITY
+
+
+A   Setting
+
+A1  Allow applicant to apply leave  True  A10 Allow approver to approve iFalseve balance is insufficient
+
+A2  Split Application For Following False A11 Maximum day per leave appli7ation
+
+A3  No Cross Month Application      False A12 Allow to apply leave after After Confirmation
+
+A4  Allow applicant to apply leave oTruee A13lAllow applicant to use prevFalseyear bring forward leave only
+
+                                                                         Full 12
+                                                                         Month And
+                                                                         Prorate Not
+A5  Include Pending As Taken        True  A14 Earned Calculation Method  Required
+
+    Allow applicant select day /
+A6  period for each leave date      True  A15 Leave entitlement rounding No Rounding
+
+A7  Allow applicant to apply half daFalse5A16yDeduct As Full Day         False
+
+    Compulsory Attach supporting
+    documents(e.g Medical
+A8  Certificate)                    True  A17 Day Of Week Detect As Full Day
+
+A9  Allow applicant to apply more thFalseaA18balance
+
+B   DayType
+
+    Exclude Day Type for Leave
+B1  Day(s) calculation : Holiday    False B3  Exclude Day Type for Leave False) calculation : Off day
+
+B2  Exclude Day Type for Leave Day(sFalsecB4ation : Rest day
+
+C   Advance Notice
+
+C1  Allow applicant to apply leave iTruevaC6e Allow Short Notice?        True
+
+C2  Advance Notice Days Required    7     C7  Tag
+
+C3  Exclude DayType : Holiday       False C8  Detect As Emergency?       False
+
+C4  Exclude DayType : Rest day      False C9  No. Of Emergency Applicatio0 Allowed (0=No Limit)
+
+C5  Exclude DayType : Off Day       False C10 Disallow Today Application False
+
+D   Back Date
+
+D1  Allow applicant to submit backdaTrueleD6e Tag                        LATE SUBMISSION
+
+D2  Back-Date Days                  7     D7  Detect As Emergency?       False
+
+D3  Exclude DayType : Holiday       False D8  Backdated Maximum Day Allow30
+
+D4  Exclude DayType : Rest day      False D9
+
+D5  Exclude DayType : Off Day       False D10
+
+COMPANY        :SB TAPE GROUP SDN BHD (846030-A)     Dat:12-May-2026 (Tue) 11Page:10
+REPORT TITLE   :LEAVE POLICY REPORT
+
+
+NO   GROUP CODE  GROUP DESCRIPTION
+
+
+10   RPL         RPL
+
+
+A   Setting
+
+A1  Allow applicant to apply leave  True  A10 Allow approver to approve iFalseve balance is insufficient
+
+A2  Split Application For Following False A11 Maximum day per leave appli99tion
+
+A3  No Cross Month Application      False A12 Allow to apply leave after Immediately
+
+A4  Allow applicant to apply leave oTruee A13lAllow applicant to use prevFalseyear bring forward leave only
+
+                                                                         Full 12
+                                                                         Month And
+                                                                         Prorate Not
+A5  Include Pending As Taken        True  A14 Earned Calculation Method  Required
+
+    Allow applicant select day /
+A6  period for each leave date      True  A15 Leave entitlement rounding No Rounding
+
+A7  Allow applicant to apply half daTrue.5A16yDeduct As Full Day         False
+
+    Compulsory Attach supporting
+    documents(e.g Medical
+A8  Certificate)                    False A17 Day Of Week Detect As Full Day
+
+A9  Allow applicant to apply more thFalseaA18balance
+
+B   DayType
+
+    Exclude Day Type for Leave
+B1  Day(s) calculation : Holiday    True  B3  Exclude Day Type for Leave Trues) calculation : Off day
+
+B2  Exclude Day Type for Leave Day(sTruelcB4ation : Rest day
+
+C   Advance Notice
+
+C1  Allow applicant to apply leave iTruevaC6e Allow Short Notice?        True
+
+C2  Advance Notice Days Required    3     C7  Tag                        EMERGENCY LEAVE
+
+C3  Exclude DayType : Holiday       True  C8  Detect As Emergency?       True
+
+C4  Exclude DayType : Rest day      True  C9  No. Of Emergency Applicatio0 Allowed (0=No Limit)
+
+C5  Exclude DayType : Off Day       True  C10 Disallow Today Application False
+
+D   Back Date
+
+D1  Allow applicant to submit backdaTrueleD6e Tag                        EMERGENCY LEAVE
+
+D2  Back-Date Days                  0     D7  Detect As Emergency?       True
+
+D3  Exclude DayType : Holiday       False D8  Backdated Maximum Day Allow30
+
+D4  Exclude DayType : Rest day      False D9
+
+D5  Exclude DayType : Off Day       False D10
+
+COMPANY        :SB TAPE GROUP SDN BHD (846030-A)     Dat:12-May-2026 (Tue) 11Page:11
+REPORT TITLE   :LEAVE POLICY REPORT
+
+
+NO   GROUP CODE  GROUP DESCRIPTION
+
+
+11   T/S         TIME SLIP
+
+
+A   Setting
+
+A1  Allow applicant to apply leave  True  A10 Allow approver to approve iTrueave balance is insufficient
+
+A2  Split Application For Following False A11 Maximum day per leave appli31tion
+
+A3  No Cross Month Application      False A12 Allow to apply leave after Immediately
+
+A4  Allow applicant to apply leave oFalse A13lAllow applicant to use prevFalseyear bring forward leave only
+
+                                                                         Full 12
+                                                                         Month And
+                                                                         Prorate Not
+A5  Include Pending As Taken        True  A14 Earned Calculation Method  Required
+
+    Allow applicant select day /
+A6  period for each leave date      True  A15 Leave entitlement rounding No Rounding
+
+A7  Allow applicant to apply half daFalse5A16yDeduct As Full Day         False
+
+    Compulsory Attach supporting
+    documents(e.g Medical
+A8  Certificate)                    True  A17 Day Of Week Detect As Full Day
+
+A9  Allow applicant to apply more thTrueeaA18balance
+
+B   DayType
+
+    Exclude Day Type for Leave
+B1  Day(s) calculation : Holiday    False B3  Exclude Day Type for Leave False) calculation : Off day
+
+B2  Exclude Day Type for Leave Day(sFalsecB4ation : Rest day
+
+C   Advance Notice
+
+C1  Allow applicant to apply leave iTruevaC6e Allow Short Notice?        True
+
+C2  Advance Notice Days Required    1     C7  Tag
+
+C3  Exclude DayType : Holiday       False C8  Detect As Emergency?       False
+
+C4  Exclude DayType : Rest day      False C9  No. Of Emergency Applicatio0 Allowed (0=No Limit)
+
+C5  Exclude DayType : Off Day       False C10 Disallow Today Application False
+
+D   Back Date
+
+D1  Allow applicant to submit backdaTrueleD6e Tag                        LATE SUBMISSION
+
+D2  Back-Date Days                  7     D7  Detect As Emergency?       False
+
+D3  Exclude DayType : Holiday       False D8  Backdated Maximum Day Allow30
+
+D4  Exclude DayType : Rest day      False D9
+
+D5  Exclude DayType : Off Day       False D10
+
+COMPANY        :SB TAPE GROUP SDN BHD (846030-A)     Dat:12-May-2026 (Tue) 11Page:12
+REPORT TITLE   :LEAVE POLICY REPORT
+
+
+NO   GROUP CODE  GROUP DESCRIPTION
+
+
+12   UPL         UPL
+
+
+A   Setting
+
+A1  Allow applicant to apply leave  True  A10 Allow approver to approve iTrueave balance is insufficient
+
+A2  Split Application For Following True  A11 Maximum day per leave appli31tion
+
+A3  No Cross Month Application      True  A12 Allow to apply leave after Immediately
+
+A4  Allow applicant to apply leave oFalse A13lAllow applicant to use prevFalseyear bring forward leave only
+
+                                                                         Full 12
+                                                                         Month And
+                                                                         Prorate Not
+A5  Include Pending As Taken        True  A14 Earned Calculation Method  Required
+
+    Allow applicant select day /
+A6  period for each leave date      True  A15 Leave entitlement rounding No Rounding
+
+A7  Allow applicant to apply half daTrue.5A16yDeduct As Full Day         True
+
+    Compulsory Attach supporting
+    documents(e.g Medical
+A8  Certificate)                    False A17 Day Of Week Detect As Full SAT
+
+A9  Allow applicant to apply more thTrueeaA18balance
+
+B   DayType
+
+    Exclude Day Type for Leave
+B1  Day(s) calculation : Holiday    False B3  Exclude Day Type for Leave False) calculation : Off day
+
+B2  Exclude Day Type for Leave Day(sFalsecB4ation : Rest day
+
+C   Advance Notice
+
+C1  Allow applicant to apply leave iTruevaC6e Allow Short Notice?        True
+
+C2  Advance Notice Days Required    3     C7  Tag                        EMERGENCY LEAVE
+
+C3  Exclude DayType : Holiday       True  C8  Detect As Emergency?       True
+
+C4  Exclude DayType : Rest day      True  C9  No. Of Emergency Applicatio0 Allowed (0=No Limit)
+
+C5  Exclude DayType : Off Day       True  C10 Disallow Today Application False
+
+D   Back Date
+
+D1  Allow applicant to submit backdaTrueleD6e Tag                        EMERGENCY LEAVE
+
+D2  Back-Date Days                  0     D7  Detect As Emergency?       True
+
+D3  Exclude DayType : Holiday       False D8  Backdated Maximum Day Allow30
+
+D4  Exclude DayType : Rest day      False D9
+
+D5  Exclude DayType : Off Day       False D10
