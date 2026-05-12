@@ -10,6 +10,7 @@ use App\Modules\Core\Employee\Concerns\ManagesSystemAgents;
 use App\Modules\Core\Employee\Database\Factories\EmployeeFactory;
 use App\Modules\Core\Employee\Exceptions\SystemEmployeeDeletionException;
 use App\Modules\Core\User\Models\User;
+use App\Modules\People\Payroll\Models\PayrollEmployeeStatutoryProfile;
 use App\Modules\People\Settings\Models\EmployeePortalAccess;
 use App\Modules\People\Settings\Models\EmployeeProfileChangeRequest;
 use App\Modules\People\Settings\Models\EmployeeWorkProfile;
@@ -148,6 +149,11 @@ class Employee extends Model
     public function profileChangeRequests(): HasMany
     {
         return $this->hasMany(EmployeeProfileChangeRequest::class, 'employee_id');
+    }
+
+    public function statutoryProfiles(): HasMany
+    {
+        return $this->hasMany(PayrollEmployeeStatutoryProfile::class, 'employee_id');
     }
 
     /**

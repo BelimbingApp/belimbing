@@ -1,6 +1,6 @@
 # people/06_ipayroll-employee-module-gap-bridge
 
-**Status:** Identified
+**Status:** In Progress
 **Last Updated:** 2026-05-12
 **Sources:**
 - `docs/plans/people/ipayroll_employee/` — iPayroll employee screenshots and exported setup workbooks
@@ -11,7 +11,7 @@
 - `app/Modules/Core/Employee/` — current canonical Employee model, admin screens, relationships, and employee types
 - `app/Modules/People/Employees/` — current People-facing employee directory
 - `app/Modules/People/Settings/` — current People Settings bridge for reference data, work profiles, account access, change requests, imports, logs, calendars, and restricted-person controls
-**Agents:** GitHub Copilot/gpt-5.5
+**Agents:** GitHub Copilot/gpt-5.5, GitHub Copilot/gpt-5.4
 
 ## Problem Essence
 
@@ -119,18 +119,18 @@ Employee workbench parity should provide these stable contracts:
 
 ### Phase 2 — People employee workbench
 
-- [ ] Expand `people.employees.index` from a directory into an Employee Workbench with work-profile joins for cost center, organization unit, employment group, job title, workforce class, job grade, pay basis, calendar, hire/resign dates, account-access state, and payroll data-readiness state.
-- [ ] Add filters for status, company, organization unit, cost center, employment group, job title, workforce class, job grade, pay basis, account-access state, and payroll data-readiness blockers.
-- [ ] Wire `PeopleSavedEmployeeView` into the workbench so users can save and recall filtered/sorted employee views.
-- [ ] Provide safe exports from the active workbench view, using BLB names while preserving source labels/codes where imported data is shown.
+- [x] Expand `people.employees.index` from a directory into an Employee Workbench with work-profile joins for cost center, organization unit, employment group, job title, workforce class, job grade, pay basis, calendar, hire/resign dates, account-access state, and payroll data-readiness state. {GitHub Copilot/gpt-5.4}
+- [x] Add filters for status, company, organization unit, cost center, employment group, job title, workforce class, job grade, pay basis, account-access state, and payroll data-readiness blockers. {GitHub Copilot/gpt-5.4}
+- [x] Wire `PeopleSavedEmployeeView` into the workbench so users can save and recall filtered/sorted employee views. {GitHub Copilot/gpt-5.4}
+- [x] Provide safe exports from the active workbench view, using BLB names while preserving source labels/codes where imported data is shown. {GitHub Copilot/gpt-5.4}
 
 ### Phase 3 — Employee detail sections
 
-- [ ] Add a People-facing employee detail route that composes sections over existing records instead of duplicating the admin employee show page.
-- [ ] Surface editable Core Employee basics only where HR has permission; keep system-admin-only concerns in the admin module.
-- [ ] Add Work Profile section backed by `EmployeeWorkProfile` and typed `PeopleReferenceEntry` selectors with active/inactive and source/alias visibility.
-- [ ] Add Payroll Data Readiness section that summarizes work profile completeness, bank/payment details, statutory profile existence/validity, active employment status, and payroll-blocking gaps without embedding Malaysia-specific fields in Employees.
-- [ ] Add Employee Account Access and Profile Change Request sections so HR can provision/revoke/invite access and review pending employee-submitted profile changes from the employee context.
+- [x] Add a People-facing employee detail route that composes sections over existing records instead of duplicating the admin employee show page. {GitHub Copilot/gpt-5.4}
+- [x] Surface editable Core Employee basics only where HR has permission; keep system-admin-only concerns in the admin module. {GitHub Copilot/gpt-5.4}
+- [x] Add Work Profile section backed by `EmployeeWorkProfile` and typed `PeopleReferenceEntry` selectors with active/inactive and source/alias visibility. {GitHub Copilot/gpt-5.4}
+- [x] Add Payroll Data Readiness section that summarizes work profile completeness, bank/payment details, statutory profile existence/validity, active employment status, and payroll-blocking gaps without embedding Malaysia-specific fields in Employees. {GitHub Copilot/gpt-5.4}
+- [x] Add Employee Account Access and Profile Change Request sections so HR can provision/revoke/invite access and review pending employee-submitted profile changes from the employee context. {GitHub Copilot/gpt-5.4}
 
 ### Phase 4 — Employee import and reconciliation
 
@@ -141,9 +141,9 @@ Employee workbench parity should provide these stable contracts:
 
 ### Phase 5 — Employee account access and controlled profile changes
 
-- [ ] Move Employee Account Access from a passive Settings list into workbench/detail actions: provision, activate, revoke, send invitation, and view notification history.
-- [ ] Decide the SBG login-identifier rule before activation: employee number, email, or separate username. Record the decision in the plan and import mapping.
-- [ ] Implement profile-change request review actions that validate requested changes, apply approved updates to canonical fields, and leave an audit trail.
+- [x] Move Employee Account Access from a passive Settings list into workbench/detail actions: provision, activate, revoke, send invitation, and view notification history. {GitHub Copilot/gpt-5.4}
+- [x] Decide the SBG login-identifier rule before activation: default to the linked user email when present, otherwise fall back to the employee number, with HR allowed to override the identifier during provisioning. Record the decision in the plan and import mapping. {GitHub Copilot/gpt-5.4}
+- [x] Implement profile-change request review actions that validate requested changes, apply approved updates to canonical fields, and leave an audit trail. {GitHub Copilot/gpt-5.4}
 - [ ] Route employee-facing profile requests into this workflow rather than allowing direct uncontrolled edits to payroll-relevant fields.
 
 ### Phase 6 — Payroll, documents, and org reporting readiness
