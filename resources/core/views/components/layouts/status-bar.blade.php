@@ -71,10 +71,10 @@
                 </button>
             @else
                 <a
-                    href="{{ route('admin.setup.lara') }}"
+                    href="{{ route('admin.ai.providers') }}"
                     wire:navigate
                     class="text-status-warning hover:underline inline-flex items-center gap-1"
-                    title="{{ __('Set up Lara') }}"
+                    title="{{ __('Activate Lara') }}"
                     aria-label="{{ __('Activate Lara') }}"
                 >
                     <x-icon name="heroicon-o-sparkles" class="w-4 h-4" />
