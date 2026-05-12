@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Console\Commands;
 
 use App\Base\Database\Console\Concerns\PrintsTableUnstableUsage;
@@ -82,13 +83,23 @@ class FreshCommand extends IlluminateFreshCommand
      */
     protected function dropTablesSelectively(?string $database): void
     {
+        if (! Schema::hasTable('base_database_tables')) {
+            throw new \RuntimeException(
+                'TableRegistry (base_database_tables) is missing. '
+                .'This table is created on install and must always exist. '
+                .'Reinstall or run the base database migration before using migrate:fresh.'
+            );
+        }
+
         $preservedTables = $this->getPreservedTableNames();
+        $unstableTables = TableRegistry::query()->unstable()->pluck('table_name')->all();
 
         // Selective drop: preserve stable + infrastructure tables
         $allTables = $this->getAllTableNames();
         $tablesToDrop = array_diff($allTables, $preservedTables);
+        $tablesToRebuild = array_values(array_unique(array_merge($tablesToDrop, $unstableTables)));
 
-        if (empty($tablesToDrop)) {
+        if (empty($tablesToRebuild)) {
             $this->components->info('All tables are stable — nothing to drop.');
             $this->printTableUnstableUsage('  To mark tables unstable so they can be dropped:');
             $this->line('');
@@ -101,12 +112,12 @@ class FreshCommand extends IlluminateFreshCommand
 
         $this->components->task(
             'Dropping '.count($tablesToDrop).' non-stable table(s)',
-            function () use ($tablesToDrop) {
+            function () use ($tablesToDrop, $tablesToRebuild) {
                 $this->dropTables($tablesToDrop);
 
                 // Clean up migration records for dropped tables so they re-run.
                 // Preserved tables keep their migration records intact.
-                $this->cleanupMigrationRecords($tablesToDrop);
+                $this->cleanupMigrationRecords($tablesToRebuild);
             }
         );
 
@@ -126,10 +137,6 @@ class FreshCommand extends IlluminateFreshCommand
      */
     protected function getPreservedTableNames(): array
     {
-        if (! Schema::hasTable('base_database_tables')) {
-            return TableRegistry::INFRASTRUCTURE_TABLES;
-        }
-
         return TableRegistry::getPreservedTableNames();
     }
 
@@ -237,9 +244,22 @@ class FreshCommand extends IlluminateFreshCommand
      */
     protected function cleanupMigrationRecords(array $droppedTables): void
     {
+        $registeredMigrationNames = TableRegistry::query()
+            ->whereIn('table_name', $droppedTables)
+            ->whereNotNull('migration_file')
+            ->pluck('migration_file')
+            ->map(fn (string $file): string => pathinfo($file, PATHINFO_FILENAME))
+            ->unique()
+            ->values()
+            ->all();
+
         $query = DB::table('migrations');
 
-        $query->where(function ($q) use ($droppedTables) {
+        $query->where(function ($q) use ($droppedTables, $registeredMigrationNames) {
+            foreach ($registeredMigrationNames as $migrationName) {
+                $q->orWhere('migration', $migrationName);
+            }
+
             foreach ($droppedTables as $table) {
                 $q->orWhere('migration', 'like', "%{$table}%");
             }
