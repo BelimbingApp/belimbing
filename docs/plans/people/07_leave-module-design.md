@@ -113,6 +113,38 @@ A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size 
 - SBG private code in `kiatng/blb-sbg` forking Malaysia statutory leave types or holiday calendars; SBG layers configuration and narrow extension hooks on top of the Malaysia pack.
 - Implying compliance certification. The contract supports Employment-Act minima and validation; formal advisory or labour-court reliance is the licensee's responsibility.
 
+## Naming Judgement
+
+The HR2000/iPayroll exports are evidence, not vocabulary. BLB should use names that state the business object or workflow clearly, while keeping HR2000 labels only as `source_label`, aliases, or migration notes.
+
+| HR2000 / iPayroll label | BLB name | Judgement |
+|-------------------------|----------|-----------|
+| Leave Group | Leave Assignment | The entity binds an employee cohort to a curated set of `(type, entitlement, policy)` triples. "Group" conflates with org units and employment groups; "Assignment" names the employee-facing job. |
+| Leave Type | Leave Type | Honest. Keep, but use neutral codes (`annual`, `sick`, `hospitalization`, `maternity`, `paternity`, `marriage`, `compassionate`, `exam`, `unpaid_leave`, `unauthorized_absence`, `replacement_leave`, `time_slip`) rather than HR2000 acronyms. |
+| Leave Entitlement | Entitlement Policy | Names the rule, not the resulting balance. |
+| Leave Policy | Request Policy | Disambiguates the apply/approval/day-counting rule set from the entitlement schedule. |
+| Detect As Time | Hourly Leave Unit | The boolean's product meaning is "this type is measured in hours, not days." |
+| Detect As NPL | Payroll Unpaid Handoff | The flag's effect is "produce an unpaid `PayrollInput` row." Name the effect, not the storage. |
+| Detect As Prorate Allowance | Reduces Prorate Allowance | The flag tells payroll to reduce a configured prorate allowance for days on this leave; it is a payroll classification, not a leave-side concept. |
+| Replacement Leave? | Earns Replacement Balance | The flag means "approving this earns a replacement-leave entry," distinct from being itself replacement leave. |
+| [R-Leave] Admin Create Only? | Admin-Only Application | Names the access rule. |
+| Paid Day (Daily Rated Only) | Counts As Paid Day (Daily Rated) | Disambiguate from the paid/unpaid disposition of the leave type itself. |
+| Include Leave Daily Worked Day | Counts Toward Working Day Cap | Names the calendar effect rather than the implementation. |
+| B/F Bal Always Zero | No Carry-Forward | Honest, action-oriented. |
+| Use Alternative Work-Flow | Custom Approval Workflow | The flag selects a non-default approval route for the type. |
+| B/Forward Bal Burn After | Carry-Forward Expiry Month | States the actual rule. |
+| Replacement Expiry Days / Replacement Expiry Date Check | Replacement Expiry Rule | Single typed parameter (`earn_date_plus_days` / `year_end` / `leave_end_plus_days`). |
+| Earned Calculation Method | Accrual Method | Standard payroll/HR vocabulary. |
+| Allow to apply leave after | Eligibility Start | "Immediately" / "After Confirmation" become typed values. |
+| Include Pending As Taken | Encumber Pending Balance | States the effect on balance projection. |
+| Split Application For Following Year | Allow Year-Boundary Split | Honest. |
+| No Cross Month Application | No Month-Boundary Split | Honest, complements the year-boundary policy. |
+| Day Of Week Detect As Full | Day-of-Week Unit Override | Names the per-day-of-week unit map. |
+| Detect As Emergency? / Tag = EMERGENCY LEAVE | Short-Notice Tag | The HR2000 emergency-tag mechanism is one application of generic short-notice tagging. |
+| Detect As Emergency? / Tag = LATE SUBMISSION | Back-Date Tag | Same generic tagging for back-dated submissions. |
+| Year Planner | Year Planner | Honest, keep. |
+| Employee Leave Balance | Leave Balance Statement | The screen is a statement, not a master record. |
+
 ## Risks and Guardrails
 
 - **Risk: statutory minima silently violated by configured policies.** Guardrail: Leave Core compares configured policies against country-pack floors at save time and at every entitlement run; mismatches block, not warn.
@@ -182,6 +214,8 @@ A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size 
 - [ ] Manager self-service: approve/reject queue, subordinate balances, overlap-risk view.
 - [ ] Reports as `RenderPdfJob` outputs under `resources/core/views/pdf/leave/`: balance statement, leave history, year planner, team calendar, leave-utilisation summary, on-behalf audit.
 - [ ] CSV exports for balance, history, and utilisation through the existing operational-CSV pattern.
+- [ ] Leave Application List export (HR2000-parity column set: Reference No, Applicant, Leave Type, From Date, To Date, Days, Applied On, Status, Approver, Approved On, Attachment, Remarks) in CSV and PDF.
+- [ ] Leave Balance Statement column set matches HR2000 parity (Last B/F, Earned, Leave Burn, Adjustment, Taken, Avail Bal, Future Taken, Next Year C/F, Year Ent.) — projected from the ledger, not stored.
 
 ### Phase 7 — Migration and SBG validation
 
@@ -200,7 +234,8 @@ A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size 
 - Confirm SBG's year-end carry-forward and expiry rules (cap, window) and whether unused balance is ever encashed.
 - Confirm whether Leave reporting needs a state-by-state public-holiday view in v1 or whether a single pay-entity state is sufficient for SBG.
 - Confirm how Leave attachments interact with the Documents/Workflow attachment infrastructure to avoid a Leave-private upload surface.
-- Confirm whether HR2000's "burn leave" maps to forced annual-leave consumption (e.g. shutdown days) or to expired carry-forward, since the BLB modelling differs.
+- Confirm SBG's reading of HR2000's `Leave Burn` balance column: is it (a) carry-forward expired by `B/Forward Bal Burn After`, (b) admin-initiated burn-down (e.g. forced shutdown days), or (c) both surfaced in one column? BLB models these as distinct ledger entry types (`expired`, `adjusted` with reason tag) and projects them together only at the Balance Statement layer.
+- Confirm SBG's expected behaviour for `Detect As Prorate Allowance` on a leave type: which payroll allowances are reduced, by what factor, and whether reduction logic lives in the Malaysia payroll pack or in a Leave→Payroll adapter.
 - Confirm semantic difference between SBG's two replacement-leave types `RL` and `RPL` (the latter flags "daily-use alternative workflow" in the HR2000 export) — single neutral `replacement_leave` with a policy switch, or two distinct neutral codes?
 - Confirm whether SBG needs `unauthorized_absence` (HR2000 `ABS`) as a distinct neutral code or can collapse it onto `unpaid_leave` with an audit tag.
 - Confirm whether SBG's hourly `T/S` time-slip leave must ship at go-live with full hourly support, or can launch as half-day approximation in v1.
