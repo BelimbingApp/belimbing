@@ -1,6 +1,6 @@
 # people/07_leave-module-design
 
-**Status:** Identified
+**Status:** In Progress
 **Last Updated:** 2026-05-12
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — Leave is one of the planned People submodules; entitlement, balances, requests, approvals, carry-forward, and team calendar visibility called out at suite level
@@ -15,7 +15,7 @@
 - `app/Modules/Core/Employee/` — canonical employee identity, supervisor/reporting line, employment dates that drive entitlement accrual and approval routing
 - Malaysia Employment Act 1955 (as amended Act A1651, in force 2023-01-01) — statutory minima for annual leave, sick leave, hospitalization leave, maternity leave (98 days), paternity leave (7 days), and gazetted public holidays
 - `docs/architecture/file-structure.md` — module placement; `docs/plans/AGENTS.md` — plan conventions
-**Agents:** amp/claude-haiku-4.5
+**Agents:** amp/claude-haiku-4.5, copilot/gpt-5.4
 
 ## Problem Essence
 
@@ -163,49 +163,49 @@ The HR2000/iPayroll exports are evidence, not vocabulary. BLB should use names t
 ### Phase 0 — Boundary and contract lock
 
 - [ ] Decide whether Malaysia leave statutory behaviour ships in `BelimbingApp/blb-payroll-my` (alongside payroll, sharing statutory data and employee profile snapshots) or in a sibling `BelimbingApp/blb-people-my` repo. Document the rationale.
-- [ ] Define the `LeaveCountryPack` v0 contract in prose: statutory types, entitlement policies, public-holiday calendars, validation rules, explanation output, and reports metadata.
-- [ ] Codify the no-leak rule: Leave Core depends on no Malaysia class, no `MY_*` constant, no Employment-Act column.
-- [ ] Confirm Workflow module covers multi-tier-by-type approval routing, or file a Workflow gap before Phase 3 starts.
+- [x] Define the `LeaveCountryPack` v0 contract in prose: statutory types, entitlement policies, public-holiday calendars, validation rules, explanation output, and reports metadata. {copilot/gpt-5.4}
+- [x] Codify the no-leak rule: Leave Core depends on no Malaysia class, no `MY_*` constant, no Employment-Act column. {copilot/gpt-5.4}
+- [ ] Confirm Workflow module covers multi-tier-by-type approval routing, or file a Workflow gap before Phase 3 starts. The current `NullLeaveApprovalRouter` keeps the gap explicit and non-silent.
 
 ### Phase 1 — Leave Core skeleton
 
-- [ ] Create the neutral leave type catalog (paid/unpaid, default unit including `hours` with quantum, default approval depth, payroll-interacting flag, compulsory-attachment flag). Seed distinct codes for `unpaid_leave` and `unauthorized_absence`.
-- [ ] Create effective-dated entitlement policy storage with service-band rows (nullable upper bound), proration rules, accrual frequency (`annual_lump_no_prorate` | `monthly_accrual` | `earned_until_month_N` | `anniversary`), rounding, and bring-forward parameters (`cap_days`, `expiry_month`, `anchor`).
-- [ ] Create effective-dated request-policy storage covering the schema enumerated in the Public Contract (negative-balance, pending-as-taken, multi-application-per-day, no-cross-month, daytype exclusions, day-of-week unit overrides, advance-notice with short-notice/emergency sub-policy, back-date with sub-policy, max-days-per-application nullable).
-- [ ] Create the `LeaveAssignment` entity binding employee cohort → `(leave_type, entitlement_policy, request_policy)` triples; cohort predicate accepts demographic fields declared by the country pack.
-- [ ] Create the append-only balance ledger with entry types: opening, accrual, taken, cancelled, adjusted, carried-forward, expired, encashed. Expose both `consumed_balance` and `encumbered_balance` projections.
-- [ ] Create the request lifecycle (draft → submitted → approved/rejected/cancelled → applied → withdrawn) with half-day, hourly, multi-day, attachments, max-days-per-application, advance-leave, back-date, and overlap-detection rules.
-- [ ] Capture audit history for each request transition and each ledger write.
+- [x] Create the neutral leave type catalog (paid/unpaid, default unit including `hours` with quantum, default approval depth, payroll-interacting flag, compulsory-attachment flag). Seed distinct codes for `unpaid_leave` and `unauthorized_absence`. {copilot/gpt-5.4}
+- [x] Create effective-dated entitlement policy storage with service-band rows (nullable upper bound), proration rules, accrual frequency (`annual_lump_no_prorate` | `monthly_accrual` | `earned_until_month_N` | `anniversary`), rounding, and bring-forward parameters (`cap_days`, `expiry_month`, `anchor`). {copilot/gpt-5.4}
+- [x] Create effective-dated request-policy storage covering the schema enumerated in the Public Contract (negative-balance, pending-as-taken, multi-application-per-day, no-cross-month, daytype exclusions, day-of-week unit overrides, advance-notice with short-notice/emergency sub-policy, back-date with sub-policy, max-days-per-application nullable). {copilot/gpt-5.4}
+- [x] Create the `LeaveAssignment` entity binding employee cohort → `(leave_type, entitlement_policy, request_policy)` triples; cohort predicate accepts demographic fields declared by the country pack. {copilot/gpt-5.4}
+- [x] Create the append-only balance ledger with entry types: opening, accrual, taken, cancelled, adjusted, carried-forward, expired, encashed. Expose both `consumed_balance` and `encumbered_balance` projections. {copilot/gpt-5.4}
+- [x] Create the request lifecycle (draft → submitted → approved/rejected/cancelled → applied → withdrawn) with half-day, hourly, multi-day, attachments, max-days-per-application, advance-leave, back-date, and overlap-detection rules. {copilot/gpt-5.4}
+- [ ] Capture audit history for each request transition and each ledger write. Request transitions are audited; ledger writes remain self-auditing facts rather than a separate audit stream.
 
 ### Phase 2 — Calendar and country-pack integration
 
-- [ ] Wire Leave Core to consume `PeopleCalendarException` for company-specific non-working days.
-- [ ] Add country-pack public-holiday resolution by pay-entity state and evaluation date.
-- [ ] Implement holiday-substitution and rest-day handling per pack rules.
-- [ ] Surface calendar-aware days-deducted in request preview before submission.
+- [x] Wire Leave Core to consume `PeopleCalendarException` for company-specific non-working days. {copilot/gpt-5.4}
+- [x] Add country-pack public-holiday resolution by pay-entity state and evaluation date. {copilot/gpt-5.4}
+- [ ] Implement holiday-substitution and rest-day handling per pack rules. Sunday substitution now ships for the first KL/Selangor slice; broader rest-day/weekend variants remain open.
+- [x] Surface calendar-aware days-deducted in request preview before submission. {copilot/gpt-5.4}
 
 ### Phase 3 — Approval routing and notifications
 
-- [ ] Wire Leave request submission to the Workflow approval engine using per-type, per-employment-group, per-threshold routing.
-- [ ] Emit standard notification events (submitted, approved, rejected, cancelled, expiry-approaching, low-balance) through `PeopleNotificationDeliveryLog`.
-- [ ] Implement on-behalf application with explicit actor audit.
+- [ ] Wire Leave request submission to the Workflow approval engine using per-type, per-employment-group, per-threshold routing. Submission currently records approval intent through `NullLeaveApprovalRouter`; execution is still not delegated to Workflow.
+- [ ] Emit standard notification events (submitted, approved, rejected, cancelled, expiry-approaching, low-balance) through `PeopleNotificationDeliveryLog`. Core request lifecycle events now include submit/approve/apply/reject/cancel/withdraw; low-balance and expiry-approaching still need emitters.
+- [x] Implement on-behalf application with explicit actor audit. {copilot/gpt-5.4}
 
 ### Phase 4 — Malaysia leave country pack (first pack)
 
-- [ ] Ship statutory leave types only: annual, sick, hospitalization, maternity (98 days), paternity (7 days), gazetted public holidays. Non-statutory employer leave (marriage, compassionate, exam, time-slip, replacement variants) ships in the SBG private pack in Phase 7, not here.
-- [ ] Ship statutory entitlement policies as Employment-Act minima with service-band tables.
-- [ ] Ship federal and state public-holiday calendars for the current year, with import path for future years.
-- [ ] Ship blocking validation rules for Act-floor violations, with explanation output.
-- [ ] Declare which work-profile demographic fields the pack consumes (gender for maternity, marital status where required, citizenship/foreign-worker for AL-FW band).
+- [x] Ship statutory leave types only: annual, sick, hospitalization, maternity (98 days), paternity (7 days), gazetted public holidays. Non-statutory employer leave (marriage, compassionate, exam, time-slip, replacement variants) ships in the SBG private pack in Phase 7, not here. {copilot/gpt-5.4}
+- [x] Ship statutory entitlement policies as Employment-Act minima with service-band tables. {copilot/gpt-5.4}
+- [ ] Ship federal and state public-holiday calendars for the current year, with import path for future years. Federal 2026 coverage plus the first KL/Selangor state overlays now exist; full state coverage and future-year import paths remain open.
+- [x] Ship blocking validation rules for Act-floor violations, with explanation output. {copilot/gpt-5.4}
+- [x] Declare which work-profile demographic fields the pack consumes (gender for maternity, marital status where required, citizenship/foreign-worker for AL-FW band). {copilot/gpt-5.4}
 - [ ] Decide initial pack home (`blb-payroll-my` or `blb-people-my`) per Phase 0 outcome and register it through the country-pack registry.
 
 ### Phase 5 — Replacement, carry-forward, encashment, and payroll handoff
 
-- [ ] Implement replacement-leave earning when working a holiday and replacement-leave expiry job. Support per-type expiry rule (`earn_date + N_days` is the SBG default at 365 days from leave-end-date; alternates: `year_end`, `leave_end_plus_days`).
-- [ ] Implement year-end carry-forward driven by `bring_forward.{cap_days, expiry_month, anchor}` policy fields (e.g. SBG AL-LOCAL: cap 7, expiry March), with dry-run output and explicit ledger expiry entries.
-- [ ] Implement leave-encashment generation as ledger entries plus matching `PayrollInput` rows.
-- [ ] Generate `PayrollInput` rows for unpaid leave (both `unpaid_leave` and `unauthorized_absence` codes) with leave-request back-reference; verify Malaysia pack classifies them correctly for EPF/SOCSO/EIS/PCB.
-- [ ] Honour `no_cross_month_split` policy when requests straddle a month boundary so payroll-period attribution is unambiguous.
+- [ ] Implement replacement-leave earning when working a holiday and replacement-leave expiry job. Support per-type expiry rule (`earn_date + N_days` is the SBG default at 365 days from leave-end-date; alternates: `year_end`, `leave_end_plus_days`). Expiry sweep exists; earning logic is still open.
+- [x] Implement year-end carry-forward driven by `bring_forward.{cap_days, expiry_month, anchor}` policy fields (e.g. SBG AL-LOCAL: cap 7, expiry March), with dry-run output and explicit ledger expiry entries. {copilot/gpt-5.4}
+- [x] Implement leave-encashment generation as ledger entries plus matching `PayrollInput` rows. {copilot/gpt-5.4}
+- [ ] Generate `PayrollInput` rows for unpaid leave (both `unpaid_leave` and `unauthorized_absence` codes) with leave-request back-reference; verify Malaysia pack classifies them correctly for EPF/SOCSO/EIS/PCB. Unpaid-leave handoff exists; distinct unauthorized-absence classification still needs explicit payroll verification.
+- [x] Honour `no_cross_month_split` policy when requests straddle a month boundary so payroll-period attribution is unambiguous. {copilot/gpt-5.4}
 - [ ] Reconcile balance ledger against Payroll inputs as part of payroll lock/audit report.
 
 ### Phase 6 — Self-service and reports
@@ -215,13 +215,13 @@ The HR2000/iPayroll exports are evidence, not vocabulary. BLB should use names t
 - [ ] Reports as `RenderPdfJob` outputs under `resources/core/views/pdf/leave/`: balance statement, leave history, year planner, team calendar, leave-utilisation summary, on-behalf audit.
 - [ ] CSV exports for balance, history, and utilisation through the existing operational-CSV pattern.
 - [ ] Leave Application List export (HR2000-parity column set: Reference No, Applicant, Leave Type, From Date, To Date, Days, Applied On, Status, Approver, Approved On, Attachment, Remarks) in CSV and PDF.
-- [ ] Leave Balance Statement column set matches HR2000 parity (Last B/F, Earned, Leave Burn, Adjustment, Taken, Avail Bal, Future Taken, Next Year C/F, Year Ent.) — projected from the ledger, not stored.
+- [ ] Leave Balance Statement column set matches HR2000 parity (Last B/F, Earned, Leave Burn, Adjustment, Taken, Avail Bal, Future Taken, Next Year C/F, Year Ent.) — projected from the ledger, not stored. A basic statement builder exists but does not yet reach parity shape.
 
 ### Phase 7 — Migration and SBG validation
 
 - [ ] Define HR2000 e-Leave import contract: leave types mapping, opening balances per employee/type/year, historical request log (optional, scoped), pending requests in flight. Translate HR2000 sentinels (`99`/`99.00`) to `NULL` on ingest.
-- [ ] Seed the SBG private pack (`kiatng/blb-sbg`) with the non-statutory SBG types observed in the reference export: marriage (MRL), compassionate (CL), exam (EXAM), time-slip (T/S, hourly), replacement variants (RL and RPL), and SBG's higher-than-floor AL service bands (AL-LOCAL 12/14/16/21) plus the FW band (AL-FW 8/12/16).
-- [ ] Seed the SBG `LeaveAssignment` cohorts equivalent to HR2000 groups (FM / FW / MM / SINGLE) using demographic predicates (gender, marital status, citizenship).
+- [x] Seed the SBG private pack (`kiatng/blb-sbg`) with the non-statutory SBG types observed in the reference export: marriage (MRL), compassionate (CL), exam (EXAM), time-slip (T/S, hourly), replacement variants (RL and RPL), and SBG's higher-than-floor AL service bands (AL-LOCAL 12/14/16/21) plus the FW band (AL-FW 8/12/16). {copilot/gpt-5.4}
+- [x] Seed the SBG `LeaveAssignment` cohorts equivalent to HR2000 groups (FM / FW / MM / SINGLE) using demographic predicates (gender, marital status, citizenship). {copilot/gpt-5.4}
 - [ ] Run dry-run import against SBG export with reconciliation report.
 - [ ] Validate Malaysia pack against SBG's actual leave operation for one full year cycle (entitlement, accrual, year-end carry-forward, expiry, encashment, payroll handoff).
 - [ ] Confirm which SBG-specific rules belong in `kiatng/blb-sbg` versus upstream in the Malaysia pack.
