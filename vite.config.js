@@ -6,23 +6,25 @@ import tailwindcss from "@tailwindcss/vite";
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-// Read FRONTEND_DOMAIN from env or .env file.
-// Each instance (main, worktree) has its own domain; don't derive from APP_ENV.
-let frontendDomain = process.env.FRONTEND_DOMAIN || '';
-if (!frontendDomain) {
-    try {
-        const envFile = readFileSync(resolve(__dirname, '.env'), 'utf8');
-        const match = envFile.match(/^FRONTEND_DOMAIN=(.+)$/m);
-        if (match) {
-            frontendDomain = stripWrappingQuotes(match[1].trim());
-        }
-    } catch (e) {
-        if (e.code !== 'ENOENT') {
-            throw e;
-        }
+// Vite is launched outside Laravel and does not auto-load .env, so we parse the
+// few values we need ourselves. Each instance (main, worktree) has its own
+// domain; don't derive from APP_ENV.
+let envFileContents = '';
+try {
+    envFileContents = readFileSync(resolve(__dirname, '.env'), 'utf8');
+} catch (e) {
+    if (e.code !== 'ENOENT') {
+        throw e;
     }
 }
-frontendDomain = frontendDomain || 'local.blb.lara';
+
+function readEnv(key, fallback = '') {
+    if (process.env[key]) {
+        return process.env[key];
+    }
+    const match = envFileContents.match(new RegExp(`^${key}=(.+)$`, 'm'));
+    return match ? stripWrappingQuotes(match[1].trim()) : fallback;
+}
 
 function stripWrappingQuotes(value) {
     const isDoubleQuoted = value.startsWith('"') && value.endsWith('"');
@@ -31,18 +33,25 @@ function stripWrappingQuotes(value) {
     return isDoubleQuoted || isSingleQuoted ? value.slice(1, -1) : value;
 }
 
+const frontendDomain = readEnv('FRONTEND_DOMAIN', 'local.blb.lara');
+const viteNoRefresh = readEnv('VITE_NO_REFRESH', '') !== '';
+const viteThemeDir = readEnv('VITE_THEME_DIR', '');
+
 export default defineConfig({
     plugins: [
         laravel({
             input: ['resources/app.css', 'resources/core/js/app.js'],
-            refresh: [
+            // Set VITE_NO_REFRESH=1 in local .env to disable auto-reload on file
+            // changes (per-machine workaround for chokidar firing phantom mtime
+            // events — e.g. Defender/indexing churn on Windows).
+            refresh: viteNoRefresh ? false : [
                 'resources/core/views/**/*.blade.php',
                 'resources/core/css/**/*.css',
                 'resources/core/js/**/*.{js,ts,vue}',
-                ...(process.env.VITE_THEME_DIR ? [
-                    `resources/extensions/${process.env.VITE_THEME_DIR}/views/**/*.blade.php`,
-                    `resources/extensions/${process.env.VITE_THEME_DIR}/css/**/*.css`,
-                    `resources/extensions/${process.env.VITE_THEME_DIR}/js/**/*.{js,ts,vue}`,
+                ...(viteThemeDir ? [
+                    `resources/extensions/${viteThemeDir}/views/**/*.blade.php`,
+                    `resources/extensions/${viteThemeDir}/css/**/*.css`,
+                    `resources/extensions/${viteThemeDir}/js/**/*.{js,ts,vue}`,
                 ] : []),
             ],
         }),
