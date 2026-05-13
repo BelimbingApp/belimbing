@@ -225,7 +225,7 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 ### Phase 0 - Boundary and parity lock
 
 - [ ] Confirm SBG's day-one Attendance scope: manual/imported attendance only, web/PWA clocking, overtime approval, rotating shifts, conditional allowances, GPS/geofence, device binding, and current HR2000 export/report requirements.
-- [ ] Review current SBG Time Management setup exports/screenshots in `docs/plans/people/sbg_attendance_ref/`: TMS Group, conditional allowance, overtime export, lateness export, absenteeism batch, clock transaction, geofence, and geogroup surfaces.
+- [x] Review current SBG Time Management setup exports/screenshots in `docs/plans/people/sbg_attendance_ref/`: TMS Group, conditional allowance, overtime export, lateness export, absenteeism batch, clock transaction, geofence, and geogroup surfaces. {codex/gpt-5}
 - [ ] Collect missing SBG exports/screenshots not present in `sbg_attendance_ref`: rounding table, export setup, report output, actual populated timecards, populated absenteeism batches, and device/geofence assignment details.
 - [ ] Decide which attendance defaults belong in Core seeders, Malaysia payroll pack metadata, and `kiatng/blb-sbg` private configuration.
 - [ ] Confirm Workflow can execute overtime and attendance-exception approval profiles selected from employee, supervisor chain, hours/amount threshold, cost center, shift/day type, and delegated approver limit; file a Workflow gap if not.
@@ -233,12 +233,12 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 
 ### Phase 1 - Attendance Core skeleton
 
-- [ ] Create `app/Modules/People/Attendance/` using migration prefix `0320_01_15_*`, module authz, menu config, routes, service provider, and Livewire workbench shell.
-- [ ] Create shift template, punch acceptance window, roster pattern, roster assignment, attendance policy group, attendance day, clock event, attendance adjustment, overtime request, allowance rule, absenteeism batch, geofence/geofence group, and payroll handoff reference tables/models.
-- [ ] Implement append-only clock event ingestion for manual/web entries and file imports, including source, actor, timezone, device/location evidence fields, and correction lineage.
-- [ ] Implement attendance-day projection from roster, rule policy, clock events, and calendar exceptions while the period is open.
+- [x] Create `app/Modules/People/Attendance/` using migration prefix `0320_01_15_*`, module authz, menu config, routes, service provider, and Livewire workbench shell. {codex/gpt-5}
+- [x] Create shift template, punch acceptance window, roster pattern, roster assignment, attendance policy group, attendance day, clock event, attendance adjustment, overtime request, allowance rule, absenteeism batch, geofence/geofence group, and payroll handoff reference tables/models. {codex/gpt-5}
+- [ ] Implement append-only clock event ingestion for manual/web entries and file imports, including source, actor, timezone, device/location evidence fields, and correction lineage. Web clock entry is implemented; import/manual correction paths remain open.
+- [ ] Implement attendance-day projection from roster, rule policy, clock events, and calendar exceptions while the period is open. A first projection service exists for clock-in/out, worked minutes, late/early flags, absence, and OT candidates; roster/calendar integration remains open.
 - [ ] Implement lifecycle states for attendance days and prevent mutation after payroll lock except through reversal/new adjustment facts.
-- [ ] Add dev seed data for common office shifts, a cross-midnight shift, punch windows, a weekly roster, a rotating roster, daily/monthly rounding, conditional allowance rules, and sample overtime/exception/absenteeism cases.
+- [x] Add dev seed data for common office shifts, a cross-midnight shift, punch windows, a weekly roster, a rotating roster, daily/monthly rounding, conditional allowance rules, and sample overtime/exception/absenteeism cases. {codex/gpt-5}
 
 ### Phase 2 - Calendar, roster, and shift rules
 
