@@ -1,150 +1,199 @@
 # people/10_payroll-intake-dependency-inversion
 
-**Status:** Proposed — awaiting Attendance module skeleton (people/09) before execution
+**Status:** Proposed (revised after Copilot + Amp review)
 **Last Updated:** 2026-05-13
 **Sources:**
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Payroll Core/country-pack boundary and the neutral `PayrollInput` contract that all upstream sources feed.
-- `docs/plans/people/07_leave-module-design.md` — Leave module writes `PayrollInput::TYPE_DEDUCTION` rows through `LeavePayrollHandoffService`.
-- `docs/plans/people/08_claim-module-design.md` — Claim module writes `PayrollInput::TYPE_REIMBURSEMENT` rows through `ClaimPayrollHandoffService`; open guardrails record duplicate-source race and stale-policy approval risks tied to this direction.
-- `docs/plans/people/09_attendance-module-design.md` — Attendance will be the third producer (OT, allowances, deductions), making the current per-producer push pattern the most painful.
-- `app/Modules/People/Claim/Services/ClaimPayrollHandoffService.php` and `app/Modules/People/Leave/Services/LeavePayrollHandoffService.php` — current producer-side handoffs that reach into `PayrollRun`, `PayrollRunParticipant`, and `PayrollInput`.
-- `app/Modules/People/Payroll/Models/PayrollInput.php` — neutral integration surface (`source_type`, `source_id`, `pay_item_code`, amount, occurred_on, metadata).
+- `docs/plans/people/07_leave-module-design.md` — Leave module's `LeavePayrollHandoffService` and `LeaveEncashmentService` both write `PayrollInput` rows directly.
+- `docs/plans/people/08_claim-module-design.md` — Claim module's `ClaimPayrollHandoffService` writes `PayrollInput::TYPE_REIMBURSEMENT` rows; open guardrails record duplicate-source race and stale-policy approval risks tied to this direction.
+- `docs/plans/people/09_attendance-module-design.md` — Attendance overtime already writes to Payroll via `AttendanceOvertimeService`, and the module ships its own `attendance_payroll_handoffs` table whose composite uniqueness key prototypes the pending-store pattern this plan generalizes.
+- `app/Modules/People/Claim/Services/ClaimPayrollHandoffService.php`, `app/Modules/People/Leave/Services/LeavePayrollHandoffService.php`, `app/Modules/People/Leave/Services/LeaveEncashmentService.php`, `app/Modules/People/Attendance/Services/AttendanceOvertimeService.php` — the five current producer-side writers (Claim 1, Leave 2, Attendance 1 with more to come) that import `PayrollInput`, `PayrollRun`, `PayrollRunParticipant`.
+- `app/Modules/People/Attendance/Models/AttendancePayrollHandoff.php` and migration `0320_01_15_000000_create_attendance_core_tables.php:364` — module-local handoff store with composite source key, to be generalized and moved into Payroll.
+- `app/Modules/People/Payroll/Models/PayrollRun.php` — actual run status vocabulary (`draft|calculated|reviewed|approved|closed|voided`) and `assertMutable` semantics (blocks only `closed|voided`).
+- `app/Modules/People/Payroll/Models/PayrollInput.php` — neutral integration surface (`source_type`, `source_id`, `pay_item_code`, `input_type`, `amount`/`quantity`, `occurred_on`, `metadata`).
 **Agents:** amp/claude-opus-4-7
 
 ## Problem Essence
 
-Claim and Leave both write directly into Payroll's tables today. They import `PayrollRun`, `PayrollRunParticipant`, and `PayrollInput`; they choose the target run; they create participant rows; they decide what duplicate protection looks like. Payroll, which should own those decisions, is a passive recipient. The smell is concrete:
+Five producer-side services (Claim×1, Leave×2, Attendance×1, with Attendance period work expected to add more) currently import `PayrollInput`, `PayrollRun`, and `PayrollRunParticipant`, choose target runs, create participant rows, and reinvent duplicate protection. None of them own Payroll's invariants. Concrete symptoms:
 
-- The duplicate `(source_type, source_id)` guard lives in each producer as an application-level get-then-insert; the underlying index is non-unique because no single module owns it. Two producers cannot agree on a unique constraint they both rely on.
-- Producer services create `PayrollRunParticipant` rows, which is a Payroll-internal concern. Future participant rules (exclusion lists, multi-currency runs, prorated participation) would have to be re-implemented in every producer.
-- Locked-period correction (reversal vs new input) is documented in plan 08 as a producer responsibility, but the rule belongs to Payroll.
-- Attendance landing soon will triple the surface: OT, allowance, and deduction rows per period per employee, each repeating the same Payroll-reaching glue.
+- The duplicate `(source_type, source_id)` guard is a get-then-insert in each producer; there is no enforcing constraint because no module owns it.
+- `PayrollRunParticipant` rows are created in five places.
+- Attendance already invented `attendance_payroll_handoffs` as a module-local pending/landing table with a composite source key — proof that the pattern wants to exist, just in the wrong place.
+- Leave's encashment writer is a second writer in the same module, easy to miss in any partial port.
+- "Locked period" rules conflict between producers (who use `draft|calculated` as the writable window) and Payroll's actual mutability rule (`assertMutable` blocks only `closed|voided`).
 
 ## Desired Outcome
 
-Producers (Claim, Leave, Attendance) emit normalized domain events when an operational fact becomes payroll-relevant. Payroll owns a single intake service that consumes those events, resolves the target run/participant, enforces duplicate-source uniqueness at the schema level, and handles locked-period reversal. Producers stop importing any Payroll model. Read-back of "was this handed off / paid?" goes through a thin Payroll query API.
+Payroll owns:
+1. A typed payload contract (`PayrollContributionPayload`) and a single intake service (`PayrollContributionIntake::ingest`) that producers call directly inside their own transactions.
+2. A durable pending store (a Payroll-owned table generalized from `attendance_payroll_handoffs`) so a contribution survives even when no open run currently covers its `occurred_on`. The intake either writes a `PayrollInput` immediately or persists the pending row and later materializes it when a run opens.
+3. The composite uniqueness key — `(source_type, source_id, pay_item_code, period_anchor)` — applied at the DB level on both the pending store and `payroll_inputs`. Producers that fan out multiple pay items per source (Attendance period lines) are first-class, not edge cases.
+4. The status read API (`PayrollContributionStatus`) that producers call instead of joining `payroll_inputs` themselves.
 
-The integration surface — `payroll_inputs.source_type` + `source_id` + `metadata` — stays exactly as it is today. Only the writer moves.
+Producers (Claim, Leave including encashment, Attendance including overtime) stop importing any Payroll model. Domain events are *not* the foundation — they are an optional adapter that can sit on top of the synchronous intake call later if asynchronous handoff is ever needed.
 
 ## Top-Level Components
 
 | Component | Responsibility | Primary owner |
 |-----------|----------------|---------------|
-| Producer domain events | `ClaimRequestApproved`, `LeaveRequestApproved`, `AttendancePeriodFinalized` (and reversal counterparts). Carry a normalized payload: employee, company, currency, occurred_on, pay item hint, amount/quantity, accounting snapshot, source ref `(type, id)`, idempotency key. | Each producer module |
-| Payroll contribution payload contract | A typed DTO (or PHP readonly class) shared across modules describing what a producer must hand to Payroll. Lives in Payroll Core so producers depend on Payroll's *contract*, not its tables. | Payroll Core |
-| Payroll contribution intake service | Resolves target `PayrollRun`, ensures `PayrollRunParticipant`, writes `PayrollInput` with unique-source enforcement, classifies locked-period correction (reversal-then-insert vs reject). Replaces both existing handoff services. | Payroll Core |
-| Event listeners | Synchronous listeners registered by Payroll for each producer event; they invoke the intake service inside the producer's existing transaction so semantics match today's inline write. | Payroll Core |
-| Payroll contribution status query | Read API: `PayrollContributionStatus::for($sourceType, $sourceId)` → `{ state: queued|reimbursed|reversed|absent, payroll_input_id, payroll_run_id, locked }`. Producers use this for badges, exports, and "is it safe to mutate?" checks. | Payroll Core |
-| Schema constraint | Unique index on `payroll_inputs (source_type, source_id)` (partial / scoped to non-null source_id), now genuinely owned. | Payroll Core migration |
+| `PayrollContributionPayload` DTO | Typed value object describing one atomic contribution: company, employee, currency, occurred_on, pay_item_code, input_type, amount/quantity/rate, accounting snapshot, source ref `(type, id)`, period_anchor (target period date, optional), metadata. Lives in Payroll. | Payroll Core |
+| `PayrollContributionIntake` service | Single entry point. Resolves target run if one is open; ensures participant; performs an atomic upsert keyed on the composite source tuple. If no run is open, persists a pending contribution row instead. Returns a structured outcome. | Payroll Core |
+| `payroll_pending_contributions` table | Payroll-owned durable store for contributions that arrived before an open run exists, or that need re-materialization (e.g. reversal after run close). Composite-unique on `(source_type, source_id, pay_item_code, period_anchor)`. Generalizes the existing `attendance_payroll_handoffs` table. | Payroll Core |
+| Pending materializer | Run-open hook that scans `payroll_pending_contributions` for rows whose `period_anchor` falls in the new run and writes corresponding `PayrollInput` rows. | Payroll Core |
+| `PayrollContributionStatus` query | Read API returning `{ state, payroll_input_id, payroll_run_id, payroll_run_status, last_updated_at, last_event_reason }`. State vocabulary aligned to actual Payroll model: `absent`, `pending`, `queued_in_run`, `calculated`, `closed`, `voided`, `reversed`, `rejected_locked`. | Payroll Core |
+| Atomic upsert path | DB-level: either `INSERT ... ON CONFLICT DO NOTHING` (PostgreSQL) / `INSERT IGNORE` + reload (MySQL), or a `try { insert } catch (UniqueViolation) { reload }` wrapper. `firstOrCreate` is explicitly insufficient because it is select-then-insert and racy. | Payroll Core |
+| Producer call site | Each producer service calls `PayrollContributionIntake::ingest($payload)` inside its existing `DB::transaction`. No event indirection, no Payroll model imports. | Each producer module |
+| Optional event adapter (deferred) | If asynchronous intake is later required (bulk Attendance finalize, cross-process flow), introduce a Payroll-owned event class that wraps the payload and a listener that calls intake. Not part of v1. | Deferred |
 
 ## Design Decisions
 
-**Invert the dependency, do not introduce a third bridge module.** The natural home for "translate a domain fact into a payroll input" is Payroll itself. Adding a `PayrollBridge` module would just move the problem; it would still own a payroll write path without owning payroll's invariants.
+**The foundation is a synchronous Payroll-owned contract, not events.** Plan 10 v1 had producer modules owning event classes that Payroll listened to, which contradicted the "Payroll Core does not import producer classes" rule. Drop events. Producers call a Payroll service directly with a Payroll-owned DTO. The dependency direction is unambiguous: producers depend on a Payroll contract, Payroll depends on nothing producer-specific.
 
-**Producers depend on a Payroll *contract*, not Payroll *models*.** The payload DTO and the event classes live in `App\Modules\People\Payroll\Contracts\` (or similar). Producers do not import `PayrollInput`, `PayrollRun`, or `PayrollRunParticipant`. This is the actual win: when Payroll changes how runs/participants work, producers do not break.
+**The atomic unit is one pay-item contribution, not one producer request.** The source granularity must match what produces a single `PayrollInput`. Today that varies:
+- Claim: one claim line → one input.
+- Leave application: one leave request → one input.
+- Leave encashment: one encashment event → one input.
+- Attendance overtime: one OT request → one input.
+- Attendance period (future): one period fans out to multiple inputs across different pay items.
 
-**Keep handoff synchronous and inline with the producer's transaction.** Today, `ApproveClaimRequestService` calls `ClaimPayrollHandoffService` inside its `DB::transaction`. Listeners must run synchronously so the approval and the payroll input either both commit or both roll back. Do not queue these. Asynchronous payroll write is a different feature.
+The composite uniqueness key `(source_type, source_id, pay_item_code, period_anchor)` accommodates all of these. Producers whose source is naturally per-input (claim line, leave request, OT request, encashment event) get fan-out for free if they later need it. Aggregate sources (attendance period) submit multiple payloads sharing the same `source_id` but different `pay_item_code`s.
 
-**Producers emit reversal events explicitly.** Cancelling/withdrawing/reducing an approved claim, or unapproving a leave request, fires a `*Reversed` event with the same source ref and a reason. Payroll's intake decides what to do (delete pending input, insert a reversing input in an open period, or reject if the source period is locked and no open period exists). Producers do not branch on Payroll state.
+**Payroll owns a durable pending store.** Today, when no open run covers the occurred date, producers either store "pending handoff" metadata in their own request or quietly skip and rely on the producer to re-fire later. That fragments truth and conflates producer state with Payroll state. Generalize `attendance_payroll_handoffs` into `payroll_pending_contributions` owned by Payroll. The intake writes the pending row, the next opened run materializes it, and producers query `PayrollContributionStatus` instead of re-firing.
 
-**Unique constraint is added in Payroll, not in producer migrations.** Phase 1 adds `unique(source_type, source_id)` (filtered to non-null source_id where the DB allows) and resolves existing dev-seeder collisions by scoping them to a non-payroll sentinel source_type. Application-level get-then-insert is replaced by `firstOrCreate` keyed on the unique pair, so the constraint is the truth.
+**Lock vocabulary follows Payroll, not the writer convention.** `PayrollRun::assertMutable()` is the source of truth: only `closed`/`voided` runs are immutable. The intake writes into runs in `draft|calculated` (the producer's current convention) but explicitly defines that window in Payroll, not in producers. Reviewed/approved/closed runs reject intake with `rejected_locked`, and the intake decides whether to (a) materialize into the next open run, (b) hold pending, or (c) bubble back rejection — per a policy owned by Payroll.
 
-**Producers query Payroll for "what happened next?", they don't peek.** When Claim's operations view needs to show "Reimbursed in run R-2026-05", it asks `PayrollContributionStatus`. Producer SQL that joins to `payroll_inputs` directly should be replaced or hidden behind the status query. This keeps the inversion honest.
+**Uniqueness is enforced at the DB level, not by the application.** `firstOrCreate` is select-then-insert and loses under concurrent approval. The intake uses an atomic upsert path appropriate to the driver. The plan does not pick the SQL dialect specifics in advance, but Phase 2 must demonstrate the path is genuinely atomic with a concurrent-insert test.
 
-**Locked-period correction is a Payroll concern.** Plan 08's open guardrail ("Prevent mutation of claim lines already handed to a locked payroll run; support explicit reversal/new-period correction flows") moves to Payroll. Claim only emits "I reduced/cancelled this approved line"; Payroll decides whether that becomes a reversal input in the next open period or a rejection that bubbles back as a status the producer surfaces.
+**Producer call sites stay synchronous and inside the producer transaction.** Today, `ApproveClaimRequestService` calls handoff inside `DB::transaction`. Move it to `PayrollContributionIntake::ingest($payload)`; identical commit semantics, identical rollback semantics. Async is not part of v1.
 
-**Do not generalize prematurely.** Three producers (Claim, Leave, Attendance) are enough to justify the inversion. Do not build a plugin registry, a contribution-source SPI, or per-producer configuration. A handful of typed event classes is fine.
+**Reversal is a Payroll-owned operation, called by producers via the same intake API.** Adding `PayrollContributionIntake::reverse($sourceRef, $reason)` keeps the API symmetric. Producers do not branch on payroll run state — they call reverse, and intake decides delete-pending, reverse-input, or queue-compensating-input in the next open run.
+
+**Scope inventory is exhaustive and named.** Five writers exist today and all must be retired:
+- `ClaimPayrollHandoffService` (Claim)
+- `LeavePayrollHandoffService` (Leave)
+- `LeaveEncashmentService` (Leave) — the writer Copilot caught
+- `AttendanceOvertimeService` (Attendance)
+- `AttendancePayrollHandoff` model + table (Attendance) — replaced by `payroll_pending_contributions`
+
+The architectural test in the cleanup phase will fail if any of these still import Payroll models. That is the test's purpose.
 
 ## Public Contract
 
-**Producer events must carry:**
-- `source_type` (string, namespaced: `claim_line`, `leave_request`, `attendance_period_line`);
-- `source_id` (integer, stable for the producer's lifetime of that fact);
+**`PayrollContributionPayload` carries:**
+- `source_type` (string, namespaced, e.g. `claim_line`, `leave_request`, `leave_encashment`, `attendance_overtime`, `attendance_period_line`);
+- `source_id` (int, stable);
+- `pay_item_code` (required — composite key field);
+- `period_anchor` (date, the occurred_on or contribution date used to pick a run; composite key field);
 - `company_id`, `employee_id`, `currency`, `occurred_on`;
-- `pay_item_code` (producer's best-effort hint; country pack still classifies);
-- `input_type` (reimbursement, deduction, earning, statutory hint);
-- `amount` and optional `quantity`/`rate` (for unit-based contributions like leave days or OT hours);
-- `accounting_snapshot` (debit/credit codes captured at approval time);
+- `input_type` (matches `PayrollInput::TYPE_*`);
+- `amount`, `quantity`, `rate` (combination per input_type);
+- `accounting_snapshot` (debit/credit codes at the point the producer captured them);
 - `label` for display;
-- `idempotency_key` (defaults to `source_type:source_id`);
-- `metadata` (producer-specific context preserved in `payroll_inputs.metadata`).
+- `metadata` (arbitrary producer context preserved into `payroll_inputs.metadata`);
+- `idempotency_key` (defaults to `source_type:source_id:pay_item_code:period_anchor`).
 
-**Payroll's intake service guarantees:**
-- exactly one `payroll_inputs` row per `(source_type, source_id)` (enforced by unique index, not by application check);
-- target run selection from open `draft`/`calculated` runs covering `occurred_on`; if none, returns `pending` status and no row is written;
-- automatic `PayrollRunParticipant` creation if absent;
-- locked-period writes are rejected with a structured outcome the producer can record;
-- reversal events translate to either deletion (if the original row is in an open run and not yet calculated) or a compensating input in the next open run.
+**`PayrollContributionIntake::ingest` guarantees:**
+- exactly one materialized `PayrollInput` row per composite key (enforced by DB unique index, verified by concurrent-insert test);
+- target run resolution: first open `draft|calculated` run whose period covers `period_anchor`, in `company_id` scope;
+- automatic `PayrollRunParticipant` creation;
+- when no open run is available, a `payroll_pending_contributions` row is written with the same composite key — also unique-enforced — and the outcome is `pending`;
+- when the resolved run is in `reviewed|approved` (mutable per `assertMutable` but past the writer window), the intake's locked-window policy applies (default: write pending row, do not mutate the run);
+- when the resolved run is `closed|voided`, the outcome is `rejected_locked` and Payroll emits a structured error producers can surface;
+- the function is idempotent: re-firing the same payload returns the existing materialized or pending row.
 
-**Payroll status query returns:**
-- `state`: `absent | pending | queued | calculated | paid | reversed | locked_rejected`;
-- `payroll_input_id`, `payroll_run_id`, `payroll_period_id`;
-- `last_updated_at`, `last_event_reason`.
+**`PayrollContributionIntake::reverse` guarantees:**
+- the existing materialized row is deleted if its run is still in `draft`;
+- a compensating reversal input is inserted in the next open run otherwise;
+- the pending row is deleted if not yet materialized;
+- the reversal action is recorded in `payroll_pending_contributions.metadata` and the status query reflects it.
+
+**`PayrollContributionStatus::for($sourceType, $sourceId, $payItemCode = null, $periodAnchor = null)` returns:**
+- `state`: `absent | pending | queued_in_run | calculated | closed | voided | reversed | rejected_locked`;
+- references: `payroll_input_id`, `payroll_run_id`, `payroll_run_status`, `period_id`;
+- audit: `last_updated_at`, `last_event_reason`.
+- When `pay_item_code` or `period_anchor` are omitted, returns the aggregate set so a producer can show "all contributions from this leave request" without re-implementing the composite lookup.
 
 **The contract forbids:**
-- producer modules importing `PayrollInput`, `PayrollRun`, `PayrollRunParticipant`, or any Payroll service;
-- producer migrations referencing payroll tables for handoff;
-- Payroll Core depending on producer-specific classes (events live in Payroll Core or a neutral contracts namespace; payloads are primitive/typed).
+- producer modules importing `PayrollInput`, `PayrollRun`, `PayrollRunParticipant`, or any Payroll service other than `PayrollContributionIntake` and `PayrollContributionStatus`;
+- producer migrations referencing payroll tables for handoff (Attendance's `attendance_payroll_handoffs` is retired);
+- Payroll Core importing producer-specific classes (event classes, if introduced later, are Payroll-owned wrappers around the payload).
 
 ## Risks and Guardrails
 
-- **Risk: synchronous listener inside producer transaction increases failure surface.** Guardrail: the intake service must be deterministic and exception-typed; producer code catches `LockedPeriodException` and surfaces it to the user without rolling back the approval if business policy says approval still stands. Decide this per producer during the port.
-- **Risk: unique constraint backfill collides with existing dev-seeder rows.** Guardrail: Phase 1 audits `payroll_inputs` for duplicate `(source_type, source_id)` rows before applying the constraint; rename dev-seeder source_types to disambiguate.
-- **Risk: event payload churn ripples across producers.** Guardrail: the payload DTO is versioned (`v1`); additive changes are safe, removals require a new event class. Producers and the intake service both pin to a version.
-- **Risk: producer needs Payroll state during its own UI flow and re-introduces a direct query.** Guardrail: `PayrollContributionStatus` must be cheap and cacheable; producers consume it through a thin trait/helper, not by re-querying `payroll_inputs`.
-- **Risk: refactor stalls halfway, leaving one producer on the new path and the others on the old.** Guardrail: land the contract and intake first, port Claim and Leave in the same release, and keep Attendance on the new path from day one.
-- **Risk: tests double-fire listeners.** Guardrail: feature tests assert event dispatch separately from intake; intake unit tests construct payloads directly without producers.
+- **Risk: composite key is still wrong for some producer.** Guardrail: Phase 0 audit walks every existing writer and confirms each currently produces ≤1 `PayrollInput` per `(source_type, source_id, pay_item_code, period_anchor)` tuple. If any producer produces multiple rows per tuple, the key includes a `line_seq` field.
+- **Risk: atomic upsert path lies.** Guardrail: Phase 2 includes a concurrent-insert test (two parallel transactions ingesting the same payload) that must produce exactly one materialized row. `firstOrCreate` fails this test by design.
+- **Risk: pending contributions accumulate silently.** Guardrail: Payroll dashboard surfaces pending count per company; the materializer runs on every run-open and on a scheduled scan; producers see `pending` state via the status query and can surface it in their own UIs.
+- **Risk: synchronous intake inside producer transaction increases failure surface.** Guardrail: intake exceptions are typed (`LockedRunException`, `MissingParticipantException`, `DuplicateSourceException`) so producers can decide whether to roll back their approval or commit it and record a `pending`/`rejected_locked` state.
+- **Risk: reversal semantics differ across producers.** Guardrail: Payroll defines the three reversal outcomes (delete-pending, delete-in-draft, compensating-input) and producers do not branch. Per-producer reversal policy lives as configuration on the intake, not as producer code.
+- **Risk: `AttendancePayrollHandoff` table holds in-flight data when the migration ships.** Guardrail: Phase 5 includes a one-shot data migration from `attendance_payroll_handoffs` to `payroll_pending_contributions` before dropping the old table.
+- **Risk: refactor stalls halfway.** Guardrail: phases 3–5 (Claim, Leave-including-encashment, Attendance-including-overtime) land in a single release. The architectural test in Phase 6 fails if any producer still imports a Payroll model, locking the inversion in.
+- **Risk: events are reintroduced opportunistically and recreate the original confusion.** Guardrail: events stay deferred. Any future event adapter is a Payroll-owned wrapper that calls the same intake; producers never own event classes that Payroll subscribes to.
 
 ## Phases
 
-### Phase 0 — Decision and audit
+### Phase 0 — Audit and granularity decision
 
-- [ ] Confirm Attendance's first slice has merged so we know its handoff shape before freezing the payload contract.
-- [ ] Audit current `payroll_inputs` rows for duplicate `(source_type, source_id)` pairs; classify by source_type and decide which are bugs vs benign dev-seeder noise.
-- [ ] Confirm whether reversal/correction is a day-one requirement (it likely is for Claim, given the locked-period guardrail in plan 08) or can land in a follow-up phase.
-- [ ] Decide where the contract namespace lives: `App\Modules\People\Payroll\Contracts\Intake\` vs a top-level shared contracts package.
+- [ ] Walk every current writer and confirm composite key `(source_type, source_id, pay_item_code, period_anchor)` is sufficient: `ClaimPayrollHandoffService`, `LeavePayrollHandoffService`, `LeaveEncashmentService`, `AttendanceOvertimeService`. Document each producer's atomic granularity.
+- [ ] Confirm Attendance's planned period-level handoff (not yet implemented) will use one payload per `(period, employee, pay_item_code)`, not one per period.
+- [ ] Audit existing `payroll_inputs` and `attendance_payroll_handoffs` rows for composite-key duplicates; classify as bugs vs benign dev-seeder noise.
+- [ ] Decide locked-window policy: when an intake targets a `reviewed|approved` run, does it write pending, write into the run, or reject? Default proposal: write pending and surface `pending` to producer.
+- [ ] Decide reversal semantics per producer: which producers actually need reversal in v1 (Claim yes, Leave probably, Attendance overtime yes, encashment open).
 
-### Phase 1 — Contract and intake service
+### Phase 1 — Payroll-owned contract and intake skeleton
 
-- [ ] Define `PayrollContributionPayload` DTO with the fields listed in the Public Contract section.
-- [ ] Define `PayrollContributionEvent` base + per-producer subclasses (`ClaimRequestApproved`, `ClaimRequestReversed`, `LeaveRequestApproved`, `LeaveRequestReversed`, `AttendancePeriodFinalized`, `AttendancePeriodReversed`).
-- [ ] Build `PayrollContributionIntake` service: open-run resolution, participant ensure, idempotent insert, locked-period exception, reversal handling.
-- [ ] Add migration: unique index on `payroll_inputs (source_type, source_id)` after the audit clears.
+- [ ] Define `PayrollContributionPayload` DTO in `App\Modules\People\Payroll\Contracts\Intake\`.
+- [ ] Create `payroll_pending_contributions` table with composite unique index on `(source_type, source_id, pay_item_code, period_anchor)`, FK `payroll_input_id` (nullable, populated on materialization), `status` (`pending|materialized|reversed|rejected_locked`), `transformation_snapshot`, `metadata`.
+- [ ] Add the same composite unique index on `payroll_inputs (source_type, source_id, pay_item_code, occurred_on)` after the audit clears. Coordinate with the existing non-unique index.
+- [ ] Build `PayrollContributionIntake::ingest()` using an atomic upsert path; throw typed exceptions for locked/missing-run cases.
+- [ ] Build `PayrollContributionIntake::reverse()`.
+- [ ] Build pending materializer hook on run open (`PayrollRun::open` or equivalent lifecycle method).
 - [ ] Build `PayrollContributionStatus` read service.
-- [ ] Unit tests covering: first-time insert, idempotent re-fire, locked-period rejection, reversal in open run, reversal when no open run exists.
 
-### Phase 2 — Port Claim to events
+### Phase 2 — Intake test harness
 
-- [ ] Replace `ClaimPayrollHandoffService` body with event dispatch (`ClaimRequestApproved`) inside the approval transaction.
-- [ ] Register Payroll listener that calls `PayrollContributionIntake::ingest(payload)`.
-- [ ] Wire Claim's cancel/withdraw/adjust paths to emit `ClaimRequestReversed`.
-- [ ] Replace direct `payroll_inputs` queries in Claim operations views with `PayrollContributionStatus`.
-- [ ] Remove Claim's imports of `PayrollInput`, `PayrollRun`, `PayrollRunParticipant`.
-- [ ] Update plan 08's open guardrails (duplicate handoff, locked-period correction, stale-policy approval boundary) to point at the new home.
+- [ ] Unit tests: first-time insert, idempotent re-fire (same payload twice), reversal-of-pending, reversal-of-materialized-in-draft, reversal-after-run-close, status query parity.
+- [ ] Concurrent-insert test (two parallel transactions, same payload) demonstrates exactly one materialized row and one row only.
+- [ ] Locked-run test: ingest targeting `closed` returns `rejected_locked`; ingest targeting `reviewed` follows configured policy.
+- [ ] Materializer test: pending row written when no open run, materialized when run opens covering the period.
 
-### Phase 3 — Port Leave to events
+### Phase 3 — Port Claim
 
-- [ ] Same shape as Phase 2 for `LeavePayrollHandoffService` → `LeaveRequestApproved`/`LeaveRequestReversed`.
-- [ ] Audit `LeaveBalanceLedgerService` for any cross-into-Payroll writes; route them through the same intake.
+- [ ] Replace `ClaimPayrollHandoffService::queueApprovedRequest` body with a loop that builds payloads from claim lines and calls `PayrollContributionIntake::ingest`.
+- [ ] Wire Claim cancel/withdraw/adjust paths to call `PayrollContributionIntake::reverse`.
+- [ ] Replace direct `payroll_inputs` queries in Claim Operations views with `PayrollContributionStatus`.
+- [ ] Delete Payroll model imports from Claim.
+- [ ] Update plan 08's open guardrails (duplicate handoff, locked-period correction) to mark them resolved here.
+
+### Phase 4 — Port Leave (handoff and encashment)
+
+- [ ] Port `LeavePayrollHandoffService` to use intake.
+- [ ] Port `LeaveEncashmentService` to use intake. This is the writer Copilot caught and is not optional.
+- [ ] Audit `LeaveBalanceLedgerService` for any indirect Payroll writes; route them through intake if found.
+- [ ] Delete Payroll model imports from Leave.
 - [ ] Update plan 07 to record the new boundary.
 
-### Phase 4 — Attendance on the new path from day one
+### Phase 5 — Port Attendance and retire `attendance_payroll_handoffs`
 
-- [ ] Attendance emits `AttendancePeriodFinalized` per contribution line (OT, allowance, deduction); never imports Payroll models.
-- [ ] Reversal flow (period re-opened after finalize) emits `AttendancePeriodReversed`.
-- [ ] Plan 09 references this plan as the handoff contract.
+- [ ] Port `AttendanceOvertimeService` to use intake.
+- [ ] Generalize the `attendance_payroll_handoffs` schema as `payroll_pending_contributions` (already created in Phase 1). Data-migrate any non-empty rows from the old table.
+- [ ] Drop `attendance_payroll_handoffs` table and `AttendancePayrollHandoff` model.
+- [ ] Ensure Attendance period-level handoff (when it lands) is implemented against intake from day one; coordinate with plan 09.
+- [ ] Delete Payroll model imports from Attendance.
 
-### Phase 5 — Cleanup and lock-in
+### Phase 6 — Cleanup and lock-in
 
-- [ ] Delete the now-unused producer-side handoff services.
-- [ ] Add an architectural test (or grep CI rule) that fails if a producer module imports a Payroll model.
-- [ ] Document the contract in `docs/architecture/` so future producers (commission, bonus, expense report) follow it.
+- [ ] Delete now-unused producer handoff services.
+- [ ] Add an architectural test (PHPUnit + reflection or a CI grep) that fails if any file under `app/Modules/People/{Claim,Leave,Attendance}/` imports `PayrollInput`, `PayrollRun`, or `PayrollRunParticipant`.
+- [ ] Document the contract in `docs/architecture/` so future producers (commission, bonus, expense) follow it.
 - [ ] Update plan 02 (Payroll Malaysia top-level design) to record that producer ingestion is now Payroll-owned.
+- [ ] Optional: introduce a Payroll-owned event class wrapping the payload, as the foundation for any future async/queued intake. Do not ship without a concrete use case.
 
 ## Open Research Before Implementation
 
-- Does the Attendance design need a unit-based payload (hours, days) distinct from amount-based, or can a single DTO with optional `quantity`/`rate` cover all three producers? Decide before freezing the contract in Phase 1.
-- Should reversal events be standalone classes or a single `*Reversed` event with a reason enum? Standalone is more discoverable; enum is leaner. Pick based on how many distinct reversal reasons each producer actually has.
-- Does the country pack need to observe these events too (for statutory side-effects on approval), or only when Payroll calculates? Today the answer is "only at calculation"; verify before exposing events outside Payroll.
-- Is there a real need for asynchronous (queued) intake — e.g., bulk Attendance finalize for 5000 employees — or is synchronous always acceptable? If async is needed, it changes the failure model and should be a Phase 6.
-- Does Workflow's approval transition already provide a natural event hook we should reuse, or should producer services fire their own events? Reusing Workflow would couple this design to Workflow's event shape.
+- Should the locked-window policy (what intake does when targeting `reviewed|approved`) be a single global rule, or configurable per `input_type`? Real Finance practice is to allow reimbursements into approved runs but not deductions; check with SBG before freezing.
+- Does the pending materializer need to run on a schedule (overnight scan) in addition to the run-open hook, to catch cases where a contribution arrives between scans and a run was already open? Probably yes; cheap to add.
+- Does the reversal API need a "force" mode for HR/Finance correction flows (override locked-run rejection with explicit authorization)? Likely yes for Claim; the gate is authz, not intake logic.
+- When Attendance period handoff lands, will it dispatch one payload per (period, employee, pay_item) or one per (period, employee)? The composite key forces the former; confirm this matches plan 09's intent.
+- Should `PayrollContributionStatus` cache its lookups? Producer Operations views may query it for hundreds of rows on render.
+- Is there value in a future event adapter (Phase 6 optional bullet), or is direct synchronous intake sufficient permanently? Revisit only if a real async use case emerges.
