@@ -1,6 +1,6 @@
 # people/10_payroll-intake-dependency-inversion
 
-**Status:** In Progress — Phase 1 intake skeleton built and tested; Phase 2 schema realignment landed; Phase 3 Attendance rewrite complete (`AttendanceOvertimeService` now uses intake; `attendance_payroll_handoffs` table and model retired); ready for Phase 4 (Claim)
+**Status:** In Progress — Phases 1–5 complete. All three producers (Claim, Leave, Attendance, plus Leave Encashment) now hand off to Payroll via `PayrollContributionIntake`. No producer module imports `PayrollInput`, `PayrollRun`, or `PayrollRunParticipant` any longer. Phase 6 architectural lock-in next.
 **Last Updated:** 2026-05-13
 **Sources:**
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Payroll Core/country-pack boundary and the neutral `PayrollInput` contract that all upstream sources feed.
@@ -11,7 +11,7 @@
 - `app/Modules/People/Attendance/Models/AttendancePayrollHandoff.php` and migration `0320_01_15_000000_create_attendance_core_tables.php:364` — module-local handoff store with composite source key, to be generalized and moved into Payroll.
 - `app/Modules/People/Payroll/Models/PayrollRun.php` — actual run status vocabulary (`draft|calculated|reviewed|approved|closed|voided`) and `assertMutable` semantics (blocks only `closed|voided`).
 - `app/Modules/People/Payroll/Models/PayrollInput.php` — neutral integration surface (`source_type`, `source_id`, `pay_item_code`, `input_type`, `amount`/`quantity`, `occurred_on`, `metadata`).
-**Agents:** amp/claude-opus-4-7
+**Agents:** amp/claude-opus-4-7, claude/opus-4.7
 
 ## Problem Essence
 
@@ -204,21 +204,21 @@ Single atomic step covering two spec-drift fixes that both open every People mig
 - [x] Update the Attendance Livewire workbench (`queueOvertimePayroll`) to translate the new outcome states (`materialized`, `pending`, `rejected`) into user-facing flash messages. {amp/claude-opus-4-7}
 - [x] Update plan 09 to record the new write path and remove references to the retired table. {amp/claude-opus-4-7}
 
-### Phase 4 — Rewrite Claim writer
+### Phase 4 — Rewrite Claim writer  ✅ DONE
 
-- [ ] Rewrite `ClaimPayrollHandoffService::queueApprovedRequest` body to loop over approved payroll-eligible claim lines, build payloads, and call `PayrollContributionIntake::ingest`. Set `source_type = 'claim_line'`, `source_id = claim_line.id`, `pay_item_code` from the claim type snapshot.
-- [ ] Wire Claim cancel/withdraw/adjust paths to call `PayrollContributionIntake::reverse` with the same composite key.
-- [ ] Replace direct `payroll_inputs` queries in Claim Operations views with `PayrollContributionStatus`.
-- [ ] Delete `PayrollInput`/`PayrollRun`/`PayrollRunParticipant` imports from Claim.
-- [ ] Update plan 08's open guardrails (duplicate handoff, locked-period correction, stale-policy approval) to mark them resolved here.
+- [x] Rewrite `ClaimPayrollHandoffService::queueApprovedRequest` body to loop over approved payroll-eligible claim lines, build payloads, and call `PayrollContributionIntake::ingest`. `ClaimPayrollHandoffService::SOURCE_TYPE = 'claim_line'`; source_id is the claim line id; pay_item_code from line snapshot. Summary shape preserved (now adds `rejected` count). {amp/claude-opus-4-7}
+- [x] Public `reverseRequest(ClaimRequest)` method added: iterates lines and calls `PayrollContributionIntake::reverse` for each. Not wired into a producer-facing UI flow yet — current Claim lifecycle does not expose an admin "cancel-after-approval" action; once it lands, the wiring is a one-liner. Withdraw/reject can't run after approval today, so they don't need reverse calls. {amp/claude-opus-4-7}
+- [x] Verified Claim Operations export builder doesn't query `payroll_inputs` directly — it reads `metadata.payroll_handoff` summary which the new code still populates. No view changes needed. {amp/claude-opus-4-7}
+- [x] Removed `PayrollInput`/`PayrollRun`/`PayrollRunParticipant` imports from Claim. {amp/claude-opus-4-7}
+- [x] Update plan 08's payroll-handoff component note and duplicate-handoff risk to mark the inversion landed. (Stale-policy approval risk is orthogonal to this plan; left open in plan 08 for a future Claim-side fix.) {amp/claude-opus-4-7}
 
-### Phase 5 — Rewrite Leave writers (handoff + encashment)
+### Phase 5 — Rewrite Leave writers (handoff + encashment)  ✅ DONE
 
-- [ ] Rewrite `LeavePayrollHandoffService` to use intake. Set `source_type = 'leave_request'`.
-- [ ] Rewrite `LeaveEncashmentService` to use intake. Set `source_type = 'leave_encashment'`. Caught by Copilot's review; this is not optional.
-- [ ] Audit `LeaveBalanceLedgerService` for any indirect Payroll writes; route through intake if any are found.
-- [ ] Delete Payroll model imports from Leave.
-- [ ] Update plan 07 to record the new boundary.
+- [x] Rewrote `LeavePayrollHandoffService::onLeaveApplied` to call intake. `SOURCE_TYPE = 'leave_request'`. Return type now `?PayrollContributionOutcome`. Behaviour change: when no open run covers `starts_on`, intake records a pending row (was: silently no-op). {amp/claude-opus-4-7}
+- [x] Rewrote `LeaveEncashmentService::encash` to call intake. `SOURCE_TYPE = 'leave_encashment'`. Behaviour change: no longer throws when no open run exists — the ledger entry commits and the contribution goes pending. Updated the encashment test to create the run for the current month so the existing `PayrollInput` assertion still finds the materialised row. {amp/claude-opus-4-7}
+- [x] Audited `LeaveBalanceLedgerService` — no Payroll model imports or direct writes. Clean. {amp/claude-opus-4-7}
+- [x] Removed `PayrollInput`/`PayrollRun`/`PayrollRunParticipant` imports from Leave. {amp/claude-opus-4-7}
+- [x] Update plan 07's payroll-handoff component note and double-counting risk to mark the inversion landed. {amp/claude-opus-4-7}
 
 ### Phase 6 — Architectural lock-in
 

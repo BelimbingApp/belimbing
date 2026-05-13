@@ -543,7 +543,8 @@ test('carry-forward applies cap and writes carried_forward + expired ledger entr
 test('encashment debits the ledger and creates a PayrollInput earning line', function (): void {
     [$company, $employee, $assignment, $type] = createLeaveAssignment();
     $ledger = app(LeaveBalanceLedgerService::class);
-    createOpenPayrollRun($company, '2026-10-01', '2026-10-31');
+    $today = now();
+    createOpenPayrollRun($company, $today->copy()->startOfMonth()->toDateString(), $today->copy()->endOfMonth()->toDateString());
 
     $ledger->record(
         companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
