@@ -2,25 +2,29 @@
 
 namespace App\Modules\People\Claim\Models;
 
-use App\Modules\Core\Company\Models\Company;
+use App\Base\Database\Concerns\BelongsToCompany;
+use App\Base\Database\Concerns\HasActiveInactiveStatus;
+use App\Base\Database\Concerns\HasEffectiveDateRange;
+use App\Base\Database\Concerns\TracksExternalSource;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ClaimPolicy extends Model
 {
+    use BelongsToCompany;
+    use HasActiveInactiveStatus;
+    use HasEffectiveDateRange;
+    use TracksExternalSource;
+
     public const MODE_SINGLE_VALUE = 'single_value';
     public const MODE_RANGE = 'range';
     public const MODE_SERVICE_YEAR = 'service_year';
-
-    public const STATUS_ACTIVE = 'active';
-    public const STATUS_INACTIVE = 'inactive';
 
     protected $table = 'people_claim_policies';
 
     /** @var list<string> */
     protected $fillable = [
-        'company_id',
+        ...self::COMPANY_FILLABLE,
         'code',
         'name',
         'item_mode',
@@ -33,14 +37,10 @@ class ClaimPolicy extends Model
         'advance_rules',
         'approval_profile_key',
         'encumber_pending',
-        'effective_from',
-        'effective_to',
+        ...self::EFFECTIVE_DATE_RANGE_FILLABLE,
         'version',
         'status',
-        'source_system',
-        'source_label',
-        'source_code',
-        'metadata',
+        ...self::EXTERNAL_SOURCE_FILLABLE,
     ];
 
     /** @return array<string, string> */
@@ -54,18 +54,10 @@ class ClaimPolicy extends Model
             'currency_rules' => 'array',
             'advance_rules' => 'array',
             'encumber_pending' => 'bool',
-            'effective_from' => 'date',
-            'effective_to' => 'date',
+            ...self::EFFECTIVE_DATE_RANGE_CASTS,
             'version' => 'integer',
-            'metadata' => 'array',
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
+            ...self::EXTERNAL_SOURCE_CASTS,
         ];
-    }
-
-    public function company(): BelongsTo
-    {
-        return $this->belongsTo(Company::class, 'company_id');
     }
 
     /** @return HasMany<ClaimPolicyBand, $this> */

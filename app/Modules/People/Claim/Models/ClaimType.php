@@ -2,13 +2,18 @@
 
 namespace App\Modules\People\Claim\Models;
 
-use App\Modules\Core\Company\Models\Company;
+use App\Base\Database\Concerns\BelongsToCompany;
+use App\Base\Database\Concerns\HasActiveInactiveStatus;
+use App\Base\Database\Concerns\TracksExternalSource;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ClaimType extends Model
 {
+    use BelongsToCompany;
+    use HasActiveInactiveStatus;
+    use TracksExternalSource;
+
     public const UNIT_AMOUNT = 'amount';
     public const UNIT_DISTANCE = 'distance';
     public const UNIT_QUANTITY = 'quantity';
@@ -18,14 +23,11 @@ class ClaimType extends Model
     public const RECEIPT_ABOVE_AMOUNT = 'above_amount';
     public const RECEIPT_ALWAYS = 'always';
 
-    public const STATUS_ACTIVE = 'active';
-    public const STATUS_INACTIVE = 'inactive';
-
     protected $table = 'people_claim_types';
 
     /** @var list<string> */
     protected $fillable = [
-        'company_id',
+        ...self::COMPANY_FILLABLE,
         'claim_category_id',
         'code',
         'name',
@@ -46,10 +48,7 @@ class ClaimType extends Model
         'admin_only',
         'advance_settlement_allowed',
         'status',
-        'source_system',
-        'source_label',
-        'source_code',
-        'metadata',
+        ...self::EXTERNAL_SOURCE_FILLABLE,
     ];
 
     /** @return array<string, string> */
@@ -63,15 +62,8 @@ class ClaimType extends Model
             'allow_on_behalf_submission' => 'bool',
             'admin_only' => 'bool',
             'advance_settlement_allowed' => 'bool',
-            'metadata' => 'array',
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
+            ...self::EXTERNAL_SOURCE_CASTS,
         ];
-    }
-
-    public function company(): BelongsTo
-    {
-        return $this->belongsTo(Company::class, 'company_id');
     }
 
     public function category(): BelongsTo

@@ -2,21 +2,24 @@
 
 namespace App\Modules\People\Attendance\Models;
 
-use App\Modules\Core\Company\Models\Company;
+use App\Base\Database\Concerns\BelongsToCompany;
+use App\Base\Database\Concerns\HasActiveInactiveStatus;
+use App\Base\Database\Concerns\HasEffectiveDateRange;
+use App\Base\Database\Concerns\TracksExternalSource;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AttendancePolicyGroup extends Model
 {
-    public const STATUS_ACTIVE = 'active';
-
-    public const STATUS_INACTIVE = 'inactive';
+    use BelongsToCompany;
+    use HasActiveInactiveStatus;
+    use HasEffectiveDateRange;
+    use TracksExternalSource;
 
     protected $table = 'people_attendance_policy_groups';
 
     protected $fillable = [
-        'company_id',
+        ...self::COMPANY_FILLABLE,
         'code',
         'name',
         'cohort_predicate',
@@ -26,14 +29,10 @@ class AttendancePolicyGroup extends Model
         'overtime_export_rules',
         'lateness_export_rules',
         'payroll_defaults',
-        'effective_from',
-        'effective_to',
+        ...self::EFFECTIVE_DATE_RANGE_FILLABLE,
         'version',
         'status',
-        'source_system',
-        'source_label',
-        'source_code',
-        'metadata',
+        ...self::EXTERNAL_SOURCE_FILLABLE,
     ];
 
     protected function casts(): array
@@ -46,16 +45,10 @@ class AttendancePolicyGroup extends Model
             'overtime_export_rules' => 'array',
             'lateness_export_rules' => 'array',
             'payroll_defaults' => 'array',
-            'effective_from' => 'date',
-            'effective_to' => 'date',
+            ...self::EFFECTIVE_DATE_RANGE_CASTS,
             'version' => 'integer',
-            'metadata' => 'array',
+            ...self::EXTERNAL_SOURCE_CASTS,
         ];
-    }
-
-    public function company(): BelongsTo
-    {
-        return $this->belongsTo(Company::class, 'company_id');
     }
 
     public function allowanceRules(): HasMany

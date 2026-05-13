@@ -2,13 +2,16 @@
 
 namespace App\Modules\People\Attendance\Models;
 
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
+use App\Base\Database\Concerns\BelongsToCompany;
+use App\Base\Database\Concerns\BelongsToEmployee;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AttendanceClockEvent extends Model
 {
+    use BelongsToCompany;
+    use BelongsToEmployee;
+
     public const TYPE_IN = 'in';
 
     public const TYPE_OUT = 'out';
@@ -28,8 +31,8 @@ class AttendanceClockEvent extends Model
     protected $table = 'people_attendance_clock_events';
 
     protected $fillable = [
-        'company_id',
-        'employee_id',
+        ...self::COMPANY_FILLABLE,
+        ...self::EMPLOYEE_FILLABLE,
         'attendance_day_id',
         'attendance_geofence_id',
         'attendance_geofence_group_id',
@@ -62,16 +65,6 @@ class AttendanceClockEvent extends Model
             'photo_evidence_present' => 'bool',
             'metadata' => 'array',
         ];
-    }
-
-    public function company(): BelongsTo
-    {
-        return $this->belongsTo(Company::class, 'company_id');
-    }
-
-    public function employee(): BelongsTo
-    {
-        return $this->belongsTo(Employee::class, 'employee_id');
     }
 
     public function attendanceDay(): BelongsTo
