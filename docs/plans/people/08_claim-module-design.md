@@ -256,8 +256,8 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 
 ### Phase 4 — Payroll, advance, and accounting handoff
 
-- [ ] Generate `PayrollInput::TYPE_REIMBURSEMENT` rows from approved payroll-eligible claim lines with duplicate protection and claim-line source references.
-- [ ] Snapshot claim type payroll code and DR/CR accounting mapping on each handed-off claim line so later setup changes do not rewrite payroll/accounting history.
+- [~] Generate `PayrollInput::TYPE_REIMBURSEMENT` rows from approved payroll-eligible claim lines with duplicate protection and claim-line source references: approved lines now queue into an open draft/calculated payroll run when one covers the incurred date, or stay approved with pending handoff metadata if no run is open. {amp/gpt-5.1-codex}
+- [~] Snapshot claim type payroll code and DR/CR accounting mapping on each handed-off claim line so later setup changes do not rewrite payroll/accounting history: claim line snapshots are stored at submission and copied to payroll input metadata during handoff. {amp/gpt-5.1-codex}
 - [ ] Prevent mutation of claim lines already handed to a locked payroll run; support explicit reversal/new-period correction flows.
 - [ ] If SBG confirms day-one advance usage, implement claim advance request, approval, payment/payroll handoff, receipt settlement, outstanding balance, overdue reminders, and variance outcomes; otherwise keep only schema/import hooks.
 - [ ] Add payroll reconciliation report: approved claims, queued inputs, paid/reimbursed lines, skipped lines, reversal lines, and mismatches.
