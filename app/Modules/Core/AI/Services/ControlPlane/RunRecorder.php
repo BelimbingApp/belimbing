@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\ControlPlane;
 
 use App\Base\AI\DTO\AiRuntimeError;
@@ -32,11 +33,6 @@ class RunRecorder
     /**
      * Record the start of execution on a run envelope.
      */
-    public function start(RunRecorderStartInput $input): void
-    {
-        $this->beginExecution($input);
-    }
-
     public function beginExecution(RunRecorderStartInput $input): void
     {
         AiRun::query()->firstOrCreate(

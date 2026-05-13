@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Integration\Services;
 
 use App\Base\Foundation\Exceptions\BlbIntegrationException;
@@ -6,6 +7,8 @@ use Illuminate\Support\Str;
 
 class OAuth2Client
 {
+    private const DEFAULT_SYSTEM = 'oauth2';
+
     public function __construct(
         private readonly IntegrationGateway $integration,
     ) {}
@@ -42,12 +45,10 @@ class OAuth2Client
         string $clientSecret,
         string $code,
         string $redirectUri,
-        string $system = 'oauth2',
-        ?string $provider = null,
-        ?string $ownerType = null,
-        ?int $ownerId = null,
-        array $metadata = [],
+        ?OAuth2TokenRequestContext $context = null,
     ): array {
+        $context ??= new OAuth2TokenRequestContext(system: self::DEFAULT_SYSTEM);
+
         return $this->tokenRequest(
             tokenEndpoint: $tokenEndpoint,
             clientId: $clientId,
@@ -58,13 +59,7 @@ class OAuth2Client
                 'redirect_uri' => $redirectUri,
             ],
             operation: 'oauth2.authorization_code.exchange',
-            context: new OAuth2TokenRequestContext(
-                system: $system,
-                provider: $provider,
-                ownerType: $ownerType,
-                ownerId: $ownerId,
-                metadata: $metadata,
-            ),
+            context: $context,
         );
     }
 
@@ -78,12 +73,10 @@ class OAuth2Client
         string $clientSecret,
         string $refreshToken,
         array $scopes = [],
-        string $system = 'oauth2',
-        ?string $provider = null,
-        ?string $ownerType = null,
-        ?int $ownerId = null,
-        array $metadata = [],
+        ?OAuth2TokenRequestContext $context = null,
     ): array {
+        $context ??= new OAuth2TokenRequestContext(system: self::DEFAULT_SYSTEM);
+
         $payload = [
             'grant_type' => 'refresh_token',
             'refresh_token' => $refreshToken,
@@ -99,13 +92,7 @@ class OAuth2Client
             clientSecret: $clientSecret,
             payload: $payload,
             operation: 'oauth2.refresh_token.exchange',
-            context: new OAuth2TokenRequestContext(
-                system: $system,
-                provider: $provider,
-                ownerType: $ownerType,
-                ownerId: $ownerId,
-                metadata: $metadata,
-            ),
+            context: $context,
         );
     }
 

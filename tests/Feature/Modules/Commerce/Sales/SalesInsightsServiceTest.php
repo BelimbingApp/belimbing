@@ -10,12 +10,16 @@ use App\Modules\Commerce\Sales\Services\SalesInsightsService;
 use App\Modules\Core\Company\Models\Company;
 use Illuminate\Support\Carbon;
 
+const SALES_INSIGHTS_FROM = '2026-04-01';
+const SALES_INSIGHTS_TO = '2026-04-30 23:59:59';
+const SALES_INSIGHTS_CURRENCY_USD = 'USD';
+
 it('aggregates revenue, cost, fees, and unit count for the requested company and period', function (): void {
     $company = Company::factory()->create();
 
     Sale::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-10'),
         'quantity' => 2,
         'sale_amount' => 5000,
@@ -25,7 +29,7 @@ it('aggregates revenue, cost, fees, and unit count for the requested company and
 
     Sale::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-20'),
         'quantity' => 1,
         'sale_amount' => 3000,
@@ -35,16 +39,16 @@ it('aggregates revenue, cost, fees, and unit count for the requested company and
 
     Sale::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-05-05'),
         'sale_amount' => 9999,
     ]);
 
     $summary = app(SalesInsightsService::class)->soldInPeriod(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
     );
 
     expect($summary->saleCount)->toBe(2)
@@ -61,7 +65,7 @@ it('treats missing cost and fee values as zero contributions', function (): void
 
     Sale::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-10'),
         'sale_amount' => 4000,
         'cost_basis_amount' => null,
@@ -70,9 +74,9 @@ it('treats missing cost and fee values as zero contributions', function (): void
 
     $summary = app(SalesInsightsService::class)->soldInPeriod(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
     );
 
     expect($summary->totalRevenueMinor)->toBe(4000)
@@ -87,23 +91,23 @@ it('excludes sales from other companies', function (): void {
 
     Sale::factory()->create([
         'company_id' => $companyA->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-10'),
         'sale_amount' => 1000,
     ]);
 
     Sale::factory()->create([
         'company_id' => $companyB->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-15'),
         'sale_amount' => 99999,
     ]);
 
     $summary = app(SalesInsightsService::class)->soldInPeriod(
         companyId: $companyA->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
     );
 
     expect($summary->saleCount)->toBe(1)
@@ -115,7 +119,7 @@ it('excludes sales in a different currency', function (): void {
 
     Sale::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-10'),
         'sale_amount' => 1000,
     ]);
@@ -129,9 +133,9 @@ it('excludes sales in a different currency', function (): void {
 
     $summary = app(SalesInsightsService::class)->soldInPeriod(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
     );
 
     expect($summary->saleCount)->toBe(1)
@@ -143,9 +147,9 @@ it('returns zeros when no sales fall in the window', function (): void {
 
     $summary = app(SalesInsightsService::class)->soldInPeriod(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
     );
 
     expect($summary->saleCount)->toBe(0)
@@ -164,7 +168,7 @@ it('aggregates margin per item and orders rows by gross profit descending', func
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => $headlight->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-05'),
         'quantity' => 1,
         'sale_amount' => 4000,
@@ -174,7 +178,7 @@ it('aggregates margin per item and orders rows by gross profit descending', func
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => $headlight->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-15'),
         'quantity' => 2,
         'sale_amount' => 6000,
@@ -184,7 +188,7 @@ it('aggregates margin per item and orders rows by gross profit descending', func
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => $bumper->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-20'),
         'quantity' => 1,
         'sale_amount' => 2500,
@@ -194,9 +198,9 @@ it('aggregates margin per item and orders rows by gross profit descending', func
 
     $rows = app(SalesInsightsService::class)->marginPerItem(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
     );
 
     expect($rows)->toHaveCount(2);
@@ -222,30 +226,30 @@ it('groups unmatched sales under a null item id row', function (): void {
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => $linked->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-05'),
         'sale_amount' => 5000,
     ]);
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => null,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-10'),
         'sale_amount' => 1500,
     ]);
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => null,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-12'),
         'sale_amount' => 1500,
     ]);
 
     $rows = app(SalesInsightsService::class)->marginPerItem(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
     );
 
     expect($rows)->toHaveCount(2);
@@ -265,7 +269,7 @@ it('honors the limit when ranking top items by gross profit', function (): void 
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => $a->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-05'),
         'sale_amount' => 5000,
         'cost_basis_amount' => 1000,
@@ -273,7 +277,7 @@ it('honors the limit when ranking top items by gross profit', function (): void 
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => $b->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-06'),
         'sale_amount' => 8000,
         'cost_basis_amount' => 1000,
@@ -281,7 +285,7 @@ it('honors the limit when ranking top items by gross profit', function (): void 
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => $c->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-07'),
         'sale_amount' => 3000,
         'cost_basis_amount' => 1000,
@@ -289,9 +293,9 @@ it('honors the limit when ranking top items by gross profit', function (): void 
 
     $rows = app(SalesInsightsService::class)->marginPerItem(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
         limit: 2,
     );
 
@@ -321,7 +325,7 @@ it('returns active listings without sales ordered oldest first', function (): vo
 
     $rows = app(SalesInsightsService::class)->daysListedWithoutSale(
         companyId: $company->id,
-        currencyCode: 'USD',
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
         asOf: $asOf,
     );
 
@@ -336,24 +340,24 @@ it('excludes listings that already produced a sale', function (): void {
 
     $sold = Listing::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'listed_at' => $asOf->copy()->subDays(30),
     ]);
     $unsold = Listing::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'listed_at' => $asOf->copy()->subDays(10),
     ]);
     Sale::factory()->create([
         'company_id' => $company->id,
         'listing_id' => $sold->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => $asOf->copy()->subDays(2),
     ]);
 
     $rows = app(SalesInsightsService::class)->daysListedWithoutSale(
         companyId: $company->id,
-        currencyCode: 'USD',
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
         asOf: $asOf,
     );
 
@@ -367,24 +371,24 @@ it('excludes ended listings and listings missing listed_at', function (): void {
 
     Listing::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'listed_at' => $asOf->copy()->subDays(30),
         'ended_at' => $asOf->copy()->subDays(1),
     ]);
     Listing::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'listed_at' => null,
     ]);
     $kept = Listing::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'listed_at' => $asOf->copy()->subDays(15),
     ]);
 
     $rows = app(SalesInsightsService::class)->daysListedWithoutSale(
         companyId: $company->id,
-        currencyCode: 'USD',
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
         asOf: $asOf,
     );
 
@@ -399,12 +403,12 @@ it('scopes listings by company and currency', function (): void {
 
     $kept = Listing::factory()->create([
         'company_id' => $companyA->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'listed_at' => $asOf->copy()->subDays(20),
     ]);
     Listing::factory()->create([
         'company_id' => $companyB->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'listed_at' => $asOf->copy()->subDays(20),
     ]);
     Listing::factory()->create([
@@ -415,7 +419,7 @@ it('scopes listings by company and currency', function (): void {
 
     $rows = app(SalesInsightsService::class)->daysListedWithoutSale(
         companyId: $companyA->id,
-        currencyCode: 'USD',
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
         asOf: $asOf,
     );
 
@@ -429,28 +433,28 @@ it('honors minDaysListed and limit when ranking aged listings', function (): voi
 
     Listing::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'listed_at' => $asOf->copy()->subDays(2),
     ]);
     $aged30 = Listing::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'listed_at' => $asOf->copy()->subDays(30),
     ]);
     $aged60 = Listing::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'listed_at' => $asOf->copy()->subDays(60),
     ]);
     $aged90 = Listing::factory()->create([
         'company_id' => $company->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'listed_at' => $asOf->copy()->subDays(90),
     ]);
 
     $rows = app(SalesInsightsService::class)->daysListedWithoutSale(
         companyId: $company->id,
-        currencyCode: 'USD',
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
         asOf: $asOf,
         minDaysListed: 14,
         limit: 2,
@@ -461,7 +465,7 @@ it('honors minDaysListed and limit when ranking aged listings', function (): voi
 
     $unfiltered = app(SalesInsightsService::class)->daysListedWithoutSale(
         companyId: $company->id,
-        currencyCode: 'USD',
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
         asOf: $asOf,
         minDaysListed: 14,
     );
@@ -481,23 +485,23 @@ it('lists sales newest first with linked item title and category', function (): 
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => $headlight->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-10 10:00:00'),
         'sale_amount' => 5000,
     ]);
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => $headlight->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-20 10:00:00'),
         'sale_amount' => 6000,
     ]);
 
     $rows = app(SalesInsightsService::class)->salesInPeriod(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
     );
 
     expect($rows)->toHaveCount(2)
@@ -522,7 +526,7 @@ it('falls back to order line title then sku when no item is linked', function ()
         'order_id' => $orderA->id,
         'order_line_id' => $lineA->id,
         'item_id' => null,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-15 10:00:00'),
     ]);
 
@@ -538,15 +542,15 @@ it('falls back to order line title then sku when no item is linked', function ()
         'order_id' => $orderB->id,
         'order_line_id' => $lineB->id,
         'item_id' => null,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-10 10:00:00'),
     ]);
 
     $rows = app(SalesInsightsService::class)->salesInPeriod(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
     );
 
     expect($rows->pluck('title')->all())->toBe(['Salvaged Toyota mirror', 'EBAY-BUMPER-2'])
@@ -560,16 +564,16 @@ it('honors the limit when listing recent sales', function (): void {
     foreach (range(1, 5) as $i) {
         $sales[] = Sale::factory()->create([
             'company_id' => $company->id,
-            'currency_code' => 'USD',
+            'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
             'sold_at' => Carbon::parse('2026-04-10')->addDays($i),
         ]);
     }
 
     $rows = app(SalesInsightsService::class)->salesInPeriod(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
         limit: 3,
     );
 
@@ -599,7 +603,7 @@ it('aggregates sales by category ordered by frequency', function (): void {
         Sale::factory()->create([
             'company_id' => $company->id,
             'item_id' => $item->id,
-            'currency_code' => 'USD',
+            'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
             'sold_at' => Carbon::parse('2026-04-10')->addDays($i),
             'quantity' => 1,
             'sale_amount' => 5000,
@@ -610,7 +614,7 @@ it('aggregates sales by category ordered by frequency', function (): void {
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => $bumper->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-15'),
         'quantity' => 1,
         'sale_amount' => 7000,
@@ -620,9 +624,9 @@ it('aggregates sales by category ordered by frequency', function (): void {
 
     $rows = app(SalesInsightsService::class)->salesByCategory(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
     );
 
     expect($rows)->toHaveCount(2)
@@ -643,30 +647,30 @@ it('buckets uncategorized sales under a null category row', function (): void {
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => $headlight->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-05'),
         'sale_amount' => 5000,
     ]);
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => $loose->id,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-10'),
         'sale_amount' => 3000,
     ]);
     Sale::factory()->create([
         'company_id' => $company->id,
         'item_id' => null,
-        'currency_code' => 'USD',
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
         'sold_at' => Carbon::parse('2026-04-12'),
         'sale_amount' => 1500,
     ]);
 
     $rows = app(SalesInsightsService::class)->salesByCategory(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
     );
 
     expect($rows)->toHaveCount(2);
@@ -690,7 +694,7 @@ it('honors the limit when ranking categories by frequency', function (): void {
             Sale::factory()->create([
                 'company_id' => $company->id,
                 'item_id' => $item->id,
-                'currency_code' => 'USD',
+                'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
                 'sold_at' => Carbon::parse('2026-04-10')->addHours($i),
                 'sale_amount' => 1000,
             ]);
@@ -699,9 +703,9 @@ it('honors the limit when ranking categories by frequency', function (): void {
 
     $rows = app(SalesInsightsService::class)->salesByCategory(
         companyId: $company->id,
-        from: Carbon::parse('2026-04-01'),
-        to: Carbon::parse('2026-04-30 23:59:59'),
-        currencyCode: 'USD',
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
         limit: 2,
     );
 

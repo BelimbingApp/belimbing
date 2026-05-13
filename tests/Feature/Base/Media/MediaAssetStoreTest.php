@@ -6,10 +6,13 @@ use App\Base\Media\Services\MediaAssetStore;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
+const MEDIA_ASSET_STORE_DISK = 'local';
+const MEDIA_ASSET_STORE_ORIGINAL_KEY = 'media/originals/abc.jpg';
+
 it('stores an original asset with the canonical kind', function (): void {
     $store = app(MediaAssetStore::class);
 
-    $asset = $store->storeOriginal('local', 'media/originals/abc.jpg', [
+    $asset = $store->storeOriginal(MEDIA_ASSET_STORE_DISK, MEDIA_ASSET_STORE_ORIGINAL_KEY, [
         'original_filename' => 'headlight.jpg',
         'mime_type' => 'image/jpeg',
         'file_size' => 12_345,
@@ -18,8 +21,8 @@ it('stores an original asset with the canonical kind', function (): void {
     expect($asset->isOriginal())->toBeTrue()
         ->and($asset->parent_id)->toBeNull()
         ->and($asset->kind)->toBe(MediaAsset::KIND_ORIGINAL)
-        ->and($asset->disk)->toBe('local')
-        ->and($asset->storage_key)->toBe('media/originals/abc.jpg')
+        ->and($asset->disk)->toBe(MEDIA_ASSET_STORE_DISK)
+        ->and($asset->storage_key)->toBe(MEDIA_ASSET_STORE_ORIGINAL_KEY)
         ->and($asset->original_filename)->toBe('headlight.jpg')
         ->and($asset->mime_type)->toBe('image/jpeg')
         ->and($asset->file_size)->toBe(12_345);
@@ -28,12 +31,12 @@ it('stores an original asset with the canonical kind', function (): void {
 it('stores a derivative linked to a parent original', function (): void {
     $store = app(MediaAssetStore::class);
 
-    $original = $store->storeOriginal('local', 'media/originals/abc.jpg');
+    $original = $store->storeOriginal(MEDIA_ASSET_STORE_DISK, MEDIA_ASSET_STORE_ORIGINAL_KEY);
 
     $cleaned = $store->storeDerivative(
         $original,
         'background_removed',
-        'local',
+        MEDIA_ASSET_STORE_DISK,
         'media/derived/abc-cleaned.png',
         [
             'mime_type' => 'image/png',
@@ -51,23 +54,23 @@ it('stores a derivative linked to a parent original', function (): void {
 
 it('rejects deriving with the canonical original kind', function (): void {
     $store = app(MediaAssetStore::class);
-    $original = $store->storeOriginal('local', 'media/originals/abc.jpg');
+    $original = $store->storeOriginal(MEDIA_ASSET_STORE_DISK, MEDIA_ASSET_STORE_ORIGINAL_KEY);
 
-    $store->storeDerivative($original, MediaAsset::KIND_ORIGINAL, 'local', 'media/wrong.png');
+    $store->storeDerivative($original, MediaAsset::KIND_ORIGINAL, MEDIA_ASSET_STORE_DISK, 'media/wrong.png');
 })->throws(InvalidArgumentException::class);
 
 it('rejects empty disk or storage key', function (): void {
     $store = app(MediaAssetStore::class);
 
     expect(fn () => $store->storeOriginal('', 'media/x.jpg'))->toThrow(InvalidArgumentException::class)
-        ->and(fn () => $store->storeOriginal('local', '   '))->toThrow(InvalidArgumentException::class);
+        ->and(fn () => $store->storeOriginal(MEDIA_ASSET_STORE_DISK, '   '))->toThrow(InvalidArgumentException::class);
 });
 
 it('cascades derivative deletion when the parent is deleted', function (): void {
     $store = app(MediaAssetStore::class);
 
-    $original = $store->storeOriginal('local', 'media/originals/abc.jpg');
-    $derivative = $store->storeDerivative($original, 'background_removed', 'local', 'media/derived/abc.png');
+    $original = $store->storeOriginal(MEDIA_ASSET_STORE_DISK, MEDIA_ASSET_STORE_ORIGINAL_KEY);
+    $derivative = $store->storeDerivative($original, 'background_removed', MEDIA_ASSET_STORE_DISK, 'media/derived/abc.png');
 
     $original->delete();
 
@@ -75,32 +78,32 @@ it('cascades derivative deletion when the parent is deleted', function (): void 
 });
 
 it('puts an uploaded file to disk and registers the original', function (): void {
-    Storage::fake('local');
+    Storage::fake(MEDIA_ASSET_STORE_DISK);
     $store = app(MediaAssetStore::class);
 
     $file = UploadedFile::fake()->create('headlight.jpg', 64, 'image/jpeg');
 
-    $asset = $store->putUploadedFile('local', 'media/originals', $file);
+    $asset = $store->putUploadedFile(MEDIA_ASSET_STORE_DISK, 'media/originals', $file);
 
     expect($asset->isOriginal())->toBeTrue()
-        ->and($asset->disk)->toBe('local')
+        ->and($asset->disk)->toBe(MEDIA_ASSET_STORE_DISK)
         ->and($asset->original_filename)->toBe('headlight.jpg')
         ->and($asset->mime_type)->toBe('image/jpeg')
         ->and($asset->file_size)->toBeGreaterThan(0);
 
-    Storage::disk('local')->assertExists($asset->storage_key);
+    Storage::disk(MEDIA_ASSET_STORE_DISK)->assertExists($asset->storage_key);
 });
 
 it('puts derivative bytes alongside an original', function (): void {
-    Storage::fake('local');
+    Storage::fake(MEDIA_ASSET_STORE_DISK);
     $store = app(MediaAssetStore::class);
 
-    $original = $store->storeOriginal('local', 'media/originals/abc.jpg');
+    $original = $store->storeOriginal(MEDIA_ASSET_STORE_DISK, MEDIA_ASSET_STORE_ORIGINAL_KEY);
 
     $cleaned = $store->putDerivativeBytes(
         $original,
         'background_removed',
-        'local',
+        MEDIA_ASSET_STORE_DISK,
         'media/derived/abc.png',
         'PNG-BYTES',
         ['mime_type' => 'image/png'],
@@ -110,34 +113,34 @@ it('puts derivative bytes alongside an original', function (): void {
         ->and($cleaned->mime_type)->toBe('image/png')
         ->and($cleaned->file_size)->toBe(strlen('PNG-BYTES'));
 
-    Storage::disk('local')->assertExists($cleaned->storage_key);
-    expect(Storage::disk('local')->get($cleaned->storage_key))->toBe('PNG-BYTES');
+    Storage::disk(MEDIA_ASSET_STORE_DISK)->assertExists($cleaned->storage_key);
+    expect(Storage::disk(MEDIA_ASSET_STORE_DISK)->get($cleaned->storage_key))->toBe('PNG-BYTES');
 });
 
 it('deletes both the row and the file', function (): void {
-    Storage::fake('local');
+    Storage::fake(MEDIA_ASSET_STORE_DISK);
     $store = app(MediaAssetStore::class);
 
     $file = UploadedFile::fake()->create('headlight.jpg', 64, 'image/jpeg');
-    $asset = $store->putUploadedFile('local', 'media/originals', $file);
+    $asset = $store->putUploadedFile(MEDIA_ASSET_STORE_DISK, 'media/originals', $file);
 
     $store->delete($asset);
 
     expect(MediaAsset::query()->whereKey($asset->id)->exists())->toBeFalse();
-    Storage::disk('local')->assertMissing($asset->storage_key);
+    Storage::disk(MEDIA_ASSET_STORE_DISK)->assertMissing($asset->storage_key);
 });
 
 it('deletes derivative files when the parent is deleted', function (): void {
-    Storage::fake('local');
+    Storage::fake(MEDIA_ASSET_STORE_DISK);
     $store = app(MediaAssetStore::class);
 
     $file = UploadedFile::fake()->createWithContent('headlight.jpg', 'JPEG-BYTES');
-    $original = $store->putUploadedFile('local', 'media/originals', $file);
+    $original = $store->putUploadedFile(MEDIA_ASSET_STORE_DISK, 'media/originals', $file);
 
     $cleaned = $store->putDerivativeBytes(
         $original,
         'background_removed',
-        'local',
+        MEDIA_ASSET_STORE_DISK,
         'media/derived/abc.png',
         'PNG-BYTES',
     );
@@ -145,16 +148,16 @@ it('deletes derivative files when the parent is deleted', function (): void {
     $grandchild = $store->putDerivativeBytes(
         $cleaned,
         'thumbnail',
-        'local',
+        MEDIA_ASSET_STORE_DISK,
         'media/derived/abc-thumb.png',
         'THUMB-BYTES',
     );
 
     $store->delete($original);
 
-    Storage::disk('local')->assertMissing($original->storage_key);
-    Storage::disk('local')->assertMissing($cleaned->storage_key);
-    Storage::disk('local')->assertMissing($grandchild->storage_key);
+    Storage::disk(MEDIA_ASSET_STORE_DISK)->assertMissing($original->storage_key);
+    Storage::disk(MEDIA_ASSET_STORE_DISK)->assertMissing($cleaned->storage_key);
+    Storage::disk(MEDIA_ASSET_STORE_DISK)->assertMissing($grandchild->storage_key);
     expect(MediaAsset::query()->whereKey($cleaned->id)->exists())->toBeFalse()
         ->and(MediaAsset::query()->whereKey($grandchild->id)->exists())->toBeFalse();
 });
@@ -162,9 +165,9 @@ it('deletes derivative files when the parent is deleted', function (): void {
 it('wraps a failed upload in MediaStorageException', function (): void {
     $store = app(MediaAssetStore::class);
 
-    $broken = new class('headlight.jpg', 'image/jpeg', null, null, true) extends UploadedFile
+    $broken = new class('headlight.jpg', 'image/jpeg', null, true) extends UploadedFile
     {
-        public function __construct(string $name, string $mime, ?int $size, ?int $error, bool $test)
+        public function __construct(string $name, string $mime, ?int $error, bool $test)
         {
             parent::__construct(__FILE__, $name, $mime, $error, $test);
         }
@@ -175,5 +178,5 @@ it('wraps a failed upload in MediaStorageException', function (): void {
         }
     };
 
-    $store->putUploadedFile('local', 'media/originals', $broken);
+    $store->putUploadedFile(MEDIA_ASSET_STORE_DISK, 'media/originals', $broken);
 })->throws(MediaStorageException::class);
