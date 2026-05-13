@@ -76,9 +76,9 @@ class MenuBuilder
      */
     protected function markActive(array $tree, string $currentRoute): array
     {
+        // Recurse into children first so deeper (more specific) matches take
+        // priority over prefix matches on parent items.
         foreach ($tree as &$node) {
-            // Check children first so deeper (more specific) matches take priority
-            // over prefix matches on parent items.
             if (! empty($node['children'])) {
                 $node['children'] = $this->markActive($node['children'], $currentRoute);
 
@@ -89,9 +89,29 @@ class MenuBuilder
                     }
                 }
             }
+        }
+        unset($node);
 
-            // Only mark this node active if no child already matched
-            if (! $node['has_active_child'] && $this->routeMatches($node['item']->route, $currentRoute)) {
+        // When siblings share an `<x>.index` prefix (e.g. people.leave.index
+        // and people.leave.approvals), the prefix match in routeMatches() would
+        // wrongly mark the index sibling active too. If any sibling exactly
+        // matches the current route, suppress prefix matches on the rest.
+        $exactMatchExists = false;
+        foreach ($tree as $node) {
+            if ($node['item']->route === $currentRoute) {
+                $exactMatchExists = true;
+                break;
+            }
+        }
+
+        foreach ($tree as &$node) {
+            if ($node['has_active_child']) {
+                continue;
+            }
+
+            if ($node['item']->route === $currentRoute) {
+                $node['is_active'] = true;
+            } elseif (! $exactMatchExists && $this->routeMatches($node['item']->route, $currentRoute)) {
                 $node['is_active'] = true;
             }
         }
