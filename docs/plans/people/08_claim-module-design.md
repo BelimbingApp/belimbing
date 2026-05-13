@@ -250,10 +250,10 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 ### Phase 3 — Approval routing and operations
 
 - [ ] Route submitted claims through Workflow using Claim-selected approval profile inputs; Workflow owns approver graph, thresholds, delegation, and escalation execution.
-- [~] Build manager approval tabs: the Claim Approvals surface now has a pending queue, selected-request detail panel, claim line detail, audit trail, approve/reject actions, and decision reason. Receipt review, reduced approval, more-info, and escalation visibility remain open. {amp/gpt-5.1-codex}
+- [~] Build manager approval tabs: the Claim Approvals surface now has a pending queue, selected-request detail panel, claim line detail, audit trail, approve/reject/more-info actions, and decision reason. Receipt review, reduced approval, and escalation visibility remain open. {amp/gpt-5.1-codex}
 - [~] Build HR/Finance operations tabs: Claim Operations now provides an all-claims table with search, status/risk/payroll-state filters, duplicate-risk visibility, and payroll handoff readiness. Policy exception queue and reconciliation drill-down remain open. {amp/gpt-5.1-codex}
 - [ ] Emit notifications for submission, approval, rejection, more-info request, withdrawal, cancellation, payroll queued, and reimbursement completion through `PeopleNotificationDeliveryLog`.
-- [~] Record audit events for every state transition and every approval-limit/routing decision: submit, approve, reject, and withdraw now write audit events; more-info, cancellation, payroll, reimbursement, and routing-decision audits remain open. {amp/gpt-5.1-codex}
+- [~] Record audit events for every state transition and every approval-limit/routing decision: submit, approve, reject, more-info, and withdraw now write audit events; cancellation, payroll, reimbursement, and routing-decision audits remain open. {amp/gpt-5.1-codex}
 
 ### Phase 4 — Payroll, advance, and accounting handoff
 

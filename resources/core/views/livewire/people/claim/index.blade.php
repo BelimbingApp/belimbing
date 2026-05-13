@@ -235,6 +235,7 @@
                                             <div class="flex flex-wrap justify-end gap-2">
                                                 @if ($canApprove)
                                                     <x-ui.button type="button" size="sm" variant="primary" wire:click="approveRequest({{ $request->id }})">{{ __('Approve') }}</x-ui.button>
+                                                    <x-ui.button type="button" size="sm" variant="secondary" wire:click="requestMoreInfo({{ $request->id }})">{{ __('More info') }}</x-ui.button>
                                                     <x-ui.button type="button" size="sm" variant="ghost" wire:click="rejectRequest({{ $request->id }})">{{ __('Reject') }}</x-ui.button>
                                                 @else
                                                     <span class="text-xs text-muted">{{ __('View only') }}</span>
@@ -270,6 +271,7 @@
                                         <x-ui.textarea id="claim-approval-reason" wire:model="approvalReason" label="{{ __('Reason / Note') }}" rows="2" />
                                         <div class="flex gap-2">
                                             <x-ui.button type="button" size="sm" variant="primary" wire:click="approveRequest({{ $selectedRequest->id }})">{{ __('Approve') }}</x-ui.button>
+                                            <x-ui.button type="button" size="sm" variant="secondary" wire:click="requestMoreInfo({{ $selectedRequest->id }})">{{ __('Request More Info') }}</x-ui.button>
                                             <x-ui.button type="button" size="sm" variant="ghost" wire:click="rejectRequest({{ $selectedRequest->id }})">{{ __('Reject') }}</x-ui.button>
                                         </div>
                                     @endif
