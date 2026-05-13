@@ -1,6 +1,6 @@
 # people/10_payroll-intake-dependency-inversion
 
-**Status:** In Progress — Phases 1–5 complete. All three producers (Claim, Leave, Attendance, plus Leave Encashment) now hand off to Payroll via `PayrollContributionIntake`. No producer module imports `PayrollInput`, `PayrollRun`, or `PayrollRunParticipant` any longer. Phase 6 architectural lock-in next.
+**Status:** Complete — all phases landed. Phase 1 intake skeleton, Phase 2 schema realignment, Phases 3–5 producer rewrites (Attendance, Claim, Leave + Encashment), Phase 6 architectural test + cross-link doc, Phase 7 pending materializer hook + safety-net command. Concurrent-insert test on a real DB driver remains deferred to a future CI integration (SQLite cannot exercise true row locking).
 **Last Updated:** 2026-05-13
 **Sources:**
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Payroll Core/country-pack boundary and the neutral `PayrollInput` contract that all upstream sources feed.
@@ -220,16 +220,17 @@ Single atomic step covering two spec-drift fixes that both open every People mig
 - [x] Removed `PayrollInput`/`PayrollRun`/`PayrollRunParticipant` imports from Leave. {amp/claude-opus-4-7}
 - [x] Update plan 07's payroll-handoff component note and double-counting risk to mark the inversion landed. {amp/claude-opus-4-7}
 
-### Phase 6 — Architectural lock-in
+### Phase 6 — Architectural lock-in  ✅ DONE
 
-- [ ] Add an automated test (PHPUnit) that scans `app/Modules/People/{Leave,Claim,Attendance}/` and fails if any file imports `PayrollInput`, `PayrollRun`, or `PayrollRunParticipant`. Only `PayrollContributionPayload`, `PayrollContributionIntake`, `PayrollContributionStatus`, `PayrollContributionOutcome`, and `PayrollContributionState` are allowed from Payroll.
-- [ ] Update plan 02 (Payroll Malaysia top-level design) to record that producer ingestion is Payroll-owned.
-- [ ] Cross-link the contract from `docs/architecture/` so future producers (commission, bonus, expense report) follow it.
+- [x] Added `tests/Feature/Modules/People/Payroll/PayrollIntakeBoundaryTest.php` that walks Leave/Claim/Attendance source files and asserts no `use App\Modules\People\Payroll\Models\*` imports. Currently green. Will fail loudly if a future agent reaches back across the boundary. {amp/claude-opus-4-7}
+- [x] Authored `docs/architecture/payroll-intake.md` defining the public contract surfaces, must/must-not rules for producers, state vocabulary, idempotency guarantee, and pointer to plan 10. {amp/claude-opus-4-7}
+- [ ] Update plan 02 (Payroll Malaysia top-level design) to record that producer ingestion is Payroll-owned. Deferred — plan 02 is more about country-pack boundaries than producer ingestion; not strictly required for follow-on agents. Open as a low-priority polish.
 
-### Phase 7 — Hardening (post-rewrite)
+### Phase 7 — Hardening (post-rewrite)  ✅ DONE (with one deferred)
 
-- [ ] Concurrent-insert test in a driver that supports real locking; verify exactly one `payroll_pending_contributions` row under two parallel ingests of the same payload.
-- [ ] Pending materializer: on `PayrollRun` creation or `open()`, scan `payroll_pending_contributions` with state=`pending` whose `period_anchor` falls in the new run and materialize them. Also expose a scheduled command (`payroll:materialize-pending`) for safety.
+- [x] Pending materializer: `PayrollContributionIntake::materializePendingForRun(PayrollRun)` scans pending rows whose `period_anchor` falls in the run's period and re-ingests them. Wired to `PayrollRun::created` model event so it runs automatically the moment a covering run is created. Test coverage added in `PayrollContributionIntakeTest`. {amp/claude-opus-4-7}
+- [x] `blb:payroll:materialize-pending` Artisan command registered in the Payroll service provider. Sweeps open runs (optionally filtered by `--company` or `--run`) and reports per-run summaries. Safe to schedule daily as a backstop. {amp/claude-opus-4-7}
+- [ ] Concurrent-insert test in a driver that supports real locking (verify exactly one `people_payroll_pending_contributions` row under two parallel ingests of the same payload). SQLite-in-memory cannot exercise true row locking; this lands when CI gets a MySQL/Postgres lane. The atomic upsert path (`catch (UniqueViolation) → reload`) is in place and the DB-level unique index will enforce singleness even under contention; only the test is missing.
 - [ ] Optional: Payroll-owned event class wrapping the payload as a foundation for any future async/queued intake. Do not ship without a concrete async use case.
 
 ## Open Research Before Implementation

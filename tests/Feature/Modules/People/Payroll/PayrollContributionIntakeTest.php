@@ -165,6 +165,52 @@ it('reports queued_in_run status via the read API', function (): void {
         ->and($status->payrollInputId)->not->toBeNull();
 });
 
+it('materialises pending contributions when a covering run is created', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $payload = intakeTestPayload($company, $employee);
+
+    $first = app(PayrollContributionIntake::class)->ingest($payload);
+    expect($first->state)->toBe(PayrollContributionState::PENDING)
+        ->and(PayrollInput::query()->count())->toBe(0);
+
+    // Now a covering run opens — model `created` event should materialise the pending row.
+    $calendar = PayrollCalendar::query()->create([
+        'company_id' => $company->id,
+        'code' => 'MONTHLY',
+        'name' => 'Monthly',
+        'country_iso' => 'MY',
+        'currency' => 'MYR',
+        'frequency' => 'monthly',
+    ]);
+    $period = PayrollPeriod::query()->create([
+        'payroll_calendar_id' => $calendar->id,
+        'code' => '2026-05',
+        'name' => 'May 2026',
+        'starts_on' => '2026-05-01',
+        'ends_on' => '2026-05-31',
+        'pay_date' => '2026-05-31',
+    ]);
+    PayrollRun::query()->create([
+        'company_id' => $company->id,
+        'payroll_calendar_id' => $calendar->id,
+        'payroll_period_id' => $period->id,
+        'code' => 'MAY-2026',
+        'name' => 'May 2026',
+        'status' => PayrollRun::STATUS_DRAFT,
+        'currency' => 'MYR',
+    ]);
+
+    expect(PayrollInput::query()->count())->toBe(1);
+    $status = app(PayrollContributionStatus::class)->for(
+        sourceType: $payload->sourceType,
+        sourceId: $payload->sourceId,
+        payItemCode: $payload->payItemCode,
+        periodAnchor: $payload->periodAnchor,
+    );
+    expect($status->state)->toBe(PayrollContributionState::QUEUED_IN_RUN);
+});
+
 it('treats different pay items on the same source as distinct contributions', function (): void {
     ['company' => $company, 'employee' => $employee] = intakeTestFixtures();
     $intake = app(PayrollContributionIntake::class);
