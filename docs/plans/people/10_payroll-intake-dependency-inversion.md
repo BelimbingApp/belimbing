@@ -1,6 +1,6 @@
 # people/10_payroll-intake-dependency-inversion
 
-**Status:** Proposed (revised after Copilot + Amp review)
+**Status:** In Progress — Phase 1 intake skeleton built and tested; greenfield rewrite path adopted (no producer work in flight)
 **Last Updated:** 2026-05-13
 **Sources:**
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Payroll Core/country-pack boundary and the neutral `PayrollInput` contract that all upstream sources feed.
@@ -132,62 +132,104 @@ The architectural test in the cleanup phase will fail if any of these still impo
 
 ## Phases
 
-### Phase 0 — Audit and granularity decision
+The plan adopts a **greenfield rewrite** path. No producer work is in flight, no production data exists, and `migrate:fresh --dev --seed` is the development workflow. That removes the need for a multi-step "port then retire" sequence: producer writers are rewritten in place, and `attendance_payroll_handoffs` is deleted from the Attendance migration rather than retired as a separate step.
 
-- [ ] Walk every current writer and confirm composite key `(source_type, source_id, pay_item_code, period_anchor)` is sufficient: `ClaimPayrollHandoffService`, `LeavePayrollHandoffService`, `LeaveEncashmentService`, `AttendanceOvertimeService`. Document each producer's atomic granularity.
-- [ ] Confirm Attendance's planned period-level handoff (not yet implemented) will use one payload per `(period, employee, pay_item_code)`, not one per period.
-- [ ] Audit existing `payroll_inputs` and `attendance_payroll_handoffs` rows for composite-key duplicates; classify as bugs vs benign dev-seeder noise.
-- [ ] Decide locked-window policy: when an intake targets a `reviewed|approved` run, does it write pending, write into the run, or reject? Default proposal: write pending and surface `pending` to producer.
-- [ ] Decide reversal semantics per producer: which producers actually need reversal in v1 (Claim yes, Leave probably, Attendance overtime yes, encashment open).
+The migration prefix reorganization (producers before consumers, with semantic tiers within People — see `docs/architecture/database.md`) lands early so every subsequent phase operates in the correctly-ordered world.
 
-### Phase 1 — Payroll-owned contract and intake skeleton
+### Phase 1 — Payroll intake skeleton  ✅ DONE
 
-- [ ] Define `PayrollContributionPayload` DTO in `App\Modules\People\Payroll\Contracts\Intake\`.
-- [ ] Create `payroll_pending_contributions` table with composite unique index on `(source_type, source_id, pay_item_code, period_anchor)`, FK `payroll_input_id` (nullable, populated on materialization), `status` (`pending|materialized|reversed|rejected_locked`), `transformation_snapshot`, `metadata`.
-- [ ] Add the same composite unique index on `payroll_inputs (source_type, source_id, pay_item_code, occurred_on)` after the audit clears. Coordinate with the existing non-unique index.
-- [ ] Build `PayrollContributionIntake::ingest()` using an atomic upsert path; throw typed exceptions for locked/missing-run cases.
-- [ ] Build `PayrollContributionIntake::reverse()`.
-- [ ] Build pending materializer hook on run open (`PayrollRun::open` or equivalent lifecycle method).
-- [ ] Build `PayrollContributionStatus` read service.
+- [x] `PayrollContributionPayload` DTO in `App\Modules\People\Payroll\Contracts\Intake\`. {amp/claude-opus-4-7}
+- [x] `PayrollContributionState` constants aligned to `PayrollRun` status vocabulary. {amp/claude-opus-4-7}
+- [x] `PayrollContributionOutcome` structured return value. {amp/claude-opus-4-7}
+- [x] `PayrollPendingContribution` model and migration with composite unique index `(source_type, source_id, pay_item_code, period_anchor)`. {amp/claude-opus-4-7}
+- [x] `PayrollContributionIntake::ingest()` with idempotent upsert path; locked-run handling. {amp/claude-opus-4-7}
+- [x] `PayrollContributionIntake::reverse()` covering pending-not-yet-materialized, draft, calculated, and closed/voided run cases. {amp/claude-opus-4-7}
+- [x] `PayrollContributionStatus::for()` / `::allFor()` read API; state derived live from current run status. {amp/claude-opus-4-7}
+- [x] Test harness: 7 tests covering happy path, idempotency, no-open-run pending, locked-run rejection, reverse, status read-back, multi-pay-item per source. {amp/claude-opus-4-7}
+- [ ] **Defer to Phase 2 rename:** the intake migration filename will move from `0320_01_06_000006_*` to `0320_03_01_000006_*` as part of the prefix reorganization.
+- [ ] **Defer to Phase 7:** concurrent-insert test (two parallel transactions). Requires a non-SQLite driver in CI to exercise real row locking.
+- [ ] **Defer to Phase 7:** pending materializer hook on run open (`PayrollRun::open` lifecycle). Not needed until producers are actually emitting `pending` outcomes — currently no producer calls intake.
 
-### Phase 2 — Intake test harness
+### Phase 2 — Schema realignment
 
-- [ ] Unit tests: first-time insert, idempotent re-fire (same payload twice), reversal-of-pending, reversal-of-materialized-in-draft, reversal-after-run-close, status query parity.
-- [ ] Concurrent-insert test (two parallel transactions, same payload) demonstrates exactly one materialized row and one row only.
-- [ ] Locked-run test: ingest targeting `closed` returns `rejected_locked`; ingest targeting `reviewed` follows configured policy.
-- [ ] Materializer test: pending row written when no open run, materialized when run opens covering the period.
+Single atomic step covering two spec-drift fixes that both open every People migration file. Done once, before any producer rewrite.
 
-### Phase 3 — Port Claim
+**2a — Migration prefix reorganization** per the new tier scheme in `database.md`:
 
-- [ ] Replace `ClaimPayrollHandoffService::queueApprovedRequest` body with a loop that builds payloads from claim lines and calls `PayrollContributionIntake::ingest`.
-- [ ] Wire Claim cancel/withdraw/adjust paths to call `PayrollContributionIntake::reverse`.
+- Leave `0320_01_09_*` → `0320_02_01_*`
+- Claim `0320_01_12_*` → `0320_02_03_*`
+- Attendance `0320_01_15_*` → `0320_02_05_*`
+- Payroll `0320_01_06_*` → `0320_03_01_*` (including the new intake migration created in Phase 1)
+- Recruitment/Onboarding/Performance/Training/Disciplinary move from `0320_01_18-30_*` → `0320_02_07-15_*` if those module skeletons exist; otherwise leave the slots reserved.
+
+**2b — Table name realignment** to match `database.md` §2 (Application Layer1 pattern `{layer1}_{module}_{entity}`). Every People table gets a `people_` prefix:
+
+| Module | Current | Target |
+|--------|---------|--------|
+| Payroll | `payroll_calendars`, `payroll_periods`, `payroll_runs`, `payroll_run_participants`, `payroll_inputs`, `payroll_result_lines`, `payroll_run_audit_events` | `people_payroll_calendars`, `people_payroll_periods`, `people_payroll_runs`, `people_payroll_run_participants`, `people_payroll_inputs`, `people_payroll_result_lines`, `people_payroll_run_audit_events` |
+| Payroll | `payroll_pay_items`, `payroll_pay_item_classifications`, `payroll_statutory_rule_sets`, `payroll_statutory_rule_rows`, `payroll_employer_statutory_profiles`, `payroll_employee_statutory_profiles`, `payroll_pdf_artifacts` | `people_payroll_pay_items`, `people_payroll_pay_item_classifications`, `people_payroll_statutory_rule_sets`, `people_payroll_statutory_rule_rows`, `people_payroll_employer_statutory_profiles`, `people_payroll_employee_statutory_profiles`, `people_payroll_pdf_artifacts` |
+| Payroll | `payroll_pending_contributions` (created Phase 1) | `people_payroll_pending_contributions` |
+| Claim | `claim_categories`, `claim_types`, `claim_policies`, `claim_policy_bands`, `claim_contexts`, `claim_assignments`, `claim_assignment_lines`, `claim_requests`, `claim_lines`, `claim_entitlement_usage_entries`, `claim_request_audit_events` | `people_claim_*` (same suffixes) |
+| Leave | `leave_types`, `leave_entitlement_policies`, `leave_request_policies`, `leave_assignments`, `leave_balance_ledger_entries`, `leave_requests`, `leave_request_*`, etc. | `people_leave_*` |
+| Attendance | `attendance_shift_templates`, `attendance_policy_groups`, `attendance_roster_patterns`, `attendance_roster_assignments`, `attendance_days`, `attendance_geofences`, `attendance_geofence_groups`, `attendance_clock_events`, `attendance_overtime_requests`, `attendance_absence_batches`, `attendance_absence_batch_entries` | `people_attendance_*` |
+| Attendance | `attendance_payroll_handoffs` | **Deleted in Phase 3, not renamed.** |
+
+**Migration filename convention for multi-table migrations:** when a single migration file creates several related tables for one module (the existing pattern), the entity slot in the filename is `core`. Example renames:
+
+- `0320_01_06_000000_create_payroll_core_tables.php` → `0320_03_01_000000_create_people_payroll_core_tables.php`
+- `0320_01_12_000000_create_claim_core_tables.php` → `0320_02_03_000000_create_people_claim_core_tables.php`
+- The new pending-contributions migration (single-table) becomes `0320_03_01_000006_create_people_payroll_pending_contributions_table.php`.
+
+**Sites to update**
+
+- [ ] Every migration's `Schema::create('x')`, `registerTable('x')`, and `constrained('x')` calls.
+- [ ] Every model's `protected $table = 'x'` property.
+- [ ] `assertDatabaseHas('x', …)` calls in feature/unit tests.
+- [ ] `DB::table('x')` and `DB::statement` / `DB::select` raw references in seeders, services, and reports.
+- [ ] Documentation samples in plans 07/08/09 if they cite table names literally.
+
+**Verification**
+
+- [ ] Run `migrate:fresh --dev --seed`; verify all tables created in the new order and seeders load cleanly.
+- [ ] Run the full test suite; fix any registry-assertion failures (e.g. `PayrollCoreTest` line 1442 expecting `module_name = 'Payroll'` on the registered table row).
+- [ ] Single atomic commit. Branch left clean for Phase 3.
+
+### Phase 3 — Rewrite Attendance writer; delete `attendance_payroll_handoffs`
+
+- [ ] Edit the Attendance core migration (now `0320_02_05_000000_*`) to remove `attendance_payroll_handoffs` from `up()` and its entry from `down()`.
+- [ ] Delete `app/Modules/People/Attendance/Models/AttendancePayrollHandoff.php`.
+- [ ] Rewrite `AttendanceOvertimeService::queuePayrollHandoff` to construct a `PayrollContributionPayload` and call `PayrollContributionIntake::ingest`. Set `source_type = 'attendance_overtime_request'`.
+- [ ] Remove imports of `PayrollInput`, `PayrollRun`, `PayrollRunParticipant` from Attendance.
+- [ ] Update or remove the `AttendanceCoreTest` overtime test ("approves overtime and queues one neutral payroll input") to assert against `PayrollPendingContribution` + `PayrollInput` instead of `AttendancePayrollHandoff`.
+- [ ] Update plan 09 to record the new write path and remove references to the retired table.
+
+### Phase 4 — Rewrite Claim writer
+
+- [ ] Rewrite `ClaimPayrollHandoffService::queueApprovedRequest` body to loop over approved payroll-eligible claim lines, build payloads, and call `PayrollContributionIntake::ingest`. Set `source_type = 'claim_line'`, `source_id = claim_line.id`, `pay_item_code` from the claim type snapshot.
+- [ ] Wire Claim cancel/withdraw/adjust paths to call `PayrollContributionIntake::reverse` with the same composite key.
 - [ ] Replace direct `payroll_inputs` queries in Claim Operations views with `PayrollContributionStatus`.
-- [ ] Delete Payroll model imports from Claim.
-- [ ] Update plan 08's open guardrails (duplicate handoff, locked-period correction) to mark them resolved here.
+- [ ] Delete `PayrollInput`/`PayrollRun`/`PayrollRunParticipant` imports from Claim.
+- [ ] Update plan 08's open guardrails (duplicate handoff, locked-period correction, stale-policy approval) to mark them resolved here.
 
-### Phase 4 — Port Leave (handoff and encashment)
+### Phase 5 — Rewrite Leave writers (handoff + encashment)
 
-- [ ] Port `LeavePayrollHandoffService` to use intake.
-- [ ] Port `LeaveEncashmentService` to use intake. This is the writer Copilot caught and is not optional.
-- [ ] Audit `LeaveBalanceLedgerService` for any indirect Payroll writes; route them through intake if found.
+- [ ] Rewrite `LeavePayrollHandoffService` to use intake. Set `source_type = 'leave_request'`.
+- [ ] Rewrite `LeaveEncashmentService` to use intake. Set `source_type = 'leave_encashment'`. Caught by Copilot's review; this is not optional.
+- [ ] Audit `LeaveBalanceLedgerService` for any indirect Payroll writes; route through intake if any are found.
 - [ ] Delete Payroll model imports from Leave.
 - [ ] Update plan 07 to record the new boundary.
 
-### Phase 5 — Port Attendance and retire `attendance_payroll_handoffs`
+### Phase 6 — Architectural lock-in
 
-- [ ] Port `AttendanceOvertimeService` to use intake.
-- [ ] Generalize the `attendance_payroll_handoffs` schema as `payroll_pending_contributions` (already created in Phase 1). Data-migrate any non-empty rows from the old table.
-- [ ] Drop `attendance_payroll_handoffs` table and `AttendancePayrollHandoff` model.
-- [ ] Ensure Attendance period-level handoff (when it lands) is implemented against intake from day one; coordinate with plan 09.
-- [ ] Delete Payroll model imports from Attendance.
+- [ ] Add an automated test (PHPUnit) that scans `app/Modules/People/{Leave,Claim,Attendance}/` and fails if any file imports `PayrollInput`, `PayrollRun`, or `PayrollRunParticipant`. Only `PayrollContributionPayload`, `PayrollContributionIntake`, `PayrollContributionStatus`, `PayrollContributionOutcome`, and `PayrollContributionState` are allowed from Payroll.
+- [ ] Update plan 02 (Payroll Malaysia top-level design) to record that producer ingestion is Payroll-owned.
+- [ ] Cross-link the contract from `docs/architecture/` so future producers (commission, bonus, expense report) follow it.
 
-### Phase 6 — Cleanup and lock-in
+### Phase 7 — Hardening (post-rewrite)
 
-- [ ] Delete now-unused producer handoff services.
-- [ ] Add an architectural test (PHPUnit + reflection or a CI grep) that fails if any file under `app/Modules/People/{Claim,Leave,Attendance}/` imports `PayrollInput`, `PayrollRun`, or `PayrollRunParticipant`.
-- [ ] Document the contract in `docs/architecture/` so future producers (commission, bonus, expense) follow it.
-- [ ] Update plan 02 (Payroll Malaysia top-level design) to record that producer ingestion is now Payroll-owned.
-- [ ] Optional: introduce a Payroll-owned event class wrapping the payload, as the foundation for any future async/queued intake. Do not ship without a concrete use case.
+- [ ] Concurrent-insert test in a driver that supports real locking; verify exactly one `payroll_pending_contributions` row under two parallel ingests of the same payload.
+- [ ] Pending materializer: on `PayrollRun` creation or `open()`, scan `payroll_pending_contributions` with state=`pending` whose `period_anchor` falls in the new run and materialize them. Also expose a scheduled command (`payroll:materialize-pending`) for safety.
+- [ ] Optional: Payroll-owned event class wrapping the payload as a foundation for any future async/queued intake. Do not ship without a concrete async use case.
 
 ## Open Research Before Implementation
 

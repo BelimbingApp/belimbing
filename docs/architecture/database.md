@@ -148,23 +148,36 @@ This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to preven
 
 ### People
 
-| Prefix | Module | Dependencies |
-|--------|--------|--------------|
-| `0320_01_01_*` | Settings | Company, Employee, User |
-| `0320_01_03_*` | Employee | Company, Employee, User, Settings |
-| `0320_01_06_*` | Payroll | Company, Employee, User, Settings |
-| `0320_01_09_*` | Leave | Company, Employee, User, Settings, Payroll, Workflow |
-| `0320_01_12_*` | Claim | Company, Employee, User, Settings, Payroll, Workflow |
-| `0320_01_15_*` | Attendance | Company, Employee, User, Settings, Payroll, Workflow |
-| `0320_01_18_*` | Recruitment | Company, Employee, User, Settings, Workflow |
-| `0320_01_21_*` | Onboarding | Company, Employee, User, Settings, Recruitment, Workflow |
-| `0320_01_24_*` | Performance | Company, Employee, User, Settings, Workflow |
-| `0320_01_27_*` | Training | Company, Employee, User, Settings |
-| `0320_01_30_*` | Disciplinary | Company, Employee, User, Settings, Workflow |
-| `0320_01_33_*` | Self-Service | Company, Employee, User, Settings, Payroll, Leave, Claim, Attendance |
-| `0320_01_36_*` | Report | Company, Employee, User, Settings, Payroll, Leave, Claim, Attendance, Recruitment, Onboarding, Performance, Training, Disciplinary |
+People modules are grouped into three semantic tiers using the `MM` component of the prefix. The tier expresses the direction of dependency between People modules; it is not a separate layer in the Base/Core/Layer1 sense.
 
-The registry table is the dependency graph. Do not duplicate module dependencies in a separate diagram; update the table when ownership, prefix, or dependency order changes.
+| Tier (`MM`) | Meaning | Migration order |
+|-------------|---------|-----------------|
+| `_01_*` | **Foundation** — referenced by every other People module (Settings, Employee). | First within People. |
+| `_02_*` | **Operational producers** — workflows that generate operational facts (leave taken, claim approved, attendance recorded, hire confirmed, course completed, etc.). Producers do not depend on consumer modules. | After foundation, before consumers. |
+| `_03_*` | **Consumers** — modules that read producer facts and synthesize derived state (payroll, self-service, reports). Consumers must not be referenced by producers via FK. | Last within People. |
+
+When introducing a new People module, choose the tier first based on dependency direction, then pick the next available `DD` slot within that tier.
+
+| Prefix | Module | Tier | Dependencies |
+|--------|--------|------|--------------|
+| `0320_01_01_*` | Settings | Foundation | Company, Employee, User |
+| `0320_01_03_*` | Employee | Foundation | Company, Employee, User, Settings |
+| `0320_02_01_*` | Leave | Producer | Company, Employee, User, Settings, Workflow |
+| `0320_02_03_*` | Claim | Producer | Company, Employee, User, Settings, Workflow |
+| `0320_02_05_*` | Attendance | Producer | Company, Employee, User, Settings, Workflow |
+| `0320_02_07_*` | Recruitment | Producer | Company, Employee, User, Settings, Workflow |
+| `0320_02_09_*` | Onboarding | Producer | Company, Employee, User, Settings, Recruitment, Workflow |
+| `0320_02_11_*` | Performance | Producer | Company, Employee, User, Settings, Workflow |
+| `0320_02_13_*` | Training | Producer | Company, Employee, User, Settings |
+| `0320_02_15_*` | Disciplinary | Producer | Company, Employee, User, Settings, Workflow |
+| `0320_03_01_*` | Payroll | Consumer | Company, Employee, User, Settings, **Leave, Claim, Attendance**, Workflow |
+| `0320_03_03_*` | Report | Consumer | Company, Employee, User, Settings, Payroll, Leave, Claim, Attendance, Recruitment, Onboarding, Performance, Training, Disciplinary |
+
+Self-service is **not** a module in BLB. Every People module exposes its own employee, manager, HR/Finance, and admin surfaces inside one Livewire workbench, gated by capabilities. The iPayroll "ESS/MSS" portal pattern was a workaround for admin-first products; BLB is authz-gated from the start, so adding a user and granting the right capability is the self-service mechanism.
+
+Payroll is a consumer of Leave/Claim/Attendance facts via the Payroll-owned `PayrollContributionIntake` contract (see `docs/plans/people/10_payroll-intake-dependency-inversion.md`). Producer modules must not import Payroll models; only Payroll's intake DTO and status query are part of the public contract.
+
+The registry table is the dependency graph. Do not duplicate module dependencies in a separate diagram; update the table when ownership, prefix, dependency direction, or tier assignment changes.
 
 ### Extensions (2026+)
 
