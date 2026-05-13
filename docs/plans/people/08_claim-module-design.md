@@ -1,6 +1,6 @@
 # people/08_claim-module-design
 
-**Status:** Draft — SBG claim reference and Oracle review bridged
+**Status:** In Progress — Claim Core skeleton and first employee submission/approval slice started
 **Last Updated:** 2026-05-13
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — Claims is a first-class People workflow with entitlements, attachments, approval limits, payroll reimbursement integration, and reporting.
@@ -225,33 +225,34 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 
 ### Phase 1 — Claim Core skeleton
 
-- [ ] Create the `app/Modules/People/Claim/` module shell with config, authz, menu, routes, service provider if needed, Livewire workbench entry point, and migration placement following the People module pattern.
-- [ ] Create claim category and claim type catalog storage with neutral codes, category grouping, receipt rules, input unit/calculation mode, provider requirement, payroll handoff eligibility, default pay item code, DR/CR accounting mapping keys, alternative approval route, and sort order.
-- [ ] Create effective-dated claim policy storage for item mode (`single_value`, `range`, `service_year`), logical threshold rows, rate/rate type, per-day/unit cap, monthly cap, yearly cap, service-year bands, eligibility, receipt thresholds, provider restrictions, mileage/rate rules, currency conversion, and pending-encumbrance behavior.
-- [ ] Create claim assignment storage binding employee cohorts to `(claim type, claim policy)` rows with active status, hidden-from-application, combine tag/use-combine, sort order, and source aliases.
-- [ ] Create optional shallow claim context/client reference storage with code, label, active status, max claim limit, source aliases, and a path to migrate it later if a richer customer/project module emerges.
-- [ ] Create claim request, claim line, shared attachment reference, audit event, lifecycle state, approval route snapshot, and entitlement usage tables with immutable history after submission.
-- [ ] Store requested, approved, reimbursed/settled, and adjustment-reason fields separately on claim lines.
-- [ ] Add admin/settings tabs for claim types and policies, consuming People Settings references for cohorts, providers, organization units, cost centers, and job grades.
+- [x] Create the `app/Modules/People/Claim/` module shell with config, authz, menu, routes, service provider if needed, Livewire workbench entry point, and migration placement following the People module pattern. {amp/gpt-5.1-codex}
+- [x] Create claim category and claim type catalog storage with neutral codes, category grouping, receipt rules, input unit/calculation mode, provider requirement, payroll handoff eligibility, default pay item code, DR/CR accounting mapping keys, alternative approval route, and sort order. {amp/gpt-5.1-codex}
+- [x] Create effective-dated claim policy storage for item mode (`single_value`, `range`, `service_year`), logical threshold rows, rate/rate type, per-day/unit cap, monthly cap, yearly cap, service-year bands, eligibility, receipt thresholds, provider restrictions, mileage/rate rules, currency conversion, and pending-encumbrance behavior. {amp/gpt-5.1-codex}
+- [x] Create claim assignment storage binding employee cohorts to `(claim type, claim policy)` rows with active status, hidden-from-application, combine tag/use-combine, sort order, and source aliases. {amp/gpt-5.1-codex}
+- [x] Create optional shallow claim context/client reference storage with code, label, active status, max claim limit, source aliases, and a path to migrate it later if a richer customer/project module emerges. {amp/gpt-5.1-codex}
+- [x] Create claim request, claim line, audit event, lifecycle state, approval route snapshot, and entitlement usage tables with immutable history after submission. {amp/gpt-5.1-codex}
+- [x] Store requested, approved, reimbursed/settled, and adjustment-reason fields separately on claim lines. {amp/gpt-5.1-codex}
+- [x] Add admin/setup tabs for claim categories, types, policies, assignments, and contexts. People Settings reference selectors for cohorts/providers remain a later enrichment after the reference mapping is locked. {amp/gpt-5.1-codex}
+- [ ] Add the shared attachment reference once the reusable document/attachment service boundary is selected.
 
 ### Phase 2 — Employee submission and validation
 
-- [ ] Build employee-scoped claim submission: draft, add/edit/remove lines, upload receipt attachments through shared attachment infrastructure, validate required receipts, submit, withdraw, and view history.
+- [~] Build employee-scoped claim submission: first single-line submit/withdraw/history path is in place, with receipt attachment-count validation as a temporary bridge until shared attachment infrastructure is selected. Draft editing, multi-line add/edit/remove, and real uploads remain open. {amp/gpt-5.1-codex}
 - [ ] Support on-behalf claim creation with actor, reason, employee notification, and audit event.
 - [ ] Implement policy evaluation for caps, eligibility, receipt thresholds, provider restrictions, service-year bands, and pending claim encumbrance.
 - [ ] Add duplicate-risk checks for receipt number/date/amount/provider and same employee/type/amount/date combinations, surfacing warnings before approval.
-- [ ] Enforce claim assignment visibility: hidden rows are unavailable to normal employee submission but remain available to authorized admin/import/payroll correction flows.
+- [~] Enforce claim assignment visibility: hidden rows are unavailable to normal employee submission in the first UI/service path; authorized admin/import/payroll correction flows remain open. {amp/gpt-5.1-codex}
 - [ ] Enforce combined-cap utilization when assignment rows share a combine tag and use-combine is active.
-- [ ] Enforce strictest-line route resolution and block mixed-line requests with incompatible approval profiles.
+- [~] Enforce strictest-line route resolution and block mixed-line requests with incompatible approval profiles: first single-line submissions snapshot the selected line/profile; multi-line incompatibility checks remain open. {amp/gpt-5.1-codex}
 - [ ] Add multi-currency receipt entry if SBG confirms a day-one need; otherwise keep the schema ready but hide the UI.
 
 ### Phase 3 — Approval routing and operations
 
 - [ ] Route submitted claims through Workflow using Claim-selected approval profile inputs; Workflow owns approver graph, thresholds, delegation, and escalation execution.
-- [ ] Build manager approval tabs: pending queue, line detail, receipt review, approve with reduced amount/reason, reject, request more info, and escalation visibility.
+- [~] Build manager approval tabs: first approve/reject actions and decision reason are available from the request list; pending queue separation, line detail, receipt review, reduced approval, more-info, and escalation visibility remain open. {amp/gpt-5.1-codex}
 - [ ] Build HR/Finance operations tabs: all-claims search, status filters, policy exception queue, duplicate-risk queue, and payroll handoff readiness.
 - [ ] Emit notifications for submission, approval, rejection, more-info request, withdrawal, cancellation, payroll queued, and reimbursement completion through `PeopleNotificationDeliveryLog`.
-- [ ] Record audit events for every state transition and every approval-limit/routing decision.
+- [~] Record audit events for every state transition and every approval-limit/routing decision: submit, approve, reject, and withdraw now write audit events; more-info, cancellation, payroll, reimbursement, and routing-decision audits remain open. {amp/gpt-5.1-codex}
 
 ### Phase 4 — Payroll, advance, and accounting handoff
 
