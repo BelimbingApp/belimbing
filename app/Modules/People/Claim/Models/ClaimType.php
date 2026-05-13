@@ -6,6 +6,7 @@ use App\Base\Database\Concerns\BelongsToCompany;
 use App\Base\Database\Concerns\HasActiveInactiveStatus;
 use App\Base\Database\Concerns\TracksExternalSource;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ClaimType extends Model
@@ -15,12 +16,17 @@ class ClaimType extends Model
     use TracksExternalSource;
 
     public const UNIT_AMOUNT = 'amount';
+
     public const UNIT_DISTANCE = 'distance';
+
     public const UNIT_QUANTITY = 'quantity';
+
     public const UNIT_DAYS = 'days';
 
     public const RECEIPT_NEVER = 'never';
+
     public const RECEIPT_ABOVE_AMOUNT = 'above_amount';
+
     public const RECEIPT_ALWAYS = 'always';
 
     protected $table = 'people_claim_types';

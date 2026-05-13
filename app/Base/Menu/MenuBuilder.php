@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Menu;
 
 use Illuminate\Support\Collection;
@@ -100,12 +101,13 @@ class MenuBuilder
 
             $node['is_active'] = $this->shouldMarkNodeActive($node, $currentRoute, $hasExactMatch);
         }
+        unset($node);
 
         return $tree;
     }
 
     /**
-     * @param  array<int, array{is_active: bool, has_active_child: bool}>  $children
+     * @param  array<int, array{item: MenuItem, is_active: bool, has_active_child: bool, children: array}>  $children
      */
     protected function hasActiveDescendant(array $children): bool
     {
