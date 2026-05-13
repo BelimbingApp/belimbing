@@ -1,11 +1,15 @@
 <?php
 
+use App\Base\Pdf\Exceptions\PdfRenderException;
 use App\Base\Pdf\Services\PdfRenderer;
 use App\Base\Pdf\Services\SignedRenderTokenStore;
 use App\Modules\Core\AI\Services\Browser\PlaywrightRunner;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
+
+const SPIKE_EMPLOYER_NAME = 'Acme Sdn Bhd';
+const PAYSLIP_TEMPLATE_VERSION = 'payslip@v1';
 
 beforeEach(function () {
     Storage::fake('local');
@@ -21,12 +25,26 @@ it('renders a view via the signed URL and consumes the token', function () {
     $tokenId = $store->issue([
         'view' => 'pdf.payroll.payslip',
         'data' => [
-            'employer' => ['name' => 'Acme Sdn Bhd'],
-            'employee' => ['name' => 'Test Employee', 'identifier' => 'EMP-001'],
-            'payslip' => ['period' => '2026-01', 'run_id' => 42],
-            'earnings' => [['label' => 'Base salary', 'amount' => 5000]],
-            'deductions' => [['label' => 'EPF (employee)', 'amount' => 550]],
-            'totals' => ['gross' => 5000, 'deductions' => 550, 'net' => 4450],
+            'employer' => ['name' => SPIKE_EMPLOYER_NAME],
+            'payslip' => [
+                'employee' => ['name' => 'Test Employee', 'number' => 'EMP-001'],
+                'period' => [
+                    'code' => '2026-01',
+                    'name' => 'January 2026',
+                    'starts_on' => '2026-01-01',
+                    'ends_on' => '2026-01-31',
+                    'pay_date' => '2026-02-01',
+                ],
+                'sections' => [
+                    'earnings' => [['label' => 'Base salary', 'amount' => 5000]],
+                    'employee_deductions' => [['label' => 'EPF (employee)', 'amount' => 550]],
+                ],
+                'summary' => [
+                    'gross_pay' => 5000,
+                    'total_deductions' => 550,
+                    'net_pay' => 4450,
+                ],
+            ],
         ],
         'user_id' => $user->id,
         'template_version' => 'spike',
@@ -37,9 +55,9 @@ it('renders a view via the signed URL and consumes the token', function () {
 
     $first = $this->get($signedUrl);
     $first->assertOk();
-    $first->assertSee('Acme Sdn Bhd');
+    $first->assertSee(SPIKE_EMPLOYER_NAME);
     $first->assertSee('Test Employee');
-    $first->assertSee('Rendered as user #'.$user->id);
+    $first->assertSee('EMP-001');
 
     $second = $this->get($signedUrl);
     $second->assertNotFound();
@@ -74,6 +92,7 @@ it('writes a PdfArtifact to the configured disk and returns lineage metadata', f
             expect($args['url'])->toContain('/pdf/render/');
             expect($args['url'])->toContain('signature=');
             file_put_contents($args['output_path'], $fakePdfBytes);
+
             return true;
         }))
         ->andReturn(['ok' => true, 'action' => 'pdf']);
@@ -84,19 +103,19 @@ it('writes a PdfArtifact to the configured disk and returns lineage metadata', f
     $artifact = $renderer->renderView(
         view: 'pdf.payroll.payslip',
         data: [
-            'employer' => ['name' => 'Acme Sdn Bhd'],
+            'employer' => ['name' => SPIKE_EMPLOYER_NAME],
             'payslip' => ['period' => '2026-01', 'run_id' => 42],
             'totals' => ['gross' => 5000, 'deductions' => 550, 'net' => 4450],
         ],
         actor: $user,
-        templateVersion: 'payslip@v1',
+        templateVersion: PAYSLIP_TEMPLATE_VERSION,
         dataVersion: 'payroll_run_id=42',
     );
 
     expect($artifact->disk)->toBe('local');
     expect($artifact->path)->toStartWith('pdf-artifacts/');
     expect($artifact->path)->toEndWith('.pdf');
-    expect($artifact->templateVersion)->toBe('payslip@v1');
+    expect($artifact->templateVersion)->toBe(PAYSLIP_TEMPLATE_VERSION);
     expect($artifact->dataVersion)->toBe('payroll_run_id=42');
     expect($artifact->bytes)->toBe(strlen($fakePdfBytes));
     expect($artifact->sha256)->toBe(hash('sha256', $fakePdfBytes));
@@ -117,6 +136,7 @@ it('renders a Blade view inline through page.setContent without a signed URL', f
             expect($args)->not->toHaveKey('url');
             expect($args['html'])->toContain('Inline Employer');
             file_put_contents($args['output_path'], $fakePdfBytes);
+
             return true;
         }))
         ->andReturn(['ok' => true, 'action' => 'pdf']);
@@ -129,14 +149,14 @@ it('renders a Blade view inline through page.setContent without a signed URL', f
             'employer' => ['name' => 'Inline Employer'],
             'totals' => ['gross' => 1000, 'deductions' => 0, 'net' => 1000],
         ],
-        templateVersion: 'payslip@v1',
+        templateVersion: PAYSLIP_TEMPLATE_VERSION,
         dataVersion: 'inline-fixture',
         producedBy: 42,
     );
 
     expect($artifact->disk)->toBe('local');
     expect($artifact->path)->toEndWith('.pdf');
-    expect($artifact->templateVersion)->toBe('payslip@v1');
+    expect($artifact->templateVersion)->toBe(PAYSLIP_TEMPLATE_VERSION);
     expect($artifact->dataVersion)->toBe('inline-fixture');
     expect($artifact->producedBy)->toBe(42);
     expect($artifact->sha256)->toBe(hash('sha256', $fakePdfBytes));
@@ -153,5 +173,5 @@ it('throws PdfRenderException when the runner reports failure', function () {
     $this->app->instance(PlaywrightRunner::class, $runner);
 
     expect(fn () => app(PdfRenderer::class)->renderView('pdf.payroll.payslip', []))
-        ->toThrow(\App\Base\Pdf\Exceptions\PdfRenderException::class, 'chromium crashed');
+        ->toThrow(PdfRenderException::class, 'chromium crashed');
 });
