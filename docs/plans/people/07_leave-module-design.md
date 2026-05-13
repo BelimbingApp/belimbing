@@ -38,7 +38,7 @@ A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size 
 | Work calendar integration | Resolve working days, public holidays (gazetted federal + state-specific), and calendar exceptions for entitlement proration, days-deducted calculation, and overlap checks. Consumes `PeopleCalendarException` and a country-pack public-holiday source. | People Settings + country pack |
 | Replacement & carry-forward | Replacement leave earned for working a holiday with expiry; year-end carry-forward with cap and expiry; optional burn-leave conversion; encashment hooks for unused balances. | Leave Core; SBG cap/expiry numbers in private pack |
 | Payroll handoff | Unpaid leave days and any encashment lines surface as neutral `PayrollInput` rows for the next draft run; the Malaysia country pack classifies them for EPF/SOCSO/EIS/PCB treatment. | Leave Core writes inputs; Payroll/country pack classifies |
-| Self-service surfaces | Employee: apply, view balance, view team calendar, withdraw, attach documents. Manager: approve/reject, see subordinate balances, see overlap risk. | People Self-Service consuming Leave Core read/write APIs |
+| Audience-scoped surfaces | Same Leave module exposes admin (`people.leave.manage`), approver (`people.leave.approve`), and employee (`people.leave.view`, scoped to `auth()->user()->employee_id`) screens in one Livewire workbench. Self-service is an authorization scope, not a separate module. | Leave module |
 | Notifications | Submitted, approved, rejected, cancelled, balance-low, expiry-approaching, year-planner published. Routes through `PeopleNotificationDeliveryLog` rather than a Leave-private channel. | Leave Core emits; People Settings persists log |
 | Reports & documents | Balance statement, leave history, year planner (per employee, team, company), team calendar PDF, statutory leave-utilisation summary, leave-on-behalf audit. PDFs go through `RenderPdfJob`. | Leave Core data builders + Blade templates under `resources/core/views/pdf/leave/` |
 
@@ -208,10 +208,13 @@ The HR2000/iPayroll exports are evidence, not vocabulary. BLB should use names t
 - [x] Honour `no_cross_month_split` policy when requests straddle a month boundary so payroll-period attribution is unambiguous. {copilot/gpt-5.4}
 - [ ] Reconcile balance ledger against Payroll inputs as part of payroll lock/audit report.
 
-### Phase 6 — Self-service and reports
+### Phase 6 — Employee/manager surfaces and reports
 
-- [ ] Employee self-service: apply leave, view balance, view team calendar, withdraw, upload attachments.
-- [ ] Manager self-service: approve/reject queue, subordinate balances, overlap-risk view.
+**Note:** BLB has no separate Self-Service module. Each People module exposes admin, approver, and employee screens in the same Livewire workbench, gated by capability (`people.leave.manage` / `.approve` / `.view`) and scoped to `auth()->user()->employee_id` for employee views. "Self-service" here means audience-scoped tabs in `people.leave.index`, not a parallel UI module.
+
+
+- [ ] Employee tabs in `people.leave.index` (scoped to `auth()->user()->employee_id`): apply leave, my balance, my history, withdraw, upload attachments.
+- [ ] Manager tabs in the same view (gated by `people.leave.approve`): approve/reject queue, subordinate balances, overlap-risk view.
 - [ ] Reports as `RenderPdfJob` outputs under `resources/core/views/pdf/leave/`: balance statement, leave history, year planner, team calendar, leave-utilisation summary, on-behalf audit.
 - [ ] CSV exports for balance, history, and utilisation through the existing operational-CSV pattern.
 - [ ] Leave Application List export (HR2000-parity column set: Reference No, Applicant, Leave Type, From Date, To Date, Days, Applied On, Status, Approver, Approved On, Attachment, Remarks) in CSV and PDF.
