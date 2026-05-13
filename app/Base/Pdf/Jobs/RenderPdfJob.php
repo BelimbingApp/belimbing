@@ -41,6 +41,7 @@ class RenderPdfJob implements ShouldQueue
 
     public function handle(PdfRenderer $renderer, PdfPostProcessor $postProcessor): void
     {
+<<<<<<< Updated upstream
         $actor = $this->actorUserId !== null ? User::query()->find($this->actorUserId) : null;
 
         $artifact = $this->renderMode === self::MODE_VIEW
@@ -48,16 +49,25 @@ class RenderPdfJob implements ShouldQueue
                 view: $this->view,
                 data: $this->data,
                 actor: $actor,
+=======
+        if ($this->renderMode === self::MODE_VIEW) {
+            $artifact = $renderer->renderView(
+                view: $this->view,
+                data: $this->data,
+                actor: $this->actorUserId !== null ? User::query()->find($this->actorUserId) : null,
+>>>>>>> Stashed changes
                 templateVersion: $this->templateVersion,
                 dataVersion: $this->dataVersion,
-            )
-            : $renderer->renderInline(
+            );
+        } else {
+            $artifact = $renderer->renderInline(
                 view: $this->view,
                 data: $this->data,
                 templateVersion: $this->templateVersion,
                 dataVersion: $this->dataVersion,
                 producedBy: $this->actorUserId,
             );
+        }
 
         if ($this->password !== null && $this->password !== '') {
             $artifact = $postProcessor->protectWithPassword($artifact, $this->password);
