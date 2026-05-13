@@ -111,16 +111,28 @@
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Employee') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Requested') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Risk') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border-default bg-surface-card">
                             @forelse ($recentRequests as $request)
+                                @php($duplicateRisks = $request->metadata['duplicate_risks'] ?? [])
                                 <tr wire:key="claim-request-{{ $request->id }}">
                                     <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink">{{ $request->reference_number ?? __('Draft #:id', ['id' => $request->id]) }}</td>
                                     <td class="px-table-cell-x py-table-cell-y text-ink">{{ $request->employee?->full_name ?? __('Employee #:id', ['id' => $request->employee_id]) }}</td>
                                     <td class="px-table-cell-x py-table-cell-y text-right tabular-nums text-ink">{{ $request->currency }} {{ number_format((float) $request->requested_amount, 2) }}</td>
                                     <td class="px-table-cell-x py-table-cell-y"><x-ui.badge :variant="$this->statusVariant($request->status)">{{ __(str_replace('_', ' ', ucfirst($request->status))) }}</x-ui.badge></td>
+                                    <td class="px-table-cell-x py-table-cell-y">
+                                        @if ($duplicateRisks !== [])
+                                            <div class="space-y-1">
+                                                <x-ui.badge variant="warning">{{ trans_choice(':count warning|:count warnings', count($duplicateRisks), ['count' => count($duplicateRisks)]) }}</x-ui.badge>
+                                                <div class="max-w-xs text-xs text-muted">{{ __($duplicateRisks[0]['message'] ?? 'Duplicate risk detected.') }}</div>
+                                            </div>
+                                        @else
+                                            <span class="text-xs text-muted">{{ __('None') }}</span>
+                                        @endif
+                                    </td>
                                     <td class="px-table-cell-x py-table-cell-y">
                                         <div class="flex flex-wrap justify-end gap-2">
                                             @if ($request->employee_id === $currentEmployeeId && in_array($request->status, [\App\Modules\People\Claim\Models\ClaimRequest::STATUS_DRAFT, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_SUBMITTED, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_NEEDS_MORE_INFO], true))
@@ -135,7 +147,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No claim requests yet.') }}</td>
+                                    <td colspan="6" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No claim requests yet.') }}</td>
                                 </tr>
                             @endforelse
                         </tbody>

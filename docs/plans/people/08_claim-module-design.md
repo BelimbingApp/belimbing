@@ -239,8 +239,8 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 
 - [~] Build employee-scoped claim submission: first single-line submit/withdraw/history path is in place, with receipt attachment-count validation as a temporary bridge until shared attachment infrastructure is selected. Draft editing, multi-line add/edit/remove, and real uploads remain open. {amp/gpt-5.1-codex}
 - [ ] Support on-behalf claim creation with actor, reason, employee notification, and audit event.
-- [ ] Implement policy evaluation for caps, eligibility, receipt thresholds, provider restrictions, service-year bands, and pending claim encumbrance.
-- [ ] Add duplicate-risk checks for receipt number/date/amount/provider and same employee/type/amount/date combinations, surfacing warnings before approval.
+- [~] Implement policy evaluation for caps, eligibility, receipt thresholds, provider restrictions, service-year bands, and pending claim encumbrance: first submission path enforces receipt/provider rules plus per-claim/month/year caps from matched policy bands; eligibility predicates, service-year bands, and combined-cap encumbrance remain open. {amp/gpt-5.1-codex}
+- [~] Add duplicate-risk checks for receipt number/date/amount/provider and same employee/type/amount/date combinations, surfacing warnings before approval: first duplicate-risk warnings are stored on request/line metadata and surfaced in the request list. {amp/gpt-5.1-codex}
 - [~] Enforce claim assignment visibility: hidden rows are unavailable to normal employee submission in the first UI/service path; authorized admin/import/payroll correction flows remain open. {amp/gpt-5.1-codex}
 - [ ] Enforce combined-cap utilization when assignment rows share a combine tag and use-combine is active.
 - [~] Enforce strictest-line route resolution and block mixed-line requests with incompatible approval profiles: first single-line submissions snapshot the selected line/profile; multi-line incompatibility checks remain open. {amp/gpt-5.1-codex}
