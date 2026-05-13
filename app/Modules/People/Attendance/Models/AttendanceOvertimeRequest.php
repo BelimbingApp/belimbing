@@ -2,15 +2,13 @@
 
 namespace App\Modules\People\Attendance\Models;
 
-use App\Base\Database\Concerns\BelongsToCompany;
-use App\Base\Database\Concerns\BelongsToEmployee;
+use App\Base\Database\Concerns\BelongsToCompanyAndEmployee;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AttendanceOvertimeRequest extends Model
 {
-    use BelongsToCompany;
-    use BelongsToEmployee;
+    use BelongsToCompanyAndEmployee;
 
     public const STATUS_DRAFT = 'draft';
 
@@ -31,8 +29,7 @@ class AttendanceOvertimeRequest extends Model
     protected $table = 'people_attendance_overtime_requests';
 
     protected $fillable = [
-        ...self::COMPANY_FILLABLE,
-        ...self::EMPLOYEE_FILLABLE,
+        ...self::COMPANY_EMPLOYEE_FILLABLE,
         'attendance_day_id',
         'request_mode',
         'status',

@@ -2,16 +2,14 @@
 
 namespace App\Modules\People\Attendance\Models;
 
-use App\Base\Database\Concerns\BelongsToCompany;
-use App\Base\Database\Concerns\BelongsToEmployee;
+use App\Base\Database\Concerns\BelongsToCompanyAndEmployee;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AttendanceDay extends Model
 {
-    use BelongsToCompany;
-    use BelongsToEmployee;
+    use BelongsToCompanyAndEmployee;
 
     public const STATUS_SCHEDULED = 'scheduled';
 
@@ -30,8 +28,7 @@ class AttendanceDay extends Model
     protected $table = 'people_attendance_days';
 
     protected $fillable = [
-        ...self::COMPANY_FILLABLE,
-        ...self::EMPLOYEE_FILLABLE,
+        ...self::COMPANY_EMPLOYEE_FILLABLE,
         'attendance_roster_assignment_id',
         'attendance_shift_template_id',
         'attendance_policy_group_id',

@@ -2,16 +2,14 @@
 
 namespace App\Modules\People\Claim\Models;
 
-use App\Base\Database\Concerns\BelongsToCompany;
-use App\Base\Database\Concerns\BelongsToEmployee;
+use App\Base\Database\Concerns\BelongsToCompanyAndEmployee;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ClaimRequest extends Model
 {
-    use BelongsToCompany;
-    use BelongsToEmployee;
+    use BelongsToCompanyAndEmployee;
 
     public const STATUS_DRAFT = 'draft';
     public const STATUS_SUBMITTED = 'submitted';
@@ -29,8 +27,7 @@ class ClaimRequest extends Model
 
     /** @var list<string> */
     protected $fillable = [
-        ...self::COMPANY_FILLABLE,
-        ...self::EMPLOYEE_FILLABLE,
+        ...self::COMPANY_EMPLOYEE_FILLABLE,
         'claim_assignment_id',
         'claim_context_id',
         'reference_number',

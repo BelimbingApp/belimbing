@@ -2,19 +2,13 @@
 
 namespace App\Modules\People\Claim\Models;
 
-use App\Base\Database\Concerns\BelongsToCompany;
-use App\Base\Database\Concerns\HasActiveInactiveStatus;
-use App\Base\Database\Concerns\HasEffectiveDateRange;
-use App\Base\Database\Concerns\TracksExternalSource;
+use App\Base\Database\Concerns\HasCompanyScopedExternalLifecycle;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ClaimPolicy extends Model
 {
-    use BelongsToCompany;
-    use HasActiveInactiveStatus;
-    use HasEffectiveDateRange;
-    use TracksExternalSource;
+    use HasCompanyScopedExternalLifecycle;
 
     public const MODE_SINGLE_VALUE = 'single_value';
     public const MODE_RANGE = 'range';
@@ -24,7 +18,7 @@ class ClaimPolicy extends Model
 
     /** @var list<string> */
     protected $fillable = [
-        ...self::COMPANY_FILLABLE,
+        ...self::COMPANY_SCOPED_EXTERNAL_LIFECYCLE_FILLABLE,
         'code',
         'name',
         'item_mode',
@@ -37,10 +31,8 @@ class ClaimPolicy extends Model
         'advance_rules',
         'approval_profile_key',
         'encumber_pending',
-        ...self::EFFECTIVE_DATE_RANGE_FILLABLE,
         'version',
         'status',
-        ...self::EXTERNAL_SOURCE_FILLABLE,
     ];
 
     /** @return array<string, string> */
@@ -54,9 +46,8 @@ class ClaimPolicy extends Model
             'currency_rules' => 'array',
             'advance_rules' => 'array',
             'encumber_pending' => 'bool',
-            ...self::EFFECTIVE_DATE_RANGE_CASTS,
+            ...self::COMPANY_SCOPED_EXTERNAL_LIFECYCLE_CASTS,
             'version' => 'integer',
-            ...self::EXTERNAL_SOURCE_CASTS,
         ];
     }
 

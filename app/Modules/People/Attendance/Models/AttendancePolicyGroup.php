@@ -2,24 +2,18 @@
 
 namespace App\Modules\People\Attendance\Models;
 
-use App\Base\Database\Concerns\BelongsToCompany;
-use App\Base\Database\Concerns\HasActiveInactiveStatus;
-use App\Base\Database\Concerns\HasEffectiveDateRange;
-use App\Base\Database\Concerns\TracksExternalSource;
+use App\Base\Database\Concerns\HasCompanyScopedExternalLifecycle;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AttendancePolicyGroup extends Model
 {
-    use BelongsToCompany;
-    use HasActiveInactiveStatus;
-    use HasEffectiveDateRange;
-    use TracksExternalSource;
+    use HasCompanyScopedExternalLifecycle;
 
     protected $table = 'people_attendance_policy_groups';
 
     protected $fillable = [
-        ...self::COMPANY_FILLABLE,
+        ...self::COMPANY_SCOPED_EXTERNAL_LIFECYCLE_FILLABLE,
         'code',
         'name',
         'cohort_predicate',
@@ -29,10 +23,8 @@ class AttendancePolicyGroup extends Model
         'overtime_export_rules',
         'lateness_export_rules',
         'payroll_defaults',
-        ...self::EFFECTIVE_DATE_RANGE_FILLABLE,
         'version',
         'status',
-        ...self::EXTERNAL_SOURCE_FILLABLE,
     ];
 
     protected function casts(): array
@@ -45,9 +37,8 @@ class AttendancePolicyGroup extends Model
             'overtime_export_rules' => 'array',
             'lateness_export_rules' => 'array',
             'payroll_defaults' => 'array',
-            ...self::EFFECTIVE_DATE_RANGE_CASTS,
+            ...self::COMPANY_SCOPED_EXTERNAL_LIFECYCLE_CASTS,
             'version' => 'integer',
-            ...self::EXTERNAL_SOURCE_CASTS,
         ];
     }
 

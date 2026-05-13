@@ -2,15 +2,13 @@
 
 namespace App\Modules\People\Attendance\Models;
 
-use App\Base\Database\Concerns\BelongsToCompany;
-use App\Base\Database\Concerns\BelongsToEmployee;
+use App\Base\Database\Concerns\BelongsToCompanyAndEmployee;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AttendanceClockEvent extends Model
 {
-    use BelongsToCompany;
-    use BelongsToEmployee;
+    use BelongsToCompanyAndEmployee;
 
     public const TYPE_IN = 'in';
 
@@ -31,8 +29,7 @@ class AttendanceClockEvent extends Model
     protected $table = 'people_attendance_clock_events';
 
     protected $fillable = [
-        ...self::COMPANY_FILLABLE,
-        ...self::EMPLOYEE_FILLABLE,
+        ...self::COMPANY_EMPLOYEE_FILLABLE,
         'attendance_day_id',
         'attendance_geofence_id',
         'attendance_geofence_group_id',
