@@ -131,7 +131,7 @@ Complex models use tabs to group related attributes within a page:
 ### D. Lara chat
 
 - **Component:** `<livewire:ai.chat />` (single instance; Alpine moves it between targets — see Shell Persistence).
-- **Trigger:** Status Bar Lara control when Lara is activated (`$dispatch('open-agent-chat')`), or `Ctrl+K` / `Cmd+K` to toggle. If Lara is not activated, the status bar links to setup instead.
+- **Trigger:** Status Bar Lara control when Lara is activated (`$dispatch('open-agent-chat')`), or `Ctrl+K` / `Cmd+K` to toggle. If , the status bar links to setup instead.
 - **Auth:** Targets and shortcuts apply to authenticated users only (`@auth` in layout).
 - **Persistent:** Conversation state is kept in the Livewire component while the shell layout stays mounted.
 

@@ -40,6 +40,15 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
             </x-slot>
         </x-ui.page-header>
 
+        @if (! $laraActivated)
+            <x-ui.alert variant="info">
+                <p>{{ __('Lara stays inactive until one connected provider has an active model available to Agents.') }}</p>
+                <p class="mt-2">
+                    {!! __('Connect a provider below and enable at least one model. If Lara still needs provisioning afterward, finish it on the :link page.', ['link' => '<a href="' . route('admin.setup.lara') . '" wire:navigate class="text-accent hover:underline">' . e(__('Lara')) . '</a>']) !!}
+                </p>
+            </x-ui.alert>
+        @endif
+
         {{-- ═══════════════════════════════════════════════════
              Section 1: Connected Providers (management)
              ═══════════════════════════════════════════════════ --}}

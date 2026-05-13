@@ -1,5 +1,10 @@
 @props(['title' => null])
 
+@php
+    $laraActivated = auth()->check()
+        && \App\Modules\Core\Employee\Models\Employee::laraActivationState() === true;
+@endphp
+
 <!DOCTYPE html>
 <html lang="{{ app(\App\Base\Locale\Contracts\LocaleContext::class)->forIntl() }}">
 <head>
@@ -24,6 +29,7 @@
         COLLAPSE_THRESHOLD: 80,
 
         {{-- Lara chat --}}
+        laraActivated: @js($laraActivated),
         laraChatOpen: (localStorage.getItem('agent-chat-1-open') ?? '0') === '1',
         laraChatMode: localStorage.getItem('agent-chat-1-mode') || 'overlay',
         laraChatFullscreen: (localStorage.getItem('agent-chat-1-fullscreen') ?? '0') === '1',
@@ -40,6 +46,13 @@
         initSidebar() {
             if (this.sidebarRail) {
                 this.sidebarWidth = this.RAIL_WIDTH;
+            }
+
+            if (!this.laraActivated) {
+                this.laraChatOpen = false;
+                this.laraChatFullscreen = false;
+                localStorage.removeItem('agent-chat-1-open');
+                localStorage.removeItem('agent-chat-1-fullscreen');
             }
         },
 
@@ -137,6 +150,10 @@
             return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
         },
         openLaraChat(prompt = null) {
+            if (!this.laraActivated) {
+                return;
+            }
+
             this.laraPrefillPrompt = prompt;
             this.laraChatOpen = true;
             localStorage.setItem('agent-chat-1-open', '1');
@@ -147,6 +164,10 @@
             localStorage.setItem('agent-chat-1-open', '0');
         },
         toggleLaraChat(event) {
+            if (!this.laraActivated) {
+                return;
+            }
+
             if (this.isTypingTarget(event)) {
                 return;
             }
@@ -158,6 +179,10 @@
             }
         },
         toggleLaraChatMode() {
+            if (!this.laraActivated) {
+                return;
+            }
+
             if (this.laraChatFullscreen) {
                 this.laraChatFullscreen = false;
                 localStorage.setItem('agent-chat-1-fullscreen', '0');
@@ -167,6 +192,10 @@
             localStorage.setItem('agent-chat-1-mode', this.laraChatMode);
         },
         toggleLaraFullscreen() {
+            if (!this.laraActivated) {
+                return;
+            }
+
             this.laraChatFullscreen = !this.laraChatFullscreen;
             localStorage.setItem('agent-chat-1-fullscreen', this.laraChatFullscreen ? '1' : '0');
         },
@@ -252,7 +281,7 @@
         <main class="relative flex-1 overflow-y-auto bg-surface-page px-1 py-2 sm:px-4 sm:py-1">
             {{ $slot }}
 
-            @auth
+            @if ($laraActivated)
                 {{-- Fullscreen mode: take over the main content box (desktop only) --}}
                 <div
                     x-show="laraChatOpen && laraChatFullscreen"
@@ -261,10 +290,10 @@
                 >
                     <div class="h-full" x-ref="laraFullscreenTarget"></div>
                 </div>
-            @endauth
+            @endif
         </main>
 
-        @auth
+        @if ($laraActivated)
             {{-- Docked mode: right-side panel inside the layout flow (drag-resizable) --}}
             <aside
                 x-show="laraChatOpen && !laraChatFullscreen && laraChatMode === 'docked'"
@@ -285,10 +314,10 @@
                 {{-- Teleport target for docked mode --}}
                 <div class="flex-1 min-w-0 h-full" x-ref="laraDockTarget"></div>
             </aside>
-        @endauth
+        @endif
     </div>
 
-    @auth
+    @if ($laraActivated)
         {{-- Overlay mode: floating card (desktop only) --}}
         <div
             x-show="laraChatOpen && !laraChatFullscreen && laraChatMode === 'overlay'"
@@ -314,6 +343,7 @@
         {{-- Single Livewire instance — Alpine moves it into the active target --}}
         <div
             x-ref="laraChatInstance"
+            x-cloak
             x-effect="
                 const el = $refs.laraChatInstance;
                 if (!el) return;
@@ -331,12 +361,14 @@
                 if (target && el.parentNode !== target) {
                     target.appendChild(el);
                 }
+                el.style.display = target && el.parentNode === target ? '' : 'none';
             "
             class="h-full"
+            style="display: none;"
         >
             <livewire:ai.chat />
         </div>
-    @endauth
+    @endif
 
     {{-- Status Bar --}}
     <x-layouts.status-bar />

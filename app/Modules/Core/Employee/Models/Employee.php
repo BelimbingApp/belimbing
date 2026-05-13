@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Employee\Models;
 
 use App\Modules\Core\Address\Models\Address;
@@ -9,6 +10,10 @@ use App\Modules\Core\Employee\Concerns\ManagesSystemAgents;
 use App\Modules\Core\Employee\Database\Factories\EmployeeFactory;
 use App\Modules\Core\Employee\Exceptions\SystemEmployeeDeletionException;
 use App\Modules\Core\User\Models\User;
+use App\Modules\People\Payroll\Models\PayrollEmployeeStatutoryProfile;
+use App\Modules\People\Settings\Models\EmployeePortalAccess;
+use App\Modules\People\Settings\Models\EmployeeProfileChangeRequest;
+use App\Modules\People\Settings\Models\EmployeeWorkProfile;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -129,6 +134,26 @@ class Employee extends Model
     public function user(): HasOne
     {
         return $this->hasOne(User::class, 'employee_id');
+    }
+
+    public function workProfile(): HasOne
+    {
+        return $this->hasOne(EmployeeWorkProfile::class, 'employee_id');
+    }
+
+    public function portalAccess(): HasOne
+    {
+        return $this->hasOne(EmployeePortalAccess::class, 'employee_id');
+    }
+
+    public function profileChangeRequests(): HasMany
+    {
+        return $this->hasMany(EmployeeProfileChangeRequest::class, 'employee_id');
+    }
+
+    public function statutoryProfiles(): HasMany
+    {
+        return $this->hasMany(PayrollEmployeeStatutoryProfile::class, 'employee_id');
     }
 
     /**

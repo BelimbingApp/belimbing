@@ -123,6 +123,18 @@ test('generic oauth provider setup is honest about missing dedicated sign-in sup
         ->exists())->toBeFalse();
 });
 
+test('providers page explains how to activate Lara when no active model is configured', function (): void {
+    $user = createAdminUser();
+
+    $this->actingAs($user);
+
+    $this->get(route('admin.ai.providers'))
+        ->assertOk()
+        ->assertSee('Lara stays inactive until one connected provider has an active model available to Agents.')
+        ->assertSee('Connect a provider below and enable at least one model. If Lara still needs provisioning afterward, finish it on the')
+        ->assertSee('href="'.route('admin.setup.lara').'"', false);
+});
+
 function createAiProvidersTestUser(): User
 {
     $company = Company::factory()->create();

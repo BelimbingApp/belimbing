@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Define the architectural standards for database migrations, seeding, and schema conventions in Belimbing.
-**Last Updated:** 2026-04-26
+**Last Updated:** 2026-05-12
 
 ## Overview
 
@@ -150,7 +150,19 @@ This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to preven
 
 | Prefix | Module | Dependencies |
 |--------|--------|--------------|
-| `0320_01_01_*` | Payroll | Company, Employee |
+| `0320_01_01_*` | Settings | Company, Employee, User |
+| `0320_01_03_*` | Employee | Company, Employee, User, Settings |
+| `0320_01_06_*` | Payroll | Company, Employee, User, Settings |
+| `0320_01_09_*` | Leave | Company, Employee, User, Settings, Payroll, Workflow |
+| `0320_01_12_*` | Claim | Company, Employee, User, Settings, Payroll, Workflow |
+| `0320_01_15_*` | Attendance | Company, Employee, User, Settings, Payroll, Workflow |
+| `0320_01_18_*` | Recruitment | Company, Employee, User, Settings, Workflow |
+| `0320_01_21_*` | Onboarding | Company, Employee, User, Settings, Recruitment, Workflow |
+| `0320_01_24_*` | Performance | Company, Employee, User, Settings, Workflow |
+| `0320_01_27_*` | Training | Company, Employee, User, Settings |
+| `0320_01_30_*` | Disciplinary | Company, Employee, User, Settings, Workflow |
+| `0320_01_33_*` | Self-Service | Company, Employee, User, Settings, Payroll, Leave, Claim, Attendance |
+| `0320_01_36_*` | Report | Company, Employee, User, Settings, Payroll, Leave, Claim, Attendance, Recruitment, Onboarding, Performance, Training, Disciplinary |
 
 The registry table is the dependency graph. Do not duplicate module dependencies in a separate diagram; update the table when ownership, prefix, or dependency order changes.
 

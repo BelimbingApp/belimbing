@@ -1,0 +1,66 @@
+COMPANY       :SB TAPE GROUP SDN BHD (846030-A)                                     Dat:12-May-2026 (Tue) 11:Page:1
+REPORT TITLE  :LEAVE GROUP REPORT
+
+
+NO  GROUP CODE  GROUP DESCRIPTION
+
+
+
+1   FM          FEMALE MARRIED
+
+            No  Leave Type           Leave Entitlement   Leave Policy
+
+            1   AL - ANNUAL LEAVE    AL-LOCAL - AL-LOCAL AL - AL
+            2   MTL - MATERNITY LEAVEMTL - MATERNITY     MTL - MATERNITY
+            3   HL - HOSPITALIZATION HL - HOSPITALIZE    HPL - HOSPITALIZE
+            4   EXAM LEAVE - EXAM LEAEXAM - EXAM         EXAM - EXAM
+            5   T/S - TIME SLIP 2 HOUT/S - TIME SLIP     T/S - TIME SLIP
+            6   RPL - REPLACEMENT LEARPL - REPLACEMENT   RPL - RPL
+            7   UPL - UNPAID LEAVE   UPL/ ABS - UNPAID/ AUPL - UPL
+            8   MC - MEDICAL LEAVE   MC - MEDICAL        MC - MC
+            9   CL - COMPASSIONATE LECL - COMPASSIONATE  CL - COMPASSIONATE
+
+2   FW          FOREIGN WORKER
+
+            No  Leave Type           Leave Entitlement   Leave Policy
+
+            1   AL - ANNUAL LEAVE    AL-FW - AL- FW      AL - AL
+            2   MC - MEDICAL LEAVE   MC - MEDICAL        MC - MC
+            3   HL - HOSPITALIZATION HL - HOSPITALIZE    HPL - HOSPITALIZE
+            4   UPL - UNPAID LEAVE   UPL/ ABS - UNPAID/ AUPL - UPL
+            5   ABS - ABSENT         UPL/ ABS - UNPAID/ AABS - ABSENT
+
+3   MM          MALE MARRIED
+
+            No  Leave Type           Leave Entitlement   Leave Policy
+
+            1   HL - HOSPITALIZATION HL - HOSPITALIZE    HPL - HOSPITALIZE
+            2   T/S - TIME SLIP 2 HOUT/S - TIME SLIP     T/S - TIME SLIP
+            3   PTL - PATERNITY LEAVEPTL - PATERNITY     PTL - PATERNITY
+            4   EXAM LEAVE - EXAM LEAEXAM - EXAM         EXAM - EXAM
+            5   MC - MEDICAL LEAVE   MC - MEDICAL        MC - MC
+            6   RPL - REPLACEMENT LEARPL - REPLACEMENT   RPL - RPL
+            7   UPL - UNPAID LEAVE   UPL/ ABS - UNPAID/ AUPL - UPL
+            8   AL - ANNUAL LEAVE    AL-LOCAL - AL-LOCAL AL - AL
+            9   CL - COMPASSIONATE LECL - COMPASSIONATE  CL - COMPASSIONATE
+
+4   SINGLE      SINGLE
+
+            No  Leave Type           Leave Entitlement   Leave Policy
+
+            1   MRL - MARRIAGE LEAVE MRL - MARRIAGE      MRL - MARRIAGE
+COMPANY       :SB TAPE GROUP SDN BHD (846030-A)                                     Dat:12-May-2026 (Tue) 11:Page:2
+REPORT TITLE  :LEAVE GROUP REPORT
+
+
+NO  GROUP CODE  GROUP DESCRIPTION
+
+
+            2   AL - ANNUAL LEAVE    AL-LOCAL - AL-LOCAL AL - AL
+            3   MC - MEDICAL LEAVE   MC - MEDICAL        MC - MC
+            4   UPL - UNPAID LEAVE   UPL/ ABS - UNPAID/ AUPL - UPL
+            5   RPL - REPLACEMENT LEARPL - REPLACEMENT   RPL - RPL
+            6   CL - COMPASSIONATE LECL - COMPASSIONATE  CL - COMPASSIONATE
+            7   EXAM LEAVE - EXAM LEAEXAM - EXAM         EXAM - EXAM
+            8   HL - HOSPITALIZATION HL - HOSPITALIZE    HPL - HOSPITALIZE
+            9   T/S - TIME SLIP 2 HOUT/S - TIME SLIP     T/S - TIME SLIP
