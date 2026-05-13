@@ -75,8 +75,44 @@ function Set-EnvValue {
     } else {
         $line = "$Key=$Value"
     }
+
+    function Write-TextFileSafely {
+        param(
+            [Parameter(Mandatory = $true)][string] $TargetPath,
+            [Parameter(Mandatory = $true)][object] $Content
+        )
+
+        $targetDir = Split-Path -Parent $TargetPath
+        $tempPath = Join-Path $targetDir ([System.IO.Path]::GetRandomFileName())
+
+        try {
+            Set-Content -Path $tempPath -Value $Content -Encoding UTF8
+
+            $lastError = $null
+            for ($attempt = 1; $attempt -le 5; $attempt++) {
+                try {
+                    Move-Item -Path $tempPath -Destination $TargetPath -Force
+                    return
+                } catch {
+                    $lastError = $_
+                    if ($attempt -eq 5) {
+                        throw
+                    }
+
+                    Start-Sleep -Milliseconds (200 * $attempt)
+                }
+            }
+
+            if ($lastError) {
+                throw $lastError
+            }
+        } finally {
+            Remove-Item -Path $tempPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     if (-not (Test-Path $Path)) {
-        Set-Content -Path $Path -Value $line -Encoding UTF8
+        Write-TextFileSafely -TargetPath $Path -Content $line
         return
     }
 
@@ -96,7 +132,7 @@ function Set-EnvValue {
         $next += $line
     }
 
-    Set-Content -Path $Path -Value $next -Encoding UTF8
+    Write-TextFileSafely -TargetPath $Path -Content $next
 }
 
 function Get-EnvValue {
