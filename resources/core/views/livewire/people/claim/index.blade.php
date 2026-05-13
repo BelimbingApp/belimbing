@@ -96,6 +96,94 @@
                     <x-ui.alert variant="warning" class="mt-4">{{ __('Your user account is not linked to an employee record, so claims cannot be submitted from this workbench yet.') }}</x-ui.alert>
                 @endif
 
+            @elseif ($tab === 'operations')
+                <div class="mb-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
+                    <x-ui.search-input
+                        wire:model.live.debounce.300ms="search"
+                        placeholder="{{ __('Search reference, employee, receipt, or provider...') }}"
+                    />
+                    <x-ui.select id="claim-operations-status" wire:model.live="operationsStatus" label="{{ __('Status') }}">
+                        <option value="">{{ __('All statuses') }}</option>
+                        @foreach ($claimStatusOptions as $status => $label)
+                            <option value="{{ $status }}">{{ $label }}</option>
+                        @endforeach
+                    </x-ui.select>
+                </div>
+
+                <div class="overflow-x-auto -mx-card-inner px-card-inner">
+                    <table class="min-w-full divide-y divide-border-default text-sm">
+                        <thead class="bg-surface-subtle/80">
+                            <tr>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Reference') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Employee') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Lines') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Requested') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Risk') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Payroll') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-border-default bg-surface-card">
+                            @forelse ($operationsRequests as $request)
+                                @php
+                                    $duplicateRisks = $request->metadata['duplicate_risks'] ?? [];
+                                    $handoff = $request->metadata['payroll_handoff'] ?? null;
+                                    $eligiblePayrollLines = $request->lines->filter(fn ($line) => (bool) $line->type?->payroll_eligible && $line->payroll_pay_item_code !== null);
+                                @endphp
+                                <tr wire:key="claim-operations-request-{{ $request->id }}">
+                                    <td class="px-table-cell-x py-table-cell-y">
+                                        <div class="font-mono text-xs text-ink">{{ $request->reference_number ?? __('Draft #:id', ['id' => $request->id]) }}</div>
+                                        <div class="text-xs text-muted tabular-nums">{{ $request->submitted_at?->format('Y-m-d H:i') ?? __('Not submitted') }}</div>
+                                    </td>
+                                    <td class="px-table-cell-x py-table-cell-y">
+                                        <div class="font-medium text-ink">{{ $request->employee?->full_name ?? __('Employee #:id', ['id' => $request->employee_id]) }}</div>
+                                        <div class="font-mono text-xs text-muted">{{ $request->employee?->employee_number }}</div>
+                                    </td>
+                                    <td class="px-table-cell-x py-table-cell-y">
+                                        <div class="flex flex-wrap gap-2">
+                                            @forelse ($request->lines as $line)
+                                                <x-ui.badge wire:key="claim-operations-line-{{ $line->id }}">{{ $line->type?->code ?? __('Line #:id', ['id' => $line->id]) }}</x-ui.badge>
+                                            @empty
+                                                <span class="text-xs text-muted">{{ __('No lines') }}</span>
+                                            @endforelse
+                                        </div>
+                                    </td>
+                                    <td class="px-table-cell-x py-table-cell-y text-right tabular-nums text-ink">{{ $request->currency }} {{ number_format((float) $request->requested_amount, 2) }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y"><x-ui.badge :variant="$this->statusVariant($request->status)">{{ __(str_replace('_', ' ', ucfirst($request->status))) }}</x-ui.badge></td>
+                                    <td class="px-table-cell-x py-table-cell-y">
+                                        @if ($duplicateRisks !== [])
+                                            <div class="space-y-1">
+                                                <x-ui.badge variant="warning">{{ trans_choice(':count warning|:count warnings', count($duplicateRisks), ['count' => count($duplicateRisks)]) }}</x-ui.badge>
+                                                <div class="max-w-xs text-xs text-muted">{{ __($duplicateRisks[0]['message'] ?? 'Duplicate risk detected.') }}</div>
+                                            </div>
+                                        @else
+                                            <span class="text-xs text-muted">{{ __('None') }}</span>
+                                        @endif
+                                    </td>
+                                    <td class="px-table-cell-x py-table-cell-y">
+                                        @if (is_array($handoff))
+                                            <div class="space-y-1 text-xs text-muted">
+                                                <x-ui.badge :variant="($handoff['pending'] ?? 0) > 0 ? 'warning' : 'success'">{{ __('Queued :queued/:eligible', ['queued' => $handoff['queued'] ?? 0, 'eligible' => $handoff['eligible'] ?? 0]) }}</x-ui.badge>
+                                                @if (($handoff['pending'] ?? 0) > 0)
+                                                    <div>{{ trans_choice(':count pending open payroll run|:count pending open payroll runs', $handoff['pending'], ['count' => $handoff['pending']]) }}</div>
+                                                @endif
+                                            </div>
+                                        @elseif ($eligiblePayrollLines->isNotEmpty())
+                                            <x-ui.badge variant="info">{{ trans_choice(':count payroll line|:count payroll lines', $eligiblePayrollLines->count(), ['count' => $eligiblePayrollLines->count()]) }}</x-ui.badge>
+                                        @else
+                                            <span class="text-xs text-muted">{{ __('Not payroll eligible') }}</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="7" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No claim requests match the current filters.') }}</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+
             @elseif ($tab === 'approvals')
                 <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(24rem,0.8fr)]">
                     <div class="overflow-x-auto -mx-card-inner px-card-inner">
