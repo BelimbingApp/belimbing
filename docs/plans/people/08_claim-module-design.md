@@ -1,6 +1,6 @@
 # people/08_claim-module-design
 
-**Status:** In Progress — Claim Core skeleton and first employee submission/approval slice started
+**Status:** In Progress — Claim Core skeleton and first employee submission/approval slice started; first round of post-implementation hardening (reference-number uniqueness, deterministic policy bands) applied 2026-05-13
 **Last Updated:** 2026-05-13
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — Claims is a first-class People workflow with entitlements, attachments, approval limits, payroll reimbursement integration, and reporting.
@@ -209,6 +209,9 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 - **Risk: iPayroll sentinel values leak into BLB.** Guardrail: translate `99.00` range/service-year upper bounds to `NULL = unlimited`; no magic sentinel values in Core schema.
 - **Risk: advance claims become untracked loans.** Guardrail: every advance has settlement due date, outstanding amount projection, reminder/escalation, and variance close reason.
 - **Risk: Finance accounting needs are bolted on later.** Guardrail: claim lines carry cost center, organization unit, pay item/accounting code metadata from day one, even if the first export is CSV.
+- **Risk: duplicate `payroll_inputs` rows for the same claim line under concurrent approval.** The handoff service uses get-then-insert against a non-unique `(source_type, source_id)` index shared with Leave. Guardrail (open): tracked under `docs/plans/people/10_payroll-intake-dependency-inversion.md`, which moves handoff ownership into Payroll and adds the unique constraint there. Do not patch in-place here.
+- **Risk: stale-policy approval.** `ApproveClaimRequestService` accepts the requested amount without re-evaluating caps or eligibility. Guardrail (open): re-run policy evaluation at approval time using the snapshot policy version, or block approval when the snapshot is older than the currently effective policy.
+- **Risk: encumbrance ignores policy.** `ClaimPolicy::encumber_pending` is persisted but `ClaimPolicyEvaluationService::usedAmountForPeriod` always encumbers pending requests and always sums `requested_amount`. Guardrail (open): honour `encumber_pending` per-policy, and switch to `approved_amount` for `approved`/`reimbursed`/`queued_for_payroll` rows so partial approvals release the unused cap.
 
 ## Phases
 
@@ -231,6 +234,7 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 - [x] Create claim assignment storage binding employee cohorts to `(claim type, claim policy)` rows with active status, hidden-from-application, combine tag/use-combine, sort order, and source aliases. {amp/gpt-5.1-codex}
 - [x] Create optional shallow claim context/client reference storage with code, label, active status, max claim limit, source aliases, and a path to migrate it later if a richer customer/project module emerges. {amp/gpt-5.1-codex}
 - [x] Create claim request, claim line, audit event, lifecycle state, approval route snapshot, and entitlement usage tables with immutable history after submission. {amp/gpt-5.1-codex}
+- [x] Add `(company_id, reference_number)` unique index on `claim_requests` and replace the count-based reference generator with a `max+lockForUpdate` parser so concurrent submissions cannot mint the same `CLM-YYYY-NNNNN`. {amp/claude-opus-4-7}
 - [x] Store requested, approved, reimbursed/settled, and adjustment-reason fields separately on claim lines. {amp/gpt-5.1-codex}
 - [x] Add Leave-pattern Claim UI surfaces and menu/routes: My Claims (`people/claims`), Claim Approvals (`people/claims/approvals`), and Claim Settings section routes for categories, types, policies, assignments, and contexts. {amp/gpt-5.1-codex}
 - [x] Add admin/setup tabs for claim categories, types, policies, assignments, and contexts. People Settings reference selectors for cohorts/providers remain a later enrichment after the reference mapping is locked. {amp/gpt-5.1-codex}
@@ -240,7 +244,7 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 
 - [~] Build employee-scoped claim submission: first single-line submit/withdraw/history path is in place under the My Claims surface, now using the Leave-style table-first list with New Claim modal; receipt attachment-count validation is a temporary bridge until shared attachment infrastructure is selected. Draft editing, multi-line add/edit/remove, and real uploads remain open. {amp/gpt-5.1-codex}
 - [ ] Support on-behalf claim creation with actor, reason, employee notification, and audit event.
-- [~] Implement policy evaluation for caps, eligibility, receipt thresholds, provider restrictions, service-year bands, and pending claim encumbrance: first submission path enforces receipt/provider rules plus per-claim/month/year caps from matched policy bands; eligibility predicates, service-year bands, and combined-cap encumbrance remain open. {amp/gpt-5.1-codex}
+- [~] Implement policy evaluation for caps, eligibility, receipt thresholds, provider restrictions, service-year bands, and pending claim encumbrance: first submission path enforces receipt/provider rules plus per-claim/month/year caps from matched policy bands; eligibility predicates, service-year bands, and combined-cap encumbrance remain open. Band `=` operator now uses an epsilon comparison instead of strict float equality. The `encumber_pending` policy flag and approval-time re-evaluation are still ignored — see Risks and Guardrails. {amp/gpt-5.1-codex,amp/claude-opus-4-7}
 - [~] Add duplicate-risk checks for receipt number/date/amount/provider and same employee/type/amount/date combinations, surfacing warnings before approval: first duplicate-risk warnings are stored on request/line metadata and surfaced in the request list. {amp/gpt-5.1-codex}
 - [~] Enforce claim assignment visibility: hidden rows are unavailable to normal employee submission in the first UI/service path; authorized admin/import/payroll correction flows remain open. {amp/gpt-5.1-codex}
 - [x] Enforce combined-cap utilization when assignment rows share a combine tag and use-combine is active: submission-time monthly/yearly policy cap checks now aggregate usage across active assignment lines with the same combine tag. {amp/gpt-5.1-codex}
@@ -257,7 +261,7 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 
 ### Phase 4 — Payroll, advance, and accounting handoff
 
-- [~] Generate `PayrollInput::TYPE_REIMBURSEMENT` rows from approved payroll-eligible claim lines with duplicate protection and claim-line source references: approved lines now queue into an open draft/calculated payroll run when one covers the incurred date, or stay approved with pending handoff metadata if no run is open. {amp/gpt-5.1-codex}
+- [~] Generate `PayrollInput::TYPE_REIMBURSEMENT` rows from approved payroll-eligible claim lines with duplicate protection and claim-line source references: approved lines now queue into an open draft/calculated payroll run when one covers the incurred date, or stay approved with pending handoff metadata if no run is open. Duplicate protection is currently only an application-level get-then-insert; the underlying `(source_type, source_id)` index on `payroll_inputs` is non-unique and shared with Leave, so concurrent approvals can race. {amp/gpt-5.1-codex}
 - [~] Snapshot claim type payroll code and DR/CR accounting mapping on each handed-off claim line so later setup changes do not rewrite payroll/accounting history: claim line snapshots are stored at submission and copied to payroll input metadata during handoff. {amp/gpt-5.1-codex}
 - [ ] Prevent mutation of claim lines already handed to a locked payroll run; support explicit reversal/new-period correction flows.
 - [ ] If SBG confirms day-one advance usage, implement claim advance request, approval, payment/payroll handoff, receipt settlement, outstanding balance, overdue reminders, and variance outcomes; otherwise keep only schema/import hooks.
