@@ -99,7 +99,7 @@
                 @endif
 
             @elseif ($tab === 'operations')
-                <div class="mb-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_16rem] md:items-center">
+                <div class="mb-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_12rem_14rem] md:items-center">
                     <x-ui.search-input
                         wire:model.live.debounce.300ms="search"
                         placeholder="{{ __('Search reference, employee, receipt, or provider...') }}"
@@ -108,6 +108,17 @@
                         <option value="">{{ __('All statuses') }}</option>
                         @foreach ($claimStatusOptions as $status => $label)
                             <option value="{{ $status }}">{{ $label }}</option>
+                        @endforeach
+                    </x-ui.select>
+                    <x-ui.select id="claim-operations-risk" wire:model.live="operationsRisk">
+                        <option value="">{{ __('All risks') }}</option>
+                        <option value="duplicate">{{ __('Duplicate risk') }}</option>
+                        <option value="clear">{{ __('No risk') }}</option>
+                    </x-ui.select>
+                    <x-ui.select id="claim-operations-payroll" wire:model.live="operationsPayroll">
+                        <option value="">{{ __('All payroll states') }}</option>
+                        @foreach ($payrollOperationsOptions as $state => $label)
+                            <option value="{{ $state }}">{{ $label }}</option>
                         @endforeach
                     </x-ui.select>
                 </div>
