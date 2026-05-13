@@ -3,10 +3,10 @@
 ?>
 
 <div>
-    <x-slot name="title">{{ __('Claims') }}</x-slot>
+    <x-slot name="title">{{ $surfaceTitle }}</x-slot>
 
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('Claims')" :subtitle="__('Configure claim categories, types, policies, assignments, and SBG migration context before enabling employee submissions.')">
+        <x-ui.page-header :title="$surfaceTitle" :subtitle="$surfaceSubtitle">
             <x-slot name="help">
                 {{ __('The Claim module uses a singular code namespace while the user-facing workbench remains Claims. Claim setup is country-neutral and hands approved reimbursement lines to Payroll.') }}
             </x-slot>
@@ -45,11 +45,11 @@
                 @endif
             </div>
 
-            @if (! $canManage && $tab !== 'requests')
+            @if ($surface === 'settings' && ! $canManage)
                 <x-ui.alert variant="warning">{{ __('You can view claim setup, but only claim managers can change it.') }}</x-ui.alert>
             @endif
 
-            @if ($tab === 'requests')
+            @if ($tab === 'submit')
                 <div class="mb-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
                     <x-ui.card :title="__('Submit Claim')">
                         @if ($currentEmployeeId === null)
@@ -97,12 +97,15 @@
                         @endif
                     </x-ui.card>
 
-                    <x-ui.card :title="__('Approval Action')">
-                        <p class="mb-4 text-sm text-muted">{{ __('Claim approvers can approve or reject submitted requests. Workflow routing is captured as profile metadata until the shared Workflow module is wired in.') }}</p>
-                        <x-ui.input id="claim-approval-reason" wire:model="approvalReason" label="{{ __('Decision Reason') }}" />
+                    <x-ui.card :title="__('Claim Lifecycle')">
+                        <div class="space-y-3 text-sm text-muted">
+                            <p>{{ __('Submit one claim line for now. The request records policy snapshots, duplicate-risk warnings, and payroll/accounting metadata before approval.') }}</p>
+                            <p>{{ __('Approved payroll-eligible lines queue to Payroll when an open run covers the incurred date; otherwise the request keeps pending handoff metadata.') }}</p>
+                        </div>
                     </x-ui.card>
                 </div>
 
+            @elseif ($tab === 'history')
                 <div class="overflow-x-auto -mx-card-inner px-card-inner">
                     <table class="min-w-full divide-y divide-border-default text-sm">
                         <thead class="bg-surface-subtle/80">
@@ -116,7 +119,7 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border-default bg-surface-card">
-                            @forelse ($recentRequests as $request)
+                            @forelse ($myRequests as $request)
                                 @php($duplicateRisks = $request->metadata['duplicate_risks'] ?? [])
                                 <tr wire:key="claim-request-{{ $request->id }}">
                                     <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink">{{ $request->reference_number ?? __('Draft #:id', ['id' => $request->id]) }}</td>
@@ -138,10 +141,6 @@
                                             @if ($request->employee_id === $currentEmployeeId && in_array($request->status, [\App\Modules\People\Claim\Models\ClaimRequest::STATUS_DRAFT, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_SUBMITTED, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_NEEDS_MORE_INFO], true))
                                                 <x-ui.button type="button" size="sm" variant="secondary" wire:click="withdrawOwnRequest({{ $request->id }})">{{ __('Withdraw') }}</x-ui.button>
                                             @endif
-                                            @if ($canApprove && in_array($request->status, [\App\Modules\People\Claim\Models\ClaimRequest::STATUS_SUBMITTED, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_RESUBMITTED], true))
-                                                <x-ui.button type="button" size="sm" variant="primary" wire:click="approveRequest({{ $request->id }})">{{ __('Approve') }}</x-ui.button>
-                                                <x-ui.button type="button" size="sm" variant="danger" wire:click="rejectRequest({{ $request->id }})">{{ __('Reject') }}</x-ui.button>
-                                            @endif
                                         </div>
                                     </td>
                                 </tr>
@@ -152,6 +151,130 @@
                             @endforelse
                         </tbody>
                     </table>
+                </div>
+
+            @elseif ($tab === 'approvals')
+                <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(24rem,0.8fr)]">
+                    <div class="overflow-x-auto -mx-card-inner px-card-inner">
+                        <table class="min-w-full divide-y divide-border-default text-sm">
+                            <thead class="bg-surface-subtle/80">
+                                <tr>
+                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Reference') }}</th>
+                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Employee') }}</th>
+                                    <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Requested') }}</th>
+                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Risk') }}</th>
+                                    <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-border-default bg-surface-card">
+                                @forelse ($pendingRequests as $request)
+                                    @php($duplicateRisks = $request->metadata['duplicate_risks'] ?? [])
+                                    <tr wire:key="pending-claim-{{ $request->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                                        <td class="px-table-cell-x py-table-cell-y">
+                                            <button type="button" wire:click="selectRequest({{ $request->id }})" class="text-left">
+                                                <div class="font-mono text-xs text-ink">{{ $request->reference_number }}</div>
+                                                <div class="text-xs text-muted tabular-nums">{{ $request->submitted_at?->format('Y-m-d H:i') }}</div>
+                                            </button>
+                                        </td>
+                                        <td class="px-table-cell-x py-table-cell-y text-ink">{{ $request->employee?->displayName() ?? __('Employee #:id', ['id' => $request->employee_id]) }}</td>
+                                        <td class="px-table-cell-x py-table-cell-y text-right tabular-nums text-ink">{{ $request->currency }} {{ number_format((float) $request->requested_amount, 2) }}</td>
+                                        <td class="px-table-cell-x py-table-cell-y">
+                                            @if ($duplicateRisks !== [])
+                                                <x-ui.badge variant="warning">{{ trans_choice(':count warning|:count warnings', count($duplicateRisks), ['count' => count($duplicateRisks)]) }}</x-ui.badge>
+                                            @else
+                                                <span class="text-xs text-muted">{{ __('None') }}</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-table-cell-x py-table-cell-y">
+                                            <div class="flex flex-wrap justify-end gap-2">
+                                                @if ($canApprove)
+                                                    <x-ui.button type="button" size="sm" variant="primary" wire:click="approveRequest({{ $request->id }})">{{ __('Approve') }}</x-ui.button>
+                                                    <x-ui.button type="button" size="sm" variant="ghost" wire:click="rejectRequest({{ $request->id }})">{{ __('Reject') }}</x-ui.button>
+                                                @else
+                                                    <span class="text-xs text-muted">{{ __('View only') }}</span>
+                                                @endif
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="5" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No claim requests are awaiting approval.') }}</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="space-y-4">
+                        @if ($selectedRequest)
+                            <x-ui.card :title="__('Request Details')">
+                                <div class="space-y-3 text-sm">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div class="font-medium text-ink">{{ $selectedRequest->employee?->displayName() }}</div>
+                                            <div class="font-mono text-xs text-muted">{{ $selectedRequest->reference_number }}</div>
+                                        </div>
+                                        <x-ui.badge :variant="$this->statusVariant($selectedRequest->status)">{{ __(str_replace('_', ' ', ucfirst($selectedRequest->status))) }}</x-ui.badge>
+                                    </div>
+                                    <dl class="grid grid-cols-2 gap-3 text-xs">
+                                        <div><dt class="text-muted">{{ __('Amount') }}</dt><dd class="text-ink tabular-nums">{{ $selectedRequest->currency }} {{ number_format((float) $selectedRequest->requested_amount, 2) }}</dd></div>
+                                        <div><dt class="text-muted">{{ __('Submitted') }}</dt><dd class="text-ink tabular-nums">{{ $selectedRequest->submitted_at?->format('Y-m-d H:i') ?? '-' }}</dd></div>
+                                        <div><dt class="text-muted">{{ __('Assignment') }}</dt><dd class="text-ink">{{ $selectedRequest->assignment?->name ?? '-' }}</dd></div>
+                                        <div><dt class="text-muted">{{ __('Context') }}</dt><dd class="text-ink">{{ $selectedRequest->context?->label ?? '-' }}</dd></div>
+                                    </dl>
+                                    @if ($canApprove && in_array($selectedRequest->status, [\App\Modules\People\Claim\Models\ClaimRequest::STATUS_SUBMITTED, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_RESUBMITTED], true))
+                                        <x-ui.textarea id="claim-approval-reason" wire:model="approvalReason" label="{{ __('Reason / Note') }}" rows="2" />
+                                        <div class="flex gap-2">
+                                            <x-ui.button type="button" size="sm" variant="primary" wire:click="approveRequest({{ $selectedRequest->id }})">{{ __('Approve') }}</x-ui.button>
+                                            <x-ui.button type="button" size="sm" variant="ghost" wire:click="rejectRequest({{ $selectedRequest->id }})">{{ __('Reject') }}</x-ui.button>
+                                        </div>
+                                    @endif
+                                </div>
+                            </x-ui.card>
+
+                            <x-ui.card :title="__('Claim Lines')">
+                                <div class="space-y-2 text-sm">
+                                    @foreach ($selectedRequest->lines as $line)
+                                        <div class="rounded-lg border border-border-default p-3" wire:key="selected-claim-line-{{ $line->id }}">
+                                            <div class="flex items-start justify-between gap-3">
+                                                <div>
+                                                    <div class="font-medium text-ink">{{ $line->type?->name }}</div>
+                                                    <div class="text-xs text-muted">{{ $line->description }}</div>
+                                                </div>
+                                                <div class="text-right text-sm tabular-nums text-ink">{{ $line->currency }} {{ number_format((float) $line->requested_amount, 2) }}</div>
+                                            </div>
+                                            <div class="mt-2 grid grid-cols-2 gap-2 text-xs text-muted">
+                                                <div>{{ __('Receipt: :receipt', ['receipt' => $line->receipt_number ?? '-']) }}</div>
+                                                <div>{{ __('Provider: :provider', ['provider' => $line->provider_name ?? '-']) }}</div>
+                                                <div>{{ __('Payroll: :code', ['code' => $line->payroll_pay_item_code ?? '-']) }}</div>
+                                                <div>{{ __('Attachments: :count', ['count' => $line->attachment_count]) }}</div>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </x-ui.card>
+
+                            <x-ui.card :title="__('Audit Trail')">
+                                <div class="space-y-2 text-sm">
+                                    @forelse ($selectedRequest->auditEvents as $event)
+                                        <div class="rounded-lg bg-surface-subtle p-3" wire:key="claim-audit-{{ $event->id }}">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <span class="font-medium text-ink">{{ $event->from_status }} → {{ $event->to_status }}</span>
+                                                <span class="text-xs text-muted tabular-nums">{{ $event->occurred_at?->format('Y-m-d H:i') }}</span>
+                                            </div>
+                                            @if ($event->reason)
+                                                <div class="mt-1 text-xs text-muted">{{ $event->reason }}</div>
+                                            @endif
+                                        </div>
+                                    @empty
+                                        <p class="text-sm text-muted">{{ __('No transitions recorded yet.') }}</p>
+                                    @endforelse
+                                </div>
+                            </x-ui.card>
+                        @else
+                            <x-ui.card>
+                                <p class="text-sm text-muted">{{ __('Select a pending claim to inspect lines, risk warnings, and audit trail.') }}</p>
+                            </x-ui.card>
+                        @endif
+                    </div>
                 </div>
 
             @elseif ($tab === 'categories')
