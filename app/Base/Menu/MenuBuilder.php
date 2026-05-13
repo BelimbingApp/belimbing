@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Menu;
 
 use Illuminate\Support\Collection;
@@ -84,19 +85,12 @@ class MenuBuilder
      */
     protected function markActive(array $tree, string $currentRoute, bool $hasExactMatch): array
     {
-        // Recurse into children first so deeper (more specific) matches take
-        // priority over prefix matches on parent items.
         foreach ($tree as &$node) {
             if (! empty($node['children'])) {
                 $node['children'] = $this->markActive($node['children'], $currentRoute, $hasExactMatch);
-
-                foreach ($node['children'] as $child) {
-                    if ($child['is_active'] || $child['has_active_child']) {
-                        $node['has_active_child'] = true;
-                        break;
-                    }
-                }
             }
+
+            $node['has_active_child'] = $this->hasActiveDescendant($node['children']);
         }
         unset($node);
 
@@ -105,14 +99,37 @@ class MenuBuilder
                 continue;
             }
 
-            if ($node['item']->route === $currentRoute) {
-                $node['is_active'] = true;
-            } elseif (! $hasExactMatch && $this->routeMatches($node['item']->route, $currentRoute)) {
-                $node['is_active'] = true;
+            $node['is_active'] = $this->shouldMarkNodeActive($node, $currentRoute, $hasExactMatch);
+        }
+        unset($node);
+
+        return $tree;
+    }
+
+    /**
+     * @param  array<int, array{item: MenuItem, is_active: bool, has_active_child: bool, children: array}>  $children
+     */
+    protected function hasActiveDescendant(array $children): bool
+    {
+        foreach ($children as $child) {
+            if ($child['is_active'] || $child['has_active_child']) {
+                return true;
             }
         }
 
-        return $tree;
+        return false;
+    }
+
+    /**
+     * @param  array{item: MenuItem, is_active: bool, has_active_child: bool, children: array}  $node
+     */
+    protected function shouldMarkNodeActive(array $node, string $currentRoute, bool $hasExactMatch): bool
+    {
+        if ($node['item']->route === $currentRoute) {
+            return true;
+        }
+
+        return ! $hasExactMatch && $this->routeMatches($node['item']->route, $currentRoute);
     }
 
     /**
