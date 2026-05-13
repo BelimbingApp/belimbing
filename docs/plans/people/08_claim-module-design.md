@@ -243,7 +243,7 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 - [~] Implement policy evaluation for caps, eligibility, receipt thresholds, provider restrictions, service-year bands, and pending claim encumbrance: first submission path enforces receipt/provider rules plus per-claim/month/year caps from matched policy bands; eligibility predicates, service-year bands, and combined-cap encumbrance remain open. {amp/gpt-5.1-codex}
 - [~] Add duplicate-risk checks for receipt number/date/amount/provider and same employee/type/amount/date combinations, surfacing warnings before approval: first duplicate-risk warnings are stored on request/line metadata and surfaced in the request list. {amp/gpt-5.1-codex}
 - [~] Enforce claim assignment visibility: hidden rows are unavailable to normal employee submission in the first UI/service path; authorized admin/import/payroll correction flows remain open. {amp/gpt-5.1-codex}
-- [ ] Enforce combined-cap utilization when assignment rows share a combine tag and use-combine is active.
+- [x] Enforce combined-cap utilization when assignment rows share a combine tag and use-combine is active: submission-time monthly/yearly policy cap checks now aggregate usage across active assignment lines with the same combine tag. {amp/gpt-5.1-codex}
 - [~] Enforce strictest-line route resolution and block mixed-line requests with incompatible approval profiles: first single-line submissions snapshot the selected line/profile; multi-line incompatibility checks remain open. {amp/gpt-5.1-codex}
 - [ ] Add multi-currency receipt entry if SBG confirms a day-one need; otherwise keep the schema ready but hide the UI.
 
