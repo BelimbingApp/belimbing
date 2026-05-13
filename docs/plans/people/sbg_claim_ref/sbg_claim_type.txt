@@ -1,0 +1,19 @@
+COMPANY       :SB TAPE GROUP SDN BHD (846030-A)                                    Dat:13-May-2026 (Wed) 09:Page:1
+REPORT TITLE  :CLAIM TYPE REPORT
+
+
+NO  CATEGORY CODCATEGORY DESCRIPTION
+
+
+
+1   MEDICAL     MEDICAL
+
+            No  Claim Type           Uom Payroll Account CodeUse Alternative Work-Flow
+
+            1   DENTAL& OPT - DENTAL SumPDENTAL              False
+
+            2   GP - GENERAL PRACTITISumRGP CLAIM            False
+
+            3   HOSP&ADM - HOSPITALISSumOHOSP & ADMION       False
+
+            4   SPECIALIST - SPECIALISum SPECIALIST          False

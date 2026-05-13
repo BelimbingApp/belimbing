@@ -206,6 +206,8 @@ app/Base/
 
 **Layer Pattern:** `app/Modules/{Layer1}/{Module}/` — Layer1 categories (`Core`, `Commerce`, `Operation`) contain modules. `People` currently anchors licensee-scoped people navigation; it should not own the canonical Employee module while employee records can belong to any company.
 
+**Module naming:** use a singular PascalCase capability/domain name for new module directories (`Claim`, `Leave`, `Payroll`, `Employee`) even when the user-facing menu label or route path is plural (`Claims`, `people/claims`). Use plural module directory names only when the domain term is inherently plural or an established aggregate surface already uses it (`Settings`, the People-facing `Employees` workbench).
+
 Each module is a self-contained capability. Subdirectories are module internals (see [Module Structure Template](#module-structure-template-for-appmoduleslayer1module) for the full list). Modules include only the internals they need.
 
 ```

@@ -1,0 +1,40 @@
+COMPANY       :SB TAPE GROUP SDN BHD (846030-A)                                    Dat:13-May-2026 (Wed) 09:Page:1
+REPORT TITLE  :CLAIM GROUP REPORT
+
+
+NO  GROUP CODE  GROUP DESCRIPTION    ACTIVE
+
+
+
+1   EXECUTIVE   EXECUTIVE            True
+
+            No  Claim Type           Claim Entitlement   Combine Use CombineHide From Application
+
+            1   GP - GENERAL PRACTITIGP-EXEC - GP-EXECUTIVE      False      False
+            2   SPECIALIST - SPECIALISPECIALIST-EXEC - SPECIALISTFalseUTIVE False
+            3   HOSP&ADM - HOSPITALISHOSP&ADM- EXEC - HOSP& ADMISFalse EXECUFalse
+            4   DENTAL& OPT - DENTAL DENTAL& OPTICAL - DENTAL & OFalseL     False
+
+2   FW          FOREIGN WORKER       True
+
+            No  Claim Type           Claim Entitlement   Combine Use CombineHide From Application
+
+            1   GP - GENERAL PRACTITIGP-FW - GP- FOREIGN         False      False
+
+3   MGR         MANAGER              True
+
+            No  Claim Type           Claim Entitlement   Combine Use CombineHide From Application
+
+            1   GP - GENERAL PRACTITIGP-MGR - GP-MANAGER         False      False
+            2   SPECIALIST - SPECIALISPECIALIST-MGR - SPECIALIST-FalseER    False
+            3   HOSP&ADM - HOSPITALISHOSP&ADM- MGR - HOSP& ADMISSFalseMANAGEFalse
+            4   DENTAL& OPT - DENTAL DENTAL& OPTICAL - DENTAL & OFalseL     False
+
+4   SV/ ASST/ CLSUPERVISOR/ ASSISTANTTrueERICAL
+
+            No  Claim Type           Claim Entitlement   Combine Use CombineHide From Application
+
+            1   GP - GENERAL PRACTITIGP-SAC - GP-SUPERVISOR/ ASSIFalseE/ CLEFalse
+            2   SPECIALIST - SPECIALISPECIALIST-SAC - SPECIALIST-FalseVISOR/FalseSTANT/ CLERICAL
+            3   HOSP&ADM - HOSPITALISHOSP&ADM- SAC - HOSP& ADMISSFalseSUPERVFalse ASSISTANT/ CLERICAL
+            4   DENTAL& OPT - DENTAL DENTAL& OPTICAL - DENTAL & OFalseL     False
