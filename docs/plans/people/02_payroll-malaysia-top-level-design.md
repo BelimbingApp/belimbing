@@ -161,7 +161,7 @@ The reason not to start as a fully independent extension immediately is practica
 |-----------|-----------|-------|
 | Payroll calendars and periods | Core | Neutral; every country uses calendars. |
 | Pay run lifecycle | Core | Draft through closed/reversed, with approvals and locks. |
-| Pay input collection | Core with People integrations | Pull salary from Employee, time/overtime from Attendance, unpaid leave from Leave, claims reimbursements from Claims, and allowances/deductions from configured pay inputs. |
+| Pay input collection | Core, via Payroll-owned intake | Operational producers (Leave, Claim, Attendance, and similar future modules) push contributions into Payroll's `PayrollContributionIntake` contract; Payroll resolves the target run, creates participants, and persists pending state. Producers do not import Payroll's internal models — see `docs/architecture/payroll-intake.md` and `docs/plans/people/10_payroll-intake-dependency-inversion.md`. |
 | Calculation orchestration | Core | Calls country pack calculators in deterministic order and stores result lines. |
 | Statutory profile forms | Country pack | Malaysia needs EPF/SOCSO/tax/zakat/HRD employer and employee fields. |
 | Statutory calculators | Country pack | EPF, SOCSO, EIS, PCB, zakat offset/deduction handling, HRD levy. |

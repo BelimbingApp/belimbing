@@ -40,7 +40,7 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 | Rule policy | Effective-dated attendance rules for rounding, grace, lateness, early-out, absent-without-leave, payable break treatment, overtime eligibility, rest-day/public-holiday work, and conditional allowances. | Attendance Core schema; country/private packs seed defaults |
 | Attendance policy group | Cohort-assigned bundle of shift templates, work-hour rules, lateness rules, overtime rules, overtime export mappings, lateness export mappings, conditional allowance rules, and payroll-facing defaults. Mirrors HR2000 TMS Group without copying its storage shape. | Attendance Core; SBG private pack imports setup |
 | Attendance allowance rule | Typed conditional allowance definition with payroll pay-item code, active state, ceiling, min/max resolution, daily/monthly condition rows, typed predicates, and source-script preservation for import/audit. | Attendance Core; private packs seed formulas |
-| Payroll handoff | Converts approved/finalized attendance facts into neutral `PayrollInput` rows for overtime, attendance allowance, shift allowance, lateness deduction, unpaid absence, rest-day work, and one-off time adjustments. | Attendance Core writes inputs; Payroll/country pack classifies |
+| Payroll handoff | Converts approved/finalized attendance facts into neutral payroll contributions for overtime, attendance allowance, shift allowance, lateness deduction, unpaid absence, rest-day work, and one-off time adjustments. **Direction inverted (Phase 3 of plan 10):** `AttendanceOvertimeService` (already shipped) and any future attendance writers go through Payroll's `PayrollContributionIntake` contract. Attendance no longer imports `PayrollInput`/`PayrollRun`/`PayrollRunParticipant`. New writers must define a stable `SOURCE_TYPE` constant and call `intake->ingest($payload)` — see `docs/architecture/payroll-intake.md`. | Attendance emits via Payroll intake; Payroll/country pack classifies |
 | Calendar integration | Resolves scheduled workdays, rest days, off days, public holidays, and company exceptions from People Settings and country-pack holiday data. | People Settings + country pack |
 | Clock-source and geofence policy | Optional policy layer for allowed clock sources, card/device identity, outlet/location labels, photo evidence, IP/location/geofence checks, geofence groups, reminder rules, and evidence retention. Not required for first payroll-adjacent slice unless SBG confirms day-one need. | Attendance Core contract; private/device integrations |
 | Absenteeism batch workflow | HR/payroll workflow to review generated absence candidates, group/filter them, batch-create absence facts, and respect an attendance/absenteeism lock date before payroll handoff. | Attendance Core consuming Leave/Payroll state |
@@ -159,17 +159,17 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 - lifecycle: draft, submitted, approved, rejected, cancelled, withdrawn, queued_for_payroll, paid/settled;
 - route snapshot and policy version used at submission;
 - duplicate protection by employee, source attendance day, overtime span, and payroll target;
-- correction path for locked payroll periods through reversing/new `PayrollInput` rows.
+- correction path for locked payroll periods owned by Payroll's intake (delete-in-draft, compensating reversal, or rejected_locked), not by Attendance writing reversal rows directly.
 
 **The payroll handoff contract is:**
-- only finalized attendance days and approved overtime/adjustments can create payroll inputs;
-- each row carries employee, pay item code, input type, amount or unit quantity, occurred date, payroll period/run target, source type, source id, policy version, roster version, attendance day id, and explanation metadata;
+- only finalized attendance days and approved overtime/adjustments can submit payroll contributions;
+- each contribution is a `PayrollContributionPayload` carrying employee, pay item code, input type, amount or unit quantity, occurred date, period anchor, source type, source id, accounting snapshot, and metadata (policy/roster version, attendance day id, explanation);
 - supported neutral input families include overtime earning, shift allowance, attendance allowance, meal/transport allowance, lateness deduction, early-out deduction, unpaid absence deduction, rest-day/public-holiday work earning, and one-off attendance adjustment;
-- overtime rows may be split by day type, hour threshold, export mapping, adjustment band, and knock-off policy; each split row keeps the source quantity and transformation explanation;
-- lateness and absence rows may be posted daily or as monthly export totals, depending on the policy group;
-- duplicate handoff is rejected for the same source fact and payroll target unless an explicit reversal/override event exists;
-- locked payroll-period corrections do not mutate exported rows; they create reversing/new rows in an open period;
-- country packs classify statutory treatment and wage bases; Attendance Core does not compute EPF/SOCSO/EIS/PCB or other country-specific payroll effects.
+- overtime contributions may be split by day type, hour threshold, export mapping, adjustment band, and knock-off policy; each split contribution submits its own payload and keeps the source quantity and transformation explanation in metadata;
+- lateness and absence contributions may be posted daily or as monthly export totals, depending on the policy group;
+- duplicate handoff is rejected by Payroll's DB-level unique index `(source_type, source_id, pay_item_code, period_anchor)` — Attendance does not enforce uniqueness itself;
+- locked payroll-period corrections are owned by Payroll's intake: reversal-in-draft, compensating new-period input, or `rejected_locked`. Attendance calls `PayrollContributionIntake::reverse(...)` and lets Payroll decide;
+- country packs classify statutory treatment and wage bases against the materialised `PayrollInput` rows; Attendance Core does not compute EPF/SOCSO/EIS/PCB or other country-specific payroll effects.
 
 **The contract explicitly forbids:**
 - Attendance Core depending on Malaysia-specific statutory classes, Malaysian overtime law labels, device-vendor SDKs, or SBG account/payroll codes;
@@ -262,11 +262,11 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 ### Phase 4 - Payroll handoff and reconciliation
 
 - [x] Generate neutral payroll contributions for approved overtime with overtime-request source references. `AttendanceOvertimeService::queuePayrollHandoff` now hands off via the Payroll-owned `PayrollContributionIntake` contract — see `docs/plans/people/10_payroll-intake-dependency-inversion.md`. The producer-owned `people_attendance_payroll_handoffs` table and `AttendancePayrollHandoff` model were retired; Payroll's `people_payroll_pending_contributions` now owns durable handoff state, including the "no open run yet" pending case. Source type: `'attendance_overtime_request'`. {codex/gpt-5,amp/claude-opus-4-7}
-- [ ] Generate neutral inputs for configured attendance allowances, shift allowances, rest-day/public-holiday work, lateness deductions, early-out deductions, unpaid absence deductions, and attendance adjustments when enabled by policy.
-- [ ] Split overtime payroll inputs by day type, hour threshold, adjustment band, and export mapping where policy requires distinct pay items.
+- [ ] Submit Payroll contributions for configured attendance allowances, shift allowances, rest-day/public-holiday work, lateness deductions, early-out deductions, unpaid absence deductions, and attendance adjustments when enabled by policy. Use `PayrollContributionIntake::ingest` with a stable per-writer `SOURCE_TYPE` (e.g. `attendance_allowance`, `attendance_lateness`). Do not import `PayrollInput`/`PayrollRun`/`PayrollRunParticipant`.
+- [ ] Split overtime contributions by day type, hour threshold, adjustment band, and export mapping where policy requires distinct pay items. Each split is a separate `PayrollContributionPayload` distinguished by `pay_item_code`; the composite unique key handles fan-out per source.
 - [ ] Support daily and monthly lateness export rules, including monthly rounding separate from daily exception calculation.
-- [ ] Enforce duplicate protection per source fact and payroll target; require explicit reversal/override for corrections.
-- [ ] Block export into locked payroll periods and create open-period correction inputs for locked-period changes.
+- [x] Duplicate protection per source fact and payroll target is now enforced by Payroll's DB-level unique index `(source_type, source_id, pay_item_code, period_anchor)` on `people_payroll_pending_contributions`. Attendance does not enforce it locally. {amp/claude-opus-4-7}
+- [x] Locked payroll-period correction is now owned by `PayrollContributionIntake::reverse(...)`. Attendance calls reverse and Payroll decides delete-in-draft, compensating reversal, or `rejected_locked`. {amp/claude-opus-4-7}
 - [ ] Add attendance-to-payroll reconciliation report covering source fact, policy version, pay item, quantity/amount, payroll period, export state, and reversal state.
 - [ ] Verify Malaysia payroll country pack classifies attendance inputs correctly without Attendance Core importing Malaysia-specific logic.
 
