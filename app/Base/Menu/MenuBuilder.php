@@ -24,7 +24,15 @@ class MenuBuilder
 
         // Mark active items
         if ($currentRoute) {
-            $tree = $this->markActive($tree, $currentRoute);
+            // If any menu item anywhere in the tree exactly matches the current
+            // route, only exact matches are allowed to mark a node active.
+            // Otherwise prefix fallback (`.index` stripped) is permitted so
+            // that e.g. admin.companies.show highlights admin.companies.index.
+            $hasExactMatch = $items->contains(
+                fn (MenuItem $item) => $item->route === $currentRoute,
+            );
+
+            $tree = $this->markActive($tree, $currentRoute, $hasExactMatch);
         }
 
         return $tree;
@@ -74,13 +82,13 @@ class MenuBuilder
      * @param  array  $tree  Menu tree
      * @param  string  $currentRoute  Current route name
      */
-    protected function markActive(array $tree, string $currentRoute): array
+    protected function markActive(array $tree, string $currentRoute, bool $hasExactMatch): array
     {
         // Recurse into children first so deeper (more specific) matches take
         // priority over prefix matches on parent items.
         foreach ($tree as &$node) {
             if (! empty($node['children'])) {
-                $node['children'] = $this->markActive($node['children'], $currentRoute);
+                $node['children'] = $this->markActive($node['children'], $currentRoute, $hasExactMatch);
 
                 foreach ($node['children'] as $child) {
                     if ($child['is_active'] || $child['has_active_child']) {
@@ -92,18 +100,6 @@ class MenuBuilder
         }
         unset($node);
 
-        // When siblings share an `<x>.index` prefix (e.g. people.leave.index
-        // and people.leave.approvals), the prefix match in routeMatches() would
-        // wrongly mark the index sibling active too. If any sibling exactly
-        // matches the current route, suppress prefix matches on the rest.
-        $exactMatchExists = false;
-        foreach ($tree as $node) {
-            if ($node['item']->route === $currentRoute) {
-                $exactMatchExists = true;
-                break;
-            }
-        }
-
         foreach ($tree as &$node) {
             if ($node['has_active_child']) {
                 continue;
@@ -111,7 +107,7 @@ class MenuBuilder
 
             if ($node['item']->route === $currentRoute) {
                 $node['is_active'] = true;
-            } elseif (! $exactMatchExists && $this->routeMatches($node['item']->route, $currentRoute)) {
+            } elseif (! $hasExactMatch && $this->routeMatches($node['item']->route, $currentRoute)) {
                 $node['is_active'] = true;
             }
         }

@@ -20,84 +20,93 @@
         @endif
 
         <x-ui.card>
-            <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <x-ui.tabs
-                    :tabs="$tabs"
-                    :default="$tab"
-                    size="sm"
-                    persistence="none"
-                    wire-action="setTab"
-                    class="w-full lg:w-auto"
-                >
-                    @foreach ($tabs as $tabDef)
-                        <x-ui.tab :id="$tabDef['id']" />
-                    @endforeach
-                </x-ui.tabs>
+            @if ($surface !== 'settings' || $tab === 'types')
+                <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    @if ($surface !== 'settings')
+                        <x-ui.tabs
+                            :tabs="$tabs"
+                            :default="$tab"
+                            size="sm"
+                            persistence="none"
+                            wire-action="setTab"
+                            class="w-full lg:w-auto"
+                        >
+                            @foreach ($tabs as $tabDef)
+                                <x-ui.tab :id="$tabDef['id']" />
+                            @endforeach
+                        </x-ui.tabs>
+                    @else
+                        <span></span>
+                    @endif
 
-                @if ($tab === 'types')
-                    <div class="w-full lg:w-80">
-                        <x-ui.search-input
-                            wire:model.live.debounce.300ms="search"
-                            placeholder="{{ __('Search leave types...') }}"
-                        />
-                    </div>
-                @endif
-            </div>
+                    @if ($tab === 'types')
+                        <div class="flex flex-col items-stretch gap-2 lg:flex-row lg:items-center">
+                            <div class="w-full lg:w-72">
+                                <x-ui.search-input
+                                    wire:model.live.debounce.300ms="search"
+                                    placeholder="{{ __('Search leave types...') }}"
+                                />
+                            </div>
+                            @if ($canManage)
+                                <x-ui.button variant="primary" wire:click="$set('showLeaveTypeModal', true)">
+                                    <x-icon name="heroicon-o-plus" class="w-4 h-4" />
+                                    {{ __('New Leave Type') }}
+                                </x-ui.button>
+                            @endif
+                        </div>
+                    @endif
+                </div>
+            @endif
 
             {{-- ====================== Apply Leave (employee self-service) ====================== --}}
             @if ($tab === 'apply')
                 @if ($currentEmployeeId === null)
                     <x-ui.alert variant="warning">{{ __('Your user account is not linked to an employee record. Ask an administrator to link it before applying for leave.') }}</x-ui.alert>
                 @else
-                    <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.7fr)]">
-                        <x-ui.card :title="__('New Leave Application')">
-                            <form wire:submit="applyLeave" class="space-y-4">
-                                <x-ui.select id="apply-assignment" wire:model="applyAssignmentId" label="{{ __('Leave Assignment') }}" required :error="$errors->first('applyAssignmentId')">
-                                    <option value="">{{ __('Select the leave you want to apply for') }}</option>
-                                    @foreach ($myAssignments as $assignment)
-                                        <option value="{{ $assignment->id }}">{{ $assignment->leaveType?->name }} — {{ $assignment->name }}</option>
-                                    @endforeach
-                                </x-ui.select>
+                    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="text-sm text-muted">{{ __('Your leave requests are listed below. Use New Leave when you need to submit a request.') }}</div>
+                        <x-ui.button variant="primary" wire:click="$set('showApplyModal', true)">
+                            <x-icon name="heroicon-o-plus" class="w-4 h-4" />
+                            {{ __('New Leave') }}
+                        </x-ui.button>
+                    </div>
 
-                                <div class="grid gap-4 md:grid-cols-2">
-                                    <x-ui.input id="apply-starts-on" type="date" wire:model="applyStartsOn" label="{{ __('From') }}" required :error="$errors->first('applyStartsOn')" />
-                                    <x-ui.input id="apply-ends-on" type="date" wire:model="applyEndsOn" label="{{ __('To') }}" required :error="$errors->first('applyEndsOn')" />
-                                </div>
-
-                                <div class="grid gap-4 md:grid-cols-2">
-                                    <x-ui.select id="apply-unit" wire:model.live="applyUnit" label="{{ __('Unit') }}">
-                                        <option value="day">{{ __('Full day(s)') }}</option>
-                                        <option value="half_day">{{ __('Half-day') }}</option>
-                                        <option value="hour">{{ __('Hours') }}</option>
-                                    </x-ui.select>
-                                    @if ($applyUnit === 'hour')
-                                        <x-ui.input id="apply-hours" wire:model="applyHoursCount" label="{{ __('Hours') }}" :error="$errors->first('applyHoursCount')" />
-                                    @endif
-                                </div>
-
-                                <x-ui.checkbox id="apply-short-notice" wire:model="applyShortNotice" label="{{ __('Short-notice application') }}" />
-
-                                <x-ui.textarea id="apply-note" wire:model="applyNote" label="{{ __('Note (optional)') }}" rows="2" />
-
-                                <x-ui.button type="submit" variant="primary">{{ __('Submit for Approval') }}</x-ui.button>
-                            </form>
-                        </x-ui.card>
-
-                        <x-ui.card :title="__('My Recent Requests')">
-                            <div class="space-y-2 text-sm">
+                    <div class="overflow-x-auto -mx-card-inner px-card-inner">
+                        <table class="min-w-full divide-y divide-border-default text-sm">
+                            <thead class="bg-surface-subtle/80">
+                                <tr>
+                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Leave Type') }}</th>
+                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Period') }}</th>
+                                    <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Qty') }}</th>
+                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
+                                    <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-surface-card divide-y divide-border-default">
                                 @forelse ($myRequests as $request)
-                                    <div class="flex items-center justify-between gap-2 rounded-lg border border-border-default p-3" wire:key="my-recent-{{ $request->id }}">
-                                        <div>
+                                    <tr wire:key="my-recent-{{ $request->id }}">
+                                        <td class="px-table-cell-x py-table-cell-y">
                                             <div class="font-medium text-ink">{{ $request->leaveType?->name }}</div>
-                                            <div class="text-xs text-muted font-mono tabular-nums">{{ $request->starts_on?->toDateString() }} → {{ $request->ends_on?->toDateString() }} · {{ $request->quantity }} {{ $request->unit }}</div>
-                                        </div>
-                                        <x-ui.badge :variant="$this->statusVariant($request->status)">{{ __(ucfirst($request->status)) }}</x-ui.badge>
-                                    </div>
+                                            <div class="text-xs text-muted font-mono">{{ $request->leaveType?->code }}</div>
+                                        </td>
+                                        <td class="px-table-cell-x py-table-cell-y text-xs text-muted font-mono tabular-nums">{{ $request->starts_on?->toDateString() }} &rarr; {{ $request->ends_on?->toDateString() }}</td>
+                                        <td class="px-table-cell-x py-table-cell-y text-right text-xs text-ink tabular-nums">{{ $request->quantity }} {{ $request->unit }}</td>
+                                        <td class="px-table-cell-x py-table-cell-y"><x-ui.badge :variant="$this->statusVariant($request->status)">{{ __(ucfirst($request->status)) }}</x-ui.badge></td>
+                                        <td class="px-table-cell-x py-table-cell-y">
+                                            <div class="flex justify-end">
+                                                @if (in_array($request->status, [\App\Modules\People\Leave\Models\LeaveRequest::STATUS_DRAFT, \App\Modules\People\Leave\Models\LeaveRequest::STATUS_SUBMITTED], true))
+                                                    <x-ui.button size="sm" variant="secondary" wire:click="withdrawOwnRequest({{ $request->id }})">{{ __('Withdraw') }}</x-ui.button>
+                                                @else
+                                                    <span class="text-xs text-muted">{{ __('No action') }}</span>
+                                                @endif
+                                            </div>
+                                        </td>
+                                    </tr>
                                 @empty
-                                    <p class="text-sm text-muted">{{ __('You have no leave requests yet.') }}</p>
+                                    <tr><td colspan="5" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('You have no leave requests yet.') }}</td></tr>
                                 @endforelse
-                            </div>
-                        </x-ui.card>
+                            </tbody>
+                        </table>
                     </div>
                 @endif
 
@@ -183,31 +192,6 @@
 
             {{-- ====================== Types ====================== --}}
             @elseif ($tab === 'types')
-                @if ($canManage)
-                    <x-ui.card :title="__('Create Leave Type')" class="mb-6">
-                        <form wire:submit="createLeaveType" class="space-y-4">
-                            <div class="grid gap-4 md:grid-cols-2">
-                                <x-ui.input id="leave-type-code" wire:model="typeCode" label="{{ __('Code') }}" required :error="$errors->first('typeCode')" />
-                                <x-ui.input id="leave-type-name" wire:model="typeName" label="{{ __('Name') }}" required :error="$errors->first('typeName')" />
-                            </div>
-                            <div class="grid gap-4 md:grid-cols-3">
-                                <x-ui.select id="leave-type-unit" wire:model="typeDefaultUnit" label="{{ __('Default Unit') }}" :error="$errors->first('typeDefaultUnit')">
-                                    <option value="day">{{ __('Day') }}</option>
-                                    <option value="half_day">{{ __('Half-Day') }}</option>
-                                    <option value="hour">{{ __('Hour') }}</option>
-                                </x-ui.select>
-                                <x-ui.input id="leave-type-payroll-code" wire:model="typePayrollPayItemCode" label="{{ __('Payroll Pay Item Code') }}" :error="$errors->first('typePayrollPayItemCode')" />
-                                <div class="flex flex-col gap-2 pt-6">
-                                    <x-ui.checkbox id="leave-type-paid" wire:model="typePaid" label="{{ __('Paid leave') }}" />
-                                    <x-ui.checkbox id="leave-type-payroll" wire:model="typeInteractsWithPayroll" label="{{ __('Interacts with payroll') }}" />
-                                    <x-ui.checkbox id="leave-type-attachment" wire:model="typeCompulsoryAttachment" label="{{ __('Attachment required') }}" />
-                                </div>
-                            </div>
-                            <x-ui.button type="submit" variant="primary">{{ __('Create Leave Type') }}</x-ui.button>
-                        </form>
-                    </x-ui.card>
-                @endif
-
                 <div class="overflow-x-auto -mx-card-inner px-card-inner">
                     <table class="min-w-full divide-y divide-border-default text-sm">
                         <thead class="bg-surface-subtle/80">
@@ -272,78 +256,19 @@
             {{-- ====================== Policies ====================== --}}
             @elseif ($tab === 'policies')
                 @if ($canManage)
-                    <div class="mb-6 grid gap-6 xl:grid-cols-2">
-                        <x-ui.card :title="__('Create Entitlement Policy')">
-                            <form wire:submit="createEntitlementPolicy" class="space-y-4">
-                                <x-ui.select id="entitlement-leave-type" wire:model="entitlementLeaveTypeId" label="{{ __('Leave Type') }}" required :error="$errors->first('entitlementLeaveTypeId')">
-                                    <option value="">{{ __('Select a leave type') }}</option>
-                                    @foreach ($leaveTypes as $type)
-                                        <option value="{{ $type->id }}">{{ $type->code }} — {{ $type->name }}</option>
-                                    @endforeach
-                                </x-ui.select>
-                                <div class="grid gap-4 md:grid-cols-2">
-                                    <x-ui.input id="entitlement-code" wire:model="entitlementCode" label="{{ __('Code') }}" required :error="$errors->first('entitlementCode')" />
-                                    <x-ui.input id="entitlement-name" wire:model="entitlementName" label="{{ __('Name') }}" required :error="$errors->first('entitlementName')" />
-                                </div>
-                                <div class="grid gap-4 md:grid-cols-2">
-                                    <x-ui.select id="entitlement-accrual" wire:model="entitlementAccrualMethod" label="{{ __('Accrual Method') }}">
-                                        <option value="annual_lump_no_prorate">{{ __('Annual lump (no prorate)') }}</option>
-                                        <option value="monthly_accrual">{{ __('Monthly accrual') }}</option>
-                                        <option value="earned_until_month_n">{{ __('Earned until month N') }}</option>
-                                        <option value="anniversary">{{ __('Anniversary') }}</option>
-                                    </x-ui.select>
-                                    <x-ui.select id="entitlement-rounding" wire:model="entitlementRounding" label="{{ __('Rounding') }}">
-                                        <option value="none">{{ __('None') }}</option>
-                                        <option value="nearest_1_day">{{ __('Nearest 1 day') }}</option>
-                                        <option value="nearest_half_day">{{ __('Nearest half-day') }}</option>
-                                    </x-ui.select>
-                                </div>
-                                <div class="grid gap-4 md:grid-cols-3">
-                                    <x-ui.input id="entitlement-bf-cap" wire:model="entitlementBringForwardCap" label="{{ __('Carry-Forward Cap (days)') }}" :error="$errors->first('entitlementBringForwardCap')" />
-                                    <x-ui.input id="entitlement-bf-expiry" type="number" wire:model="entitlementBringForwardExpiryMonth" label="{{ __('Expiry Month (1-12)') }}" :error="$errors->first('entitlementBringForwardExpiryMonth')" />
-                                    <x-ui.select id="entitlement-bf-anchor" wire:model="entitlementBringForwardAnchor" label="{{ __('Anchor') }}">
-                                        <option value="year_start">{{ __('Year start') }}</option>
-                                        <option value="anniversary">{{ __('Anniversary') }}</option>
-                                    </x-ui.select>
-                                </div>
-                                <div class="flex flex-wrap gap-4">
-                                    <x-ui.checkbox id="entitlement-prorate-joiners" wire:model="entitlementProrateJoiners" label="{{ __('Prorate for joiners') }}" />
-                                    <x-ui.checkbox id="entitlement-prorate-leavers" wire:model="entitlementProrateLeavers" label="{{ __('Prorate for leavers') }}" />
-                                </div>
-                                <x-ui.input id="entitlement-effective-from" type="date" wire:model="entitlementEffectiveFrom" label="{{ __('Effective From') }}" required :error="$errors->first('entitlementEffectiveFrom')" />
-                                <x-ui.button type="submit" variant="primary">{{ __('Create Entitlement Policy') }}</x-ui.button>
-                            </form>
-                        </x-ui.card>
-
-                        <x-ui.card :title="__('Create Request Policy')">
-                            <form wire:submit="createRequestPolicy" class="space-y-4">
-                                <x-ui.select id="request-leave-type" wire:model="requestLeaveTypeId" label="{{ __('Leave Type') }}" required :error="$errors->first('requestLeaveTypeId')">
-                                    <option value="">{{ __('Select a leave type') }}</option>
-                                    @foreach ($leaveTypes as $type)
-                                        <option value="{{ $type->id }}">{{ $type->code }} — {{ $type->name }}</option>
-                                    @endforeach
-                                </x-ui.select>
-                                <div class="grid gap-4 md:grid-cols-2">
-                                    <x-ui.input id="request-code" wire:model="requestCode" label="{{ __('Code') }}" required :error="$errors->first('requestCode')" />
-                                    <x-ui.input id="request-name" wire:model="requestName" label="{{ __('Name') }}" required :error="$errors->first('requestName')" />
-                                </div>
-                                <div class="grid gap-4 md:grid-cols-2">
-                                    <x-ui.input id="request-max-days" wire:model="requestMaxDaysPerApplication" label="{{ __('Max Days per Application') }}" :error="$errors->first('requestMaxDaysPerApplication')" />
-                                    <x-ui.input id="request-effective-from" type="date" wire:model="requestEffectiveFrom" label="{{ __('Effective From') }}" required :error="$errors->first('requestEffectiveFrom')" />
-                                </div>
-                                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                    <x-ui.checkbox id="request-allow-negative" wire:model="requestAllowNegative" label="{{ __('Allow negative balance') }}" />
-                                    <x-ui.checkbox id="request-include-pending" wire:model="requestIncludePending" label="{{ __('Encumber pending as taken') }}" />
-                                    <x-ui.checkbox id="request-multi-per-day" wire:model="requestAllowMultiplePerDay" label="{{ __('Allow multiple per day') }}" />
-                                    <x-ui.checkbox id="request-no-cross-month" wire:model="requestNoCrossMonth" label="{{ __('No month-boundary split') }}" />
-                                    <x-ui.checkbox id="request-attachment" wire:model="requestCompulsoryAttachment" label="{{ __('Attachment required') }}" />
-                                    <x-ui.checkbox id="request-exclude-holiday" wire:model="requestExcludeHoliday" label="{{ __('Exclude holidays') }}" />
-                                    <x-ui.checkbox id="request-exclude-off-day" wire:model="requestExcludeOffDay" label="{{ __('Exclude off-days') }}" />
-                                    <x-ui.checkbox id="request-exclude-rest-day" wire:model="requestExcludeRestDay" label="{{ __('Exclude rest-days') }}" />
-                                </div>
-                                <x-ui.button type="submit" variant="primary">{{ __('Create Request Policy') }}</x-ui.button>
-                            </form>
-                        </x-ui.card>
+                    <div class="mb-4 flex flex-wrap items-center justify-end gap-2">
+                        <x-ui.button variant="primary" wire:click="$set('showEntitlementPolicyModal', true)">
+                            <x-icon name="heroicon-o-plus" class="w-4 h-4" />
+                            {{ __('New Entitlement Policy') }}
+                        </x-ui.button>
+                        <x-ui.button variant="primary" wire:click="$set('showRequestPolicyModal', true)">
+                            <x-icon name="heroicon-o-plus" class="w-4 h-4" />
+                            {{ __('New Request Policy') }}
+                        </x-ui.button>
+                        <x-ui.button variant="ghost" wire:click="$set('showEntitlementBandModal', true)">
+                            <x-icon name="heroicon-o-plus" class="w-4 h-4" />
+                            {{ __('Add Band') }}
+                        </x-ui.button>
                     </div>
                 @endif
 
@@ -394,30 +319,6 @@
                         </div>
                     </x-ui.card>
 
-                    <x-ui.card :title="__('Add Entitlement Band')">
-                        @if ($canManage)
-                            <form wire:submit="addEntitlementBand" class="space-y-4">
-                                <x-ui.select id="band-policy" wire:model="bandPolicyId" label="{{ __('Entitlement Policy') }}" required :error="$errors->first('bandPolicyId')">
-                                    <option value="">{{ __('Select a policy') }}</option>
-                                    @foreach ($entitlementPolicies as $policy)
-                                        <option value="{{ $policy->id }}">{{ $policy->code }} — {{ $policy->name }}</option>
-                                    @endforeach
-                                </x-ui.select>
-                                <div class="grid gap-4 md:grid-cols-2">
-                                    <x-ui.input id="band-min-years" wire:model="bandMinYears" label="{{ __('Min Years of Service') }}" required :error="$errors->first('bandMinYears')" />
-                                    <x-ui.input id="band-max-years" wire:model="bandMaxYears" label="{{ __('Max Years of Service (blank = unlimited)') }}" :error="$errors->first('bandMaxYears')" />
-                                </div>
-                                <div class="grid gap-4 md:grid-cols-2">
-                                    <x-ui.input id="band-days" wire:model="bandDays" label="{{ __('Entitlement Days') }}" required :error="$errors->first('bandDays')" />
-                                    <x-ui.input id="band-bf-override" wire:model="bandCarryForwardOverride" label="{{ __('Carry-Forward Cap Override (optional)') }}" :error="$errors->first('bandCarryForwardOverride')" />
-                                </div>
-                                <x-ui.button type="submit" variant="primary">{{ __('Add Band') }}</x-ui.button>
-                            </form>
-                        @else
-                            <p class="text-sm text-muted">{{ __('Manage permission required.') }}</p>
-                        @endif
-                    </x-ui.card>
-
                     <x-ui.card :title="__('Request Policies')">
                         <div class="space-y-3">
                             @forelse ($requestPolicies as $policy)
@@ -449,59 +350,12 @@
             {{-- ====================== Assignments ====================== --}}
             @elseif ($tab === 'assignments')
                 @if ($canManage)
-                    <x-ui.card :title="__('Create Leave Assignment')" class="mb-6">
-                        <form wire:submit="createAssignment" class="space-y-4">
-                            <div class="grid gap-4 md:grid-cols-2">
-                                <x-ui.input id="assignment-code" wire:model="assignmentCode" label="{{ __('Code') }}" required :error="$errors->first('assignmentCode')" />
-                                <x-ui.input id="assignment-name" wire:model="assignmentName" label="{{ __('Name') }}" required :error="$errors->first('assignmentName')" />
-                            </div>
-                            <div class="grid gap-4 md:grid-cols-3">
-                                <x-ui.select id="assignment-leave-type" wire:model="assignmentLeaveTypeId" label="{{ __('Leave Type') }}" required :error="$errors->first('assignmentLeaveTypeId')">
-                                    <option value="">{{ __('Select') }}</option>
-                                    @foreach ($leaveTypes as $type)
-                                        <option value="{{ $type->id }}">{{ $type->code }}</option>
-                                    @endforeach
-                                </x-ui.select>
-                                <x-ui.select id="assignment-entitlement-policy" wire:model="assignmentEntitlementPolicyId" label="{{ __('Entitlement Policy') }}" required :error="$errors->first('assignmentEntitlementPolicyId')">
-                                    <option value="">{{ __('Select') }}</option>
-                                    @foreach ($entitlementPolicies as $policy)
-                                        <option value="{{ $policy->id }}">{{ $policy->code }}</option>
-                                    @endforeach
-                                </x-ui.select>
-                                <x-ui.select id="assignment-request-policy" wire:model="assignmentRequestPolicyId" label="{{ __('Request Policy') }}" required :error="$errors->first('assignmentRequestPolicyId')">
-                                    <option value="">{{ __('Select') }}</option>
-                                    @foreach ($requestPolicies as $policy)
-                                        <option value="{{ $policy->id }}">{{ $policy->code }}</option>
-                                    @endforeach
-                                </x-ui.select>
-                            </div>
-                            <x-ui.input id="assignment-effective-from" type="date" wire:model="assignmentEffectiveFrom" label="{{ __('Effective From') }}" required :error="$errors->first('assignmentEffectiveFrom')" />
-
-                            <div>
-                                <div class="mb-2 text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Cohort Predicate (optional)') }}</div>
-                                <p class="mb-3 text-xs text-muted">{{ __('Leave a field blank to apply the assignment regardless of that demographic.') }}</p>
-                                <div class="grid gap-4 md:grid-cols-3">
-                                    <x-ui.select id="assignment-cohort-gender" wire:model="assignmentCohortGender" label="{{ __('Gender') }}">
-                                        <option value="">{{ __('Any') }}</option>
-                                        <option value="male">{{ __('Male') }}</option>
-                                        <option value="female">{{ __('Female') }}</option>
-                                    </x-ui.select>
-                                    <x-ui.select id="assignment-cohort-marital" wire:model="assignmentCohortMaritalStatus" label="{{ __('Marital Status') }}">
-                                        <option value="">{{ __('Any') }}</option>
-                                        <option value="single">{{ __('Single') }}</option>
-                                        <option value="married">{{ __('Married') }}</option>
-                                    </x-ui.select>
-                                    <x-ui.select id="assignment-cohort-citizenship" wire:model="assignmentCohortCitizenship" label="{{ __('Citizenship') }}">
-                                        <option value="">{{ __('Any') }}</option>
-                                        <option value="citizen">{{ __('Citizen') }}</option>
-                                        <option value="foreign_worker">{{ __('Foreign Worker') }}</option>
-                                    </x-ui.select>
-                                </div>
-                            </div>
-
-                            <x-ui.button type="submit" variant="primary">{{ __('Create Assignment') }}</x-ui.button>
-                        </form>
-                    </x-ui.card>
+                    <div class="mb-4 flex justify-end">
+                        <x-ui.button variant="primary" wire:click="$set('showAssignmentModal', true)">
+                            <x-icon name="heroicon-o-plus" class="w-4 h-4" />
+                            {{ __('New Assignment') }}
+                        </x-ui.button>
+                    </div>
                 @endif
 
                 <div class="overflow-x-auto -mx-card-inner px-card-inner">
@@ -763,40 +617,12 @@
             {{-- ====================== Adjustments ====================== --}}
             @elseif ($tab === 'adjustments')
                 @if ($canManage)
-                    <x-ui.card :title="__('Record Manual Ledger Entry')" class="mb-6">
-                        <p class="mb-4 text-xs text-muted">{{ __('Append-only. Use Opening for migration balances, Adjusted for corrections, Accrual for manual top-ups. Use negative quantity to reduce balance.') }}</p>
-                        <form wire:submit="recordAdjustment" class="space-y-4">
-                            <div class="grid gap-4 md:grid-cols-2">
-                                <x-ui.select id="adjustment-employee" wire:model="adjustmentEmployeeId" label="{{ __('Employee') }}" required :error="$errors->first('adjustmentEmployeeId')">
-                                    <option value="">{{ __('Select an employee') }}</option>
-                                    @foreach ($employees as $employee)
-                                        <option value="{{ $employee->id }}">{{ $employee->employee_number }} — {{ $employee->displayName() }}</option>
-                                    @endforeach
-                                </x-ui.select>
-                                <x-ui.select id="adjustment-leave-type" wire:model="adjustmentLeaveTypeId" label="{{ __('Leave Type') }}" required :error="$errors->first('adjustmentLeaveTypeId')">
-                                    <option value="">{{ __('Select a leave type') }}</option>
-                                    @foreach ($leaveTypes as $type)
-                                        <option value="{{ $type->id }}">{{ $type->code }} — {{ $type->name }}</option>
-                                    @endforeach
-                                </x-ui.select>
-                            </div>
-                            <div class="grid gap-4 md:grid-cols-4">
-                                <x-ui.select id="adjustment-entry-type" wire:model="adjustmentEntryType" label="{{ __('Entry Type') }}">
-                                    <option value="opening">{{ __('Opening') }}</option>
-                                    <option value="adjusted">{{ __('Adjusted') }}</option>
-                                    <option value="accrual">{{ __('Accrual') }}</option>
-                                </x-ui.select>
-                                <x-ui.input id="adjustment-quantity" wire:model="adjustmentQuantity" label="{{ __('Quantity (+/-)') }}" required :error="$errors->first('adjustmentQuantity')" />
-                                <x-ui.select id="adjustment-unit" wire:model="adjustmentUnit" label="{{ __('Unit') }}">
-                                    <option value="day">{{ __('Day') }}</option>
-                                    <option value="hour">{{ __('Hour') }}</option>
-                                </x-ui.select>
-                                <x-ui.input id="adjustment-year" type="number" wire:model="adjustmentYear" label="{{ __('Leave Year') }}" required :error="$errors->first('adjustmentYear')" />
-                            </div>
-                            <x-ui.textarea id="adjustment-note" wire:model="adjustmentNote" label="{{ __('Note') }}" rows="2" :error="$errors->first('adjustmentNote')" />
-                            <x-ui.button type="submit" variant="primary">{{ __('Record Entry') }}</x-ui.button>
-                        </form>
-                    </x-ui.card>
+                    <div class="mb-4 flex justify-end">
+                        <x-ui.button variant="primary" wire:click="$set('showAdjustmentModal', true)">
+                            <x-icon name="heroicon-o-plus" class="w-4 h-4" />
+                            {{ __('New Adjustment') }}
+                        </x-ui.button>
+                    </div>
                 @endif
 
                 <x-ui.card :title="__('Recent Manual Entries')">
@@ -900,4 +726,317 @@
             @endif
         </x-ui.card>
     </div>
+
+    {{-- ====================== Modals (self-service surface) ====================== --}}
+    @if ($surface === 'my' && $currentEmployeeId !== null)
+        <x-ui.modal wire:model="showApplyModal" class="max-w-2xl">
+            <form wire:submit="applyLeave" class="p-6 space-y-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-medium tracking-tight text-ink">{{ __('New Leave') }}</h3>
+                        <p class="mt-1 text-sm text-muted">{{ __('Submit a leave request for approval.') }}</p>
+                    </div>
+                    <button type="button" @click="show = false" class="text-muted hover:text-ink" aria-label="{{ __('Close') }}">
+                        <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <x-ui.select id="apply-assignment" wire:model="applyAssignmentId" label="{{ __('Leave Type') }}" required :error="$errors->first('applyAssignmentId')">
+                    <option value="">{{ __('Select leave type') }}</option>
+                    @foreach ($myAssignments as $assignment)
+                        <option value="{{ $assignment->id }}">{{ $assignment->leaveType?->name }} ({{ $assignment->code }})</option>
+                    @endforeach
+                </x-ui.select>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.input id="apply-start" type="date" wire:model="applyStartsOn" label="{{ __('Start Date') }}" required :error="$errors->first('applyStartsOn')" />
+                    <x-ui.input id="apply-end" type="date" wire:model="applyEndsOn" label="{{ __('End Date') }}" required :error="$errors->first('applyEndsOn')" />
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.select id="apply-unit" wire:model="applyUnit" label="{{ __('Unit') }}" required :error="$errors->first('applyUnit')">
+                        <option value="day">{{ __('Day') }}</option>
+                        <option value="half_day">{{ __('Half Day') }}</option>
+                        <option value="hour">{{ __('Hour') }}</option>
+                    </x-ui.select>
+                    <x-ui.input id="apply-hours" type="number" step="0.25" min="0" wire:model="applyHoursCount" label="{{ __('Hours') }}" :error="$errors->first('applyHoursCount')" />
+                </div>
+
+                <x-ui.checkbox id="apply-short-notice" wire:model="applyShortNotice" label="{{ __('Short notice') }}" />
+                <x-ui.textarea id="apply-note" wire:model="applyNote" label="{{ __('Note') }}" rows="3" />
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <x-ui.button type="button" variant="secondary" @click="show = false">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="primary">{{ __('Submit Request') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
+
+    {{-- ====================== Modals (settings surface) ====================== --}}
+    @if ($surface === 'settings' && $canManage)
+        {{-- New Leave Type --}}
+        <x-ui.modal wire:model="showLeaveTypeModal" class="max-w-2xl">
+            <form wire:submit="createLeaveType" class="p-6 space-y-4">
+                <div class="flex items-start justify-between gap-3">
+                    <h3 class="text-lg font-medium tracking-tight text-ink">{{ __('New Leave Type') }}</h3>
+                    <button type="button" @click="show = false" class="text-muted hover:text-ink" aria-label="{{ __('Close') }}">
+                        <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
+                    </button>
+                </div>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.input id="leave-type-code" wire:model="typeCode" label="{{ __('Code') }}" required :error="$errors->first('typeCode')" />
+                    <x-ui.input id="leave-type-name" wire:model="typeName" label="{{ __('Name') }}" required :error="$errors->first('typeName')" />
+                </div>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.select id="leave-type-unit" wire:model="typeDefaultUnit" label="{{ __('Default Unit') }}" :error="$errors->first('typeDefaultUnit')">
+                        <option value="day">{{ __('Day') }}</option>
+                        <option value="half_day">{{ __('Half-Day') }}</option>
+                        <option value="hour">{{ __('Hour') }}</option>
+                    </x-ui.select>
+                    <x-ui.input id="leave-type-payroll-code" wire:model="typePayrollPayItemCode" label="{{ __('Payroll Pay Item Code') }}" :error="$errors->first('typePayrollPayItemCode')" />
+                </div>
+                <div class="flex flex-wrap gap-4">
+                    <x-ui.checkbox id="leave-type-paid" wire:model="typePaid" label="{{ __('Paid leave') }}" />
+                    <x-ui.checkbox id="leave-type-payroll" wire:model="typeInteractsWithPayroll" label="{{ __('Interacts with payroll') }}" />
+                    <x-ui.checkbox id="leave-type-attachment" wire:model="typeCompulsoryAttachment" label="{{ __('Attachment required') }}" />
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <x-ui.button type="button" variant="ghost" @click="show = false">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="primary">{{ __('Create Leave Type') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+
+        {{-- New Entitlement Policy --}}
+        <x-ui.modal wire:model="showEntitlementPolicyModal" class="max-w-3xl">
+            <form wire:submit="createEntitlementPolicy" class="p-6 space-y-4">
+                <div class="flex items-start justify-between gap-3">
+                    <h3 class="text-lg font-medium tracking-tight text-ink">{{ __('New Entitlement Policy') }}</h3>
+                    <button type="button" @click="show = false" class="text-muted hover:text-ink" aria-label="{{ __('Close') }}">
+                        <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
+                    </button>
+                </div>
+                <x-ui.select id="entitlement-leave-type" wire:model="entitlementLeaveTypeId" label="{{ __('Leave Type') }}" required :error="$errors->first('entitlementLeaveTypeId')">
+                    <option value="">{{ __('Select a leave type') }}</option>
+                    @foreach ($leaveTypes as $type)
+                        <option value="{{ $type->id }}">{{ $type->code }} — {{ $type->name }}</option>
+                    @endforeach
+                </x-ui.select>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.input id="entitlement-code" wire:model="entitlementCode" label="{{ __('Code') }}" required :error="$errors->first('entitlementCode')" />
+                    <x-ui.input id="entitlement-name" wire:model="entitlementName" label="{{ __('Name') }}" required :error="$errors->first('entitlementName')" />
+                </div>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.select id="entitlement-accrual" wire:model="entitlementAccrualMethod" label="{{ __('Accrual Method') }}">
+                        <option value="annual_lump_no_prorate">{{ __('Annual lump (no prorate)') }}</option>
+                        <option value="monthly_accrual">{{ __('Monthly accrual') }}</option>
+                        <option value="earned_until_month_n">{{ __('Earned until month N') }}</option>
+                        <option value="anniversary">{{ __('Anniversary') }}</option>
+                    </x-ui.select>
+                    <x-ui.select id="entitlement-rounding" wire:model="entitlementRounding" label="{{ __('Rounding') }}">
+                        <option value="none">{{ __('None') }}</option>
+                        <option value="nearest_1_day">{{ __('Nearest 1 day') }}</option>
+                        <option value="nearest_half_day">{{ __('Nearest half-day') }}</option>
+                    </x-ui.select>
+                </div>
+                <div class="grid gap-4 md:grid-cols-3">
+                    <x-ui.input id="entitlement-bf-cap" wire:model="entitlementBringForwardCap" label="{{ __('Carry-Forward Cap (days)') }}" :error="$errors->first('entitlementBringForwardCap')" />
+                    <x-ui.input id="entitlement-bf-expiry" type="number" wire:model="entitlementBringForwardExpiryMonth" label="{{ __('Expiry Month (1-12)') }}" :error="$errors->first('entitlementBringForwardExpiryMonth')" />
+                    <x-ui.select id="entitlement-bf-anchor" wire:model="entitlementBringForwardAnchor" label="{{ __('Anchor') }}">
+                        <option value="year_start">{{ __('Year start') }}</option>
+                        <option value="anniversary">{{ __('Anniversary') }}</option>
+                    </x-ui.select>
+                </div>
+                <div class="flex flex-wrap gap-4">
+                    <x-ui.checkbox id="entitlement-prorate-joiners" wire:model="entitlementProrateJoiners" label="{{ __('Prorate for joiners') }}" />
+                    <x-ui.checkbox id="entitlement-prorate-leavers" wire:model="entitlementProrateLeavers" label="{{ __('Prorate for leavers') }}" />
+                </div>
+                <x-ui.input id="entitlement-effective-from" type="date" wire:model="entitlementEffectiveFrom" label="{{ __('Effective From') }}" required :error="$errors->first('entitlementEffectiveFrom')" />
+                <div class="flex justify-end gap-2 pt-2">
+                    <x-ui.button type="button" variant="ghost" @click="show = false">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="primary">{{ __('Create Policy') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+
+        {{-- New Request Policy --}}
+        <x-ui.modal wire:model="showRequestPolicyModal" class="max-w-3xl">
+            <form wire:submit="createRequestPolicy" class="p-6 space-y-4">
+                <div class="flex items-start justify-between gap-3">
+                    <h3 class="text-lg font-medium tracking-tight text-ink">{{ __('New Request Policy') }}</h3>
+                    <button type="button" @click="show = false" class="text-muted hover:text-ink" aria-label="{{ __('Close') }}">
+                        <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
+                    </button>
+                </div>
+                <x-ui.select id="request-leave-type" wire:model="requestLeaveTypeId" label="{{ __('Leave Type') }}" required :error="$errors->first('requestLeaveTypeId')">
+                    <option value="">{{ __('Select a leave type') }}</option>
+                    @foreach ($leaveTypes as $type)
+                        <option value="{{ $type->id }}">{{ $type->code }} — {{ $type->name }}</option>
+                    @endforeach
+                </x-ui.select>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.input id="request-code" wire:model="requestCode" label="{{ __('Code') }}" required :error="$errors->first('requestCode')" />
+                    <x-ui.input id="request-name" wire:model="requestName" label="{{ __('Name') }}" required :error="$errors->first('requestName')" />
+                </div>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.input id="request-max-days" wire:model="requestMaxDaysPerApplication" label="{{ __('Max Days per Application') }}" :error="$errors->first('requestMaxDaysPerApplication')" />
+                    <x-ui.input id="request-effective-from" type="date" wire:model="requestEffectiveFrom" label="{{ __('Effective From') }}" required :error="$errors->first('requestEffectiveFrom')" />
+                </div>
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <x-ui.checkbox id="request-allow-negative" wire:model="requestAllowNegative" label="{{ __('Allow negative balance') }}" />
+                    <x-ui.checkbox id="request-include-pending" wire:model="requestIncludePending" label="{{ __('Encumber pending as taken') }}" />
+                    <x-ui.checkbox id="request-multi-per-day" wire:model="requestAllowMultiplePerDay" label="{{ __('Allow multiple per day') }}" />
+                    <x-ui.checkbox id="request-no-cross-month" wire:model="requestNoCrossMonth" label="{{ __('No month-boundary split') }}" />
+                    <x-ui.checkbox id="request-attachment" wire:model="requestCompulsoryAttachment" label="{{ __('Attachment required') }}" />
+                    <x-ui.checkbox id="request-exclude-holiday" wire:model="requestExcludeHoliday" label="{{ __('Exclude holidays') }}" />
+                    <x-ui.checkbox id="request-exclude-off-day" wire:model="requestExcludeOffDay" label="{{ __('Exclude off-days') }}" />
+                    <x-ui.checkbox id="request-exclude-rest-day" wire:model="requestExcludeRestDay" label="{{ __('Exclude rest-days') }}" />
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <x-ui.button type="button" variant="ghost" @click="show = false">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="primary">{{ __('Create Policy') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+
+        {{-- Add Entitlement Band --}}
+        <x-ui.modal wire:model="showEntitlementBandModal" class="max-w-xl">
+            <form wire:submit="addEntitlementBand" class="p-6 space-y-4">
+                <div class="flex items-start justify-between gap-3">
+                    <h3 class="text-lg font-medium tracking-tight text-ink">{{ __('Add Entitlement Band') }}</h3>
+                    <button type="button" @click="show = false" class="text-muted hover:text-ink" aria-label="{{ __('Close') }}">
+                        <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
+                    </button>
+                </div>
+                <x-ui.select id="band-policy" wire:model="bandPolicyId" label="{{ __('Entitlement Policy') }}" required :error="$errors->first('bandPolicyId')">
+                    <option value="">{{ __('Select a policy') }}</option>
+                    @foreach ($entitlementPolicies as $policy)
+                        <option value="{{ $policy->id }}">{{ $policy->code }} — {{ $policy->name }}</option>
+                    @endforeach
+                </x-ui.select>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.input id="band-min-years" wire:model="bandMinYears" label="{{ __('Min Years of Service') }}" required :error="$errors->first('bandMinYears')" />
+                    <x-ui.input id="band-max-years" wire:model="bandMaxYears" label="{{ __('Max Years (blank = unlimited)') }}" :error="$errors->first('bandMaxYears')" />
+                </div>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.input id="band-days" wire:model="bandDays" label="{{ __('Entitlement Days') }}" required :error="$errors->first('bandDays')" />
+                    <x-ui.input id="band-bf-override" wire:model="bandCarryForwardOverride" label="{{ __('Carry-Forward Cap Override') }}" :error="$errors->first('bandCarryForwardOverride')" />
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <x-ui.button type="button" variant="ghost" @click="show = false">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="primary">{{ __('Add Band') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+
+        {{-- New Assignment --}}
+        <x-ui.modal wire:model="showAssignmentModal" class="max-w-3xl">
+            <form wire:submit="createAssignment" class="p-6 space-y-4">
+                <div class="flex items-start justify-between gap-3">
+                    <h3 class="text-lg font-medium tracking-tight text-ink">{{ __('New Leave Assignment') }}</h3>
+                    <button type="button" @click="show = false" class="text-muted hover:text-ink" aria-label="{{ __('Close') }}">
+                        <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
+                    </button>
+                </div>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.input id="assignment-code" wire:model="assignmentCode" label="{{ __('Code') }}" required :error="$errors->first('assignmentCode')" />
+                    <x-ui.input id="assignment-name" wire:model="assignmentName" label="{{ __('Name') }}" required :error="$errors->first('assignmentName')" />
+                </div>
+                <div class="grid gap-4 md:grid-cols-3">
+                    <x-ui.select id="assignment-leave-type" wire:model="assignmentLeaveTypeId" label="{{ __('Leave Type') }}" required :error="$errors->first('assignmentLeaveTypeId')">
+                        <option value="">{{ __('Select') }}</option>
+                        @foreach ($leaveTypes as $type)
+                            <option value="{{ $type->id }}">{{ $type->code }}</option>
+                        @endforeach
+                    </x-ui.select>
+                    <x-ui.select id="assignment-entitlement-policy" wire:model="assignmentEntitlementPolicyId" label="{{ __('Entitlement Policy') }}" required :error="$errors->first('assignmentEntitlementPolicyId')">
+                        <option value="">{{ __('Select') }}</option>
+                        @foreach ($entitlementPolicies as $policy)
+                            <option value="{{ $policy->id }}">{{ $policy->code }}</option>
+                        @endforeach
+                    </x-ui.select>
+                    <x-ui.select id="assignment-request-policy" wire:model="assignmentRequestPolicyId" label="{{ __('Request Policy') }}" required :error="$errors->first('assignmentRequestPolicyId')">
+                        <option value="">{{ __('Select') }}</option>
+                        @foreach ($requestPolicies as $policy)
+                            <option value="{{ $policy->id }}">{{ $policy->code }}</option>
+                        @endforeach
+                    </x-ui.select>
+                </div>
+                <x-ui.input id="assignment-effective-from" type="date" wire:model="assignmentEffectiveFrom" label="{{ __('Effective From') }}" required :error="$errors->first('assignmentEffectiveFrom')" />
+
+                <div>
+                    <div class="mb-2 text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Cohort Predicate (optional)') }}</div>
+                    <p class="mb-3 text-xs text-muted">{{ __('Leave a field blank to apply the assignment regardless of that demographic.') }}</p>
+                    <div class="grid gap-4 md:grid-cols-3">
+                        <x-ui.select id="assignment-cohort-gender" wire:model="assignmentCohortGender" label="{{ __('Gender') }}">
+                            <option value="">{{ __('Any') }}</option>
+                            <option value="male">{{ __('Male') }}</option>
+                            <option value="female">{{ __('Female') }}</option>
+                        </x-ui.select>
+                        <x-ui.select id="assignment-cohort-marital" wire:model="assignmentCohortMaritalStatus" label="{{ __('Marital Status') }}">
+                            <option value="">{{ __('Any') }}</option>
+                            <option value="single">{{ __('Single') }}</option>
+                            <option value="married">{{ __('Married') }}</option>
+                        </x-ui.select>
+                        <x-ui.select id="assignment-cohort-citizenship" wire:model="assignmentCohortCitizenship" label="{{ __('Citizenship') }}">
+                            <option value="">{{ __('Any') }}</option>
+                            <option value="citizen">{{ __('Citizen') }}</option>
+                            <option value="foreign_worker">{{ __('Foreign Worker') }}</option>
+                        </x-ui.select>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <x-ui.button type="button" variant="ghost" @click="show = false">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="primary">{{ __('Create Assignment') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+
+        {{-- New Ledger Adjustment --}}
+        <x-ui.modal wire:model="showAdjustmentModal" class="max-w-2xl">
+            <form wire:submit="recordAdjustment" class="p-6 space-y-4">
+                <div class="flex items-start justify-between gap-3">
+                    <h3 class="text-lg font-medium tracking-tight text-ink">{{ __('New Ledger Adjustment') }}</h3>
+                    <button type="button" @click="show = false" class="text-muted hover:text-ink" aria-label="{{ __('Close') }}">
+                        <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
+                    </button>
+                </div>
+                <p class="text-xs text-muted">{{ __('Append-only. Opening for migration balances, Adjusted for corrections, Accrual for manual top-ups. Negative quantity reduces balance.') }}</p>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.select id="adjustment-employee" wire:model="adjustmentEmployeeId" label="{{ __('Employee') }}" required :error="$errors->first('adjustmentEmployeeId')">
+                        <option value="">{{ __('Select an employee') }}</option>
+                        @foreach ($employees as $employee)
+                            <option value="{{ $employee->id }}">{{ $employee->employee_number }} — {{ $employee->displayName() }}</option>
+                        @endforeach
+                    </x-ui.select>
+                    <x-ui.select id="adjustment-leave-type" wire:model="adjustmentLeaveTypeId" label="{{ __('Leave Type') }}" required :error="$errors->first('adjustmentLeaveTypeId')">
+                        <option value="">{{ __('Select a leave type') }}</option>
+                        @foreach ($leaveTypes as $type)
+                            <option value="{{ $type->id }}">{{ $type->code }} — {{ $type->name }}</option>
+                        @endforeach
+                    </x-ui.select>
+                </div>
+                <div class="grid gap-4 md:grid-cols-4">
+                    <x-ui.select id="adjustment-entry-type" wire:model="adjustmentEntryType" label="{{ __('Entry Type') }}">
+                        <option value="opening">{{ __('Opening') }}</option>
+                        <option value="adjusted">{{ __('Adjusted') }}</option>
+                        <option value="accrual">{{ __('Accrual') }}</option>
+                    </x-ui.select>
+                    <x-ui.input id="adjustment-quantity" wire:model="adjustmentQuantity" label="{{ __('Quantity (+/-)') }}" required :error="$errors->first('adjustmentQuantity')" />
+                    <x-ui.select id="adjustment-unit" wire:model="adjustmentUnit" label="{{ __('Unit') }}">
+                        <option value="day">{{ __('Day') }}</option>
+                        <option value="hour">{{ __('Hour') }}</option>
+                    </x-ui.select>
+                    <x-ui.input id="adjustment-year" type="number" wire:model="adjustmentYear" label="{{ __('Leave Year') }}" required :error="$errors->first('adjustmentYear')" />
+                </div>
+                <x-ui.textarea id="adjustment-note" wire:model="adjustmentNote" label="{{ __('Note') }}" rows="2" :error="$errors->first('adjustmentNote')" />
+                <div class="flex justify-end gap-2 pt-2">
+                    <x-ui.button type="button" variant="ghost" @click="show = false">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="primary">{{ __('Record Entry') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
 </div>

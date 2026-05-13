@@ -50,62 +50,14 @@
             @endif
 
             @if ($tab === 'submit')
-                <div class="mb-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
-                    <x-ui.card :title="__('Submit Claim')">
-                        @if ($currentEmployeeId === null)
-                            <x-ui.alert variant="warning">{{ __('Your user account is not linked to an employee record, so claims cannot be submitted from this workbench yet.') }}</x-ui.alert>
-                        @else
-                            <form wire:submit="submitClaim" class="space-y-4">
-                                <div class="grid gap-4 md:grid-cols-2">
-                                    <x-ui.select id="claim-apply-assignment" wire:model.live="applyAssignmentId" label="{{ __('Assignment') }}" required :error="$errors->first('applyAssignmentId')">
-                                        <option value="">{{ __('Select assignment') }}</option>
-                                        @foreach ($myAssignments as $assignment)
-                                            <option value="{{ $assignment->id }}">{{ $assignment->code }} &mdash; {{ $assignment->name }}</option>
-                                        @endforeach
-                                    </x-ui.select>
-                                    <x-ui.select id="claim-apply-line" wire:model="applyAssignmentLineId" label="{{ __('Claim Type') }}" required :error="$errors->first('applyAssignmentLineId')">
-                                        <option value="">{{ __('Select claim type') }}</option>
-                                        @foreach ($availableAssignmentLines as $line)
-                                            <option value="{{ $line->id }}">{{ $line->type?->code }} &mdash; {{ $line->type?->name }}</option>
-                                        @endforeach
-                                    </x-ui.select>
-                                </div>
-
-                                <div class="grid gap-4 md:grid-cols-3">
-                                    <x-ui.select id="claim-apply-context" wire:model="applyContextId" label="{{ __('Context') }}" :error="$errors->first('applyContextId')">
-                                        <option value="">{{ __('No context') }}</option>
-                                        @foreach ($contexts as $context)
-                                            <option value="{{ $context->id }}">{{ $context->code }} &mdash; {{ $context->label }}</option>
-                                        @endforeach
-                                    </x-ui.select>
-                                    <x-ui.input id="claim-apply-incurred-on" type="date" wire:model="applyIncurredOn" label="{{ __('Incurred On') }}" required :error="$errors->first('applyIncurredOn')" />
-                                    <x-ui.input id="claim-apply-amount" wire:model="applyRequestedAmount" label="{{ __('Amount') }}" required :error="$errors->first('applyRequestedAmount')" />
-                                </div>
-
-                                <div class="grid gap-4 md:grid-cols-3">
-                                    <x-ui.input id="claim-apply-provider" wire:model="applyProviderName" label="{{ __('Provider') }}" :error="$errors->first('applyProviderName')" />
-                                    <x-ui.input id="claim-apply-receipt" wire:model="applyReceiptNumber" label="{{ __('Receipt Number') }}" :error="$errors->first('applyReceiptNumber')" />
-                                    <x-ui.input id="claim-apply-attachments" wire:model="applyAttachmentCount" label="{{ __('Attachment Count') }}" required :error="$errors->first('applyAttachmentCount')" />
-                                </div>
-
-                                <x-ui.input id="claim-apply-description" wire:model="applyDescription" label="{{ __('Description') }}" :error="$errors->first('applyDescription')" />
-
-                                <div class="flex justify-end">
-                                    <x-ui.button type="submit" variant="primary">{{ __('Submit Claim') }}</x-ui.button>
-                                </div>
-                            </form>
-                        @endif
-                    </x-ui.card>
-
-                    <x-ui.card :title="__('Claim Lifecycle')">
-                        <div class="space-y-3 text-sm text-muted">
-                            <p>{{ __('Submit one claim line for now. The request records policy snapshots, duplicate-risk warnings, and payroll/accounting metadata before approval.') }}</p>
-                            <p>{{ __('Approved payroll-eligible lines queue to Payroll when an open run covers the incurred date; otherwise the request keeps pending handoff metadata.') }}</p>
-                        </div>
-                    </x-ui.card>
+                <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="text-sm text-muted">{{ __('Your claims are listed below. Create a new claim only when you need to submit a reimbursement.') }}</div>
+                    <x-ui.button type="button" variant="primary" wire:click="$set('showClaimModal', true)" :disabled="$currentEmployeeId === null">
+                        <x-icon name="heroicon-o-plus" class="h-4 w-4" />
+                        {{ __('New Claim') }}
+                    </x-ui.button>
                 </div>
 
-            @elseif ($tab === 'history')
                 <div class="overflow-x-auto -mx-card-inner px-card-inner">
                     <table class="min-w-full divide-y divide-border-default text-sm">
                         <thead class="bg-surface-subtle/80">
@@ -132,6 +84,55 @@
                                                 <x-ui.badge variant="warning">{{ trans_choice(':count warning|:count warnings', count($duplicateRisks), ['count' => count($duplicateRisks)]) }}</x-ui.badge>
                                                 <div class="max-w-xs text-xs text-muted">{{ __($duplicateRisks[0]['message'] ?? 'Duplicate risk detected.') }}</div>
                                             </div>
+                                        @else
+                                            <span class="text-xs text-muted">{{ __('None') }}</span>
+                                        @endif
+                                    </td>
+                                    <td class="px-table-cell-x py-table-cell-y">
+                                        <div class="flex flex-wrap justify-end gap-2">
+                                            @if ($request->employee_id === $currentEmployeeId && in_array($request->status, [\App\Modules\People\Claim\Models\ClaimRequest::STATUS_DRAFT, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_SUBMITTED, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_NEEDS_MORE_INFO], true))
+                                                <x-ui.button type="button" size="sm" variant="secondary" wire:click="withdrawOwnRequest({{ $request->id }})">{{ __('Withdraw') }}</x-ui.button>
+                                            @endif
+                                        </div>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No claim requests yet.') }}</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+
+                @if ($currentEmployeeId === null)
+                    <x-ui.alert variant="warning" class="mt-4">{{ __('Your user account is not linked to an employee record, so claims cannot be submitted from this workbench yet.') }}</x-ui.alert>
+                @endif
+
+            @elseif ($tab === 'history')
+                <div class="overflow-x-auto -mx-card-inner px-card-inner">
+                    <table class="min-w-full divide-y divide-border-default text-sm">
+                        <thead class="bg-surface-subtle/80">
+                            <tr>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Reference') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Employee') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Requested') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Risk') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-border-default bg-surface-card">
+                            @forelse ($myRequests as $request)
+                                @php($duplicateRisks = $request->metadata['duplicate_risks'] ?? [])
+                                <tr wire:key="claim-history-request-{{ $request->id }}">
+                                    <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink">{{ $request->reference_number ?? __('Draft #:id', ['id' => $request->id]) }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y text-ink">{{ $request->employee?->full_name ?? __('Employee #:id', ['id' => $request->employee_id]) }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y text-right tabular-nums text-ink">{{ $request->currency }} {{ number_format((float) $request->requested_amount, 2) }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y"><x-ui.badge :variant="$this->statusVariant($request->status)">{{ __(str_replace('_', ' ', ucfirst($request->status))) }}</x-ui.badge></td>
+                                    <td class="px-table-cell-x py-table-cell-y">
+                                        @if ($duplicateRisks !== [])
+                                            <x-ui.badge variant="warning">{{ trans_choice(':count warning|:count warnings', count($duplicateRisks), ['count' => count($duplicateRisks)]) }}</x-ui.badge>
                                         @else
                                             <span class="text-xs text-muted">{{ __('None') }}</span>
                                         @endif
@@ -527,4 +528,57 @@
             @endif
         </x-ui.card>
     </div>
+
+    <x-ui.modal wire:model="showClaimModal" class="max-w-4xl">
+        <form wire:submit="submitClaim" class="p-6 space-y-4">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-lg font-medium tracking-tight text-ink">{{ __('New Claim') }}</h3>
+                    <p class="mt-1 text-sm text-muted">{{ __('Submit one reimbursement line. Policy snapshots, duplicate-risk warnings, and payroll metadata are recorded at submission.') }}</p>
+                </div>
+                <button type="button" @click="show = false" class="text-muted hover:text-ink" aria-label="{{ __('Close') }}">
+                    <x-icon name="heroicon-o-x-mark" class="h-5 w-5" />
+                </button>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-2">
+                <x-ui.select id="claim-apply-assignment" wire:model.live="applyAssignmentId" label="{{ __('Assignment') }}" required :error="$errors->first('applyAssignmentId')">
+                    <option value="">{{ __('Select assignment') }}</option>
+                    @foreach ($myAssignments as $assignment)
+                        <option value="{{ $assignment->id }}">{{ $assignment->code }} &mdash; {{ $assignment->name }}</option>
+                    @endforeach
+                </x-ui.select>
+                <x-ui.select id="claim-apply-line" wire:model="applyAssignmentLineId" label="{{ __('Claim Type') }}" required :error="$errors->first('applyAssignmentLineId')">
+                    <option value="">{{ __('Select claim type') }}</option>
+                    @foreach ($availableAssignmentLines as $line)
+                        <option value="{{ $line->id }}">{{ $line->type?->code }} &mdash; {{ $line->type?->name }}</option>
+                    @endforeach
+                </x-ui.select>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-3">
+                <x-ui.select id="claim-apply-context" wire:model="applyContextId" label="{{ __('Context') }}" :error="$errors->first('applyContextId')">
+                    <option value="">{{ __('No context') }}</option>
+                    @foreach ($contexts as $context)
+                        <option value="{{ $context->id }}">{{ $context->code }} &mdash; {{ $context->label }}</option>
+                    @endforeach
+                </x-ui.select>
+                <x-ui.input id="claim-apply-incurred-on" type="date" wire:model="applyIncurredOn" label="{{ __('Incurred On') }}" required :error="$errors->first('applyIncurredOn')" />
+                <x-ui.input id="claim-apply-amount" wire:model="applyRequestedAmount" label="{{ __('Amount') }}" required :error="$errors->first('applyRequestedAmount')" />
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-3">
+                <x-ui.input id="claim-apply-provider" wire:model="applyProviderName" label="{{ __('Provider') }}" :error="$errors->first('applyProviderName')" />
+                <x-ui.input id="claim-apply-receipt" wire:model="applyReceiptNumber" label="{{ __('Receipt Number') }}" :error="$errors->first('applyReceiptNumber')" />
+                <x-ui.input id="claim-apply-attachments" wire:model="applyAttachmentCount" label="{{ __('Attachment Count') }}" required :error="$errors->first('applyAttachmentCount')" />
+            </div>
+
+            <x-ui.input id="claim-apply-description" wire:model="applyDescription" label="{{ __('Description') }}" :error="$errors->first('applyDescription')" />
+
+            <div class="flex justify-end gap-2 pt-2">
+                <x-ui.button type="button" variant="ghost" @click="show = false">{{ __('Cancel') }}</x-ui.button>
+                <x-ui.button type="submit" variant="primary">{{ __('Submit Claim') }}</x-ui.button>
+            </div>
+        </form>
+    </x-ui.modal>
 </div>

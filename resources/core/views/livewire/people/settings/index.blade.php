@@ -28,46 +28,20 @@
                 </x-ui.tabs>
 
                 @if ($tab === 'reference-data')
-                    <div class="w-full lg:w-80">
-                        <x-ui.search-input wire:model.live.debounce.300ms="search" placeholder="{{ __('Search code, name, or source label...') }}" />
+                    <div class="flex w-full flex-col gap-3 sm:flex-row lg:w-auto lg:items-center">
+                        <x-ui.search-input wire:model.live.debounce.300ms="search" placeholder="{{ __('Search code, name, or source label...') }}" class="w-full lg:w-80" />
+                        @if ($canManage)
+                            <x-ui.button variant="primary" wire:click="$set('showReferenceEntryModal', true)">
+                                <x-icon name="heroicon-o-plus" class="w-4 h-4" />
+                                {{ __('New Reference') }}
+                            </x-ui.button>
+                        @endif
                     </div>
                 @endif
             </div>
 
             @if ($tab === 'reference-data')
                 <div class="space-y-4">
-                    @if ($canManage)
-                        <form wire:submit="createReferenceEntry" class="grid gap-3 rounded-xl border border-border-default bg-surface-subtle p-4 lg:grid-cols-5">
-                            <label class="text-sm">
-                                <span class="mb-1 block text-xs font-medium text-muted">{{ __('Type') }}</span>
-                                <select wire:model="referenceType" class="w-full rounded-lg border-border-default bg-surface-card text-sm">
-                                    @foreach ($referenceTypes as $type => $label)
-                                        <option value="{{ $type }}">{{ __($label) }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <label class="text-sm">
-                                <span class="mb-1 block text-xs font-medium text-muted">{{ __('Code') }}</span>
-                                <input wire:model="entryCode" class="w-full rounded-lg border-border-default bg-surface-card text-sm" />
-                            </label>
-                            <label class="text-sm lg:col-span-2">
-                                <span class="mb-1 block text-xs font-medium text-muted">{{ __('Name') }}</span>
-                                <input wire:model="entryName" class="w-full rounded-lg border-border-default bg-surface-card text-sm" />
-                            </label>
-                            <label class="text-sm">
-                                <span class="mb-1 block text-xs font-medium text-muted">{{ __('Level') }}</span>
-                                <input wire:model="entryLevel" class="w-full rounded-lg border-border-default bg-surface-card text-sm" placeholder="{{ __('Optional') }}" />
-                            </label>
-                            <label class="text-sm lg:col-span-4">
-                                <span class="mb-1 block text-xs font-medium text-muted">{{ __('Source label') }}</span>
-                                <input wire:model="entrySourceLabel" class="w-full rounded-lg border-border-default bg-surface-card text-sm" placeholder="{{ __('Optional migration/source label') }}" />
-                            </label>
-                            <div class="flex items-end justify-end">
-                                <x-ui.button type="submit">{{ __('Save') }}</x-ui.button>
-                            </div>
-                        </form>
-                    @endif
-
                     <div class="overflow-x-auto -mx-card-inner px-card-inner">
                         <table class="min-w-full divide-y divide-border-default text-sm">
                             <thead class="bg-surface-subtle/80">
@@ -192,4 +166,39 @@
             @endif
         </x-ui.card>
     </div>
+
+    @if ($tab === 'reference-data' && $canManage)
+        <x-ui.modal wire:model="showReferenceEntryModal" class="max-w-2xl">
+            <form wire:submit="createReferenceEntry" class="p-6 space-y-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-medium tracking-tight text-ink">{{ __('New Reference') }}</h3>
+                        <p class="mt-1 text-sm text-muted">{{ __('Create or update People reference data by type and code.') }}</p>
+                    </div>
+                    <button type="button" @click="show = false" class="text-muted hover:text-ink" aria-label="{{ __('Close') }}">
+                        <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
+                    </button>
+                </div>
+
+                <x-ui.select id="people-reference-type" wire:model="referenceType" label="{{ __('Type') }}">
+                    @foreach ($referenceTypes as $type => $label)
+                        <option value="{{ $type }}">{{ __($label) }}</option>
+                    @endforeach
+                </x-ui.select>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.input id="people-reference-code" wire:model="entryCode" label="{{ __('Code') }}" required :error="$errors->first('entryCode')" />
+                    <x-ui.input id="people-reference-level" wire:model="entryLevel" label="{{ __('Level') }}" placeholder="{{ __('Optional') }}" :error="$errors->first('entryLevel')" />
+                </div>
+
+                <x-ui.input id="people-reference-name" wire:model="entryName" label="{{ __('Name') }}" required :error="$errors->first('entryName')" />
+                <x-ui.input id="people-reference-source-label" wire:model="entrySourceLabel" label="{{ __('Source label') }}" placeholder="{{ __('Optional migration/source label') }}" :error="$errors->first('entrySourceLabel')" />
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <x-ui.button type="button" variant="secondary" @click="show = false">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="primary">{{ __('Save Reference') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
 </div>
