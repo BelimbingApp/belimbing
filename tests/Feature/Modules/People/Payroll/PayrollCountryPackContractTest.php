@@ -180,5 +180,6 @@ test('malaysia payroll country pack is registered with profile schemas and plann
             'epf_monthly_contribution',
             'socso_eis_monthly_contribution',
             'pcb_cp39_monthly_submission',
+            'bank_payment_placeholder',
         ]);
 });
