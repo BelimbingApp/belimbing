@@ -333,14 +333,16 @@ it('approves overtime and queues one neutral payroll input', function (): void {
 
     $service = app(AttendanceOvertimeService::class);
     $service->approve($request, 90);
-    $handoff = $service->queuePayrollHandoff($request);
+    $outcome = $service->queuePayrollHandoff($request);
     $again = $service->queuePayrollHandoff($request->refresh());
 
-    expect($handoff)->not->toBeNull()
-        ->and($again?->is($handoff))->toBeTrue()
+    expect($outcome)->not->toBeNull()
+        ->and($outcome->isMaterialized())->toBeTrue()
+        ->and($again?->payrollPendingContributionId)->toBe($outcome->payrollPendingContributionId)
         ->and(PayrollInput::query()->count())->toBe(1)
         ->and(PayrollInput::query()->first()?->pay_item_code)->toBe('OT15')
         ->and(PayrollInput::query()->first()?->quantity)->toBe('1.5000')
+        ->and(PayrollInput::query()->first()?->source_type)->toBe(AttendanceOvertimeService::SOURCE_TYPE)
         ->and($request->refresh()->status)->toBe(AttendanceOvertimeRequest::STATUS_QUEUED_FOR_PAYROLL);
 });
 

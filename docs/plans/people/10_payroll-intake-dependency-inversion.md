@@ -1,6 +1,6 @@
 # people/10_payroll-intake-dependency-inversion
 
-**Status:** In Progress — Phase 1 intake skeleton built and tested; Phase 2 schema realignment landed (all People migrations renumbered to tier scheme, all tables prefixed `people_*`); ready to start Phase 3 (rewrite producers)
+**Status:** In Progress — Phase 1 intake skeleton built and tested; Phase 2 schema realignment landed; Phase 3 Attendance rewrite complete (`AttendanceOvertimeService` now uses intake; `attendance_payroll_handoffs` table and model retired); ready for Phase 4 (Claim)
 **Last Updated:** 2026-05-13
 **Sources:**
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Payroll Core/country-pack boundary and the neutral `PayrollInput` contract that all upstream sources feed.
@@ -146,7 +146,7 @@ The migration prefix reorganization (producers before consumers, with semantic t
 - [x] `PayrollContributionIntake::reverse()` covering pending-not-yet-materialized, draft, calculated, and closed/voided run cases. {amp/claude-opus-4-7}
 - [x] `PayrollContributionStatus::for()` / `::allFor()` read API; state derived live from current run status. {amp/claude-opus-4-7}
 - [x] Test harness: 7 tests covering happy path, idempotency, no-open-run pending, locked-run rejection, reverse, status read-back, multi-pay-item per source. {amp/claude-opus-4-7}
-- [ ] **Defer to Phase 2 rename:** the intake migration filename will move from `0320_01_06_000006_*` to `0320_03_01_000006_*` as part of the prefix reorganization.
+- [x] Intake migration filename moved from `0320_01_06_000006_*` to `0320_03_01_000006_*` and table renamed to `people_payroll_pending_contributions` as part of Phase 2. {amp/claude-opus-4-7}
 - [ ] **Defer to Phase 7:** concurrent-insert test (two parallel transactions). Requires a non-SQLite driver in CI to exercise real row locking.
 - [ ] **Defer to Phase 7:** pending materializer hook on run open (`PayrollRun::open` lifecycle). Not needed until producers are actually emitting `pending` outcomes — currently no producer calls intake.
 
@@ -182,26 +182,27 @@ Single atomic step covering two spec-drift fixes that both open every People mig
 
 **Sites to update**
 
-- [ ] Every migration's `Schema::create('x')`, `registerTable('x')`, and `constrained('x')` calls.
-- [ ] Every model's `protected $table = 'x'` property.
-- [ ] `assertDatabaseHas('x', …)` calls in feature/unit tests.
-- [ ] `DB::table('x')` and `DB::statement` / `DB::select` raw references in seeders, services, and reports.
-- [ ] Documentation samples in plans 07/08/09 if they cite table names literally.
+- [x] Every migration's `Schema::create('x')`, `registerTable('x')`, and `constrained('x')` calls. {amp/claude-opus-4-7}
+- [x] Every model's `protected $table = 'x'` property. {amp/claude-opus-4-7}
+- [x] `assertDatabaseHas('x', …)` calls in feature/unit tests. {amp/claude-opus-4-7}
+- [x] `DB::table('x')` and `DB::statement` / `DB::select` raw references in seeders, services, and reports. (No People-table refs found in raw queries.) {amp/claude-opus-4-7}
+- [ ] Documentation samples in plans 07/08/09 if they cite table names literally. (Deferred — tackled when each producer is rewritten.)
 
 **Verification**
 
-- [ ] Run `migrate:fresh --dev --seed`; verify all tables created in the new order and seeders load cleanly.
-- [ ] Run the full test suite; fix any registry-assertion failures (e.g. `PayrollCoreTest` line 1442 expecting `module_name = 'Payroll'` on the registered table row).
-- [ ] Single atomic commit. Branch left clean for Phase 3.
+- [x] Run `migrate:fresh --dev --seed`; verify all tables created in the new order and seeders load cleanly. Migrations apply in producer-first order without error. {amp/claude-opus-4-7}
+- [x] Run the full test suite. People: 81 pass, 2 pre-existing unrelated failures (`RenderPdfJob.php` merge conflict markers). Commerce: 51 pass. Core: 105 pass, 3 pre-existing unrelated OpenAI mock failures. Registry assertion now passes after framework-level Windows path fix in `ExtractsModuleProvenance`. {amp/claude-opus-4-7}
+- [x] Single atomic commit (`f0af7e87`). Branch left clean for Phase 3. {amp/claude-opus-4-7}
 
-### Phase 3 — Rewrite Attendance writer; delete `attendance_payroll_handoffs`
+### Phase 3 — Rewrite Attendance writer; delete `attendance_payroll_handoffs`  ✅ DONE
 
-- [ ] Edit the Attendance core migration (now `0320_02_05_000000_*`) to remove `attendance_payroll_handoffs` from `up()` and its entry from `down()`.
-- [ ] Delete `app/Modules/People/Attendance/Models/AttendancePayrollHandoff.php`.
-- [ ] Rewrite `AttendanceOvertimeService::queuePayrollHandoff` to construct a `PayrollContributionPayload` and call `PayrollContributionIntake::ingest`. Set `source_type = 'attendance_overtime_request'`.
-- [ ] Remove imports of `PayrollInput`, `PayrollRun`, `PayrollRunParticipant` from Attendance.
-- [ ] Update or remove the `AttendanceCoreTest` overtime test ("approves overtime and queues one neutral payroll input") to assert against `PayrollPendingContribution` + `PayrollInput` instead of `AttendancePayrollHandoff`.
-- [ ] Update plan 09 to record the new write path and remove references to the retired table.
+- [x] Edit the Attendance core migration (now `0320_02_05_000000_*`) to remove `people_attendance_payroll_handoffs` from `up()` and its entry from `down()`. {amp/claude-opus-4-7}
+- [x] Delete `app/Modules/People/Attendance/Models/AttendancePayrollHandoff.php`. {amp/claude-opus-4-7}
+- [x] Rewrite `AttendanceOvertimeService::queuePayrollHandoff` to construct a `PayrollContributionPayload` and call `PayrollContributionIntake::ingest`. Source type constant `AttendanceOvertimeService::SOURCE_TYPE = 'attendance_overtime_request'`. Return type now `?PayrollContributionOutcome` (null only when payable_minutes ≤ 0). {amp/claude-opus-4-7}
+- [x] Remove imports of `PayrollInput`, `PayrollRun`, `PayrollRunParticipant` from Attendance. {amp/claude-opus-4-7}
+- [x] Update the `AttendanceCoreTest` overtime test ("approves overtime and queues one neutral payroll input") to assert against the new outcome shape and `PayrollInput.source_type = 'attendance_overtime_request'`. {amp/claude-opus-4-7}
+- [x] Update the Attendance Livewire workbench (`queueOvertimePayroll`) to translate the new outcome states (`materialized`, `pending`, `rejected`) into user-facing flash messages. {amp/claude-opus-4-7}
+- [x] Update plan 09 to record the new write path and remove references to the retired table. {amp/claude-opus-4-7}
 
 ### Phase 4 — Rewrite Claim writer
 

@@ -261,7 +261,7 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 
 ### Phase 4 - Payroll handoff and reconciliation
 
-- [x] Generate neutral `PayrollInput` rows for approved overtime with attendance-day and overtime-request source references. Approved overtime queues idempotent `PayrollInput` and `AttendancePayrollHandoff` rows into open payroll runs. {codex/gpt-5}
+- [x] Generate neutral payroll contributions for approved overtime with overtime-request source references. `AttendanceOvertimeService::queuePayrollHandoff` now hands off via the Payroll-owned `PayrollContributionIntake` contract — see `docs/plans/people/10_payroll-intake-dependency-inversion.md`. The producer-owned `people_attendance_payroll_handoffs` table and `AttendancePayrollHandoff` model were retired; Payroll's `people_payroll_pending_contributions` now owns durable handoff state, including the "no open run yet" pending case. Source type: `'attendance_overtime_request'`. {codex/gpt-5,amp/claude-opus-4-7}
 - [ ] Generate neutral inputs for configured attendance allowances, shift allowances, rest-day/public-holiday work, lateness deductions, early-out deductions, unpaid absence deductions, and attendance adjustments when enabled by policy.
 - [ ] Split overtime payroll inputs by day type, hour threshold, adjustment band, and export mapping where policy requires distinct pay items.
 - [ ] Support daily and monthly lateness export rules, including monthly rounding separate from daily exception calculation.
