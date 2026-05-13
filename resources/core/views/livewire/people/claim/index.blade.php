@@ -7,6 +7,14 @@
 
     <div class="space-y-section-gap">
         <x-ui.page-header :title="$surfaceTitle" :subtitle="$surfaceSubtitle">
+            @if ($surface === 'operations')
+                <x-slot name="actions">
+                    <x-ui.button as="a" :href="$operationsExportUrl" variant="secondary">
+                        <x-icon name="heroicon-o-arrow-down-tray" class="h-4 w-4" />
+                        {{ __('Export CSV') }}
+                    </x-ui.button>
+                </x-slot>
+            @endif
             <x-slot name="help">
                 {{ __('The Claim module uses a singular code namespace while the user-facing workbench remains Claims. Claim setup is country-neutral and hands approved reimbursement lines to Payroll.') }}
             </x-slot>

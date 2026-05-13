@@ -251,8 +251,8 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 
 - [ ] Route submitted claims through Workflow using Claim-selected approval profile inputs; Workflow owns approver graph, thresholds, delegation, and escalation execution.
 - [~] Build manager approval tabs: the Claim Approvals surface now has a pending queue, selected-request detail panel, claim line detail, audit trail, approve/reject/more-info actions, and decision reason. Receipt review, reduced approval, and escalation visibility remain open. {amp/gpt-5.1-codex}
-- [~] Build HR/Finance operations tabs: Claim Operations now provides an all-claims table with search, status/risk/payroll-state filters, duplicate-risk visibility, and payroll handoff readiness. Policy exception queue and reconciliation drill-down remain open. {amp/gpt-5.1-codex}
-- [ ] Emit notifications for submission, approval, rejection, more-info request, withdrawal, cancellation, payroll queued, and reimbursement completion through `PeopleNotificationDeliveryLog`.
+- [~] Build HR/Finance operations tabs: Claim Operations now provides an all-claims table with search, status/risk/payroll-state filters, duplicate-risk visibility, payroll handoff readiness, and filtered CSV export. Policy exception queue and reconciliation drill-down remain open. {amp/gpt-5.1-codex}
+- [~] Emit notifications for submission, approval, rejection, more-info request, withdrawal, cancellation, payroll queued, and reimbursement completion through `PeopleNotificationDeliveryLog`: Claim now emits submission, approval, rejection, more-info, withdrawal, and payroll-queued notifications into the People notification log; cancellation and reimbursement completion wait on those lifecycle endpoints. {amp/gpt-5.1-codex}
 - [~] Record audit events for every state transition and every approval-limit/routing decision: submit, approve, reject, more-info, and withdraw now write audit events; cancellation, payroll, reimbursement, and routing-decision audits remain open. {amp/gpt-5.1-codex}
 
 ### Phase 4 — Payroll, advance, and accounting handoff
@@ -267,7 +267,7 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 ### Phase 5 — Reports, documents, and SBG validation
 
 - [ ] Add Claim Application List export with HR2000-parity columns after Phase 0 confirms the exact SBG column set.
-- [ ] Add reimbursement statement, entitlement utilization, outstanding advance, approval aging, duplicate-risk, and payroll handoff reconciliation reports in CSV and PDF where useful.
+- [~] Add reimbursement statement, entitlement utilization, outstanding advance, approval aging, duplicate-risk, and payroll handoff reconciliation reports in CSV and PDF where useful: Claim Operations now exports a filtered CSV with duplicate-risk and payroll handoff fields; dedicated statements/utilization/aging and PDF reports remain open. {amp/gpt-5.1-codex}
 - [ ] Seed SBG private claim categories, claim types, claim assignments, policy limits, claim context/client limits, mileage rates if any, provider/account mappings, and approver amount limits in `kiatng/blb-sbg`.
 - [ ] Run dry-run import or side-by-side validation against SBG's current claim data, reconciling opening entitlement usage, in-flight claims, outstanding advances if any, and reimbursement totals.
 - [ ] Confirm one complete monthly workflow: employee submission → manager approval → payroll handoff → payroll lock → reimbursement report.
