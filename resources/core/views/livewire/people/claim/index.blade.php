@@ -59,7 +59,9 @@
                         </thead>
                         <tbody class="divide-y divide-border-default bg-surface-card">
                             @forelse ($myRequests as $request)
-                                @php($duplicateRisks = $request->metadata['duplicate_risks'] ?? [])
+                                @php
+                                    $duplicateRisks = $request->metadata['duplicate_risks'] ?? [];
+                                @endphp
                                 <tr wire:key="claim-request-{{ $request->id }}">
                                     <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink">{{ $request->reference_number ?? __('Draft #:id', ['id' => $request->id]) }}</td>
                                     <td class="px-table-cell-x py-table-cell-y text-ink">{{ $request->employee?->full_name ?? __('Employee #:id', ['id' => $request->employee_id]) }}</td>
@@ -199,7 +201,9 @@
                             </thead>
                             <tbody class="divide-y divide-border-default bg-surface-card">
                                 @forelse ($pendingRequests as $request)
-                                    @php($duplicateRisks = $request->metadata['duplicate_risks'] ?? [])
+                                    @php
+                                        $duplicateRisks = $request->metadata['duplicate_risks'] ?? [];
+                                    @endphp
                                     <tr wire:key="pending-claim-{{ $request->id }}" class="hover:bg-surface-subtle/50 transition-colors">
                                         <td class="px-table-cell-x py-table-cell-y">
                                             <button type="button" wire:click="selectRequest({{ $request->id }})" class="text-left">
