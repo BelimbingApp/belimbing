@@ -12,6 +12,13 @@ use App\Modules\People\Payroll\Models\PayrollRun;
 use App\Modules\People\Payroll\Services\PayrollContributionIntake;
 use App\Modules\People\Payroll\Services\PayrollContributionStatus;
 
+const INTAKE_PERIOD_CODE = '2026-05';
+const INTAKE_PERIOD_NAME = 'May 2026';
+const INTAKE_PERIOD_START = '2026-05-01';
+const INTAKE_PERIOD_END = '2026-05-31';
+const INTAKE_RUN_CODE = 'MAY-2026';
+const INTAKE_ANCHOR_DATE = '2026-05-15';
+
 function intakeTestFixtures(string $runStatus = PayrollRun::STATUS_DRAFT): array
 {
     $company = Company::factory()->minimal()->create();
@@ -26,18 +33,18 @@ function intakeTestFixtures(string $runStatus = PayrollRun::STATUS_DRAFT): array
     ]);
     $period = PayrollPeriod::query()->create([
         'payroll_calendar_id' => $calendar->id,
-        'code' => '2026-05',
-        'name' => 'May 2026',
-        'starts_on' => '2026-05-01',
-        'ends_on' => '2026-05-31',
-        'pay_date' => '2026-05-31',
+        'code' => INTAKE_PERIOD_CODE,
+        'name' => INTAKE_PERIOD_NAME,
+        'starts_on' => INTAKE_PERIOD_START,
+        'ends_on' => INTAKE_PERIOD_END,
+        'pay_date' => INTAKE_PERIOD_END,
     ]);
     $run = PayrollRun::query()->create([
         'company_id' => $company->id,
         'payroll_calendar_id' => $calendar->id,
         'payroll_period_id' => $period->id,
-        'code' => 'MAY-2026',
-        'name' => 'May 2026',
+        'code' => INTAKE_RUN_CODE,
+        'name' => INTAKE_PERIOD_NAME,
         'status' => $runStatus,
         'currency' => 'MYR',
     ]);
@@ -51,11 +58,11 @@ function intakeTestPayload(Company $company, Employee $employee, string $payItem
         sourceType: 'claim_line',
         sourceId: 42,
         payItemCode: $payItemCode,
-        periodAnchor: new DateTimeImmutable('2026-05-15'),
+        periodAnchor: new DateTimeImmutable(INTAKE_ANCHOR_DATE),
         companyId: (int) $company->id,
         employeeId: (int) $employee->id,
         currency: 'MYR',
-        occurredOn: new DateTimeImmutable('2026-05-15'),
+        occurredOn: new DateTimeImmutable(INTAKE_ANCHOR_DATE),
         inputType: PayrollInput::TYPE_REIMBURSEMENT,
         amount: 120.50,
         quantity: 1.0,
@@ -185,18 +192,18 @@ it('materialises pending contributions when a covering run is created', function
     ]);
     $period = PayrollPeriod::query()->create([
         'payroll_calendar_id' => $calendar->id,
-        'code' => '2026-05',
-        'name' => 'May 2026',
-        'starts_on' => '2026-05-01',
-        'ends_on' => '2026-05-31',
-        'pay_date' => '2026-05-31',
+        'code' => INTAKE_PERIOD_CODE,
+        'name' => INTAKE_PERIOD_NAME,
+        'starts_on' => INTAKE_PERIOD_START,
+        'ends_on' => INTAKE_PERIOD_END,
+        'pay_date' => INTAKE_PERIOD_END,
     ]);
     PayrollRun::query()->create([
         'company_id' => $company->id,
         'payroll_calendar_id' => $calendar->id,
         'payroll_period_id' => $period->id,
-        'code' => 'MAY-2026',
-        'name' => 'May 2026',
+        'code' => INTAKE_RUN_CODE,
+        'name' => INTAKE_PERIOD_NAME,
         'status' => PayrollRun::STATUS_DRAFT,
         'currency' => 'MYR',
     ]);

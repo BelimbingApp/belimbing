@@ -17,9 +17,12 @@ use App\Modules\People\Payroll\Models\PayrollResultLine;
 use App\Modules\People\Payroll\Services\PayrollCountryPackRegistry;
 use Illuminate\Support\Carbon;
 
+const PAYROLL_MY_PACK = 'belimbing/payroll-my';
+const PAYROLL_DEV_VERSION = '2026.dev';
+
 function createPayrollContractTestPack(
     string $countryIso = 'MY',
-    string $packIdentifier = 'belimbing/payroll-my',
+    string $packIdentifier = PAYROLL_MY_PACK,
     array $supportedContracts = [PayrollCountryPackRegistry::CORE_CONTRACT_VERSION],
 ): PayrollCountryPack {
     return new class($countryIso, $packIdentifier, $supportedContracts) implements CalculatesPayrollRun, ClassifiesPayrollPayItems, PayrollCountryPack, ProvidesPayrollExports, ProvidesPayrollProfileSchemas
@@ -35,9 +38,9 @@ function createPayrollContractTestPack(
             return new CountryPackManifest(
                 countryIso: $this->countryIso,
                 packIdentifier: $this->packIdentifier,
-                packVersion: '2026.dev',
+                packVersion: PAYROLL_DEV_VERSION,
                 supportedCoreContracts: $this->supportedContracts,
-                statutoryDataVersions: ['2026.dev'],
+                statutoryDataVersions: [PAYROLL_DEV_VERSION],
             );
         }
 
@@ -52,7 +55,7 @@ function createPayrollContractTestPack(
                 countryIso: $this->countryIso,
                 profileType: 'employer',
                 sourcePack: $this->packIdentifier,
-                sourceVersion: '2026.dev',
+                sourceVersion: PAYROLL_DEV_VERSION,
                 fields: [
                     ['key' => 'epf_employer_number', 'label' => 'EPF employer number', 'required' => true],
                 ],
@@ -65,7 +68,7 @@ function createPayrollContractTestPack(
                 countryIso: $this->countryIso,
                 profileType: 'employee',
                 sourcePack: $this->packIdentifier,
-                sourceVersion: '2026.dev',
+                sourceVersion: PAYROLL_DEV_VERSION,
                 fields: [
                     ['key' => 'epf_number', 'label' => 'EPF number', 'required' => false],
                 ],
@@ -83,7 +86,7 @@ function createPayrollContractTestPack(
                 'statutory_wage_base' => [
                     'value' => 'ordinary_wage',
                     'source_pack' => $this->packIdentifier,
-                    'source_version' => '2026.dev',
+                    'source_version' => PAYROLL_DEV_VERSION,
                 ],
             ];
         }
@@ -103,7 +106,7 @@ function createPayrollContractTestPack(
                     amount: '330.0000',
                     currency: 'MYR',
                     sourceRule: 'epf_contribution_schedule',
-                    sourceVersion: '2026.dev',
+                    sourceVersion: PAYROLL_DEV_VERSION,
                     explanation: ['country_iso' => $this->countryIso],
                 ),
             ]);
@@ -137,7 +140,7 @@ test('payroll country pack registry exposes the v0 extension contract facets', f
     expect($registry->hasCountry('my'))->toBeTrue()
         ->and($registry->countries())->toBe(['MY'])
         ->and($pack->manifest())
-        ->packIdentifier->toBe('belimbing/payroll-my')
+        ->packIdentifier->toBe(PAYROLL_MY_PACK)
         ->and($pack->manifest()->supportsCoreContract(PayrollCountryPackRegistry::CORE_CONTRACT_VERSION))->toBeTrue()
         ->and($pack->profileSchemas()->employerSchema()->fields[0]['key'])->toBe('epf_employer_number')
         ->and($pack->profileSchemas()->employeeSchema()->fields[0]['key'])->toBe('epf_number')
@@ -148,7 +151,7 @@ test('payroll country pack registry exposes the v0 extension contract facets', f
 test('payroll country pack registry rejects incompatible or duplicate packs', function (): void {
     $registry = new PayrollCountryPackRegistry;
 
-    $registry->register(createPayrollContractTestPack(packIdentifier: 'belimbing/payroll-my'));
+    $registry->register(createPayrollContractTestPack(packIdentifier: PAYROLL_MY_PACK));
 
     expect(fn () => $registry->register(createPayrollContractTestPack(packIdentifier: 'other/payroll-my')))
         ->toThrow(PayrollCountryPackException::class, 'already registered')
@@ -169,7 +172,7 @@ test('malaysia payroll country pack is registered with profile schemas and plann
     $pack = app(PayrollCountryPackRegistry::class)->forCountry('my');
     $manifest = $pack->manifest();
 
-    expect($manifest->packIdentifier)->toBe('belimbing/payroll-my')
+    expect($manifest->packIdentifier)->toBe(PAYROLL_MY_PACK)
         ->and($manifest->metadata['repository'])->toBe('BelimbingApp/blb-payroll-my')
         ->and($pack->profileSchemas()->employerSchema()->fields)
         ->toContain(['key' => 'epf_employer_number', 'label' => 'EPF employer number', 'required' => true])

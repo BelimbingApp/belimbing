@@ -45,6 +45,13 @@ use App\Modules\People\Payroll\Services\StatutoryProfileResolver;
 use App\Modules\People\Payroll\Services\StatutoryRuleSetResolver;
 use Illuminate\Support\Carbon;
 
+const PAYROLL_MY_PACK = 'belimbing/payroll-my';
+const PAYROLL_DEV_VERSION = '2026.dev';
+const TRAVEL_CLAIM_LABEL = 'Travel Claim';
+const HRD_LEVY_LABEL = 'HRD Levy';
+const NET_PAY_LABEL = 'Net Pay';
+const TEST_BANK_NAME = 'Test Bank';
+
 function createPayrollCoreTestCountryPack(string $countryIso = 'SG'): PayrollCountryPack
 {
     return new class($countryIso) implements CalculatesPayrollRun, ClassifiesPayrollPayItems, PayrollCountryPack, ProvidesPayrollExports, ProvidesPayrollProfileSchemas
@@ -214,7 +221,7 @@ test('neutral payroll core calculates gross deductions reimbursements and net pa
         'payroll_run_participant_id' => $participant->id,
         'employee_id' => $employee->id,
         'pay_item_code' => 'travel_claim',
-        'label' => 'Travel Claim',
+        'label' => TRAVEL_CLAIM_LABEL,
         'input_type' => PayrollInput::TYPE_REIMBURSEMENT,
         'amount' => '80.0000',
         'currency' => 'MYR',
@@ -318,8 +325,8 @@ test('malaysia pack calculates epf socso eis and hrd levy from classified statut
     PayrollEmployerStatutoryProfile::query()->create([
         'company_id' => $company->id,
         'country_iso' => 'MY',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
         'effective_from' => '2026-01-01',
         'profile_data' => ['hrd_levy_applicable' => true],
         'validation_messages' => [],
@@ -338,14 +345,14 @@ test('malaysia pack calculates epf socso eis and hrd levy from classified statut
         'classification_key' => 'statutory_wage_base',
         'classification_value' => 'ordinary_wage',
         'effective_from' => '2026-01-01',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
     ]);
 
     $travelClaim = PayrollPayItem::query()->create([
         'company_id' => $company->id,
         'code' => 'travel_claim',
-        'name' => 'Travel Claim',
+        'name' => TRAVEL_CLAIM_LABEL,
         'input_type' => PayrollInput::TYPE_REIMBURSEMENT,
         'status' => 'active',
     ]);
@@ -355,16 +362,16 @@ test('malaysia pack calculates epf socso eis and hrd levy from classified statut
         'classification_key' => 'statutory_wage_base',
         'classification_value' => 'excluded',
         'effective_from' => '2026-01-01',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
     ]);
 
     $ruleSet = PayrollStatutoryRuleSet::query()->create([
         'country_iso' => 'MY',
         'rule_key' => 'epf_contribution_schedule',
         'name' => 'EPF dev test schedule',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
         'effective_from' => '2026-01-01',
         'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
     ]);
@@ -381,8 +388,8 @@ test('malaysia pack calculates epf socso eis and hrd levy from classified statut
         'country_iso' => 'MY',
         'rule_key' => 'socso_contribution_schedule',
         'name' => 'SOCSO dev test schedule',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
         'effective_from' => '2026-01-01',
         'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
     ]);
@@ -399,8 +406,8 @@ test('malaysia pack calculates epf socso eis and hrd levy from classified statut
         'country_iso' => 'MY',
         'rule_key' => 'eis_contribution_schedule',
         'name' => 'EIS dev test schedule',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
         'effective_from' => '2026-01-01',
         'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
     ]);
@@ -417,8 +424,8 @@ test('malaysia pack calculates epf socso eis and hrd levy from classified statut
         'country_iso' => 'MY',
         'rule_key' => 'hrd_levy_schedule',
         'name' => 'HRD levy dev test schedule',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
         'effective_from' => '2026-01-01',
         'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
     ]);
@@ -446,7 +453,7 @@ test('malaysia pack calculates epf socso eis and hrd levy from classified statut
         'payroll_run_participant_id' => $participant->id,
         'employee_id' => $employee->id,
         'pay_item_code' => 'travel_claim',
-        'label' => 'Travel Claim',
+        'label' => TRAVEL_CLAIM_LABEL,
         'input_type' => PayrollInput::TYPE_REIMBURSEMENT,
         'amount' => '80.0000',
         'currency' => 'MYR',
@@ -515,8 +522,8 @@ test('malaysia pack uses component wage bases and employee category rule rows', 
     PayrollEmployerStatutoryProfile::query()->create([
         'company_id' => $company->id,
         'country_iso' => 'MY',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
         'effective_from' => '2026-01-01',
         'profile_data' => ['hrd_levy_applicable' => true],
         'validation_messages' => [],
@@ -525,8 +532,8 @@ test('malaysia pack uses component wage bases and employee category rule rows', 
         'company_id' => $company->id,
         'employee_id' => $employee->id,
         'country_iso' => 'MY',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
         'effective_from' => '2026-01-01',
         'profile_data' => [
             'citizenship_status' => 'foreign_worker',
@@ -557,8 +564,8 @@ test('malaysia pack uses component wage bases and employee category rule rows', 
             'classification_key' => $classificationKey,
             'classification_value' => $classificationValue,
             'effective_from' => '2026-01-01',
-            'source_pack' => 'belimbing/payroll-my',
-            'source_version' => '2026.dev',
+            'source_pack' => PAYROLL_MY_PACK,
+            'source_version' => PAYROLL_DEV_VERSION,
         ]);
     }
 
@@ -581,8 +588,8 @@ test('malaysia pack uses component wage bases and employee category rule rows', 
             'classification_key' => $classificationKey,
             'classification_value' => $classificationValue,
             'effective_from' => '2026-01-01',
-            'source_pack' => 'belimbing/payroll-my',
-            'source_version' => '2026.dev',
+            'source_pack' => PAYROLL_MY_PACK,
+            'source_version' => PAYROLL_DEV_VERSION,
         ]);
     }
 
@@ -590,8 +597,8 @@ test('malaysia pack uses component wage bases and employee category rule rows', 
         'country_iso' => 'MY',
         'rule_key' => 'epf_contribution_schedule',
         'name' => 'EPF category schedule',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
         'effective_from' => '2026-01-01',
         'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
     ]);
@@ -618,8 +625,8 @@ test('malaysia pack uses component wage bases and employee category rule rows', 
         'country_iso' => 'MY',
         'rule_key' => 'socso_contribution_schedule',
         'name' => 'SOCSO category schedule',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
         'effective_from' => '2026-01-01',
         'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
     ]);
@@ -637,8 +644,8 @@ test('malaysia pack uses component wage bases and employee category rule rows', 
         'country_iso' => 'MY',
         'rule_key' => 'eis_contribution_schedule',
         'name' => 'EIS category schedule',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
         'effective_from' => '2026-01-01',
         'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
     ]);
@@ -647,8 +654,8 @@ test('malaysia pack uses component wage bases and employee category rule rows', 
         'country_iso' => 'MY',
         'rule_key' => 'hrd_levy_schedule',
         'name' => 'HRD category schedule',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
         'effective_from' => '2026-01-01',
         'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
     ]);
@@ -738,8 +745,8 @@ test('malaysia pack blocks calculation when an applicable required schedule is m
         'classification_key' => 'epf_wage_base',
         'classification_value' => 'ordinary_wage',
         'effective_from' => '2026-01-01',
-        'source_pack' => 'belimbing/payroll-my',
-        'source_version' => '2026.dev',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
     ]);
     PayrollInput::query()->create([
         'payroll_run_id' => $run->id,
@@ -875,7 +882,7 @@ test('payslip snapshot separates employee statutory and employer cost sections',
         'employee_id' => $employee->id,
         'line_type' => PayrollResultLine::TYPE_EMPLOYER_LEVY,
         'code' => 'my_hrd_levy',
-        'label' => 'HRD Levy',
+        'label' => HRD_LEVY_LABEL,
         'amount' => '30.0000',
         'currency' => 'MYR',
     ]);
@@ -885,7 +892,7 @@ test('payslip snapshot separates employee statutory and employer cost sections',
         'employee_id' => $employee->id,
         'line_type' => PayrollResultLine::TYPE_NET_PAY,
         'code' => 'net_pay',
-        'label' => 'Net Pay',
+        'label' => NET_PAY_LABEL,
         'amount' => '2670.0000',
         'currency' => 'MYR',
     ]);
@@ -940,7 +947,7 @@ test('payslip pdf template renders from payroll payslip builder data', function 
         'employee_id' => $employee->id,
         'line_type' => PayrollResultLine::TYPE_NET_PAY,
         'code' => 'net_pay',
-        'label' => 'Net Pay',
+        'label' => NET_PAY_LABEL,
         'amount' => '3000.0000',
         'currency' => 'MYR',
     ]);
@@ -965,7 +972,7 @@ test('employer cost report summarizes employer contributions and levies by run',
     foreach ([
         [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', 'EPF Employer Contribution', '390.0000'],
         [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_socso_employer', 'SOCSO Employer Contribution', '52.5000'],
-        [PayrollResultLine::TYPE_EMPLOYER_LEVY, 'my_hrd_levy', 'HRD Levy', '30.0000'],
+        [PayrollResultLine::TYPE_EMPLOYER_LEVY, 'my_hrd_levy', HRD_LEVY_LABEL, '30.0000'],
     ] as [$type, $code, $label, $amount]) {
         PayrollResultLine::query()->create([
             'payroll_run_id' => $run->id,
@@ -1013,9 +1020,9 @@ test('payroll summary report builds renderable payroll summary data', function (
         [PayrollResultLine::TYPE_EMPLOYEE_DEDUCTION, 'advance_recovery', 'Advance Recovery', '125.0000'],
         [PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION, 'my_epf_employee', 'EPF Employee Contribution', '330.0000'],
         [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', 'EPF Employer Contribution', '390.0000'],
-        [PayrollResultLine::TYPE_EMPLOYER_LEVY, 'my_hrd_levy', 'HRD Levy', '30.0000'],
-        [PayrollResultLine::TYPE_REIMBURSEMENT, 'travel_claim', 'Travel Claim', '80.0000'],
-        [PayrollResultLine::TYPE_NET_PAY, 'net_pay', 'Net Pay', '2625.0000'],
+        [PayrollResultLine::TYPE_EMPLOYER_LEVY, 'my_hrd_levy', HRD_LEVY_LABEL, '30.0000'],
+        [PayrollResultLine::TYPE_REIMBURSEMENT, 'travel_claim', TRAVEL_CLAIM_LABEL, '80.0000'],
+        [PayrollResultLine::TYPE_NET_PAY, 'net_pay', NET_PAY_LABEL, '2625.0000'],
     ] as [$type, $code, $label, $amount]) {
         PayrollResultLine::query()->create([
             'payroll_run_id' => $run->id,
@@ -1064,7 +1071,7 @@ test('statutory contribution report groups contribution totals and renders templ
     foreach ([
         [PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION, 'my_epf_employee', 'EPF Employee Contribution', '330.0000', 'epf_contribution_schedule'],
         [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', 'EPF Employer Contribution', '390.0000', 'epf_contribution_schedule'],
-        [PayrollResultLine::TYPE_EMPLOYER_LEVY, 'my_hrd_levy', 'HRD Levy', '30.0000', 'hrd_levy_schedule'],
+        [PayrollResultLine::TYPE_EMPLOYER_LEVY, 'my_hrd_levy', HRD_LEVY_LABEL, '30.0000', 'hrd_levy_schedule'],
     ] as [$type, $code, $label, $amount, $sourceRule]) {
         PayrollResultLine::query()->create([
             'payroll_run_id' => $run->id,
@@ -1076,7 +1083,7 @@ test('statutory contribution report groups contribution totals and renders templ
             'amount' => $amount,
             'currency' => 'MYR',
             'source_rule' => $sourceRule,
-            'source_version' => '2026.dev',
+            'source_version' => PAYROLL_DEV_VERSION,
         ]);
     }
 
@@ -1092,7 +1099,7 @@ test('statutory contribution report groups contribution totals and renders templ
         ])
         ->and($report['totals_by_code'])->toContain([
             'code' => 'my_hrd_levy',
-            'label' => 'HRD Levy',
+            'label' => HRD_LEVY_LABEL,
             'type' => PayrollResultLine::TYPE_EMPLOYER_LEVY,
             'amount' => '30.0000',
         ])
@@ -1142,7 +1149,7 @@ test('payroll lock audit report summarizes lifecycle controls and audit events',
         'employee_id' => $employee->id,
         'line_type' => PayrollResultLine::TYPE_NET_PAY,
         'code' => 'net_pay',
-        'label' => 'Net Pay',
+        'label' => NET_PAY_LABEL,
         'amount' => '3000.0000',
         'currency' => 'MYR',
     ]);
@@ -1185,7 +1192,7 @@ test('bank payment export placeholder produces a clearly marked review csv', fun
     $employee->forceFill([
         'metadata' => [
             'payroll_bank' => [
-                'bank_name' => 'Test Bank',
+                'bank_name' => TEST_BANK_NAME,
                 'bank_account_number' => '1234567890',
             ],
         ],
@@ -1210,14 +1217,14 @@ test('bank payment export placeholder produces a clearly marked review csv', fun
         ->and($export['rows'][0])->toMatchArray([
             'export_status' => 'placeholder_not_bank_submittable',
             'payroll_run_code' => 'MY-2026-01-BANK-EXPORT',
-            'bank_name' => 'Test Bank',
+            'bank_name' => TEST_BANK_NAME,
             'bank_account_number' => '1234567890',
             'amount' => '2500.0000',
             'currency' => 'MYR',
             'status' => 'ready_for_mapping',
         ])
         ->and($export['content'])->toContain('placeholder_not_bank_submittable')
-        ->and($export['content'])->toContain('Test Bank');
+        ->and($export['content'])->toContain(TEST_BANK_NAME);
 });
 
 test('malaysia country pack advertises bank payment placeholder export', function (): void {
@@ -1237,9 +1244,9 @@ test('operational payroll reports can be exported as csv', function (): void {
 
     foreach ([
         [PayrollResultLine::TYPE_EARNING, 'basic_salary', 'Basic Salary', '3000.0000', 'payroll-core-input-copy', 'v0'],
-        [PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION, 'my_epf_employee', 'EPF Employee Contribution', '330.0000', 'epf_contribution_schedule', '2026.dev'],
-        [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', 'EPF Employer Contribution', '390.0000', 'epf_contribution_schedule', '2026.dev'],
-        [PayrollResultLine::TYPE_NET_PAY, 'net_pay', 'Net Pay', '2670.0000', 'payroll-core-neutral-net-pay', 'v0'],
+        [PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION, 'my_epf_employee', 'EPF Employee Contribution', '330.0000', 'epf_contribution_schedule', PAYROLL_DEV_VERSION],
+        [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', 'EPF Employer Contribution', '390.0000', 'epf_contribution_schedule', PAYROLL_DEV_VERSION],
+        [PayrollResultLine::TYPE_NET_PAY, 'net_pay', NET_PAY_LABEL, '2670.0000', 'payroll-core-neutral-net-pay', 'v0'],
     ] as [$type, $code, $label, $amount, $sourceRule, $sourceVersion]) {
         PayrollResultLine::query()->create([
             'payroll_run_id' => $run->id,
@@ -1298,7 +1305,7 @@ test('payroll pdf report factory builds inline render jobs with lineage metadata
         'employee_id' => $employee->id,
         'line_type' => PayrollResultLine::TYPE_NET_PAY,
         'code' => 'net_pay',
-        'label' => 'Net Pay',
+        'label' => NET_PAY_LABEL,
         'amount' => '1000.0000',
         'currency' => 'MYR',
     ]);
@@ -1471,7 +1478,7 @@ test('pay item classifications resolve by country and effective date without cou
         'classification_key' => 'statutory_wage_base',
         'classification_value' => 'ordinary_wage',
         'effective_from' => '2026-01-01',
-        'source_pack' => 'belimbing/payroll-my',
+        'source_pack' => PAYROLL_MY_PACK,
         'source_version' => '2026.1',
         'metadata' => ['reason' => 'Malaysia pack owns statutory treatment.'],
     ]);
@@ -1481,7 +1488,7 @@ test('pay item classifications resolve by country and effective date without cou
         'classification_key' => 'statutory_wage_base',
         'classification_value' => 'ordinary_wage_v2',
         'effective_from' => '2026-07-01',
-        'source_pack' => 'belimbing/payroll-my',
+        'source_pack' => PAYROLL_MY_PACK,
         'source_version' => '2026.2',
     ]);
 
@@ -1500,7 +1507,7 @@ test('pay item classifications resolve by country and effective date without cou
         ->and($january['statutory_wage_base'])->toMatchArray([
             'value' => 'ordinary_wage',
             'country_iso' => 'MY',
-            'source_pack' => 'belimbing/payroll-my',
+            'source_pack' => PAYROLL_MY_PACK,
             'source_version' => '2026.1',
             'metadata' => ['reason' => 'Malaysia pack owns statutory treatment.'],
         ])
@@ -1519,7 +1526,7 @@ test('statutory profile resolver selects effective employer and employee profile
     PayrollEmployerStatutoryProfile::query()->create([
         'company_id' => $company->id,
         'country_iso' => 'MY',
-        'source_pack' => 'belimbing/payroll-my',
+        'source_pack' => PAYROLL_MY_PACK,
         'source_version' => '2026.1',
         'effective_from' => '2026-01-01',
         'effective_to' => '2026-06-30',
@@ -1533,7 +1540,7 @@ test('statutory profile resolver selects effective employer and employee profile
     PayrollEmployerStatutoryProfile::query()->create([
         'company_id' => $company->id,
         'country_iso' => 'MY',
-        'source_pack' => 'belimbing/payroll-my',
+        'source_pack' => PAYROLL_MY_PACK,
         'source_version' => '2026.2',
         'effective_from' => '2026-07-01',
         'profile_data' => [
@@ -1547,7 +1554,7 @@ test('statutory profile resolver selects effective employer and employee profile
         'company_id' => $company->id,
         'employee_id' => $employee->id,
         'country_iso' => 'MY',
-        'source_pack' => 'belimbing/payroll-my',
+        'source_pack' => PAYROLL_MY_PACK,
         'source_version' => '2026.1',
         'effective_from' => '2026-01-01',
         'profile_data' => [
@@ -1582,7 +1589,7 @@ test('statutory profile resolver selects effective employer and employee profile
         ])
         ->and($employeeProfile)
         ->not()->toBeNull()
-        ->source_pack->toBe('belimbing/payroll-my')
+        ->source_pack->toBe(PAYROLL_MY_PACK)
         ->and($employeeProfile->profile_data)->toMatchArray([
             'citizenship_status' => 'citizen',
             'tax_residency' => 'resident',
@@ -1596,7 +1603,7 @@ test('statutory rule sets resolve effective contribution tables with ordered row
         'country_iso' => 'MY',
         'rule_key' => 'epf_contribution_schedule',
         'name' => 'EPF contribution schedule 2026 H1',
-        'source_pack' => 'belimbing/payroll-my',
+        'source_pack' => PAYROLL_MY_PACK,
         'source_version' => '2026.1',
         'effective_from' => '2026-01-01',
         'effective_to' => '2026-06-30',
@@ -1606,7 +1613,7 @@ test('statutory rule sets resolve effective contribution tables with ordered row
         'country_iso' => 'MY',
         'rule_key' => 'epf_contribution_schedule',
         'name' => 'EPF contribution schedule 2026 H2',
-        'source_pack' => 'belimbing/payroll-my',
+        'source_pack' => PAYROLL_MY_PACK,
         'source_version' => '2026.2',
         'effective_from' => '2026-07-01',
         'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
@@ -1637,7 +1644,7 @@ test('statutory rule sets resolve effective contribution tables with ordered row
 
     expect($ruleSet)
         ->not()->toBeNull()
-        ->source_pack->toBe('belimbing/payroll-my')
+        ->source_pack->toBe(PAYROLL_MY_PACK)
         ->source_version->toBe('2026.2')
         ->and($ruleSet->rounding_policy)->toBe(['mode' => 'ceiling', 'precision' => '0.01'])
         ->and($ruleSet->metadata)->toBe(['official_reference' => 'country-pack-maintained'])
