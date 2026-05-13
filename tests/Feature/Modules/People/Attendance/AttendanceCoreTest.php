@@ -4,14 +4,24 @@ use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use App\Modules\People\Attendance\Exceptions\AttendanceClockEventIngestionException;
+use App\Modules\People\Attendance\Exceptions\AttendanceLifecycleException;
 use App\Modules\People\Attendance\Models\AttendanceClockEvent;
 use App\Modules\People\Attendance\Models\AttendanceDay;
+use App\Modules\People\Attendance\Models\AttendanceOvertimeRequest;
 use App\Modules\People\Attendance\Models\AttendancePolicyGroup;
 use App\Modules\People\Attendance\Models\AttendanceRosterAssignment;
+use App\Modules\People\Attendance\Models\AttendanceRosterPattern;
 use App\Modules\People\Attendance\Models\AttendanceShiftTemplate;
 use App\Modules\People\Attendance\Services\AttendanceDayProjectionService;
+use App\Modules\People\Attendance\Services\AttendanceDayResolverService;
+use App\Modules\People\Attendance\Services\AttendanceLifecycleService;
+use App\Modules\People\Attendance\Services\AttendanceOvertimeService;
 use App\Modules\People\Attendance\Services\AttendancePolicyGroupResolver;
 use App\Modules\People\Attendance\Services\ClockEventIngestionService;
+use App\Modules\People\Payroll\Models\PayrollCalendar;
+use App\Modules\People\Payroll\Models\PayrollInput;
+use App\Modules\People\Payroll\Models\PayrollPeriod;
+use App\Modules\People\Payroll\Models\PayrollRun;
 
 it('projects attendance day metrics from clock events', function (): void {
     $company = Company::factory()->minimal()->create();
@@ -188,3 +198,146 @@ it('blocks new clock events on locked attendance days', function (): void {
         attributes: ['timezone' => 'Asia/Singapore'],
     );
 })->throws(AttendanceClockEventIngestionException::class);
+
+it('resolves attendance days from rotating roster assignments', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $dayShift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day Shift',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+    $nightShift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'NIGHT',
+        'name' => 'Night Shift',
+        'starts_at' => '20:00:00',
+        'ends_at' => '08:00:00',
+        'crosses_midnight' => true,
+        'expected_work_minutes' => 720,
+        'effective_from' => '2026-01-01',
+    ]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard Attendance',
+        'effective_from' => '2026-01-01',
+    ]);
+    $pattern = AttendanceRosterPattern::query()->create([
+        'company_id' => $company->id,
+        'code' => 'ROTATE',
+        'name' => 'Rotation',
+        'pattern_type' => AttendanceRosterPattern::TYPE_ROTATING,
+        'pattern_definition' => [
+            'cycle_days' => 2,
+            'days' => [
+                ['offset' => 0, 'shift_code' => $dayShift->code],
+                ['offset' => 1, 'shift_code' => $nightShift->code],
+            ],
+        ],
+        'status' => AttendanceRosterPattern::STATUS_PUBLISHED,
+    ]);
+    AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_roster_pattern_id' => $pattern->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => '2026-05-13',
+        'publish_state' => 'published',
+    ]);
+
+    $day = app(AttendanceDayResolverService::class)->resolve($employee, '2026-05-14');
+
+    expect($day->shiftTemplate?->is($nightShift))->toBeTrue()
+        ->and($day->status)->toBe(AttendanceDay::STATUS_SCHEDULED)
+        ->and($day->expected_minutes)->toBe(720)
+        ->and($day->shift_ends_at?->toDateString())->toBe('2026-05-15');
+});
+
+it('finalizes ready attendance days and blocks locked lifecycle changes', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $day = AttendanceDay::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_date' => '2026-05-13',
+        'status' => AttendanceDay::STATUS_READY_FOR_REVIEW,
+    ]);
+
+    app(AttendanceLifecycleService::class)->finalize($day);
+    app(AttendanceLifecycleService::class)->lock($day);
+
+    expect($day->refresh()->locked_at)->not->toBeNull();
+
+    app(AttendanceLifecycleService::class)->finalize($day);
+})->throws(AttendanceLifecycleException::class);
+
+it('approves overtime and queues one neutral payroll input', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard Attendance',
+        'effective_from' => '2026-01-01',
+        'payroll_defaults' => ['overtime_pay_item_code' => 'OT15'],
+    ]);
+    $day = AttendanceDay::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'attendance_date' => '2026-05-13',
+        'status' => AttendanceDay::STATUS_FINALIZED,
+    ]);
+    $request = AttendanceOvertimeRequest::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_day_id' => $day->id,
+        'status' => AttendanceOvertimeRequest::STATUS_SUBMITTED,
+        'starts_at' => '2026-05-13 17:00:00',
+        'ends_at' => '2026-05-13 19:00:00',
+        'requested_minutes' => 120,
+        'reason' => 'Production support',
+    ]);
+    $calendar = PayrollCalendar::query()->create([
+        'company_id' => $company->id,
+        'code' => 'MONTHLY',
+        'name' => 'Monthly',
+        'country_iso' => 'MY',
+        'currency' => 'MYR',
+        'frequency' => 'monthly',
+    ]);
+    $period = PayrollPeriod::query()->create([
+        'payroll_calendar_id' => $calendar->id,
+        'code' => '2026-05',
+        'name' => 'May 2026',
+        'starts_on' => '2026-05-01',
+        'ends_on' => '2026-05-31',
+        'pay_date' => '2026-05-31',
+    ]);
+    PayrollRun::query()->create([
+        'company_id' => $company->id,
+        'payroll_calendar_id' => $calendar->id,
+        'payroll_period_id' => $period->id,
+        'code' => 'MAY-2026',
+        'name' => 'May 2026',
+        'status' => PayrollRun::STATUS_DRAFT,
+        'currency' => 'MYR',
+    ]);
+
+    $service = app(AttendanceOvertimeService::class);
+    $service->approve($request, 90);
+    $handoff = $service->queuePayrollHandoff($request);
+    $again = $service->queuePayrollHandoff($request->refresh());
+
+    expect($handoff)->not->toBeNull()
+        ->and($again?->is($handoff))->toBeTrue()
+        ->and(PayrollInput::query()->count())->toBe(1)
+        ->and(PayrollInput::query()->first()?->pay_item_code)->toBe('OT15')
+        ->and(PayrollInput::query()->first()?->quantity)->toBe('1.5000')
+        ->and($request->refresh()->status)->toBe(AttendanceOvertimeRequest::STATUS_QUEUED_FOR_PAYROLL);
+});

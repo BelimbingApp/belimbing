@@ -236,8 +236,8 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 - [x] Create `app/Modules/People/Attendance/` using migration prefix `0320_01_15_*`, module authz, menu config, routes, service provider, and Livewire workbench shell. {codex/gpt-5}
 - [x] Create shift template, punch acceptance window, roster pattern, roster assignment, attendance policy group, attendance day, clock event, attendance adjustment, overtime request, allowance rule, absenteeism batch, geofence/geofence group, and payroll handoff reference tables/models. {codex/gpt-5}
 - [x] Implement append-only clock event ingestion for manual/web entries and file imports, including source, actor, timezone, device/location evidence fields, and correction lineage. Web, manual, import, and correction APIs are implemented behind `ClockEventIngestionService`; file parser UX remains a later import surface. {codex/gpt-5}
-- [ ] Implement attendance-day projection from roster, rule policy, clock events, and calendar exceptions while the period is open. A first projection service exists for clock-in/out, worked minutes, late/early flags, absence, and OT candidates; roster/calendar integration remains open.
-- [ ] Implement lifecycle states for attendance days and prevent mutation after payroll lock except through reversal/new adjustment facts.
+- [ ] Implement attendance-day projection from roster, rule policy, clock events, and calendar exceptions while the period is open. Roster-aware day resolution and clock-event projection are implemented; People Settings calendar exception integration remains open. {codex/gpt-5}
+- [x] Implement lifecycle states for attendance days and prevent mutation after payroll lock except through reversal/new adjustment facts. Finalize/lock guards are implemented for Attendance Core mutations; reversal UX remains a later correction surface. {codex/gpt-5}
 - [x] Add dev seed data for common office shifts, a cross-midnight shift, punch windows, a weekly roster, a rotating roster, daily/monthly rounding, conditional allowance rules, and sample overtime/exception/absenteeism cases. {codex/gpt-5}
 
 ### Phase 2 - Calendar, roster, and shift rules
@@ -252,7 +252,7 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 ### Phase 3 - Exceptions, overtime, and Workflow routing
 
 - [ ] Implement missing-punch and attendance-adjustment requests with employee, supervisor, HR, and on-behalf modes.
-- [ ] Implement overtime request lifecycle: draft, submitted, approved, rejected, cancelled, withdrawn, queued for payroll, paid/settled.
+- [ ] Implement overtime request lifecycle: draft, submitted, approved, rejected, cancelled, withdrawn, queued for payroll, paid/settled. Draft/submitted/approved/rejected/queued-for-payroll transitions are implemented; cancel/withdraw/paid settlement remain open. {codex/gpt-5}
 - [ ] Generate overtime candidates from attendance days without paying them until approval or HR-finalized batch.
 - [ ] Implement overtime adjustment bands and overtime knock-off policy with before/after quantities and explanation output.
 - [ ] Implement absenteeism candidate generation, batch entry, batch record review, grouping, and attendance lock-date enforcement.
@@ -261,7 +261,7 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 
 ### Phase 4 - Payroll handoff and reconciliation
 
-- [ ] Generate neutral `PayrollInput` rows for approved overtime with attendance-day and overtime-request source references.
+- [x] Generate neutral `PayrollInput` rows for approved overtime with attendance-day and overtime-request source references. Approved overtime queues idempotent `PayrollInput` and `AttendancePayrollHandoff` rows into open payroll runs. {codex/gpt-5}
 - [ ] Generate neutral inputs for configured attendance allowances, shift allowances, rest-day/public-holiday work, lateness deductions, early-out deductions, unpaid absence deductions, and attendance adjustments when enabled by policy.
 - [ ] Split overtime payroll inputs by day type, hour threshold, adjustment band, and export mapping where policy requires distinct pay items.
 - [ ] Support daily and monthly lateness export rules, including monthly rounding separate from daily exception calculation.
