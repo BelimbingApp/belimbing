@@ -17,13 +17,15 @@ trait ExtractsModuleProvenance
      */
     protected function extractModulePath(string $migrationPath): ?string
     {
+        $normalized = str_replace('\\', '/', $migrationPath);
+
         // Pattern: .../app/Modules/{Layer}/{Module}/Database/Migrations/{file}
-        if (preg_match('#app/Modules/[^/]+/[^/]+#', $migrationPath, $matches)) {
+        if (preg_match('#app/Modules/[^/]+/[^/]+#', $normalized, $matches)) {
             return $matches[0];
         }
 
         // Pattern: .../app/Base/{Module}/Database/Migrations/{file}
-        if (preg_match('#app/Base/[^/]+#', $migrationPath, $matches)) {
+        if (preg_match('#app/Base/[^/]+#', $normalized, $matches)) {
             return $matches[0];
         }
 

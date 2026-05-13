@@ -1,6 +1,6 @@
 # people/10_payroll-intake-dependency-inversion
 
-**Status:** In Progress — Phase 1 intake skeleton built and tested; greenfield rewrite path adopted (no producer work in flight)
+**Status:** In Progress — Phase 1 intake skeleton built and tested; Phase 2 schema realignment landed (all People migrations renumbered to tier scheme, all tables prefixed `people_*`); ready to start Phase 3 (rewrite producers)
 **Last Updated:** 2026-05-13
 **Sources:**
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Payroll Core/country-pack boundary and the neutral `PayrollInput` contract that all upstream sources feed.
@@ -150,7 +150,7 @@ The migration prefix reorganization (producers before consumers, with semantic t
 - [ ] **Defer to Phase 7:** concurrent-insert test (two parallel transactions). Requires a non-SQLite driver in CI to exercise real row locking.
 - [ ] **Defer to Phase 7:** pending materializer hook on run open (`PayrollRun::open` lifecycle). Not needed until producers are actually emitting `pending` outcomes — currently no producer calls intake.
 
-### Phase 2 — Schema realignment
+### Phase 2 — Schema realignment  ✅ DONE
 
 Single atomic step covering two spec-drift fixes that both open every People migration file. Done once, before any producer rewrite.
 

@@ -253,7 +253,7 @@ test('neutral payroll core calculates gross deductions reimbursements and net pa
             'total_reimbursements' => '80.0000',
         ]);
 
-    $this->assertDatabaseHas('payroll_run_audit_events', [
+    $this->assertDatabaseHas('people_payroll_run_audit_events', [
         'payroll_run_id' => $run->id,
         'action' => 'calculated',
     ]);
@@ -777,7 +777,7 @@ test('payroll run lifecycle records review approval close and void audit events'
         ->status->toBe(PayrollRun::STATUS_VOIDED)
         ->voided_at->not()->toBeNull();
 
-    $this->assertDatabaseHas('payroll_run_audit_events', [
+    $this->assertDatabaseHas('people_payroll_run_audit_events', [
         'payroll_run_id' => $voidedRun->id,
         'action' => 'voided',
     ]);
@@ -1424,20 +1424,20 @@ test('closed payroll runs reject payroll detail mutations', function (): void {
 
 test('payroll core tables are registered for stability management', function (): void {
     foreach ([
-        'payroll_calendars',
-        'payroll_periods',
-        'payroll_runs',
-        'payroll_run_participants',
-        'payroll_inputs',
-        'payroll_result_lines',
-        'payroll_run_audit_events',
-        'payroll_pdf_artifacts',
-        'payroll_pay_items',
-        'payroll_pay_item_classifications',
-        'payroll_employer_statutory_profiles',
-        'payroll_employee_statutory_profiles',
-        'payroll_statutory_rule_sets',
-        'payroll_statutory_rule_rows',
+        'people_payroll_calendars',
+        'people_payroll_periods',
+        'people_payroll_runs',
+        'people_payroll_run_participants',
+        'people_payroll_inputs',
+        'people_payroll_result_lines',
+        'people_payroll_run_audit_events',
+        'people_payroll_pdf_artifacts',
+        'people_payroll_pay_items',
+        'people_payroll_pay_item_classifications',
+        'people_payroll_employer_statutory_profiles',
+        'people_payroll_employee_statutory_profiles',
+        'people_payroll_statutory_rule_sets',
+        'people_payroll_statutory_rule_rows',
     ] as $tableName) {
         $this->assertDatabaseHas('base_database_tables', [
             'table_name' => $tableName,
