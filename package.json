@@ -8,7 +8,7 @@
         "dev:all:watch": "bunx concurrently -c \"#93c5fd,#c4b5fd,#86efac\" \"php artisan octane:start --server=frankenphp --caddyfile=Caddyfile --host=${APP_BIND_HOST:-127.0.0.1} --port=${APP_PORT:-8000} --admin-port=${CADDY_SERVER_ADMIN_PORT:-2019} --watch\" \"php artisan queue:work --queue=ai-agent-tasks,ai-background-commands,ai-schedules,default --tries=1 --timeout=900 --sleep=1\" \"bun run dev\" --names=server,queue,vite"
     },
     "dependencies": {
-        "@tailwindcss/vite": "^4.2.4",
+        "@tailwindcss/vite": "^4.3.0",
         "alpinejs": "^3.15.12",
         "autoprefixer": "^10.5.0",
         "axios": "^1.16.0",
