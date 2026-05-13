@@ -232,12 +232,13 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 - [x] Create optional shallow claim context/client reference storage with code, label, active status, max claim limit, source aliases, and a path to migrate it later if a richer customer/project module emerges. {amp/gpt-5.1-codex}
 - [x] Create claim request, claim line, audit event, lifecycle state, approval route snapshot, and entitlement usage tables with immutable history after submission. {amp/gpt-5.1-codex}
 - [x] Store requested, approved, reimbursed/settled, and adjustment-reason fields separately on claim lines. {amp/gpt-5.1-codex}
+- [x] Add Leave-pattern Claim UI surfaces and menu/routes: My Claims (`people/claims`), Claim Approvals (`people/claims/approvals`), and Claim Settings section routes for categories, types, policies, assignments, and contexts. {amp/gpt-5.1-codex}
 - [x] Add admin/setup tabs for claim categories, types, policies, assignments, and contexts. People Settings reference selectors for cohorts/providers remain a later enrichment after the reference mapping is locked. {amp/gpt-5.1-codex}
 - [ ] Add the shared attachment reference once the reusable document/attachment service boundary is selected.
 
 ### Phase 2 — Employee submission and validation
 
-- [~] Build employee-scoped claim submission: first single-line submit/withdraw/history path is in place, with receipt attachment-count validation as a temporary bridge until shared attachment infrastructure is selected. Draft editing, multi-line add/edit/remove, and real uploads remain open. {amp/gpt-5.1-codex}
+- [~] Build employee-scoped claim submission: first single-line submit/withdraw/history path is in place under the My Claims surface, with receipt attachment-count validation as a temporary bridge until shared attachment infrastructure is selected. Draft editing, multi-line add/edit/remove, and real uploads remain open. {amp/gpt-5.1-codex}
 - [ ] Support on-behalf claim creation with actor, reason, employee notification, and audit event.
 - [~] Implement policy evaluation for caps, eligibility, receipt thresholds, provider restrictions, service-year bands, and pending claim encumbrance: first submission path enforces receipt/provider rules plus per-claim/month/year caps from matched policy bands; eligibility predicates, service-year bands, and combined-cap encumbrance remain open. {amp/gpt-5.1-codex}
 - [~] Add duplicate-risk checks for receipt number/date/amount/provider and same employee/type/amount/date combinations, surfacing warnings before approval: first duplicate-risk warnings are stored on request/line metadata and surfaced in the request list. {amp/gpt-5.1-codex}
@@ -249,7 +250,7 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 ### Phase 3 — Approval routing and operations
 
 - [ ] Route submitted claims through Workflow using Claim-selected approval profile inputs; Workflow owns approver graph, thresholds, delegation, and escalation execution.
-- [~] Build manager approval tabs: first approve/reject actions and decision reason are available from the request list; pending queue separation, line detail, receipt review, reduced approval, more-info, and escalation visibility remain open. {amp/gpt-5.1-codex}
+- [~] Build manager approval tabs: the Claim Approvals surface now has a pending queue, selected-request detail panel, claim line detail, audit trail, approve/reject actions, and decision reason. Receipt review, reduced approval, more-info, and escalation visibility remain open. {amp/gpt-5.1-codex}
 - [ ] Build HR/Finance operations tabs: all-claims search, status filters, policy exception queue, duplicate-risk queue, and payroll handoff readiness.
 - [ ] Emit notifications for submission, approval, rejection, more-info request, withdrawal, cancellation, payroll queued, and reimbursement completion through `PeopleNotificationDeliveryLog`.
 - [~] Record audit events for every state transition and every approval-limit/routing decision: submit, approve, reject, and withdraw now write audit events; more-info, cancellation, payroll, reimbursement, and routing-decision audits remain open. {amp/gpt-5.1-codex}
