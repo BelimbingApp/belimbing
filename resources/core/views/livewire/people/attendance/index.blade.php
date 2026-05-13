@@ -20,6 +20,12 @@
             <x-ui.alert variant="danger">{{ session('error') }}</x-ui.alert>
         @endif
 
+        @if (! $schemaReady)
+            <x-ui.alert variant="warning">
+                {{ __('Attendance database tables are not installed yet. Run the Attendance migration before using timecards, clock events, overtime, and payroll handoff screens.') }}
+            </x-ui.alert>
+        @endif
+
         <div class="grid gap-4 md:grid-cols-4">
             <x-ui.card>
                 <div class="text-xs font-semibold uppercase tracking-wide text-muted">{{ __('Attendance Days') }}</div>
@@ -56,11 +62,15 @@
 
                 @if ($surface === 'my' && $canClock)
                     <div class="flex gap-2">
-                        <x-ui.button type="button" variant="primary" wire:click="clock('in')" :disabled="$currentEmployeeId === null">
+                        <x-ui.button type="button" variant="secondary" wire:click="openOvertimeModal" :disabled="$currentEmployeeId === null || ! $schemaReady">
+                            <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
+                            {{ __('Request OT') }}
+                        </x-ui.button>
+                        <x-ui.button type="button" variant="primary" wire:click="clock('in')" :disabled="$currentEmployeeId === null || ! $schemaReady">
                             <x-icon name="heroicon-o-arrow-right-on-rectangle" class="h-4 w-4" />
                             {{ __('Clock In') }}
                         </x-ui.button>
-                        <x-ui.button type="button" variant="secondary" wire:click="clock('out')" :disabled="$currentEmployeeId === null">
+                        <x-ui.button type="button" variant="secondary" wire:click="clock('out')" :disabled="$currentEmployeeId === null || ! $schemaReady">
                             <x-icon name="heroicon-o-arrow-left-on-rectangle" class="h-4 w-4" />
                             {{ __('Clock Out') }}
                         </x-ui.button>
@@ -83,6 +93,10 @@
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Late') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('OT Candidate') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Exceptions') }}</th>
+                            @if ($surface === 'operations' && $canManage)
+                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Actions') }}</th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-border-default bg-surface-card">
@@ -101,10 +115,25 @@
                                 <td class="px-table-cell-x py-table-cell-y text-right tabular-nums">{{ $day->late_minutes }}</td>
                                 <td class="px-table-cell-x py-table-cell-y text-right tabular-nums">{{ number_format($day->overtime_candidate_minutes / 60, 2) }}</td>
                                 <td class="px-table-cell-x py-table-cell-y"><x-ui.badge :variant="$this->statusVariant($day->status)">{{ __(str_replace('_', ' ', ucfirst($day->status))) }}</x-ui.badge></td>
+                                <td class="px-table-cell-x py-table-cell-y text-xs text-muted">
+                                    {{ collect($day->exception_tags ?? [])->map(fn ($tag) => str_replace('_', ' ', $tag))->implode(', ') ?: '-' }}
+                                </td>
+                                @if ($surface === 'operations' && $canManage)
+                                    <td class="px-table-cell-x py-table-cell-y">
+                                        <div class="flex justify-end gap-2">
+                                            @if (in_array($day->status, ['ready_for_review', 'exception_pending'], true))
+                                                <x-ui.button size="sm" type="button" variant="primary" wire:click="finalizeDay({{ $day->id }})">{{ __('Finalize') }}</x-ui.button>
+                                            @endif
+                                            @if ($day->locked_at === null && $day->status !== 'locked')
+                                                <x-ui.button size="sm" type="button" variant="secondary" wire:click="lockDay({{ $day->id }})">{{ __('Lock') }}</x-ui.button>
+                                            @endif
+                                        </div>
+                                    </td>
+                                @endif
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No attendance days found.') }}</td>
+                                <td colspan="{{ $surface === 'operations' && $canManage ? 9 : 8 }}" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No attendance days found.') }}</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -114,7 +143,13 @@
 
         @if ($surface === 'approvals')
             <x-ui.card>
-                <h2 class="text-base font-semibold text-ink">{{ __('Submitted Overtime') }}</h2>
+                <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                    <div>
+                        <h2 class="text-base font-semibold text-ink">{{ __('Overtime Queue') }}</h2>
+                        <p class="mt-1 text-sm text-muted">{{ __('Approve submitted requests, reject invalid requests, or queue approved requests into an open payroll run.') }}</p>
+                    </div>
+                    <x-ui.input id="attendance-decision-reason" wire:model="decisionReason" label="{{ __('Decision note') }}" placeholder="{{ __('Optional') }}" />
+                </div>
                 <div class="mt-4 overflow-x-auto -mx-card-inner px-card-inner">
                     <table class="min-w-full divide-y divide-border-default text-sm">
                         <thead class="bg-surface-subtle/80">
@@ -123,19 +158,36 @@
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Window') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Requested Hours') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Reason') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
+                                @if ($canApprove)
+                                    <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Actions') }}</th>
+                                @endif
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border-default bg-surface-card">
-                            @forelse ($pendingOvertime as $request)
+                            @forelse ($overtimeRequests as $request)
                                 <tr wire:key="attendance-ot-{{ $request->id }}">
                                     <td class="px-table-cell-x py-table-cell-y">{{ $request->employee?->full_name ?? __('Employee #:id', ['id' => $request->employee_id]) }}</td>
                                     <td class="px-table-cell-x py-table-cell-y font-mono text-xs">{{ $request->starts_at?->format('Y-m-d H:i') }} - {{ $request->ends_at?->format('H:i') }}</td>
                                     <td class="px-table-cell-x py-table-cell-y text-right tabular-nums">{{ number_format($request->requested_minutes / 60, 2) }}</td>
                                     <td class="px-table-cell-x py-table-cell-y">{{ $request->reason }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y"><x-ui.badge>{{ __(str_replace('_', ' ', ucfirst($request->status))) }}</x-ui.badge></td>
+                                    @if ($canApprove)
+                                        <td class="px-table-cell-x py-table-cell-y">
+                                            <div class="flex justify-end gap-2">
+                                                @if ($request->status === 'submitted')
+                                                    <x-ui.button size="sm" type="button" variant="primary" wire:click="approveOvertime({{ $request->id }})">{{ __('Approve') }}</x-ui.button>
+                                                    <x-ui.button size="sm" type="button" variant="danger" wire:click="rejectOvertime({{ $request->id }})">{{ __('Reject') }}</x-ui.button>
+                                                @elseif ($request->status === 'approved')
+                                                    <x-ui.button size="sm" type="button" variant="primary" wire:click="queueOvertimePayroll({{ $request->id }})">{{ __('Queue Payroll') }}</x-ui.button>
+                                                @endif
+                                            </div>
+                                        </td>
+                                    @endif
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="4" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No overtime requests are waiting for approval.') }}</td>
+                                    <td colspan="{{ $canApprove ? 6 : 5 }}" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No overtime requests are waiting for action.') }}</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -260,5 +312,25 @@
                 </x-ui.card>
             </div>
         @endif
+
+        <x-ui.modal wire:model="showOvertimeModal" class="max-w-2xl">
+            <form wire:submit="submitOvertimeRequest" class="p-6 space-y-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-ink">{{ __('Request Overtime') }}</h2>
+                    <p class="mt-1 text-sm text-muted">{{ __('Submitted overtime stays out of payroll until an approver approves and queues it.') }}</p>
+                </div>
+                <div class="grid gap-4 md:grid-cols-3">
+                    <x-ui.input id="attendance-ot-date" type="date" wire:model="overtimeDate" label="{{ __('Date') }}" required :error="$errors->first('overtimeDate')" />
+                    <x-ui.input id="attendance-ot-start" type="time" wire:model="overtimeStartsAt" label="{{ __('Start') }}" required :error="$errors->first('overtimeStartsAt')" />
+                    <x-ui.input id="attendance-ot-end" type="time" wire:model="overtimeEndsAt" label="{{ __('End') }}" required :error="$errors->first('overtimeEndsAt')" />
+                </div>
+                <x-ui.input id="attendance-ot-hours" type="number" step="0.25" min="0.25" max="24" wire:model="overtimeRequestedHours" label="{{ __('Requested Hours') }}" required :error="$errors->first('overtimeRequestedHours')" />
+                <x-ui.textarea id="attendance-ot-reason" wire:model="overtimeReason" label="{{ __('Reason') }}" rows="3" :error="$errors->first('overtimeReason')" />
+                <div class="flex justify-end gap-2">
+                    <x-ui.button type="button" variant="secondary" wire:click="$set('showOvertimeModal', false)">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="primary">{{ __('Submit Request') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
     </div>
 </div>

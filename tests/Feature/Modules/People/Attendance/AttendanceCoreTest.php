@@ -5,6 +5,7 @@ use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use App\Modules\People\Attendance\Exceptions\AttendanceClockEventIngestionException;
 use App\Modules\People\Attendance\Exceptions\AttendanceLifecycleException;
+use App\Modules\People\Attendance\Livewire\Index;
 use App\Modules\People\Attendance\Models\AttendanceClockEvent;
 use App\Modules\People\Attendance\Models\AttendanceDay;
 use App\Modules\People\Attendance\Models\AttendanceOvertimeRequest;
@@ -22,6 +23,7 @@ use App\Modules\People\Payroll\Models\PayrollCalendar;
 use App\Modules\People\Payroll\Models\PayrollInput;
 use App\Modules\People\Payroll\Models\PayrollPeriod;
 use App\Modules\People\Payroll\Models\PayrollRun;
+use Livewire\Livewire;
 
 it('projects attendance day metrics from clock events', function (): void {
     $company = Company::factory()->minimal()->create();
@@ -340,4 +342,29 @@ it('approves overtime and queues one neutral payroll input', function (): void {
         ->and(PayrollInput::query()->first()?->pay_item_code)->toBe('OT15')
         ->and(PayrollInput::query()->first()?->quantity)->toBe('1.5000')
         ->and($request->refresh()->status)->toBe(AttendanceOvertimeRequest::STATUS_QUEUED_FOR_PAYROLL);
+});
+
+it('lets linked employees submit overtime from the attendance workbench', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $user->forceFill(['employee_id' => $employee->id])->save();
+
+    $this->actingAs($user);
+
+    Livewire::test(Index::class)
+        ->assertSee('Request OT')
+        ->call('openOvertimeModal')
+        ->set('overtimeDate', '2026-05-13')
+        ->set('overtimeStartsAt', '17:00')
+        ->set('overtimeEndsAt', '19:00')
+        ->set('overtimeRequestedHours', '2.00')
+        ->set('overtimeReason', 'Month-end production support')
+        ->call('submitOvertimeRequest')
+        ->assertHasNoErrors();
+
+    expect(AttendanceOvertimeRequest::query()
+        ->where('employee_id', $employee->id)
+        ->where('status', AttendanceOvertimeRequest::STATUS_SUBMITTED)
+        ->exists())->toBeTrue();
 });
