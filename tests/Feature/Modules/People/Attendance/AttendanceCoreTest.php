@@ -2,6 +2,8 @@
 
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Models\User;
+use App\Modules\People\Attendance\Exceptions\AttendanceClockEventIngestionException;
 use App\Modules\People\Attendance\Models\AttendanceClockEvent;
 use App\Modules\People\Attendance\Models\AttendanceDay;
 use App\Modules\People\Attendance\Models\AttendancePolicyGroup;
@@ -9,6 +11,7 @@ use App\Modules\People\Attendance\Models\AttendanceRosterAssignment;
 use App\Modules\People\Attendance\Models\AttendanceShiftTemplate;
 use App\Modules\People\Attendance\Services\AttendanceDayProjectionService;
 use App\Modules\People\Attendance\Services\AttendancePolicyGroupResolver;
+use App\Modules\People\Attendance\Services\ClockEventIngestionService;
 
 it('projects attendance day metrics from clock events', function (): void {
     $company = Company::factory()->minimal()->create();
@@ -106,3 +109,82 @@ it('prefers employee roster policy groups over cohort defaults', function (): vo
 
     expect($resolved?->is($employeeGroup))->toBeTrue();
 });
+
+it('ingests web clock events through an append-only service and projects partial punches as exceptions', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $actor = User::factory()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+    ]);
+
+    $event = app(ClockEventIngestionService::class)->recordWebClock(
+        employee: $employee,
+        eventType: AttendanceClockEvent::TYPE_IN,
+        actorUserId: $actor->id,
+        ipAddress: '127.0.0.1',
+        occurredAt: '2026-05-13 08:05:00',
+        timezone: 'Asia/Singapore',
+    );
+
+    $day = AttendanceDay::query()->whereKey($event->attendance_day_id)->firstOrFail();
+
+    expect($event->source)->toBe(AttendanceClockEvent::SOURCE_WEB)
+        ->and($event->timezone)->toBe('Asia/Singapore')
+        ->and($event->actor_user_id)->toBe($actor->id)
+        ->and($event->ip_address)->toBe('127.0.0.1')
+        ->and($day->status)->toBe(AttendanceDay::STATUS_EXCEPTION_PENDING)
+        ->and($day->exception_tags)->toBe(['missing_clock_out']);
+});
+
+it('records manual corrections without mutating the original clock event', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $actor = User::factory()->create(['company_id' => $company->id]);
+    $service = app(ClockEventIngestionService::class);
+
+    $original = $service->importClockEvent(
+        employee: $employee,
+        eventType: AttendanceClockEvent::TYPE_IN,
+        occurredAt: '2026-05-13 08:30:00',
+        sourceSystem: 'legacy-device',
+        sourceCode: 'PUNCH-1001',
+        attributes: ['timezone' => 'Asia/Singapore'],
+    );
+
+    $correction = $service->correctClockEvent(
+        correctedEvent: $original,
+        eventType: AttendanceClockEvent::TYPE_IN,
+        occurredAt: '2026-05-13 08:00:00',
+        actorUserId: $actor->id,
+    );
+
+    $original->refresh();
+
+    expect($original->occurred_at->format('H:i:s'))->toBe('08:30:00')
+        ->and($correction->source)->toBe(AttendanceClockEvent::SOURCE_MANUAL)
+        ->and($correction->corrects_clock_event_id)->toBe($original->id)
+        ->and(AttendanceClockEvent::query()->count())->toBe(2);
+});
+
+it('blocks new clock events on locked attendance days', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $actor = User::factory()->create(['company_id' => $company->id]);
+
+    AttendanceDay::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_date' => '2026-05-13',
+        'status' => AttendanceDay::STATUS_LOCKED,
+        'locked_at' => now(),
+    ]);
+
+    app(ClockEventIngestionService::class)->recordManualClock(
+        employee: $employee,
+        eventType: AttendanceClockEvent::TYPE_IN,
+        occurredAt: '2026-05-13 08:00:00',
+        actorUserId: $actor->id,
+        attributes: ['timezone' => 'Asia/Singapore'],
+    );
+})->throws(AttendanceClockEventIngestionException::class);
