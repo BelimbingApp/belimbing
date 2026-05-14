@@ -265,6 +265,25 @@ final class OpenAiCodexSetup extends ProviderSetup
         $php = $this->resolvePhpBinary();
         $artisan = base_path('artisan');
         $logFile = storage_path('logs/codex-auth-listen.log');
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            // `start /B` detaches without opening a new window; redirect output
+            // so the process is fully decoupled from the parent.
+            $cmd = sprintf(
+                'start /B "" %s %s blb:ai:codex:auth-listen --timeout=180 >> %s 2>&1',
+                escapeshellarg($php),
+                escapeshellarg($artisan),
+                escapeshellarg($logFile),
+            );
+            $handle = popen($cmd, 'r');
+            if ($handle === false) {
+                return false;
+            }
+            pclose($handle);
+
+            return $this->waitForPortBind(1455, 3000);
+        }
+
         $cmd = sprintf(
             'nohup %s %s blb:ai:codex:auth-listen --timeout=180 >> %s 2>&1 &',
             escapeshellarg($php),
@@ -274,7 +293,27 @@ final class OpenAiCodexSetup extends ProviderSetup
 
         exec($cmd);
 
-        return true;
+        return $this->waitForPortBind(1455, 3000);
+    }
+
+    /**
+     * Block until the child process binds the port (up to $timeoutMs).
+     * Returns true once something is listening, false on timeout.
+     */
+    private function waitForPortBind(int $port, int $timeoutMs): bool
+    {
+        $deadline = microtime(true) + ($timeoutMs / 1000);
+        while (microtime(true) < $deadline) {
+            $conn = @fsockopen('127.0.0.1', $port, $errno, $errstr, 1);
+            if ($conn) {
+                fclose($conn);
+
+                return true;
+            }
+            usleep(100_000);
+        }
+
+        return false;
     }
 
     /**
