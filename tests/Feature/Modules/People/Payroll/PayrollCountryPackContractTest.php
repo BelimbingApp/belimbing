@@ -17,8 +17,8 @@ use App\Modules\People\Payroll\Models\PayrollResultLine;
 use App\Modules\People\Payroll\Services\PayrollCountryPackRegistry;
 use Illuminate\Support\Carbon;
 
-const PAYROLL_MY_PACK = 'belimbing/payroll-my';
-const PAYROLL_DEV_VERSION = '2026.dev';
+defined('PAYROLL_MY_PACK') || define('PAYROLL_MY_PACK', 'belimbing/payroll-my');
+defined('PAYROLL_DEV_VERSION') || define('PAYROLL_DEV_VERSION', '2026.dev');
 
 function createPayrollContractTestPack(
     string $countryIso = 'MY',

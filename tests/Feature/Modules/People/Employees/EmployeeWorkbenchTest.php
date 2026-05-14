@@ -84,7 +84,7 @@ test('employee workbench renders readiness and saved view controls', function ()
         'validation_messages' => [],
     ]);
 
-    $blockedEmployee = Employee::factory()->create([
+    Employee::factory()->create([
         'company_id' => $company->id,
         'employee_number' => 'E1002',
         'full_name' => 'Ben Blocked',

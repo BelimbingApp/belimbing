@@ -3,6 +3,7 @@
 namespace App\Base\Database\Console\Commands;
 
 use App\Base\Database\Console\Concerns\PrintsTableUnstableUsage;
+use App\Base\Database\Exceptions\TableRegistryMissingException;
 use App\Base\Database\Models\TableRegistry;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -84,11 +85,7 @@ class FreshCommand extends IlluminateFreshCommand
     protected function dropTablesSelectively(?string $database): void
     {
         if (! Schema::hasTable('base_database_tables')) {
-            throw new \RuntimeException(
-                'TableRegistry (base_database_tables) is missing. '
-                .'This table is created on install and must always exist. '
-                .'Reinstall or run the base database migration before using migrate:fresh.'
-            );
+            throw TableRegistryMissingException::forFreshCommand();
         }
 
         $preservedTables = $this->getPreservedTableNames();
