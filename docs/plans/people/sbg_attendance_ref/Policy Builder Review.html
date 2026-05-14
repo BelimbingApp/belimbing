@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Policy Builder — Design Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --surface-page:    #f1ede5;
+    --surface-card:    #faf9f5;
+    --surface-subtle:  #ece8e0;
+    --surface-sidebar: #EEE7DA;
+    --surface-pinned:  #dfd9cf;
+    --surface-bar:     #f5f2ec;
+    --border:          #ddd8cf;
+    --border-strong:   #cbc5bb;
+    --border-input:    #cbc5bb;
+    --ink:             #2c2418;
+    --muted:           #6b6057;
+    --link:            #544c43;
+    --accent:          #b5622f;
+    --accent-hover:    #9a5226;
+    --accent-tint:     #f4e8dd;
+    --accent-on:       #ffffff;
+    --secondary:       #525252;
+    --success:         #166534;
+    --success-bg:      #eaf3ec;
+    --success-border:  #cfe1d3;
+    --danger:          #991b1b;
+    --warning:         #854d0e;
+    --warning-bg:      #f8eed4;
+    --info:            #1e40af;
+    --info-bg:         #e6ecf6;
+    --r-control: 0.75rem;
+    --r-card: 0.75rem;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif; color: var(--ink); background: var(--surface-page); -webkit-font-smoothing: antialiased; }
+  body { font-size: 14px; line-height: 1.45; }
+
+  .review-page { max-width: 1840px; margin: 0 auto; padding: 56px 56px 96px; }
+
+  /* ─── Review header ─────────────────────────────────────────── */
+  .review-kicker { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .review-title { font-size: 36px; font-weight: 500; letter-spacing: -0.02em; color: var(--ink); margin-bottom: 14px; line-height: 1.1; }
+  .review-lede { font-size: 16px; color: var(--link); max-width: 780px; line-height: 1.55; }
+  .review-lede em { font-style: normal; color: var(--ink); font-weight: 500; }
+  .review-meta { display: flex; gap: 28px; margin-top: 24px; flex-wrap: wrap; }
+  .review-meta-item { font-size: 12px; color: var(--muted); display: flex; align-items: baseline; gap: 8px; }
+  .review-meta-item strong { color: var(--ink); font-weight: 500; }
+
+  hr.divider { border: none; border-top: 1px solid var(--border); margin: 44px 0 36px; }
+
+  /* ─── Split layout ──────────────────────────────────────────── */
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 40px; align-items: start; }
+  .notes-rail { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 18px; }
+
+  /* ─── Note cards ────────────────────────────────────────────── */
+  .note-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--r-card); padding: 16px 18px; box-shadow: 0 1px 1px rgba(0,0,0,0.02); }
+  .note-card h3 { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .note-card h3::before { content: ''; width: 5px; height: 5px; border-radius: 99px; background: var(--accent); display: inline-block; }
+  .note-list { list-style: none; display: flex; flex-direction: column; gap: 11px; }
+  .note-list li { font-size: 13px; line-height: 1.5; color: var(--link); padding-left: 22px; position: relative; }
+  .note-list li::before { content: attr(data-n); position: absolute; left: 0; top: 1px; width: 16px; height: 16px; border-radius: 99px; background: var(--accent-tint); color: var(--accent); font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+  .note-list li b { color: var(--ink); font-weight: 600; }
+  .note-list code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; background: var(--surface-subtle); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+  .note-list li.tag-add::before { background: var(--success-bg); color: var(--success); }
+  .note-list li.tag-fix::before { background: var(--warning-bg); color: var(--warning); }
+  .note-list li.tag-cut::before { background: var(--surface-subtle); color: var(--muted); }
+
+  /* ─── Mockup frame ──────────────────────────────────────────── */
+  .mockup-wrap { display: flex; flex-direction: column; gap: 14px; }
+  .mockup-label { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .mockup-label .dot { width: 7px; height: 7px; border-radius: 99px; background: var(--accent); }
+  .mockup-frame { background: var(--surface-page); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 6px 24px -8px rgba(44, 36, 24, 0.18), 0 1px 0 rgba(0,0,0,0.02); }
+
+  /* ─── App chrome ────────────────────────────────────────────── */
+  .app-shell { display: grid; grid-template-columns: 232px 1fr; height: 880px; background: var(--surface-page); }
+
+  /* ─── Sidebar ───────────────────────────────────────────────── */
+  .sidebar { background: var(--surface-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sb-logo { padding: 14px 14px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 9px; }
+  .sb-logo-mark { width: 24px; height: 24px; }
+  .sb-logo-name { font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+
+  .sb-search { padding: 10px 12px 4px; }
+  .sb-search-input { width: 100%; padding: 6px 10px 6px 30px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-card); color: var(--muted); font-size: 12.5px; font-family: inherit; outline: none; position: relative; }
+  .sb-search-wrap { position: relative; }
+  .sb-search-wrap svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+
+  .sb-nav { flex: 1; overflow-y: auto; padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 1px; }
+  .sb-section-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); padding: 14px 10px 6px; }
+  .sb-link { display: flex; align-items: center; gap: 9px; padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--link); cursor: pointer; user-select: none; }
+  .sb-link.parent { color: var(--ink); font-weight: 500; }
+  .sb-link .caret { color: var(--muted); margin-right: -2px; transition: transform 0.15s; flex-shrink: 0; }
+  .sb-link.open .caret { transform: rotate(90deg); }
+  .sb-link svg.lead { width: 16px; height: 16px; flex-shrink: 0; color: var(--muted); }
+  .sb-link:hover { background: var(--surface-subtle); color: var(--ink); }
+  .sb-children { display: flex; flex-direction: column; gap: 1px; padding-left: 18px; margin: 1px 0 2px; border-left: 1px solid var(--border); margin-left: 14px; }
+  .sb-children .sb-link { font-size: 12.5px; padding: 5px 10px; color: var(--link); border-radius: 6px; }
+  .sb-children .sb-link.active { background: var(--surface-card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 1px rgba(0,0,0,0.04); outline: 1px solid rgba(221,216,207,0.6); }
+  .sb-children .sb-link .count { margin-left: auto; font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .sb-user { padding: 10px 8px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .sb-user-avatar { width: 30px; height: 30px; border-radius: 99px; background: var(--accent-tint); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; flex-shrink: 0; }
+  .sb-user-info { line-height: 1.25; min-width: 0; flex: 1; }
+  .sb-user-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .sb-user-email { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sb-user-logout { color: var(--muted); padding: 6px; border-radius: 6px; cursor: pointer; }
+  .sb-user-logout:hover { background: var(--surface-subtle); color: var(--ink); }
+
+  /* ─── Main + Topbar ─────────────────────────────────────────── */
+  .main { display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .topbar { height: 48px; background: var(--surface-bar); border-bottom: 1px solid var(--border); padding: 0 20px; display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+  .crumbs { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+  .crumbs a { color: var(--muted); text-decoration: none; cursor: pointer; }
+  .crumbs a:hover { color: var(--ink); }
+  .crumbs .sep { color: var(--border-strong); }
+  .crumbs .here { color: var(--ink); font-weight: 600; }
+  .topbar-spacer { flex: 1; }
+  .topbar-tools { display: flex; align-items: center; gap: 6px; }
+  .topbar-co { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-card); font-size: 12.5px; color: var(--ink); cursor: pointer; }
+  .topbar-co .pip { width: 6px; height: 6px; border-radius: 99px; background: var(--warning); }
+  .topbar-ico { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--muted); cursor: pointer; }
+  .topbar-ico:hover { background: var(--surface-subtle); color: var(--ink); }
+
+  /* ─── Content area ──────────────────────────────────────────── */
+  .content { flex: 1; overflow-y: auto; padding: 0; }
+
+  /* ─── Builder header strip ──────────────────────────────────── */
+  .builder-head { padding: 22px 32px 18px; background: var(--surface-bar); border-bottom: 1px solid var(--border); }
+  .builder-head-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .title-block { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .builder-title-row { display: flex; align-items: center; gap: 12px; }
+  .builder-title { font-size: 22px; font-weight: 600; color: var(--ink); letter-spacing: -0.015em; padding: 2px 4px; border-radius: 6px; line-height: 1.15; }
+  .builder-title:hover { background: var(--surface-subtle); cursor: text; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 600; line-height: 1.4; }
+  .pill::before { content: ''; width: 6px; height: 6px; border-radius: 99px; }
+  .pill.draft { background: var(--warning-bg); color: var(--warning); }
+  .pill.draft::before { background: var(--warning); }
+  .pill.active { background: var(--success-bg); color: var(--success); }
+  .pill.active::before { background: var(--success); }
+  .builder-meta { display: flex; flex-wrap: wrap; gap: 18px; font-size: 12.5px; color: var(--muted); align-items: center; }
+  .builder-meta strong { color: var(--ink); font-weight: 500; }
+  .builder-meta .dot { width: 3px; height: 3px; border-radius: 99px; background: var(--border-strong); }
+  .builder-actions { display: flex; align-items: center; gap: 8px; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; padding: 6px 14px; font-family: inherit; line-height: 1.4; transition: background 0.15s, border-color 0.15s; }
+  .btn-ghost { background: transparent; color: var(--link); border-color: transparent; }
+  .btn-ghost:hover { background: var(--surface-subtle); color: var(--ink); }
+  .btn-outline { background: var(--surface-card); color: var(--ink); border-color: var(--border-strong); }
+  .btn-outline:hover { background: var(--surface-subtle); }
+  .btn-primary { background: var(--accent); color: var(--accent-on); }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn svg { width: 14px; height: 14px; }
+  .btn-split { display: inline-flex; border-radius: 10px; overflow: hidden; border: 1px solid var(--accent); }
+  .btn-split > .btn { border-radius: 0; border: none; padding: 6px 14px; }
+  .btn-split > .btn + .btn { border-left: 1px solid rgba(255,255,255,0.25); padding: 6px 8px; }
+
+  .save-state { font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .save-state svg { width: 12px; height: 12px; color: var(--success); }
+
+  /* ─── Builder body (two-col: TOC + sections) ───────────────── */
+  .builder-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 32px; padding: 28px 32px 60px; max-width: 1280px; }
+
+  .toc { position: sticky; top: 28px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
+  .toc-label { font-size: 10px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); padding: 4px 12px 6px; }
+  .toc-item { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--link); cursor: pointer; line-height: 1.3; }
+  .toc-item:hover { background: var(--surface-subtle); color: var(--ink); }
+  .toc-item.active { background: var(--surface-card); color: var(--ink); outline: 1px solid var(--border); box-shadow: 0 1px 1px rgba(0,0,0,0.03); }
+  .toc-item .toc-dot { width: 14px; height: 14px; border-radius: 99px; display: flex; align-items: center; justify-content: center; }
+  .toc-item .toc-dot.done { background: var(--success-bg); color: var(--success); }
+  .toc-item .toc-dot.todo { background: transparent; border: 1.5px dashed var(--border-strong); }
+  .toc-item .toc-dot.warn { background: var(--warning-bg); color: var(--warning); }
+  .toc-item .toc-dot svg { width: 9px; height: 9px; }
+  .toc-item .toc-aside { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .toc-divider { border-top: 1px solid var(--border); margin: 8px 4px; }
+
+  /* ─── Sections (right column) ──────────────────────────────── */
+  .sections { display: flex; flex-direction: column; gap: 18px; }
+  .sec { background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: 0 1px 1px rgba(0,0,0,0.02); }
+  .sec-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 18px 22px 12px; }
+  .sec-head-text { min-width: 0; }
+  .sec-name { font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: -0.005em; margin-bottom: 3px; }
+  .sec-desc { font-size: 12.5px; color: var(--muted); }
+  .sec-aside { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .sec-body { padding: 6px 22px 20px; }
+
+  /* ─── Field grid ───────────────────────────────────────────── */
+  .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 24px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 24px; }
+  .full { grid-column: 1 / -1; }
+
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .field-label { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .field-label .req { color: var(--accent); font-weight: 700; }
+  .field-label .info { width: 13px; height: 13px; border-radius: 99px; background: var(--surface-subtle); color: var(--muted); font-size: 9px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; cursor: help; }
+  .field-help { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+  .field-help.ok { color: var(--success); }
+
+  .input, .select { width: 100%; padding: 8px 12px; border: 1px solid var(--border-input); border-radius: 10px; background: var(--surface-card); color: var(--ink); font-size: 13.5px; font-family: inherit; outline: none; line-height: 1.4; }
+  .input:focus, .select:focus { box-shadow: 0 0 0 2px var(--accent); border-color: transparent; }
+  .input.with-icon { padding-left: 32px; }
+
+  .input-wrap { position: relative; }
+  .input-wrap .lead-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); width: 14px; height: 14px; pointer-events: none; }
+  .input-wrap .suffix { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 11.5px; font-weight: 500; color: var(--muted); pointer-events: none; }
+
+  /* ─── Compound: select + number + unit ─────────────────────── */
+  .compound { display: grid; grid-template-columns: 1fr 90px; gap: 8px; align-items: stretch; }
+  .compound .select { padding-right: 28px; appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+  .compound .num-wrap { position: relative; }
+  .compound .num-wrap .input { padding-right: 32px; text-align: left; }
+  .compound .num-wrap .unit { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--muted); pointer-events: none; }
+
+  /* ─── Segmented control ────────────────────────────────────── */
+  .seg { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--surface-subtle); border: 1px solid var(--border); width: 100%; }
+  .seg-btn { flex: 1; text-align: center; padding: 5px 10px; font-size: 12.5px; font-weight: 500; color: var(--link); border-radius: 7px; cursor: pointer; line-height: 1.4; }
+  .seg-btn:hover { color: var(--ink); }
+  .seg-btn.on { background: var(--surface-card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+  /* ─── Inline validation row ───────────────────────────────── */
+  .validate-row { background: var(--success-bg); border: 1px solid var(--success-border); border-radius: var(--r-card); padding: 14px 18px; display: flex; align-items: flex-start; gap: 14px; }
+  .validate-row .vico { width: 28px; height: 28px; border-radius: 99px; background: white; display: flex; align-items: center; justify-content: center; color: var(--success); flex-shrink: 0; border: 1px solid var(--success-border); }
+  .validate-text { flex: 1; }
+  .validate-title { font-size: 13px; font-weight: 600; color: var(--success); }
+  .validate-body { font-size: 12.5px; color: var(--ink); margin-top: 2px; }
+  .validate-body code { background: rgba(0,0,0,0.04); padding: 1px 5px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
+
+  /* ─── Effective dates row ──────────────────────────────────── */
+  .date-input { padding-left: 12px; }
+  .date-input::-webkit-calendar-picker-indicator { opacity: 0.5; }
+
+  /* ─── Range slider visualisation ───────────────────────────── */
+  .ot-vis { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; padding: 12px 14px; background: var(--surface-page); border-radius: 10px; border: 1px dashed var(--border); }
+  .ot-vis-cell { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); }
+  .ot-vis-cell .label { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; }
+  .ot-vis-cell .value { font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  /* ─── Code chip ────────────────────────────────────────────── */
+  .code-chip { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; background: var(--surface-subtle); padding: 2px 8px; border-radius: 6px; color: var(--ink); }
+
+  /* ─── Annotation pins on mockup ────────────────────────────── */
+  .pin { position: absolute; width: 22px; height: 22px; border-radius: 99px; background: var(--accent); color: white; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(181,98,47,0.45), 0 0 0 4px rgba(181,98,47,0.18); z-index: 5; font-variant-numeric: tabular-nums; }
+  .pin-anchor { position: absolute; pointer-events: none; }
+
+  /* ─── Responsive ───────────────────────────────────────────── */
+  @media (max-width: 1500px) {
+    .split { grid-template-columns: 1fr; }
+    .notes-rail { position: static; }
+  }
+  @media (max-width: 900px) {
+    .review-page { padding: 32px 20px 60px; }
+    .review-title { font-size: 26px; }
+    .builder-body { grid-template-columns: 1fr; padding: 20px; }
+    .toc { position: static; }
+    .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="review-page">
+
+  <!-- ─── Header ─────────────────────────────────────────────── -->
+  <header>
+    <div class="review-kicker">Belimbing · People · Attendance · Design Review</div>
+    <h1 class="review-title">Policy Builder — what I'd change, and a proposed redesign</h1>
+    <p class="review-lede">
+      The current Builder asks supervisors to author an attendance rulebook through four equal-weight columns sitting inside a nested-card stack, with no breadcrumb back to the policy list, no save state, and help text that's longer than the inputs themselves. <em>The redesign below treats the policy as a document</em> — name and status at the top, one section at a time, a sticky table-of-contents that doubles as a progress map, and compound inputs that group rules instead of splitting them across columns.
+    </p>
+    <div class="review-meta">
+      <span class="review-meta-item"><strong>Surface</strong> Policy Studio → Builder</span>
+      <span class="review-meta-item"><strong>Route</strong> <code class="code-chip">people/attendance/policy-studio/builder</code></span>
+      <span class="review-meta-item"><strong>Reviewer</strong> Design</span>
+      <span class="review-meta-item"><strong>Date</strong> 14 May 2026</span>
+    </div>
+  </header>
+
+  <hr class="divider" />
+
+  <!-- ─── Split: mockup + notes rail ─────────────────────────── -->
+  <div class="split">
+
+    <!-- ─── Mockup ────────────────────────────────────────────── -->
+    <div class="mockup-wrap">
+      <div class="mockup-label"><span class="dot"></span>Proposed redesign — Policy Builder, editing <em style="font-style:normal;color:var(--ink);">Standard 8 to 5</em></div>
+
+      <div class="mockup-frame" style="position: relative;">
+        <div class="app-shell">
+
+          <!-- ─── Sidebar ──────────────────────────────────────── -->
+          <aside class="sidebar">
+            <div class="sb-logo">
+              <svg class="sb-logo-mark" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none">
+                <path d="M12 2 L14.5 9.5 L22 12 L14.5 14.5 L12 22 L9.5 14.5 L2 12 L9.5 9.5 Z" fill="#78ac35"/>
+                <circle cx="12" cy="12" r="2.5" fill="#fdd105"/>
+              </svg>
+              <span class="sb-logo-name">Belimbing</span>
+            </div>
+
+            <div class="sb-search">
+              <div class="sb-search-wrap">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input class="sb-search-input" placeholder="Search… ⌘K" />
+              </div>
+            </div>
+
+            <nav class="sb-nav">
+              <div class="sb-section-label">Pinned</div>
+              <div class="sb-link"><svg class="lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg><span>Database tables</span></div>
+              <div class="sb-link"><svg class="lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 11l3 3 7-7"/><path d="M21 12a9 9 0 1 1-6.2-8.55"/></svg><span>Claim assignments</span></div>
+
+              <div class="sb-section-label">Workspaces</div>
+              <div class="sb-link parent"><svg class="caret" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1 L7 5 L3 9" stroke="currentColor" stroke-width="1.6" fill="none"/></svg><svg class="lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Administration</span></div>
+              <div class="sb-link parent"><svg class="caret" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1 L7 5 L3 9" stroke="currentColor" stroke-width="1.6" fill="none"/></svg><svg class="lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/><path d="M3 4h2l2.5 11h11l2-7H6"/></svg><span>Commerce</span></div>
+              <div class="sb-link parent"><svg class="caret" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1 L7 5 L3 9" stroke="currentColor" stroke-width="1.6" fill="none"/></svg><svg class="lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>Operations</span></div>
+
+              <div class="sb-link parent open"><svg class="caret" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1 L7 5 L3 9" stroke="currentColor" stroke-width="1.6" fill="none"/></svg><svg class="lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.7-3.2 3.1-5 6-5s5.3 1.8 6 5"/><circle cx="17" cy="6" r="2.5"/><path d="M17 11c2.8 0 4.5 1.4 5 4"/></svg><span>People</span></div>
+              <div class="sb-children">
+                <div class="sb-link parent open"><svg class="caret" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1 L7 5 L3 9" stroke="currentColor" stroke-width="1.6" fill="none"/></svg><span>Attendance</span></div>
+                <div class="sb-children">
+                  <div class="sb-link"><span>Approvals</span><span class="count">4</span></div>
+                  <div class="sb-link"><span>Operations</span></div>
+                  <div class="sb-link parent open" style="margin-top:2px;"><svg class="caret" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1 L7 5 L3 9" stroke="currentColor" stroke-width="1.6" fill="none"/></svg><span>Policy Studio</span></div>
+                  <div class="sb-children">
+                    <div class="sb-link"><span>Policies</span><span class="count">12</span></div>
+                    <div class="sb-link"><span>Templates</span><span class="count">6</span></div>
+                    <div class="sb-link active"><span>Builder</span></div>
+                    <div class="sb-link"><span>Activity log</span></div>
+                  </div>
+                  <div class="sb-link" style="margin-top:2px;"><span>Rosters</span></div>
+                  <div class="sb-link"><span>Timesheets</span></div>
+                </div>
+              </div>
+            </nav>
+
+            <div class="sb-user">
+              <div class="sb-user-avatar">KN</div>
+              <div class="sb-user-info">
+                <div class="sb-user-name">Administrator</div>
+                <div class="sb-user-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="b4dfddd5c0dad3f4dcdbc0d9d5ddd89ad7dbd9">[email&#160;protected]</a></div>
+              </div>
+              <div class="sb-user-logout" title="Log out">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 17l5-5-5-5"/><path d="M14 12H3"/><path d="M14 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/></svg>
+              </div>
+            </div>
+          </aside>
+
+          <!-- ─── Main ─────────────────────────────────────────── -->
+          <div class="main">
+
+            <!-- ─── Topbar with breadcrumb + actions ──────────── -->
+            <div class="topbar">
+              <nav class="crumbs">
+                <a>People</a><span class="sep">/</span>
+                <a>Attendance</a><span class="sep">/</span>
+                <a>Policy Studio</a><span class="sep">/</span>
+                <a>Policies</a><span class="sep">/</span>
+                <span class="here">Standard 8 to 5</span>
+              </nav>
+              <div class="topbar-spacer"></div>
+              <div class="topbar-tools">
+                <div class="topbar-co"><span class="pip"></span>Company — (not set)<svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5L5 7L8 3.5" stroke="currentColor" stroke-width="1.4" fill="none"/></svg></div>
+                <div class="topbar-ico" title="Notifications"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
+                <div class="topbar-ico" title="Toggle theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></div>
+              </div>
+            </div>
+
+            <div class="content">
+
+              <!-- ─── Builder header strip ───────────────────── -->
+              <div class="builder-head">
+                <div class="builder-head-top">
+                  <div class="title-block">
+                    <div class="builder-title-row">
+                      <span class="builder-title" contenteditable="false">Standard 8 to 5</span>
+                      <span class="pill draft">Draft</span>
+                    </div>
+                    <div class="builder-meta">
+                      <span><strong>STD_8_5</strong></span>
+                      <span class="dot"></span>
+                      <span>Effective from <strong>14 May 2026</strong></span>
+                      <span class="dot"></span>
+                      <span>Edited <strong>3 min ago</strong> by Kiat</span>
+                      <span class="dot"></span>
+                      <span>Used by <strong>0</strong> rosters</span>
+                    </div>
+                  </div>
+                  <div class="builder-actions">
+                    <span class="save-state">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l4.5 4.5L19 7"/></svg>
+                      Autosaved
+                    </span>
+                    <button class="btn btn-ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>Preview</button>
+                    <button class="btn btn-outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>Validate</button>
+                    <button class="btn btn-primary">Publish policy</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ─── Builder body ────────────────────────────── -->
+              <div class="builder-body">
+
+                <!-- ─── TOC ──────────────────────────────────── -->
+                <nav class="toc">
+                  <div class="toc-label">Sections</div>
+                  <div class="toc-item active">
+                    <span class="toc-dot done"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6.5l2.5 2.5L10 3.5"/></svg></span>
+                    <span>Identification</span>
+                    <span class="toc-aside"></span>
+                  </div>
+                  <div class="toc-item">
+                    <span class="toc-dot done"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6.5l2.5 2.5L10 3.5"/></svg></span>
+                    <span>Work time</span>
+                    <span class="toc-aside">2</span>
+                  </div>
+                  <div class="toc-item">
+                    <span class="toc-dot done"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6.5l2.5 2.5L10 3.5"/></svg></span>
+                    <span>Lateness</span>
+                    <span class="toc-aside">2</span>
+                  </div>
+                  <div class="toc-item">
+                    <span class="toc-dot warn">!</span>
+                    <span>Overtime &amp; payroll</span>
+                    <span class="toc-aside">3</span>
+                  </div>
+                  <div class="toc-item">
+                    <span class="toc-dot todo"></span>
+                    <span>Pay item mapping</span>
+                    <span class="toc-aside">0/5</span>
+                  </div>
+                  <div class="toc-item">
+                    <span class="toc-dot done"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6.5l2.5 2.5L10 3.5"/></svg></span>
+                    <span>Effective dates</span>
+                    <span class="toc-aside"></span>
+                  </div>
+                  <div class="toc-item">
+                    <span class="toc-dot todo"></span>
+                    <span>Activation</span>
+                    <span class="toc-aside"></span>
+                  </div>
+                  <div class="toc-divider"></div>
+                  <div class="toc-item">
+                    <span class="toc-dot" style="background:var(--accent-tint);color:var(--accent);"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v8M2 6h8"/></svg></span>
+                    <span style="color:var(--accent);">Test against shift</span>
+                  </div>
+                </nav>
+
+                <!-- ─── Sections ─────────────────────────────── -->
+                <div class="sections">
+
+                  <!-- ─── Section: Identification ────────────── -->
+                  <section class="sec">
+                    <div class="sec-head">
+                      <div class="sec-head-text">
+                        <div class="sec-name">Identification</div>
+                        <div class="sec-desc">How this policy appears in rosters, imports and audit logs.</div>
+                      </div>
+                    </div>
+                    <div class="sec-body">
+                      <div class="grid-2">
+                        <div class="field">
+                          <label class="field-label">Policy code <span class="req">*</span></label>
+                          <input class="input" value="STD_8_5" />
+                          <span class="field-help">Used in CSV imports. Letters, numbers and underscores only.</span>
+                        </div>
+                        <div class="field">
+                          <label class="field-label">Policy name <span class="req">*</span></label>
+                          <input class="input" value="Standard 8 to 5" />
+                          <span class="field-help">How supervisors find this policy in the roster picker.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <!-- ─── Section: Work time ─────────────────── -->
+                  <section class="sec">
+                    <div class="sec-head">
+                      <div class="sec-head-text">
+                        <div class="sec-name">Work time</div>
+                        <div class="sec-desc">How raw clock-in/out becomes payable minutes.</div>
+                      </div>
+                      <span class="sec-aside">2 settings</span>
+                    </div>
+                    <div class="sec-body">
+                      <div class="grid-2">
+                        <div class="field">
+                          <label class="field-label">Round daily total <span class="info" title="How worked minutes are rounded before payable time is calculated.">i</span></label>
+                          <div class="compound">
+                            <select class="select"><option>Nearest</option><option>Up (ceiling)</option><option>Down (floor)</option></select>
+                            <div class="num-wrap"><input class="input" value="15" /><span class="unit">min</span></div>
+                          </div>
+                          <span class="field-help">e.g. 7h&nbsp;52m worked → rounds to <code>8h&nbsp;00m</code> on the timesheet.</span>
+                        </div>
+                        <div class="field">
+                          <label class="field-label">Minimum shift length</label>
+                          <div class="input-wrap">
+                            <input class="input" value="4" />
+                            <span class="suffix">hours</span>
+                          </div>
+                          <span class="field-help">Shorter clock-ins are still recorded, but flagged for review.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <!-- ─── Section: Lateness ──────────────────── -->
+                  <section class="sec">
+                    <div class="sec-head">
+                      <div class="sec-head-text">
+                        <div class="sec-name">Lateness</div>
+                        <div class="sec-desc">Grace minutes and how late arrivals affect payable time.</div>
+                      </div>
+                      <span class="sec-aside">2 settings</span>
+                    </div>
+                    <div class="sec-body">
+                      <div class="grid-2">
+                        <div class="field">
+                          <label class="field-label">Round late arrival <span class="info" title="Late minutes are rounded before deduction.">i</span></label>
+                          <div class="compound">
+                            <select class="select"><option>Up (ceiling)</option><option>Nearest</option><option>Down (floor)</option></select>
+                            <div class="num-wrap"><input class="input" value="5" /><span class="unit">min</span></div>
+                          </div>
+                          <span class="field-help">e.g. 2 minutes late → rounds up to <code>5</code> minutes deducted.</span>
+                        </div>
+                        <div class="field">
+                          <label class="field-label">Grace before lateness counts</label>
+                          <div class="input-wrap">
+                            <input class="input" value="3" />
+                            <span class="suffix">min</span>
+                          </div>
+                          <span class="field-help">Arrivals within this window are treated as on-time.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <!-- ─── Section: Overtime ──────────────────── -->
+                  <section class="sec">
+                    <div class="sec-head">
+                      <div class="sec-head-text">
+                        <div class="sec-name">Overtime &amp; payroll</div>
+                        <div class="sec-desc">When extra minutes count as overtime, and at what multiplier.</div>
+                      </div>
+                      <span class="sec-aside">3 settings</span>
+                    </div>
+                    <div class="sec-body">
+                      <div class="grid-3">
+                        <div class="field">
+                          <label class="field-label">Early OT threshold</label>
+                          <div class="input-wrap">
+                            <input class="input" value="60" />
+                            <span class="suffix">min before</span>
+                          </div>
+                          <span class="field-help">Minutes worked before shift start that count as overtime.</span>
+                        </div>
+                        <div class="field">
+                          <label class="field-label">Late OT threshold</label>
+                          <div class="input-wrap">
+                            <input class="input" value="60" />
+                            <span class="suffix">min after</span>
+                          </div>
+                          <span class="field-help">Minutes worked after shift end that count as overtime.</span>
+                        </div>
+                        <div class="field">
+                          <label class="field-label">Pay multiplier</label>
+                          <div class="input-wrap">
+                            <input class="input" value="1.5" />
+                            <span class="suffix">× base</span>
+                          </div>
+                          <span class="field-help">Applied to overtime minutes during payroll export.</span>
+                        </div>
+                      </div>
+
+                      <div class="ot-vis">
+                        <div class="ot-vis-cell">
+                          <span class="label">Shift starts</span>
+                          <span class="value">08:00 — <span style="color:var(--muted);font-weight:500;">OT before 07:00</span></span>
+                        </div>
+                        <div class="ot-vis-cell">
+                          <span class="label">Shift ends</span>
+                          <span class="value">17:00 — <span style="color:var(--muted);font-weight:500;">OT after 18:00</span></span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <!-- ─── Section: Effective dates ───────────── -->
+                  <section class="sec">
+                    <div class="sec-head">
+                      <div class="sec-head-text">
+                        <div class="sec-name">Effective dates &amp; activation</div>
+                        <div class="sec-desc">When supervisors can pick this policy, and whether it's currently in use.</div>
+                      </div>
+                    </div>
+                    <div class="sec-body">
+                      <div class="grid-3">
+                        <div class="field">
+                          <label class="field-label">Effective from <span class="req">*</span></label>
+                          <input class="input date-input" type="date" value="2026-05-14" />
+                          <span class="field-help">First date this policy may be assigned to rosters.</span>
+                        </div>
+                        <div class="field">
+                          <label class="field-label">Effective until</label>
+                          <input class="input date-input" type="date" placeholder="No end date" />
+                          <span class="field-help">Leave blank for an open-ended policy.</span>
+                        </div>
+                        <div class="field">
+                          <label class="field-label">Status</label>
+                          <div class="seg">
+                            <span class="seg-btn">Draft</span>
+                            <span class="seg-btn on">Active</span>
+                            <span class="seg-btn">Archived</span>
+                          </div>
+                          <span class="field-help">Only <b style="color:var(--ink);font-weight:600;">Active</b> policies appear in roster pickers.</span>
+                        </div>
+                      </div>
+
+                      <div class="validate-row" style="margin-top:18px;">
+                        <div class="vico">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12l4.5 4.5L19 7"/></svg>
+                        </div>
+                        <div class="validate-text">
+                          <div class="validate-title">Ready to publish</div>
+                          <div class="validate-body">All required fields are set. Run <code>Validate</code> to test the policy against a sample shift before exposing it to supervisors.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─── Pins overlay ─────────────────────────────────── -->
+        <div class="pin" style="left: 198px; top: 318px;">1</div>
+        <div class="pin" style="left: 244px; top: 80px;">2</div>
+        <div class="pin" style="left: 720px; top: 100px;">3</div>
+        <div class="pin" style="left: 1140px; top: 110px;">4</div>
+        <div class="pin" style="left: 510px; top: 240px;">5</div>
+        <div class="pin" style="left: 760px; top: 450px;">6</div>
+        <div class="pin" style="left: 1310px; top: 460px;">7</div>
+        <div class="pin" style="left: 950px; top: 815px;">8</div>
+      </div>
+    </div>
+
+    <!-- ─── Notes rail ───────────────────────────────────────── -->
+    <aside class="notes-rail">
+
+      <div class="note-card">
+        <h3>Sidebar &amp; navigation</h3>
+        <ul class="note-list">
+          <li data-n="1"><b>Expose Policy Studio's sub-tree.</b> Today the only way back to the list of policies is the browser back button. Show <code>Policies / Templates / Builder / Activity log</code> nested under Attendance &gt; Policy Studio, with the active page highlighted.</li>
+          <li data-n="2" class="tag-add"><b>Search + ⌘K.</b> The nav is four levels deep; a search field at the top of the sidebar lets you jump straight to "Policy STD_8_5" without expanding three parents.</li>
+          <li data-n="" class="tag-cut"><b>Demote "Pinned".</b> "Database Tables" and "Claim Assignments" aren't pinned for an attendance admin — they're org-level shortcuts. Move them below the active workspace or behind a toggle.</li>
+        </ul>
+      </div>
+
+      <div class="note-card">
+        <h3>Page header</h3>
+        <ul class="note-list">
+          <li data-n="3"><b>Title is the policy, not the tool.</b> The current page reads "Policy Builder" with the policy name buried inside a card title. Promote <em style="font-style:normal;color:var(--ink);font-weight:500;">Standard 8 to 5</em> to the H1 and demote "Policy Builder" to the breadcrumb.</li>
+          <li data-n=""><b>Status pill next to the title.</b> Draft / Active / Archived needs to be visible from the page header so it's obvious whether you're editing a live policy or a draft.</li>
+          <li data-n=""><b>Meta strip.</b> Code, effective date, last edit, and "used by N rosters" sit under the title — answers the question "is it safe to change this?".</li>
+          <li data-n="4" class="tag-add"><b>Actions at the top.</b> Preview, Validate, Publish — plus an "Autosaved 3 min ago" indicator. The current page has no save affordance at all.</li>
+        </ul>
+      </div>
+
+      <div class="note-card">
+        <h3>Form layout</h3>
+        <ul class="note-list">
+          <li data-n="5" class="tag-fix"><b>Drop the parent card.</b> Three nested cards inside one parent card make the borders compete. Use flat sections separated by spacing — one card per group.</li>
+          <li data-n=""><b>Group identity, separate timing.</b> Today's four-up grid mixes Policy Code &amp; Name (identity) with Effective From &amp; Status (lifecycle). Identity goes at the top; lifecycle moves to its own section near the bottom where supervisors expect activation controls.</li>
+          <li data-n="6" class="tag-add"><b>Sticky TOC with completion dots.</b> Long forms need a map. The left rail shows section status (done / warning / empty) and doubles as anchor links — a supervisor returning to a half-finished policy lands on the first unfinished section.</li>
+        </ul>
+      </div>
+
+      <div class="note-card">
+        <h3>Inputs &amp; help text</h3>
+        <ul class="note-list">
+          <li data-n="7" class="tag-fix"><b>Combine rounding mode + minutes.</b> "Daily Rounding" and "Minutes" are one rule split across two columns. Merge into a compound input: <code>[ Nearest ▾ ] [ 15 ] min</code>. Two columns of help text collapse into one.</li>
+          <li data-n=""><b>Number fields get unit suffixes.</b> Every numeric field should carry its unit inside the field (<code>min</code>, <code>hours</code>, <code>× base</code>) so a value of "60" can't be misread as seconds or hours.</li>
+          <li data-n="8"><b>Status becomes a segmented control.</b> Three mutually-exclusive values — Draft / Active / Archived — don't deserve a dropdown. A segmented switch shows the full state at a glance.</li>
+          <li data-n="" class="tag-fix"><b>Tighten help text.</b> "Plainly: the nickname supervisors will recognize" reads as filler. Aim for one short sentence per field; move longer explanation into an <code>i</code> tooltip. Drop "BLB" — supervisors don't need the internal product code in microcopy.</li>
+          <li data-n="" class="tag-add"><b>Show a worked example.</b> For rounding fields, append a one-liner: "7h 52m worked → <code>8h 00m</code> on the timesheet." Concrete beats abstract every time.</li>
+        </ul>
+      </div>
+
+      <div class="note-card">
+        <h3>Missing affordances</h3>
+        <ul class="note-list">
+          <li data-n="" class="tag-add"><b>"Test against shift" tool.</b> The subtitle promises validation before supervisors use the policy. Add a small panel that runs the current rules against a sample clock-in to surface the resulting timesheet line — the fastest way to catch an inverted rounding rule.</li>
+          <li data-n="" class="tag-add"><b>"Duplicate from policy".</b> Most new policies fork an existing one. A duplicate action on the Policies index avoids re-entering 20 fields.</li>
+          <li data-n="" class="tag-add"><b>Activity log + diff.</b> When a published policy is edited, supervisors want to know what changed and when. The fourth Policy Studio sub-item.</li>
+        </ul>
+      </div>
+
+    </aside>
+  </div>
+</div>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script></body>
+</html>
