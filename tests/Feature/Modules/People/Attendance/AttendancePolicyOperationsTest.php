@@ -5,10 +5,12 @@ use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\People\Attendance\Livewire\Index;
 use App\Modules\People\Attendance\Models\AttendanceAllowanceRule;
 use App\Modules\People\Attendance\Models\AttendancePolicyGroup;
+use App\Modules\People\Attendance\Models\AttendancePunchWindow;
 use App\Modules\People\Attendance\Models\AttendanceRosterAssignment;
 use App\Modules\People\Attendance\Models\AttendanceShiftTemplate;
 use App\Modules\People\Attendance\Services\AttendancePolicySimulationService;
 use App\Modules\People\Attendance\Services\AttendancePolicyValidationService;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Livewire\Livewire;
 
@@ -173,8 +175,7 @@ it('lets managers interact with the policy studio from attendance settings', fun
     $this->actingAs($user);
 
     Livewire::test(Index::class, ['surface' => 'settings', 'section' => 'policies'])
-        ->assertSee('Policy Library')
-        ->assertSee('Policy library')
+        ->assertSee('Policy Groups')
         ->assertDontSee('Roster Setup')
         ->assertDontSee('Settings areas')
         ->call('simulatePolicyGroup', $policyGroup->id)
@@ -198,13 +199,17 @@ it('lets managers build edit and validate attendance policy groups from settings
     $this->actingAs($user);
 
     $component = Livewire::test(Index::class, ['surface' => 'settings', 'section' => 'policies'])
-        ->assertSee('Policy library')
+        ->assertSee('Policy Groups')
         ->assertDontSee('Identification')
         ->call('usePolicyTemplate', 'office-grace')
         ->assertSee('Identification')
         ->assertSee('Readiness status')
         ->assertSee('Ready to publish')
         ->assertSet('policyGraceIn', '10')
+        ->call('usePolicyTemplate', 'office-grace')
+        ->assertDontSee('Identification')
+        ->assertSet('showAllPolicyTemplates', true)
+        ->call('usePolicyTemplate', 'office-grace')
         ->set('policyCode', 'std_8_5')
         ->set('policyName', 'Standard 8 to 5')
         ->set('policyEffectiveFrom', '2026-01-01')
@@ -237,7 +242,7 @@ it('lets managers build edit and validate attendance policy groups from settings
         ->and($policy->lateness_rules['grace']['in'])->toBe(10);
 });
 
-it('lets managers import and export attendance policy templates as JSON', function (): void {
+it('lets managers upload and download attendance policy templates as JSON', function (): void {
     $user = createAdminUser();
 
     $this->actingAs($user);
@@ -259,19 +264,19 @@ it('lets managers import and export attendance policy templates as JSON', functi
 
     Livewire::test(Index::class, ['surface' => 'settings', 'section' => 'policies', 'mode' => 'builder'])
         ->assertSee('Templates')
-        ->assertSee('Import Template')
+        ->assertSee('Upload Template')
         ->assertDontSee('Identification')
-        ->set('policyTemplateImportJson', json_encode($template))
+        ->set('policyTemplateUpload', UploadedFile::fake()->createWithContent('policy-template.json', json_encode($template)))
         ->call('importPolicyTemplate')
         ->assertHasNoErrors()
-        ->assertSee('Policy template imported into the builder.')
+        ->assertSee('Policy template uploaded into the builder.')
         ->assertSee('Identification')
         ->assertSet('policyStudioMode', 'builder')
         ->assertSet('showPolicyBuilderForm', true)
         ->assertSet('policyCode', 'JSON_POLICY')
         ->assertSet('policyGraceIn', '7')
         ->call('exportBuilderPolicyTemplate')
-        ->assertSee('Policy template JSON prepared.')
+        ->assertSee('Policy template JSON ready to download.')
         ->assertSet('policyTemplateExportJson', fn (string $json): bool => str_contains($json, 'belimbing.attendance.policy-template.v1') && str_contains($json, 'JSON_POLICY'));
 });
 
@@ -374,21 +379,84 @@ it('lets managers create roster assignments from a guided roster builder', funct
         ->and($assignment->publish_state)->toBe('published');
 });
 
+it('lets managers build shift templates from guided templates', function (): void {
+    $user = createAdminUser();
+
+    $this->actingAs($user);
+
+    Livewire::test(Index::class, ['surface' => 'settings', 'section' => 'shifts'])
+        ->assertSee('Templates')
+        ->assertDontSee('Shift code')
+        ->call('useShiftTemplate', 'night-shift')
+        ->assertSee('Shift code')
+        ->assertSet('shiftCode', 'NIGHT_SHIFT')
+        ->call('exportBuilderShiftTemplate')
+        ->assertSet('shiftTemplateExportJson', fn (string $json): bool => str_contains($json, 'belimbing.attendance.shift-template.v1') && str_contains($json, 'NIGHT_SHIFT'))
+        ->set('shiftCode', 'NIGHT_MAIN')
+        ->set('shiftName', 'Night Main')
+        ->call('saveShiftTemplate')
+        ->assertHasNoErrors()
+        ->assertSee('Shift template saved.');
+
+    $shift = AttendanceShiftTemplate::query()
+        ->where('company_id', $user->company_id)
+        ->where('code', 'NIGHT_MAIN')
+        ->firstOrFail();
+
+    expect($shift->crosses_midnight)->toBeTrue()
+        ->and($shift->expected_work_minutes)->toBe(660)
+        ->and($shift->break_windows[0]['starts_at'])->toBe('00:00')
+        ->and($shift->punchWindows()->where('event_type', AttendancePunchWindow::TYPE_IN)->exists())->toBeTrue()
+        ->and($shift->punchWindows()->where('event_type', AttendancePunchWindow::TYPE_OUT)->exists())->toBeTrue();
+
+    Livewire::test(Index::class, ['surface' => 'settings', 'section' => 'shifts'])
+        ->set('shiftTemplateUpload', UploadedFile::fake()->createWithContent('shift-template.json', json_encode([
+            'schema' => 'belimbing.attendance.shift-template.v1',
+            'code' => 'IMPORT_DAY',
+            'name' => 'Imported Day',
+            'starts_at' => '09:00',
+            'ends_at' => '18:00',
+            'expected_work_minutes' => 480,
+            'break_windows' => [['starts_at' => '13:00', 'ends_at' => '14:00']],
+            'punch_windows' => [
+                'in' => ['before_minutes' => 30, 'after_minutes' => 10],
+                'out' => ['before_minutes' => 10, 'after_minutes' => 90],
+            ],
+            'payroll_attribution' => 'shift_start_date',
+        ])))
+        ->call('importShiftTemplate')
+        ->assertHasNoErrors()
+        ->assertSet('shiftCode', 'IMPORT_DAY')
+        ->assertSet('shiftBreakStartsAt', '13:00')
+        ->assertSet('shiftInWindowBeforeMinutes', '30');
+});
+
 it('uses section-specific titles for attendance settings pages', function (): void {
     $user = createAdminUser();
 
     $this->actingAs($user);
 
     Livewire::test(Index::class, ['surface' => 'settings', 'section' => 'policies'])
-        ->assertSee('Policy Library')
+        ->assertSee('Policy Groups')
         ->assertDontSee('Attendance Days')
         ->assertDontSee('Search employee...')
         ->assertDontSee('Settings areas')
         ->assertDontSee('Attendance Settings');
 
     Livewire::test(Index::class, ['surface' => 'settings', 'section' => 'shifts'])
-        ->assertSee('Shift Templates')
+        ->assertSee('Templates')
         ->assertSee('Maintain reusable shift times')
+        ->assertDontSee('Shift Library')
+        ->assertDontSee('Reset builder')
+        ->assertDontSee('heroicon-m-chevron-down')
+        ->assertDontSee('Attendance Days')
+        ->assertDontSee('Search employee...')
+        ->assertDontSee('Settings areas')
+        ->assertDontSee('Attendance Settings');
+
+    Livewire::test(Index::class, ['surface' => 'settings', 'section' => 'shift-library'])
+        ->assertSee('Shift Library')
+        ->assertDontSee('Templates')
         ->assertDontSee('Attendance Days')
         ->assertDontSee('Search employee...')
         ->assertDontSee('Settings areas')

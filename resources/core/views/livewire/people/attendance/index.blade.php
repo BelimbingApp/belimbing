@@ -10,6 +10,18 @@ use App\Modules\People\Attendance\Livewire\Index;
 
     <div class="space-y-section-gap">
         <x-ui.page-header :title="$surfaceTitle" :subtitle="$surfaceSubtitle">
+            <x-slot name="actions">
+                @if ($surface === 'settings' && $section === 'policies' && $policyStudioMode === 'library')
+                    <x-ui.button as="a" variant="primary" href="{{ route('people.attendance.policy-studio.builder') }}">
+                        <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
+                        {{ __('New policy') }}
+                    </x-ui.button>
+                @elseif ($surface === 'settings' && $section === 'shift-library')
+                    <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.rosters') }}">
+                        {{ __('Open Roster Builder') }}
+                    </x-ui.button>
+                @endif
+            </x-slot>
             <x-slot name="help">
                 {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
             </x-slot>
@@ -252,27 +264,11 @@ use App\Modules\People\Attendance\Livewire\Index;
                     <div class="space-y-4">
                         @if ($policyStudioMode === 'library')
                             <x-ui.card>
-                                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                    <div class="max-w-2xl">
-                                        <h2 class="text-base font-semibold text-ink">{{ __('Policy Library') }}</h2>
-                                        <p class="mt-1 text-sm text-muted">{{ __('Manage the rulebooks supervisors attach to rosters.') }}</p>
-                                    </div>
-                                    <x-ui.button as="a" variant="primary" href="{{ route('people.attendance.policy-studio.builder') }}">
-                                        <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
-                                        {{ __('New policy') }}
-                                    </x-ui.button>
-                                </div>
-                            </x-ui.card>
-
-                            <x-ui.card>
-                                    <div class="flex items-center justify-between gap-3">
-                                        <h3 class="text-base font-semibold text-ink">{{ __('Policy library') }}</h3>
-                                        <span class="text-xs text-muted">{{ trans_choice(':count policy|:count policies', $policyGroups->count(), ['count' => $policyGroups->count()]) }}</span>
-                                    </div>
-                                    <div class="mt-4 overflow-x-auto -mx-card-inner px-card-inner">
+                                    <div class="overflow-x-auto -mx-card-inner px-card-inner">
                                         <table class="min-w-full divide-y divide-border-default text-sm">
                                             <thead class="bg-surface-subtle/80">
                                                 <tr>
+                                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('No.') }}</th>
                                                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Policy group') }}</th>
                                                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
                                                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Version') }}</th>
@@ -283,6 +279,7 @@ use App\Modules\People\Attendance\Livewire\Index;
                                             <tbody class="divide-y divide-border-default bg-surface-card">
                                                 @forelse ($policyGroups as $group)
                                                     <tr wire:key="policy-library-row-{{ $group->id }}">
+                                                        <td class="px-table-cell-x py-table-cell-y text-xs text-muted tabular-nums">{{ $loop->iteration }}</td>
                                                         <td class="px-table-cell-x py-table-cell-y">
                                                             <button type="button" class="text-left font-medium text-accent hover:underline" wire:click="editPolicyGroup({{ $group->id }})">{{ $group->name }}</button>
                                                             <div class="font-mono text-xs text-muted">{{ $group->code }}</div>
@@ -301,7 +298,7 @@ use App\Modules\People\Attendance\Livewire\Index;
                                                         </td>
                                                     </tr>
                                                 @empty
-                                                    <tr><td colspan="5" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No policy groups yet. Start from a template or create a new policy.') }}</td></tr>
+                                                    <tr><td colspan="6" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No policy groups yet. Start from a template or create a new policy.') }}</td></tr>
                                                 @endforelse
                                             </tbody>
                                         </table>
@@ -311,53 +308,20 @@ use App\Modules\People\Attendance\Livewire\Index;
                             @if ($policyTemplateExportJson !== '')
                                 <x-ui.card>
                                     <h3 class="text-base font-semibold text-ink">{{ __('Template JSON ready') }}</h3>
-                                    <p class="mt-1 text-sm text-muted">{{ __('Copy this JSON into a shared template repository or country pack. Import it from Policy Builder when needed.') }}</p>
+                                    <p class="mt-1 text-sm text-muted">{{ __('Copy this JSON into a shared template repository or country pack. Upload it from Policy Builder when needed.') }}</p>
                                     <x-ui.textarea id="attendance-policy-library-template-export" wire:model="policyTemplateExportJson" label="{{ __('Template JSON') }}" rows="10" class="mt-4" />
                                 </x-ui.card>
                             @endif
                         @endif
 
                         @if ($policyStudioMode === 'builder')
-                        <x-ui.card>
-                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                <div class="flex items-center gap-2">
-                                    <button type="button" class="inline-flex items-center gap-2 text-base font-semibold text-ink hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent/30 rounded-lg" wire:click="$toggle('showAllPolicyTemplates')" aria-expanded="{{ $showAllPolicyTemplates ? 'true' : 'false' }}">
-                                        <x-icon name="heroicon-m-chevron-down" class="h-4 w-4 transition-transform {{ $showAllPolicyTemplates ? '' : '-rotate-90' }}" />
-                                        {{ __('Templates') }}
-                                    </button>
-                                    @if ($selectedPolicyTemplateKey !== '')
-                                        <span class="text-xs text-muted">{{ __('Selected') }}</span>
-                                    @endif
-                                </div>
-                                <x-ui.button type="button" variant="secondary" wire:click="$set('showPolicyTemplateImportModal', true)">
-                                    {{ __('Import Template') }}
-                                </x-ui.button>
-                            </div>
-
-                            <div class="mt-4 overflow-hidden rounded-2xl border border-border-default">
-                                <table class="min-w-full divide-y divide-border-default text-sm">
-                                    <thead class="bg-surface-subtle/80">
-                                        <tr>
-                                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Template') }}</th>
-                                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Best for') }}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-border-default bg-surface-card">
-                                @foreach ($policyTemplates as $template)
-                                    @if ($showAllPolicyTemplates || $selectedPolicyTemplateKey === $template['key'])
-                                        <tr class="cursor-pointer transition hover:bg-surface-subtle {{ $selectedPolicyTemplateKey === $template['key'] ? 'border-l-4 border-accent bg-surface-subtle/70' : 'border-l-4 border-transparent' }}" wire:click="usePolicyTemplate('{{ $template['key'] }}')" wire:key="policy-builder-template-{{ $template['key'] }}">
-                                            <td class="px-table-cell-x py-2.5 align-top">
-                                                <div class="font-medium text-ink">{{ $template['name'] }}</div>
-                                                <p class="mt-0.5 text-xs text-muted">{{ $template['summary'] }}</p>
-                                            </td>
-                                            <td class="px-table-cell-x py-2.5 align-top text-xs text-muted">{{ $template['best_for'] }}</td>
-                                        </tr>
-                                    @endif
-                                @endforeach
-                                    </tbody>
-                                </table>
-                            </div>
-                        </x-ui.card>
+                        <x-ui.template-picker
+                            :templates="$policyTemplates"
+                            :selected-key="$selectedPolicyTemplateKey"
+                            :show-all="$showAllPolicyTemplates"
+                            select-action="usePolicyTemplate"
+                            upload-action="$set('showPolicyTemplateImportModal', true)"
+                        />
 
                         @if ($showPolicyBuilderForm)
                             <form wire:submit="savePolicyGroup" class="space-y-4">
@@ -529,7 +493,7 @@ use App\Modules\People\Attendance\Livewire\Index;
                         @if ($policyTemplateExportJson !== '')
                             <x-ui.card>
                                 <h3 class="text-base font-semibold text-ink">{{ __('Template JSON ready') }}</h3>
-                                <p class="mt-1 text-sm text-muted">{{ __('Copy this JSON into a shared template repository or country pack. Import supports this same format.') }}</p>
+                                <p class="mt-1 text-sm text-muted">{{ __('Copy this JSON into a shared template repository or country pack. Upload supports this same format.') }}</p>
                                 <x-ui.textarea id="attendance-policy-builder-template-export" wire:model="policyTemplateExportJson" label="{{ __('Template JSON') }}" rows="10" class="mt-4" />
                             </x-ui.card>
                         @endif
@@ -671,24 +635,169 @@ use App\Modules\People\Attendance\Livewire\Index;
                 @endif
 
                 @if ($section === 'shifts')
-                    <x-ui.card>
-                        <h2 class="text-base font-semibold text-ink">{{ __('Shift Templates') }}</h2>
-                        <div class="mt-4 grid gap-3 xl:grid-cols-2">
-                            @forelse ($shiftTemplates as $shift)
-                                <div class="rounded-2xl border border-border-default p-3" wire:key="shift-{{ $shift->id }}">
-                                    <div class="flex items-start justify-between gap-3">
-                                        <div>
-                                            <div class="font-medium text-ink">{{ $shift->code }} - {{ $shift->name }}</div>
-                                            <div class="font-mono text-xs text-muted">{{ $shift->starts_at }} - {{ $shift->ends_at }} / {{ trans_choice(':count punch window|:count punch windows', $shift->punchWindows->count(), ['count' => $shift->punchWindows->count()]) }}</div>
-                                        </div>
-                                        @if ($shift->crosses_midnight)
-                                            <x-ui.badge variant="warning">{{ __('Cross-midnight') }}</x-ui.badge>
-                                        @endif
+                    <x-ui.template-picker
+                        :templates="$shiftTemplatePresets"
+                        :selected-key="$selectedShiftTemplateKey"
+                        :show-all="$showAllShiftTemplates"
+                        select-action="useShiftTemplate"
+                        upload-action="$set('showShiftTemplateImportModal', true)"
+                    />
+
+                    @if ($showShiftBuilderForm)
+                        <form wire:submit="saveShiftTemplate" class="space-y-4">
+                            <x-ui.card>
+                                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                    <div>
+                                        <h2 class="text-base font-semibold text-ink">{{ __('Identification') }}</h2>
+                                        <p class="mt-1 text-sm text-muted">{{ __('How this shift appears in rosters, policy validation and audit logs.') }}</p>
+                                    </div>
+                                    @if ($editingShiftTemplateId !== null)
+                                        <x-ui.button type="button" variant="secondary" wire:click="cancelShiftEdit">{{ __('Cancel edit') }}</x-ui.button>
+                                    @endif
+                                </div>
+                                <div class="mt-4 grid gap-4 md:grid-cols-2">
+                                    <x-ui.input id="attendance-shift-code" wire:model="shiftCode" label="{{ __('Shift code') }}" placeholder="{{ __('OFFICE_DAY') }}" required help="{{ __('Short reference supervisors see while building rosters.') }}" :error="$errors->first('shiftCode')" />
+                                    <x-ui.input id="attendance-shift-name" wire:model="shiftName" label="{{ __('Shift name') }}" placeholder="{{ __('Office day') }}" required help="{{ __('Human-readable name for this scheduled work pattern.') }}" :error="$errors->first('shiftName')" />
+                                </div>
+                            </x-ui.card>
+
+                            <x-ui.card>
+                                <div>
+                                    <h2 class="text-base font-semibold text-ink">{{ __('Work schedule') }}</h2>
+                                    <p class="mt-1 text-sm text-muted">{{ __('The normal start, end, break and expected payable work time for this shift.') }}</p>
+                                </div>
+                                <div class="mt-4 space-y-4">
+                                    <x-ui.alert variant="info">
+                                        {{ __('Policy Builder decides rounding, lateness and overtime. Shift Builder only defines scheduled time and punch expectations.') }}
+                                        <a href="{{ route('people.attendance.policy-studio.builder') }}" target="_blank" rel="noopener noreferrer" class="font-medium text-accent hover:underline">{{ __('Open Policy Builder in a new tab') }}</a>
+                                    </x-ui.alert>
+                                    <div class="grid gap-4 sm:grid-cols-3">
+                                        <x-ui.input id="attendance-shift-starts-at" type="time" wire:model="shiftStartsAt" label="{{ __('Shift start') }}" required help="{{ __('When scheduled work begins.') }}" :error="$errors->first('shiftStartsAt')" />
+                                        <x-ui.input id="attendance-shift-ends-at" type="time" wire:model="shiftEndsAt" label="{{ __('Shift end') }}" required help="{{ __('Use an earlier end time for overnight shifts.') }}" :error="$errors->first('shiftEndsAt')" />
+                                        <x-ui.input id="attendance-shift-expected-work-minutes" type="number" min="1" max="1440" wire:model="shiftExpectedWorkMinutes" label="{{ __('Expected work') }}" suffix="{{ __('min') }}" required help="{{ __('Payable work time before policy rounding or exceptions.') }}" :error="$errors->first('shiftExpectedWorkMinutes')" />
+                                    </div>
+                                    <div class="grid gap-4 sm:grid-cols-2">
+                                        <x-ui.input id="attendance-shift-break-starts-at" type="time" wire:model="shiftBreakStartsAt" label="{{ __('Break start') }}" help="{{ __('Leave blank with break end if this shift has no scheduled break.') }}" :error="$errors->first('shiftBreakStartsAt')" />
+                                        <x-ui.input id="attendance-shift-break-ends-at" type="time" wire:model="shiftBreakEndsAt" label="{{ __('Break end') }}" help="{{ __('Scheduled return time from the main break.') }}" :error="$errors->first('shiftBreakEndsAt')" />
                                     </div>
                                 </div>
-                            @empty
-                                <p class="text-sm text-muted">{{ __('No shift templates configured.') }}</p>
-                            @endforelse
+                            </x-ui.card>
+
+                            <x-ui.card>
+                                <div>
+                                    <h2 class="text-base font-semibold text-ink">{{ __('Punch windows') }}</h2>
+                                    <p class="mt-1 text-sm text-muted">{{ __('How early or late BLB should accept clock events around shift start and end.') }}</p>
+                                </div>
+                                <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                                    <x-ui.input id="attendance-shift-in-before" type="number" min="0" max="720" wire:model="shiftInWindowBeforeMinutes" label="{{ __('Clock-in before') }}" suffix="{{ __('min') }}" help="{{ __('How early before shift start a clock-in can match this shift.') }}" :error="$errors->first('shiftInWindowBeforeMinutes')" />
+                                    <x-ui.input id="attendance-shift-in-after" type="number" min="0" max="720" wire:model="shiftInWindowAfterMinutes" label="{{ __('Clock-in after') }}" suffix="{{ __('min') }}" help="{{ __('How late after shift start a clock-in can still match this shift.') }}" :error="$errors->first('shiftInWindowAfterMinutes')" />
+                                    <x-ui.input id="attendance-shift-out-before" type="number" min="0" max="720" wire:model="shiftOutWindowBeforeMinutes" label="{{ __('Clock-out before') }}" suffix="{{ __('min') }}" help="{{ __('How early before shift end a clock-out can match this shift.') }}" :error="$errors->first('shiftOutWindowBeforeMinutes')" />
+                                    <x-ui.input id="attendance-shift-out-after" type="number" min="0" max="720" wire:model="shiftOutWindowAfterMinutes" label="{{ __('Clock-out after') }}" suffix="{{ __('min') }}" help="{{ __('How late after shift end a clock-out can match this shift.') }}" :error="$errors->first('shiftOutWindowAfterMinutes')" />
+                                </div>
+                            </x-ui.card>
+
+                            <x-ui.card>
+                                <div>
+                                    <h2 class="text-base font-semibold text-ink">{{ __('Effective dates & activation') }}</h2>
+                                    <p class="mt-1 text-sm text-muted">{{ __('When supervisors can pick this shift, and how overnight payroll dates are attributed.') }}</p>
+                                </div>
+                                <div class="mt-4 grid gap-4 md:grid-cols-4">
+                                    <x-ui.input id="attendance-shift-effective-from" type="date" wire:model="shiftEffectiveFrom" label="{{ __('Effective from') }}" required help="{{ __('First date this shift can be assigned in rosters.') }}" :error="$errors->first('shiftEffectiveFrom')" />
+                                    <x-ui.input id="attendance-shift-effective-to" type="date" wire:model="shiftEffectiveTo" label="{{ __('Effective to') }}" help="{{ __('Optional last date this shift can be assigned.') }}" :error="$errors->first('shiftEffectiveTo')" />
+                                    <x-ui.select id="attendance-shift-payroll-attribution" wire:model="shiftPayrollAttribution" label="{{ __('Payroll date') }}" help="{{ __('Which date receives attendance and payroll attribution for overnight shifts.') }}" :error="$errors->first('shiftPayrollAttribution')">
+                                        <option value="shift_start_date">{{ __('Shift start date') }}</option>
+                                        <option value="shift_end_date">{{ __('Shift end date') }}</option>
+                                    </x-ui.select>
+                                    <x-ui.select id="attendance-shift-status" wire:model="shiftStatus" label="{{ __('Status') }}" help="{{ __('Active shifts can be used in rosters.') }}" :error="$errors->first('shiftStatus')">
+                                        <option value="active">{{ __('Active') }}</option>
+                                        <option value="inactive">{{ __('Inactive') }}</option>
+                                    </x-ui.select>
+                                </div>
+                            </x-ui.card>
+
+                            <x-ui.card>
+                                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                    <div>
+                                        <h2 class="text-base font-semibold text-ink">{{ __('Readiness status') }}</h2>
+                                        <p class="mt-1 text-sm font-medium text-ink">{{ __('Ready to publish') }}</p>
+                                        <p class="mt-1 text-sm text-muted">{{ __('All required fields are set. Save this shift, then validate a policy against it before supervisors use it in rosters.') }}</p>
+                                    </div>
+                                    <x-ui.badge variant="success">{{ __('Ready') }}</x-ui.badge>
+                                </div>
+                                <div class="mt-4 flex flex-wrap justify-end gap-2">
+                                    <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.policy-studio.validator') }}">
+                                        {{ __('Validate with policy') }}
+                                    </x-ui.button>
+                                    <x-ui.button type="button" variant="secondary" wire:click="exportBuilderShiftTemplate" :disabled="! $canManage">
+                                        {{ __('Download as JSON') }}
+                                    </x-ui.button>
+                                    <x-ui.button type="submit" variant="primary" :disabled="! $canManage">
+                                        <x-icon name="heroicon-o-shield-check" class="h-4 w-4" />
+                                        {{ $editingShiftTemplateId === null ? __('Create shift') : __('Save shift') }}
+                                    </x-ui.button>
+                                </div>
+                            </x-ui.card>
+                        </form>
+                    @endif
+
+                    @if ($shiftTemplateExportJson !== '')
+                        <x-ui.card>
+                            <h3 class="text-base font-semibold text-ink">{{ __('Template JSON ready') }}</h3>
+                            <p class="mt-1 text-sm text-muted">{{ __('Copy this JSON into a shared template repository or country pack. Upload supports this same format.') }}</p>
+                            <x-ui.textarea id="attendance-shift-template-export" wire:model="shiftTemplateExportJson" label="{{ __('Template JSON') }}" rows="10" class="mt-4" />
+                        </x-ui.card>
+                    @endif
+                @endif
+
+                @if ($section === 'shift-library')
+                    @if ($shiftTemplateExportJson !== '')
+                        <x-ui.card>
+                            <h3 class="text-base font-semibold text-ink">{{ __('Template JSON ready') }}</h3>
+                            <p class="mt-1 text-sm text-muted">{{ __('Copy this JSON into a shared template repository or country pack. Upload supports this same format.') }}</p>
+                            <x-ui.textarea id="attendance-shift-library-template-export" wire:model="shiftTemplateExportJson" label="{{ __('Template JSON') }}" rows="10" class="mt-4" />
+                        </x-ui.card>
+                    @endif
+
+                    <x-ui.card>
+                        <div class="overflow-hidden rounded-2xl border border-border-default">
+                            <table class="min-w-full divide-y divide-border-default text-sm">
+                                <thead class="bg-surface-subtle/80">
+                                    <tr>
+                                        <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Shift') }}</th>
+                                        <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Schedule') }}</th>
+                                        <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
+                                        <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Actions') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-border-default bg-surface-card">
+                                    @forelse ($shiftTemplates as $shift)
+                                        <tr wire:key="shift-library-{{ $shift->id }}" class="transition hover:bg-surface-subtle/70">
+                                            <td class="px-table-cell-x py-table-cell-y align-top">
+                                                <button type="button" class="text-left font-medium text-accent hover:underline" wire:click="editShiftTemplate({{ $shift->id }})">{{ $shift->code }} - {{ $shift->name }}</button>
+                                                <p class="mt-0.5 text-xs text-muted">{{ trans_choice(':count punch window|:count punch windows', $shift->punchWindows->count(), ['count' => $shift->punchWindows->count()]) }}</p>
+                                            </td>
+                                            <td class="px-table-cell-x py-table-cell-y align-top font-mono text-xs text-muted">
+                                                {{ $shift->starts_at }} → {{ $shift->ends_at }} · {{ trans_choice(':count minute|:count minutes', $shift->expected_work_minutes, ['count' => $shift->expected_work_minutes]) }}
+                                                @if ($shift->crosses_midnight)
+                                                    <div class="mt-1"><x-ui.badge variant="warning">{{ __('Cross-midnight') }}</x-ui.badge></div>
+                                                @endif
+                                            </td>
+                                            <td class="px-table-cell-x py-table-cell-y align-top">
+                                                <x-ui.badge :variant="$shift->status === 'active' ? 'success' : 'secondary'">{{ __(ucfirst($shift->status)) }}</x-ui.badge>
+                                            </td>
+                                            <td class="px-table-cell-x py-table-cell-y align-top">
+                                                <div class="flex justify-end gap-2">
+                                                    <x-ui.button type="button" size="sm" variant="secondary" wire:click="editShiftTemplate({{ $shift->id }})">{{ __('Edit') }}</x-ui.button>
+                                                    <x-ui.button type="button" size="sm" variant="ghost" wire:click="duplicateShiftTemplate({{ $shift->id }})">{{ __('Duplicate') }}</x-ui.button>
+                                                    <x-ui.button type="button" size="sm" variant="ghost" wire:click="exportShiftTemplate({{ $shift->id }})">{{ __('Download') }}</x-ui.button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr><td colspan="4" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No shift templates configured. Start from a template above.') }}</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
                         </div>
                     </x-ui.card>
                 @endif
@@ -1001,13 +1110,35 @@ use App\Modules\People\Attendance\Livewire\Index;
         <x-ui.modal wire:model="showPolicyTemplateImportModal" class="max-w-2xl">
             <div class="p-6 space-y-4">
                 <div>
-                    <h2 class="text-lg font-semibold text-ink">{{ __('Import Template') }}</h2>
-                    <p class="mt-1 text-sm text-muted">{{ __('Paste one JSON template object, or an array of template objects.') }}</p>
+                    <h2 class="text-lg font-semibold text-ink">{{ __('Upload Template') }}</h2>
+                    <p class="mt-1 text-sm text-muted">{{ __('Choose a JSON file containing one policy template object, or an array of template objects.') }}</p>
                 </div>
-                <x-ui.textarea id="attendance-policy-template-import" wire:model="policyTemplateImportJson" label="{{ __('Template JSON') }}" rows="10" :error="$errors->first('policyTemplateImportJson')" />
+                <div>
+                    <label for="attendance-policy-template-upload" class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Template JSON file') }}</label>
+                    <input id="attendance-policy-template-upload" type="file" accept="application/json,.json" wire:model="policyTemplateUpload" class="mt-1 block w-full text-sm text-ink file:mr-4 file:rounded file:border-0 file:bg-surface-subtle file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-surface-subtle/80" />
+                    @error('policyTemplateUpload') <p class="mt-1 text-sm text-status-danger">{{ $message }}</p> @enderror
+                </div>
                 <div class="flex justify-end gap-2">
                     <x-ui.button type="button" variant="secondary" wire:click="$set('showPolicyTemplateImportModal', false)">{{ __('Cancel') }}</x-ui.button>
-                    <x-ui.button type="button" variant="primary" wire:click="importPolicyTemplate">{{ __('Import into builder') }}</x-ui.button>
+                    <x-ui.button type="button" variant="primary" wire:click="importPolicyTemplate">{{ __('Upload into builder') }}</x-ui.button>
+                </div>
+            </div>
+        </x-ui.modal>
+
+        <x-ui.modal wire:model="showShiftTemplateImportModal" class="max-w-2xl">
+            <div class="p-6 space-y-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-ink">{{ __('Upload Shift Template') }}</h2>
+                    <p class="mt-1 text-sm text-muted">{{ __('Choose a JSON file containing one shift template object, or an array of template objects.') }}</p>
+                </div>
+                <div>
+                    <label for="attendance-shift-template-upload" class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Template JSON file') }}</label>
+                    <input id="attendance-shift-template-upload" type="file" accept="application/json,.json" wire:model="shiftTemplateUpload" class="mt-1 block w-full text-sm text-ink file:mr-4 file:rounded file:border-0 file:bg-surface-subtle file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-surface-subtle/80" />
+                    @error('shiftTemplateUpload') <p class="mt-1 text-sm text-status-danger">{{ $message }}</p> @enderror
+                </div>
+                <div class="flex justify-end gap-2">
+                    <x-ui.button type="button" variant="secondary" wire:click="$set('showShiftTemplateImportModal', false)">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="button" variant="primary" wire:click="importShiftTemplate">{{ __('Upload into builder') }}</x-ui.button>
                 </div>
             </div>
         </x-ui.modal>
