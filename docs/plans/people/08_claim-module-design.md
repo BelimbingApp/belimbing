@@ -1,6 +1,6 @@
 # people/08_claim-module-design
 
-**Status:** In Progress — Claim Core skeleton with employee submission/approval slice; encumbrance/approval-reevaluation guardrails closed; cancel + reimbursement lifecycles added; multi-line submission service path, on-behalf service validation, service-year band matching, cohort-predicate eligibility, and finance CSV exports (accounting, reimbursement statement, utilization) landed 2026-05-14
+**Status:** In Progress — Claim Core skeleton with employee submission/approval slice; encumbrance/approval-reevaluation guardrails closed; cancel + reimbursement lifecycles added; multi-line submission service path, on-behalf service validation, service-year band matching, cohort-predicate eligibility, finance CSV exports (accounting, reimbursement statement, utilization, approval aging), and Policy Studio service primitives (validation + simulation + CLI) landed 2026-05-14
 **Last Updated:** 2026-05-14
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — Claims is a first-class People workflow with entitlements, attachments, approval limits, payroll reimbursement integration, and reporting.
@@ -269,6 +269,15 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 - [ ] If SBG confirms day-one advance usage, implement claim advance request, approval, payment/payroll handoff, receipt settlement, outstanding balance, overdue reminders, and variance outcomes; otherwise keep only schema/import hooks.
 - [ ] Add payroll reconciliation report: approved claims, queued inputs, paid/reimbursed lines, skipped lines, reversal lines, and mismatches.
 - [x] Add Finance/accounting CSV export with employee, company, cost center, claim type, GL/account code metadata, tax hint, receipt state, and settlement state: `ClaimAccountingExportBuilder` emits one row per claim line filtered to approved/queued/reimbursed/settled by default, surfaces the per-line accounting snapshot (pay item, debit/credit codes, taxability hint), receipt state, and settlement state; download is gated by `people.claim.manage` at `people.claim.operations.accounting.csv`. {claude-code/claude-opus-4-7}
+
+### Policy Studio (service primitives)
+
+The IA reshape (Library / Builder / Simulate as first-class menu under People → Claim) will mirror Amp's Attendance Policy Studio once that pattern stabilises. Service primitives ship now so they are usable from CLI, tests, and pre-save hooks immediately.
+
+- [x] `ClaimPolicyValidationService::validate(ClaimPolicy)` returning `{status, policy, summary, findings[]}` linter-style output. Mirrors `AttendancePolicyValidationService`. Covers identity, band shape, cohort key allowlist, receipt rule shape, and encumber consistency. {claude-code/claude-opus-4-7}
+- [x] `ClaimPolicySimulationService::simulate(employee, assignmentLine, incurredOn, requestedAmount, ...)` returning `{status, policy, input, matched_band, blocking[], explanation}`. Read-only — never persists. Wraps existing `ClaimPolicyEvaluationService::evaluateBeforeSubmission` so simulator and submission agree by construction. {claude-code/claude-opus-4-7}
+- [x] CLI commands `blb:claim:policy:validate` and `blb:claim:policy:simulate` for CI / scripting. JSON and human-readable output modes. {claude-code/claude-opus-4-7}
+- [ ] Policy Studio UX (Library / Builder / Simulate Livewire modes, template import/export) — deferred until Attendance Studio pattern stabilises so Claim mirrors it 1:1.
 
 ### Phase 5 — Reports, documents, and SBG validation
 
