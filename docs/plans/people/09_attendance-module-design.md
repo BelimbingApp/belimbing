@@ -1,7 +1,7 @@
 # people/09_attendance-module-design
 
 **Status:** Identified
-**Last Updated:** 2026-05-13
+**Last Updated:** 2026-05-14
 **Sources:**
 - `docs/plans/people/01_people-modules.md` - Attendance is a planned People module for daily attendance, clock-in/out, overtime calculation, shift patterns, conditional allowances, payroll feed, and future mobile/geofenced attendance.
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` - Payroll expects attendance/overtime inputs as neutral `PayrollInput` rows and keeps rotating shifts, GPS/geofence, and device binding outside payroll v1 unless SBG confirms day-one need.
@@ -17,7 +17,7 @@
 - `docs/architecture/database.md` - reserves migration prefix `0320_01_15_*` for People Attendance with dependencies on Company, Employee, User, Settings, Payroll, and Workflow.
 - `docs/architecture/file-structure.md` - module placement and singular PascalCase module directory convention.
 - `docs/plans/AGENTS.md` - plan conventions.
-**Agents:** codex/gpt-5
+**Agents:** codex/gpt-5, amp/gpt-5.5-medium
 
 ## Problem Essence
 
@@ -40,6 +40,7 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 | Rule policy | Effective-dated attendance rules for rounding, grace, lateness, early-out, absent-without-leave, payable break treatment, overtime eligibility, rest-day/public-holiday work, and conditional allowances. | Attendance Core schema; country/private packs seed defaults |
 | Attendance policy group | Cohort-assigned bundle of shift templates, work-hour rules, lateness rules, overtime rules, overtime export mappings, lateness export mappings, conditional allowance rules, and payroll-facing defaults. Mirrors HR2000 TMS Group without copying its storage shape. | Attendance Core; SBG private pack imports setup |
 | Attendance allowance rule | Typed conditional allowance definition with payroll pay-item code, active state, ceiling, min/max resolution, daily/monthly condition rows, typed predicates, and source-script preservation for import/audit. | Attendance Core; private packs seed formulas |
+| Guided setup operations | Deterministic draft, validate, simulate, activate, import, explain, roster-draft, roster-validate, and roster-publish operations exposed to the UI and optional Artisan/operator commands. These operations are the People-domain provision; Lara, skills, or other AI orchestration may consume them later but are not part of Attendance Core. | Attendance Core services; UI; Artisan/operator commands |
 | Payroll handoff | Converts approved/finalized attendance facts into neutral payroll contributions for overtime, attendance allowance, shift allowance, lateness deduction, unpaid absence, rest-day work, and one-off time adjustments. **Direction inverted (Phase 3 of plan 10):** `AttendanceOvertimeService` (already shipped) and any future attendance writers go through Payroll's `PayrollContributionIntake` contract. Attendance no longer imports `PayrollInput`/`PayrollRun`/`PayrollRunParticipant`. New writers must define a stable `SOURCE_TYPE` constant and call `intake->ingest($payload)` — see `docs/architecture/payroll-intake.md`. | Attendance emits via Payroll intake; Payroll/country pack classifies |
 | Calendar integration | Resolves scheduled workdays, rest days, off days, public holidays, and company exceptions from People Settings and country-pack holiday data. | People Settings + country pack |
 | Clock-source and geofence policy | Optional policy layer for allowed clock sources, card/device identity, outlet/location labels, photo evidence, IP/location/geofence checks, geofence groups, reminder rules, and evidence retention. Not required for first payroll-adjacent slice unless SBG confirms day-one need. | Attendance Core contract; private/device integrations |
@@ -61,6 +62,14 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 **Support cross-midnight and rotating shifts in the model from day one.** HR2000 parity explicitly includes 24-hour rotating shifts. Designing only for calendar-day office attendance would force a migration later across attendance days, overtime rows, payroll inputs, and reports. The model should distinguish attendance date, shift start/end instants, payroll attribution period, and per-punch acceptance windows for IN, break out/in, and OUT.
 
 **TMS Group becomes an Attendance Policy Group, not a flat setup table.** SBG's HR2000 TMS Group combines shift windows, work-hour rounding, daily-rated employee options, break-hour treatment, lateness grace, overtime eligibility, overtime adjustment, overtime export mapping, and lateness export mapping. BLB should model this as a cohort-assigned policy bundle with versioned child rows, so the employee-facing effect is clear and historical attendance days can snapshot the bundle version.
+
+**Attendance setup is guided operations, not an HR2000-style grid.** BLB should preserve the power visible in SBG's TMS Group screenshots while replacing dense setup grids with templates, visual timelines, plain-language rule cards, validation findings, and simulations. Administrators should be able to start from common policy shapes such as fixed office hours, flexible start, rotating production shifts, cross-midnight shifts, daily-rated work, or SBG import. The stored result remains typed, versioned Attendance policy data; the setup surface is optimized for comprehension.
+
+**AI assistance is optional, not a prerequisite.** Attendance must be fully usable through normal BLB UI and deterministic operations when no AI provider is configured. Lara or another authorized agent may help interpret screenshots, policy documents, spreadsheets, or natural-language instructions, but AI output is only a draft proposal. Persisted policies and rosters require typed data, deterministic validation, actor attribution, and human activation or publish confirmation.
+
+**Keep AI orchestration outside the People-domain commitment.** Attendance v1 should focus on what People can safely provision: excellent UI flows, deterministic services, JSON-emitting Artisan/operator commands, validation, simulation, review gates, and audit trails. Lara, skills, native AI tools, or other AI orchestration belong to the AI layer and can be added later against these stable operations. Attendance should not require Lara, should not force unrelated skill loading, and should not encode AI workflow assumptions into payroll-impacting domain behavior.
+
+**Supervisor roster creation is the main daily Attendance UX.** Policy groups are authored by HR/admin, but supervisors consume them while creating rosters. The roster surface should be a calendar/coverage builder with draft, validate, preview, publish, copy, swap, and bulk-fill flows. Supervisors should not need to understand payroll export mappings to schedule their team; BLB should surface only the policy effects relevant to scheduling, coverage, conflicts, likely overtime, leave clashes, and employee notifications.
 
 **Do not build a general rule DSL in v1.** Typed policy fields cover the known cases: grace, rounding, paid/unpaid breaks, late/early thresholds, absence classification, overtime before/after shift, rest-day/public-holiday work, daily/monthly rounding, overtime adjustment bands, overtime export thresholds, lateness export rounding, shift allowance, and meal/transport allowance triggers. SBG script-like conditional allowance criteria should be translated into typed predicates where possible, with the original script preserved as source text for audit/import. Arbitrary custom script execution can wait until multiple real customers prove typed predicates insufficient.
 
@@ -129,6 +138,24 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 - condition rows with description, amount, day/month scope, and typed predicates over attendance context such as day type, clock-out time, worked minutes, leave/absence tag, shift code, and work profile;
 - preserved source-script text where imported HR2000 conditions cannot yet be expressed as typed predicates;
 - explanation output showing which rows matched, which rows were capped, and which payroll input was produced.
+
+**Guided setup operations should expose deterministic People-domain contracts usable by UI and optional Artisan/operator commands:**
+- policy draft creation from structured input, selected template, SBG import payload, or AI-proposed normalized data;
+- policy validation with stable finding codes, severity, human message, affected path, and suggested next action;
+- policy simulation for sample employees, dates, shifts, punches, leave/absence facts, overtime spans, and allowance/payroll-preview outcomes;
+- policy activation with effective date, version note, actor, validation snapshot, and source evidence references;
+- SBG policy import as draft-only input with source aliases, collapsed-pattern explanations, unmapped-field warnings, and preserved source metadata;
+- roster draft creation from team, date range, pattern, coverage requirement, policy group, employee availability, leave coverage, and constraints;
+- roster validation with stable warnings for gaps, overlaps, leave conflicts, policy mismatches, excessive consecutive days, cross-midnight clashes, and likely overtime;
+- roster publish with human actor confirmation, revision history, employee notification intent, and immutable published snapshot;
+- explanation output for why a policy/rule/shift/roster warning applies, suitable for both human UI and AI narration.
+
+**AI and operator consumption should remain layered above Attendance Core:**
+- Attendance provides screens, services, command contracts, stable validation codes, review URLs, and audit evidence;
+- AI-layer work may later add Lara skills, native tools, or task-specific orchestration, but those artifacts should live with AI/agent guidance rather than People domain rules;
+- any future skill should be task-specific and opt-in, not globally loaded for unrelated Attendance work;
+- payroll-impacting activation, roster publish, reversal, or locked-period changes remain behind deterministic services, validation results, human actor attribution, and UI confirmation regardless of whether an AI helped prepare the draft;
+- audit trails preserve the human actor and source evidence first; AI run, command output, browser review, or skill references are optional provenance attached when actually involved.
 
 **A roster assignment should support:**
 - employee or cohort target resolved from People Settings references;
@@ -214,6 +241,12 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 - **Risk: payroll double-counts attendance effects.** Guardrail: payroll inputs have unique source references and require reversal/override events for corrections.
 - **Risk: SBG policy flags become opaque metadata.** Guardrail: model known effects as typed policy fields: rounding, grace, break treatment, overtime eligibility, allowance triggers, and payroll attribution.
 - **Risk: imported HR2000 custom scripts become unsafe executable business logic.** Guardrail: translate known scripts to typed predicates, preserve source script text for audit, and block arbitrary runtime execution in Core v1.
+- **Risk: AI becomes an opaque attendance policy engine.** Guardrail: AI only proposes typed drafts or explanations; Attendance services perform deterministic validation, simulation, calculation, activation, roster publish, and payroll handoff.
+- **Risk: AI-assisted setup becomes mandatory.** Guardrail: every setup operation must be available through BLB UI and/or operator commands without an AI provider; Lara improves speed and explanation but is not required for correctness.
+- **Risk: People domain absorbs AI orchestration concerns.** Guardrail: Attendance v1 provisions deterministic UI, service, validation, simulation, and command contracts; Lara skills/tools/orchestration remain separate AI-layer follow-up work.
+- **Risk: unrelated skills are loaded for the task at hand.** Guardrail: any future Attendance skill must be task-specific and opt-in; Attendance Core remains usable without skills and does not depend on them.
+- **Risk: terminal-oriented AI or operator workflows become brittle.** Guardrail: Artisan/operator commands emit stable JSON, validation codes, and review URLs; payroll-impacting changes still require UI confirmation instead of blind terminal execution.
+- **Risk: AI publishes payroll-impacting policy or roster changes without human review.** Guardrail: activation and publish actions require deterministic validation, explicit actor attribution, confirmation gates, and audit snapshots.
 - **Risk: overtime transformations are unexplainable.** Guardrail: store raw approved OT, adjustment bands, knock-off amounts, export mapping, final payroll quantity, and explanation as separate facts.
 - **Risk: absenteeism batch entry bypasses Leave.** Guardrail: candidate generation and batch finalization must check approved/pending Leave coverage before creating unauthorized absence facts.
 - **Risk: employee privacy leakage from location/device evidence.** Guardrail: store only policy-relevant evidence, scope access through Attendance permissions, and avoid exposing coordinates in normal reports unless the actor can audit clock events.
@@ -247,6 +280,8 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 - [ ] Implement fixed weekly roster, rotating roster cycle, ad hoc roster rows, roster publishing, and revision history.
 - [ ] Implement typed rule-policy evaluation for grace, daily/monthly rounding, paid/unpaid breaks, pay-basis-specific break exclusion, break lateness, missing punch, late, early-out, absent, cross-midnight, daily-rated workday counting, and payroll attribution.
 - [ ] Implement attendance policy group assignment so employees/cohorts resolve shift, work-hour, lateness, overtime, export, and allowance rules from one versioned bundle.
+- [ ] Implement guided policy draft, validation, simulation, and activation services that the UI and optional Artisan/operator commands all call.
+- [ ] Add optional Artisan commands for policy import, validation, simulation, and dry-run comparison, emitting stable JSON for batch/operator workflows.
 - [ ] Surface schedule and attendance previews before roster publish and before payroll handoff.
 
 ### Phase 3 - Exceptions, overtime, and Workflow routing
@@ -275,6 +310,9 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 - [ ] Employee tabs in `people.attendance.index`: clock in/out where enabled, my schedule, my attendance, missing-punch/adjustment request, overtime request, and history.
 - [ ] Supervisor tabs gated by approval capability: subordinate attendance exceptions, overtime approvals, roster view, overlap/coverage warnings, and subordinate summaries.
 - [ ] HR/admin tabs: shift templates, attendance policy groups, roster patterns, roster assignment, rule policies, allowance rules, absenteeism batches, imports, manual corrections, finalization, and audit.
+- [ ] HR/admin guided setup: template-based Attendance Policy Group wizard, visual shift timeline editor, plain-language rule cards, validation findings, simulation preview, source-evidence panel, and version activation flow.
+- [ ] Supervisor roster builder: team/date-range calendar, coverage view, copy previous period, rotating pattern fill, bulk assignment, swap/override flow, validation warnings, publish preview, revision history, and employee notification intent.
+- [ ] Add optional Artisan commands for roster draft, validate, explain, and publish dry-run, emitting stable JSON for batch/operator workflows.
 - [ ] Payroll tabs: attendance export queue, payroll handoff status, reconciliation, reversal/correction review, and lock-state warnings.
 - [ ] Reports as `RenderPdfJob` outputs under `resources/core/views/pdf/attendance/`: attendance summary, overtime list, late/absence exceptions, absenteeism batch record, roster, payroll reconciliation, and monthly attendance statement.
 - [ ] CSV exports for attendance days, clock events audit, overtime, roster, exceptions, absenteeism batches, geofence audit, and payroll handoff.
@@ -290,6 +328,7 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 ### Phase 7 - SBG migration and parity validation
 
 - [ ] Import SBG TMS Group, shift windows, rounding, lateness, overtime, overtime export, lateness export, conditional allowance, geofence, and geogroup setup into private configuration with source aliases and typed policy translation.
+- [ ] Support SBG policy import as draft structured input with collapsed-pattern explanations, unmapped-field warnings, source screenshot/export references, and human review before activation; AI may help transform screenshots/docs into draft input but is not required migration infrastructure.
 - [ ] Import historical or opening attendance summaries, approved overtime, and already-paid attendance adjustments needed for payroll cutover.
 - [ ] Reconcile BLB attendance/overtime/payroll handoff against HR2000 reports for a selected historical pay period.
 - [ ] Document remaining HR2000 gaps, explicitly separating Core gaps, Malaysia pack gaps, and `kiatng/blb-sbg` private-policy gaps.
