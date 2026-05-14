@@ -33,9 +33,30 @@ function stripWrappingQuotes(value) {
     return isDoubleQuoted || isSingleQuoted ? value.slice(1, -1) : value;
 }
 
+function isEnvFlagEnabled(value) {
+    return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
 const frontendDomain = readEnv('FRONTEND_DOMAIN', 'local.blb.lara');
-const viteNoRefresh = readEnv('VITE_NO_REFRESH', '') !== '';
+const viteNoRefresh = isEnvFlagEnabled(readEnv('VITE_NO_REFRESH', ''));
 const viteThemeDir = readEnv('VITE_THEME_DIR', '');
+const bladeRefreshPaths = [
+    'resources/core/views/**/*.blade.php',
+    ...(viteThemeDir ? [
+        `resources/extensions/${viteThemeDir}/views/**/*.blade.php`,
+    ] : []),
+];
+
+function suppressMarkdownReloads() {
+    return {
+        name: 'blb-suppress-markdown-reloads',
+        handleHotUpdate(context) {
+            if (context.file.endsWith('.md')) {
+                return [];
+            }
+        },
+    };
+}
 
 export default defineConfig({
     plugins: [
@@ -44,29 +65,24 @@ export default defineConfig({
             // Set VITE_NO_REFRESH=1 in local .env to disable auto-reload on file
             // changes (per-machine workaround for chokidar firing phantom mtime
             // events — e.g. Defender/indexing churn on Windows).
-            refresh: viteNoRefresh ? false : [
-                'resources/core/views/**/*.blade.php',
-                'resources/core/css/**/*.css',
-                'resources/core/js/**/*.{js,ts,vue}',
-                ...(viteThemeDir ? [
-                    `resources/extensions/${viteThemeDir}/views/**/*.blade.php`,
-                    `resources/extensions/${viteThemeDir}/css/**/*.css`,
-                    `resources/extensions/${viteThemeDir}/js/**/*.{js,ts,vue}`,
-                ] : []),
-            ],
+            refresh: viteNoRefresh ? false : bladeRefreshPaths,
         }),
         tailwindcss(),
+        suppressMarkdownReloads(),
     ],
     server: {
         host: '127.0.0.1',
         port: Number.parseInt(process.env.VITE_PORT || '5173'),
         strictPort: true,
         origin: `https://${frontendDomain}`,
-        hmr: {
+        hmr: viteNoRefresh ? false : {
             host: frontendDomain,
             protocol: 'wss',
             clientPort: 443,
         },
         cors: true,
+        watch: {
+            ignored: ['**/*.md'],
+        },
     },
 });

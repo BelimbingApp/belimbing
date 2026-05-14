@@ -65,6 +65,10 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 
 **Attendance setup is guided operations, not an HR2000-style grid.** BLB should preserve the power visible in SBG's TMS Group screenshots while replacing dense setup grids with templates, visual timelines, plain-language rule cards, validation findings, and simulations. Administrators should be able to start from common policy shapes such as fixed office hours, flexible start, rotating production shifts, cross-midnight shifts, daily-rated work, or SBG import. The stored result remains typed, versioned Attendance policy data; the setup surface is optimized for comprehension.
 
+**Policy Studio is a first-class Attendance workspace, not a generic settings page.** Attendance navigation should expose Policy Library, Policy Builder, Policy Validator, Shift Builder, and Allowance Rules under Policy Studio because these are core attendance design activities. Roster Builder and Clocking Locations remain Attendance siblings: rosters are supervisor scheduling work, while clocking locations/geofences may become policy inputs later but are not policy authoring themselves.
+
+**Policy templates use JSON object/array exchange first.** A policy template is a nested, reviewable attendance-rule object, so JSON is the right initial format. JSONL can be added later for very large registries, but normal import/export should accept one template object or an array of template objects so templates can move between BLB, country packs, private packs, or a separate template repository without changing the Policy Builder UX.
+
 **AI assistance is optional, not a prerequisite.** Attendance must be fully usable through normal BLB UI and deterministic operations when no AI provider is configured. Lara or another authorized agent may help interpret screenshots, policy documents, spreadsheets, or natural-language instructions, but AI output is only a draft proposal. Persisted policies and rosters require typed data, deterministic validation, actor attribution, and human activation or publish confirmation.
 
 **Keep AI orchestration outside the People-domain commitment.** Attendance v1 should focus on what People can safely provision: excellent UI flows, deterministic services, JSON-emitting Artisan/operator commands, validation, simulation, review gates, and audit trails. Lara, skills, native AI tools, or other AI orchestration belong to the AI layer and can be added later against these stable operations. Attendance should not require Lara, should not force unrelated skill loading, and should not encode AI workflow assumptions into payroll-impacting domain behavior.
@@ -280,8 +284,10 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 - [ ] Implement fixed weekly roster, rotating roster cycle, ad hoc roster rows, roster publishing, and revision history.
 - [ ] Implement typed rule-policy evaluation for grace, daily/monthly rounding, paid/unpaid breaks, pay-basis-specific break exclusion, break lateness, missing punch, late, early-out, absent, cross-midnight, daily-rated workday counting, and payroll attribution.
 - [ ] Implement attendance policy group assignment so employees/cohorts resolve shift, work-hour, lateness, overtime, export, and allowance rules from one versioned bundle.
-- [ ] Implement guided policy draft, validation, simulation, and activation services that the UI and optional Artisan/operator commands all call.
-- [ ] Add optional Artisan commands for policy import, validation, simulation, and dry-run comparison, emitting stable JSON for batch/operator workflows.
+- [x] Implement guided policy validation and simulation services that the UI and optional Artisan/operator commands can call. `AttendancePolicyValidationService` emits stable finding codes; `AttendancePolicySimulationService` previews late/early/OT metrics and daily allowance candidates without creating attendance facts. {amp/gpt-5}
+- [ ] Implement guided policy draft and activation services with review gates, actor attribution, and version activation snapshots.
+- [x] Add optional Artisan commands for policy validation and simulation, emitting stable JSON for batch/operator workflows: `blb:attendance:policy:validate` and `blb:attendance:policy:simulate`. {amp/gpt-5}
+- [ ] Add optional Artisan commands for policy import and dry-run comparison, emitting stable JSON for batch/operator workflows.
 - [ ] Surface schedule and attendance previews before roster publish and before payroll handoff.
 
 ### Phase 3 - Exceptions, overtime, and Workflow routing
@@ -311,6 +317,8 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 - [ ] Supervisor tabs gated by approval capability: subordinate attendance exceptions, overtime approvals, roster view, overlap/coverage warnings, and subordinate summaries.
 - [ ] HR/admin tabs: shift templates, attendance policy groups, roster patterns, roster assignment, rule policies, allowance rules, absenteeism batches, imports, manual corrections, finalization, and audit.
 - [ ] HR/admin guided setup: template-based Attendance Policy Group wizard, visual shift timeline editor, plain-language rule cards, validation findings, simulation preview, source-evidence panel, and version activation flow.
+- [x] Promote Attendance setup out of generic Settings into first-class Attendance navigation: Policy Studio now has Policy Library, Policy Builder, Policy Validator, Shift Builder, and Allowance Rules; Roster Builder and Clocking Locations are direct Attendance workspaces. {amp/gpt-5.5-medium}
+- [x] Ship JSON policy-template exchange in Policy Studio: users can start from built-in templates, import a template object/array into the builder, and export a builder draft or saved policy group as `belimbing.attendance.policy-template.v1` JSON for future country-pack/private-pack/template-repo reuse. {amp/gpt-5.5-medium}
 - [ ] Supervisor roster builder: team/date-range calendar, coverage view, copy previous period, rotating pattern fill, bulk assignment, swap/override flow, validation warnings, publish preview, revision history, and employee notification intent.
 - [ ] Add optional Artisan commands for roster draft, validate, explain, and publish dry-run, emitting stable JSON for batch/operator workflows.
 - [ ] Payroll tabs: attendance export queue, payroll handoff status, reconciliation, reversal/correction review, and lock-state warnings.
