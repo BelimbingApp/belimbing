@@ -38,7 +38,7 @@ class SubmitClaimRequestService
             $claimType = $assignmentLine->type;
             $policy = $assignmentLine->policy;
 
-            $this->validateSubmission($employee, $assignment, $assignmentLine, $requestedAmount, $options);
+            $this->validateSubmission($employee, $assignment, $assignmentLine, $requestedAmount);
             $attachmentCount = (int) ($options['attachment_count'] ?? 0);
             $providerName = $this->blankToNull($options['provider_name'] ?? null);
             $receiptNumber = $this->blankToNull($options['receipt_number'] ?? null);

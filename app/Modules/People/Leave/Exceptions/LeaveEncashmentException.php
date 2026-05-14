@@ -2,9 +2,9 @@
 
 namespace App\Modules\People\Leave\Exceptions;
 
-use RuntimeException;
+use App\Base\Foundation\Exceptions\BlbInvariantViolationException;
 
-final class LeaveEncashmentException extends RuntimeException
+final class LeaveEncashmentException extends BlbInvariantViolationException
 {
     public static function nonPositiveDays(): self
     {

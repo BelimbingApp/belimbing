@@ -2,9 +2,9 @@
 
 namespace App\Modules\People\Leave\Exceptions;
 
-use RuntimeException;
+use App\Base\Foundation\Exceptions\BlbInvariantViolationException;
 
-final class LeaveRequestLifecycleException extends RuntimeException
+final class LeaveRequestLifecycleException extends BlbInvariantViolationException
 {
     public static function invalidStatus(int $requestId, string $status, string $action): self
     {
