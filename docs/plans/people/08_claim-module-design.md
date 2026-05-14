@@ -1,7 +1,7 @@
 # people/08_claim-module-design
 
-**Status:** In Progress — Claim Core skeleton and first employee submission/approval slice started; first round of post-implementation hardening (reference-number uniqueness, deterministic policy bands) applied 2026-05-13
-**Last Updated:** 2026-05-13
+**Status:** In Progress — Claim Core skeleton with employee submission/approval slice; encumbrance/approval-reevaluation guardrails closed; cancel + reimbursement lifecycles added; multi-line submission service path, on-behalf service validation, service-year band matching, cohort-predicate eligibility, and finance CSV exports (accounting, reimbursement statement, utilization) landed 2026-05-14
+**Last Updated:** 2026-05-14
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — Claims is a first-class People workflow with entitlements, attachments, approval limits, payroll reimbursement integration, and reporting.
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Payroll Core and country-pack boundary that Claim must feed through neutral `PayrollInput` reimbursement rows.
@@ -14,7 +14,7 @@
 - `app/Modules/People/Settings/Models/PeopleReferenceEntry.php` — existing typed reference data, including organization, demographic, bank, statutory-office, medical-provider, and training-provider categories.
 - `docs/plans/people/sbg_claim_ref/` — SBG iPayroll claim setup screenshots and exports for claim category, claim type, claim group, claim entitlement, and claim client/max-limit setup.
 - `docs/architecture/file-structure.md` — module placement; `docs/plans/AGENTS.md` — plan conventions.
-**Agents:** amp/gpt-5.1-codex
+**Agents:** amp/gpt-5.1-codex, amp/claude-opus-4-7, claude-code/claude-opus-4-7
 
 ## Problem Essence
 
@@ -210,8 +210,8 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 - **Risk: advance claims become untracked loans.** Guardrail: every advance has settlement due date, outstanding amount projection, reminder/escalation, and variance close reason.
 - **Risk: Finance accounting needs are bolted on later.** Guardrail: claim lines carry cost center, organization unit, pay item/accounting code metadata from day one, even if the first export is CSV.
 - **Risk: duplicate `people_payroll_inputs` rows for the same claim line under concurrent approval.** Resolved by `docs/plans/people/10_payroll-intake-dependency-inversion.md` Phases 1–4: `ClaimPayrollHandoffService` now writes through `PayrollContributionIntake`, which is keyed on a composite unique index `(source_type, source_id, pay_item_code, period_anchor)` enforced at the DB level on the Payroll-owned `people_payroll_pending_contributions` table.
-- **Risk: stale-policy approval.** `ApproveClaimRequestService` accepts the requested amount without re-evaluating caps or eligibility. Guardrail (open): re-run policy evaluation at approval time using the snapshot policy version, or block approval when the snapshot is older than the currently effective policy.
-- **Risk: encumbrance ignores policy.** `ClaimPolicy::encumber_pending` is persisted but `ClaimPolicyEvaluationService::usedAmountForPeriod` always encumbers pending requests and always sums `requested_amount`. Guardrail (open): honour `encumber_pending` per-policy, and switch to `approved_amount` for `approved`/`reimbursed`/`queued_for_payroll` rows so partial approvals release the unused cap.
+- **Risk: stale-policy approval.** Closed 2026-05-14: `ApproveClaimRequestService` now re-runs `ClaimPolicyEvaluationService::evaluateAtApproval` per line before persisting approved amounts, throwing a lifecycle exception when current cap/eligibility state would be violated. Exclusion of the request-under-approval prevents self-blocking.
+- **Risk: encumbrance ignores policy.** Closed 2026-05-14: `ClaimPolicyEvaluationService::usedAmountForPeriod` now honours `ClaimPolicy::encumber_pending` (pending claims only counted when the evaluating policy opts in) and sums `approved_amount` for `approved`/`queued_for_payroll`/`reimbursed`/`settled` rows so partial approvals release the unused cap.
 
 ## Phases
 
@@ -242,13 +242,13 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 
 ### Phase 2 — Employee submission and validation
 
-- [~] Build employee-scoped claim submission: first single-line submit/withdraw/history path is in place under the My Claims surface, now using the Leave-style table-first list with New Claim modal; receipt attachment-count validation is a temporary bridge until shared attachment infrastructure is selected. Draft editing, multi-line add/edit/remove, and real uploads remain open. {amp/gpt-5.1-codex}
-- [ ] Support on-behalf claim creation with actor, reason, employee notification, and audit event.
-- [~] Implement policy evaluation for caps, eligibility, receipt thresholds, provider restrictions, service-year bands, and pending claim encumbrance: first submission path enforces receipt/provider rules plus per-claim/month/year caps from matched policy bands; eligibility predicates, service-year bands, and combined-cap encumbrance remain open. Band `=` operator now uses an epsilon comparison instead of strict float equality. The `encumber_pending` policy flag and approval-time re-evaluation are still ignored — see Risks and Guardrails. {amp/gpt-5.1-codex,amp/claude-opus-4-7}
+- [~] Build employee-scoped claim submission: single-line submit/withdraw/history surface is shipped under My Claims with the Leave-style table-first list; `SubmitClaimRequestService::submitLines` now accepts multiple line specs in one transaction and the legacy `submit()` is a thin wrapper. Receipt attachment-count validation is a temporary bridge until shared attachment infrastructure is selected. UI repeater for multi-line entry, draft editing, and real uploads remain open. {amp/gpt-5.1-codex,claude-code/claude-opus-4-7}
+- [~] Support on-behalf claim creation with actor, reason, employee notification, and audit event: service-level validation now refuses on-behalf without a reason, refuses claim types that disallow on-behalf submission, and stamps `on_behalf_actor_user_id` plus the actor on the audit event. Admin-only UI for selecting the employee + reason is still open. {claude-code/claude-opus-4-7}
+- [x] Implement policy evaluation for caps, eligibility, receipt thresholds, provider restrictions, service-year bands, and pending claim encumbrance: submission path enforces receipt/provider rules plus per-claim/month/year caps from matched policy bands; pending encumbrance honours `ClaimPolicy::encumber_pending`; finalised statuses consume `approved_amount`; `ApproveClaimRequestService` re-runs evaluation at approval time; service-year banded policies (`MODE_SERVICE_YEAR`) match against the employee's years of service from `employment_start`; cohort predicates on both `ClaimAssignment` and `ClaimPolicy` are evaluated by `ClaimCohortPredicateService` (allowlisted keys — employee_type, department_id, supervisor_id, status — with scalar = exact and list = IN match; unknown keys fail closed). {amp/gpt-5.1-codex,amp/claude-opus-4-7,claude-code/claude-opus-4-7}
 - [~] Add duplicate-risk checks for receipt number/date/amount/provider and same employee/type/amount/date combinations, surfacing warnings before approval: first duplicate-risk warnings are stored on request/line metadata and surfaced in the request list. {amp/gpt-5.1-codex}
 - [~] Enforce claim assignment visibility: hidden rows are unavailable to normal employee submission in the first UI/service path; authorized admin/import/payroll correction flows remain open. {amp/gpt-5.1-codex}
 - [x] Enforce combined-cap utilization when assignment rows share a combine tag and use-combine is active: submission-time monthly/yearly policy cap checks now aggregate usage across active assignment lines with the same combine tag. {amp/gpt-5.1-codex}
-- [~] Enforce strictest-line route resolution and block mixed-line requests with incompatible approval profiles: first single-line submissions snapshot the selected line/profile; multi-line incompatibility checks remain open. {amp/gpt-5.1-codex}
+- [x] Enforce strictest-line route resolution and block mixed-line requests with incompatible approval profiles: `submitLines` rejects requests whose lines resolve to more than one distinct approval profile key, and the header snapshots the strictest line (largest requested_amount) with its profile. {amp/gpt-5.1-codex,claude-code/claude-opus-4-7}
 - [ ] Add multi-currency receipt entry if SBG confirms a day-one need; otherwise keep the schema ready but hide the UI.
 
 ### Phase 3 — Approval routing and operations
@@ -256,8 +256,8 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 - [ ] Route submitted claims through Workflow using Claim-selected approval profile inputs; Workflow owns approver graph, thresholds, delegation, and escalation execution.
 - [~] Build manager approval tabs: the Claim Approvals surface now has a pending queue, selected-request detail panel, claim line detail, audit trail, approve/reject/more-info actions, and decision reason. Receipt review, reduced approval, and escalation visibility remain open. {amp/gpt-5.1-codex}
 - [~] Build HR/Finance operations tabs: Claim Operations now provides an all-claims table with search, status/risk/payroll-state filters, duplicate-risk visibility, payroll handoff readiness, and filtered CSV export. Policy exception queue and reconciliation drill-down remain open. {amp/gpt-5.1-codex}
-- [~] Emit notifications for submission, approval, rejection, more-info request, withdrawal, cancellation, payroll queued, and reimbursement completion through `PeopleNotificationDeliveryLog`: Claim now emits submission, approval, rejection, more-info, withdrawal, and payroll-queued notifications into the People notification log; cancellation and reimbursement completion wait on those lifecycle endpoints. {amp/gpt-5.1-codex}
-- [~] Record audit events for every state transition and every approval-limit/routing decision: submit, approve, reject, more-info, and withdraw now write audit events; cancellation, payroll, reimbursement, and routing-decision audits remain open. {amp/gpt-5.1-codex}
+- [~] Emit notifications for submission, approval, rejection, more-info request, withdrawal, cancellation, payroll queued, and reimbursement completion through `PeopleNotificationDeliveryLog`: Claim now emits submission, approval, rejection, more-info, withdrawal, payroll-queued, cancellation, and reimbursement-completion notifications into the People notification log. {amp/gpt-5.1-codex,claude-code/claude-opus-4-7}
+- [~] Record audit events for every state transition and every approval-limit/routing decision: submit, approve, reject, more-info, withdraw, cancel, payroll-queued, and reimbursement transitions now write audit events; routing-decision audits (route selection, approver-limit evaluation) remain open and are coupled to the Workflow integration. {amp/gpt-5.1-codex,claude-code/claude-opus-4-7}
 
 ### Phase 4 — Payroll, advance, and accounting handoff
 
@@ -265,15 +265,15 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 
 - [x] Generate `PayrollInput::TYPE_REIMBURSEMENT` rows from approved payroll-eligible claim lines via Payroll's intake. `ClaimPayrollHandoffService::SOURCE_TYPE = 'claim_line'`; duplicate protection is now DB-enforced through the composite unique index on `people_payroll_pending_contributions`. When no covering run is open, the contribution sits as pending and materialises automatically when a run is created. See `docs/plans/people/10_payroll-intake-dependency-inversion.md` Phase 4. {amp/gpt-5.1-codex,amp/claude-opus-4-7}
 - [~] Snapshot claim type payroll code and DR/CR accounting mapping on each handed-off claim line so later setup changes do not rewrite payroll/accounting history: claim line snapshots are stored at submission and copied to payroll input metadata during handoff. {amp/gpt-5.1-codex}
-- [ ] Prevent mutation of claim lines already handed to a locked payroll run; support explicit reversal/new-period correction flows.
+- [~] Prevent mutation of claim lines already handed to a locked payroll run; support explicit reversal/new-period correction flows: lifecycle services (cancel/withdraw/approve/reimburse) already gate mutation by request status, and `CancelClaimRequestService` now defensively invokes `ClaimPayrollHandoffService::reverseRequest` when an approved request is cancelled to clean up any partial pending contributions. Explicit reversal/new-period correction UI for queued/reimbursed states remains open. {claude-code/claude-opus-4-7}
 - [ ] If SBG confirms day-one advance usage, implement claim advance request, approval, payment/payroll handoff, receipt settlement, outstanding balance, overdue reminders, and variance outcomes; otherwise keep only schema/import hooks.
 - [ ] Add payroll reconciliation report: approved claims, queued inputs, paid/reimbursed lines, skipped lines, reversal lines, and mismatches.
-- [ ] Add Finance/accounting CSV export with employee, company, cost center, claim type, GL/account code metadata, tax hint, receipt state, and settlement state.
+- [x] Add Finance/accounting CSV export with employee, company, cost center, claim type, GL/account code metadata, tax hint, receipt state, and settlement state: `ClaimAccountingExportBuilder` emits one row per claim line filtered to approved/queued/reimbursed/settled by default, surfaces the per-line accounting snapshot (pay item, debit/credit codes, taxability hint), receipt state, and settlement state; download is gated by `people.claim.manage` at `people.claim.operations.accounting.csv`. {claude-code/claude-opus-4-7}
 
 ### Phase 5 — Reports, documents, and SBG validation
 
 - [ ] Add Claim Application List export with HR2000-parity columns after Phase 0 confirms the exact SBG column set.
-- [~] Add reimbursement statement, entitlement utilization, outstanding advance, approval aging, duplicate-risk, and payroll handoff reconciliation reports in CSV and PDF where useful: Claim Operations now exports a filtered CSV with duplicate-risk and payroll handoff fields; dedicated statements/utilization/aging and PDF reports remain open. {amp/gpt-5.1-codex}
+- [~] Add reimbursement statement, entitlement utilization, outstanding advance, approval aging, duplicate-risk, and payroll handoff reconciliation reports in CSV and PDF where useful: Claim Operations exports a filtered request-level CSV with duplicate-risk and payroll handoff fields; per-employee reimbursement statement, per-(employee, claim type, year) utilization, and approval aging (0-3d / 4-7d / 8-14d / 15-30d / 30d+ buckets) ship as CSV. Outstanding advance, payroll handoff reconciliation, and PDF reports remain open. {amp/gpt-5.1-codex,claude-code/claude-opus-4-7}
 - [ ] Seed SBG private claim categories, claim types, claim assignments, policy limits, claim context/client limits, mileage rates if any, provider/account mappings, and approver amount limits in `kiatng/blb-sbg`.
 - [ ] Run dry-run import or side-by-side validation against SBG's current claim data, reconciling opening entitlement usage, in-flight claims, outstanding advances if any, and reimbursement totals.
 - [ ] Confirm one complete monthly workflow: employee submission → manager approval → payroll handoff → payroll lock → reimbursement report.

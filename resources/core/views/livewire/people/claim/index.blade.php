@@ -13,6 +13,22 @@
                         <x-icon name="heroicon-o-arrow-down-tray" class="h-4 w-4" />
                         {{ __('Export CSV') }}
                     </x-ui.button>
+                    <x-ui.button as="a" :href="$accountingExportUrl" variant="secondary">
+                        <x-icon name="heroicon-o-banknotes" class="h-4 w-4" />
+                        {{ __('Accounting CSV') }}
+                    </x-ui.button>
+                    <x-ui.button as="a" :href="$reimbursementStatementUrl" variant="secondary">
+                        <x-icon name="heroicon-o-document-text" class="h-4 w-4" />
+                        {{ __('Reimbursement Statement') }}
+                    </x-ui.button>
+                    <x-ui.button as="a" :href="$utilizationReportUrl" variant="secondary">
+                        <x-icon name="heroicon-o-chart-bar" class="h-4 w-4" />
+                        {{ __('Utilization Report') }}
+                    </x-ui.button>
+                    <x-ui.button as="a" :href="$approvalAgingUrl" variant="secondary">
+                        <x-icon name="heroicon-o-clock" class="h-4 w-4" />
+                        {{ __('Approval Aging') }}
+                    </x-ui.button>
                 </x-slot>
             @endif
             <x-slot name="help">
@@ -142,6 +158,7 @@
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Risk') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Payroll') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border-default bg-surface-card">
@@ -195,10 +212,23 @@
                                             <span class="text-xs text-muted">{{ __('Not payroll eligible') }}</span>
                                         @endif
                                     </td>
+                                    <td class="px-table-cell-x py-table-cell-y text-right">
+                                        <div class="flex flex-wrap justify-end gap-1">
+                                            @if (in_array($request->status, [\App\Modules\People\Claim\Models\ClaimRequest::STATUS_APPROVED, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_QUEUED_FOR_PAYROLL], true))
+                                                <x-ui.button type="button" size="sm" variant="primary" wire:click="markReimbursed({{ $request->id }})" wire:confirm="{{ __('Mark this claim as reimbursed?') }}">{{ __('Reimburse') }}</x-ui.button>
+                                            @endif
+                                            @if (in_array($request->status, [\App\Modules\People\Claim\Models\ClaimRequest::STATUS_DRAFT, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_SUBMITTED, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_NEEDS_MORE_INFO, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_RESUBMITTED, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_APPROVED], true))
+                                                <x-ui.button type="button" size="sm" variant="ghost" wire:click="cancelRequest({{ $request->id }})" wire:confirm="{{ __('Cancel this claim request?') }}">{{ __('Cancel') }}</x-ui.button>
+                                            @endif
+                                            @if (! in_array($request->status, [\App\Modules\People\Claim\Models\ClaimRequest::STATUS_DRAFT, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_SUBMITTED, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_NEEDS_MORE_INFO, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_RESUBMITTED, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_APPROVED, \App\Modules\People\Claim\Models\ClaimRequest::STATUS_QUEUED_FOR_PAYROLL], true))
+                                                <span class="text-xs text-muted">{{ __('—') }}</span>
+                                            @endif
+                                        </div>
+                                    </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No claim requests match the current filters.') }}</td>
+                                    <td colspan="8" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No claim requests match the current filters.') }}</td>
                                 </tr>
                             @endforelse
                         </tbody>
