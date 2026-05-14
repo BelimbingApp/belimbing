@@ -45,13 +45,13 @@ $DatabasePath = Join-Path $ProjectRootPath 'database\database.sqlite'
 
 function Write-Step {
     param([string] $Message)
-    Write-Host ""
-    Write-Host "==> $Message" -ForegroundColor Cyan
+    Write-Output ""
+    Write-Output "==> $Message"
 }
 
 function Write-Ok {
     param([string] $Message)
-    Write-Host "OK  $Message" -ForegroundColor Green
+    Write-Output "OK  $Message"
 }
 
 function Resolve-FrankenPhpHome {
@@ -161,7 +161,7 @@ function Add-HostsEntry {
     )
 
     if ($Skip) {
-        Write-Host "Skipping hosts file update."
+        Write-Output "Skipping hosts file update."
         return
     }
 
@@ -182,8 +182,8 @@ function Add-HostsEntry {
     $entry = "127.0.0.1 $($missing -join ' ')"
 
     if (-not $isAdmin) {
-        Write-Host "Hosts entry still needed. Re-run this script as Administrator or add this line:" -ForegroundColor Yellow
-        Write-Host "  $entry"
+        Write-Warning "Hosts entry still needed. Re-run this script as Administrator or add this line:"
+        Write-Output "  $entry"
         return
     }
 
@@ -365,7 +365,7 @@ variables_order=EGPCS
                 throw "npm dependency install failed"
             }
         } else {
-            Write-Host "Bun/npm is not available. Install Bun for the full dev workflow: https://bun.sh/docs/installation" -ForegroundColor Yellow
+            Write-Warning "Bun/npm is not available. Install Bun for the full dev workflow: https://bun.sh/docs/installation"
         }
     }
 
@@ -418,12 +418,12 @@ variables_order=EGPCS
         }
         Invoke-Php @('artisan', 'config:clear')
     } else {
-        Write-Host "Skipping Laravel finalization because vendor/autoload.php is not present." -ForegroundColor Yellow
+        Write-Warning "Skipping Laravel finalization because vendor/autoload.php is not present."
     }
 
-    Write-Host ""
-    Write-Host "Windows setup complete. Start the app with:" -ForegroundColor Green
-    Write-Host "  .\scripts\start-app.ps1"
+    Write-Output ""
+    Write-Output "Windows setup complete. Start the app with:"
+    Write-Output "  .\scripts\start-app.ps1"
 } finally {
     Pop-Location
 }
