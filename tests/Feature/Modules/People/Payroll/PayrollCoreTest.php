@@ -45,12 +45,34 @@ use App\Modules\People\Payroll\Services\StatutoryProfileResolver;
 use App\Modules\People\Payroll\Services\StatutoryRuleSetResolver;
 use Illuminate\Support\Carbon;
 
-const PAYROLL_MY_PACK = 'belimbing/payroll-my';
-const PAYROLL_DEV_VERSION = '2026.dev';
+defined('PAYROLL_MY_PACK') || define('PAYROLL_MY_PACK', 'belimbing/payroll-my');
+defined('PAYROLL_DEV_VERSION') || define('PAYROLL_DEV_VERSION', '2026.dev');
+const PAYROLL_COUNTRY_PACK_VERSION = '2026.1';
+const PAYROLL_PERIOD_START = '2026-01-01';
+const PAYROLL_PERIOD_END = '2026-01-31';
+const ZERO_AMOUNT = '0.0000';
+const TEST_COUNTRY_PACK_EMPLOYEE_AMOUNT = '110.0000';
+const TEST_COUNTRY_PACK_EMPLOYER_AMOUNT = '130.0000';
+const BASIC_SALARY_AMOUNT = '3000.0000';
+const PAYSLIP_BASIC_SALARY_AMOUNT = '2500.0000';
+const BONUS_AMOUNT = '1000.0000';
+const EPF_EMPLOYEE_RATE = '0.11000000';
+const EPF_EMPLOYER_RATE = '0.13000000';
+const EPF_EMPLOYEE_AMOUNT = '330.0000';
+const EPF_EMPLOYER_AMOUNT = '390.0000';
+const HRD_LEVY_AMOUNT = '30.0000';
+const EMPLOYEE_DEDUCTION_AMOUNT = '125.0000';
+const STANDARD_NET_PAY_AMOUNT = '2670.0000';
+const SUMMARY_NET_PAY_AMOUNT = '2625.0000';
 const TRAVEL_CLAIM_LABEL = 'Travel Claim';
+const ADVANCE_RECOVERY_LABEL = 'Advance Recovery';
+const EPF_EMPLOYEE_CONTRIBUTION_LABEL = 'EPF Employee Contribution';
+const EPF_EMPLOYER_CONTRIBUTION_LABEL = 'EPF Employer Contribution';
 const HRD_LEVY_LABEL = 'HRD Levy';
 const NET_PAY_LABEL = 'Net Pay';
 const TEST_BANK_NAME = 'Test Bank';
+const PAYROLL_PAYSLIP_TEMPLATE_VERSION = 'payroll-payslip@v1';
+const PAYROLL_PAYSLIP_ARTIFACT_PATH = 'pdf-artifacts/payroll/payslip-MY-2026-01-PDF-ARTIFACT.pdf';
 
 function createPayrollCoreTestCountryPack(string $countryIso = 'SG'): PayrollCountryPack
 {
@@ -107,7 +129,7 @@ function createPayrollCoreTestCountryPack(string $countryIso = 'SG'): PayrollCou
                         lineType: PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION,
                         code: 'test_employee_contribution',
                         label: 'Test Employee Contribution',
-                        amount: '110.0000',
+                        amount: TEST_COUNTRY_PACK_EMPLOYEE_AMOUNT,
                         currency: $context->run->currency,
                         sourceRule: 'test-contribution-rule',
                         sourceVersion: 'test.1',
@@ -117,7 +139,7 @@ function createPayrollCoreTestCountryPack(string $countryIso = 'SG'): PayrollCou
                         lineType: PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION,
                         code: 'test_employer_contribution',
                         label: 'Test Employer Contribution',
-                        amount: '130.0000',
+                        amount: TEST_COUNTRY_PACK_EMPLOYER_AMOUNT,
                         currency: $context->run->currency,
                         sourceRule: 'test-contribution-rule',
                         sourceVersion: 'test.1',
@@ -158,9 +180,9 @@ function createPayrollCoreRun(string $runCode = 'MY-2026-01-MAIN'): array
         'payroll_calendar_id' => $calendar->id,
         'code' => '2026-01',
         'name' => 'January 2026',
-        'starts_on' => '2026-01-01',
-        'ends_on' => '2026-01-31',
-        'pay_date' => '2026-01-31',
+        'starts_on' => PAYROLL_PERIOD_START,
+        'ends_on' => PAYROLL_PERIOD_END,
+        'pay_date' => PAYROLL_PERIOD_END,
         'status' => 'open',
     ]);
     $run = PayrollRun::query()->create([
@@ -181,6 +203,307 @@ function createPayrollCoreRun(string $runCode = 'MY-2026-01-MAIN'): array
     ]);
 
     return [$run, $participant, $employee];
+}
+
+function createPayrollInputRecord(PayrollRun $run, PayrollRunParticipant $participant, Employee $employee, array $attributes): PayrollInput
+{
+    return PayrollInput::query()->create([
+        'payroll_run_id' => $run->id,
+        'payroll_run_participant_id' => $participant->id,
+        'employee_id' => $employee->id,
+        'currency' => 'MYR',
+        ...$attributes,
+    ]);
+}
+
+function createPayrollInputRecords(PayrollRun $run, PayrollRunParticipant $participant, Employee $employee, array $inputs): void
+{
+    foreach ($inputs as $input) {
+        createPayrollInputRecord($run, $participant, $employee, $input);
+    }
+}
+
+function createPayrollResultLineRecord(PayrollRun $run, PayrollRunParticipant $participant, Employee $employee, array $attributes): PayrollResultLine
+{
+    return PayrollResultLine::query()->create([
+        'payroll_run_id' => $run->id,
+        'payroll_run_participant_id' => $participant->id,
+        'employee_id' => $employee->id,
+        'currency' => 'MYR',
+        ...$attributes,
+    ]);
+}
+
+function createPayrollResultLineRecords(PayrollRun $run, PayrollRunParticipant $participant, Employee $employee, array $lines): void
+{
+    foreach ($lines as $line) {
+        createPayrollResultLineRecord($run, $participant, $employee, $line);
+    }
+}
+
+function findParticipantResultLine(PayrollRunParticipant $participant, string $code): PayrollResultLine
+{
+    return PayrollResultLine::query()
+        ->where('payroll_run_participant_id', $participant->id)
+        ->where('code', $code)
+        ->firstOrFail();
+}
+
+function createMalaysiaEmployerStatutoryProfile(Company $company, array $attributes = []): PayrollEmployerStatutoryProfile
+{
+    return PayrollEmployerStatutoryProfile::query()->create([
+        'company_id' => $company->id,
+        'country_iso' => 'MY',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
+        'effective_from' => PAYROLL_PERIOD_START,
+        'profile_data' => ['hrd_levy_applicable' => true],
+        'validation_messages' => [],
+        ...$attributes,
+    ]);
+}
+
+function createMalaysiaEmployeeStatutoryProfile(Company $company, Employee $employee, array $attributes = []): PayrollEmployeeStatutoryProfile
+{
+    return PayrollEmployeeStatutoryProfile::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'country_iso' => 'MY',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
+        'effective_from' => PAYROLL_PERIOD_START,
+        'validation_messages' => [],
+        ...$attributes,
+    ]);
+}
+
+function createPayrollPayItemRecord(Company $company, array $attributes): PayrollPayItem
+{
+    return PayrollPayItem::query()->create([
+        'company_id' => $company->id,
+        'status' => 'active',
+        ...$attributes,
+    ]);
+}
+
+function createMalaysiaPayItemClassifications(PayrollPayItem $payItem, array $classifications): void
+{
+    foreach ($classifications as $classificationKey => $classificationValue) {
+        PayrollPayItemClassification::query()->create([
+            'payroll_pay_item_id' => $payItem->id,
+            'country_iso' => 'MY',
+            'classification_key' => $classificationKey,
+            'classification_value' => $classificationValue,
+            'effective_from' => PAYROLL_PERIOD_START,
+            'source_pack' => PAYROLL_MY_PACK,
+            'source_version' => PAYROLL_DEV_VERSION,
+        ]);
+    }
+}
+
+function createMalaysiaPayItemRecord(Company $company, array $attributes, array $classifications): PayrollPayItem
+{
+    $payItem = createPayrollPayItemRecord($company, $attributes);
+    createMalaysiaPayItemClassifications($payItem, $classifications);
+
+    return $payItem;
+}
+
+function createMalaysiaRuleSet(array $attributes): PayrollStatutoryRuleSet
+{
+    return PayrollStatutoryRuleSet::query()->create([
+        'country_iso' => 'MY',
+        'source_pack' => PAYROLL_MY_PACK,
+        'source_version' => PAYROLL_DEV_VERSION,
+        'effective_from' => PAYROLL_PERIOD_START,
+        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
+        ...$attributes,
+    ]);
+}
+
+function createMalaysiaRuleRow(PayrollStatutoryRuleSet $ruleSet, array $attributes): PayrollStatutoryRuleRow
+{
+    return PayrollStatutoryRuleRow::query()->create([
+        'payroll_statutory_rule_set_id' => $ruleSet->id,
+        'min_wage' => ZERO_AMOUNT,
+        'max_wage' => null,
+        ...$attributes,
+    ]);
+}
+
+function seedMalaysiaStandardStatutoryRuleSets(): void
+{
+    $epfRuleSet = createMalaysiaRuleSet([
+        'rule_key' => 'epf_contribution_schedule',
+        'name' => 'EPF dev test schedule',
+    ]);
+    createMalaysiaRuleRow($epfRuleSet, [
+        'sort_order' => 10,
+        'row_key' => 'standard',
+        'employee_rate' => EPF_EMPLOYEE_RATE,
+        'employer_rate' => EPF_EMPLOYER_RATE,
+    ]);
+
+    $socsoRuleSet = createMalaysiaRuleSet([
+        'rule_key' => 'socso_contribution_schedule',
+        'name' => 'SOCSO dev test schedule',
+    ]);
+    createMalaysiaRuleRow($socsoRuleSet, [
+        'sort_order' => 10,
+        'row_key' => 'standard',
+        'employee_rate' => '0.00500000',
+        'employer_rate' => '0.01750000',
+    ]);
+
+    $eisRuleSet = createMalaysiaRuleSet([
+        'rule_key' => 'eis_contribution_schedule',
+        'name' => 'EIS dev test schedule',
+    ]);
+    createMalaysiaRuleRow($eisRuleSet, [
+        'sort_order' => 10,
+        'row_key' => 'standard',
+        'employee_rate' => '0.00200000',
+        'employer_rate' => '0.00200000',
+    ]);
+
+    $hrdLevyRuleSet = createMalaysiaRuleSet([
+        'rule_key' => 'hrd_levy_schedule',
+        'name' => 'HRD levy dev test schedule',
+    ]);
+    createMalaysiaRuleRow($hrdLevyRuleSet, [
+        'sort_order' => 10,
+        'row_key' => 'standard',
+        'levy_rate' => '0.01000000',
+    ]);
+}
+
+function seedMalaysiaCategoryStatutoryRuleSets(): void
+{
+    $epfRuleSet = createMalaysiaRuleSet([
+        'rule_key' => 'epf_contribution_schedule',
+        'name' => 'EPF category schedule',
+    ]);
+    createMalaysiaRuleRow($epfRuleSet, [
+        'sort_order' => 10,
+        'row_key' => 'citizen-standard',
+        'employee_rate' => EPF_EMPLOYEE_RATE,
+        'employer_rate' => EPF_EMPLOYER_RATE,
+        'row_data' => ['epf_category' => 'citizen'],
+    ]);
+    createMalaysiaRuleRow($epfRuleSet, [
+        'sort_order' => 20,
+        'row_key' => 'foreign-worker-fixed',
+        'employee_amount' => '20.0000',
+        'employer_amount' => '40.0000',
+        'row_data' => ['epf_category' => 'foreign_worker'],
+    ]);
+
+    $socsoRuleSet = createMalaysiaRuleSet([
+        'rule_key' => 'socso_contribution_schedule',
+        'name' => 'SOCSO category schedule',
+    ]);
+    createMalaysiaRuleRow($socsoRuleSet, [
+        'sort_order' => 10,
+        'row_key' => 'foreign-worker',
+        'employee_rate' => '0.00500000',
+        'employer_rate' => '0.01750000',
+        'row_data' => ['socso_category' => 'foreign_worker'],
+    ]);
+
+    createMalaysiaRuleSet([
+        'rule_key' => 'eis_contribution_schedule',
+        'name' => 'EIS category schedule',
+    ]);
+
+    $hrdRuleSet = createMalaysiaRuleSet([
+        'rule_key' => 'hrd_levy_schedule',
+        'name' => 'HRD category schedule',
+    ]);
+    createMalaysiaRuleRow($hrdRuleSet, [
+        'sort_order' => 10,
+        'row_key' => 'foreign-worker',
+        'levy_rate' => '0.01000000',
+        'row_data' => ['employee_category' => 'foreign_worker'],
+    ]);
+}
+
+function expectMalaysiaStandardStatutoryOutcome(PayrollRunParticipant $participant): void
+{
+    $employeeEpf = findParticipantResultLine($participant, 'my_epf_employee');
+    $employerEpf = findParticipantResultLine($participant, 'my_epf_employer');
+    $employeeSocso = findParticipantResultLine($participant, 'my_socso_employee');
+    $employerSocso = findParticipantResultLine($participant, 'my_socso_employer');
+    $employeeEis = findParticipantResultLine($participant, 'my_eis_employee');
+    $employerEis = findParticipantResultLine($participant, 'my_eis_employer');
+    $hrdLevy = findParticipantResultLine($participant, 'my_hrd_levy');
+
+    expect($employeeEpf)
+        ->line_type->toBe(PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION)
+        ->amount->toBe(EPF_EMPLOYEE_AMOUNT)
+        ->and($employerEpf)
+        ->line_type->toBe(PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION)
+        ->amount->toBe(EPF_EMPLOYER_AMOUNT)
+        ->and($employeeSocso)->amount->toBe('15.0000')
+        ->and($employerSocso)->amount->toBe('52.5000')
+        ->and($employeeEis)->amount->toBe('6.0000')
+        ->and($employerEis)->amount->toBe('6.0000')
+        ->and($hrdLevy)
+        ->line_type->toBe(PayrollResultLine::TYPE_EMPLOYER_LEVY)
+        ->amount->toBe(HRD_LEVY_AMOUNT)
+        ->and($employeeEpf->explanation)->toMatchArray([
+            'wage_base' => BASIC_SALARY_AMOUNT,
+            'rule_row_key' => 'standard',
+            'share' => 'employee',
+        ])
+        ->and($participant->refresh())
+        ->gross_pay->toBe(BASIC_SALARY_AMOUNT)
+        ->total_deductions->toBe('351.0000')
+        ->total_reimbursements->toBe('80.0000')
+        ->net_pay->toBe('2729.0000');
+}
+
+function expectMalaysiaCategoryStatutoryOutcome(PayrollRunParticipant $participant): void
+{
+    $employeeEpf = findParticipantResultLine($participant, 'my_epf_employee');
+    $employerEpf = findParticipantResultLine($participant, 'my_epf_employer');
+    $employeeSocso = findParticipantResultLine($participant, 'my_socso_employee');
+    $hrdLevy = findParticipantResultLine($participant, 'my_hrd_levy');
+
+    expect($employeeEpf)
+        ->amount->toBe('20.0000')
+        ->and($employerEpf)->amount->toBe('40.0000')
+        ->and($employeeEpf->explanation)->toMatchArray([
+            'wage_base' => '4000.0000',
+            'wage_base_keys' => ['epf_wage_base', 'statutory_wage_base'],
+            'rule_row_key' => 'foreign-worker-fixed',
+            'employee_category' => [
+                'employee_category' => 'foreign_worker',
+                'citizenship_status' => 'foreign_worker',
+                'age_category' => 'under_60',
+                'epf_category' => 'foreign_worker',
+                'socso_category' => 'foreign_worker',
+                'eis_category' => 'not_applicable',
+            ],
+        ])
+        ->and($employeeSocso)
+        ->amount->toBe('15.0000')
+        ->and($employeeSocso->explanation)->toMatchArray([
+            'wage_base' => BASIC_SALARY_AMOUNT,
+            'wage_base_keys' => ['socso_wage_base', 'statutory_wage_base'],
+            'rule_row_key' => 'foreign-worker',
+        ])
+        ->and(PayrollResultLine::query()->where('payroll_run_participant_id', $participant->id)->where('code', 'my_eis_employee')->exists())->toBeFalse()
+        ->and($hrdLevy)
+        ->amount->toBe(HRD_LEVY_AMOUNT)
+        ->and($hrdLevy->explanation)->toMatchArray([
+            'wage_base' => BASIC_SALARY_AMOUNT,
+            'wage_base_keys' => ['hrd_levy_wage_base', 'statutory_wage_base'],
+            'rule_row_key' => 'foreign-worker',
+        ])
+        ->and($participant->refresh())
+        ->gross_pay->toBe('4000.0000')
+        ->total_deductions->toBe('35.0000')
+        ->net_pay->toBe('3965.0000');
 }
 
 test('neutral payroll core calculates gross deductions reimbursements and net pay', function (): void {
@@ -211,7 +534,7 @@ test('neutral payroll core calculates gross deductions reimbursements and net pa
         'payroll_run_participant_id' => $participant->id,
         'employee_id' => $employee->id,
         'pay_item_code' => 'advance_recovery',
-        'label' => 'Advance Recovery',
+        'label' => ADVANCE_RECOVERY_LABEL,
         'input_type' => PayrollInput::TYPE_DEDUCTION,
         'amount' => '125.2500',
         'currency' => 'MYR',
@@ -278,15 +601,15 @@ test('payroll core persists registered country pack result lines before net pay'
         'pay_item_code' => 'basic_salary',
         'label' => 'Basic Salary',
         'input_type' => PayrollInput::TYPE_EARNING,
-        'amount' => '1000.0000',
+        'amount' => BONUS_AMOUNT,
         'currency' => 'MYR',
     ]);
 
     app(PayrollRunCalculator::class)->calculate($run->refresh());
 
     expect($participant->refresh())
-        ->gross_pay->toBe('1000.0000')
-        ->total_deductions->toBe('110.0000')
+        ->gross_pay->toBe(BONUS_AMOUNT)
+        ->total_deductions->toBe(TEST_COUNTRY_PACK_EMPLOYEE_AMOUNT)
         ->net_pay->toBe('890.0000');
 
     $resultLines = PayrollResultLine::query()
@@ -306,7 +629,7 @@ test('payroll core persists registered country pack result lines before net pay'
         ->toBe(PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION)
         ->and($resultLines->firstWhere('code', 'net_pay')->explanation)
         ->toMatchArray([
-            'total_deductions' => '110.0000',
+            'total_deductions' => TEST_COUNTRY_PACK_EMPLOYEE_AMOUNT,
             'country_pack' => ['pack_identifier' => 'test/payroll-sg'],
             'country_pack_warnings' => [['level' => 'info', 'message' => 'Test warning.']],
         ])
@@ -322,219 +645,45 @@ test('malaysia pack calculates epf socso eis and hrd levy from classified statut
     [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-EPF');
     $company = Company::query()->findOrFail(Company::LICENSEE_ID);
 
-    PayrollEmployerStatutoryProfile::query()->create([
-        'company_id' => $company->id,
-        'country_iso' => 'MY',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-        'effective_from' => '2026-01-01',
-        'profile_data' => ['hrd_levy_applicable' => true],
-        'validation_messages' => [],
-    ]);
-
-    $basicSalary = PayrollPayItem::query()->create([
-        'company_id' => $company->id,
+    createMalaysiaEmployerStatutoryProfile($company);
+    createMalaysiaPayItemRecord($company, [
         'code' => 'basic_salary',
         'name' => 'Basic Salary',
         'input_type' => PayrollInput::TYPE_EARNING,
-        'status' => 'active',
-    ]);
-    PayrollPayItemClassification::query()->create([
-        'payroll_pay_item_id' => $basicSalary->id,
-        'country_iso' => 'MY',
-        'classification_key' => 'statutory_wage_base',
-        'classification_value' => 'ordinary_wage',
-        'effective_from' => '2026-01-01',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-    ]);
-
-    $travelClaim = PayrollPayItem::query()->create([
-        'company_id' => $company->id,
+    ], ['statutory_wage_base' => 'ordinary_wage']);
+    createMalaysiaPayItemRecord($company, [
         'code' => 'travel_claim',
         'name' => TRAVEL_CLAIM_LABEL,
         'input_type' => PayrollInput::TYPE_REIMBURSEMENT,
-        'status' => 'active',
-    ]);
-    PayrollPayItemClassification::query()->create([
-        'payroll_pay_item_id' => $travelClaim->id,
-        'country_iso' => 'MY',
-        'classification_key' => 'statutory_wage_base',
-        'classification_value' => 'excluded',
-        'effective_from' => '2026-01-01',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-    ]);
+    ], ['statutory_wage_base' => 'excluded']);
+    seedMalaysiaStandardStatutoryRuleSets();
 
-    $ruleSet = PayrollStatutoryRuleSet::query()->create([
-        'country_iso' => 'MY',
-        'rule_key' => 'epf_contribution_schedule',
-        'name' => 'EPF dev test schedule',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-        'effective_from' => '2026-01-01',
-        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
-    ]);
-    PayrollStatutoryRuleRow::query()->create([
-        'payroll_statutory_rule_set_id' => $ruleSet->id,
-        'sort_order' => 10,
-        'row_key' => 'standard',
-        'min_wage' => '0.0000',
-        'max_wage' => null,
-        'employee_rate' => '0.11000000',
-        'employer_rate' => '0.13000000',
-    ]);
-    $socsoRuleSet = PayrollStatutoryRuleSet::query()->create([
-        'country_iso' => 'MY',
-        'rule_key' => 'socso_contribution_schedule',
-        'name' => 'SOCSO dev test schedule',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-        'effective_from' => '2026-01-01',
-        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
-    ]);
-    PayrollStatutoryRuleRow::query()->create([
-        'payroll_statutory_rule_set_id' => $socsoRuleSet->id,
-        'sort_order' => 10,
-        'row_key' => 'standard',
-        'min_wage' => '0.0000',
-        'max_wage' => null,
-        'employee_rate' => '0.00500000',
-        'employer_rate' => '0.01750000',
-    ]);
-    $eisRuleSet = PayrollStatutoryRuleSet::query()->create([
-        'country_iso' => 'MY',
-        'rule_key' => 'eis_contribution_schedule',
-        'name' => 'EIS dev test schedule',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-        'effective_from' => '2026-01-01',
-        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
-    ]);
-    PayrollStatutoryRuleRow::query()->create([
-        'payroll_statutory_rule_set_id' => $eisRuleSet->id,
-        'sort_order' => 10,
-        'row_key' => 'standard',
-        'min_wage' => '0.0000',
-        'max_wage' => null,
-        'employee_rate' => '0.00200000',
-        'employer_rate' => '0.00200000',
-    ]);
-    $hrdLevyRuleSet = PayrollStatutoryRuleSet::query()->create([
-        'country_iso' => 'MY',
-        'rule_key' => 'hrd_levy_schedule',
-        'name' => 'HRD levy dev test schedule',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-        'effective_from' => '2026-01-01',
-        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
-    ]);
-    PayrollStatutoryRuleRow::query()->create([
-        'payroll_statutory_rule_set_id' => $hrdLevyRuleSet->id,
-        'sort_order' => 10,
-        'row_key' => 'standard',
-        'min_wage' => '0.0000',
-        'max_wage' => null,
-        'levy_rate' => '0.01000000',
-    ]);
-
-    PayrollInput::query()->create([
-        'payroll_run_id' => $run->id,
-        'payroll_run_participant_id' => $participant->id,
-        'employee_id' => $employee->id,
-        'pay_item_code' => 'basic_salary',
-        'label' => 'Basic Salary',
-        'input_type' => PayrollInput::TYPE_EARNING,
-        'amount' => '3000.0000',
-        'currency' => 'MYR',
-    ]);
-    PayrollInput::query()->create([
-        'payroll_run_id' => $run->id,
-        'payroll_run_participant_id' => $participant->id,
-        'employee_id' => $employee->id,
-        'pay_item_code' => 'travel_claim',
-        'label' => TRAVEL_CLAIM_LABEL,
-        'input_type' => PayrollInput::TYPE_REIMBURSEMENT,
-        'amount' => '80.0000',
-        'currency' => 'MYR',
+    createPayrollInputRecords($run, $participant, $employee, [
+        [
+            'pay_item_code' => 'basic_salary',
+            'label' => 'Basic Salary',
+            'input_type' => PayrollInput::TYPE_EARNING,
+            'amount' => BASIC_SALARY_AMOUNT,
+        ],
+        [
+            'pay_item_code' => 'travel_claim',
+            'label' => TRAVEL_CLAIM_LABEL,
+            'input_type' => PayrollInput::TYPE_REIMBURSEMENT,
+            'amount' => '80.0000',
+        ],
     ]);
 
     app(PayrollRunCalculator::class)->calculate($run->refresh());
 
-    $employeeEpf = PayrollResultLine::query()
-        ->where('payroll_run_participant_id', $participant->id)
-        ->where('code', 'my_epf_employee')
-        ->firstOrFail();
-    $employerEpf = PayrollResultLine::query()
-        ->where('payroll_run_participant_id', $participant->id)
-        ->where('code', 'my_epf_employer')
-        ->firstOrFail();
-    $employeeSocso = PayrollResultLine::query()
-        ->where('payroll_run_participant_id', $participant->id)
-        ->where('code', 'my_socso_employee')
-        ->firstOrFail();
-    $employerSocso = PayrollResultLine::query()
-        ->where('payroll_run_participant_id', $participant->id)
-        ->where('code', 'my_socso_employer')
-        ->firstOrFail();
-    $employeeEis = PayrollResultLine::query()
-        ->where('payroll_run_participant_id', $participant->id)
-        ->where('code', 'my_eis_employee')
-        ->firstOrFail();
-    $employerEis = PayrollResultLine::query()
-        ->where('payroll_run_participant_id', $participant->id)
-        ->where('code', 'my_eis_employer')
-        ->firstOrFail();
-    $hrdLevy = PayrollResultLine::query()
-        ->where('payroll_run_participant_id', $participant->id)
-        ->where('code', 'my_hrd_levy')
-        ->firstOrFail();
-
-    expect($employeeEpf)
-        ->line_type->toBe(PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION)
-        ->amount->toBe('330.0000')
-        ->and($employerEpf)
-        ->line_type->toBe(PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION)
-        ->amount->toBe('390.0000')
-        ->and($employeeSocso)->amount->toBe('15.0000')
-        ->and($employerSocso)->amount->toBe('52.5000')
-        ->and($employeeEis)->amount->toBe('6.0000')
-        ->and($employerEis)->amount->toBe('6.0000')
-        ->and($hrdLevy)
-        ->line_type->toBe(PayrollResultLine::TYPE_EMPLOYER_LEVY)
-        ->amount->toBe('30.0000')
-        ->and($employeeEpf->explanation)->toMatchArray([
-            'wage_base' => '3000.0000',
-            'rule_row_key' => 'standard',
-            'share' => 'employee',
-        ])
-        ->and($participant->refresh())
-        ->gross_pay->toBe('3000.0000')
-        ->total_deductions->toBe('351.0000')
-        ->total_reimbursements->toBe('80.0000')
-        ->net_pay->toBe('2729.0000');
+    expectMalaysiaStandardStatutoryOutcome($participant);
 });
 
 test('malaysia pack uses component wage bases and employee category rule rows', function (): void {
     [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-CATEGORY');
     $company = Company::query()->findOrFail(Company::LICENSEE_ID);
 
-    PayrollEmployerStatutoryProfile::query()->create([
-        'company_id' => $company->id,
-        'country_iso' => 'MY',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-        'effective_from' => '2026-01-01',
-        'profile_data' => ['hrd_levy_applicable' => true],
-        'validation_messages' => [],
-    ]);
-    PayrollEmployeeStatutoryProfile::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'country_iso' => 'MY',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-        'effective_from' => '2026-01-01',
+    createMalaysiaEmployerStatutoryProfile($company);
+    createMalaysiaEmployeeStatutoryProfile($company, $employee, [
         'profile_data' => [
             'citizenship_status' => 'foreign_worker',
             'epf_category' => 'foreign_worker',
@@ -542,190 +691,49 @@ test('malaysia pack uses component wage bases and employee category rule rows', 
             'eis_category' => 'not_applicable',
             'age_category' => 'under_60',
         ],
-        'validation_messages' => [],
     ]);
 
-    $basicSalary = PayrollPayItem::query()->create([
-        'company_id' => $company->id,
+    createMalaysiaPayItemRecord($company, [
         'code' => 'category_basic_salary',
         'name' => 'Category Basic Salary',
         'input_type' => PayrollInput::TYPE_EARNING,
-        'status' => 'active',
-    ]);
-    foreach ([
+    ], [
         'epf_wage_base' => 'ordinary_wage',
         'socso_wage_base' => 'ordinary_wage',
         'eis_wage_base' => 'excluded',
         'hrd_levy_wage_base' => 'ordinary_wage',
-    ] as $classificationKey => $classificationValue) {
-        PayrollPayItemClassification::query()->create([
-            'payroll_pay_item_id' => $basicSalary->id,
-            'country_iso' => 'MY',
-            'classification_key' => $classificationKey,
-            'classification_value' => $classificationValue,
-            'effective_from' => '2026-01-01',
-            'source_pack' => PAYROLL_MY_PACK,
-            'source_version' => PAYROLL_DEV_VERSION,
-        ]);
-    }
+    ]);
 
-    $bonus = PayrollPayItem::query()->create([
-        'company_id' => $company->id,
+    createMalaysiaPayItemRecord($company, [
         'code' => 'category_bonus',
         'name' => 'Category Bonus',
         'input_type' => PayrollInput::TYPE_EARNING,
-        'status' => 'active',
-    ]);
-    foreach ([
+    ], [
         'epf_wage_base' => 'additional_wage',
         'socso_wage_base' => 'excluded',
         'eis_wage_base' => 'excluded',
         'hrd_levy_wage_base' => 'excluded',
-    ] as $classificationKey => $classificationValue) {
-        PayrollPayItemClassification::query()->create([
-            'payroll_pay_item_id' => $bonus->id,
-            'country_iso' => 'MY',
-            'classification_key' => $classificationKey,
-            'classification_value' => $classificationValue,
-            'effective_from' => '2026-01-01',
-            'source_pack' => PAYROLL_MY_PACK,
-            'source_version' => PAYROLL_DEV_VERSION,
-        ]);
-    }
+    ]);
+    seedMalaysiaCategoryStatutoryRuleSets();
 
-    $epfRuleSet = PayrollStatutoryRuleSet::query()->create([
-        'country_iso' => 'MY',
-        'rule_key' => 'epf_contribution_schedule',
-        'name' => 'EPF category schedule',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-        'effective_from' => '2026-01-01',
-        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
-    ]);
-    PayrollStatutoryRuleRow::query()->create([
-        'payroll_statutory_rule_set_id' => $epfRuleSet->id,
-        'sort_order' => 10,
-        'row_key' => 'citizen-standard',
-        'min_wage' => '0.0000',
-        'employee_rate' => '0.11000000',
-        'employer_rate' => '0.13000000',
-        'row_data' => ['epf_category' => 'citizen'],
-    ]);
-    PayrollStatutoryRuleRow::query()->create([
-        'payroll_statutory_rule_set_id' => $epfRuleSet->id,
-        'sort_order' => 20,
-        'row_key' => 'foreign-worker-fixed',
-        'min_wage' => '0.0000',
-        'employee_amount' => '20.0000',
-        'employer_amount' => '40.0000',
-        'row_data' => ['epf_category' => 'foreign_worker'],
-    ]);
-
-    $socsoRuleSet = PayrollStatutoryRuleSet::query()->create([
-        'country_iso' => 'MY',
-        'rule_key' => 'socso_contribution_schedule',
-        'name' => 'SOCSO category schedule',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-        'effective_from' => '2026-01-01',
-        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
-    ]);
-    PayrollStatutoryRuleRow::query()->create([
-        'payroll_statutory_rule_set_id' => $socsoRuleSet->id,
-        'sort_order' => 10,
-        'row_key' => 'foreign-worker',
-        'min_wage' => '0.0000',
-        'employee_rate' => '0.00500000',
-        'employer_rate' => '0.01750000',
-        'row_data' => ['socso_category' => 'foreign_worker'],
-    ]);
-
-    PayrollStatutoryRuleSet::query()->create([
-        'country_iso' => 'MY',
-        'rule_key' => 'eis_contribution_schedule',
-        'name' => 'EIS category schedule',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-        'effective_from' => '2026-01-01',
-        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
-    ]);
-
-    $hrdRuleSet = PayrollStatutoryRuleSet::query()->create([
-        'country_iso' => 'MY',
-        'rule_key' => 'hrd_levy_schedule',
-        'name' => 'HRD category schedule',
-        'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => PAYROLL_DEV_VERSION,
-        'effective_from' => '2026-01-01',
-        'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
-    ]);
-    PayrollStatutoryRuleRow::query()->create([
-        'payroll_statutory_rule_set_id' => $hrdRuleSet->id,
-        'sort_order' => 10,
-        'row_key' => 'foreign-worker',
-        'min_wage' => '0.0000',
-        'levy_rate' => '0.01000000',
-        'row_data' => ['employee_category' => 'foreign_worker'],
-    ]);
-
-    foreach ([
-        ['code' => 'category_basic_salary', 'label' => 'Category Basic Salary', 'amount' => '3000.0000'],
-        ['code' => 'category_bonus', 'label' => 'Category Bonus', 'amount' => '1000.0000'],
-    ] as $input) {
-        PayrollInput::query()->create([
-            'payroll_run_id' => $run->id,
-            'payroll_run_participant_id' => $participant->id,
-            'employee_id' => $employee->id,
-            'pay_item_code' => $input['code'],
-            'label' => $input['label'],
+    createPayrollInputRecords($run, $participant, $employee, [
+        [
+            'pay_item_code' => 'category_basic_salary',
+            'label' => 'Category Basic Salary',
             'input_type' => PayrollInput::TYPE_EARNING,
-            'amount' => $input['amount'],
-            'currency' => 'MYR',
-        ]);
-    }
+            'amount' => BASIC_SALARY_AMOUNT,
+        ],
+        [
+            'pay_item_code' => 'category_bonus',
+            'label' => 'Category Bonus',
+            'input_type' => PayrollInput::TYPE_EARNING,
+            'amount' => BONUS_AMOUNT,
+        ],
+    ]);
 
     app(PayrollRunCalculator::class)->calculate($run->refresh());
 
-    $employeeEpf = PayrollResultLine::query()->where('payroll_run_participant_id', $participant->id)->where('code', 'my_epf_employee')->firstOrFail();
-    $employerEpf = PayrollResultLine::query()->where('payroll_run_participant_id', $participant->id)->where('code', 'my_epf_employer')->firstOrFail();
-    $employeeSocso = PayrollResultLine::query()->where('payroll_run_participant_id', $participant->id)->where('code', 'my_socso_employee')->firstOrFail();
-    $hrdLevy = PayrollResultLine::query()->where('payroll_run_participant_id', $participant->id)->where('code', 'my_hrd_levy')->firstOrFail();
-
-    expect($employeeEpf)
-        ->amount->toBe('20.0000')
-        ->and($employerEpf)->amount->toBe('40.0000')
-        ->and($employeeEpf->explanation)->toMatchArray([
-            'wage_base' => '4000.0000',
-            'wage_base_keys' => ['epf_wage_base', 'statutory_wage_base'],
-            'rule_row_key' => 'foreign-worker-fixed',
-            'employee_category' => [
-                'employee_category' => 'foreign_worker',
-                'citizenship_status' => 'foreign_worker',
-                'age_category' => 'under_60',
-                'epf_category' => 'foreign_worker',
-                'socso_category' => 'foreign_worker',
-                'eis_category' => 'not_applicable',
-            ],
-        ])
-        ->and($employeeSocso)
-        ->amount->toBe('15.0000')
-        ->and($employeeSocso->explanation)->toMatchArray([
-            'wage_base' => '3000.0000',
-            'wage_base_keys' => ['socso_wage_base', 'statutory_wage_base'],
-            'rule_row_key' => 'foreign-worker',
-        ])
-        ->and(PayrollResultLine::query()->where('payroll_run_participant_id', $participant->id)->where('code', 'my_eis_employee')->exists())->toBeFalse()
-        ->and($hrdLevy)
-        ->amount->toBe('30.0000')
-        ->and($hrdLevy->explanation)->toMatchArray([
-            'wage_base' => '3000.0000',
-            'wage_base_keys' => ['hrd_levy_wage_base', 'statutory_wage_base'],
-            'rule_row_key' => 'foreign-worker',
-        ])
-        ->and($participant->refresh())
-        ->gross_pay->toBe('4000.0000')
-        ->total_deductions->toBe('35.0000')
-        ->net_pay->toBe('3965.0000');
+    expectMalaysiaCategoryStatutoryOutcome($participant);
 });
 
 test('malaysia pack blocks calculation when an applicable required schedule is missing', function (): void {
@@ -744,7 +752,7 @@ test('malaysia pack blocks calculation when an applicable required schedule is m
         'country_iso' => 'MY',
         'classification_key' => 'epf_wage_base',
         'classification_value' => 'ordinary_wage',
-        'effective_from' => '2026-01-01',
+        'effective_from' => PAYROLL_PERIOD_START,
         'source_pack' => PAYROLL_MY_PACK,
         'source_version' => PAYROLL_DEV_VERSION,
     ]);
@@ -755,7 +763,7 @@ test('malaysia pack blocks calculation when an applicable required schedule is m
         'pay_item_code' => 'missing_rule_basic_salary',
         'label' => 'Missing Rule Basic Salary',
         'input_type' => PayrollInput::TYPE_EARNING,
-        'amount' => '3000.0000',
+        'amount' => BASIC_SALARY_AMOUNT,
         'currency' => 'MYR',
     ]);
 
@@ -800,7 +808,7 @@ test('basic payslip snapshot is generated from payroll result lines', function (
         'pay_item_code' => 'basic_salary',
         'label' => 'Basic Salary',
         'input_type' => PayrollInput::TYPE_EARNING,
-        'amount' => '2500.0000',
+        'amount' => PAYSLIP_BASIC_SALARY_AMOUNT,
         'currency' => 'MYR',
     ]);
     PayrollInput::query()->create([
@@ -808,7 +816,7 @@ test('basic payslip snapshot is generated from payroll result lines', function (
         'payroll_run_participant_id' => $participant->id,
         'employee_id' => $employee->id,
         'pay_item_code' => 'advance_recovery',
-        'label' => 'Advance Recovery',
+        'label' => ADVANCE_RECOVERY_LABEL,
         'input_type' => PayrollInput::TYPE_DEDUCTION,
         'amount' => '100.0000',
         'currency' => 'MYR',
@@ -826,14 +834,14 @@ test('basic payslip snapshot is generated from payroll result lines', function (
         ->and($payslip['period'])->toMatchArray([
             'code' => '2026-01',
             'name' => 'January 2026',
-            'starts_on' => '2026-01-01',
-            'ends_on' => '2026-01-31',
-            'pay_date' => '2026-01-31',
+            'starts_on' => PAYROLL_PERIOD_START,
+            'ends_on' => PAYROLL_PERIOD_END,
+            'pay_date' => PAYROLL_PERIOD_END,
         ])
         ->and($payslip['summary'])->toMatchArray([
-            'gross_pay' => '2500.0000',
+            'gross_pay' => PAYSLIP_BASIC_SALARY_AMOUNT,
             'total_deductions' => '100.0000',
-            'total_reimbursements' => '0.0000',
+            'total_reimbursements' => ZERO_AMOUNT,
             'net_pay' => '2400.0000',
         ])
         ->and(array_column($payslip['lines'], 'type'))->toBe([
@@ -846,61 +854,43 @@ test('basic payslip snapshot is generated from payroll result lines', function (
 test('payslip snapshot separates employee statutory and employer cost sections', function (): void {
     [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-PAYSLIP-STATUTORY');
 
-    PayrollResultLine::query()->create([
-        'payroll_run_id' => $run->id,
-        'payroll_run_participant_id' => $participant->id,
-        'employee_id' => $employee->id,
-        'line_type' => PayrollResultLine::TYPE_EARNING,
-        'code' => 'basic_salary',
-        'label' => 'Basic Salary',
-        'amount' => '3000.0000',
-        'currency' => 'MYR',
-    ]);
-    PayrollResultLine::query()->create([
-        'payroll_run_id' => $run->id,
-        'payroll_run_participant_id' => $participant->id,
-        'employee_id' => $employee->id,
-        'line_type' => PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION,
-        'code' => 'my_epf_employee',
-        'label' => 'EPF Employee Contribution',
-        'amount' => '330.0000',
-        'currency' => 'MYR',
-    ]);
-    PayrollResultLine::query()->create([
-        'payroll_run_id' => $run->id,
-        'payroll_run_participant_id' => $participant->id,
-        'employee_id' => $employee->id,
-        'line_type' => PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION,
-        'code' => 'my_epf_employer',
-        'label' => 'EPF Employer Contribution',
-        'amount' => '390.0000',
-        'currency' => 'MYR',
-    ]);
-    PayrollResultLine::query()->create([
-        'payroll_run_id' => $run->id,
-        'payroll_run_participant_id' => $participant->id,
-        'employee_id' => $employee->id,
-        'line_type' => PayrollResultLine::TYPE_EMPLOYER_LEVY,
-        'code' => 'my_hrd_levy',
-        'label' => HRD_LEVY_LABEL,
-        'amount' => '30.0000',
-        'currency' => 'MYR',
-    ]);
-    PayrollResultLine::query()->create([
-        'payroll_run_id' => $run->id,
-        'payroll_run_participant_id' => $participant->id,
-        'employee_id' => $employee->id,
-        'line_type' => PayrollResultLine::TYPE_NET_PAY,
-        'code' => 'net_pay',
-        'label' => NET_PAY_LABEL,
-        'amount' => '2670.0000',
-        'currency' => 'MYR',
+    createPayrollResultLineRecords($run, $participant, $employee, [
+        [
+            'line_type' => PayrollResultLine::TYPE_EARNING,
+            'code' => 'basic_salary',
+            'label' => 'Basic Salary',
+            'amount' => BASIC_SALARY_AMOUNT,
+        ],
+        [
+            'line_type' => PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION,
+            'code' => 'my_epf_employee',
+            'label' => EPF_EMPLOYEE_CONTRIBUTION_LABEL,
+            'amount' => EPF_EMPLOYEE_AMOUNT,
+        ],
+        [
+            'line_type' => PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION,
+            'code' => 'my_epf_employer',
+            'label' => EPF_EMPLOYER_CONTRIBUTION_LABEL,
+            'amount' => EPF_EMPLOYER_AMOUNT,
+        ],
+        [
+            'line_type' => PayrollResultLine::TYPE_EMPLOYER_LEVY,
+            'code' => 'my_hrd_levy',
+            'label' => HRD_LEVY_LABEL,
+            'amount' => HRD_LEVY_AMOUNT,
+        ],
+        [
+            'line_type' => PayrollResultLine::TYPE_NET_PAY,
+            'code' => 'net_pay',
+            'label' => NET_PAY_LABEL,
+            'amount' => STANDARD_NET_PAY_AMOUNT,
+        ],
     ]);
     $participant->forceFill([
-        'gross_pay' => '3000.0000',
-        'total_deductions' => '330.0000',
-        'total_reimbursements' => '0.0000',
-        'net_pay' => '2670.0000',
+        'gross_pay' => BASIC_SALARY_AMOUNT,
+        'total_deductions' => EPF_EMPLOYEE_AMOUNT,
+        'total_reimbursements' => ZERO_AMOUNT,
+        'net_pay' => STANDARD_NET_PAY_AMOUNT,
     ])->save();
 
     $payslip = app(PayrollPayslipBuilder::class)->build($participant->refresh());
@@ -912,8 +902,8 @@ test('payslip snapshot separates employee statutory and employer cost sections',
         ->and($payslip['sections']['employer_levies'])->toHaveCount(1)
         ->and($payslip['sections']['employer_levies'][0]['code'])->toBe('my_hrd_levy')
         ->and($payslip['summary'])->toMatchArray([
-            'employer_contributions' => '390.0000',
-            'employer_levies' => '30.0000',
+            'employer_contributions' => EPF_EMPLOYER_AMOUNT,
+            'employer_levies' => HRD_LEVY_AMOUNT,
             'total_employer_cost' => '3420.0000',
         ]);
 });
@@ -921,39 +911,29 @@ test('payslip snapshot separates employee statutory and employer cost sections',
 test('payslip pdf template renders from payroll payslip builder data', function (): void {
     [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-PAYSLIP-PDF');
 
-    PayrollResultLine::query()->create([
-        'payroll_run_id' => $run->id,
-        'payroll_run_participant_id' => $participant->id,
-        'employee_id' => $employee->id,
-        'line_type' => PayrollResultLine::TYPE_EARNING,
-        'code' => 'basic_salary',
-        'label' => 'Basic Salary',
-        'amount' => '3000.0000',
-        'currency' => 'MYR',
-    ]);
-    PayrollResultLine::query()->create([
-        'payroll_run_id' => $run->id,
-        'payroll_run_participant_id' => $participant->id,
-        'employee_id' => $employee->id,
-        'line_type' => PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION,
-        'code' => 'my_epf_employer',
-        'label' => 'EPF Employer Contribution',
-        'amount' => '390.0000',
-        'currency' => 'MYR',
-    ]);
-    PayrollResultLine::query()->create([
-        'payroll_run_id' => $run->id,
-        'payroll_run_participant_id' => $participant->id,
-        'employee_id' => $employee->id,
-        'line_type' => PayrollResultLine::TYPE_NET_PAY,
-        'code' => 'net_pay',
-        'label' => NET_PAY_LABEL,
-        'amount' => '3000.0000',
-        'currency' => 'MYR',
+    createPayrollResultLineRecords($run, $participant, $employee, [
+        [
+            'line_type' => PayrollResultLine::TYPE_EARNING,
+            'code' => 'basic_salary',
+            'label' => 'Basic Salary',
+            'amount' => BASIC_SALARY_AMOUNT,
+        ],
+        [
+            'line_type' => PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION,
+            'code' => 'my_epf_employer',
+            'label' => EPF_EMPLOYER_CONTRIBUTION_LABEL,
+            'amount' => EPF_EMPLOYER_AMOUNT,
+        ],
+        [
+            'line_type' => PayrollResultLine::TYPE_NET_PAY,
+            'code' => 'net_pay',
+            'label' => NET_PAY_LABEL,
+            'amount' => BASIC_SALARY_AMOUNT,
+        ],
     ]);
     $participant->forceFill([
-        'gross_pay' => '3000.0000',
-        'net_pay' => '3000.0000',
+        'gross_pay' => BASIC_SALARY_AMOUNT,
+        'net_pay' => BASIC_SALARY_AMOUNT,
     ])->save();
 
     $payslip = app(PayrollPayslipBuilder::class)->build($participant->refresh());
@@ -961,7 +941,7 @@ test('payslip pdf template renders from payroll payslip builder data', function 
 
     expect($html)->toContain('Payslip for January 2026')
         ->and($html)->toContain('Basic Salary')
-        ->and($html)->toContain('EPF Employer Contribution')
+        ->and($html)->toContain(EPF_EMPLOYER_CONTRIBUTION_LABEL)
         ->and($html)->toContain('390.00')
         ->and($html)->toContain('not deducted from net pay');
 });
@@ -970,9 +950,9 @@ test('employer cost report summarizes employer contributions and levies by run',
     [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-EMPLOYER-COST');
 
     foreach ([
-        [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', 'EPF Employer Contribution', '390.0000'],
+        [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', EPF_EMPLOYER_CONTRIBUTION_LABEL, EPF_EMPLOYER_AMOUNT],
         [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_socso_employer', 'SOCSO Employer Contribution', '52.5000'],
-        [PayrollResultLine::TYPE_EMPLOYER_LEVY, 'my_hrd_levy', HRD_LEVY_LABEL, '30.0000'],
+        [PayrollResultLine::TYPE_EMPLOYER_LEVY, 'my_hrd_levy', HRD_LEVY_LABEL, HRD_LEVY_AMOUNT],
     ] as [$type, $code, $label, $amount]) {
         PayrollResultLine::query()->create([
             'payroll_run_id' => $run->id,
@@ -986,7 +966,7 @@ test('employer cost report summarizes employer contributions and levies by run',
         ]);
     }
     $participant->forceFill([
-        'gross_pay' => '3000.0000',
+        'gross_pay' => BASIC_SALARY_AMOUNT,
         'total_reimbursements' => '80.0000',
     ])->save();
 
@@ -1000,14 +980,14 @@ test('employer cost report summarizes employer contributions and levies by run',
         ->and($report['participants'])->toHaveCount(1)
         ->and($report['participants'][0])->toMatchArray([
             'employer_contributions' => '442.5000',
-            'employer_levies' => '30.0000',
+            'employer_levies' => HRD_LEVY_AMOUNT,
             'total_employer_cost' => '3552.5000',
         ])
         ->and($report['totals'])->toMatchArray([
-            'gross_pay' => '3000.0000',
+            'gross_pay' => BASIC_SALARY_AMOUNT,
             'reimbursements' => '80.0000',
             'employer_contributions' => '442.5000',
-            'employer_levies' => '30.0000',
+            'employer_levies' => HRD_LEVY_AMOUNT,
             'total_employer_cost' => '3552.5000',
         ]);
 });
@@ -1016,13 +996,13 @@ test('payroll summary report builds renderable payroll summary data', function (
     [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-SUMMARY-REPORT');
 
     foreach ([
-        [PayrollResultLine::TYPE_EARNING, 'basic_salary', 'Basic Salary', '3000.0000'],
-        [PayrollResultLine::TYPE_EMPLOYEE_DEDUCTION, 'advance_recovery', 'Advance Recovery', '125.0000'],
-        [PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION, 'my_epf_employee', 'EPF Employee Contribution', '330.0000'],
-        [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', 'EPF Employer Contribution', '390.0000'],
-        [PayrollResultLine::TYPE_EMPLOYER_LEVY, 'my_hrd_levy', HRD_LEVY_LABEL, '30.0000'],
+        [PayrollResultLine::TYPE_EARNING, 'basic_salary', 'Basic Salary', BASIC_SALARY_AMOUNT],
+        [PayrollResultLine::TYPE_EMPLOYEE_DEDUCTION, 'advance_recovery', ADVANCE_RECOVERY_LABEL, EMPLOYEE_DEDUCTION_AMOUNT],
+        [PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION, 'my_epf_employee', EPF_EMPLOYEE_CONTRIBUTION_LABEL, EPF_EMPLOYEE_AMOUNT],
+        [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', EPF_EMPLOYER_CONTRIBUTION_LABEL, EPF_EMPLOYER_AMOUNT],
+        [PayrollResultLine::TYPE_EMPLOYER_LEVY, 'my_hrd_levy', HRD_LEVY_LABEL, HRD_LEVY_AMOUNT],
         [PayrollResultLine::TYPE_REIMBURSEMENT, 'travel_claim', TRAVEL_CLAIM_LABEL, '80.0000'],
-        [PayrollResultLine::TYPE_NET_PAY, 'net_pay', NET_PAY_LABEL, '2625.0000'],
+        [PayrollResultLine::TYPE_NET_PAY, 'net_pay', NET_PAY_LABEL, SUMMARY_NET_PAY_AMOUNT],
     ] as [$type, $code, $label, $amount]) {
         PayrollResultLine::query()->create([
             'payroll_run_id' => $run->id,
@@ -1036,30 +1016,30 @@ test('payroll summary report builds renderable payroll summary data', function (
         ]);
     }
     $participant->forceFill([
-        'gross_pay' => '3000.0000',
+        'gross_pay' => BASIC_SALARY_AMOUNT,
         'total_deductions' => '455.0000',
         'total_reimbursements' => '80.0000',
-        'net_pay' => '2625.0000',
+        'net_pay' => SUMMARY_NET_PAY_AMOUNT,
     ])->save();
 
     $report = app(PayrollSummaryReportBuilder::class)->build($run->refresh());
     $html = view('pdf.payroll.payroll-summary', ['report' => $report])->render();
 
     expect($report['totals'])->toMatchArray([
-        'gross_pay' => '3000.0000',
-        'employee_deductions' => '125.0000',
-        'employee_contributions' => '330.0000',
+        'gross_pay' => BASIC_SALARY_AMOUNT,
+        'employee_deductions' => EMPLOYEE_DEDUCTION_AMOUNT,
+        'employee_contributions' => EPF_EMPLOYEE_AMOUNT,
         'reimbursements' => '80.0000',
-        'net_pay' => '2625.0000',
-        'employer_contributions' => '390.0000',
-        'employer_levies' => '30.0000',
+        'net_pay' => SUMMARY_NET_PAY_AMOUNT,
+        'employer_contributions' => EPF_EMPLOYER_AMOUNT,
+        'employer_levies' => HRD_LEVY_AMOUNT,
     ])
         ->and($report['participants'][0])->toMatchArray([
-            'gross_pay' => '3000.0000',
-            'employee_deductions' => '125.0000',
-            'employee_contributions' => '330.0000',
+            'gross_pay' => BASIC_SALARY_AMOUNT,
+            'employee_deductions' => EMPLOYEE_DEDUCTION_AMOUNT,
+            'employee_contributions' => EPF_EMPLOYEE_AMOUNT,
             'reimbursements' => '80.0000',
-            'net_pay' => '2625.0000',
+            'net_pay' => SUMMARY_NET_PAY_AMOUNT,
         ])
         ->and($html)->toContain('Payroll Summary')
         ->and($html)->toContain('MY-2026-01-SUMMARY-REPORT');
@@ -1069,9 +1049,9 @@ test('statutory contribution report groups contribution totals and renders templ
     [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-STATUTORY-REPORT');
 
     foreach ([
-        [PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION, 'my_epf_employee', 'EPF Employee Contribution', '330.0000', 'epf_contribution_schedule'],
-        [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', 'EPF Employer Contribution', '390.0000', 'epf_contribution_schedule'],
-        [PayrollResultLine::TYPE_EMPLOYER_LEVY, 'my_hrd_levy', HRD_LEVY_LABEL, '30.0000', 'hrd_levy_schedule'],
+        [PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION, 'my_epf_employee', EPF_EMPLOYEE_CONTRIBUTION_LABEL, EPF_EMPLOYEE_AMOUNT, 'epf_contribution_schedule'],
+        [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', EPF_EMPLOYER_CONTRIBUTION_LABEL, EPF_EMPLOYER_AMOUNT, 'epf_contribution_schedule'],
+        [PayrollResultLine::TYPE_EMPLOYER_LEVY, 'my_hrd_levy', HRD_LEVY_LABEL, HRD_LEVY_AMOUNT, 'hrd_levy_schedule'],
     ] as [$type, $code, $label, $amount, $sourceRule]) {
         PayrollResultLine::query()->create([
             'payroll_run_id' => $run->id,
@@ -1093,15 +1073,15 @@ test('statutory contribution report groups contribution totals and renders templ
     expect($report['participants'][0]['lines'])->toHaveCount(3)
         ->and($report['totals_by_code'])->toContain([
             'code' => 'my_epf_employee',
-            'label' => 'EPF Employee Contribution',
+            'label' => EPF_EMPLOYEE_CONTRIBUTION_LABEL,
             'type' => PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION,
-            'amount' => '330.0000',
+            'amount' => EPF_EMPLOYEE_AMOUNT,
         ])
         ->and($report['totals_by_code'])->toContain([
             'code' => 'my_hrd_levy',
             'label' => HRD_LEVY_LABEL,
             'type' => PayrollResultLine::TYPE_EMPLOYER_LEVY,
-            'amount' => '30.0000',
+            'amount' => HRD_LEVY_AMOUNT,
         ])
         ->and($html)->toContain('Employee Statutory Contributions')
         ->and($html)->toContain('epf_contribution_schedule');
@@ -1116,11 +1096,11 @@ test('employer cost report template renders from report data', function (): void
         'employee_id' => $employee->id,
         'line_type' => PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION,
         'code' => 'my_epf_employer',
-        'label' => 'EPF Employer Contribution',
-        'amount' => '390.0000',
+        'label' => EPF_EMPLOYER_CONTRIBUTION_LABEL,
+        'amount' => EPF_EMPLOYER_AMOUNT,
         'currency' => 'MYR',
     ]);
-    $participant->forceFill(['gross_pay' => '3000.0000'])->save();
+    $participant->forceFill(['gross_pay' => BASIC_SALARY_AMOUNT])->save();
 
     $report = app(PayrollEmployerCostReportBuilder::class)->build($run->refresh());
     $html = view('pdf.payroll.employer-cost', ['report' => $report])->render();
@@ -1140,7 +1120,7 @@ test('payroll lock audit report summarizes lifecycle controls and audit events',
         'line_type' => PayrollResultLine::TYPE_EARNING,
         'code' => 'basic_salary',
         'label' => 'Basic Salary',
-        'amount' => '3000.0000',
+        'amount' => BASIC_SALARY_AMOUNT,
         'currency' => 'MYR',
     ]);
     PayrollResultLine::query()->create([
@@ -1150,12 +1130,12 @@ test('payroll lock audit report summarizes lifecycle controls and audit events',
         'line_type' => PayrollResultLine::TYPE_NET_PAY,
         'code' => 'net_pay',
         'label' => NET_PAY_LABEL,
-        'amount' => '3000.0000',
+        'amount' => BASIC_SALARY_AMOUNT,
         'currency' => 'MYR',
     ]);
     $participant->forceFill([
-        'gross_pay' => '3000.0000',
-        'net_pay' => '3000.0000',
+        'gross_pay' => BASIC_SALARY_AMOUNT,
+        'net_pay' => BASIC_SALARY_AMOUNT,
     ])->save();
 
     $run->markReviewed();
@@ -1178,7 +1158,7 @@ test('payroll lock audit report summarizes lifecycle controls and audit events',
         ->and($report['totals_by_line_type'])->toContain([
             'type' => PayrollResultLine::TYPE_EARNING,
             'count' => 1,
-            'amount' => '3000.0000',
+            'amount' => BASIC_SALARY_AMOUNT,
         ])
         ->and(array_column($report['audit_events'], 'action'))->toBe(['reviewed', 'approved', 'closed'])
         ->and($html)->toContain('Payroll Lock Audit Report')
@@ -1198,7 +1178,7 @@ test('bank payment export placeholder produces a clearly marked review csv', fun
         ],
     ])->save();
     $participant->forceFill([
-        'net_pay' => '2500.0000',
+        'net_pay' => PAYSLIP_BASIC_SALARY_AMOUNT,
         'currency' => 'MYR',
     ])->save();
 
@@ -1210,7 +1190,7 @@ test('bank payment export placeholder produces a clearly marked review csv', fun
         'status' => 'placeholder',
         'totals' => [
             'rows' => 1,
-            'amount' => '2500.0000',
+            'amount' => PAYSLIP_BASIC_SALARY_AMOUNT,
             'missing_bank_details' => 0,
         ],
     ])
@@ -1219,7 +1199,7 @@ test('bank payment export placeholder produces a clearly marked review csv', fun
             'payroll_run_code' => 'MY-2026-01-BANK-EXPORT',
             'bank_name' => TEST_BANK_NAME,
             'bank_account_number' => '1234567890',
-            'amount' => '2500.0000',
+            'amount' => PAYSLIP_BASIC_SALARY_AMOUNT,
             'currency' => 'MYR',
             'status' => 'ready_for_mapping',
         ])
@@ -1243,10 +1223,10 @@ test('operational payroll reports can be exported as csv', function (): void {
     [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-CSV-REPORTS');
 
     foreach ([
-        [PayrollResultLine::TYPE_EARNING, 'basic_salary', 'Basic Salary', '3000.0000', 'payroll-core-input-copy', 'v0'],
-        [PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION, 'my_epf_employee', 'EPF Employee Contribution', '330.0000', 'epf_contribution_schedule', PAYROLL_DEV_VERSION],
-        [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', 'EPF Employer Contribution', '390.0000', 'epf_contribution_schedule', PAYROLL_DEV_VERSION],
-        [PayrollResultLine::TYPE_NET_PAY, 'net_pay', NET_PAY_LABEL, '2670.0000', 'payroll-core-neutral-net-pay', 'v0'],
+        [PayrollResultLine::TYPE_EARNING, 'basic_salary', 'Basic Salary', BASIC_SALARY_AMOUNT, 'payroll-core-input-copy', 'v0'],
+        [PayrollResultLine::TYPE_EMPLOYEE_CONTRIBUTION, 'my_epf_employee', EPF_EMPLOYEE_CONTRIBUTION_LABEL, EPF_EMPLOYEE_AMOUNT, 'epf_contribution_schedule', PAYROLL_DEV_VERSION],
+        [PayrollResultLine::TYPE_EMPLOYER_CONTRIBUTION, 'my_epf_employer', EPF_EMPLOYER_CONTRIBUTION_LABEL, EPF_EMPLOYER_AMOUNT, 'epf_contribution_schedule', PAYROLL_DEV_VERSION],
+        [PayrollResultLine::TYPE_NET_PAY, 'net_pay', NET_PAY_LABEL, STANDARD_NET_PAY_AMOUNT, 'payroll-core-neutral-net-pay', 'v0'],
     ] as [$type, $code, $label, $amount, $sourceRule, $sourceVersion]) {
         PayrollResultLine::query()->create([
             'payroll_run_id' => $run->id,
@@ -1262,9 +1242,9 @@ test('operational payroll reports can be exported as csv', function (): void {
         ]);
     }
     $participant->forceFill([
-        'gross_pay' => '3000.0000',
-        'total_deductions' => '330.0000',
-        'net_pay' => '2670.0000',
+        'gross_pay' => BASIC_SALARY_AMOUNT,
+        'total_deductions' => EPF_EMPLOYEE_AMOUNT,
+        'net_pay' => STANDARD_NET_PAY_AMOUNT,
     ])->save();
     $run->markReviewed();
 
@@ -1283,11 +1263,11 @@ test('operational payroll reports can be exported as csv', function (): void {
     ])
         ->and($summary['rows'][0])->toMatchArray([
             'payroll_run_code' => 'MY-2026-01-CSV-REPORTS',
-            'gross_pay' => '3000.0000',
-            'net_pay' => '2670.0000',
+            'gross_pay' => BASIC_SALARY_AMOUNT,
+            'net_pay' => STANDARD_NET_PAY_AMOUNT,
         ])
         ->and($summary['content'])->toContain('gross_pay')
-        ->and($summary['content'])->toContain('2670.0000')
+        ->and($summary['content'])->toContain(STANDARD_NET_PAY_AMOUNT)
         ->and($statutory['content'])->toContain('my_epf_employee')
         ->and($statutory['content'])->toContain('epf_contribution_schedule')
         ->and($employerCost['content'])->toContain('total_employer_cost')
@@ -1306,10 +1286,10 @@ test('payroll pdf report factory builds inline render jobs with lineage metadata
         'line_type' => PayrollResultLine::TYPE_NET_PAY,
         'code' => 'net_pay',
         'label' => NET_PAY_LABEL,
-        'amount' => '1000.0000',
+        'amount' => BONUS_AMOUNT,
         'currency' => 'MYR',
     ]);
-    $participant->forceFill(['net_pay' => '1000.0000'])->save();
+    $participant->forceFill(['net_pay' => BONUS_AMOUNT])->save();
 
     $factory = app(PayrollPdfReportJobFactory::class);
     $payslipJob = $factory->payslip($participant->refresh(), actorUserId: 7, password: 'secret');
@@ -1320,7 +1300,7 @@ test('payroll pdf report factory builds inline render jobs with lineage metadata
 
     expect($payslipJob)
         ->view->toBe('pdf.payroll.payslip')
-        ->templateVersion->toBe('payroll-payslip@v1')
+        ->templateVersion->toBe(PAYROLL_PAYSLIP_TEMPLATE_VERSION)
         ->actorUserId->toBe(7)
         ->password->toBe('secret')
         ->metadata->toMatchArray([
@@ -1349,14 +1329,14 @@ test('payroll pdf report factory builds inline render jobs with lineage metadata
 
 test('rendered payroll pdf artifacts are persisted from render events', function (): void {
     [$run, $participant, $employee] = createPayrollCoreRun('MY-2026-01-PDF-ARTIFACT');
-    $participant->forceFill(['net_pay' => '1000.0000'])->save();
+    $participant->forceFill(['net_pay' => BONUS_AMOUNT])->save();
     $run->close();
 
     $job = app(PayrollPdfReportJobFactory::class)->payslip($participant->refresh());
     $artifact = new PdfArtifact(
         disk: 'local',
-        path: 'pdf-artifacts/payroll/payslip-MY-2026-01-PDF-ARTIFACT.pdf',
-        templateVersion: 'payroll-payslip@v1',
+        path: PAYROLL_PAYSLIP_ARTIFACT_PATH,
+        templateVersion: PAYROLL_PAYSLIP_TEMPLATE_VERSION,
         dataVersion: 'payroll_run_participant_id='.$participant->id,
         bytes: 12345,
         sha256: str_repeat('a', 64),
@@ -1369,15 +1349,15 @@ test('rendered payroll pdf artifacts are persisted from render events', function
 
     $persisted = PayrollPdfArtifact::query()->orderBy('id')->firstOrFail();
 
-    expect(PayrollPdfArtifact::query()->where('disk', 'local')->where('path', 'pdf-artifacts/payroll/payslip-MY-2026-01-PDF-ARTIFACT.pdf')->count())->toBe(2)
+    expect(PayrollPdfArtifact::query()->where('disk', 'local')->where('path', PAYROLL_PAYSLIP_ARTIFACT_PATH)->count())->toBe(2)
         ->and($persisted)->toMatchArray([
             'payroll_run_id' => $run->id,
             'payroll_run_participant_id' => $participant->id,
             'employee_id' => $employee->id,
             'report_type' => 'payslip',
             'disk' => 'local',
-            'path' => 'pdf-artifacts/payroll/payslip-MY-2026-01-PDF-ARTIFACT.pdf',
-            'template_version' => 'payroll-payslip@v1',
+            'path' => PAYROLL_PAYSLIP_ARTIFACT_PATH,
+            'template_version' => PAYROLL_PAYSLIP_TEMPLATE_VERSION,
             'data_version' => 'payroll_run_participant_id='.$participant->id,
             'bytes' => 12345,
             'sha256' => str_repeat('a', 64),
@@ -1403,7 +1383,7 @@ test('closed payroll runs cannot be recalculated', function (): void {
         'pay_item_code' => 'basic_salary',
         'label' => 'Basic Salary',
         'input_type' => PayrollInput::TYPE_EARNING,
-        'amount' => '3000.0000',
+        'amount' => BASIC_SALARY_AMOUNT,
         'currency' => 'MYR',
     ]);
 
@@ -1424,7 +1404,7 @@ test('closed payroll runs reject payroll detail mutations', function (): void {
         'pay_item_code' => 'basic_salary',
         'label' => 'Basic Salary',
         'input_type' => PayrollInput::TYPE_EARNING,
-        'amount' => '3000.0000',
+        'amount' => BASIC_SALARY_AMOUNT,
         'currency' => 'MYR',
     ]);
 })->throws(ClosedPayrollRunException::class);
@@ -1468,7 +1448,7 @@ test('pay item classifications resolve by country and effective date without cou
         'country_iso' => null,
         'classification_key' => 'payroll_input_family',
         'classification_value' => 'regular_earning',
-        'effective_from' => '2026-01-01',
+        'effective_from' => PAYROLL_PERIOD_START,
         'source_pack' => 'payroll-core',
         'source_version' => 'v0',
     ]);
@@ -1477,9 +1457,9 @@ test('pay item classifications resolve by country and effective date without cou
         'country_iso' => 'MY',
         'classification_key' => 'statutory_wage_base',
         'classification_value' => 'ordinary_wage',
-        'effective_from' => '2026-01-01',
+        'effective_from' => PAYROLL_PERIOD_START,
         'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => '2026.1',
+        'source_version' => PAYROLL_COUNTRY_PACK_VERSION,
         'metadata' => ['reason' => 'Malaysia pack owns statutory treatment.'],
     ]);
     PayrollPayItemClassification::query()->create([
@@ -1492,7 +1472,7 @@ test('pay item classifications resolve by country and effective date without cou
         'source_version' => '2026.2',
     ]);
 
-    $january = app(PayItemClassifier::class)->classificationsFor($payItem, 'my', '2026-01-31');
+    $january = app(PayItemClassifier::class)->classificationsFor($payItem, 'my', PAYROLL_PERIOD_END);
     $july = app(PayItemClassifier::class)->classificationsFor($payItem, 'MY', '2026-07-31');
     $singapore = app(PayItemClassifier::class)->classificationsFor($payItem, 'SG', '2026-07-31');
 
@@ -1508,7 +1488,7 @@ test('pay item classifications resolve by country and effective date without cou
             'value' => 'ordinary_wage',
             'country_iso' => 'MY',
             'source_pack' => PAYROLL_MY_PACK,
-            'source_version' => '2026.1',
+            'source_version' => PAYROLL_COUNTRY_PACK_VERSION,
             'metadata' => ['reason' => 'Malaysia pack owns statutory treatment.'],
         ])
         ->and($july['statutory_wage_base'])->toMatchArray([
@@ -1527,8 +1507,8 @@ test('statutory profile resolver selects effective employer and employee profile
         'company_id' => $company->id,
         'country_iso' => 'MY',
         'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => '2026.1',
-        'effective_from' => '2026-01-01',
+        'source_version' => PAYROLL_COUNTRY_PACK_VERSION,
+        'effective_from' => PAYROLL_PERIOD_START,
         'effective_to' => '2026-06-30',
         'profile_data' => [
             'epf_employer_number' => 'EPF-OLD',
@@ -1555,8 +1535,8 @@ test('statutory profile resolver selects effective employer and employee profile
         'employee_id' => $employee->id,
         'country_iso' => 'MY',
         'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => '2026.1',
-        'effective_from' => '2026-01-01',
+        'source_version' => PAYROLL_COUNTRY_PACK_VERSION,
+        'effective_from' => PAYROLL_PERIOD_START,
         'profile_data' => [
             'citizenship_status' => 'citizen',
             'tax_residency' => 'resident',
@@ -1566,13 +1546,13 @@ test('statutory profile resolver selects effective employer and employee profile
     ]);
 
     $resolver = app(StatutoryProfileResolver::class);
-    $januaryEmployerProfile = $resolver->employerProfile($company, 'my', '2026-01-31');
+    $januaryEmployerProfile = $resolver->employerProfile($company, 'my', PAYROLL_PERIOD_END);
     $julyEmployerProfile = $resolver->employerProfile($company->id, 'MY', '2026-07-31');
-    $employeeProfile = $resolver->employeeProfile($employee, 'MY', '2026-01-31');
+    $employeeProfile = $resolver->employeeProfile($employee, 'MY', PAYROLL_PERIOD_END);
 
     expect($januaryEmployerProfile)
         ->not()->toBeNull()
-        ->source_version->toBe('2026.1')
+        ->source_version->toBe(PAYROLL_COUNTRY_PACK_VERSION)
         ->and($januaryEmployerProfile->profile_data)->toMatchArray([
             'epf_employer_number' => 'EPF-OLD',
             'hrd_levy_applicable' => false,
@@ -1595,7 +1575,7 @@ test('statutory profile resolver selects effective employer and employee profile
             'tax_residency' => 'resident',
             'epf_number' => 'KWSP-123',
         ])
-        ->and($resolver->employeeProfile($employee, 'SG', '2026-01-31'))->toBeNull();
+        ->and($resolver->employeeProfile($employee, 'SG', PAYROLL_PERIOD_END))->toBeNull();
 });
 
 test('statutory rule sets resolve effective contribution tables with ordered rows', function (): void {
@@ -1604,8 +1584,8 @@ test('statutory rule sets resolve effective contribution tables with ordered row
         'rule_key' => 'epf_contribution_schedule',
         'name' => 'EPF contribution schedule 2026 H1',
         'source_pack' => PAYROLL_MY_PACK,
-        'source_version' => '2026.1',
-        'effective_from' => '2026-01-01',
+        'source_version' => PAYROLL_COUNTRY_PACK_VERSION,
+        'effective_from' => PAYROLL_PERIOD_START,
         'effective_to' => '2026-06-30',
         'rounding_policy' => ['mode' => 'ceiling', 'precision' => '0.01'],
     ]);
@@ -1625,7 +1605,7 @@ test('statutory rule sets resolve effective contribution tables with ordered row
         'row_key' => 'band-2',
         'min_wage' => '5000.0100',
         'max_wage' => null,
-        'employee_rate' => '0.11000000',
+        'employee_rate' => EPF_EMPLOYEE_RATE,
         'employer_rate' => '0.12000000',
         'row_data' => ['category' => 'standard'],
     ]);
@@ -1633,10 +1613,10 @@ test('statutory rule sets resolve effective contribution tables with ordered row
         'payroll_statutory_rule_set_id' => $secondHalfRuleSet->id,
         'sort_order' => 10,
         'row_key' => 'band-1',
-        'min_wage' => '0.0000',
+        'min_wage' => ZERO_AMOUNT,
         'max_wage' => '5000.0000',
-        'employee_rate' => '0.11000000',
-        'employer_rate' => '0.13000000',
+        'employee_rate' => EPF_EMPLOYEE_RATE,
+        'employer_rate' => EPF_EMPLOYER_RATE,
         'row_data' => ['category' => 'standard'],
     ]);
 
@@ -1651,7 +1631,7 @@ test('statutory rule sets resolve effective contribution tables with ordered row
         ->and($ruleSet->rows)->toHaveCount(2)
         ->and($ruleSet->rows->pluck('row_key')->all())->toBe(['band-1', 'band-2'])
         ->and($ruleSet->rows->first()->max_wage)->toBe('5000.0000')
-        ->and($ruleSet->rows->first()->employee_rate)->toBe('0.11000000');
+        ->and($ruleSet->rows->first()->employee_rate)->toBe(EPF_EMPLOYEE_RATE);
 
     expect(app(StatutoryRuleSetResolver::class)->resolve('MY', 'missing_rule', '2026-07-31'))->toBeNull();
 });

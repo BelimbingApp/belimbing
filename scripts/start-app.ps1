@@ -77,7 +77,7 @@ function Start-BelimbingProcess {
         [string[]] $Arguments
     )
 
-    Write-Host "Starting $Name..." -ForegroundColor Cyan
+    Write-Output "Starting $Name..."
     $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -WorkingDirectory $ProjectRootPath -PassThru -NoNewWindow
     return [pscustomobject]@{
         Name = $Name

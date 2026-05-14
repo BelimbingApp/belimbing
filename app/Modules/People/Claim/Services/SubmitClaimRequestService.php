@@ -166,7 +166,6 @@ class SubmitClaimRequestService
         ClaimAssignment $assignment,
         ClaimAssignmentLine $assignmentLine,
         float $requestedAmount,
-        array $options,
     ): void {
         if ((int) $employee->company_id !== (int) $assignment->company_id) {
             throw ClaimRequestLifecycleException::invalidSubmission('The employee does not belong to the claim assignment company.');

@@ -22,7 +22,7 @@ function readEnv(key, fallback = '') {
     if (process.env[key]) {
         return process.env[key];
     }
-    const match = envFileContents.match(new RegExp(`^${key}=(.+)$`, 'm'));
+    const match = new RegExp(`^${key}=(.+)$`, 'm').exec(envFileContents);
     return match ? stripWrappingQuotes(match[1].trim()) : fallback;
 }
 

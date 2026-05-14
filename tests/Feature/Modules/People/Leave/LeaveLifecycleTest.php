@@ -150,7 +150,7 @@ function createOpenPayrollRun(Company $company, string $startsOn, string $endsOn
 }
 
 test('balance ledger is append-only: update throws', function (): void {
-    [$company, $employee, $assignment, $type] = createLeaveAssignment();
+    [$company, $employee, , $type] = createLeaveAssignment();
 
     $entry = app(LeaveBalanceLedgerService::class)->record(
         companyId: $company->id,
@@ -482,7 +482,7 @@ test('cancelling a submitted request transitions to cancelled with audit event',
 });
 
 test('unpaid leave generates a PayrollInput row on apply, deduplicated by leave request id', function (): void {
-    [$company, $employee, $assignment, $type] = createLeaveAssignment([
+    [$company, $employee, $assignment] = createLeaveAssignment([
         'leave_type' => [
             'code' => MalaysiaStatutoryLeaveTypes::CODE_UNPAID,
             'name' => 'Unpaid Leave',
@@ -513,7 +513,7 @@ test('unpaid leave generates a PayrollInput row on apply, deduplicated by leave 
 });
 
 test('carry-forward applies cap and writes carried_forward + expired ledger entries', function (): void {
-    [$company, $employee, $assignment, $type, $entitlement] = createLeaveAssignment();
+    [$company, $employee, , $type, $entitlement] = createLeaveAssignment();
     $ledger = app(LeaveBalanceLedgerService::class);
 
     $ledger->record(
@@ -541,7 +541,7 @@ test('carry-forward applies cap and writes carried_forward + expired ledger entr
 });
 
 test('encashment debits the ledger and creates a PayrollInput earning line', function (): void {
-    [$company, $employee, $assignment, $type] = createLeaveAssignment();
+    [$company, $employee, , $type] = createLeaveAssignment();
     $ledger = app(LeaveBalanceLedgerService::class);
     $today = now();
     createOpenPayrollRun($company, $today->copy()->startOfMonth()->toDateString(), $today->copy()->endOfMonth()->toDateString());
@@ -570,7 +570,7 @@ test('encashment debits the ledger and creates a PayrollInput earning line', fun
 });
 
 test('balance statement aggregates ledger entries per leave type', function (): void {
-    [$company, $employee, $assignment, $type] = createLeaveAssignment();
+    [$company, $employee, , $type] = createLeaveAssignment();
     $ledger = app(LeaveBalanceLedgerService::class);
     $ledger->record(
         companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
