@@ -11,8 +11,9 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Library;
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Shift Library')" :subtitle="__('Manage reusable shift templates supervisors can select while building rosters.')">
             <x-slot name="actions">
-                <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.rosters') }}">
-                    {{ __('Open Roster Builder') }}
+                <x-ui.button as="a" variant="primary" href="{{ route('people.attendance.shifts') }}">
+                    <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
+                    {{ __('New shift') }}
                 </x-ui.button>
             </x-slot>
             <x-slot name="help">
