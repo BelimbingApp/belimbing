@@ -3,9 +3,11 @@
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
+use App\Modules\People\Attendance\Exceptions\AttendanceAdjustmentException;
 use App\Modules\People\Attendance\Exceptions\AttendanceClockEventIngestionException;
 use App\Modules\People\Attendance\Exceptions\AttendanceLifecycleException;
 use App\Modules\People\Attendance\Livewire\MyAttendance;
+use App\Modules\People\Attendance\Models\AttendanceAdjustmentRequest;
 use App\Modules\People\Attendance\Models\AttendanceClockEvent;
 use App\Modules\People\Attendance\Models\AttendanceDay;
 use App\Modules\People\Attendance\Models\AttendanceOvertimeRequest;
@@ -13,6 +15,7 @@ use App\Modules\People\Attendance\Models\AttendancePolicyGroup;
 use App\Modules\People\Attendance\Models\AttendanceRosterAssignment;
 use App\Modules\People\Attendance\Models\AttendanceRosterPattern;
 use App\Modules\People\Attendance\Models\AttendanceShiftTemplate;
+use App\Modules\People\Attendance\Services\AttendanceAdjustmentService;
 use App\Modules\People\Attendance\Services\AttendanceCalendarResolver;
 use App\Modules\People\Attendance\Services\AttendanceDayProjectionService;
 use App\Modules\People\Attendance\Services\AttendanceDayResolverService;
@@ -601,6 +604,163 @@ it('projects worked minutes across midnight on a night shift', function (): void
         ->and($day->payable_minutes)->toBe(480)
         ->and($day->overtime_candidate_minutes)->toBe(0);
 });
+
+it('approves a missing-punch adjustment by creating a manual clock event from the request', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $user = User::factory()->create(['company_id' => $company->id]);
+    AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard',
+        'effective_from' => '2026-01-01',
+    ]);
+    AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => AttendanceShiftTemplate::query()->where('code', 'DAY')->value('id'),
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => '2026-05-01',
+        'publish_state' => 'published',
+    ]);
+
+    $request = AttendanceAdjustmentRequest::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'request_mode' => AttendanceAdjustmentRequest::MODE_MISSING_PUNCH,
+        'target_event_type' => AttendanceClockEvent::TYPE_IN,
+        'proposed_occurred_at' => '2026-05-13 08:05:00',
+        'reason' => 'Forgot to clock in; was at desk at 08:05.',
+        'status' => AttendanceAdjustmentRequest::STATUS_DRAFT,
+    ]);
+
+    $service = app(AttendanceAdjustmentService::class);
+    $service->submit($request, $employee->id);
+    $service->approve($request->refresh(), $user->id, 'Verified by supervisor.');
+    $request->refresh();
+
+    expect($request->status)->toBe(AttendanceAdjustmentRequest::STATUS_APPROVED)
+        ->and($request->applied_clock_event_id)->not->toBeNull()
+        ->and($request->attendance_day_id)->not->toBeNull();
+
+    $clockEvent = AttendanceClockEvent::query()->find($request->applied_clock_event_id);
+    expect($clockEvent->event_type)->toBe(AttendanceClockEvent::TYPE_IN)
+        ->and($clockEvent->source)->toBe(AttendanceClockEvent::SOURCE_MANUAL)
+        ->and($clockEvent->actor_user_id)->toBe($user->id)
+        ->and($clockEvent->corrects_clock_event_id)->toBeNull()
+        ->and($clockEvent->metadata['adjustment_request_id'] ?? null)->toBe($request->id);
+});
+
+it('approves a correct-existing adjustment by creating a correction event linked to the original', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $user = User::factory()->create(['company_id' => $company->id]);
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard',
+        'effective_from' => '2026-01-01',
+    ]);
+    AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => '2026-05-01',
+        'publish_state' => 'published',
+    ]);
+
+    $original = app(ClockEventIngestionService::class)->recordManualClock(
+        $employee,
+        AttendanceClockEvent::TYPE_IN,
+        '2026-05-13 08:30:00',
+        $user->id,
+    );
+
+    $request = AttendanceAdjustmentRequest::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'corrects_clock_event_id' => $original->id,
+        'request_mode' => AttendanceAdjustmentRequest::MODE_CORRECT_EXISTING,
+        'target_event_type' => AttendanceClockEvent::TYPE_IN,
+        'proposed_occurred_at' => '2026-05-13 08:00:00',
+        'reason' => 'Card reader was 30 minutes slow; actual clock-in was 08:00.',
+        'status' => AttendanceAdjustmentRequest::STATUS_SUBMITTED,
+        'submitted_by_user_id' => $employee->id,
+        'submitted_at' => now(),
+    ]);
+
+    app(AttendanceAdjustmentService::class)->approve($request, $user->id);
+    $request->refresh();
+
+    $correctingEvent = AttendanceClockEvent::query()->find($request->applied_clock_event_id);
+
+    expect($request->status)->toBe(AttendanceAdjustmentRequest::STATUS_APPROVED)
+        ->and($correctingEvent->corrects_clock_event_id)->toBe($original->id)
+        ->and($correctingEvent->source)->toBe(AttendanceClockEvent::SOURCE_MANUAL)
+        ->and($correctingEvent->occurred_at->format('H:i'))->toBe('08:00');
+});
+
+it('rejects an adjustment request without creating a clock event', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $user = User::factory()->create(['company_id' => $company->id]);
+
+    $request = AttendanceAdjustmentRequest::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'request_mode' => AttendanceAdjustmentRequest::MODE_MISSING_PUNCH,
+        'target_event_type' => AttendanceClockEvent::TYPE_IN,
+        'proposed_occurred_at' => '2026-05-13 08:00:00',
+        'status' => AttendanceAdjustmentRequest::STATUS_SUBMITTED,
+        'submitted_by_user_id' => $employee->id,
+        'submitted_at' => now(),
+    ]);
+
+    app(AttendanceAdjustmentService::class)->reject($request, $user->id, 'No corroborating evidence.');
+    $request->refresh();
+
+    expect($request->status)->toBe(AttendanceAdjustmentRequest::STATUS_REJECTED)
+        ->and($request->applied_clock_event_id)->toBeNull()
+        ->and($request->decision_reason)->toBe('No corroborating evidence.')
+        ->and(AttendanceClockEvent::query()->where('employee_id', $employee->id)->count())->toBe(0);
+});
+
+it('blocks invalid adjustment-request transitions', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $user = User::factory()->create(['company_id' => $company->id]);
+
+    $request = AttendanceAdjustmentRequest::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'request_mode' => AttendanceAdjustmentRequest::MODE_MISSING_PUNCH,
+        'target_event_type' => AttendanceClockEvent::TYPE_IN,
+        'proposed_occurred_at' => '2026-05-13 08:00:00',
+        'status' => AttendanceAdjustmentRequest::STATUS_REJECTED,
+        'rejected_at' => now(),
+    ]);
+
+    app(AttendanceAdjustmentService::class)->approve($request, $user->id);
+})->throws(AttendanceAdjustmentException::class);
 
 it('flags a public holiday from the employee work calendar as a holiday day type', function (): void {
     $company = Company::factory()->minimal()->create();

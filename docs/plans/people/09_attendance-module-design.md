@@ -292,7 +292,7 @@ An Attendance module under `app/Modules/People/Attendance/` that records and exp
 
 ### Phase 3 - Exceptions, overtime, and Workflow routing
 
-- [ ] Implement missing-punch and attendance-adjustment requests with employee, supervisor, HR, and on-behalf modes.
+- [ ] Implement missing-punch and attendance-adjustment requests with employee, supervisor, HR, and on-behalf modes. Core lifecycle is implemented: `AttendanceAdjustmentRequest` model (`missing_punch` vs `correct_existing` modes), `AttendanceAdjustmentService` with `submit` / `approve` / `reject` / `cancel`, approval creates a real `AttendanceClockEvent` via `ClockEventIngestionService` (manual for missing-punch, correction for amend) and stores it as `applied_clock_event_id`. Remaining: UI (employee submission form on My Attendance + HR review queue), submitter-role disambiguation (employee/supervisor/HR/on-behalf), Workflow approval routing. {claude-code/opus-4.7}
 - [ ] Implement overtime request lifecycle: draft, submitted, approved, rejected, cancelled, withdrawn, queued for payroll, paid/settled. Draft/submitted/approved/rejected/queued-for-payroll transitions are implemented; cancel/withdraw/paid settlement remain open. {codex/gpt-5}
 - [ ] Generate overtime candidates from attendance days without paying them until approval or HR-finalized batch.
 - [ ] Implement overtime adjustment bands and overtime knock-off policy with before/after quantities and explanation output.
