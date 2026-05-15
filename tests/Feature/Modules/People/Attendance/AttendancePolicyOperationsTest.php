@@ -2,14 +2,14 @@
 
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\People\Attendance\Livewire\Allowances;
 use App\Modules\People\Attendance\Livewire\Approvals;
+use App\Modules\People\Attendance\Livewire\PolicyStudio\Allowances;
 use App\Modules\People\Attendance\Livewire\PolicyStudio\Builder as PolicyBuilder;
 use App\Modules\People\Attendance\Livewire\PolicyStudio\Library as PolicyLibrary;
+use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Builder as ShiftBuilder;
+use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Library as ShiftLibrary;
 use App\Modules\People\Attendance\Livewire\PolicyStudio\Validator as PolicyValidator;
 use App\Modules\People\Attendance\Livewire\Rosters;
-use App\Modules\People\Attendance\Livewire\Shifts\Builder as ShiftBuilder;
-use App\Modules\People\Attendance\Livewire\Shifts\Library as ShiftLibrary;
 use App\Modules\People\Attendance\Models\AttendanceAllowanceRule;
 use App\Modules\People\Attendance\Models\AttendancePolicyGroup;
 use App\Modules\People\Attendance\Models\AttendancePunchWindow;

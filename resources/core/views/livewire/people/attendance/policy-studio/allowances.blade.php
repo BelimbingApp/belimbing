@@ -1,20 +1,15 @@
 <?php
 
-use App\Modules\People\Attendance\Livewire\Shifts\Library;
+use App\Modules\People\Attendance\Livewire\PolicyStudio\Allowances;
 
-/** @var Library $this */
+/** @var Allowances $this */
 ?>
 
 <div>
-    <x-slot name="title">{{ __('Shift Library') }}</x-slot>
+    <x-slot name="title">{{ __('Allowance Rules') }}</x-slot>
 
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('Shift Library')" :subtitle="__('Manage reusable shift templates supervisors can select while building rosters.')">
-            <x-slot name="actions">
-                <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.rosters') }}">
-                    {{ __('Open Roster Builder') }}
-                </x-ui.button>
-            </x-slot>
+        <x-ui.page-header :title="__('Allowance Rules')" :subtitle="__('Maintain attendance-driven allowance rules and their payroll pay item mappings.')">
             <x-slot name="help">
                 {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
             </x-slot>
@@ -34,6 +29,6 @@ use App\Modules\People\Attendance\Livewire\Shifts\Library;
             </x-ui.alert>
         @endif
 
-        @include('livewire.people.attendance.partials.settings-shift-library')
+        @include('livewire.people.attendance.partials.settings-allowances')
     </div>
 </div>

@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\People\Attendance\Livewire\Shifts\Builder;
+use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Builder;
 
 /** @var Builder $this */
 ?>
