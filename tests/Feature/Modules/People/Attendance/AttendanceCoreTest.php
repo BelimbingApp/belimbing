@@ -5,7 +5,7 @@ use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use App\Modules\People\Attendance\Exceptions\AttendanceClockEventIngestionException;
 use App\Modules\People\Attendance\Exceptions\AttendanceLifecycleException;
-use App\Modules\People\Attendance\Livewire\Index;
+use App\Modules\People\Attendance\Livewire\MyAttendance;
 use App\Modules\People\Attendance\Models\AttendanceClockEvent;
 use App\Modules\People\Attendance\Models\AttendanceDay;
 use App\Modules\People\Attendance\Models\AttendanceOvertimeRequest;
@@ -354,7 +354,7 @@ it('lets linked employees submit overtime from the attendance workbench', functi
 
     $this->actingAs($user);
 
-    Livewire::test(Index::class)
+    Livewire::test(MyAttendance::class)
         ->assertSee('Request OT')
         ->call('openOvertimeModal')
         ->set('overtimeDate', '2026-05-13')
