@@ -445,7 +445,14 @@ it('lets managers create attendance allowance rules', function (): void {
     $this->actingAs($user);
 
     $component = Livewire::test(AllowanceRules::class)
-        ->assertSee('Create allowance rule')
+        ->assertSet('mode', 'list')
+        ->assertDontSee('Best for')
+        ->call('startNewAllowanceRule')
+        ->assertSet('mode', 'form')
+        ->assertSee('Best for')
+        ->assertDontSee('Identification')
+        ->call('useAllowanceTemplate', 'late-out-transport')
+        ->assertSee('Identification')
         ->set('allowancePolicyGroupId', (string) $policyGroup->id)
         ->set('allowanceCode', 'night_allowance')
         ->set('allowanceName', 'Night allowance')
@@ -456,6 +463,7 @@ it('lets managers create attendance allowance rules', function (): void {
         ->set('allowanceEffectiveFrom', '2026-01-01')
         ->call('saveAllowanceRule')
         ->assertHasNoErrors()
+        ->assertSet('mode', 'list')
         ->assertSee('Allowance rule saved.')
         ->assertSee('NIGHT_ALLOWANCE');
 
@@ -471,7 +479,8 @@ it('lets managers create attendance allowance rules', function (): void {
 
     $component
         ->call('editAllowanceRule', $rule->id)
-        ->assertSee('Edit allowance rule')
+        ->assertSet('mode', 'form')
+        ->assertDontSee('Best for')
         ->set('allowanceAmount', '30.00')
         ->call('saveAllowanceRule')
         ->assertHasNoErrors();
@@ -483,6 +492,55 @@ it('lets managers create attendance allowance rules', function (): void {
         ->assertSee('Allowance rule deleted.');
 
     expect(AttendanceAllowanceRule::query()->whereKey($rule->id)->exists())->toBeFalse();
+});
+
+it('lets managers duplicate attendance allowance rules without binding template scope', function (): void {
+    $user = createAdminUser();
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $user->company_id,
+        'code' => 'STD',
+        'name' => 'Standard',
+        'effective_from' => '2026-01-01',
+    ]);
+    $rule = AttendanceAllowanceRule::query()->create([
+        'company_id' => $user->company_id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'code' => 'MEAL',
+        'name' => 'Meal allowance',
+        'allowance_type' => AttendanceAllowanceRule::TYPE_DAILY,
+        'payroll_pay_item_code' => 'meal_allowance',
+        'resolution_method' => AttendanceAllowanceRule::RESOLUTION_SUM,
+        'condition_rows' => [
+            ['description' => 'Worked time', 'amount' => 10, 'predicate' => ['min_worked_minutes' => 480]],
+        ],
+        'effective_from' => '2026-01-01',
+        'status' => 'active',
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(AllowanceRules::class)
+        ->call('duplicateAllowanceRule', $rule->id)
+        ->assertSet('mode', 'form')
+        ->assertSet('editingAllowanceRuleId', null)
+        ->assertSet('allowanceCode', 'MEAL_COPY')
+        ->assertSet('allowanceName', 'Meal allowance Copy')
+        ->assertSet('allowanceStatus', 'inactive')
+        ->assertSet('allowancePolicyGroupId', (string) $policyGroup->id)
+        ->assertDontSee('Best for')
+        ->set('allowancePolicyGroupId', '')
+        ->call('saveAllowanceRule')
+        ->assertHasNoErrors()
+        ->assertSet('mode', 'list');
+
+    $copy = AttendanceAllowanceRule::query()
+        ->where('company_id', $user->company_id)
+        ->where('code', 'MEAL_COPY')
+        ->firstOrFail();
+
+    expect($copy->attendance_policy_group_id)->toBeNull()
+        ->and($copy->condition_rows[0]['predicate'])->toBe(['min_worked_minutes' => 480])
+        ->and($copy->status)->toBe('inactive');
 });
 
 it('lets managers create roster assignments from the guided roster builder', function (): void {

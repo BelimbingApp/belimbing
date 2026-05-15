@@ -10,6 +10,14 @@ use App\Modules\People\Attendance\Livewire\AllowanceRules;
 
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Allowance Rules')" :subtitle="__('Maintain attendance-driven allowance rules and their payroll pay item mappings.')">
+            @if ($mode === 'list')
+                <x-slot name="actions">
+                    <x-ui.button type="button" variant="primary" wire:click="startNewAllowanceRule">
+                        <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
+                        {{ __('New allowance') }}
+                    </x-ui.button>
+                </x-slot>
+            @endif
             <x-slot name="help">
                 {{ __('Each rule pays one payroll pay item when its predicate matches — minutes worked, clock-out time, or both. Rules can target a specific policy group or apply when none is linked.') }}
             </x-slot>
@@ -29,6 +37,10 @@ use App\Modules\People\Attendance\Livewire\AllowanceRules;
             </x-ui.alert>
         @endif
 
-        @include('livewire.people.attendance.partials.allowance-rule-form')
+        @if ($mode === 'list')
+            @include('livewire.people.attendance.partials.allowance-rules-table')
+        @else
+            @include('livewire.people.attendance.partials.allowance-rule-form')
+        @endif
     </div>
 </div>
