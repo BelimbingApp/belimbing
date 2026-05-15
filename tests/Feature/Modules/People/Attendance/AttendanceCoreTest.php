@@ -486,6 +486,122 @@ it('resolves attendance days from rotating roster assignments', function (): voi
         ->and($day->shift_ends_at?->toDateString())->toBe('2026-05-15');
 });
 
+it('rolls the payroll period date forward for cross-midnight shifts attributed to shift_end_date', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $endEmployee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $startEmployee = Employee::factory()->active()->create(['company_id' => $company->id]);
+
+    $endDateShift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'NIGHT_END',
+        'name' => 'Night attributed to end date',
+        'starts_at' => '20:00:00',
+        'ends_at' => '05:00:00',
+        'crosses_midnight' => true,
+        'expected_work_minutes' => 480,
+        'payroll_attribution' => 'shift_end_date',
+        'effective_from' => '2026-01-01',
+    ]);
+    $startDateShift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'NIGHT_START',
+        'name' => 'Night attributed to start date',
+        'starts_at' => '20:00:00',
+        'ends_at' => '05:00:00',
+        'crosses_midnight' => true,
+        'expected_work_minutes' => 480,
+        'payroll_attribution' => 'shift_start_date',
+        'effective_from' => '2026-01-01',
+    ]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard',
+        'effective_from' => '2026-01-01',
+    ]);
+
+    AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $endEmployee->id,
+        'attendance_shift_template_id' => $endDateShift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => '2026-05-13',
+        'publish_state' => 'published',
+    ]);
+    AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $startEmployee->id,
+        'attendance_shift_template_id' => $startDateShift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => '2026-05-13',
+        'publish_state' => 'published',
+    ]);
+
+    $resolver = app(AttendanceDayResolverService::class);
+    $endAttributed = $resolver->resolve($endEmployee, '2026-05-13');
+    $startAttributed = $resolver->resolve($startEmployee, '2026-05-13');
+
+    expect($endAttributed->payroll_period_date?->toDateString())->toBe('2026-05-14')
+        ->and($startAttributed->payroll_period_date?->toDateString())->toBe('2026-05-13');
+});
+
+it('projects worked minutes across midnight on a night shift', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'NIGHT',
+        'name' => 'Night',
+        'starts_at' => '20:00:00',
+        'ends_at' => '05:00:00',
+        'crosses_midnight' => true,
+        'expected_work_minutes' => 480,
+        'break_windows' => [['label' => 'Midnight', 'starts_at' => '00:00', 'ends_at' => '01:00', 'paid' => false]],
+        'effective_from' => '2026-01-01',
+    ]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'NIGHTPOL',
+        'name' => 'Night policy',
+        'effective_from' => '2026-01-01',
+    ]);
+    $day = AttendanceDay::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'attendance_date' => '2026-05-13',
+        'expected_minutes' => 480,
+        'payroll_period_date' => '2026-05-13',
+    ]);
+    AttendanceClockEvent::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_day_id' => $day->id,
+        'event_type' => AttendanceClockEvent::TYPE_IN,
+        'occurred_at' => '2026-05-13 20:00:00',
+        'source' => AttendanceClockEvent::SOURCE_WEB,
+    ]);
+    AttendanceClockEvent::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_day_id' => $day->id,
+        'event_type' => AttendanceClockEvent::TYPE_OUT,
+        'occurred_at' => '2026-05-14 05:00:00',
+        'source' => AttendanceClockEvent::SOURCE_WEB,
+    ]);
+
+    app(AttendanceDayProjectionService::class)->project($day)->save();
+    $day->refresh();
+
+    // Span 20:00 Mon → 05:00 Tue = 540 min. Midnight break (00:00–01:00 next day, unpaid) = 60.
+    // Worked = 480, expected = 480, no OT.
+    expect($day->worked_minutes)->toBe(480)
+        ->and($day->break_minutes)->toBe(60)
+        ->and($day->payable_minutes)->toBe(480)
+        ->and($day->overtime_candidate_minutes)->toBe(0);
+});
+
 it('flags a public holiday from the employee work calendar as a holiday day type', function (): void {
     $company = Company::factory()->minimal()->create();
     $employee = Employee::factory()->active()->create(['company_id' => $company->id]);

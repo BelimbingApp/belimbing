@@ -59,36 +59,32 @@
                     <x-ui.input id="attendance-shift-expected-work-minutes" type="number" min="1" max="1440" wire:model="shiftExpectedWorkMinutes" label="{{ __('Expected work') }}" suffix="{{ __('min') }}" required help="{{ __('Payable work time before policy rounding or exceptions.') }}" :error="$errors->first('shiftExpectedWorkMinutes')" />
                 </div>
                 <div class="space-y-3">
-                    <div class="space-y-1.5">
-                        <div class="flex items-center justify-between">
-                            <p class="text-xs font-semibold uppercase tracking-wider text-muted">{{ __('Breaks') }}</p>
-                            @if (count($shiftBreaks) < 2)
-                                <x-ui.button type="button" size="sm" variant="secondary" wire:click="addShiftBreak">
-                                    <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
-                                    {{ __('Add another break') }}
-                                </x-ui.button>
-                            @endif
-                        </div>
-                        <p class="text-sm text-muted">{{ __('Leave both times blank if this shift has no scheduled break.') }}</p>
+                    <div class="flex justify-end">
+                        @if (count($shiftBreaks) < 2)
+                            <x-ui.button type="button" size="sm" variant="secondary" wire:click="addShiftBreak">
+                                <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
+                                {{ count($shiftBreaks) === 0 ? __('Add Break') : __('Add Another Break') }}
+                            </x-ui.button>
+                        @endif
                     </div>
-                    @foreach ($shiftBreaks as $index => $break)
-                        <div class="grid gap-4 sm:grid-cols-4" wire:key="shift-break-{{ $index }}">
-                            <x-ui.input id="attendance-shift-break-{{ $index }}-label" wire:model="shiftBreaks.{{ $index }}.label" label="{{ __('Label') }}" placeholder="{{ __('Lunch') }}" :error="$errors->first('shiftBreaks.'.$index.'.label')" />
-                            <x-ui.input id="attendance-shift-break-{{ $index }}-starts-at" type="time" wire:model="shiftBreaks.{{ $index }}.starts_at" label="{{ __('Start') }}" :error="$errors->first('shiftBreaks.'.$index.'.starts_at')" />
-                            <x-ui.input id="attendance-shift-break-{{ $index }}-ends-at" type="time" wire:model="shiftBreaks.{{ $index }}.ends_at" label="{{ __('End') }}" :error="$errors->first('shiftBreaks.'.$index.'.ends_at')" />
-                            <div class="space-y-1">
-                                <span class="block text-[11px] uppercase tracking-wider font-semibold text-transparent" aria-hidden="true">{{ __('Paid') }}</span>
-                                <div class="min-h-[42px] flex items-center">
-                                    <x-ui.checkbox id="attendance-shift-break-{{ $index }}-paid" wire:model="shiftBreaks.{{ $index }}.paid" label="{{ __('Paid') }}" help="{{ __('Paid breaks count as worked time; unpaid breaks are deducted by payroll when the evaluator runs.') }}" />
+                    @if (count($shiftBreaks) > 0)
+                        @foreach ($shiftBreaks as $index => $break)
+                            <div class="grid gap-4 sm:grid-cols-4" wire:key="shift-break-{{ $index }}">
+                                <x-ui.input id="attendance-shift-break-{{ $index }}-label" wire:model="shiftBreaks.{{ $index }}.label" label="{{ __('Label') }}" placeholder="{{ __('Lunch') }}" :error="$errors->first('shiftBreaks.'.$index.'.label')" />
+                                <x-ui.input id="attendance-shift-break-{{ $index }}-starts-at" type="time" wire:model="shiftBreaks.{{ $index }}.starts_at" label="{{ __('Start') }}" :error="$errors->first('shiftBreaks.'.$index.'.starts_at')" />
+                                <x-ui.input id="attendance-shift-break-{{ $index }}-ends-at" type="time" wire:model="shiftBreaks.{{ $index }}.ends_at" label="{{ __('End') }}" :error="$errors->first('shiftBreaks.'.$index.'.ends_at')" />
+                                <div class="space-y-1">
+                                    <span class="block text-[11px] uppercase tracking-wider font-semibold text-transparent" aria-hidden="true">{{ __('Paid') }}</span>
+                                    <div class="min-h-[42px] flex items-center">
+                                        <x-ui.checkbox id="attendance-shift-break-{{ $index }}-paid" wire:model="shiftBreaks.{{ $index }}.paid" label="{{ __('Paid') }}" help="{{ __('Paid breaks count as worked time; unpaid breaks are deducted by payroll when the evaluator runs.') }}" />
+                                    </div>
                                 </div>
-                            </div>
-                            @if (count($shiftBreaks) > 1)
                                 <div class="sm:col-span-4 flex justify-end">
                                     <x-ui.button type="button" size="sm" variant="danger" wire:click="removeShiftBreak({{ $index }})">{{ __('Remove') }}</x-ui.button>
                                 </div>
-                            @endif
-                        </div>
-                    @endforeach
+                            </div>
+                        @endforeach
+                    @endif
                 </div>
             </div>
         </x-ui.card>
