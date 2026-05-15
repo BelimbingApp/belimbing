@@ -584,8 +584,49 @@ it('lets managers build shift templates inline from guided templates and import 
         ->assertHasNoErrors()
         ->assertSet('mode', 'form')
         ->assertSet('shiftCode', 'IMPORT_DAY')
-        ->assertSet('shiftBreakStartsAt', '13:00')
+        ->assertSet('shiftBreaks.0.starts_at', '13:00')
         ->assertSet('shiftInWindowBeforeMinutes', '30');
+});
+
+it('persists multiple breaks with per-break paid flag and emits second break punch windows', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    Livewire::test(ShiftTemplates::class)
+        ->call('startNewShift')
+        ->set('shiftCode', 'PROD_12H')
+        ->set('shiftName', 'Production 12h')
+        ->set('shiftStartsAt', '07:00')
+        ->set('shiftEndsAt', '19:00')
+        ->set('shiftExpectedWorkMinutes', '660')
+        ->set('shiftBreaks.0', ['label' => 'Lunch', 'starts_at' => '12:00', 'ends_at' => '13:00', 'paid' => false])
+        ->call('addShiftBreak')
+        ->set('shiftBreaks.1', ['label' => 'Tea', 'starts_at' => '15:30', 'ends_at' => '15:45', 'paid' => true])
+        ->call('saveShiftTemplate')
+        ->assertHasNoErrors();
+
+    $shift = AttendanceShiftTemplate::query()->where('code', 'PROD_12H')->firstOrFail();
+    expect($shift->break_windows)->toHaveCount(2)
+        ->and($shift->break_windows[0])->toMatchArray(['label' => 'Lunch', 'starts_at' => '12:00', 'ends_at' => '13:00', 'paid' => false])
+        ->and($shift->break_windows[1])->toMatchArray(['label' => 'Tea', 'starts_at' => '15:30', 'ends_at' => '15:45', 'paid' => true]);
+
+    $eventTypes = $shift->punchWindows()->pluck('event_type')->all();
+    expect($eventTypes)
+        ->toContain(AttendancePunchWindow::TYPE_BREAK_OUT)
+        ->toContain(AttendancePunchWindow::TYPE_BREAK_IN)
+        ->toContain(AttendancePunchWindow::TYPE_BREAK_OUT_2)
+        ->toContain(AttendancePunchWindow::TYPE_BREAK_IN_2);
+});
+
+it('caps the breaks form at two entries', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    Livewire::test(ShiftTemplates::class)
+        ->call('startNewShift')
+        ->call('addShiftBreak')
+        ->call('addShiftBreak')
+        ->tap(fn ($component) => expect($component->get('shiftBreaks'))->toHaveCount(2));
 });
 
 it('restores shift edit mode from the URL', function (): void {

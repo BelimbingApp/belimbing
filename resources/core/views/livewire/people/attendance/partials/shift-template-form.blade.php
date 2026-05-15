@@ -58,9 +58,30 @@
                     <x-ui.input id="attendance-shift-ends-at" type="time" wire:model="shiftEndsAt" label="{{ __('Shift end') }}" required help="{{ __('Use an earlier end time for overnight shifts.') }}" :error="$errors->first('shiftEndsAt')" />
                     <x-ui.input id="attendance-shift-expected-work-minutes" type="number" min="1" max="1440" wire:model="shiftExpectedWorkMinutes" label="{{ __('Expected work') }}" suffix="{{ __('min') }}" required help="{{ __('Payable work time before policy rounding or exceptions.') }}" :error="$errors->first('shiftExpectedWorkMinutes')" />
                 </div>
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <x-ui.input id="attendance-shift-break-starts-at" type="time" wire:model="shiftBreakStartsAt" label="{{ __('Break start') }}" help="{{ __('Leave blank with break end if this shift has no scheduled break.') }}" :error="$errors->first('shiftBreakStartsAt')" />
-                    <x-ui.input id="attendance-shift-break-ends-at" type="time" wire:model="shiftBreakEndsAt" label="{{ __('Break end') }}" help="{{ __('Scheduled return time from the main break.') }}" :error="$errors->first('shiftBreakEndsAt')" />
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs font-semibold uppercase tracking-wider text-muted">{{ __('Breaks') }}</p>
+                        @if (count($shiftBreaks) < 2)
+                            <x-ui.button type="button" size="sm" variant="secondary" wire:click="addShiftBreak">
+                                <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
+                                {{ __('Add another break') }}
+                            </x-ui.button>
+                        @endif
+                    </div>
+                    @foreach ($shiftBreaks as $index => $break)
+                        <div class="grid gap-3 sm:grid-cols-[1.2fr_1fr_1fr_auto_auto] sm:items-end" wire:key="shift-break-{{ $index }}">
+                            <x-ui.input id="attendance-shift-break-{{ $index }}-label" wire:model="shiftBreaks.{{ $index }}.label" label="{{ __('Label') }}" placeholder="{{ __('Lunch') }}" :error="$errors->first('shiftBreaks.'.$index.'.label')" />
+                            <x-ui.input id="attendance-shift-break-{{ $index }}-starts-at" type="time" wire:model="shiftBreaks.{{ $index }}.starts_at" label="{{ __('Start') }}" help="{{ $index === 0 ? __('Leave blank with end if this shift has no scheduled break.') : '' }}" :error="$errors->first('shiftBreaks.'.$index.'.starts_at')" />
+                            <x-ui.input id="attendance-shift-break-{{ $index }}-ends-at" type="time" wire:model="shiftBreaks.{{ $index }}.ends_at" label="{{ __('End') }}" :error="$errors->first('shiftBreaks.'.$index.'.ends_at')" />
+                            <x-ui.checkbox id="attendance-shift-break-{{ $index }}-paid" wire:model="shiftBreaks.{{ $index }}.paid" label="{{ __('Paid') }}" />
+                            @if (count($shiftBreaks) > 1)
+                                <x-ui.button type="button" size="sm" variant="danger" wire:click="removeShiftBreak({{ $index }})">{{ __('Remove') }}</x-ui.button>
+                            @else
+                                <span></span>
+                            @endif
+                        </div>
+                    @endforeach
+                    <p class="text-xs text-muted">{{ __('Paid breaks count as worked time; unpaid breaks are deducted by payroll when the evaluator runs.') }}</p>
                 </div>
             </div>
         </x-ui.card>
