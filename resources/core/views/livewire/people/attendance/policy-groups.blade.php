@@ -1,8 +1,8 @@
 <?php
 
-use App\Modules\People\Attendance\Livewire\PolicyStudio\Library;
+use App\Modules\People\Attendance\Livewire\PolicyGroups;
 
-/** @var Library $this */
+/** @var PolicyGroups $this */
 ?>
 
 <div>
@@ -53,7 +53,7 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Library;
                         </thead>
                         <tbody class="divide-y divide-border-default bg-surface-card">
                             @forelse ($policyGroups as $group)
-                                <tr wire:key="policy-library-row-{{ $group->id }}">
+                                <tr wire:key="policy-group-row-{{ $group->id }}">
                                     <td class="px-table-cell-x py-table-cell-y text-xs text-muted tabular-nums">{{ $loop->iteration }}</td>
                                     <td class="px-table-cell-x py-table-cell-y">
                                         <button type="button" class="text-left font-medium text-accent hover:underline" wire:click="editPolicyGroup({{ $group->id }})">{{ $group->name }}</button>
@@ -81,14 +81,14 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Library;
             </x-ui.card>
 
             @if ($policyTemplateExportJson !== '')
-                @include('livewire.people.attendance.policy-studio.partials.template-json-export', [
-                    'id' => 'attendance-policy-library-template-export',
+                @include('livewire.people.attendance.partials.template-json-export', [
+                    'id' => 'attendance-policy-group-template-export',
                     'field' => 'policyTemplateExportJson',
                     'description' => __('Copy this JSON into a shared template repository or country pack. Upload it from the builder when needed.'),
                 ])
             @endif
         @else
-            @include('livewire.people.attendance.policy-studio.partials.policy-form')
+            @include('livewire.people.attendance.partials.policy-form')
         @endif
     </div>
 </div>

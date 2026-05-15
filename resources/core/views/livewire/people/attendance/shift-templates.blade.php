@@ -1,15 +1,15 @@
 <?php
 
-use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Library;
+use App\Modules\People\Attendance\Livewire\ShiftTemplates;
 
-/** @var Library $this */
+/** @var ShiftTemplates $this */
 ?>
 
 <div>
-    <x-slot name="title">{{ __('Shift Library') }}</x-slot>
+    <x-slot name="title">{{ __('Shift Templates') }}</x-slot>
 
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('Shift Library')" :subtitle="__('Manage reusable shift templates supervisors can select while building rosters.')">
+        <x-ui.page-header :title="__('Shift Templates')" :subtitle="__('Manage reusable shift templates supervisors can select while building rosters.')">
             @if ($mode === 'list')
                 <x-slot name="actions">
                     <x-ui.button type="button" variant="primary" wire:click="startNewShift">
@@ -38,9 +38,9 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Library;
         @endif
 
         @if ($mode === 'list')
-            @include('livewire.people.attendance.policy-studio.partials.shifts-library-table')
+            @include('livewire.people.attendance.partials.shift-templates-table')
         @else
-            @include('livewire.people.attendance.policy-studio.partials.shifts-form')
+            @include('livewire.people.attendance.partials.shift-template-form')
         @endif
     </div>
 </div>

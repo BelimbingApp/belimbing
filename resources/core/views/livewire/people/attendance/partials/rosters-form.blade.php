@@ -7,7 +7,7 @@
             </div>
             <div class="flex flex-wrap gap-2">
                 <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.shifts') }}">{{ __('Set up shifts') }}</x-ui.button>
-                <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.policy-studio.library') }}">{{ __('Set up policies') }}</x-ui.button>
+                <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.policy-groups') }}">{{ __('Set up policies') }}</x-ui.button>
                 <x-ui.badge variant="info">{{ __('Supervisor workspace') }}</x-ui.badge>
             </div>
         </div>

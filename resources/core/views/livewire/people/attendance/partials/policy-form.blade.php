@@ -105,7 +105,7 @@
                     <x-ui.input id="attendance-policy-grace-end-break" type="number" min="0" max="240" wire:model="policyGraceEndBreak" label="{{ __('Break in') }}" suffix="{{ __('min') }}" help="{{ __('Tolerance when employees return from break after the expected time.') }}" :error="$errors->first('policyGraceEndBreak')" />
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
-                    @include('livewire.people.attendance.policy-studio.partials.pay-item-field', [
+                    @include('livewire.people.attendance.partials.pay-item-field', [
                         'field' => 'policyLatenessPayItem',
                         'id' => 'attendance-policy-lateness-pay-item',
                         'label' => __('Deduction pay item'),
@@ -134,7 +134,7 @@
                         ['field' => 'policyRestDayOvertimePayItem', 'id' => 'attendance-policy-rest-day-ot-pay-item', 'label' => __('Rest day OT item'), 'help' => __('Optional payroll item when overtime happens on a roster rest day.'), 'required' => false],
                         ['field' => 'policyHolidayOvertimePayItem', 'id' => 'attendance-policy-holiday-ot-pay-item', 'label' => __('Holiday OT item'), 'help' => __('Optional payroll item when overtime happens on a public holiday.'), 'required' => false],
                     ] as $payItemConfig)
-                        @include('livewire.people.attendance.policy-studio.partials.pay-item-field', $payItemConfig)
+                        @include('livewire.people.attendance.partials.pay-item-field', $payItemConfig)
                     @endforeach
                 </div>
                 <x-ui.input id="attendance-policy-currency" wire:model="policyCurrency" label="{{ __('Payroll currency') }}" required help="{{ __('Three-letter payroll currency code, for example MYR.') }}" :error="$errors->first('policyCurrency')" />
@@ -158,7 +158,7 @@
 
         <div class="flex flex-wrap justify-end gap-2">
             <x-ui.button type="button" variant="secondary" wire:click="cancelPolicyEdit">{{ __('Cancel') }}</x-ui.button>
-            <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.policy-studio.validator') }}">
+            <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.policy-groups.validator') }}">
                 {{ __('Open Validator') }}
             </x-ui.button>
             <x-ui.button type="submit" variant="primary" :disabled="! $canManage">

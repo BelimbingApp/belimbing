@@ -1,15 +1,15 @@
 <?php
 
-use App\Modules\People\Attendance\Livewire\PolicyStudio\Validator;
+use App\Modules\People\Attendance\Livewire\AllowanceRules;
 
-/** @var Validator $this */
+/** @var AllowanceRules $this */
 ?>
 
 <div>
-    <x-slot name="title">{{ __('Policy Validator') }}</x-slot>
+    <x-slot name="title">{{ __('Allowance Rules') }}</x-slot>
 
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('Policy Validator')" :subtitle="__('Validate policy groups and simulate attendance outcomes before rules affect rosters or payroll.')">
+        <x-ui.page-header :title="__('Allowance Rules')" :subtitle="__('Maintain attendance-driven allowance rules and their payroll pay item mappings.')">
             <x-slot name="help">
                 {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
             </x-slot>
@@ -29,6 +29,6 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Validator;
             </x-ui.alert>
         @endif
 
-        @include('livewire.people.attendance.policy-studio.partials.validator-body')
+        @include('livewire.people.attendance.partials.allowance-rule-form')
     </div>
 </div>

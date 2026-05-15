@@ -3,7 +3,7 @@
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div class="max-w-2xl">
                 <h2 class="text-base font-semibold text-ink">{{ $editingAllowanceRuleId === null ? __('Create allowance rule') : __('Edit allowance rule') }}</h2>
-                <p class="mt-1 text-sm text-muted">{{ __('Pick a recipe, fill only the fields that recipe needs, then validate the policy in Policy Studio before payroll handoff.') }}</p>
+                <p class="mt-1 text-sm text-muted">{{ __('Pick a recipe, fill only the fields that recipe needs, then validate the linked policy group before payroll handoff.') }}</p>
             </div>
             <div class="flex flex-wrap gap-2">
                 @if ($editingAllowanceRuleId !== null)
@@ -62,7 +62,7 @@
                     </x-ui.select>
                     <p class="text-xs text-muted">
                         {{ __('Cannot find the policy you need?') }}
-                        <a href="{{ route('people.attendance.policy-studio.library') }}" class="text-accent hover:underline">{{ __('Open Policy Studio') }}</a>
+                        <a href="{{ route('people.attendance.policy-groups') }}" class="text-accent hover:underline">{{ __('Open Policy Groups') }}</a>
                     </p>
                     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
                         <x-ui.select id="attendance-allowance-type" wire:model="allowanceType" label="{{ __('Type') }}" :error="$errors->first('allowanceType')">
@@ -117,7 +117,7 @@
                     </div>
                 </div>
             @empty
-                <p class="text-sm text-muted">{{ __('No allowance rules configured yet. Create the first rule on the left, then validate the policy in Policy Studio.') }}</p>
+                <p class="text-sm text-muted">{{ __('No allowance rules configured yet. Create the first rule on the left, then validate the linked policy group.') }}</p>
             @endforelse
         </div>
     </x-ui.card>

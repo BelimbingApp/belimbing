@@ -51,7 +51,7 @@
             <div class="mt-4 space-y-4">
                 <x-ui.alert variant="info">
                     {{ __('Policy Builder decides rounding, lateness and overtime. Shift Builder only defines scheduled time and punch expectations.') }}
-                    <a href="{{ route('people.attendance.policy-studio.library') }}" target="_blank" rel="noopener noreferrer" class="font-medium text-accent hover:underline">{{ __('Open Policy Studio in a new tab') }}</a>
+                    <a href="{{ route('people.attendance.policy-groups') }}" target="_blank" rel="noopener noreferrer" class="font-medium text-accent hover:underline">{{ __('Open Policy Groups in a new tab') }}</a>
                 </x-ui.alert>
                 <div class="grid gap-4 sm:grid-cols-3">
                     <x-ui.input id="attendance-shift-starts-at" type="time" wire:model="shiftStartsAt" label="{{ __('Shift start') }}" required help="{{ __('When scheduled work begins.') }}" :error="$errors->first('shiftStartsAt')" />
@@ -99,7 +99,7 @@
 
         <div class="flex flex-wrap justify-end gap-2">
             <x-ui.button type="button" variant="secondary" wire:click="cancelShiftEdit">{{ __('Cancel') }}</x-ui.button>
-            <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.policy-studio.validator') }}">
+            <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.policy-groups.validator') }}">
                 {{ __('Open Validator') }}
             </x-ui.button>
             <x-ui.button type="submit" variant="primary" :disabled="! $canManage">

@@ -1,6 +1,6 @@
 @if ($shiftTemplateExportJson !== '')
-    @include('livewire.people.attendance.policy-studio.partials.template-json-export', [
-        'id' => 'attendance-shift-library-template-export',
+    @include('livewire.people.attendance.partials.template-json-export', [
+        'id' => 'attendance-shift-template-export',
         'field' => 'shiftTemplateExportJson',
     ])
 @endif
@@ -20,7 +20,7 @@
             </thead>
             <tbody class="divide-y divide-border-default bg-surface-card">
                 @forelse ($shiftTemplates as $shift)
-                    <tr wire:key="shift-library-row-{{ $shift->id }}">
+                    <tr wire:key="shift-template-row-{{ $shift->id }}">
                         <td class="px-table-cell-x py-table-cell-y text-xs text-muted tabular-nums">{{ $loop->iteration }}</td>
                         <td class="px-table-cell-x py-table-cell-y">
                             <button type="button" class="text-left font-medium text-accent hover:underline" wire:click="editShiftTemplate({{ $shift->id }})">{{ $shift->name }}</button>
