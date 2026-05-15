@@ -1,6 +1,6 @@
 # people/11_attendance-shift-and-allowance-coverage
 
-**Status:** SBG requirements confirmed — three scheduled changes: (1) multi-break shift template with per-break paid flag; (2) shift-scoped allowance rule (SBG has differential allowances between day and night shifts); (3) drop the dead `day_type_overrides` column.
+**Status:** Implemented (2026-05-15) — all three scheduled changes shipped: (1) multi-break shift template with per-break paid flag, (2) shift-scoped allowance rule with nullable `attendance_shift_template_id` FK, (3) `day_type_overrides` column dropped. One follow-on remains explicitly deferred: applying per-break `paid` to work-minute deduction lands with the production attendance-day evaluator (which currently does no break deduction at all).
 **Last Updated:** 2026-05-15
 **Sources:**
 - `docs/plans/people/09_attendance-module-design.md` — parent Attendance design. Splits the legacy "TMS Group" monolith into `AttendanceShiftTemplate` (schedule) + `AttendancePolicyGroup` (rules) + `AttendanceAllowanceRule` (allowance triggers) + `AttendanceRosterPattern` (rotation) + `AttendanceRosterAssignment` (per-employee assignment). That split is deliberate and not under review here.
@@ -97,8 +97,8 @@ Every real case decomposes into "separate shift template + roster reassignment."
 - [x] Confirmed: SBG production operators need two breaks per shift with mixed paid/unpaid.
 - [x] Confirmed: SBG has different allowances for day vs. night shifts.
 - [x] Confirmed: drop `day_type_overrides` (no surviving use case; future day-type behaviour belongs on policy group).
-- [ ] Implement multi-break (data + UI only): form state + blade + per-break `paid` field in `break_windows` cast + `syncPunchWindows` emits `BREAK_OUT_2` / `BREAK_IN_2` + `AttendancePunchWindow` constants.
-- [ ] Implement shift-scoped allowance: migration adding nullable `attendance_shift_template_id` to `people_attendance_allowance_rules` + model relationship + AllowanceRules form select + simulator predicate update.
-- [ ] Drop `day_type_overrides` migration + remove the cast in `AttendanceShiftTemplate`.
-- [ ] (Later, deferred) Apply per-break `paid` to work-minute deduction once the production attendance-day evaluator is built. Backfill rule when that ships: `paid: false` for breaks on shifts whose policy had `daily_exclude_break_hours = true`, else `paid: true`.
-- [ ] (Cross-reference, in 09) Roster-side gaps surfaced by this analysis: day-type-aware resolver (read public-holiday / rest-day calendar), pattern routing by day type, bulk roster reassignment by employee attribute (Ramadan).
+- [x] Multi-break (data + UI): form state, blade, per-break `paid`, `syncPunchWindows` emits `BREAK_OUT_2` / `BREAK_IN_2`, `AttendancePunchWindow` constants. {claude-code/opus-4.7, commit 0953a2e7}
+- [x] Shift-scoped allowance: migration `0320_02_05_000002_*`, `AttendanceAllowanceRule.attendance_shift_template_id` + relationship, AllowanceRules form select, simulator filter. {claude-code/opus-4.7, commit acc31975}
+- [x] Drop `day_type_overrides`: migration `0320_02_05_000001_*` + cast/fillable removed. {claude-code/opus-4.7, commit 8ceaf4e2}
+- [x] Cross-reference items added to 09 roster-builder checklist: day-type-aware resolver, pattern routing by day type, bulk reassignment by employee attribute. {claude-code/opus-4.7, commit a6e4ba08}
+- [ ] (Deferred) Apply per-break `paid` to work-minute deduction once the production attendance-day evaluator is built. Backfill rule when that ships: `paid: false` for breaks on shifts whose policy had `daily_exclude_break_hours = true`, else `paid: true`.
