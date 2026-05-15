@@ -75,7 +75,7 @@
                                 <x-ui.input id="attendance-shift-break-{{ $index }}-ends-at" type="time" wire:model="shiftBreaks.{{ $index }}.ends_at" label="{{ __('End') }}" :error="$errors->first('shiftBreaks.'.$index.'.ends_at')" />
                                 <div class="space-y-1">
                                     <span class="block text-[11px] uppercase tracking-wider font-semibold text-transparent" aria-hidden="true">{{ __('Paid') }}</span>
-                                    <div class="min-h-[42px] flex items-center">
+                                    <div class="pt-[14px]">
                                         <x-ui.checkbox id="attendance-shift-break-{{ $index }}-paid" wire:model="shiftBreaks.{{ $index }}.paid" label="{{ __('Paid') }}" help="{{ __('Paid breaks count as worked time; unpaid breaks are deducted by payroll when the evaluator runs.') }}" />
                                     </div>
                                 </div>

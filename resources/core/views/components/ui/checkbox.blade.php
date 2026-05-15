@@ -5,7 +5,7 @@
     'help' => null,
 ])
 
-<div>
+<div class="space-y-1">
     <div class="flex items-center gap-2">
     <input
         id="{{ $id }}"
@@ -28,11 +28,11 @@
     </div>
 
     @if($error)
-        <p class="pl-6 text-sm text-status-danger">{{ $error }}</p>
+        <p class="text-sm text-status-danger">{{ $error }}</p>
     @endif
 
     @if($help)
-        <div class="pl-6 leading-none">
+        <div>
             <x-ui.field-help :hint="$help" />
         </div>
     @endif
