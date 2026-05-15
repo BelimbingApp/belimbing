@@ -13,6 +13,7 @@ use App\Modules\People\Attendance\Models\AttendancePolicyGroup;
 use App\Modules\People\Attendance\Models\AttendanceRosterAssignment;
 use App\Modules\People\Attendance\Models\AttendanceRosterPattern;
 use App\Modules\People\Attendance\Models\AttendanceShiftTemplate;
+use App\Modules\People\Attendance\Services\AttendanceCalendarResolver;
 use App\Modules\People\Attendance\Services\AttendanceDayProjectionService;
 use App\Modules\People\Attendance\Services\AttendanceDayResolverService;
 use App\Modules\People\Attendance\Services\AttendanceLifecycleService;
@@ -23,6 +24,9 @@ use App\Modules\People\Payroll\Models\PayrollCalendar;
 use App\Modules\People\Payroll\Models\PayrollInput;
 use App\Modules\People\Payroll\Models\PayrollPeriod;
 use App\Modules\People\Payroll\Models\PayrollRun;
+use App\Modules\People\Settings\Models\EmployeeWorkProfile;
+use App\Modules\People\Settings\Models\PeopleCalendarException;
+use App\Modules\People\Settings\Models\PeopleReferenceEntry;
 use Livewire\Livewire;
 
 it('projects attendance day metrics from clock events', function (): void {
@@ -258,6 +262,155 @@ it('resolves attendance days from rotating roster assignments', function (): voi
         ->and($day->status)->toBe(AttendanceDay::STATUS_SCHEDULED)
         ->and($day->expected_minutes)->toBe(720)
         ->and($day->shift_ends_at?->toDateString())->toBe('2026-05-15');
+});
+
+it('flags a public holiday from the employee work calendar as a holiday day type', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $workCalendar = PeopleReferenceEntry::query()->create([
+        'company_id' => $company->id,
+        'type' => PeopleReferenceEntry::TYPE_WORK_CALENDAR,
+        'code' => 'MY-STD',
+        'name' => 'Malaysia Standard',
+        'status' => PeopleReferenceEntry::STATUS_ACTIVE,
+        'metadata' => ['rest_days' => ['sunday'], 'off_days' => ['saturday']],
+    ]);
+    EmployeeWorkProfile::query()->create([
+        'employee_id' => $employee->id,
+        'work_calendar_id' => $workCalendar->id,
+        'hired_on' => '2026-01-01',
+    ]);
+    PeopleCalendarException::query()->create([
+        'work_calendar_id' => $workCalendar->id,
+        'occurs_on' => '2026-05-14',
+        'name' => 'Wesak Day',
+        'kind' => 'public_holiday',
+    ]);
+
+    $dayType = app(AttendanceCalendarResolver::class)->dayType($employee, '2026-05-14');
+
+    expect($dayType)->toBe(AttendanceDay::DAY_TYPE_HOLIDAY);
+});
+
+it('derives weekly rest and off day types from the work calendar metadata', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $workCalendar = PeopleReferenceEntry::query()->create([
+        'company_id' => $company->id,
+        'type' => PeopleReferenceEntry::TYPE_WORK_CALENDAR,
+        'code' => 'MY-STD',
+        'name' => 'Malaysia Standard',
+        'status' => PeopleReferenceEntry::STATUS_ACTIVE,
+        'metadata' => ['rest_days' => ['sunday'], 'off_days' => ['saturday']],
+    ]);
+    EmployeeWorkProfile::query()->create([
+        'employee_id' => $employee->id,
+        'work_calendar_id' => $workCalendar->id,
+        'hired_on' => '2026-01-01',
+    ]);
+
+    $resolver = app(AttendanceCalendarResolver::class);
+
+    // 2026-05-17 is a Sunday → rest.
+    // 2026-05-16 is a Saturday → off.
+    // 2026-05-15 is a Friday → normal.
+    expect($resolver->dayType($employee, '2026-05-17'))->toBe(AttendanceDay::DAY_TYPE_REST)
+        ->and($resolver->dayType($employee, '2026-05-16'))->toBe(AttendanceDay::DAY_TYPE_OFF)
+        ->and($resolver->dayType($employee, '2026-05-15'))->toBe(AttendanceDay::DAY_TYPE_NORMAL);
+});
+
+it('treats employees without a work calendar as normal day type', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+
+    $dayType = app(AttendanceCalendarResolver::class)->dayType($employee, '2026-05-17');
+
+    expect($dayType)->toBe(AttendanceDay::DAY_TYPE_NORMAL);
+});
+
+it('routes a fixed weekly roster pattern through the day_types map when a holiday falls on a working weekday', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $workCalendar = PeopleReferenceEntry::query()->create([
+        'company_id' => $company->id,
+        'type' => PeopleReferenceEntry::TYPE_WORK_CALENDAR,
+        'code' => 'MY-STD',
+        'name' => 'Malaysia Standard',
+        'status' => PeopleReferenceEntry::STATUS_ACTIVE,
+        'metadata' => ['rest_days' => ['sunday'], 'off_days' => ['saturday']],
+    ]);
+    EmployeeWorkProfile::query()->create([
+        'employee_id' => $employee->id,
+        'work_calendar_id' => $workCalendar->id,
+        'hired_on' => '2026-01-01',
+    ]);
+    PeopleCalendarException::query()->create([
+        'work_calendar_id' => $workCalendar->id,
+        'occurs_on' => '2026-05-14',
+        'name' => 'Wesak Day',
+        'kind' => 'public_holiday',
+    ]);
+
+    $standardShift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'PROD_DAY',
+        'name' => 'Production day',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+    $holidayShift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'PROD_HOLIDAY_HALF',
+        'name' => 'Production half-day on holidays',
+        'starts_at' => '08:00:00',
+        'ends_at' => '12:00:00',
+        'expected_work_minutes' => 240,
+        'effective_from' => '2026-01-01',
+    ]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard',
+        'effective_from' => '2026-01-01',
+    ]);
+    $pattern = AttendanceRosterPattern::query()->create([
+        'company_id' => $company->id,
+        'code' => 'WEEKLY',
+        'name' => 'Weekly',
+        'pattern_type' => AttendanceRosterPattern::TYPE_FIXED_WEEKLY,
+        'pattern_definition' => [
+            'weekdays' => [
+                'thursday' => ['shift_code' => 'PROD_DAY'],
+            ],
+            'day_types' => [
+                AttendanceDay::DAY_TYPE_HOLIDAY => ['shift_code' => 'PROD_HOLIDAY_HALF'],
+                AttendanceDay::DAY_TYPE_REST => ['shift_code' => null],
+            ],
+        ],
+        'status' => AttendanceRosterPattern::STATUS_PUBLISHED,
+    ]);
+    AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_roster_pattern_id' => $pattern->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => '2026-05-01',
+        'publish_state' => 'published',
+    ]);
+
+    $resolver = app(AttendanceDayResolverService::class);
+    $holidayDay = $resolver->resolve($employee, '2026-05-14');   // Thursday + holiday → PROD_HOLIDAY_HALF
+    $normalDay = $resolver->resolve($employee, '2026-05-21');    // Thursday, no holiday → PROD_DAY
+    $restDay = $resolver->resolve($employee, '2026-05-17');      // Sunday → rest, no shift
+
+    expect($holidayDay->day_type)->toBe(AttendanceDay::DAY_TYPE_HOLIDAY)
+        ->and($holidayDay->shiftTemplate?->code)->toBe('PROD_HOLIDAY_HALF')
+        ->and($normalDay->day_type)->toBe(AttendanceDay::DAY_TYPE_NORMAL)
+        ->and($normalDay->shiftTemplate?->code)->toBe('PROD_DAY')
+        ->and($restDay->day_type)->toBe(AttendanceDay::DAY_TYPE_REST)
+        ->and($restDay->shiftTemplate)->toBeNull();
 });
 
 it('finalizes ready attendance days and blocks locked lifecycle changes', function (): void {
