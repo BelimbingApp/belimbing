@@ -216,8 +216,6 @@ it('lets managers build, save, and edit policies inline on the studio page', fun
         ->assertDontSee('Identification')
         ->call('usePolicyTemplate', 'office-grace')
         ->assertSee('Identification')
-        ->assertSee('Readiness status')
-        ->assertSee('Ready to publish')
         ->assertSet('policyGraceIn', '10')
         ->set('policyCode', 'std_8_5')
         ->set('policyName', 'Standard 8 to 5')
@@ -228,7 +226,7 @@ it('lets managers build, save, and edit policies inline on the studio page', fun
         ->call('savePolicyGroup')
         ->assertHasNoErrors()
         ->assertSet('mode', 'list')
-        ->assertSee('Policy group saved and validated.')
+        ->assertSee('Policy group saved.')
         ->assertSee('STD_8_5');
 
     $policy = AttendancePolicyGroup::query()
@@ -253,6 +251,21 @@ it('lets managers build, save, and edit policies inline on the studio page', fun
 
     expect($policy->refresh()->version)->toBe(2)
         ->and($policy->lateness_rules['grace']['in'])->toBe(10);
+});
+
+it('lists field errors prominently when saving a policy with invalid input', function (): void {
+    $user = createAdminUser();
+
+    $this->actingAs($user);
+
+    Livewire::test(PolicyStudio::class)
+        ->call('startNewPolicy')
+        ->call('usePolicyTemplate', 'office-grace')
+        ->set('policyCode', '')
+        ->set('policyName', '')
+        ->call('savePolicyGroup')
+        ->assertHasErrors(['policyCode', 'policyName'])
+        ->assertSee('Fix these before saving:');
 });
 
 it('returns to the list when cancelling a policy edit', function (): void {
@@ -305,15 +318,12 @@ it('lets managers upload and download attendance policy templates as JSON', func
         ->set('policyTemplateUpload', UploadedFile::fake()->createWithContent('policy-template.json', json_encode($template)))
         ->call('importPolicyTemplate')
         ->assertHasNoErrors()
-        ->assertSee('Policy template uploaded into the builder.')
+        ->assertSee('Policy template loaded.')
         ->assertSee('Identification')
         ->assertSet('mode', 'form')
         ->assertSet('showPolicyBuilderForm', true)
         ->assertSet('policyCode', 'JSON_POLICY')
-        ->assertSet('policyGraceIn', '7')
-        ->call('exportBuilderPolicyTemplate')
-        ->assertSee('Policy template JSON ready to download.')
-        ->assertSet('policyTemplateExportJson', fn (string $json): bool => str_contains($json, 'belimbing.attendance.policy-template.v1') && str_contains($json, 'JSON_POLICY'));
+        ->assertSet('policyGraceIn', '7');
 });
 
 it('downloads policy template JSON directly from the library without entering the builder', function (): void {
@@ -449,8 +459,6 @@ it('lets managers build shift templates inline from guided templates and import 
         ->call('useShiftTemplate', 'night-shift')
         ->assertSee('Shift code')
         ->assertSet('shiftCode', 'NIGHT_SHIFT')
-        ->call('exportBuilderShiftTemplate')
-        ->assertSet('shiftTemplateExportJson', fn (string $json): bool => str_contains($json, 'belimbing.attendance.shift-template.v1') && str_contains($json, 'NIGHT_SHIFT'))
         ->set('shiftCode', 'NIGHT_MAIN')
         ->set('shiftName', 'Night Main')
         ->call('saveShiftTemplate')

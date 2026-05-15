@@ -22,6 +22,17 @@
 
 @if ($showPolicyBuilderForm)
     <form wire:submit="savePolicyGroup" class="space-y-4">
+        @if ($errors->any())
+            <x-ui.alert variant="danger">
+                <p class="font-medium">{{ __('Fix these before saving:') }}</p>
+                <ul class="mt-2 list-disc pl-5 text-sm">
+                    @foreach ($errors->all() as $message)
+                        <li>{{ $message }}</li>
+                    @endforeach
+                </ul>
+            </x-ui.alert>
+        @endif
+
         <x-ui.card>
             <div>
                 <h2 class="text-base font-semibold text-ink">{{ __('Identification') }}</h2>
@@ -149,37 +160,16 @@
             </div>
         </x-ui.card>
 
-        <x-ui.card>
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                    <h2 class="text-base font-semibold text-ink">{{ __('Readiness status') }}</h2>
-                    <p class="mt-1 text-sm font-medium text-ink">{{ __('Ready to publish') }}</p>
-                    <p class="mt-1 text-sm text-muted">{{ __('All required fields are set. Run Validate to test the policy against a sample shift before exposing it to supervisors.') }}</p>
-                </div>
-                <x-ui.badge variant="success">{{ __('Ready') }}</x-ui.badge>
-            </div>
-            <div class="mt-4 flex flex-wrap justify-end gap-2">
-                <x-ui.button type="button" variant="secondary" wire:click="cancelPolicyEdit">{{ __('Cancel') }}</x-ui.button>
-                <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.policy-studio.validator') }}">
-                    {{ __('Validate with sample shift') }}
-                </x-ui.button>
-                <x-ui.button type="button" variant="secondary" wire:click="exportBuilderPolicyTemplate" :disabled="! $canManage">
-                    {{ __('Download as JSON') }}
-                </x-ui.button>
-                <x-ui.button type="submit" variant="primary" :disabled="! $canManage">
-                    <x-icon name="heroicon-o-shield-check" class="h-4 w-4" />
-                    {{ $editingPolicyGroupId === null ? __('Create and validate policy') : __('Save and validate policy') }}
-                </x-ui.button>
-            </div>
-        </x-ui.card>
+        <div class="flex flex-wrap justify-end gap-2">
+            <x-ui.button type="button" variant="secondary" wire:click="cancelPolicyEdit">{{ __('Cancel') }}</x-ui.button>
+            <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.policy-studio.validator') }}">
+                {{ __('Open Validator') }}
+            </x-ui.button>
+            <x-ui.button type="submit" variant="primary" :disabled="! $canManage">
+                {{ $editingPolicyGroupId === null ? __('Create policy') : __('Save policy') }}
+            </x-ui.button>
+        </div>
     </form>
-@endif
-
-@if ($policyTemplateExportJson !== '')
-    @include('livewire.people.attendance.policy-studio.partials.template-json-export', [
-        'id' => 'attendance-policy-builder-template-export',
-        'field' => 'policyTemplateExportJson',
-    ])
 @endif
 
 <x-ui.modal wire:model="showPolicyTemplateImportModal" class="max-w-2xl">
