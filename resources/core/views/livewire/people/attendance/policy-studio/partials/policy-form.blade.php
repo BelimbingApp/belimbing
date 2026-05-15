@@ -9,13 +9,16 @@
     </p>
 </div>
 
-<x-ui.template-picker
-    :templates="$policyTemplates"
-    :selected-key="$selectedPolicyTemplateKey"
-    :show-all="$showAllPolicyTemplates"
-    select-action="usePolicyTemplate"
-    upload-action="$set('showPolicyTemplateImportModal', true)"
-/>
+{{-- Templates are a creation affordance only — hide once a saved policy is loaded for edit or duplicate. --}}
+@if ($selectedPolicyTemplateKey !== 'saved-policy')
+    <x-ui.template-picker
+        :templates="$policyTemplates"
+        :selected-key="$selectedPolicyTemplateKey"
+        :show-all="$showAllPolicyTemplates"
+        select-action="usePolicyTemplate"
+        upload-action="$set('showPolicyTemplateImportModal', true)"
+    />
+@endif
 
 @if ($showPolicyBuilderForm)
     <form wire:submit="savePolicyGroup" class="space-y-4">

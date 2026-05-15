@@ -8,13 +8,16 @@
     </p>
 </div>
 
-<x-ui.template-picker
-    :templates="$shiftTemplatePresets"
-    :selected-key="$selectedShiftTemplateKey"
-    :show-all="$showAllShiftTemplates"
-    select-action="useShiftTemplate"
-    upload-action="$set('showShiftTemplateImportModal', true)"
-/>
+{{-- Templates are a creation affordance only — hide once a saved shift is loaded for edit or duplicate. --}}
+@if ($selectedShiftTemplateKey !== 'saved-shift')
+    <x-ui.template-picker
+        :templates="$shiftTemplatePresets"
+        :selected-key="$selectedShiftTemplateKey"
+        :show-all="$showAllShiftTemplates"
+        select-action="useShiftTemplate"
+        upload-action="$set('showShiftTemplateImportModal', true)"
+    />
+@endif
 
 @if ($showShiftBuilderForm)
     <form wire:submit="saveShiftTemplate" class="space-y-4">
