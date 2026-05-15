@@ -1,3 +1,13 @@
+<div class="flex items-center justify-between gap-3">
+    <button type="button" wire:click="cancelShiftEdit" class="inline-flex items-center gap-1 text-sm font-medium text-muted transition hover:text-accent">
+        <x-icon name="heroicon-o-arrow-left" class="h-4 w-4" />
+        {{ __('Back to shifts') }}
+    </button>
+    <p class="text-sm font-medium text-ink">
+        {{ $editingShiftTemplateId === null ? __('New shift') : __('Editing :code', ['code' => $shiftCode ?: '—']) }}
+    </p>
+</div>
+
 <x-ui.template-picker
     :templates="$shiftTemplatePresets"
     :selected-key="$selectedShiftTemplateKey"
@@ -9,14 +19,9 @@
 @if ($showShiftBuilderForm)
     <form wire:submit="saveShiftTemplate" class="space-y-4">
         <x-ui.card>
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                    <h2 class="text-base font-semibold text-ink">{{ __('Identification') }}</h2>
-                    <p class="mt-1 text-sm text-muted">{{ __('How this shift appears in rosters, policy validation and audit logs.') }}</p>
-                </div>
-                @if ($editingShiftTemplateId !== null)
-                    <x-ui.button type="button" variant="secondary" wire:click="cancelShiftEdit">{{ __('Cancel edit') }}</x-ui.button>
-                @endif
+            <div>
+                <h2 class="text-base font-semibold text-ink">{{ __('Identification') }}</h2>
+                <p class="mt-1 text-sm text-muted">{{ __('How this shift appears in rosters, policy validation and audit logs.') }}</p>
             </div>
             <div class="mt-4 grid gap-4 md:grid-cols-2">
                 <x-ui.input id="attendance-shift-code" wire:model="shiftCode" label="{{ __('Shift code') }}" placeholder="{{ __('OFFICE_DAY') }}" required help="{{ __('Short reference supervisors see while building rosters.') }}" :error="$errors->first('shiftCode')" />
@@ -32,7 +37,7 @@
             <div class="mt-4 space-y-4">
                 <x-ui.alert variant="info">
                     {{ __('Policy Builder decides rounding, lateness and overtime. Shift Builder only defines scheduled time and punch expectations.') }}
-                    <a href="{{ route('people.attendance.policy-studio.builder') }}" target="_blank" rel="noopener noreferrer" class="font-medium text-accent hover:underline">{{ __('Open Policy Builder in a new tab') }}</a>
+                    <a href="{{ route('people.attendance.policy-studio.library') }}" target="_blank" rel="noopener noreferrer" class="font-medium text-accent hover:underline">{{ __('Open Policy Studio in a new tab') }}</a>
                 </x-ui.alert>
                 <div class="grid gap-4 sm:grid-cols-3">
                     <x-ui.input id="attendance-shift-starts-at" type="time" wire:model="shiftStartsAt" label="{{ __('Shift start') }}" required help="{{ __('When scheduled work begins.') }}" :error="$errors->first('shiftStartsAt')" />
@@ -88,6 +93,7 @@
                 <x-ui.badge variant="success">{{ __('Ready') }}</x-ui.badge>
             </div>
             <div class="mt-4 flex flex-wrap justify-end gap-2">
+                <x-ui.button type="button" variant="secondary" wire:click="cancelShiftEdit">{{ __('Cancel') }}</x-ui.button>
                 <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.policy-studio.validator') }}">
                     {{ __('Validate with policy') }}
                 </x-ui.button>
@@ -109,3 +115,21 @@
         'field' => 'shiftTemplateExportJson',
     ])
 @endif
+
+<x-ui.modal wire:model="showShiftTemplateImportModal" class="max-w-2xl">
+    <div class="p-6 space-y-4">
+        <div>
+            <h2 class="text-lg font-semibold text-ink">{{ __('Upload Shift Template') }}</h2>
+            <p class="mt-1 text-sm text-muted">{{ __('Choose a JSON file containing one shift template object, or an array of template objects.') }}</p>
+        </div>
+        <div>
+            <label for="attendance-shift-template-upload" class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Template JSON file') }}</label>
+            <input id="attendance-shift-template-upload" type="file" accept="application/json,.json" wire:model="shiftTemplateUpload" class="mt-1 block w-full text-sm text-ink file:mr-4 file:rounded file:border-0 file:bg-surface-subtle file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-surface-subtle/80" />
+            @error('shiftTemplateUpload') <p class="mt-1 text-sm text-status-danger">{{ $message }}</p> @enderror
+        </div>
+        <div class="flex justify-end gap-2">
+            <x-ui.button type="button" variant="secondary" wire:click="$set('showShiftTemplateImportModal', false)">{{ __('Cancel') }}</x-ui.button>
+            <x-ui.button type="button" variant="primary" wire:click="importShiftTemplate">{{ __('Upload into builder') }}</x-ui.button>
+        </div>
+    </div>
+</x-ui.modal>

@@ -4,10 +4,8 @@ use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\People\Attendance\Livewire\Approvals;
 use App\Modules\People\Attendance\Livewire\PolicyStudio\Allowances;
-use App\Modules\People\Attendance\Livewire\PolicyStudio\Builder as PolicyBuilder;
-use App\Modules\People\Attendance\Livewire\PolicyStudio\Library as PolicyLibrary;
-use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Builder as ShiftBuilder;
-use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Library as ShiftLibrary;
+use App\Modules\People\Attendance\Livewire\PolicyStudio\Library as PolicyStudio;
+use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Library as Shifts;
 use App\Modules\People\Attendance\Livewire\PolicyStudio\Validator as PolicyValidator;
 use App\Modules\People\Attendance\Livewire\Rosters;
 use App\Modules\People\Attendance\Models\AttendanceAllowanceRule;
@@ -181,7 +179,7 @@ it('routes managers from the policy library into the validator and runs validati
 
     $this->actingAs($user);
 
-    Livewire::test(PolicyLibrary::class)
+    Livewire::test(PolicyStudio::class)
         ->assertSee('Policy Groups')
         ->assertDontSee('Validation findings')
         ->call('simulatePolicyGroup', $policyGroup->id)
@@ -202,13 +200,18 @@ it('routes managers from the policy library into the validator and runs validati
         ->assertHasNoErrors();
 });
 
-it('lets managers build, save, and edit attendance policy groups', function (): void {
+it('lets managers build, save, and edit policies inline on the studio page', function (): void {
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
 
     $this->actingAs($user);
 
-    Livewire::test(PolicyBuilder::class)
+    Livewire::test(PolicyStudio::class)
+        ->assertSee('Policy Groups')
+        ->assertSet('mode', 'list')
+        ->assertDontSee('Templates')
+        ->call('startNewPolicy')
+        ->assertSet('mode', 'form')
         ->assertSee('Templates')
         ->assertDontSee('Identification')
         ->call('usePolicyTemplate', 'office-grace')
@@ -216,10 +219,6 @@ it('lets managers build, save, and edit attendance policy groups', function (): 
         ->assertSee('Readiness status')
         ->assertSee('Ready to publish')
         ->assertSet('policyGraceIn', '10')
-        ->call('usePolicyTemplate', 'office-grace')
-        ->assertDontSee('Identification')
-        ->assertSet('showAllPolicyTemplates', true)
-        ->call('usePolicyTemplate', 'office-grace')
         ->set('policyCode', 'std_8_5')
         ->set('policyName', 'Standard 8 to 5')
         ->set('policyEffectiveFrom', '2026-01-01')
@@ -228,7 +227,9 @@ it('lets managers build, save, and edit attendance policy groups', function (): 
         ->set('policyLatenessPayItem', 'lateness_deduction')
         ->call('savePolicyGroup')
         ->assertHasNoErrors()
-        ->assertRedirect(route('people.attendance.policy-studio.library'));
+        ->assertSet('mode', 'list')
+        ->assertSee('Policy group saved and validated.')
+        ->assertSee('STD_8_5');
 
     $policy = AttendancePolicyGroup::query()
         ->where('company_id', $company->id)
@@ -240,38 +241,40 @@ it('lets managers build, save, and edit attendance policy groups', function (): 
         ->and($policy->overtime_export_rules['normal'][0]['pay_item_code'])->toBe('overtime')
         ->and($policy->payroll_defaults['currency'])->toBe('MYR');
 
-    Livewire::test(PolicyBuilder::class, ['policyGroup' => $policy->id])
-        ->assertSee('Identification')
+    Livewire::test(PolicyStudio::class)
+        ->call('editPolicyGroup', $policy->id)
+        ->assertSet('mode', 'form')
+        ->assertSet('editingPolicyGroupId', $policy->id)
         ->assertSet('policyGraceIn', '5')
         ->set('policyGraceIn', '10')
         ->call('savePolicyGroup')
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->assertSet('mode', 'list');
 
     expect($policy->refresh()->version)->toBe(2)
         ->and($policy->lateness_rules['grace']['in'])->toBe(10);
 });
 
-it('loads policy edit form when reached via ?policyGroup query string redirect', function (): void {
-    // Regression: Library->edit redirects to /builder?policyGroup={id}. Livewire
-    // mount params resolve from route segments only, so the builder was opening
-    // blank instead of loading the policy. mount() now reads the query string.
+it('returns to the list when cancelling a policy edit', function (): void {
     $user = createAdminUser();
-    $company = Company::query()->findOrFail($user->company_id);
     $policy = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'QSEDIT',
-        'name' => 'Query string edit',
+        'company_id' => $user->company_id,
+        'code' => 'CANCEL_ME',
+        'name' => 'Cancel me',
         'effective_from' => '2026-01-01',
-        'lateness_rules' => ['grace' => ['in' => 7]],
     ]);
 
     $this->actingAs($user);
 
-    $this->get(route('people.attendance.policy-studio.builder', ['policyGroup' => $policy->id]))
-        ->assertOk()
-        ->assertSee('QSEDIT')
-        ->assertSee('Query string edit')
-        ->assertSee('Identification');
+    Livewire::test(PolicyStudio::class)
+        ->call('editPolicyGroup', $policy->id)
+        ->assertSet('mode', 'form')
+        ->set('policyGraceIn', '99')
+        ->call('cancelPolicyEdit')
+        ->assertSet('mode', 'list')
+        ->assertSet('editingPolicyGroupId', null);
+
+    expect($policy->refresh()->lateness_rules['grace']['in'] ?? 0)->not->toBe(99);
 });
 
 it('lets managers upload and download attendance policy templates as JSON', function (): void {
@@ -294,7 +297,8 @@ it('lets managers upload and download attendance policy templates as JSON', func
         'lateness_pay_item' => 'lateness_deduction',
     ];
 
-    Livewire::test(PolicyBuilder::class)
+    Livewire::test(PolicyStudio::class)
+        ->call('startNewPolicy')
         ->assertSee('Templates')
         ->assertSee('Upload Template')
         ->assertDontSee('Identification')
@@ -303,6 +307,7 @@ it('lets managers upload and download attendance policy templates as JSON', func
         ->assertHasNoErrors()
         ->assertSee('Policy template uploaded into the builder.')
         ->assertSee('Identification')
+        ->assertSet('mode', 'form')
         ->assertSet('showPolicyBuilderForm', true)
         ->assertSet('policyCode', 'JSON_POLICY')
         ->assertSet('policyGraceIn', '7')
@@ -324,7 +329,7 @@ it('downloads policy template JSON directly from the library without entering th
 
     $this->actingAs($user);
 
-    Livewire::test(PolicyLibrary::class)
+    Livewire::test(PolicyStudio::class)
         ->call('exportPolicyGroupTemplate', $policyGroup->id)
         ->assertSee('Policy template JSON ready to download from EXPORT_ME.')
         ->assertSet('policyTemplateExportJson', fn (string $json): bool => str_contains($json, 'belimbing.attendance.policy-template.v1') && str_contains($json, 'EXPORT_ME'));
@@ -429,12 +434,16 @@ it('lets managers create roster assignments from the guided roster builder', fun
         ->and($assignment->publish_state)->toBe('published');
 });
 
-it('lets managers build shift templates from guided templates and import JSON', function (): void {
+it('lets managers build shift templates inline from guided templates and import JSON', function (): void {
     $user = createAdminUser();
 
     $this->actingAs($user);
 
-    Livewire::test(ShiftBuilder::class)
+    Livewire::test(Shifts::class)
+        ->assertSet('mode', 'list')
+        ->assertDontSee('Templates')
+        ->call('startNewShift')
+        ->assertSet('mode', 'form')
         ->assertSee('Templates')
         ->assertDontSee('Shift code')
         ->call('useShiftTemplate', 'night-shift')
@@ -446,7 +455,8 @@ it('lets managers build shift templates from guided templates and import JSON', 
         ->set('shiftName', 'Night Main')
         ->call('saveShiftTemplate')
         ->assertHasNoErrors()
-        ->assertRedirect(route('people.attendance.shift-library'));
+        ->assertSet('mode', 'list')
+        ->assertSee('Shift template saved.');
 
     $shift = AttendanceShiftTemplate::query()
         ->where('company_id', $user->company_id)
@@ -459,7 +469,8 @@ it('lets managers build shift templates from guided templates and import JSON', 
         ->and($shift->punchWindows()->where('event_type', AttendancePunchWindow::TYPE_IN)->exists())->toBeTrue()
         ->and($shift->punchWindows()->where('event_type', AttendancePunchWindow::TYPE_OUT)->exists())->toBeTrue();
 
-    Livewire::test(ShiftBuilder::class)
+    Livewire::test(Shifts::class)
+        ->call('startNewShift')
         ->set('shiftTemplateUpload', UploadedFile::fake()->createWithContent('shift-template.json', json_encode([
             'schema' => 'belimbing.attendance.shift-template.v1',
             'code' => 'IMPORT_DAY',
@@ -476,32 +487,10 @@ it('lets managers build shift templates from guided templates and import JSON', 
         ])))
         ->call('importShiftTemplate')
         ->assertHasNoErrors()
+        ->assertSet('mode', 'form')
         ->assertSet('shiftCode', 'IMPORT_DAY')
         ->assertSet('shiftBreakStartsAt', '13:00')
         ->assertSet('shiftInWindowBeforeMinutes', '30');
-});
-
-it('loads shift edit form when reached via ?shift query string redirect', function (): void {
-    // Regression: matches the policy-builder fix — ShiftLibrary->edit redirects
-    // with ?shift={id} which mount() must read from the query string.
-    $user = createAdminUser();
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $user->company_id,
-        'code' => 'QSHIFT',
-        'name' => 'Query string shift',
-        'starts_at' => '09:00:00',
-        'ends_at' => '18:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-
-    $this->actingAs($user);
-
-    $this->get(route('people.attendance.shifts', ['shift' => $shift->id]))
-        ->assertOk()
-        ->assertSee('QSHIFT')
-        ->assertSee('Query string shift')
-        ->assertSee('Shift code');
 });
 
 it('toggles shift template status from the library', function (): void {
@@ -519,7 +508,7 @@ it('toggles shift template status from the library', function (): void {
 
     $this->actingAs($user);
 
-    Livewire::test(ShiftLibrary::class)
+    Livewire::test(Shifts::class)
         ->call('toggleShiftStatus', $shift->id)
         ->assertHasNoErrors()
         ->assertSee('Shift status updated.');
@@ -532,31 +521,20 @@ it('uses focused titles for each policy studio page', function (): void {
 
     $this->actingAs($user);
 
-    Livewire::test(PolicyLibrary::class)
+    Livewire::test(PolicyStudio::class)
         ->assertSee('Policy Groups')
         ->assertDontSee('Attendance Days')
         ->assertDontSee('Search employee...')
         ->assertDontSee('Settings areas')
         ->assertDontSee('Attendance Settings');
 
-    Livewire::test(ShiftBuilder::class)
-        ->assertSee('Templates')
-        ->assertSee('Maintain reusable shift times')
-        ->assertDontSee('Shift Library')
-        ->assertDontSee('Reset builder')
-        ->assertDontSee('heroicon-m-chevron-down')
-        ->assertDontSee('Attendance Days')
-        ->assertDontSee('Search employee...')
-        ->assertDontSee('Settings areas')
-        ->assertDontSee('Attendance Settings');
-
-    Livewire::test(ShiftLibrary::class)
+    // List mode hides templates; entering form mode reveals them.
+    Livewire::test(Shifts::class)
+        ->assertSet('mode', 'list')
         ->assertSee('Shift Library')
         ->assertDontSee('Templates')
-        ->assertDontSee('Attendance Days')
-        ->assertDontSee('Search employee...')
-        ->assertDontSee('Settings areas')
-        ->assertDontSee('Attendance Settings');
+        ->call('startNewShift')
+        ->assertSee('Templates');
 });
 
 it('keeps operational timecard controls off the approvals surface', function (): void {

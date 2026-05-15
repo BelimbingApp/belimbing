@@ -10,12 +10,14 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Library;
 
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Shift Library')" :subtitle="__('Manage reusable shift templates supervisors can select while building rosters.')">
-            <x-slot name="actions">
-                <x-ui.button as="a" variant="primary" href="{{ route('people.attendance.shifts') }}">
-                    <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
-                    {{ __('New shift') }}
-                </x-ui.button>
-            </x-slot>
+            @if ($mode === 'list')
+                <x-slot name="actions">
+                    <x-ui.button type="button" variant="primary" wire:click="startNewShift">
+                        <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
+                        {{ __('New shift') }}
+                    </x-ui.button>
+                </x-slot>
+            @endif
             <x-slot name="help">
                 {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
             </x-slot>
@@ -35,6 +37,10 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Library;
             </x-ui.alert>
         @endif
 
-        @include('livewire.people.attendance.policy-studio.partials.shifts-library-table')
+        @if ($mode === 'list')
+            @include('livewire.people.attendance.policy-studio.partials.shifts-library-table')
+        @else
+            @include('livewire.people.attendance.policy-studio.partials.shifts-form')
+        @endif
     </div>
 </div>
