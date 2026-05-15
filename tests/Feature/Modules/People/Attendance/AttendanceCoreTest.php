@@ -90,6 +90,228 @@ it('projects attendance day metrics from clock events', function (): void {
         ->and($day->exception_tags)->toBe(['late_in']);
 });
 
+it('deducts unpaid breaks from worked time but keeps paid breaks counted', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'PROD_12H',
+        'name' => 'Production 12h',
+        'starts_at' => '07:00:00',
+        'ends_at' => '19:00:00',
+        'expected_work_minutes' => 660,
+        'break_windows' => [
+            ['label' => 'Lunch', 'starts_at' => '12:00', 'ends_at' => '13:00', 'paid' => false],
+            ['label' => 'Tea', 'starts_at' => '15:30', 'ends_at' => '15:45', 'paid' => true],
+        ],
+        'effective_from' => '2026-01-01',
+    ]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'PROD',
+        'name' => 'Production',
+        'effective_from' => '2026-01-01',
+    ]);
+    $day = AttendanceDay::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'attendance_date' => '2026-05-13',
+        'expected_minutes' => 660,
+        'payroll_period_date' => '2026-05-13',
+    ]);
+    AttendanceClockEvent::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_day_id' => $day->id,
+        'event_type' => AttendanceClockEvent::TYPE_IN,
+        'occurred_at' => '2026-05-13 07:00:00',
+        'source' => AttendanceClockEvent::SOURCE_WEB,
+    ]);
+    AttendanceClockEvent::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_day_id' => $day->id,
+        'event_type' => AttendanceClockEvent::TYPE_OUT,
+        'occurred_at' => '2026-05-13 19:00:00',
+        'source' => AttendanceClockEvent::SOURCE_WEB,
+    ]);
+
+    app(AttendanceDayProjectionService::class)->project($day)->save();
+    $day->refresh();
+
+    // 07:00–19:00 = 720 min raw. Unpaid lunch (60 min) deducted; paid tea kept. Worked = 660.
+    expect($day->worked_minutes)->toBe(660)
+        ->and($day->break_minutes)->toBe(75)
+        ->and($day->payable_minutes)->toBe(660)
+        ->and($day->overtime_candidate_minutes)->toBe(0);
+});
+
+it('applies lateness grace and rounding from the policy group', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'GRACE',
+        'name' => 'Grace policy',
+        'effective_from' => '2026-01-01',
+        'lateness_rules' => [
+            'grace' => ['in' => 10, 'out' => 5],
+            'daily_rounding' => ['method' => 'ceiling', 'minutes' => 5],
+        ],
+    ]);
+    $day = AttendanceDay::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'attendance_date' => '2026-05-13',
+        'expected_minutes' => 480,
+        'payroll_period_date' => '2026-05-13',
+    ]);
+    AttendanceClockEvent::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_day_id' => $day->id,
+        'event_type' => AttendanceClockEvent::TYPE_IN,
+        'occurred_at' => '2026-05-13 08:12:00',
+        'source' => AttendanceClockEvent::SOURCE_WEB,
+    ]);
+    AttendanceClockEvent::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_day_id' => $day->id,
+        'event_type' => AttendanceClockEvent::TYPE_OUT,
+        'occurred_at' => '2026-05-13 16:57:00',
+        'source' => AttendanceClockEvent::SOURCE_WEB,
+    ]);
+
+    app(AttendanceDayProjectionService::class)->project($day)->save();
+    $day->refresh();
+
+    // Late: 12 min - 10 min grace = 2 min → ceiling 5 = 5.
+    // Early out: 3 min - 5 min grace = 0.
+    expect($day->late_minutes)->toBe(5)
+        ->and($day->early_out_minutes)->toBe(0);
+});
+
+it('rounds worked minutes and suppresses overtime candidates below the OT minimum', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'TIGHT',
+        'name' => 'Tight policy',
+        'effective_from' => '2026-01-01',
+        'work_hour_rules' => ['daily_rounding' => ['method' => 'nearest', 'minutes' => 15]],
+        'overtime_rules' => ['late_ot' => ['enabled' => true, 'minimum_minutes' => 60]],
+    ]);
+    $day = AttendanceDay::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'attendance_date' => '2026-05-13',
+        'expected_minutes' => 480,
+        'payroll_period_date' => '2026-05-13',
+    ]);
+    AttendanceClockEvent::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_day_id' => $day->id,
+        'event_type' => AttendanceClockEvent::TYPE_IN,
+        'occurred_at' => '2026-05-13 08:00:00',
+        'source' => AttendanceClockEvent::SOURCE_WEB,
+    ]);
+    AttendanceClockEvent::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_day_id' => $day->id,
+        'event_type' => AttendanceClockEvent::TYPE_OUT,
+        'occurred_at' => '2026-05-13 17:25:00',
+        'source' => AttendanceClockEvent::SOURCE_WEB,
+    ]);
+
+    app(AttendanceDayProjectionService::class)->project($day)->save();
+    $day->refresh();
+
+    // Raw worked = 565 min; nearest 15 = 570. Excess over 480 = 90 → above 60-min threshold → kept as OT candidate.
+    expect($day->worked_minutes)->toBe(570)
+        ->and($day->overtime_candidate_minutes)->toBe(90);
+});
+
+it('zeroes the overtime candidate when the excess falls below the OT minimum threshold', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 540,
+        'effective_from' => '2026-01-01',
+    ]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'OT60',
+        'name' => '60-min OT threshold',
+        'effective_from' => '2026-01-01',
+        'overtime_rules' => ['late_ot' => ['enabled' => true, 'minimum_minutes' => 60]],
+    ]);
+    $day = AttendanceDay::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'attendance_date' => '2026-05-13',
+        'expected_minutes' => 540,
+        'payroll_period_date' => '2026-05-13',
+    ]);
+    AttendanceClockEvent::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_day_id' => $day->id,
+        'event_type' => AttendanceClockEvent::TYPE_IN,
+        'occurred_at' => '2026-05-13 08:00:00',
+        'source' => AttendanceClockEvent::SOURCE_WEB,
+    ]);
+    AttendanceClockEvent::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_day_id' => $day->id,
+        'event_type' => AttendanceClockEvent::TYPE_OUT,
+        'occurred_at' => '2026-05-13 17:30:00',
+        'source' => AttendanceClockEvent::SOURCE_WEB,
+    ]);
+
+    app(AttendanceDayProjectionService::class)->project($day)->save();
+    $day->refresh();
+
+    // 570 worked, 30-min excess over 540 expected; below the 60-min OT threshold → suppressed.
+    expect($day->worked_minutes)->toBe(570)
+        ->and($day->overtime_candidate_minutes)->toBe(0);
+});
+
 it('prefers employee roster policy groups over cohort defaults', function (): void {
     $company = Company::factory()->minimal()->create();
     $employee = Employee::factory()->active()->create(['company_id' => $company->id]);

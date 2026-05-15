@@ -1,6 +1,6 @@
 # people/11_attendance-shift-and-allowance-coverage
 
-**Status:** Implemented (2026-05-15) — all three scheduled changes shipped: (1) multi-break shift template with per-break paid flag, (2) shift-scoped allowance rule with nullable `attendance_shift_template_id` FK, (3) `day_type_overrides` column dropped. One follow-on remains explicitly deferred: applying per-break `paid` to work-minute deduction lands with the production attendance-day evaluator (which currently does no break deduction at all).
+**Status:** Complete (2026-05-15) — all four originally scheduled changes shipped, including the previously deferred work-minute deduction. (1) multi-break shift template with per-break paid flag, (2) shift-scoped allowance rule with nullable `attendance_shift_template_id` FK, (3) `day_type_overrides` column dropped, (4) `AttendanceDayProjectionService` now reads per-break `paid` and deducts only the unpaid breaks from worked minutes.
 **Last Updated:** 2026-05-15
 **Sources:**
 - `docs/plans/people/09_attendance-module-design.md` — parent Attendance design. Splits the legacy "TMS Group" monolith into `AttendanceShiftTemplate` (schedule) + `AttendancePolicyGroup` (rules) + `AttendanceAllowanceRule` (allowance triggers) + `AttendanceRosterPattern` (rotation) + `AttendanceRosterAssignment` (per-employee assignment). That split is deliberate and not under review here.
@@ -101,4 +101,4 @@ Every real case decomposes into "separate shift template + roster reassignment."
 - [x] Shift-scoped allowance: migration `0320_02_05_000002_*`, `AttendanceAllowanceRule.attendance_shift_template_id` + relationship, AllowanceRules form select, simulator filter. {claude-code/opus-4.7, commit acc31975}
 - [x] Drop `day_type_overrides`: migration `0320_02_05_000001_*` + cast/fillable removed. {claude-code/opus-4.7, commit 8ceaf4e2}
 - [x] Cross-reference items added to 09 roster-builder checklist: day-type-aware resolver, pattern routing by day type, bulk reassignment by employee attribute. {claude-code/opus-4.7, commit a6e4ba08}
-- [ ] (Deferred) Apply per-break `paid` to work-minute deduction once the production attendance-day evaluator is built. Backfill rule when that ships: `paid: false` for breaks on shifts whose policy had `daily_exclude_break_hours = true`, else `paid: true`.
+- [x] Apply per-break `paid` to work-minute deduction. `AttendanceDayProjectionService` now reads `shift.break_windows[*].paid` and subtracts the overlap of each unpaid break against the (first clock-in → last clock-out) span. Paid breaks stay in worked time. Dev seeder break entries normalized to the `{label, starts_at, ends_at, paid}` shape used by the form. {claude-code/opus-4.7}
