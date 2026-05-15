@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Browser;
 
+use App\Base\AI\Services\DetachedProcessLauncher;
 use App\Base\Support\Json as BlbJson;
 use App\Base\Support\Str as BlbStr;
 use Symfony\Component\Process\Process;
@@ -50,6 +52,10 @@ class PlaywrightRunner
         'WAYLAND_DISPLAY',
         'XDG_RUNTIME_DIR',
     ];
+
+    public function __construct(
+        private readonly ?DetachedProcessLauncher $launcher = null,
+    ) {}
 
     /**
      * Execute a browser action via the Playwright runner.
@@ -107,22 +113,21 @@ class PlaywrightRunner
 
         file_put_contents($inputFile, $input);
 
-        // Build shell environment prefix. Keys are safe constants —
-        // only values need escaping.
-        $envParts = [];
-        foreach ($displayEnv as $key => $value) {
-            $envParts[] = $key.'='.escapeshellarg($value);
-        }
-        $envParts[] = 'BLB_INPUT_FILE='.escapeshellarg($inputFile);
-        $envParts[] = 'BLB_OUTPUT_FILE='.escapeshellarg($outputFile);
-
-        $cmd = sprintf(
-            '%s setsid node %s </dev/null >/dev/null 2>&1 &',
-            implode(' ', $envParts),
-            escapeshellarg($scriptPath),
+        $started = $this->launcher()->launch(
+            ['node', $scriptPath],
+            base_path(),
+            array_merge($displayEnv, [
+                'BLB_INPUT_FILE' => $inputFile,
+                'BLB_OUTPUT_FILE' => $outputFile,
+            ]),
         );
 
-        exec($cmd);
+        if (! $started) {
+            @unlink($inputFile);
+            @unlink($outputFile);
+
+            throw new PlaywrightRunnerException('Failed to launch browser runner process.');
+        }
 
         // Poll for the output file. The runner writes to a .tmp file first,
         // then atomically renames it, so we only ever see complete JSON.
@@ -331,5 +336,10 @@ class PlaywrightRunner
     private function scriptPath(): string
     {
         return resource_path('core/scripts/browser-runner.mjs');
+    }
+
+    private function launcher(): DetachedProcessLauncher
+    {
+        return $this->launcher ?? app(DetachedProcessLauncher::class);
     }
 }

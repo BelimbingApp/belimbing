@@ -325,15 +325,15 @@ describe('BashTool', function () {
     it('executes a simple command successfully', function () {
         $tool = new BashTool;
 
-        $result = $tool->execute(['command' => 'echo hello-bash-tool']);
+        $result = $tool->execute(['command' => 'php -r "echo \'hello-shell-tool\';"']);
 
-        expect((string) $result)->toBe('hello-bash-tool');
+        expect((string) $result)->toBe('hello-shell-tool');
     });
 
     it('returns failure message for bad command', function () {
         $tool = new BashTool;
 
-        $result = $tool->execute(['command' => 'cat /nonexistent/file/path']);
+        $result = $tool->execute(['command' => 'php -r "fwrite(STDERR, \'expected shell failure\'); exit(1);"']);
 
         expect((string) $result)->toContain('Command failed');
     });
@@ -341,7 +341,7 @@ describe('BashTool', function () {
     it('returns success message when command produces no output', function () {
         $tool = new BashTool;
 
-        $result = $tool->execute(['command' => 'true']);
+        $result = $tool->execute(['command' => 'php -r ""']);
 
         expect((string) $result)->toBe('Command completed successfully (no output).');
     });

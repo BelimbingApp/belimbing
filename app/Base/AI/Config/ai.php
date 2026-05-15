@@ -1,7 +1,5 @@
 <?php
 
-use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
-
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
@@ -22,6 +20,21 @@ return [
     |
     */
     'workspace_path' => env('AI_WORKSPACE_PATH', storage_path('app/ai/workspace')),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Agent Runtime Shell
+    |--------------------------------------------------------------------------
+    |
+    | Shared shell backend for agent-facing command execution and other
+    | runtime helpers that need a platform-aware command shell.
+    |
+    */
+    'shell' => [
+        'backend' => env('AI_SHELL_BACKEND', 'auto'),
+        'powershell_binary' => env('AI_SHELL_POWERSHELL_BINARY'),
+        'bash_binary' => env('AI_SHELL_BASH_BINARY', 'bash'),
+    ],
 
     /*
     |--------------------------------------------------------------------------

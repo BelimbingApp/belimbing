@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire\Providers;
 
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Services\DetachedProcessLauncher;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Livewire\Providers\Concerns\ConfiguresOpenAiCodexSetupView;
@@ -266,32 +268,17 @@ final class OpenAiCodexSetup extends ProviderSetup
         $artisan = base_path('artisan');
         $logFile = storage_path('logs/codex-auth-listen.log');
 
-        if (PHP_OS_FAMILY === 'Windows') {
-            // `start /B` detaches without opening a new window; redirect output
-            // so the process is fully decoupled from the parent.
-            $cmd = sprintf(
-                'start /B "" %s %s blb:ai:codex:auth-listen --timeout=180 >> %s 2>&1',
-                escapeshellarg($php),
-                escapeshellarg($artisan),
-                escapeshellarg($logFile),
-            );
-            $handle = popen($cmd, 'r');
-            if ($handle === false) {
-                return false;
-            }
-            pclose($handle);
-
-            return $this->waitForPortBind(1455, 3000);
-        }
-
-        $cmd = sprintf(
-            'nohup %s %s blb:ai:codex:auth-listen --timeout=180 >> %s 2>&1 &',
-            escapeshellarg($php),
-            escapeshellarg($artisan),
-            escapeshellarg($logFile),
+        $started = app(DetachedProcessLauncher::class)->launch(
+            [$php, $artisan, 'blb:ai:codex:auth-listen', '--timeout=180'],
+            base_path(),
+            [],
+            $logFile,
+            $logFile,
         );
 
-        exec($cmd);
+        if (! $started) {
+            return false;
+        }
 
         return $this->waitForPortBind(1455, 3000);
     }

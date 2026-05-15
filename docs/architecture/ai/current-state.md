@@ -319,7 +319,7 @@ Implementation notes:
 Implemented outcome:
 
 - Lara's default interactive path uses one minimal tool allowlist instead of named chat profiles
-- the default interactive allowlist keeps `bash` and `browser`, still filtered by the logged-in user's capabilities
+- the default interactive allowlist keeps the `bash` tool and `browser`, still filtered by the logged-in user's capabilities
 - repository work has an explicit target surface: `core` or `extension:<slug>`
 - core repository tools reject extension paths unless the caller selects the matching extension surface
 - extension surfaces are discovered under `extensions/`, `extensions/custom/`, `extensions/vendor/`, and `resources/extensions/`
@@ -340,7 +340,7 @@ Repository tool behavior:
 - `read` reads project files with denied secret/dependency/generated paths and a byte limit, and can run guarded read-only data queries
 - `search` searches paths or contents inside the selected surface, excluding dependency, generated, VCS, and environment files
 - `edit` supports file write, append, and exact single-match replacement scoped to the selected surface, and can run guarded data writes
-- repository diffs are intentionally left to `bash`/git instead of a separate tool
+- repository diffs are intentionally left to the configured shell backend and git instead of a separate tool
 
 Remaining gaps:
 
@@ -348,6 +348,12 @@ Remaining gaps:
 - remote/origin enforcement for core vs extension repositories is not complete
 - automatic cross-surface work splitting and completion-evidence policy are runtime work, not yet enforced
 - filesystem skills are loaded and ownership-labelled, but task-time filtering and operator lifecycle UI are still pending
+
+Native Windows runtime expectations:
+
+- agent shell execution resolves through the shared AI shell backend, with PowerShell preferred on Windows and Bash remaining available when explicitly configured
+- operators should ensure `php`, `node`, `bun`, and `git` are available on `PATH`, and Windows shell-backed helpers should not assume WSL2 or Unix redirection behavior
+- detached helper processes such as browser runner launches and Codex OAuth listener startup go through platform-aware launch paths instead of Unix-only `nohup` or `setsid` commands
 
 ---
 
@@ -358,7 +364,7 @@ The current AI runtime registers these implemented tool surfaces.
 Core/general tools:
 
 - `artisan`
-- `bash`
+- `bash` (shell backend execution)
 - `navigate`
 - `visible_nav_menu`
 - `write_js`

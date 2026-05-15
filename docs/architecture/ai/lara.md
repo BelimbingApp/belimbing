@@ -103,14 +103,14 @@ Core tool categories:
 | Repository | read, search, edit |
 | Verification | tests, linters, formatters, diagnostics |
 | Application | Artisan, config, permitted data |
-| Shell | bash or equivalent command-line tools |
+| Shell | shell or equivalent command-line tools |
 | Browser/UI | Belimbing and other software interfaces |
 | Knowledge | docs, plans, compiled knowledge, licensee overlay |
 | Communication | explain, file follow-ups, delegate |
 
 Tool execution must provide schemas, capability-filtered availability, defense-in-depth checks, structured results, auditable traces, and safe failures.
 
-Repository tools are rooted at the project root, exclude secrets and generated noise by default, record before/after state for writes, and rely on `bash`/git for repository inspection such as diffs.
+Repository tools are rooted at the project root, exclude secrets and generated noise by default, record before/after state for writes, and rely on the configured shell backend and git for repository inspection such as diffs.
 
 Skills are ownership-scoped:
 

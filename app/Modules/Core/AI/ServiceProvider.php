@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI;
 
 use App\Base\AI\Contracts\Tool;
@@ -350,7 +351,7 @@ class ServiceProvider extends BaseServiceProvider
         $always = [
             $app->make(ActivePageSnapshotTool::class),
             $app->make(ArtisanTool::class),
-            new BashTool,
+            $app->make(BashTool::class),
             $app->make(BrowserTool::class),
             $app->make(DelegateTaskTool::class),
             $app->make(DelegationStatusTool::class),

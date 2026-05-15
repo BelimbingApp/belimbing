@@ -1,11 +1,13 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Contracts\StreamableTool;
+use App\Base\AI\Exceptions\ShellBackendUnavailableException;
+use App\Base\AI\Services\ShellCommandRunner;
 use App\Base\AI\Tools\AbstractHighImpactProcessTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolResult;
-use Illuminate\Support\Facades\Process;
 
 /**
  * Bash CLI execution tool for Agents.
@@ -27,6 +29,10 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
 
     private const MAX_STDOUT_EVENTS = 50;
 
+    public function __construct(
+        private readonly ?ShellCommandRunner $shell = null,
+    ) {}
+
     public function name(): string
     {
         return 'bash';
@@ -34,7 +40,7 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
 
     public function description(): string
     {
-        return 'Execute a bash command and return its output. '
+        return 'Execute a shell command and return its output. '
             .'Use this for system commands, file operations, package management, git, etc. '
             .'Commands run from the Belimbing project root directory.';
     }
@@ -44,8 +50,8 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
         return ToolSchemaBuilder::make()
             ->string(
                 'command',
-                'The bash command to execute. '
-                    .'Examples: "ls -la storage/app", "cat .env | grep DB_", "git log --oneline -5".'
+                'The shell command to execute. '
+                    .'Examples: "git status --short", "php artisan route:list", "Get-ChildItem storage".'
             )->required();
     }
 
@@ -57,19 +63,19 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
     protected function metadata(): array
     {
         return [
-            'display_name' => 'Bash',
+            'display_name' => 'Shell',
             'summary' => 'Execute shell commands on the server.',
-            'explanation' => 'Runs shell commands on the Belimbing server. Extremely powerful — can modify files, '
+            'explanation' => 'Runs shell commands through the configured Belimbing shell backend. Extremely powerful — can modify files, '
                 .'install packages, and interact with the operating system. '
                 .'Requires the highest authorization level.',
             'test_examples' => [
                 [
-                    'label' => 'Disk usage',
-                    'input' => ['command' => 'df -h'],
+                    'label' => 'Git status',
+                    'input' => ['command' => 'git status --short'],
                 ],
                 [
                     'label' => '⚠ Clear application logs (irreversible)',
-                    'input' => ['command' => 'truncate -s 0 storage/logs/laravel.log && echo "Log cleared."'],
+                    'input' => ['command' => 'php -r "file_put_contents(\'storage/logs/laravel.log\', \'\'); echo \'Log cleared.\';"'],
                     'runnable' => false,
                 ],
             ],
@@ -86,9 +92,11 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
     {
         $command = $this->requireString($arguments, 'command');
 
-        $result = Process::timeout(self::TIMEOUT_SECONDS)
-            ->path(base_path())
-            ->run($command);
+        try {
+            $result = $this->shell()->run($command, base_path(), self::TIMEOUT_SECONDS);
+        } catch (ShellBackendUnavailableException $e) {
+            return ToolResult::error($e->getMessage(), 'command_unavailable');
+        }
 
         return $this->formatProcessResult($result);
     }
@@ -124,29 +132,13 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
      */
     private function openBashStreamingPipes(string $command): ?array
     {
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-
-        $pipes = null;
-        $process = proc_open(
-            ['bash', '-c', $command],
-            $descriptors,
-            $pipes,
-            base_path(),
-        );
-
-        if (! is_resource($process) || ! is_array($pipes)) {
+        try {
+            $opened = $this->shell()->openStreamingProcess($command, base_path());
+        } catch (ShellBackendUnavailableException) {
             return null;
         }
 
-        fclose($pipes[0]);
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
-
-        return [$process, $pipes];
+        return $opened;
     }
 
     /**
@@ -261,5 +253,10 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
         }
 
         return ToolResult::success($stdout !== '' ? $stdout : $stderr);
+    }
+
+    private function shell(): ShellCommandRunner
+    {
+        return $this->shell ?? app(ShellCommandRunner::class);
     }
 }

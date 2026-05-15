@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
+use App\Base\AI\Services\ExecutableLocator;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Support\File as BlbFile;
@@ -8,6 +10,7 @@ use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Str;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Symfony\Component\Process\Process;
 
 /**
  * Handles file attachment validation, storage, and text extraction.
@@ -128,14 +131,20 @@ trait HandlesAttachments
      */
     private function extractPdfText(string $filePath): ?string
     {
-        $binary = trim((string) shell_exec('which pdftotext 2>/dev/null'));
-
-        if ($binary === '') {
+        $binary = app(ExecutableLocator::class)->find('pdftotext');
+        if ($binary === null) {
             return null;
         }
 
-        $escaped = escapeshellarg($filePath);
-        $output = shell_exec("{$binary} {$escaped} - 2>/dev/null");
+        $process = new Process([$binary, $filePath, '-']);
+        $process->setTimeout(30);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            return null;
+        }
+
+        $output = $process->getOutput();
 
         return is_string($output) && trim($output) !== '' ? $output : null;
     }
