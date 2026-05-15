@@ -11,7 +11,7 @@ use App\Modules\People\Attendance\Livewire\Approvals;
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Attendance Approvals')" :subtitle="__('Review overtime and attendance exceptions before they affect payroll.')">
             <x-slot name="help">
-                {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
+                {{ __('Overtime requests stay out of payroll until approved here. Rejected requests record the reason for audit.') }}
             </x-slot>
         </x-ui.page-header>
 

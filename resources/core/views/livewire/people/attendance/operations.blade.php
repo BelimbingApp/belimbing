@@ -11,7 +11,7 @@ use App\Modules\People\Attendance\Livewire\Operations;
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Attendance Operations')" :subtitle="__('Review timecards, absenteeism batches, clock events, and payroll handoff readiness.')">
             <x-slot name="help">
-                {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
+                {{ __('Finalize attendance days to lock their worked-minutes calculation; lock days to freeze them for payroll. Finalized days still allow correction; locked days do not.') }}
             </x-slot>
         </x-ui.page-header>
 

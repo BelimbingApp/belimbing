@@ -11,7 +11,7 @@ use App\Modules\People\Attendance\Livewire\Rosters;
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Roster Builder')" :subtitle="__('Assign employees to shifts and policy groups so supervisors can publish clean rosters.')">
             <x-slot name="help">
-                {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
+                {{ __('Each assignment pairs an employee with a shift template and policy group over a date range. Attendance days resolve against the assignment that covers their date. Overlapping ranges per employee are blocked.') }}
             </x-slot>
         </x-ui.page-header>
 

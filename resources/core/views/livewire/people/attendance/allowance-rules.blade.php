@@ -11,7 +11,7 @@ use App\Modules\People\Attendance\Livewire\AllowanceRules;
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Allowance Rules')" :subtitle="__('Maintain attendance-driven allowance rules and their payroll pay item mappings.')">
             <x-slot name="help">
-                {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
+                {{ __('Each rule pays one payroll pay item when its predicate matches — minutes worked, clock-out time, or both. Rules can target a specific policy group or apply when none is linked.') }}
             </x-slot>
         </x-ui.page-header>
 

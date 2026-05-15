@@ -612,7 +612,7 @@ it('uses focused titles for each attendance setup page', function (): void {
     // List mode hides templates; entering form mode reveals them.
     Livewire::test(ShiftTemplates::class)
         ->assertSet('mode', 'list')
-        ->assertSee('Shift Templates')
+        ->assertSee('Shifts')
         ->assertDontSee('Best for')
         ->call('startNewShift')
         ->assertSee('Best for');

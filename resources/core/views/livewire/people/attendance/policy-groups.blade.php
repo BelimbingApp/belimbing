@@ -8,8 +8,12 @@ use App\Modules\People\Attendance\Livewire\PolicyGroups;
 <div>
     <x-slot name="title">{{ __('Policy Groups') }}</x-slot>
 
+    @php($pickerVisible = $mode === 'form' && $selectedPolicyTemplateKey !== 'saved-policy')
+
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('Policy Groups')" :subtitle="__('Manage active policy groups and open validation or builder flows.')">
+        <x-ui.page-header
+            :title="__('Policy Groups')"
+            :subtitle="$pickerVisible ? __('Rule bundles — work hours, lateness, overtime, payroll mapping — that rosters point employees at.') : null">
             @if ($mode === 'list')
                 <x-slot name="actions">
                     <x-ui.button type="button" variant="primary" wire:click="startNewPolicy">
@@ -18,9 +22,11 @@ use App\Modules\People\Attendance\Livewire\PolicyGroups;
                     </x-ui.button>
                 </x-slot>
             @endif
-            <x-slot name="help">
-                {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
-            </x-slot>
+            @if ($pickerVisible)
+                <x-slot name="help">
+                    {{ __('Each saved policy is versioned, so attendance days resolved against an older version stay reproducible. Use Simulate to preview changes before publishing.') }}
+                </x-slot>
+            @endif
         </x-ui.page-header>
 
         @if (session('success'))

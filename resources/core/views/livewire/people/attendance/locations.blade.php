@@ -11,7 +11,7 @@ use App\Modules\People\Attendance\Livewire\Locations;
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Clocking Locations')" :subtitle="__('Maintain geofences and geofence groups used by clock-source policies.')">
             <x-slot name="help">
-                {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
+                {{ __('Geofences define accept regions for web and mobile clock events. Group them so a clock-source policy can reference multiple sites without listing each one.') }}
             </x-slot>
         </x-ui.page-header>
 

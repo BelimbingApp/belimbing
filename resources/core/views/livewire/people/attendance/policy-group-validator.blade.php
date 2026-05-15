@@ -11,7 +11,7 @@ use App\Modules\People\Attendance\Livewire\PolicyGroupValidator;
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Policy Validator')" :subtitle="__('Validate policy groups and simulate attendance outcomes before rules affect rosters or payroll.')">
             <x-slot name="help">
-                {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
+                {{ __('Validation checks rule shape — rounding methods, grace ranges, band ordering, missing pay items. Simulation runs one (date, clock-in, clock-out) tuple against a policy plus shift template without persisting anything.') }}
             </x-slot>
         </x-ui.page-header>
 

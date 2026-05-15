@@ -11,7 +11,7 @@ use App\Modules\People\Attendance\Livewire\MyAttendance;
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('My Attendance')" :subtitle="__('Review your timecard and record web clock events where enabled.')">
             <x-slot name="help">
-                {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
+                {{ __('Your clock events become a resolved attendance day once HR finalizes them. Submitted overtime requires approver action before payroll picks it up.') }}
             </x-slot>
         </x-ui.page-header>
 

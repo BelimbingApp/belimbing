@@ -6,10 +6,12 @@ use App\Modules\People\Attendance\Livewire\ShiftTemplates;
 ?>
 
 <div>
-    <x-slot name="title">{{ __('Shift Templates') }}</x-slot>
+    <x-slot name="title">{{ __('Shifts') }}</x-slot>
 
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('Shift Templates')" :subtitle="__('Manage reusable shift templates supervisors can select while building rosters.')">
+        <x-ui.page-header
+            :title="__('Shifts')"
+            :subtitle="__('Work shifts — schedule, break, clock-in/out tolerances — that rosters assign to employees.')">
             @if ($mode === 'list')
                 <x-slot name="actions">
                     <x-ui.button type="button" variant="primary" wire:click="startNewShift">
@@ -19,7 +21,7 @@ use App\Modules\People\Attendance\Livewire\ShiftTemplates;
                 </x-slot>
             @endif
             <x-slot name="help">
-                {{ __('Attendance records raw clock facts separately from resolved attendance days, then hands only finalized facts to Payroll.') }}
+                {{ __('Each shift defines a daily start/end, expected work minutes (excluding the break), break window, and how early or late a clock-in or clock-out is accepted. Rosters assign one shift per employee per date range; clock events are validated against that shift.') }}
             </x-slot>
         </x-ui.page-header>
 
