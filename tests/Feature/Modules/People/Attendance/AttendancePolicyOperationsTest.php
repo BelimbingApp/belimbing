@@ -251,6 +251,29 @@ it('lets managers build, save, and edit attendance policy groups', function (): 
         ->and($policy->lateness_rules['grace']['in'])->toBe(10);
 });
 
+it('loads policy edit form when reached via ?policyGroup query string redirect', function (): void {
+    // Regression: Library->edit redirects to /builder?policyGroup={id}. Livewire
+    // mount params resolve from route segments only, so the builder was opening
+    // blank instead of loading the policy. mount() now reads the query string.
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $policy = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'QSEDIT',
+        'name' => 'Query string edit',
+        'effective_from' => '2026-01-01',
+        'lateness_rules' => ['grace' => ['in' => 7]],
+    ]);
+
+    $this->actingAs($user);
+
+    $this->get(route('people.attendance.policy-studio.builder', ['policyGroup' => $policy->id]))
+        ->assertOk()
+        ->assertSee('QSEDIT')
+        ->assertSee('Query string edit')
+        ->assertSee('Identification');
+});
+
 it('lets managers upload and download attendance policy templates as JSON', function (): void {
     $user = createAdminUser();
 
@@ -456,6 +479,52 @@ it('lets managers build shift templates from guided templates and import JSON', 
         ->assertSet('shiftCode', 'IMPORT_DAY')
         ->assertSet('shiftBreakStartsAt', '13:00')
         ->assertSet('shiftInWindowBeforeMinutes', '30');
+});
+
+it('loads shift edit form when reached via ?shift query string redirect', function (): void {
+    // Regression: matches the policy-builder fix — ShiftLibrary->edit redirects
+    // with ?shift={id} which mount() must read from the query string.
+    $user = createAdminUser();
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $user->company_id,
+        'code' => 'QSHIFT',
+        'name' => 'Query string shift',
+        'starts_at' => '09:00:00',
+        'ends_at' => '18:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+
+    $this->actingAs($user);
+
+    $this->get(route('people.attendance.shifts', ['shift' => $shift->id]))
+        ->assertOk()
+        ->assertSee('QSHIFT')
+        ->assertSee('Query string shift')
+        ->assertSee('Shift code');
+});
+
+it('toggles shift template status from the library', function (): void {
+    $user = createAdminUser();
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $user->company_id,
+        'code' => 'TOGGLE_ME',
+        'name' => 'Toggle me',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+        'status' => 'active',
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(ShiftLibrary::class)
+        ->call('toggleShiftStatus', $shift->id)
+        ->assertHasNoErrors()
+        ->assertSee('Shift status updated.');
+
+    expect($shift->refresh()->status)->toBe('inactive');
 });
 
 it('uses focused titles for each policy studio page', function (): void {
