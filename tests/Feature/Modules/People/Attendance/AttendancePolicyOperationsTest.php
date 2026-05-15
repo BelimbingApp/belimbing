@@ -253,6 +253,41 @@ it('lets managers build, save, and edit policies inline on the studio page', fun
         ->and($policy->lateness_rules['grace']['in'])->toBe(10);
 });
 
+it('restores policy edit mode from the URL', function (): void {
+    $user = createAdminUser();
+    $policy = AttendancePolicyGroup::query()->create([
+        'company_id' => $user->company_id,
+        'code' => 'URL_POLICY',
+        'name' => 'URL policy',
+        'effective_from' => '2026-01-01',
+        'lateness_rules' => ['grace' => ['in' => 7]],
+    ]);
+
+    Livewire::actingAs($user)
+        ->withQueryParams(['policy' => $policy->id])
+        ->test(PolicyStudio::class)
+        ->assertSet('mode', 'form')
+        ->assertSet('editingPolicyGroupId', $policy->id)
+        ->assertSet('policyCode', 'URL_POLICY')
+        ->assertSet('policyGraceIn', '7')
+        ->assertSee('Identification');
+});
+
+it('restores policy create mode and selected template from the URL', function (): void {
+    $user = createAdminUser();
+
+    Livewire::actingAs($user)
+        ->withQueryParams(['mode' => 'form', 'template' => 'office-grace'])
+        ->test(PolicyStudio::class)
+        ->assertSet('mode', 'form')
+        ->assertSet('editingPolicyGroupId', null)
+        ->assertSet('selectedPolicyTemplateKey', 'office-grace')
+        ->assertSet('showPolicyBuilderForm', true)
+        ->assertSet('policyCode', 'OFFICE_GRACE')
+        ->assertSet('policyGraceIn', '10')
+        ->assertSee('Identification');
+});
+
 it('lists field errors prominently when saving a policy with invalid input', function (): void {
     $user = createAdminUser();
 
@@ -499,6 +534,44 @@ it('lets managers build shift templates inline from guided templates and import 
         ->assertSet('shiftCode', 'IMPORT_DAY')
         ->assertSet('shiftBreakStartsAt', '13:00')
         ->assertSet('shiftInWindowBeforeMinutes', '30');
+});
+
+it('restores shift edit mode from the URL', function (): void {
+    $user = createAdminUser();
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $user->company_id,
+        'code' => 'URL_SHIFT',
+        'name' => 'URL shift',
+        'starts_at' => '06:00:00',
+        'ends_at' => '14:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+        'status' => 'active',
+    ]);
+
+    Livewire::actingAs($user)
+        ->withQueryParams(['shift' => $shift->id])
+        ->test(Shifts::class)
+        ->assertSet('mode', 'form')
+        ->assertSet('editingShiftTemplateId', $shift->id)
+        ->assertSet('shiftCode', 'URL_SHIFT')
+        ->assertSet('shiftStartsAt', '06:00')
+        ->assertSee('Shift code');
+});
+
+it('restores shift create mode and selected template from the URL', function (): void {
+    $user = createAdminUser();
+
+    Livewire::actingAs($user)
+        ->withQueryParams(['mode' => 'form', 'template' => 'night-shift'])
+        ->test(Shifts::class)
+        ->assertSet('mode', 'form')
+        ->assertSet('editingShiftTemplateId', null)
+        ->assertSet('selectedShiftTemplateKey', 'night-shift')
+        ->assertSet('showShiftBuilderForm', true)
+        ->assertSet('shiftCode', 'NIGHT_SHIFT')
+        ->assertSet('shiftStartsAt', '20:00')
+        ->assertSee('Shift code');
 });
 
 it('toggles shift template status from the library', function (): void {

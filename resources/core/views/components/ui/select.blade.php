@@ -1,6 +1,7 @@
 @props([
     'label' => null,
     'error' => null,
+    'required' => false,
     'id' => 'select-' . \Illuminate\Support\Str::random(8),
     'name' => null,
     'help' => null,
@@ -10,6 +11,9 @@
     @if($label)
         <label for="{{ $id }}" class="block text-[11px] uppercase tracking-wider font-semibold text-muted">
             {{ $label }}
+            @if($required)
+                <span class="text-status-danger">*</span>
+            @endif
         </label>
     @endif
 
@@ -17,7 +21,7 @@
         <select
             id="{{ $id }}"
             @if($name) name="{{ $name }}" @endif
-            {{ $attributes->except(['label', 'error', 'id', 'help'])->class([
+            {{ $attributes->except(['label', 'error', 'required', 'id', 'help'])->class([
                 'w-full pl-input-x pr-10 py-input-y text-sm appearance-none',
                 'border border-border-input rounded-2xl',
                 'bg-surface-card text-ink',
@@ -36,7 +40,9 @@
 
     @if($error)
         <p class="text-sm text-status-danger">{{ $error }}</p>
-    @elseif($help)
+    @endif
+
+    @if($help)
         <x-ui.field-help :hint="$help" />
     @endif
 </div>

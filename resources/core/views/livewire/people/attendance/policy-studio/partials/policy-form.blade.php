@@ -70,7 +70,7 @@
                     </div>
                 @endif
                 <div class="grid gap-4 sm:grid-cols-2">
-                    <x-ui.select id="attendance-policy-work-rounding-method" wire:model="policyWorkRoundingMethod" label="{{ __('Daily rounding') }}" help="{{ __('How BLB adjusts raw worked minutes before payable time is calculated.') }}" :error="$errors->first('policyWorkRoundingMethod')">
+                    <x-ui.select id="attendance-policy-work-rounding-method" wire:model="policyWorkRoundingMethod" label="{{ __('Daily rounding') }}" required help="{{ __('How BLB adjusts raw worked minutes before payable time is calculated.') }}" :error="$errors->first('policyWorkRoundingMethod')">
                         <option value="none">{{ __('None') }}</option>
                         <option value="floor">{{ __('Floor') }}</option>
                         <option value="ceiling">{{ __('Ceiling') }}</option>
@@ -90,7 +90,7 @@
             </div>
             <div class="mt-4 space-y-4">
                 <div class="grid gap-4 sm:grid-cols-2">
-                    <x-ui.select id="attendance-policy-lateness-rounding-method" wire:model="policyLatenessRoundingMethod" label="{{ __('Daily rounding') }}" help="{{ __('How late minutes are rounded before a deduction is considered.') }}" :error="$errors->first('policyLatenessRoundingMethod')">
+                    <x-ui.select id="attendance-policy-lateness-rounding-method" wire:model="policyLatenessRoundingMethod" label="{{ __('Daily rounding') }}" required help="{{ __('How late minutes are rounded before a deduction is considered.') }}" :error="$errors->first('policyLatenessRoundingMethod')">
                         <option value="none">{{ __('None') }}</option>
                         <option value="floor">{{ __('Floor') }}</option>
                         <option value="ceiling">{{ __('Ceiling') }}</option>
@@ -110,6 +110,7 @@
                         'id' => 'attendance-policy-lateness-pay-item',
                         'label' => __('Deduction pay item'),
                         'help' => __('Payroll pay items are the source of truth for attendance payroll codes.'),
+                        'required' => true,
                     ])
                     <x-ui.input id="attendance-policy-lateness-monthly-minutes" type="number" min="1" max="60" wire:model="policyLatenessMonthlyRoundingMinutes" label="{{ __('Monthly rounding') }}" suffix="{{ __('min') }}" help="{{ __('If payroll deducts lateness monthly, this rounds the monthly total.') }}" :error="$errors->first('policyLatenessMonthlyRoundingMinutes')" />
                 </div>
@@ -128,17 +129,12 @@
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
                     @foreach ([
-                        'policyNormalOvertimePayItem' => ['attendance-policy-normal-ot-pay-item', __('Normal OT item'), __('Required payroll item for ordinary overtime candidates.')],
-                        'policyExtendedOvertimePayItem' => ['attendance-policy-extended-ot-pay-item', __('Extended OT item'), __('Optional payroll item for a later overtime band.')],
-                        'policyRestDayOvertimePayItem' => ['attendance-policy-rest-day-ot-pay-item', __('Rest day OT item'), __('Optional payroll item when overtime happens on a roster rest day.')],
-                        'policyHolidayOvertimePayItem' => ['attendance-policy-holiday-ot-pay-item', __('Holiday OT item'), __('Optional payroll item when overtime happens on a public holiday.')],
-                    ] as $payItemField => [$payItemId, $payItemLabel, $payItemHelp])
-                        @include('livewire.people.attendance.policy-studio.partials.pay-item-field', [
-                            'field' => $payItemField,
-                            'id' => $payItemId,
-                            'label' => $payItemLabel,
-                            'help' => $payItemHelp,
-                        ])
+                        ['field' => 'policyNormalOvertimePayItem', 'id' => 'attendance-policy-normal-ot-pay-item', 'label' => __('Normal OT item'), 'help' => __('Payroll item for ordinary overtime candidates.'), 'required' => true],
+                        ['field' => 'policyExtendedOvertimePayItem', 'id' => 'attendance-policy-extended-ot-pay-item', 'label' => __('Extended OT item'), 'help' => __('Optional payroll item for a later overtime band.'), 'required' => false],
+                        ['field' => 'policyRestDayOvertimePayItem', 'id' => 'attendance-policy-rest-day-ot-pay-item', 'label' => __('Rest day OT item'), 'help' => __('Optional payroll item when overtime happens on a roster rest day.'), 'required' => false],
+                        ['field' => 'policyHolidayOvertimePayItem', 'id' => 'attendance-policy-holiday-ot-pay-item', 'label' => __('Holiday OT item'), 'help' => __('Optional payroll item when overtime happens on a public holiday.'), 'required' => false],
+                    ] as $payItemConfig)
+                        @include('livewire.people.attendance.policy-studio.partials.pay-item-field', $payItemConfig)
                     @endforeach
                 </div>
                 <x-ui.input id="attendance-policy-currency" wire:model="policyCurrency" label="{{ __('Payroll currency') }}" required help="{{ __('Three-letter payroll currency code, for example MYR.') }}" :error="$errors->first('policyCurrency')" />
@@ -153,7 +149,7 @@
             <div class="mt-4 grid gap-4 md:grid-cols-3">
                 <x-ui.input id="attendance-policy-effective-from" type="date" wire:model="policyEffectiveFrom" label="{{ __('Effective from') }}" required help="{{ __('First date this policy can be assigned to rosters.') }}" :error="$errors->first('policyEffectiveFrom')" />
                 <x-ui.input id="attendance-policy-effective-to" type="date" wire:model="policyEffectiveTo" label="{{ __('Effective to') }}" help="{{ __('Optional last date this policy can be assigned.') }}" :error="$errors->first('policyEffectiveTo')" />
-                <x-ui.select id="attendance-policy-status" wire:model="policyStatus" label="{{ __('Status') }}" help="{{ __('Active policies can be used in rosters.') }}" :error="$errors->first('policyStatus')">
+                <x-ui.select id="attendance-policy-status" wire:model="policyStatus" label="{{ __('Status') }}" required help="{{ __('Active policies can be used in rosters.') }}" :error="$errors->first('policyStatus')">
                     <option value="active">{{ __('Active') }}</option>
                     <option value="inactive">{{ __('Inactive') }}</option>
                 </x-ui.select>

@@ -64,7 +64,9 @@
 
     @if($error)
         <p class="text-sm text-status-danger">{{ $error }}</p>
-    @elseif($help)
+    @endif
+
+    @if($help)
         <x-ui.field-help :hint="$help" />
     @endif
 </div>

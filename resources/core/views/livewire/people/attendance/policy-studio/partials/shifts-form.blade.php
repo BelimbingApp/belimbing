@@ -86,11 +86,11 @@
             <div class="mt-4 grid gap-4 md:grid-cols-4">
                 <x-ui.input id="attendance-shift-effective-from" type="date" wire:model="shiftEffectiveFrom" label="{{ __('Effective from') }}" required help="{{ __('First date this shift can be assigned in rosters.') }}" :error="$errors->first('shiftEffectiveFrom')" />
                 <x-ui.input id="attendance-shift-effective-to" type="date" wire:model="shiftEffectiveTo" label="{{ __('Effective to') }}" help="{{ __('Optional last date this shift can be assigned.') }}" :error="$errors->first('shiftEffectiveTo')" />
-                <x-ui.select id="attendance-shift-payroll-attribution" wire:model="shiftPayrollAttribution" label="{{ __('Payroll date') }}" help="{{ __('Which date receives attendance and payroll attribution for overnight shifts.') }}" :error="$errors->first('shiftPayrollAttribution')">
+                <x-ui.select id="attendance-shift-payroll-attribution" wire:model="shiftPayrollAttribution" label="{{ __('Payroll date') }}" required help="{{ __('Which date receives attendance and payroll attribution for overnight shifts.') }}" :error="$errors->first('shiftPayrollAttribution')">
                     <option value="shift_start_date">{{ __('Shift start date') }}</option>
                     <option value="shift_end_date">{{ __('Shift end date') }}</option>
                 </x-ui.select>
-                <x-ui.select id="attendance-shift-status" wire:model="shiftStatus" label="{{ __('Status') }}" help="{{ __('Active shifts can be used in rosters.') }}" :error="$errors->first('shiftStatus')">
+                <x-ui.select id="attendance-shift-status" wire:model="shiftStatus" label="{{ __('Status') }}" required help="{{ __('Active shifts can be used in rosters.') }}" :error="$errors->first('shiftStatus')">
                     <option value="active">{{ __('Active') }}</option>
                     <option value="inactive">{{ __('Inactive') }}</option>
                 </x-ui.select>

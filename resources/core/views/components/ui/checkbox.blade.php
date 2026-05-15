@@ -28,8 +28,10 @@
     </div>
 
     @if($error)
-        <p class="text-sm text-status-danger">{{ $error }}</p>
-    @elseif($help)
+        <p class="pl-6 text-sm text-status-danger">{{ $error }}</p>
+    @endif
+
+    @if($help)
         <div class="pl-6 leading-none">
             <x-ui.field-help :hint="$help" />
         </div>
