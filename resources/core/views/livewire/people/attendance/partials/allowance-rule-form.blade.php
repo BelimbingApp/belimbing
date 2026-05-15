@@ -60,6 +60,12 @@
                             <option value="{{ $group->id }}">{{ $group->code }} - {{ $group->name }}</option>
                         @endforeach
                     </x-ui.select>
+                    <x-ui.select id="attendance-allowance-shift" wire:model="allowanceShiftTemplateId" label="{{ __('Only when this shift is worked') }}" help="{{ __('Leave blank to apply regardless of shift.') }}" :error="$errors->first('allowanceShiftTemplateId')">
+                        <option value="">{{ __('Any shift') }}</option>
+                        @foreach ($shiftTemplates as $shift)
+                            <option value="{{ $shift->id }}">{{ $shift->code }} - {{ $shift->name }}</option>
+                        @endforeach
+                    </x-ui.select>
                     <p class="text-xs text-muted">
                         {{ __('Cannot find the policy you need?') }}
                         <a href="{{ route('people.attendance.policy-groups') }}" class="text-accent hover:underline">{{ __('Open Policy Groups') }}</a>
@@ -102,7 +108,7 @@
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <div class="font-medium text-ink">{{ $rule->code }} - {{ $rule->name }}</div>
-                            <div class="mt-1 text-xs text-muted">{{ __('Policy: :policy / Pay item: :code', ['policy' => $rule->policyGroup?->code ?? __('Any'), 'code' => $rule->payroll_pay_item_code ?? '-']) }}</div>
+                            <div class="mt-1 text-xs text-muted">{{ __('Policy: :policy / Shift: :shift / Pay item: :code', ['policy' => $rule->policyGroup?->code ?? __('Any'), 'shift' => $rule->shiftTemplate?->code ?? __('Any'), 'code' => $rule->payroll_pay_item_code ?? '-']) }}</div>
                         </div>
                         <div class="flex items-center gap-2">
                             <x-ui.badge :variant="$rule->status === 'active' ? 'success' : 'warning'">{{ __(ucfirst($rule->status)) }}</x-ui.badge>

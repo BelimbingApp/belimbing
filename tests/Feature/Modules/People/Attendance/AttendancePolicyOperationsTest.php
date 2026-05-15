@@ -120,6 +120,58 @@ it('simulates policy outcomes and allowance candidates without creating attendan
         ->and($result['allowance_candidates'][0]['code'])->toBe('NIGHT_ALLOWANCE');
 });
 
+it('only surfaces shift-scoped allowance rules when the matching shift is simulated', function (): void {
+    $company = Company::factory()->minimal()->create();
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'ROT',
+        'name' => 'Rotation policy',
+        'effective_from' => '2026-01-01',
+        'lateness_rules' => ['grace' => ['in' => 0]],
+    ]);
+    $dayShift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day shift',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+    $nightShift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'NIGHT',
+        'name' => 'Night shift',
+        'starts_at' => '20:00:00',
+        'ends_at' => '05:00:00',
+        'crosses_midnight' => true,
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+    AttendanceAllowanceRule::query()->create([
+        'company_id' => $company->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'attendance_shift_template_id' => $nightShift->id,
+        'code' => 'NIGHT_DIFFERENTIAL',
+        'name' => 'Night differential',
+        'allowance_type' => AttendanceAllowanceRule::TYPE_DAILY,
+        'payroll_pay_item_code' => 'night_differential',
+        'resolution_method' => AttendanceAllowanceRule::RESOLUTION_SUM,
+        'condition_rows' => [
+            ['description' => 'Always', 'amount' => 5, 'predicate' => []],
+        ],
+        'effective_from' => '2026-01-01',
+        'status' => 'active',
+    ]);
+
+    $simulator = app(AttendancePolicySimulationService::class);
+    $dayResult = $simulator->simulate($policyGroup, $dayShift, '2026-05-14', '08:00', '17:00');
+    $nightResult = $simulator->simulate($policyGroup, $nightShift, '2026-05-14', '20:00', '05:00');
+
+    expect($dayResult['allowance_candidates'])->toBe([])
+        ->and($nightResult['allowance_candidates'][0]['code'])->toBe('NIGHT_DIFFERENTIAL');
+});
+
 it('emits simulation results as JSON from the attendance policy simulate command', function (): void {
     $company = Company::factory()->minimal()->create();
     AttendancePolicyGroup::query()->create([
