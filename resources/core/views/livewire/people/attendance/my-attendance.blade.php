@@ -42,6 +42,56 @@ use App\Modules\People\Attendance\Livewire\MyAttendance;
 
         @include('livewire.people.attendance.partials.attendance-days-card')
 
+        <x-ui.card>
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-semibold text-ink">{{ __('My Adjustment Requests') }}</h2>
+                    <p class="mt-1 text-sm text-muted">{{ __('Request a missing clock event when the web or device clock failed. HR reviews each request before it becomes an attendance fact.') }}</p>
+                </div>
+                @if ($canClock)
+                    <x-ui.button type="button" variant="secondary" wire:click="openAdjustmentModal">
+                        {{ __('Request adjustment') }}
+                    </x-ui.button>
+                @endif
+            </div>
+            <div class="mt-4 space-y-2">
+                @forelse ($myAdjustments as $adjustment)
+                    <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border-default p-3 text-sm">
+                        <div class="flex flex-col">
+                            <span class="font-medium text-ink">{{ $eventTypeOptions[$adjustment->target_event_type] ?? $adjustment->target_event_type }} · {{ $adjustment->proposed_occurred_at?->format('Y-m-d H:i') }}</span>
+                            <span class="text-xs text-muted">{{ $adjustment->reason }}</span>
+                        </div>
+                        <x-ui.badge>{{ $this->statusLabel($adjustment->status) }}</x-ui.badge>
+                    </div>
+                @empty
+                    <p class="text-sm text-muted">{{ __('No adjustment requests yet.') }}</p>
+                @endforelse
+            </div>
+        </x-ui.card>
+
+        <x-ui.modal wire:model="showAdjustmentModal" class="max-w-2xl">
+            <form wire:submit="submitAdjustmentRequest" class="p-6 space-y-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-ink">{{ __('Request adjustment') }}</h2>
+                    <p class="mt-1 text-sm text-muted">{{ __('Use this for missing clock-ins/outs. Approval creates a manual clock event on your timecard.') }}</p>
+                </div>
+                <div class="grid gap-4 md:grid-cols-3">
+                    <x-ui.input id="attendance-adj-date" type="date" wire:model="adjustmentDate" label="{{ __('Date') }}" required :error="$errors->first('adjustmentDate')" />
+                    <x-ui.input id="attendance-adj-time" type="time" wire:model="adjustmentTime" label="{{ __('Time') }}" required :error="$errors->first('adjustmentTime')" />
+                    <x-ui.select id="attendance-adj-event" wire:model="adjustmentEventType" label="{{ __('Event') }}" required :error="$errors->first('adjustmentEventType')">
+                        @foreach ($eventTypeOptions as $value => $label)
+                            <option value="{{ $value }}">{{ $label }}</option>
+                        @endforeach
+                    </x-ui.select>
+                </div>
+                <x-ui.textarea id="attendance-adj-reason" wire:model="adjustmentReason" label="{{ __('Reason') }}" rows="3" required :error="$errors->first('adjustmentReason')" />
+                <div class="flex justify-end gap-2">
+                    <x-ui.button type="button" variant="secondary" wire:click="$set('showAdjustmentModal', false)">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="primary">{{ __('Submit request') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.modal>
+
         <x-ui.modal wire:model="showOvertimeModal" class="max-w-2xl">
             <form wire:submit="submitOvertimeRequest" class="p-6 space-y-4">
                 <div>

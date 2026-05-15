@@ -6,6 +6,7 @@ use App\Modules\Core\User\Models\User;
 use App\Modules\People\Attendance\Exceptions\AttendanceAdjustmentException;
 use App\Modules\People\Attendance\Exceptions\AttendanceClockEventIngestionException;
 use App\Modules\People\Attendance\Exceptions\AttendanceLifecycleException;
+use App\Modules\People\Attendance\Livewire\Approvals;
 use App\Modules\People\Attendance\Livewire\MyAttendance;
 use App\Modules\People\Attendance\Models\AttendanceAdjustmentRequest;
 use App\Modules\People\Attendance\Models\AttendanceClockEvent;
@@ -1020,4 +1021,119 @@ it('lets linked employees submit overtime from the attendance workbench', functi
         ->where('employee_id', $employee->id)
         ->where('status', AttendanceOvertimeRequest::STATUS_SUBMITTED)
         ->exists())->toBeTrue();
+});
+
+it('lets linked employees submit adjustment requests from the attendance workbench', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $user->forceFill(['employee_id' => $employee->id])->save();
+
+    $this->actingAs($user);
+
+    Livewire::test(MyAttendance::class)
+        ->assertSee('My Adjustment Requests')
+        ->call('openAdjustmentModal')
+        ->set('adjustmentDate', '2026-05-13')
+        ->set('adjustmentTime', '08:05')
+        ->set('adjustmentEventType', AttendanceClockEvent::TYPE_IN)
+        ->set('adjustmentReason', 'Forgot to clock in after network outage.')
+        ->call('submitAdjustmentRequest')
+        ->assertHasNoErrors();
+
+    $request = AttendanceAdjustmentRequest::query()
+        ->where('employee_id', $employee->id)
+        ->latest('id')
+        ->first();
+
+    expect($request)->not->toBeNull()
+        ->and($request?->status)->toBe(AttendanceAdjustmentRequest::STATUS_SUBMITTED)
+        ->and($request?->request_mode)->toBe(AttendanceAdjustmentRequest::MODE_MISSING_PUNCH)
+        ->and($request?->target_event_type)->toBe(AttendanceClockEvent::TYPE_IN)
+        ->and($request?->reason)->toBe('Forgot to clock in after network outage.');
+});
+
+it('lets approvers approve adjustment requests from the approvals workbench', function (): void {
+    $approver = createAdminUser();
+    $company = Company::query()->findOrFail($approver->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day Shift',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard',
+        'effective_from' => '2026-01-01',
+    ]);
+    AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => '2026-05-01',
+        'publish_state' => 'published',
+    ]);
+    $request = AttendanceAdjustmentRequest::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'request_mode' => AttendanceAdjustmentRequest::MODE_MISSING_PUNCH,
+        'target_event_type' => AttendanceClockEvent::TYPE_IN,
+        'proposed_occurred_at' => '2026-05-13 08:05:00',
+        'reason' => 'Forgot to clock in after network outage.',
+        'status' => AttendanceAdjustmentRequest::STATUS_SUBMITTED,
+        'submitted_by_user_id' => $employee->id,
+        'submitted_at' => now(),
+    ]);
+
+    $this->actingAs($approver);
+
+    Livewire::test(Approvals::class)
+        ->assertSee('Adjustment Queue')
+        ->call('approveAdjustment', $request->id)
+        ->assertHasNoErrors();
+
+    $request->refresh();
+    $clockEvent = AttendanceClockEvent::query()->find($request->applied_clock_event_id);
+
+    expect($request->status)->toBe(AttendanceAdjustmentRequest::STATUS_APPROVED)
+        ->and($request->applied_clock_event_id)->not->toBeNull()
+        ->and($clockEvent)->not->toBeNull()
+        ->and($clockEvent?->event_type)->toBe(AttendanceClockEvent::TYPE_IN)
+        ->and($clockEvent?->metadata['adjustment_request_id'] ?? null)->toBe($request->id);
+});
+
+it('lets approvers reject adjustment requests from the approvals workbench', function (): void {
+    $approver = createAdminUser();
+    $company = Company::query()->findOrFail($approver->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $request = AttendanceAdjustmentRequest::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'request_mode' => AttendanceAdjustmentRequest::MODE_MISSING_PUNCH,
+        'target_event_type' => AttendanceClockEvent::TYPE_OUT,
+        'proposed_occurred_at' => '2026-05-13 17:05:00',
+        'reason' => 'Missed the clock-out before leaving the floor.',
+        'status' => AttendanceAdjustmentRequest::STATUS_SUBMITTED,
+        'submitted_by_user_id' => $employee->id,
+        'submitted_at' => now(),
+    ]);
+
+    $this->actingAs($approver);
+
+    Livewire::test(Approvals::class)
+        ->call('rejectAdjustment', $request->id)
+        ->assertHasNoErrors();
+
+    $request->refresh();
+
+    expect($request->status)->toBe(AttendanceAdjustmentRequest::STATUS_REJECTED)
+        ->and($request->applied_clock_event_id)->toBeNull()
+        ->and(AttendanceClockEvent::query()->where('employee_id', $employee->id)->count())->toBe(0);
 });
