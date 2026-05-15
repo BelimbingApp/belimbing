@@ -116,7 +116,7 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Builder;
                             <x-ui.input id="attendance-policy-grace-end-break" type="number" min="0" max="240" wire:model="policyGraceEndBreak" label="{{ __('Break in') }}" suffix="{{ __('min') }}" help="{{ __('Tolerance when employees return from break after the expected time.') }}" :error="$errors->first('policyGraceEndBreak')" />
                         </div>
                         <div class="grid gap-4 sm:grid-cols-2">
-                            @include('livewire.people.attendance.partials.pay-item-field', [
+                            @include('livewire.people.attendance.policy-studio.partials.pay-item-field', [
                                 'field' => 'policyLatenessPayItem',
                                 'id' => 'attendance-policy-lateness-pay-item',
                                 'label' => __('Deduction pay item'),
@@ -144,7 +144,7 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Builder;
                                 'policyRestDayOvertimePayItem' => ['attendance-policy-rest-day-ot-pay-item', __('Rest day OT item'), __('Optional payroll item when overtime happens on a roster rest day.')],
                                 'policyHolidayOvertimePayItem' => ['attendance-policy-holiday-ot-pay-item', __('Holiday OT item'), __('Optional payroll item when overtime happens on a public holiday.')],
                             ] as $payItemField => [$payItemId, $payItemLabel, $payItemHelp])
-                                @include('livewire.people.attendance.partials.pay-item-field', [
+                                @include('livewire.people.attendance.policy-studio.partials.pay-item-field', [
                                     'field' => $payItemField,
                                     'id' => $payItemId,
                                     'label' => $payItemLabel,
@@ -197,7 +197,7 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Builder;
         @endif
 
         @if ($policyTemplateExportJson !== '')
-            @include('livewire.people.attendance.partials.template-json-export', [
+            @include('livewire.people.attendance.policy-studio.partials.template-json-export', [
                 'id' => 'attendance-policy-builder-template-export',
                 'field' => 'policyTemplateExportJson',
             ])

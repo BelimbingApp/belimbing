@@ -29,6 +29,6 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Allowances;
             </x-ui.alert>
         @endif
 
-        @include('livewire.people.attendance.partials.settings-allowances')
+        @include('livewire.people.attendance.policy-studio.partials.allowances-form')
     </div>
 </div>

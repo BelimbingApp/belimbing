@@ -1,5 +1,5 @@
 @if ($shiftTemplateExportJson !== '')
-    @include('livewire.people.attendance.partials.template-json-export', [
+    @include('livewire.people.attendance.policy-studio.partials.template-json-export', [
         'id' => 'attendance-shift-library-template-export',
         'field' => 'shiftTemplateExportJson',
     ])

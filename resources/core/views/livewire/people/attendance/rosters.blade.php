@@ -29,6 +29,6 @@ use App\Modules\People\Attendance\Livewire\Rosters;
             </x-ui.alert>
         @endif
 
-        @include('livewire.people.attendance.partials.settings-rosters')
+        @include('livewire.people.attendance.partials.rosters-form')
     </div>
 </div>

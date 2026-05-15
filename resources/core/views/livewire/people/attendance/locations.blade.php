@@ -29,6 +29,6 @@ use App\Modules\People\Attendance\Livewire\Locations;
             </x-ui.alert>
         @endif
 
-        @include('livewire.people.attendance.partials.settings-locations')
+        @include('livewire.people.attendance.partials.locations-counts')
     </div>
 </div>

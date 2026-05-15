@@ -34,6 +34,6 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Library;
             </x-ui.alert>
         @endif
 
-        @include('livewire.people.attendance.partials.settings-shift-library')
+        @include('livewire.people.attendance.policy-studio.partials.shifts-library-table')
     </div>
 </div>

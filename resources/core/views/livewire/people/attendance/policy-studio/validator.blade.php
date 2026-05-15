@@ -29,6 +29,6 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Validator;
             </x-ui.alert>
         @endif
 
-        @include('livewire.people.attendance.partials.settings-policies-simulate')
+        @include('livewire.people.attendance.policy-studio.partials.validator-body')
     </div>
 </div>

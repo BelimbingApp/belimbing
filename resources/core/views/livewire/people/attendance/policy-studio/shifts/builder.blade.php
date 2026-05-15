@@ -29,7 +29,7 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Shifts\Builder;
             </x-ui.alert>
         @endif
 
-        @include('livewire.people.attendance.partials.settings-shifts')
+        @include('livewire.people.attendance.policy-studio.partials.shifts-form')
 
         <x-ui.modal wire:model="showShiftTemplateImportModal" class="max-w-2xl">
             <div class="p-6 space-y-4">

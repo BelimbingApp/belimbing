@@ -78,7 +78,7 @@ use App\Modules\People\Attendance\Livewire\PolicyStudio\Library;
         </x-ui.card>
 
         @if ($policyTemplateExportJson !== '')
-            @include('livewire.people.attendance.partials.template-json-export', [
+            @include('livewire.people.attendance.policy-studio.partials.template-json-export', [
                 'id' => 'attendance-policy-library-template-export',
                 'field' => 'policyTemplateExportJson',
                 'description' => __('Copy this JSON into a shared template repository or country pack. Upload it from Policy Builder when needed.'),

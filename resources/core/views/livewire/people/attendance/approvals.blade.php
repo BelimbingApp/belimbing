@@ -29,6 +29,6 @@ use App\Modules\People\Attendance\Livewire\Approvals;
             </x-ui.alert>
         @endif
 
-        @include('livewire.people.attendance.partials.approvals')
+        @include('livewire.people.attendance.partials.approvals-queue')
     </div>
 </div>
