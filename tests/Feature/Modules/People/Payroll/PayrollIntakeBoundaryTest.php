@@ -32,6 +32,12 @@ const PAYROLL_INTAKE_FORBIDDEN_IMPORTS = [
     'App\\Modules\\People\\Payroll\\Models\\PayrollStatutoryRuleSet',
     'App\\Modules\\People\\Payroll\\Models\\PayrollStatutoryRuleRow',
     'App\\Modules\\People\\Payroll\\Models\\PayrollPdfArtifact',
+    // After plans 12–14, the intake contract is also off-limits to
+    // producers. All Payroll communication goes through events now.
+    'App\\Modules\\People\\Payroll\\Services\\PayrollContributionIntake',
+    'App\\Modules\\People\\Payroll\\Contracts\\Intake\\PayrollContributionPayload',
+    'App\\Modules\\People\\Payroll\\Contracts\\Intake\\PayrollContributionOutcome',
+    'App\\Modules\\People\\Payroll\\Contracts\\Intake\\PayrollContributionState',
 ];
 
 const PAYROLL_INTAKE_PRODUCER_MODULES = [
