@@ -2,8 +2,6 @@
 
 namespace App\Base\Foundation\ModuleManifest;
 
-use RuntimeException;
-
 /**
  * Scans the BLB module tree for `composer.json` files declaring an
  * `extra.blb` block and returns parsed manifests.
@@ -84,24 +82,15 @@ class ModuleManifestReader
 
     private function parse(string $composerPath): ?ModuleManifest
     {
-        $contents = @file_get_contents($composerPath);
-        if ($contents === false) {
+        $manifestData = $this->manifestData($composerPath);
+        if ($manifestData === null) {
             return null;
         }
 
-        $data = json_decode($contents, true);
-        if (! is_array($data)) {
-            return null;
-        }
-
-        $blb = $data['extra']['blb'] ?? null;
-        if (! is_array($blb)) {
-            return null;
-        }
-
+        ['composer' => $data, 'blb' => $blb] = $manifestData;
         $name = is_string($data['name'] ?? null) ? $data['name'] : '';
         if ($name === '') {
-            throw new RuntimeException(sprintf('Module manifest at %s has no name.', $composerPath));
+            throw new ModuleManifestException(sprintf('Module manifest at %s has no name.', $composerPath));
         }
 
         return new ModuleManifest(
@@ -119,7 +108,28 @@ class ModuleManifestReader
     }
 
     /**
-     * @param  mixed  $value
+     * @return array{composer: array<string, mixed>, blb: array<string, mixed>}|null
+     */
+    private function manifestData(string $composerPath): ?array
+    {
+        $contents = @file_get_contents($composerPath);
+        if ($contents === false) {
+            return null;
+        }
+
+        $data = json_decode($contents, true);
+        $blb = is_array($data) ? ($data['extra']['blb'] ?? null) : null;
+        if (! is_array($data) || ! is_array($blb)) {
+            return null;
+        }
+
+        return [
+            'composer' => $data,
+            'blb' => $blb,
+        ];
+    }
+
+    /**
      * @return array<string, string>
      */
     private function normaliseModuleMap(mixed $value): array
@@ -153,5 +163,4 @@ class ModuleManifestReader
             fn (string $v): bool => $v !== '',
         ));
     }
-
 }
