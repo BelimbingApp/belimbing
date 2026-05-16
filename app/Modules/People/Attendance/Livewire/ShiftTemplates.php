@@ -29,6 +29,8 @@ class ShiftTemplates extends Component
 
     private const DEFAULT_SHIFT_END = '17:00';
 
+    private const NIGHT_SHIFT_END = '08:00';
+
     #[Url(as: 'mode')]
     public string $mode = 'list';
 
@@ -413,7 +415,7 @@ class ShiftTemplates extends Component
                 'summary' => __('20:00 to 08:00, crossing midnight with payroll attributed to shift start.'),
                 'best_for' => __('Security, operations and overnight production teams.'),
                 'starts_at' => '20:00',
-                'ends_at' => self::DEFAULT_SHIFT_START,
+                'ends_at' => self::NIGHT_SHIFT_END,
                 'expected_work_minutes' => 660,
                 'break_starts_at' => '00:00',
                 'break_ends_at' => '01:00',
