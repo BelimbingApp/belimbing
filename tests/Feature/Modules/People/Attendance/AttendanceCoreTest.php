@@ -34,56 +34,199 @@ use App\Modules\People\Settings\Models\PeopleCalendarException;
 use App\Modules\People\Settings\Models\PeopleReferenceEntry;
 use Livewire\Livewire;
 
-it('projects attendance day metrics from clock events', function (): void {
+const ATTENDANCE_EFFECTIVE_FROM = '2026-01-01';
+const ATTENDANCE_TEST_DATE = '2026-05-13';
+const ATTENDANCE_HOLIDAY_DATE = '2026-05-14';
+const ATTENDANCE_DAY_SHIFT_NAME = 'Day Shift';
+const ATTENDANCE_STANDARD_POLICY_NAME = 'Standard Attendance';
+const ATTENDANCE_PROPOSED_CLOCK_IN = '2026-05-13 08:05:00';
+
+/** @return array{0: Company, 1: Employee} */
+function attendanceEmployee(): array
+{
     $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $shift = AttendanceShiftTemplate::query()->create([
+
+    return [
+        $company,
+        Employee::factory()->active()->create(['company_id' => $company->id]),
+    ];
+}
+
+/** @param array<string, mixed> $attributes */
+function attendanceShiftTemplate(Company $company, array $attributes = []): AttendanceShiftTemplate
+{
+    return AttendanceShiftTemplate::query()->create(array_replace([
         'company_id' => $company->id,
         'code' => 'DAY',
-        'name' => 'Day Shift',
+        'name' => 'Day',
         'starts_at' => '08:00:00',
         'ends_at' => '17:00:00',
         'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
+        'effective_from' => ATTENDANCE_EFFECTIVE_FROM,
+    ], $attributes));
+}
+
+/** @param array<string, mixed> $attributes */
+function attendancePolicyGroup(Company $company, array $attributes = []): AttendancePolicyGroup
+{
+    return AttendancePolicyGroup::query()->create(array_replace([
         'company_id' => $company->id,
         'code' => 'STD',
-        'name' => 'Standard Attendance',
-        'effective_from' => '2026-01-01',
+        'name' => 'Standard',
+        'effective_from' => ATTENDANCE_EFFECTIVE_FROM,
+    ], $attributes));
+}
+
+/** @param array<string, mixed> $attributes */
+function attendanceDay(
+    Company $company,
+    Employee $employee,
+    ?AttendanceShiftTemplate $shift = null,
+    ?AttendancePolicyGroup $policyGroup = null,
+    array $attributes = [],
+): AttendanceDay {
+    return AttendanceDay::query()->create(array_replace([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift?->id,
+        'attendance_policy_group_id' => $policyGroup?->id,
+        'attendance_date' => ATTENDANCE_TEST_DATE,
+        'expected_minutes' => $shift?->expected_work_minutes ?? 480,
+        'payroll_period_date' => ATTENDANCE_TEST_DATE,
+    ], $attributes));
+}
+
+function attendanceClockEvent(
+    Company $company,
+    Employee $employee,
+    AttendanceDay $day,
+    string $eventType,
+    string $occurredAt,
+): AttendanceClockEvent {
+    return AttendanceClockEvent::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_day_id' => $day->id,
+        'event_type' => $eventType,
+        'occurred_at' => $occurredAt,
+        'source' => AttendanceClockEvent::SOURCE_WEB,
     ]);
-    $day = AttendanceDay::query()->create([
+}
+
+function projectAttendanceDay(AttendanceDay $day): AttendanceDay
+{
+    app(AttendanceDayProjectionService::class)->project($day)->save();
+
+    return $day->refresh();
+}
+
+/**
+ * @param  array<string, mixed>  $shiftAttributes
+ * @param  array<string, mixed>  $policyAttributes
+ */
+function projectedAttendanceDay(array $shiftAttributes, array $policyAttributes, string $clockIn, string $clockOut): AttendanceDay
+{
+    [$company, $employee] = attendanceEmployee();
+    $shift = attendanceShiftTemplate($company, $shiftAttributes);
+    $policyGroup = attendancePolicyGroup($company, $policyAttributes);
+    $day = attendanceDay($company, $employee, $shift, $policyGroup);
+
+    attendanceClockEvent($company, $employee, $day, AttendanceClockEvent::TYPE_IN, $clockIn);
+    attendanceClockEvent($company, $employee, $day, AttendanceClockEvent::TYPE_OUT, $clockOut);
+
+    return projectAttendanceDay($day);
+}
+
+function assignAttendanceRoster(
+    Company $company,
+    Employee $employee,
+    AttendanceShiftTemplate $shift,
+    AttendancePolicyGroup $policyGroup,
+): AttendanceRosterAssignment {
+    return AttendanceRosterAssignment::query()->create([
         'company_id' => $company->id,
         'employee_id' => $employee->id,
         'attendance_shift_template_id' => $shift->id,
         'attendance_policy_group_id' => $policyGroup->id,
-        'attendance_date' => '2026-05-13',
+        'effective_from' => '2026-05-01',
+        'publish_state' => 'published',
+    ]);
+}
+
+/** @return array{0: Company, 1: Employee, 2: PeopleReferenceEntry} */
+function employeeWithMalaysiaWorkCalendar(): array
+{
+    [$company, $employee] = attendanceEmployee();
+    $workCalendar = PeopleReferenceEntry::query()->create([
+        'company_id' => $company->id,
+        'type' => PeopleReferenceEntry::TYPE_WORK_CALENDAR,
+        'code' => 'MY-STD',
+        'name' => 'Malaysia Standard',
+        'status' => PeopleReferenceEntry::STATUS_ACTIVE,
+        'metadata' => ['rest_days' => ['sunday'], 'off_days' => ['saturday']],
+    ]);
+
+    EmployeeWorkProfile::query()->create([
+        'employee_id' => $employee->id,
+        'work_calendar_id' => $workCalendar->id,
+        'hired_on' => ATTENDANCE_EFFECTIVE_FROM,
+    ]);
+
+    return [$company, $employee, $workCalendar];
+}
+
+function createWesakCalendarException(PeopleReferenceEntry $workCalendar): PeopleCalendarException
+{
+    return PeopleCalendarException::query()->create([
+        'work_calendar_id' => $workCalendar->id,
+        'occurs_on' => ATTENDANCE_HOLIDAY_DATE,
+        'name' => 'Wesak Day',
+        'kind' => 'public_holiday',
+    ]);
+}
+
+function createMayPayrollRun(Company $company): PayrollRun
+{
+    $calendar = PayrollCalendar::query()->create([
+        'company_id' => $company->id,
+        'code' => 'MONTHLY',
+        'name' => 'Monthly',
+        'country_iso' => 'MY',
+        'currency' => 'MYR',
+        'frequency' => 'monthly',
+    ]);
+    $period = PayrollPeriod::query()->create([
+        'payroll_calendar_id' => $calendar->id,
+        'code' => '2026-05',
+        'name' => 'May 2026',
+        'starts_on' => '2026-05-01',
+        'ends_on' => '2026-05-31',
+        'pay_date' => '2026-05-31',
+    ]);
+
+    return PayrollRun::query()->create([
+        'company_id' => $company->id,
+        'payroll_calendar_id' => $calendar->id,
+        'payroll_period_id' => $period->id,
+        'code' => 'MAY-2026',
+        'name' => 'May 2026',
+        'status' => PayrollRun::STATUS_DRAFT,
+        'currency' => 'MYR',
+    ]);
+}
+
+it('projects attendance day metrics from clock events', function (): void {
+    [$company, $employee] = attendanceEmployee();
+    $shift = attendanceShiftTemplate($company, ['name' => ATTENDANCE_DAY_SHIFT_NAME]);
+    $policyGroup = attendancePolicyGroup($company, ['name' => ATTENDANCE_STANDARD_POLICY_NAME]);
+    $day = attendanceDay($company, $employee, $shift, $policyGroup, [
         'shift_starts_at' => '2026-05-13 08:00:00',
         'shift_ends_at' => '2026-05-13 17:00:00',
-        'expected_minutes' => 480,
-        'payroll_period_date' => '2026-05-13',
     ]);
 
-    AttendanceClockEvent::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_day_id' => $day->id,
-        'event_type' => AttendanceClockEvent::TYPE_IN,
-        'occurred_at' => '2026-05-13 08:12:00',
-        'source' => AttendanceClockEvent::SOURCE_WEB,
-    ]);
-    AttendanceClockEvent::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_day_id' => $day->id,
-        'event_type' => AttendanceClockEvent::TYPE_OUT,
-        'occurred_at' => '2026-05-13 17:30:00',
-        'source' => AttendanceClockEvent::SOURCE_WEB,
-    ]);
-
-    app(AttendanceDayProjectionService::class)->project($day)->save();
-
-    $day->refresh();
+    attendanceClockEvent($company, $employee, $day, AttendanceClockEvent::TYPE_IN, '2026-05-13 08:12:00');
+    attendanceClockEvent($company, $employee, $day, AttendanceClockEvent::TYPE_OUT, '2026-05-13 17:30:00');
+    $day = projectAttendanceDay($day);
 
     expect($day->status)->toBe(AttendanceDay::STATUS_EXCEPTION_PENDING)
         ->and($day->worked_minutes)->toBe(558)
@@ -96,10 +239,7 @@ it('projects attendance day metrics from clock events', function (): void {
 });
 
 it('deducts unpaid breaks from worked time but keeps paid breaks counted', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
+    $day = projectedAttendanceDay([
         'code' => 'PROD_12H',
         'name' => 'Production 12h',
         'starts_at' => '07:00:00',
@@ -109,42 +249,10 @@ it('deducts unpaid breaks from worked time but keeps paid breaks counted', funct
             ['label' => 'Lunch', 'starts_at' => '12:00', 'ends_at' => '13:00', 'paid' => false],
             ['label' => 'Tea', 'starts_at' => '15:30', 'ends_at' => '15:45', 'paid' => true],
         ],
-        'effective_from' => '2026-01-01',
-    ]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
+    ], [
         'code' => 'PROD',
         'name' => 'Production',
-        'effective_from' => '2026-01-01',
-    ]);
-    $day = AttendanceDay::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
-        'attendance_date' => '2026-05-13',
-        'expected_minutes' => 660,
-        'payroll_period_date' => '2026-05-13',
-    ]);
-    AttendanceClockEvent::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_day_id' => $day->id,
-        'event_type' => AttendanceClockEvent::TYPE_IN,
-        'occurred_at' => '2026-05-13 07:00:00',
-        'source' => AttendanceClockEvent::SOURCE_WEB,
-    ]);
-    AttendanceClockEvent::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_day_id' => $day->id,
-        'event_type' => AttendanceClockEvent::TYPE_OUT,
-        'occurred_at' => '2026-05-13 19:00:00',
-        'source' => AttendanceClockEvent::SOURCE_WEB,
-    ]);
-
-    app(AttendanceDayProjectionService::class)->project($day)->save();
-    $day->refresh();
+    ], '2026-05-13 07:00:00', '2026-05-13 19:00:00');
 
     // 07:00–19:00 = 720 min raw. Unpaid lunch (60 min) deducted; paid tea kept. Worked = 660.
     expect($day->worked_minutes)->toBe(660)
@@ -154,55 +262,14 @@ it('deducts unpaid breaks from worked time but keeps paid breaks counted', funct
 });
 
 it('applies lateness grace and rounding from the policy group', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
+    $day = projectedAttendanceDay([], [
         'code' => 'GRACE',
         'name' => 'Grace policy',
-        'effective_from' => '2026-01-01',
         'lateness_rules' => [
             'grace' => ['in' => 10, 'out' => 5],
             'daily_rounding' => ['method' => 'ceiling', 'minutes' => 5],
         ],
-    ]);
-    $day = AttendanceDay::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
-        'attendance_date' => '2026-05-13',
-        'expected_minutes' => 480,
-        'payroll_period_date' => '2026-05-13',
-    ]);
-    AttendanceClockEvent::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_day_id' => $day->id,
-        'event_type' => AttendanceClockEvent::TYPE_IN,
-        'occurred_at' => '2026-05-13 08:12:00',
-        'source' => AttendanceClockEvent::SOURCE_WEB,
-    ]);
-    AttendanceClockEvent::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_day_id' => $day->id,
-        'event_type' => AttendanceClockEvent::TYPE_OUT,
-        'occurred_at' => '2026-05-13 16:57:00',
-        'source' => AttendanceClockEvent::SOURCE_WEB,
-    ]);
-
-    app(AttendanceDayProjectionService::class)->project($day)->save();
-    $day->refresh();
+    ], '2026-05-13 08:12:00', '2026-05-13 16:57:00');
 
     // Late: 12 min - 10 min grace = 2 min → ceiling 5 = 5.
     // Early out: 3 min - 5 min grace = 0.
@@ -211,53 +278,12 @@ it('applies lateness grace and rounding from the policy group', function (): voi
 });
 
 it('rounds worked minutes and suppresses overtime candidates below the OT minimum', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
+    $day = projectedAttendanceDay([], [
         'code' => 'TIGHT',
         'name' => 'Tight policy',
-        'effective_from' => '2026-01-01',
         'work_hour_rules' => ['daily_rounding' => ['method' => 'nearest', 'minutes' => 15]],
         'overtime_rules' => ['late_ot' => ['enabled' => true, 'minimum_minutes' => 60]],
-    ]);
-    $day = AttendanceDay::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
-        'attendance_date' => '2026-05-13',
-        'expected_minutes' => 480,
-        'payroll_period_date' => '2026-05-13',
-    ]);
-    AttendanceClockEvent::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_day_id' => $day->id,
-        'event_type' => AttendanceClockEvent::TYPE_IN,
-        'occurred_at' => '2026-05-13 08:00:00',
-        'source' => AttendanceClockEvent::SOURCE_WEB,
-    ]);
-    AttendanceClockEvent::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_day_id' => $day->id,
-        'event_type' => AttendanceClockEvent::TYPE_OUT,
-        'occurred_at' => '2026-05-13 17:25:00',
-        'source' => AttendanceClockEvent::SOURCE_WEB,
-    ]);
-
-    app(AttendanceDayProjectionService::class)->project($day)->save();
-    $day->refresh();
+    ], '2026-05-13 08:00:00', '2026-05-13 17:25:00');
 
     // Raw worked = 565 min; nearest 15 = 570. Excess over 480 = 90 → above 60-min threshold → kept as OT candidate.
     expect($day->worked_minutes)->toBe(570)
@@ -265,52 +291,13 @@ it('rounds worked minutes and suppresses overtime candidates below the OT minimu
 });
 
 it('zeroes the overtime candidate when the excess falls below the OT minimum threshold', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
+    $day = projectedAttendanceDay([
         'expected_work_minutes' => 540,
-        'effective_from' => '2026-01-01',
-    ]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
+    ], [
         'code' => 'OT60',
         'name' => '60-min OT threshold',
-        'effective_from' => '2026-01-01',
         'overtime_rules' => ['late_ot' => ['enabled' => true, 'minimum_minutes' => 60]],
-    ]);
-    $day = AttendanceDay::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
-        'attendance_date' => '2026-05-13',
-        'expected_minutes' => 540,
-        'payroll_period_date' => '2026-05-13',
-    ]);
-    AttendanceClockEvent::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_day_id' => $day->id,
-        'event_type' => AttendanceClockEvent::TYPE_IN,
-        'occurred_at' => '2026-05-13 08:00:00',
-        'source' => AttendanceClockEvent::SOURCE_WEB,
-    ]);
-    AttendanceClockEvent::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_day_id' => $day->id,
-        'event_type' => AttendanceClockEvent::TYPE_OUT,
-        'occurred_at' => '2026-05-13 17:30:00',
-        'source' => AttendanceClockEvent::SOURCE_WEB,
-    ]);
-
-    app(AttendanceDayProjectionService::class)->project($day)->save();
-    $day->refresh();
+    ], '2026-05-13 08:00:00', '2026-05-13 17:30:00');
 
     // 570 worked, 30-min excess over 540 expected; below the 60-min OT threshold → suppressed.
     expect($day->worked_minutes)->toBe(570)
@@ -318,44 +305,38 @@ it('zeroes the overtime candidate when the excess falls below the OT minimum thr
 });
 
 it('prefers employee roster policy groups over cohort defaults', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $defaultGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
+    [$company, $employee] = attendanceEmployee();
+    $defaultGroup = attendancePolicyGroup($company, [
         'code' => 'DEFAULT',
         'name' => 'Default',
-        'effective_from' => '2026-01-01',
     ]);
-    $employeeGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
+    $employeeGroup = attendancePolicyGroup($company, [
         'code' => 'EMPLOYEE',
         'name' => 'Employee Specific',
-        'effective_from' => '2026-01-01',
     ]);
 
     AttendanceRosterAssignment::query()->create([
         'company_id' => $company->id,
         'employee_id' => null,
         'attendance_policy_group_id' => $defaultGroup->id,
-        'effective_from' => '2026-01-01',
+        'effective_from' => ATTENDANCE_EFFECTIVE_FROM,
         'publish_state' => 'published',
     ]);
     AttendanceRosterAssignment::query()->create([
         'company_id' => $company->id,
         'employee_id' => $employee->id,
         'attendance_policy_group_id' => $employeeGroup->id,
-        'effective_from' => '2026-01-01',
+        'effective_from' => ATTENDANCE_EFFECTIVE_FROM,
         'publish_state' => 'published',
     ]);
 
-    $resolved = app(AttendancePolicyGroupResolver::class)->resolveForEmployee($employee, '2026-05-13');
+    $resolved = app(AttendancePolicyGroupResolver::class)->resolveForEmployee($employee, ATTENDANCE_TEST_DATE);
 
     expect($resolved?->is($employeeGroup))->toBeTrue();
 });
 
 it('ingests web clock events through an append-only service and projects partial punches as exceptions', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    [$company, $employee] = attendanceEmployee();
     $actor = User::factory()->create([
         'company_id' => $company->id,
         'employee_id' => $employee->id,
@@ -366,7 +347,7 @@ it('ingests web clock events through an append-only service and projects partial
         eventType: AttendanceClockEvent::TYPE_IN,
         actorUserId: $actor->id,
         ipAddress: '127.0.0.1',
-        occurredAt: '2026-05-13 08:05:00',
+        occurredAt: ATTENDANCE_PROPOSED_CLOCK_IN,
         timezone: 'Asia/Singapore',
     );
 
@@ -381,8 +362,7 @@ it('ingests web clock events through an append-only service and projects partial
 });
 
 it('records manual corrections without mutating the original clock event', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    [$company, $employee] = attendanceEmployee();
     $actor = User::factory()->create(['company_id' => $company->id]);
     $service = app(ClockEventIngestionService::class);
 
@@ -411,14 +391,13 @@ it('records manual corrections without mutating the original clock event', funct
 });
 
 it('blocks new clock events on locked attendance days', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    [$company, $employee] = attendanceEmployee();
     $actor = User::factory()->create(['company_id' => $company->id]);
 
     AttendanceDay::query()->create([
         'company_id' => $company->id,
         'employee_id' => $employee->id,
-        'attendance_date' => '2026-05-13',
+        'attendance_date' => ATTENDANCE_TEST_DATE,
         'status' => AttendanceDay::STATUS_LOCKED,
         'locked_at' => now(),
     ]);
@@ -433,32 +412,18 @@ it('blocks new clock events on locked attendance days', function (): void {
 })->throws(AttendanceClockEventIngestionException::class);
 
 it('resolves attendance days from rotating roster assignments', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $dayShift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day Shift',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-    $nightShift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
+    [$company, $employee] = attendanceEmployee();
+    $dayShift = attendanceShiftTemplate($company, ['name' => ATTENDANCE_DAY_SHIFT_NAME]);
+    $nightShift = attendanceShiftTemplate($company, [
         'code' => 'NIGHT',
         'name' => 'Night Shift',
         'starts_at' => '20:00:00',
         'ends_at' => '08:00:00',
         'crosses_midnight' => true,
         'expected_work_minutes' => 720,
-        'effective_from' => '2026-01-01',
     ]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard Attendance',
-        'effective_from' => '2026-01-01',
+    $policyGroup = attendancePolicyGroup($company, [
+        'name' => ATTENDANCE_STANDARD_POLICY_NAME,
     ]);
     $pattern = AttendanceRosterPattern::query()->create([
         'company_id' => $company->id,
@@ -479,11 +444,11 @@ it('resolves attendance days from rotating roster assignments', function (): voi
         'employee_id' => $employee->id,
         'attendance_roster_pattern_id' => $pattern->id,
         'attendance_policy_group_id' => $policyGroup->id,
-        'effective_from' => '2026-05-13',
+        'effective_from' => ATTENDANCE_TEST_DATE,
         'publish_state' => 'published',
     ]);
 
-    $day = app(AttendanceDayResolverService::class)->resolve($employee, '2026-05-14');
+    $day = app(AttendanceDayResolverService::class)->resolve($employee, ATTENDANCE_HOLIDAY_DATE);
 
     expect($day->shiftTemplate?->is($nightShift))->toBeTrue()
         ->and($day->status)->toBe(AttendanceDay::STATUS_SCHEDULED)
@@ -496,8 +461,7 @@ it('rolls the payroll period date forward for cross-midnight shifts attributed t
     $endEmployee = Employee::factory()->active()->create(['company_id' => $company->id]);
     $startEmployee = Employee::factory()->active()->create(['company_id' => $company->id]);
 
-    $endDateShift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
+    $endDateShift = attendanceShiftTemplate($company, [
         'code' => 'NIGHT_END',
         'name' => 'Night attributed to end date',
         'starts_at' => '20:00:00',
@@ -505,10 +469,8 @@ it('rolls the payroll period date forward for cross-midnight shifts attributed t
         'crosses_midnight' => true,
         'expected_work_minutes' => 480,
         'cross_midnight_attribution' => 'shift_end_date',
-        'effective_from' => '2026-01-01',
     ]);
-    $startDateShift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
+    $startDateShift = attendanceShiftTemplate($company, [
         'code' => 'NIGHT_START',
         'name' => 'Night attributed to start date',
         'starts_at' => '20:00:00',
@@ -516,21 +478,15 @@ it('rolls the payroll period date forward for cross-midnight shifts attributed t
         'crosses_midnight' => true,
         'expected_work_minutes' => 480,
         'cross_midnight_attribution' => 'shift_start_date',
-        'effective_from' => '2026-01-01',
     ]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
+    $policyGroup = attendancePolicyGroup($company);
 
     AttendanceRosterAssignment::query()->create([
         'company_id' => $company->id,
         'employee_id' => $endEmployee->id,
         'attendance_shift_template_id' => $endDateShift->id,
         'attendance_policy_group_id' => $policyGroup->id,
-        'effective_from' => '2026-05-13',
+        'effective_from' => ATTENDANCE_TEST_DATE,
         'publish_state' => 'published',
     ]);
     AttendanceRosterAssignment::query()->create([
@@ -538,23 +494,20 @@ it('rolls the payroll period date forward for cross-midnight shifts attributed t
         'employee_id' => $startEmployee->id,
         'attendance_shift_template_id' => $startDateShift->id,
         'attendance_policy_group_id' => $policyGroup->id,
-        'effective_from' => '2026-05-13',
+        'effective_from' => ATTENDANCE_TEST_DATE,
         'publish_state' => 'published',
     ]);
 
     $resolver = app(AttendanceDayResolverService::class);
-    $endAttributed = $resolver->resolve($endEmployee, '2026-05-13');
-    $startAttributed = $resolver->resolve($startEmployee, '2026-05-13');
+    $endAttributed = $resolver->resolve($endEmployee, ATTENDANCE_TEST_DATE);
+    $startAttributed = $resolver->resolve($startEmployee, ATTENDANCE_TEST_DATE);
 
-    expect($endAttributed->payroll_period_date?->toDateString())->toBe('2026-05-14')
-        ->and($startAttributed->payroll_period_date?->toDateString())->toBe('2026-05-13');
+    expect($endAttributed->payroll_period_date?->toDateString())->toBe(ATTENDANCE_HOLIDAY_DATE)
+        ->and($startAttributed->payroll_period_date?->toDateString())->toBe(ATTENDANCE_TEST_DATE);
 });
 
 it('projects worked minutes across midnight on a night shift', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
+    $day = projectedAttendanceDay([
         'code' => 'NIGHT',
         'name' => 'Night',
         'starts_at' => '20:00:00',
@@ -562,42 +515,10 @@ it('projects worked minutes across midnight on a night shift', function (): void
         'crosses_midnight' => true,
         'expected_work_minutes' => 480,
         'break_windows' => [['label' => 'Midnight', 'starts_at' => '00:00', 'ends_at' => '01:00', 'paid' => false]],
-        'effective_from' => '2026-01-01',
-    ]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
+    ], [
         'code' => 'NIGHTPOL',
         'name' => 'Night policy',
-        'effective_from' => '2026-01-01',
-    ]);
-    $day = AttendanceDay::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
-        'attendance_date' => '2026-05-13',
-        'expected_minutes' => 480,
-        'payroll_period_date' => '2026-05-13',
-    ]);
-    AttendanceClockEvent::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_day_id' => $day->id,
-        'event_type' => AttendanceClockEvent::TYPE_IN,
-        'occurred_at' => '2026-05-13 20:00:00',
-        'source' => AttendanceClockEvent::SOURCE_WEB,
-    ]);
-    AttendanceClockEvent::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_day_id' => $day->id,
-        'event_type' => AttendanceClockEvent::TYPE_OUT,
-        'occurred_at' => '2026-05-14 05:00:00',
-        'source' => AttendanceClockEvent::SOURCE_WEB,
-    ]);
-
-    app(AttendanceDayProjectionService::class)->project($day)->save();
-    $day->refresh();
+    ], '2026-05-13 20:00:00', '2026-05-14 05:00:00');
 
     // Span 20:00 Mon → 05:00 Tue = 540 min. Midnight break (00:00–01:00 next day, unpaid) = 60.
     // Worked = 480, expected = 480, no OT.
@@ -608,39 +529,18 @@ it('projects worked minutes across midnight on a night shift', function (): void
 });
 
 it('approves a missing-punch adjustment by creating a manual clock event from the request', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    [$company, $employee] = attendanceEmployee();
     $user = User::factory()->create(['company_id' => $company->id]);
-    AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
-    AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => AttendanceShiftTemplate::query()->where('code', 'DAY')->value('id'),
-        'attendance_policy_group_id' => $policyGroup->id,
-        'effective_from' => '2026-05-01',
-        'publish_state' => 'published',
-    ]);
+    $shift = attendanceShiftTemplate($company);
+    $policyGroup = attendancePolicyGroup($company);
+    assignAttendanceRoster($company, $employee, $shift, $policyGroup);
 
     $request = AttendanceAdjustmentRequest::query()->create([
         'company_id' => $company->id,
         'employee_id' => $employee->id,
         'request_mode' => AttendanceAdjustmentRequest::MODE_MISSING_PUNCH,
         'target_event_type' => AttendanceClockEvent::TYPE_IN,
-        'proposed_occurred_at' => '2026-05-13 08:05:00',
+        'proposed_occurred_at' => ATTENDANCE_PROPOSED_CLOCK_IN,
         'reason' => 'Forgot to clock in; was at desk at 08:05.',
         'status' => AttendanceAdjustmentRequest::STATUS_DRAFT,
     ]);
@@ -663,32 +563,11 @@ it('approves a missing-punch adjustment by creating a manual clock event from th
 });
 
 it('approves a correct-existing adjustment by creating a correction event linked to the original', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    [$company, $employee] = attendanceEmployee();
     $user = User::factory()->create(['company_id' => $company->id]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
-    AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
-        'effective_from' => '2026-05-01',
-        'publish_state' => 'published',
-    ]);
+    $shift = attendanceShiftTemplate($company);
+    $policyGroup = attendancePolicyGroup($company);
+    assignAttendanceRoster($company, $employee, $shift, $policyGroup);
 
     $original = app(ClockEventIngestionService::class)->recordManualClock(
         $employee,
@@ -722,8 +601,7 @@ it('approves a correct-existing adjustment by creating a correction event linked
 });
 
 it('rejects an adjustment request without creating a clock event', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    [$company, $employee] = attendanceEmployee();
     $user = User::factory()->create(['company_id' => $company->id]);
 
     $request = AttendanceAdjustmentRequest::query()->create([
@@ -747,8 +625,7 @@ it('rejects an adjustment request without creating a clock event', function (): 
 });
 
 it('blocks invalid adjustment-request transitions', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    [$company, $employee] = attendanceEmployee();
     $user = User::factory()->create(['company_id' => $company->id]);
 
     $request = AttendanceAdjustmentRequest::query()->create([
@@ -765,49 +642,16 @@ it('blocks invalid adjustment-request transitions', function (): void {
 })->throws(AttendanceAdjustmentException::class);
 
 it('flags a public holiday from the employee work calendar as a holiday day type', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $workCalendar = PeopleReferenceEntry::query()->create([
-        'company_id' => $company->id,
-        'type' => PeopleReferenceEntry::TYPE_WORK_CALENDAR,
-        'code' => 'MY-STD',
-        'name' => 'Malaysia Standard',
-        'status' => PeopleReferenceEntry::STATUS_ACTIVE,
-        'metadata' => ['rest_days' => ['sunday'], 'off_days' => ['saturday']],
-    ]);
-    EmployeeWorkProfile::query()->create([
-        'employee_id' => $employee->id,
-        'work_calendar_id' => $workCalendar->id,
-        'hired_on' => '2026-01-01',
-    ]);
-    PeopleCalendarException::query()->create([
-        'work_calendar_id' => $workCalendar->id,
-        'occurs_on' => '2026-05-14',
-        'name' => 'Wesak Day',
-        'kind' => 'public_holiday',
-    ]);
+    [, $employee, $workCalendar] = employeeWithMalaysiaWorkCalendar();
+    createWesakCalendarException($workCalendar);
 
-    $dayType = app(AttendanceCalendarResolver::class)->dayType($employee, '2026-05-14');
+    $dayType = app(AttendanceCalendarResolver::class)->dayType($employee, ATTENDANCE_HOLIDAY_DATE);
 
     expect($dayType)->toBe(AttendanceDay::DAY_TYPE_HOLIDAY);
 });
 
 it('derives weekly rest and off day types from the work calendar metadata', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $workCalendar = PeopleReferenceEntry::query()->create([
-        'company_id' => $company->id,
-        'type' => PeopleReferenceEntry::TYPE_WORK_CALENDAR,
-        'code' => 'MY-STD',
-        'name' => 'Malaysia Standard',
-        'status' => PeopleReferenceEntry::STATUS_ACTIVE,
-        'metadata' => ['rest_days' => ['sunday'], 'off_days' => ['saturday']],
-    ]);
-    EmployeeWorkProfile::query()->create([
-        'employee_id' => $employee->id,
-        'work_calendar_id' => $workCalendar->id,
-        'hired_on' => '2026-01-01',
-    ]);
+    [, $employee] = employeeWithMalaysiaWorkCalendar();
 
     $resolver = app(AttendanceCalendarResolver::class);
 
@@ -829,52 +673,20 @@ it('treats employees without a work calendar as normal day type', function (): v
 });
 
 it('routes a fixed weekly roster pattern through the day_types map when a holiday falls on a working weekday', function (): void {
-    $company = Company::factory()->minimal()->create();
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $workCalendar = PeopleReferenceEntry::query()->create([
-        'company_id' => $company->id,
-        'type' => PeopleReferenceEntry::TYPE_WORK_CALENDAR,
-        'code' => 'MY-STD',
-        'name' => 'Malaysia Standard',
-        'status' => PeopleReferenceEntry::STATUS_ACTIVE,
-        'metadata' => ['rest_days' => ['sunday'], 'off_days' => ['saturday']],
-    ]);
-    EmployeeWorkProfile::query()->create([
-        'employee_id' => $employee->id,
-        'work_calendar_id' => $workCalendar->id,
-        'hired_on' => '2026-01-01',
-    ]);
-    PeopleCalendarException::query()->create([
-        'work_calendar_id' => $workCalendar->id,
-        'occurs_on' => '2026-05-14',
-        'name' => 'Wesak Day',
-        'kind' => 'public_holiday',
-    ]);
+    [$company, $employee, $workCalendar] = employeeWithMalaysiaWorkCalendar();
+    createWesakCalendarException($workCalendar);
 
-    AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
+    attendanceShiftTemplate($company, [
         'code' => 'PROD_DAY',
         'name' => 'Production day',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
     ]);
-    AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
+    attendanceShiftTemplate($company, [
         'code' => 'PROD_HOLIDAY_HALF',
         'name' => 'Production half-day on holidays',
-        'starts_at' => '08:00:00',
         'ends_at' => '12:00:00',
         'expected_work_minutes' => 240,
-        'effective_from' => '2026-01-01',
     ]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
+    $policyGroup = attendancePolicyGroup($company);
     $pattern = AttendanceRosterPattern::query()->create([
         'company_id' => $company->id,
         'code' => 'WEEKLY',
@@ -901,7 +713,7 @@ it('routes a fixed weekly roster pattern through the day_types map when a holida
     ]);
 
     $resolver = app(AttendanceDayResolverService::class);
-    $holidayDay = $resolver->resolve($employee, '2026-05-14');   // Thursday + holiday → PROD_HOLIDAY_HALF
+    $holidayDay = $resolver->resolve($employee, ATTENDANCE_HOLIDAY_DATE);   // Thursday + holiday → PROD_HOLIDAY_HALF
     $normalDay = $resolver->resolve($employee, '2026-05-21');    // Thursday, no holiday → PROD_DAY
     $restDay = $resolver->resolve($employee, '2026-05-17');      // Sunday → rest, no shift
 
@@ -919,7 +731,7 @@ it('finalizes ready attendance days and blocks locked lifecycle changes', functi
     $day = AttendanceDay::query()->create([
         'company_id' => $company->id,
         'employee_id' => $employee->id,
-        'attendance_date' => '2026-05-13',
+        'attendance_date' => ATTENDANCE_TEST_DATE,
         'status' => AttendanceDay::STATUS_READY_FOR_REVIEW,
     ]);
 
@@ -934,17 +746,14 @@ it('finalizes ready attendance days and blocks locked lifecycle changes', functi
 it('approves overtime and queues one neutral payroll input', function (): void {
     $company = Company::factory()->minimal()->create();
     $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard Attendance',
-        'effective_from' => '2026-01-01',
+    $policyGroup = attendancePolicyGroup($company, [
+        'name' => ATTENDANCE_STANDARD_POLICY_NAME,
     ]);
     $day = AttendanceDay::query()->create([
         'company_id' => $company->id,
         'employee_id' => $employee->id,
         'attendance_policy_group_id' => $policyGroup->id,
-        'attendance_date' => '2026-05-13',
+        'attendance_date' => ATTENDANCE_TEST_DATE,
         'status' => AttendanceDay::STATUS_FINALIZED,
     ]);
     $request = AttendanceOvertimeRequest::query()->create([
@@ -958,31 +767,7 @@ it('approves overtime and queues one neutral payroll input', function (): void {
         'reason' => 'Production support',
         'policy_snapshot' => ['overtime_pay_item_code' => 'OT15'],
     ]);
-    $calendar = PayrollCalendar::query()->create([
-        'company_id' => $company->id,
-        'code' => 'MONTHLY',
-        'name' => 'Monthly',
-        'country_iso' => 'MY',
-        'currency' => 'MYR',
-        'frequency' => 'monthly',
-    ]);
-    $period = PayrollPeriod::query()->create([
-        'payroll_calendar_id' => $calendar->id,
-        'code' => '2026-05',
-        'name' => 'May 2026',
-        'starts_on' => '2026-05-01',
-        'ends_on' => '2026-05-31',
-        'pay_date' => '2026-05-31',
-    ]);
-    PayrollRun::query()->create([
-        'company_id' => $company->id,
-        'payroll_calendar_id' => $calendar->id,
-        'payroll_period_id' => $period->id,
-        'code' => 'MAY-2026',
-        'name' => 'May 2026',
-        'status' => PayrollRun::STATUS_DRAFT,
-        'currency' => 'MYR',
-    ]);
+    createMayPayrollRun($company);
 
     $service = app(AttendanceOvertimeService::class);
     $service->approve($request, 90);
@@ -1009,7 +794,7 @@ it('lets linked employees submit overtime from the attendance workbench', functi
     Livewire::test(MyAttendance::class)
         ->assertSee('Request OT')
         ->call('openOvertimeModal')
-        ->set('overtimeDate', '2026-05-13')
+        ->set('overtimeDate', ATTENDANCE_TEST_DATE)
         ->set('overtimeStartsAt', '17:00')
         ->set('overtimeEndsAt', '19:00')
         ->set('overtimeRequestedHours', '2.00')
@@ -1034,7 +819,7 @@ it('lets linked employees submit adjustment requests from the attendance workben
     Livewire::test(MyAttendance::class)
         ->assertSee('My Adjustment Requests')
         ->call('openAdjustmentModal')
-        ->set('adjustmentDate', '2026-05-13')
+        ->set('adjustmentDate', ATTENDANCE_TEST_DATE)
         ->set('adjustmentTime', '08:05')
         ->set('adjustmentEventType', AttendanceClockEvent::TYPE_IN)
         ->set('adjustmentReason', 'Forgot to clock in after network outage.')
@@ -1057,21 +842,8 @@ it('lets approvers approve adjustment requests from the approvals workbench', fu
     $approver = createAdminUser();
     $company = Company::query()->findOrFail($approver->company_id);
     $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day Shift',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
+    $shift = attendanceShiftTemplate($company, ['name' => ATTENDANCE_DAY_SHIFT_NAME]);
+    $policyGroup = attendancePolicyGroup($company);
     AttendanceRosterAssignment::query()->create([
         'company_id' => $company->id,
         'employee_id' => $employee->id,
@@ -1085,7 +857,7 @@ it('lets approvers approve adjustment requests from the approvals workbench', fu
         'employee_id' => $employee->id,
         'request_mode' => AttendanceAdjustmentRequest::MODE_MISSING_PUNCH,
         'target_event_type' => AttendanceClockEvent::TYPE_IN,
-        'proposed_occurred_at' => '2026-05-13 08:05:00',
+        'proposed_occurred_at' => ATTENDANCE_PROPOSED_CLOCK_IN,
         'reason' => 'Forgot to clock in after network outage.',
         'status' => AttendanceAdjustmentRequest::STATUS_SUBMITTED,
         'submitted_by_user_id' => $employee->id,
