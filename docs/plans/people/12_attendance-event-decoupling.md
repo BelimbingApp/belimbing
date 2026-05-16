@@ -1,6 +1,6 @@
 # people/12_attendance-event-decoupling
 
-**Status:** Planning — no code changes yet.
+**Status:** In progress — Phase 1 complete (2026-05-16). Phases 2–6 pending.
 **Last Updated:** 2026-05-16
 **Owners:** unassigned. See [Distribution Notes](#distribution-notes) for per-phase pickup guidance.
 **Sources:**
@@ -89,26 +89,36 @@ Phases progress strictly in order: each depends on the previous being complete a
 
 ### Phase 1 — Event classes and listener fan-out
 
+**Status:** Complete (2026-05-16). All 178 People feature tests + new architectural test green. {claud/opus-4.7}
+
 **Goal:** Producers dispatch events; Payroll listens; no functional behavior changes.
 
 **Dependencies:** none.
 
 **Tasks:**
 
-- [ ] Create `app/Modules/People/Attendance/Events/AttendanceOvertimeApproved.php` as a final readonly value object with the payload fields named in the Top-Level Components table. PHP 8.3 syntax; no Laravel-specific base class required.
-- [ ] Create `app/Modules/People/Attendance/Events/AttendanceAllowanceMaterialized.php` similarly. (Even if no code dispatches it yet — placeholder for Phase 3.)
-- [ ] Create `app/Modules/People/Payroll/Listeners/RecordAttendanceOvertimeContribution.php`. Constructor-injects `PayrollContributionIntake`. Handle method builds `PayrollContributionPayload` from the event and calls `intake->ingest()`.
-- [ ] Create `app/Modules/People/Payroll/Listeners/RecordAttendanceAllowanceContribution.php`. Initial implementation: still reads `payroll_pay_item_code` directly from the rule (column still exists at this phase). Phase 2 will switch it to read from the mapping table.
-- [ ] Register both listeners in `app/Modules/People/Payroll/ServiceProvider.php`.
-- [ ] Refactor `AttendanceOvertimeService::approve` to dispatch `AttendanceOvertimeApproved` after the DB transaction commits, instead of calling the intake directly.
-- [ ] Remove `PayrollContributionIntake` constructor injection from `AttendanceOvertimeService`. Remove its `use` statements for Payroll types.
-- [ ] Run the existing OT feature tests. Confirm green; the listener path produces the same `PayrollInput` rows.
-- [ ] Add architectural test in `tests/Architecture/AttendanceDoesNotImportPayrollTest.php`: fails if any file under `app/Modules/People/Attendance/` contains `use App\Modules\People\Payroll\`.
+- [x] Create `app/Modules/People/Attendance/Events/AttendanceOvertimeApproved.php` as a final readonly value object with the payload fields named in the Top-Level Components table. PHP 8.3 syntax; no Laravel-specific base class required. {claud/opus-4.7}
+- [x] Create `app/Modules/People/Attendance/Events/AttendanceAllowanceMaterialized.php` similarly. (Even if no code dispatches it yet — placeholder for Phase 3.) {claud/opus-4.7}
+- [x] Create `app/Modules/People/Payroll/Listeners/RecordAttendanceOvertimeContribution.php`. Constructor-injects `PayrollContributionIntake`. Handle method builds `PayrollContributionPayload` from the event and calls `intake->ingest()`. {claud/opus-4.7}
+- [x] Create `app/Modules/People/Payroll/Listeners/RecordAttendanceAllowanceContribution.php`. Initial implementation: still reads `payroll_pay_item_code` directly from the rule (column still exists at this phase). Phase 2 will switch it to read from the mapping table. {claud/opus-4.7}
+- [x] Register both listeners in `app/Modules/People/Payroll/ServiceProvider.php`. {claud/opus-4.7}
+- [x] Refactor `AttendanceOvertimeService::queuePayrollHandoff` to dispatch `AttendanceOvertimeApproved` instead of calling the intake directly. {claud/opus-4.7}
+- [x] Remove `PayrollContributionIntake` constructor injection from `AttendanceOvertimeService`. Remove its `use` statements for Payroll types. {claud/opus-4.7}
+- [x] Run the existing OT feature tests. Confirm green; the listener path produces the same `PayrollInput` rows. {claud/opus-4.7}
+- [x] Add architectural test in `tests/Feature/Modules/People/Attendance/AttendanceDoesNotImportPayrollTest.php`: fails if any file under `app/Modules/People/Attendance/` contains `use App\Modules\People\Payroll\`. {claud/opus-4.7}
+
+**Phase 1 implementation notes:**
+
+- Architectural test landed under `tests/Feature/Modules/People/Attendance/` rather than `tests/Architecture/` because the project's existing boundary test (`PayrollIntakeBoundaryTest`) uses that location. Sibling placement keeps related boundary tests together.
+- `queuePayrollHandoff` was the actual intake-calling method (not `approve`). Refactor target adjusted accordingly. The signature changed from `?PayrollContributionOutcome` to `bool` — producers no longer learn whether the listener materialised, persisted as pending, or rejected. That outcome is a downstream-status query, not a producer concern.
+- The Livewire approval surface (`Approvals::queueOvertimePayroll`) lost the per-outcome toast variants; the new message is generic ("queued to payroll; check the Payroll module for status"). Phase 3 of the architecture spec may add a status read endpoint if richer UI is needed.
+- `STATUS_QUEUED_FOR_PAYROLL` and `queued_for_payroll_at` are now set unconditionally on dispatch (no longer gated on the listener's materialised outcome). They record "Attendance has emitted the event," not "Payroll has accepted it."
+- Pay-item-code resolution logic for OT (read from `policy_snapshot` or `payroll_defaults`) moved into `RecordAttendanceOvertimeContribution::resolvePayItemCode`. This is the Phase 4 audit lead — `payroll_defaults` JSON on `AttendancePolicyGroup` is a payroll concept still living on Attendance.
 
 **Exit criterion:**
-- OT approval still produces a `PayrollInput` row end-to-end.
-- `grep -r "App\\\\Modules\\\\People\\\\Payroll" app/Modules/People/Attendance/` returns no matches.
-- All Attendance tests green.
+- [x] OT approval still produces a `PayrollInput` row end-to-end.
+- [x] `grep -r "App\\\\Modules\\\\People\\\\Payroll" app/Modules/People/Attendance/` returns no matches.
+- [x] All Attendance tests green (50 passing; 178 across People).
 
 ---
 

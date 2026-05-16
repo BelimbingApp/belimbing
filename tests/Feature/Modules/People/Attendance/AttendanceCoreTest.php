@@ -24,6 +24,7 @@ use App\Modules\People\Attendance\Services\AttendanceLifecycleService;
 use App\Modules\People\Attendance\Services\AttendanceOvertimeService;
 use App\Modules\People\Attendance\Services\AttendancePolicyGroupResolver;
 use App\Modules\People\Attendance\Services\ClockEventIngestionService;
+use App\Modules\People\Payroll\Listeners\RecordAttendanceOvertimeContribution;
 use App\Modules\People\Payroll\Models\PayrollCalendar;
 use App\Modules\People\Payroll\Models\PayrollInput;
 use App\Modules\People\Payroll\Models\PayrollPeriod;
@@ -985,16 +986,15 @@ it('approves overtime and queues one neutral payroll input', function (): void {
 
     $service = app(AttendanceOvertimeService::class);
     $service->approve($request, 90);
-    $outcome = $service->queuePayrollHandoff($request);
-    $again = $service->queuePayrollHandoff($request->refresh());
+    $dispatchedFirst = $service->queuePayrollHandoff($request);
+    $dispatchedAgain = $service->queuePayrollHandoff($request->refresh());
 
-    expect($outcome)->not->toBeNull()
-        ->and($outcome->isMaterialized())->toBeTrue()
-        ->and($again?->payrollPendingContributionId)->toBe($outcome->payrollPendingContributionId)
+    expect($dispatchedFirst)->toBeTrue()
+        ->and($dispatchedAgain)->toBeTrue()
         ->and(PayrollInput::query()->count())->toBe(1)
         ->and(PayrollInput::query()->first()?->pay_item_code)->toBe('OT15')
         ->and(PayrollInput::query()->first()?->quantity)->toBe('1.5000')
-        ->and(PayrollInput::query()->first()?->source_type)->toBe(AttendanceOvertimeService::SOURCE_TYPE)
+        ->and(PayrollInput::query()->first()?->source_type)->toBe(RecordAttendanceOvertimeContribution::SOURCE_TYPE)
         ->and($request->refresh()->status)->toBe(AttendanceOvertimeRequest::STATUS_QUEUED_FOR_PAYROLL);
 });
 
