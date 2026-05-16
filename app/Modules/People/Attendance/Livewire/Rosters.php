@@ -110,7 +110,7 @@ class Rosters extends Component
         $ids = $this->filteredEmployeesQuery()
             ->orderBy('employees.full_name')
             ->orderBy('employees.id')
-            ->limit(25)
+            ->forPage($this->getPage(), 25)
             ->pluck('employees.id')
             ->map(fn (int $id): string => (string) $id)
             ->all();
