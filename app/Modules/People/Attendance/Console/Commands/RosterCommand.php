@@ -21,30 +21,33 @@ class RosterCommand extends Command
     public function handle(): int
     {
         $action = (string) $this->argument('action');
-        if (! in_array($action, ['draft', 'validate', 'explain', 'publish-dry-run'], true)) {
-            $this->error('Unsupported roster action.');
+        $inputErrors = $this->inputErrors($action);
 
-            return self::FAILURE;
+        if ($inputErrors !== []) {
+            return $this->writeResult([
+                'action' => $action,
+                'status' => 'error',
+                'summary' => [
+                    'assignments' => 0,
+                    'drafts' => 0,
+                    'published' => 0,
+                ],
+                'findings' => $inputErrors,
+                'publish_preview' => [],
+            ], self::FAILURE);
         }
 
         $query = AttendanceRosterAssignment::query()->with(['employee', 'shiftTemplate', 'policyGroup']);
 
-        if (filter_var($this->option('company'), FILTER_VALIDATE_INT) !== false) {
-            $query->where('company_id', (int) $this->option('company'));
-        }
+        $query->where('company_id', (int) $this->option('company'));
 
-        $from = (string) ($this->option('from') ?? '');
-        $to = (string) ($this->option('to') ?? '');
-        if ($from !== '') {
-            $query->where(function ($scope) use ($from): void {
-                $scope->whereNull('effective_to')
-                    ->orWhereDate('effective_to', '>=', $from);
-            });
-        }
-
-        if ($to !== '') {
-            $query->whereDate('effective_from', '<=', $to);
-        }
+        $from = (string) $this->option('from');
+        $to = (string) $this->option('to');
+        $query->where(function ($scope) use ($from): void {
+            $scope->whereNull('effective_to')
+                ->orWhereDate('effective_to', '>=', $from);
+        });
+        $query->whereDate('effective_from', '<=', $to);
 
         $assignments = $query->orderBy('effective_from')->limit(500)->get();
         $drafts = $assignments->where('publish_state', 'draft');
@@ -72,9 +75,77 @@ class RosterCommand extends Command
                 : [],
         ];
 
-        $this->line(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        return $this->writeResult($payload, self::SUCCESS);
+    }
 
-        return self::SUCCESS;
+    /**
+     * @return list<array<string, string>>
+     */
+    private function inputErrors(string $action): array
+    {
+        $findings = [];
+
+        if (! in_array($action, ['draft', 'validate', 'explain', 'publish-dry-run'], true)) {
+            $findings[] = [
+                'severity' => 'error',
+                'code' => 'unsupported_action',
+                'message' => 'Unsupported roster action.',
+                'path' => 'action',
+            ];
+        }
+
+        if (filter_var($this->option('company'), FILTER_VALIDATE_INT) === false) {
+            $findings[] = [
+                'severity' => 'error',
+                'code' => 'company_required',
+                'message' => 'A valid --company ID is required.',
+                'path' => 'company',
+            ];
+        }
+
+        foreach (['from', 'to'] as $option) {
+            $value = (string) ($this->option($option) ?? '');
+            if (! $this->isDateString($value)) {
+                $findings[] = [
+                    'severity' => 'error',
+                    'code' => $option.'_date_required',
+                    'message' => 'A valid --'.$option.' date is required in YYYY-MM-DD format.',
+                    'path' => $option,
+                ];
+            }
+        }
+
+        if ($this->isDateString((string) ($this->option('from') ?? ''))
+            && $this->isDateString((string) ($this->option('to') ?? ''))
+            && (string) $this->option('from') > (string) $this->option('to')) {
+            $findings[] = [
+                'severity' => 'error',
+                'code' => 'invalid_date_range',
+                'message' => '--to must be on or after --from.',
+                'path' => 'to',
+            ];
+        }
+
+        return $findings;
+    }
+
+    private function isDateString(string $value): bool
+    {
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return false;
+        }
+
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        if (! $date instanceof \DateTimeImmutable) {
+            return false;
+        }
+
+        $errors = \DateTimeImmutable::getLastErrors();
+        if (is_array($errors) && ($errors['warning_count'] > 0 || $errors['error_count'] > 0)) {
+            return false;
+        }
+
+        return $date->format('Y-m-d') === $value;
     }
 
     /**
@@ -103,5 +174,15 @@ class RosterCommand extends Command
         }
 
         return $findings;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function writeResult(array $payload, int $exitCode): int
+    {
+        $this->line(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+        return $exitCode;
     }
 }

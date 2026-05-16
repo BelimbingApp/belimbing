@@ -253,7 +253,14 @@ class Rosters extends Component
 
         $this->authorizeAttendance('people.attendance.manage');
 
-        if (filter_var($this->rosterShiftTemplateId, FILTER_VALIDATE_INT) === false || filter_var($this->rosterPolicyGroupId, FILTER_VALIDATE_INT) === false) {
+        $employee = Employee::query()
+            ->where('company_id', $this->companyId())
+            ->whereKey($employeeId)
+            ->first();
+        $shiftTemplate = $this->activeShiftTemplateForDate($this->rosterShiftTemplateId, $date);
+        $policyGroup = $this->activePolicyGroupForDate($this->rosterPolicyGroupId, $date);
+
+        if (! $employee instanceof Employee || ! $shiftTemplate instanceof AttendanceShiftTemplate || ! $policyGroup instanceof AttendancePolicyGroup) {
             $this->addError('rosterShiftTemplateId', __('Choose a shift and policy before applying a cell override.'));
 
             return;
@@ -261,7 +268,7 @@ class Rosters extends Component
 
         $assignment = $this->assignmentForEmployeeDate($employeeId, $date);
         if ($assignment instanceof AttendanceRosterAssignment) {
-            $this->appendExceptionOverride($assignment, $date, (int) $this->rosterShiftTemplateId, (int) $this->rosterPolicyGroupId, 'cell_override');
+            $this->appendExceptionOverride($assignment, $date, (int) $shiftTemplate->id, (int) $policyGroup->id, 'cell_override');
             session()->flash('success', __('Roster cell override saved.'));
 
             return;
@@ -270,8 +277,8 @@ class Rosters extends Component
         $created = AttendanceRosterAssignment::query()->create([
             'company_id' => $this->companyId(),
             'employee_id' => $employeeId,
-            'attendance_shift_template_id' => (int) $this->rosterShiftTemplateId,
-            'attendance_policy_group_id' => (int) $this->rosterPolicyGroupId,
+            'attendance_shift_template_id' => (int) $shiftTemplate->id,
+            'attendance_policy_group_id' => (int) $policyGroup->id,
             'effective_from' => $date,
             'effective_to' => $date,
             'publish_state' => 'draft',
@@ -389,15 +396,27 @@ class Rosters extends Component
             return;
         }
 
-        $ids = AttendanceRosterAssignment::query()
+        $idsQuery = AttendanceRosterAssignment::query()
             ->where('company_id', $this->companyId())
             ->where('publish_state', 'draft')
             ->whereDate('effective_from', '<=', $this->safeGridEndDate($this->safeGridStartDate())->toDateString())
             ->where(function ($query): void {
                 $query->whereNull('effective_to')
                     ->orWhereDate('effective_to', '>=', $this->safeGridStartDate()->toDateString());
-            })
-            ->pluck('id');
+            });
+
+        $employeeIds = $this->selectedRosterEmployeeIds();
+        if ($employeeIds !== []) {
+            $idsQuery->whereIn('employee_id', $employeeIds);
+        } elseif ($this->lastDraftAssignmentIds !== []) {
+            $idsQuery->whereIn('id', $this->lastDraftAssignmentIds);
+        } else {
+            $this->addError('rosterRevisionNote', __('Select roster rows or use the latest draft operation before publishing.'));
+
+            return;
+        }
+
+        $ids = $idsQuery->pluck('id');
 
         $published = 0;
         foreach ($ids as $id) {
@@ -493,6 +512,7 @@ class Rosters extends Component
         $effectiveTo = $this->blankToNull($validated['rosterEffectiveTo'] ?? null);
         $created = 0;
         $skipped = 0;
+        $createdIds = [];
 
         foreach ($employeeIds as $employeeId) {
             if ($this->hasRosterOverlap($employeeId, $validated['rosterEffectiveFrom'], $effectiveTo)) {
@@ -501,7 +521,7 @@ class Rosters extends Component
                 continue;
             }
 
-            AttendanceRosterAssignment::query()->create([
+            $assignment = AttendanceRosterAssignment::query()->create([
                 'company_id' => $companyId,
                 'employee_id' => $employeeId,
                 'attendance_roster_pattern_id' => $this->blankToNull($validated['rosterPatternId'] ?? null),
@@ -520,6 +540,7 @@ class Rosters extends Component
                 ],
             ]);
 
+            $createdIds[] = $assignment->id;
             $created++;
         }
 
@@ -529,6 +550,7 @@ class Rosters extends Component
             return;
         }
 
+        $this->lastDraftAssignmentIds = $createdIds;
         $this->resetForm();
         session()->flash('success', trans_choice(
             'Roster assignment saved. :skipped skipped because of existing roster overlaps.|:count roster assignments saved. :skipped skipped because of existing roster overlaps.',
@@ -569,6 +591,9 @@ class Rosters extends Component
             'canManage' => $this->canAttendance('people.attendance.manage'),
             'employees' => $employees,
             'filteredEmployeeCount' => $schemaReady ? $this->filteredEmployeesQuery()->count() : 0,
+            'companyEmployeeCount' => $schemaReady
+                ? Employee::query()->where('company_id', $companyId)->count()
+                : 0,
             'selectedEmployeeCount' => $schemaReady ? count($this->selectedRosterEmployeeIds()) : 0,
             'rosterGridDays' => $schemaReady ? $this->rosterGridDays() : [],
             'rosterGridRows' => $schemaReady ? $this->rosterGridRows($employees->getCollection()) : collect(),
@@ -1006,6 +1031,42 @@ class Rosters extends Component
             ->where('company_id', $this->companyId())
             ->whereKey((int) $this->rosterPolicyGroupId)
             ->value('code');
+    }
+
+    private function activeShiftTemplateForDate(mixed $shiftTemplateId, string $date): ?AttendanceShiftTemplate
+    {
+        if (filter_var($shiftTemplateId, FILTER_VALIDATE_INT) === false) {
+            return null;
+        }
+
+        return AttendanceShiftTemplate::query()
+            ->where('company_id', $this->companyId())
+            ->whereKey((int) $shiftTemplateId)
+            ->where('status', AttendanceShiftTemplate::STATUS_ACTIVE)
+            ->whereDate('effective_from', '<=', $date)
+            ->where(function ($query) use ($date): void {
+                $query->whereNull('effective_to')
+                    ->orWhereDate('effective_to', '>=', $date);
+            })
+            ->first();
+    }
+
+    private function activePolicyGroupForDate(mixed $policyGroupId, string $date): ?AttendancePolicyGroup
+    {
+        if (filter_var($policyGroupId, FILTER_VALIDATE_INT) === false) {
+            return null;
+        }
+
+        return AttendancePolicyGroup::query()
+            ->where('company_id', $this->companyId())
+            ->whereKey((int) $policyGroupId)
+            ->where('status', AttendancePolicyGroup::STATUS_ACTIVE)
+            ->whereDate('effective_from', '<=', $date)
+            ->where(function ($query) use ($date): void {
+                $query->whereNull('effective_to')
+                    ->orWhereDate('effective_to', '>=', $date);
+            })
+            ->first();
     }
 
     private function dateWithinDraftRange(string $date): bool

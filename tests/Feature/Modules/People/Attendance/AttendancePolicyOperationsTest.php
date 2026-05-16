@@ -776,6 +776,7 @@ it('supports roster cell overrides and resolves them into attendance days', func
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
     $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $otherCompany = Company::factory()->minimal()->create();
     $policyGroup = AttendancePolicyGroup::query()->create([
         'company_id' => $company->id,
         'code' => 'STD',
@@ -799,6 +800,12 @@ it('supports roster cell overrides and resolves them into attendance days', func
         'ends_at' => '05:00:00',
         'crosses_midnight' => true,
         'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+    $foreignPolicyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $otherCompany->id,
+        'code' => 'FOREIGN',
+        'name' => 'Foreign',
         'effective_from' => '2026-01-01',
     ]);
     AttendanceRosterAssignment::query()->create([
@@ -825,12 +832,37 @@ it('supports roster cell overrides and resolves them into attendance days', func
     $day = app(AttendanceDayResolverService::class)->resolve($employee, '2026-08-03');
 
     expect($day->attendance_shift_template_id)->toBe($nightShift->id);
+
+    $tamperedEmployee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $tamperedAssignment = AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $tamperedEmployee->id,
+        'attendance_shift_template_id' => $dayShift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => '2026-08-01',
+        'effective_to' => '2026-08-07',
+        'publish_state' => 'published',
+        'lock_state' => 'open',
+        'revision' => 1,
+        'exceptions' => [[
+            'date' => '2026-08-04',
+            'attendance_shift_template_id' => $nightShift->id,
+            'attendance_policy_group_id' => $foreignPolicyGroup->id,
+        ]],
+    ]);
+
+    $tamperedDay = app(AttendanceDayResolverService::class)->resolve($tamperedEmployee, '2026-08-04');
+
+    expect($tamperedAssignment->exists())->toBeTrue()
+        ->and($tamperedDay->attendance_shift_template_id)->toBe($nightShift->id)
+        ->and($tamperedDay->attendance_policy_group_id)->toBe($policyGroup->id);
 });
 
-it('imports spreadsheet roster rows and publishes reviewed drafts with notification intents', function (): void {
+it('rejects cell overrides for employees and roster dimensions outside the current company', function (): void {
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id, 'employee_number' => 'EMP-SPREAD']);
+    $otherCompany = Company::factory()->minimal()->create();
+    $foreignEmployee = Employee::factory()->active()->create(['company_id' => $otherCompany->id]);
     $policyGroup = AttendancePolicyGroup::query()->create([
         'company_id' => $company->id,
         'code' => 'STD',
@@ -845,6 +877,53 @@ it('imports spreadsheet roster rows and publishes reviewed drafts with notificat
         'ends_at' => '17:00:00',
         'expected_work_minutes' => 480,
         'effective_from' => '2026-01-01',
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Rosters::class)
+        ->set('rosterShiftTemplateId', (string) $shift->id)
+        ->set('rosterPolicyGroupId', (string) $policyGroup->id)
+        ->call('saveCellOverride', $foreignEmployee->id, '2026-08-03')
+        ->assertHasErrors('rosterShiftTemplateId');
+
+    expect(AttendanceRosterAssignment::query()
+        ->where('company_id', $company->id)
+        ->where('employee_id', $foreignEmployee->id)
+        ->exists())->toBeFalse();
+});
+
+it('imports spreadsheet roster rows and publishes reviewed drafts with notification intents', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id, 'employee_number' => 'EMP-SPREAD']);
+    $otherEmployee = Employee::factory()->active()->create(['company_id' => $company->id, 'employee_number' => 'EMP-OTHER']);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard',
+        'effective_from' => '2026-01-01',
+    ]);
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day Shift',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+    $unselectedDraft = AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $otherEmployee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => '2026-09-01',
+        'effective_to' => '2026-09-01',
+        'publish_state' => 'draft',
+        'lock_state' => 'open',
+        'revision' => 1,
+        'exceptions' => [],
     ]);
 
     $this->actingAs($user);
@@ -869,6 +948,7 @@ it('imports spreadsheet roster rows and publishes reviewed drafts with notificat
         ->firstOrFail();
 
     expect($assignment->publish_state)->toBe('published')
+        ->and($unselectedDraft->fresh()->publish_state)->toBe('draft')
         ->and($assignment->metadata['revision_note'])->toBe('September publish')
         ->and(PeopleNotificationDeliveryLog::query()
             ->where('notifiable_type', AttendanceRosterAssignment::class)
@@ -920,6 +1000,18 @@ it('emits stable roster operator JSON from the attendance roster command', funct
     expect($payload['status'])->toBe('ok')
         ->and($payload['summary']['drafts'])->toBe(1)
         ->and($payload['publish_preview'][0]['shift'])->toBe('DAY');
+});
+
+it('returns roster command validation errors as stable JSON', function (): void {
+    $exitCode = Artisan::call('blb:attendance:roster', [
+        'action' => 'publish-dry-run',
+    ]);
+
+    $payload = json_decode(Artisan::output(), true);
+
+    expect($exitCode)->toBe(1)
+        ->and($payload['status'])->toBe('error')
+        ->and(collect($payload['findings'])->pluck('code')->all())->toContain('company_required', 'from_date_required', 'to_date_required');
 });
 
 it('lets managers build shift templates inline from guided templates and import JSON', function (): void {

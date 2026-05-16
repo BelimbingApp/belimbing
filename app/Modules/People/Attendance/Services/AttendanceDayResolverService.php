@@ -4,6 +4,7 @@ namespace App\Modules\People\Attendance\Services;
 
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\People\Attendance\Models\AttendanceDay;
+use App\Modules\People\Attendance\Models\AttendancePolicyGroup;
 use App\Modules\People\Attendance\Models\AttendanceRosterAssignment;
 use App\Modules\People\Attendance\Models\AttendanceRosterPattern;
 use App\Modules\People\Attendance\Models\AttendanceShiftTemplate;
@@ -31,7 +32,7 @@ class AttendanceDayResolverService
         $dayType = $this->calendarResolver->dayType($employee, $attendanceDate);
         $assignment = $this->assignmentFor($employee, $attendanceDate);
         $shift = $this->shiftFor($assignment, $employee, $attendanceDate, $dayType);
-        $policyGroupId = $this->policyGroupIdFor($assignment, $attendanceDate);
+        $policyGroupId = $this->policyGroupIdFor($assignment, $employee, $attendanceDate);
         $shiftStart = $shift === null ? null : CarbonImmutable::parse($attendanceDate.' '.$shift->starts_at);
         $shiftEnd = $shift === null ? null : CarbonImmutable::parse($attendanceDate.' '.$shift->ends_at);
         if ($shift?->crosses_midnight) {
@@ -141,7 +142,7 @@ class AttendanceDayResolverService
         return null;
     }
 
-    private function policyGroupIdFor(?AttendanceRosterAssignment $assignment, string $date): ?int
+    private function policyGroupIdFor(?AttendanceRosterAssignment $assignment, Employee $employee, string $date): ?int
     {
         if ($assignment === null) {
             return null;
@@ -151,11 +152,28 @@ class AttendanceDayResolverService
             if (is_array($exception)
                 && ($exception['date'] ?? null) === $date
                 && filter_var($exception['attendance_policy_group_id'] ?? null, FILTER_VALIDATE_INT) !== false) {
-                return (int) $exception['attendance_policy_group_id'];
+                $policyGroupId = $this->activePolicyGroupIdForDate($employee->company_id, (int) $exception['attendance_policy_group_id'], $date);
+                if ($policyGroupId !== null) {
+                    return $policyGroupId;
+                }
             }
         }
 
         return $assignment->attendance_policy_group_id;
+    }
+
+    private function activePolicyGroupIdForDate(int $companyId, int $policyGroupId, string $date): ?int
+    {
+        return AttendancePolicyGroup::query()
+            ->where('company_id', $companyId)
+            ->whereKey($policyGroupId)
+            ->where('status', AttendancePolicyGroup::STATUS_ACTIVE)
+            ->whereDate('effective_from', '<=', $date)
+            ->where(function ($query) use ($date): void {
+                $query->whereNull('effective_to')
+                    ->orWhereDate('effective_to', '>=', $date);
+            })
+            ->value('id');
     }
 
     private function shiftFromPattern(AttendanceRosterAssignment $assignment, Employee $employee, string $date, string $dayType): ?AttendanceShiftTemplate

@@ -1,5 +1,5 @@
 <div class="space-y-4">
-    @php($rosterIncomplete = $employees->count() === 0 || $shiftTemplates->isEmpty() || $policyGroups->isEmpty())
+    @php($rosterIncomplete = $companyEmployeeCount === 0 || $shiftTemplates->isEmpty() || $policyGroups->isEmpty())
 
     <x-ui.card>
         <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -314,9 +314,11 @@
                                             <x-ui.badge :variant="$cell['variant']">{{ $this->statusLabel($cell['state']) }}</x-ui.badge>
                                         </div>
                                     @endif
-                                    <button type="button" wire:click="saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}')" class="mt-1 block w-full text-[11px] font-medium text-accent hover:underline">
-                                        {{ __('Override') }}
-                                    </button>
+                                    @if ($canManage)
+                                        <button type="button" wire:click="saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}')" class="mt-1 block w-full text-[11px] font-medium text-accent hover:underline">
+                                            {{ __('Override') }}
+                                        </button>
+                                    @endif
                                 </td>
                             @endforeach
                         </tr>
