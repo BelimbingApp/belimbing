@@ -162,7 +162,7 @@ Single atomic step covering two spec-drift fixes that both open every People mig
 - Payroll `0320_01_06_*` → `0320_03_01_*` (including the new intake migration created in Phase 1)
 - Recruitment/Onboarding/Performance/Training/Disciplinary move from `0320_01_18-30_*` → `0320_02_07-15_*` if those module skeletons exist; otherwise leave the slots reserved.
 
-**2b — Table name realignment** to match `database.md` §2 (Application Layer1 pattern `{layer1}_{module}_{entity}`). Every People table gets a `people_` prefix:
+**2b — Table name realignment** to match `database.md` §2 (Application domain pattern `{domain}_{module}_{entity}`). Every People table gets a `people_` prefix:
 
 | Module | Current | Target |
 |--------|---------|--------|

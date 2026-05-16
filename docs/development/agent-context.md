@@ -72,7 +72,7 @@ see `app/Base/Database/AGENTS.md` for the migration guide.
 
 **Directory Pattern:**
 ```
-app/Modules/{Layer1}/{Module}/
+app/Modules/{Domain}/{Module}/
 ├── Database/
 │   ├── Migrations/     # Auto-discovered by BLB
 │   ├── Seeders/        # Production seeders; auto-discovered with --seed
@@ -95,10 +95,11 @@ app/Modules/{Layer1}/{Module}/
 ### Layer Hierarchy
 
 ```
-app/Base/{Module}/                    # Framework infrastructure (Layer0/Module)
-app/Modules/Core/{Module}/            # Core modules (Layer0/Layer1/Module)
-app/Modules/Operation/{Module}/       # Operational modules (Layer0/Layer1/Module)
-app/Modules/Commerce/{Module}/        # Commerce modules (Layer0/Layer1/Module)
+app/Base/{Module}/                    # Framework infrastructure (Base/Module)
+app/Modules/Core/{Module}/            # Core modules (Modules/Domain/Module)
+app/Modules/Operation/{Module}/       # Operational modules (Modules/Domain/Module)
+app/Modules/Commerce/{Module}/        # Commerce modules (Modules/Domain/Module)
+app/Modules/People/{Module}/          # People modules (Modules/Domain/Module)
 ```
 
 **Key Principle:** Stop labeling at Module boundary. Subdirectories within module are implementation details, not architectural layers.

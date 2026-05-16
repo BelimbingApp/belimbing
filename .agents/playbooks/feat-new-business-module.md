@@ -4,7 +4,7 @@ Intent: create a complete business module from scratch by composing atomic playb
 
 ## When To Use
 
-- Building a new module under `app/Modules/{Layer1}/{Module}/` (`Layer1` is `Core`, `Operation`, or `Commerce`).
+- Building a new module under `app/Modules/{Domain}/{Module}/` (`Domain` is `Core`, `Operation`, `Commerce`, or `People`).
 - Module requires the full surface: model, migration, CRUD pages, routes, menu, authz, seeders.
 
 ## Do Not Use When
@@ -21,7 +21,7 @@ The IT Ticket module (`app/Modules/Operation/IT/`) is the canonical first busine
 Every business module produces this file set. The agent should create all files — no discovery sweeps needed.
 
 ```
-app/Modules/{Layer1}/{Module}/
+app/Modules/{Domain}/{Module}/
 ├── ServiceProvider.php                          # Auto-discovered; usually empty
 ├── Config/
 │   ├── authz.php                                # Capability keys

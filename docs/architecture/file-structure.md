@@ -25,8 +25,8 @@ BLB uses a layered directory naming convention to define architectural boundarie
 ### Layer Hierarchy
 
 ```
-app/{Layer0}/{Module}/...                    # For Base modules (shallow)
-app/{Layer0}/{Layer1}/{Module}/...           # For categorized application modules
+app/Base/{Module}/...                        # Framework infrastructure modules (shallow)
+app/Modules/{Domain}/{Module}/...            # Application modules grouped by domain
 ```
 
 **Key Principle:** Stop labeling at the Module boundary. Subdirectories within a module are implementation details, not architectural layers.
@@ -35,19 +35,23 @@ app/{Layer0}/{Layer1}/{Module}/...           # For categorized application modul
 
 | Term | Meaning | Examples |
 |------|---------|----------|
-| **Layer0** | The first architectural boundary under `app/`. It separates framework-owned infrastructure from application-owned modules. | `Base`, `Modules` |
-| **Layer1** | A module category under `app/Modules`. It groups modules by architectural or domain area. Base modules skip this layer. | `Core`, `Commerce`, `Operation`; `People` exists today as a navigation/domain anchor |
-| **Module** | The ownership boundary for a cohesive capability. Labeling stops here; everything below the module directory is module internals. | `Database`, `AI`, `Geonames`, `Inventory`, `IT` |
+| **`app/Base/`** | Framework-owned infrastructure. Shallow — no domain grouping. | `Database`, `AI`, `Cache`, `Queue` |
+| **`app/Modules/`** | Application-owned code, grouped by domain. | (the directory itself) |
+| **Domain** | A business domain under `app/Modules`. It groups modules by business area. | `Core`, `Commerce`, `Operation`, `People` |
+| **Module** | The ownership boundary for a cohesive capability. Labeling stops here; everything below the module directory is module internals. | `Database`, `AI`, `Geonames`, `Inventory`, `IT`, `Attendance` |
 | **Entity** | A domain object or relation owned by a module. Entities appear in models, tables, routes, UI features, factories, and seeders, but they are not architectural layers. | `Country`, `Part`, `Ticket`, `Role` |
+
+> **Note on "domain":** used here in the general business-area sense, not in the strict Domain-Driven Design sense. Modules within a domain are cohesive capabilities, not formally enforced bounded contexts. Where the DDD mapping helps: Domain ≈ DDD *subdomain*; Module ≈ DDD *bounded context*.
 
 ### Path Examples
 
 | Path | Shape | Notes |
 |------|-------|-------|
-| `app/Base/Database` | `Layer0/Module` | Base module with no Layer1 category |
-| `app/Base/AI` | `Layer0/Module` | Base module with no Layer1 category |
-| `app/Modules/Core/Geonames` | `Layer0/Layer1/Module` | Core application module |
-| `app/Modules/Commerce/Inventory` | `Layer0/Layer1/Module` | Commerce application module |
+| `app/Base/Database` | `Base/Module` | Base module; no domain |
+| `app/Base/AI` | `Base/Module` | Base module; no domain |
+| `app/Modules/Core/Geonames` | `Modules/Domain/Module` | Core domain module |
+| `app/Modules/Commerce/Inventory` | `Modules/Domain/Module` | Commerce domain module |
+| `app/Modules/People/Attendance` | `Modules/Domain/Module` | People domain module |
 
 ### Module directory and config file naming
 
@@ -66,9 +70,9 @@ belimbing/
 │   ├── ai/                  # AI model cache, generated code templates
 │   └── deployment/          # Deployment state, rollback points
 │
-├── app/                     # Core application code (Layer0 directories)
+├── app/                     # Application code (Base/ and Modules/)
 │   ├── Base/                # Framework infrastructure (AI, Cache, Database, etc.)
-│   └── Modules/             # Application modules grouped by Layer1
+│   └── Modules/             # Application modules grouped by domain
 │
 ├── bootstrap/               # Framework bootstrapping
 │   ├── app.php              # Application configuration (middleware, exceptions)
@@ -141,9 +145,9 @@ belimbing/
 
 ## Core Application Structure (`app/`)
 
-Directories under `app/` are Layer0. See [Directory Layer Convention](#directory-layer-convention) for the full hierarchy.
+The `app/` directory has two roots: `Base/` for framework infrastructure and `Modules/` for application code. See [Directory Layer Convention](#directory-layer-convention) for the full hierarchy.
 
-### `app/Base/` - Framework Infrastructure (Layer0)
+### `app/Base/` - Framework Infrastructure
 
 **Layer Pattern:** `app/Base/{Module}/` — subdirectories are modules (e.g., `Database`, `Events`, `Security`).
 
@@ -202,13 +206,13 @@ app/Base/
     └── AuditLogger.php
 ```
 
-### `app/Modules/` - Application Modules (Layer0)
+### `app/Modules/` - Application Modules
 
-**Layer Pattern:** `app/Modules/{Layer1}/{Module}/` — Layer1 categories (`Core`, `Commerce`, `Operation`) contain modules. `People` currently anchors licensee-scoped people navigation; it should not own the canonical Employee module while employee records can belong to any company.
+**Layer Pattern:** `app/Modules/{Domain}/{Module}/` — domains (`Core`, `Commerce`, `Operation`, `People`) contain modules. `People` anchors HR-domain modules (Attendance, Leave, Claim, Payroll, Settings); it should not own the canonical Employee module, which lives in `Core` because employee records can belong to any company.
 
 **Module naming:** use a singular PascalCase capability/domain name for new module directories (`Claim`, `Leave`, `Payroll`, `Employee`) even when the user-facing menu label or route path is plural (`Claims`, `people/claims`). Use plural module directory names only when the domain term is inherently plural or an established aggregate surface already uses it (`Settings`, the People-facing `Employees` workbench).
 
-Each module is a self-contained capability. Subdirectories are module internals (see [Module Structure Template](#module-structure-template-for-appmoduleslayer1module) for the full list). Modules include only the internals they need.
+Each module is a self-contained capability. Subdirectories are module internals (see [Module Structure Template](#module-structure-template-for-appmodulesdomainmodule) for the full list). Modules include only the internals they need.
 
 ```
 app/Modules/
@@ -242,12 +246,12 @@ app/Modules/
     └── Quality/             # NCR / SCAR / CAPA workflows
 ```
 
-**Module Structure Template (for `app/Modules/{Layer1}/{Module}/`):**
+**Module Structure Template (for `app/Modules/{Domain}/{Module}/`):**
 
 All subdirectories within a module are **module internals** — they are not assigned layer numbers.
 
 ```
-app/Modules/{Layer1}/{Module}/
+app/Modules/{Domain}/{Module}/
 ├── Database/                 # Module internals: database layer
 │   ├── Migrations/           # Module migrations (auto-discovered)
 │   ├── Seeders/              # Production seeders (reference/config data)
@@ -475,7 +479,7 @@ Forcing them into one schema yields either an anemic table (lowest common denomi
 
 The rule:
 
-- Each domain lives in its own module under the appropriate `Layer1` (`Commerce/Inventory`, `Maintenance/MRO`, `Production/RawMaterials`, …) with its own tables, lifecycle, and consumers.
+- Each subject lives in its own module under the appropriate domain (`Commerce/Inventory`, `Maintenance/MRO`, `Production/RawMaterials`, …) with its own tables, lifecycle, and consumers.
 - Cross-module reporting is a thin Insights query that joins what it needs, **not** a fact about a shared table.
 - Do not pre-build modules speculatively. The principle is about *placement when the second domain arrives*, not about scaffolding empty modules now.
 

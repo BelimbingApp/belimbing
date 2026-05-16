@@ -27,18 +27,18 @@ This document keeps only the high-level design, naming spec, registry table, and
 
 ### Timestamp Conventions
 
-Migration filenames use the timestamp prefix to encode execution order. The year-like segment maps to a Layer0 or Layer1 group; the `MM_DD` segment identifies the module within that group.
+Migration filenames use the timestamp prefix to encode execution order. The year-like segment maps to either the `Base/` root or an application domain; the `MM_DD` segment identifies the module within that group.
 
 **Format:** `YYYY_MM_DD_HHMMSS`
 
 | Prefix Range | Owner | Purpose |
 | :--- | :--- | :--- |
 | `0001` | Laravel | Native Laravel tables such as jobs, cache, and sessions. |
-| `0100` | Base Layer0 | Framework infrastructure modules. |
-| `0200` | Modules/Core Layer1 | Required business foundations loaded before operational and commerce workflows. |
-| `0300` | Modules/Operation Layer1 | Operational modules. |
-| `0310` | Modules/Commerce Layer1 | Commerce modules. |
-| `0320` | Modules/People Layer1 | People workflows that depend on Core employee/company foundations. |
+| `0100` | Base | Framework infrastructure modules. |
+| `0200` | Modules/Core domain | Required business foundations loaded before operational and commerce workflows. |
+| `0300` | Modules/Operation domain | Operational modules. |
+| `0310` | Modules/Commerce domain | Commerce modules. |
+| `0320` | Modules/People domain | People workflows that depend on Core employee/company foundations. |
 | `2026+` | Extensions | Licensee or vendor extensions using real calendar years. |
 
 ### Module Identification (MM_DD)
@@ -55,16 +55,16 @@ Within each prefix range, the `MM_DD` component identifies the module. Additiona
 
 ### Table Naming Conventions
 
-Table names use owner, module, and entity names to prevent ownership conflicts. Core intentionally omits the Layer1 prefix so foundational tables align with Laravel conventions such as `users`.
+Table names use owner, module, and entity names to prevent ownership conflicts. Core intentionally omits the domain prefix so foundational tables align with Laravel conventions such as `users`.
 
 | Owner | Pattern | Example |
 | :--- | :--- | :--- |
 | Base modules | `base_{module}_{entity}` | `base_database_tables`, `base_authz_roles` |
 | Core modules | `{entity}` or `{module}_{entity}` when needed for clarity; no `core_` prefix | `companies`, `users`, `employees`, `geonames_countries` |
-| Application Layer1 modules | `{layer1}_{module}_{entity}` | `commerce_inventory_items`, `operation_it_tickets` |
+| Application domain modules | `{domain}_{module}_{entity}` | `commerce_inventory_items`, `operation_it_tickets` |
 | Extensions | `{vendor}_{module}_{entity}` | `sbg_quality_ncr_ext` |
 
-`entity` is the domain object or relation represented by the table. It is not a filesystem layer. Existing tables that predate the finalized Layer1 convention should be renamed during initialization rather than documented as exceptions.
+`entity` is the table-row noun represented by the table. It is not a filesystem layer. Existing tables that predate the finalized domain convention should be renamed during initialization rather than documented as exceptions.
 
 ---
 
@@ -148,7 +148,7 @@ This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to preven
 
 ### People
 
-People modules are grouped into three semantic tiers using the `MM` component of the prefix. The tier expresses the direction of dependency between People modules; it is not a separate layer in the Base/Core/Layer1 sense.
+People modules are grouped into three semantic tiers using the `MM` component of the prefix. The tier expresses the direction of dependency between People modules; it is not a separate layer in the Base/Core/domain sense.
 
 | Tier (`MM`) | Meaning | Migration order |
 |-------------|---------|-----------------|

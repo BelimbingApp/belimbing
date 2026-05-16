@@ -11,7 +11,7 @@ The menu cleanup made the navigation taxonomy clearer: Employee screens are usef
 
 ## Desired Outcome
 
-- Keep `app/Modules/Operation` as the canonical Layer1 path and `App\Modules\Operation` as the namespace. Do not rename it to `Operations`.
+- Keep `app/Modules/Operation` as the canonical domain path and `App\Modules\Operation` as the namespace. Do not rename it to `Operations`.
 - Keep Employee in `app/Modules/Core/Employee` with namespace `App\Modules\Core\Employee`.
 - Treat `app/Modules/People/Config/menu.php` as a People domain anchor for licensee-facing views, not ownership of the canonical any-company Employee module.
 - Move Quality to `app/Modules/Operation/Quality` with namespace `App\Modules\Operation\Quality`.
@@ -21,11 +21,11 @@ The menu cleanup made the navigation taxonomy clearer: Employee screens are usef
 
 ## Design Decisions
 
-### D1: Keep Layer1 directory names singular and conceptual
+### D1: Keep domain directory names singular and conceptual
 
-`Operation` is an architectural category, not the rendered sidebar label. The existing `module-layer1-operation` plan already retired `Business` in favor of singular `Operation`, updated namespaces, migration registry paths, and table naming around `operation_it_tickets`. Renaming `Operation` to `Operations` would add broad namespace and documentation churn while weakening the convention that Layer1 names are conceptual categories.
+`Operation` is an architectural domain, not the rendered sidebar label. The existing `module-layer1-operation` plan already retired `Business` in favor of singular `Operation`, updated namespaces, migration registry paths, and table naming around `operation_it_tickets`. Renaming `Operation` to `Operations` would add broad namespace and documentation churn while weakening the convention that domain names are conceptual.
 
-The menu label stays plural because it is user-facing prose. The code path stays singular because it is an ownership category.
+The menu label stays plural because it is user-facing prose. The code path stays singular because it is an ownership domain.
 
 ### D2: Keep Employee in Core
 
@@ -66,7 +66,7 @@ Navigation and permission IDs remain menu-domain based:
 - [x] Search and record all references to `App\Modules\Core\Employee`, `app/Modules/Core/Employee`, and Employee module docs. codex/gpt-5
 - [x] Search and record all references to `App\Modules\Core\Quality`, `app/Modules/Core/Quality`, and Quality module docs. codex/gpt-5
 - [x] Confirm provider auto-discovery still discovers one-level domain anchors and two-level leaf modules after the moves. codex/gpt-5
-- [x] Confirm no code depends on `Operation` becoming plural; document that `Operation` remains the canonical Layer1 in `docs/architecture/file-structure.md`. codex/gpt-5
+- [x] Confirm no code depends on `Operation` becoming plural; document that `Operation` remains the canonical domain in `docs/architecture/file-structure.md`. codex/gpt-5
 
 ### Phase 2 — Keep Employee in Core
 
