@@ -183,6 +183,16 @@
                     @endif
 
                     <div class="mt-4 space-y-4">
+                        <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                            <x-ui.select id="attendance-roster-template" wire:model="rosterTemplateKey" label="{{ __('Saved template') }}" :error="$errors->first('rosterTemplateKey')">
+                                <option value="">{{ __('Choose template') }}</option>
+                                @foreach ($rosterTemplates as $template)
+                                    <option value="{{ $template['key'] }}">{{ $template['name'] }}</option>
+                                @endforeach
+                            </x-ui.select>
+                            <x-ui.button type="button" variant="secondary" wire:click="applyRosterTemplate">{{ __('Apply') }}</x-ui.button>
+                        </div>
+
                         <x-ui.select id="attendance-roster-pattern" wire:model="rosterPatternId" label="{{ __('Repeat pattern') }}" :error="$errors->first('rosterPatternId')">
                             <option value="">{{ __('No pattern - use fixed shift') }}</option>
                             @foreach ($rosterPatterns as $pattern)
@@ -216,10 +226,16 @@
                     </div>
 
                     <div class="mt-4 border-t border-border-default pt-4">
-                        <x-ui.button type="submit" variant="primary" class="w-full justify-center" :disabled="! $canManage || $rosterIncomplete || $selectedEmployeeCount === 0">
-                            <x-icon name="heroicon-o-calendar-days" class="h-4 w-4" />
-                            {{ __('Save roster assignments') }}
-                        </x-ui.button>
+                        <div class="grid gap-2 sm:grid-cols-2">
+                            <x-ui.button type="button" variant="secondary" class="justify-center" wire:click="validateRosterDraft">
+                                <x-icon name="heroicon-o-check-circle" class="h-4 w-4" />
+                                {{ __('Validate') }}
+                            </x-ui.button>
+                            <x-ui.button type="submit" variant="primary" class="justify-center" :disabled="! $canManage || $rosterIncomplete || $selectedEmployeeCount === 0">
+                                <x-icon name="heroicon-o-calendar-days" class="h-4 w-4" />
+                                {{ __('Save roster assignments') }}
+                            </x-ui.button>
+                        </div>
                     </div>
                 </div>
 
@@ -231,8 +247,184 @@
                         <li class="flex gap-2"><x-icon name="heroicon-o-check-circle" class="mt-0.5 h-4 w-4 text-accent" /> <span>{{ __('Published rosters are used by attendance resolution; drafts are safe to prepare.') }}</span></li>
                     </ul>
                 </div>
+
+                <div class="rounded-2xl border border-border-default p-card-inner">
+                    <h3 class="text-base font-semibold text-ink">{{ __('Operations') }}</h3>
+                    <div class="mt-3 space-y-3">
+                        <x-ui.input id="attendance-roster-required-per-shift" type="number" min="0" wire:model.live="rosterRequiredPerShift" label="{{ __('Required per shift') }}" help="{{ __('Optional coverage target used for shortage warnings.') }}" />
+                        <x-ui.button type="button" variant="secondary" class="w-full justify-center" wire:click="copyPreviousPeriod">{{ __('Copy previous period') }}</x-ui.button>
+                        <x-ui.button type="button" variant="secondary" class="w-full justify-center" wire:click="undoLastDraftRosterOperation">{{ __('Undo latest draft bulk action') }}</x-ui.button>
+                    </div>
+                </div>
             </div>
         </form>
+    </x-ui.card>
+
+    <x-ui.card>
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+                <h3 class="text-base font-semibold text-ink">{{ __('Roster grid') }}</h3>
+                <p class="mt-1 text-sm text-muted">{{ __('Scan the filtered employees across the selected date range. Existing assignments show draft or published state; selected unsaved work appears as a preview.') }}</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <x-ui.badge variant="success">{{ __('Published') }}</x-ui.badge>
+                <x-ui.badge variant="warning">{{ __('Draft') }}</x-ui.badge>
+                <x-ui.badge variant="info">{{ __('Preview') }}</x-ui.badge>
+            </div>
+        </div>
+
+        <div class="mt-4 overflow-x-auto rounded-2xl border border-border-default">
+            <table class="min-w-full divide-y divide-border-default text-xs">
+                <thead class="bg-surface-subtle/80">
+                    <tr>
+                        <th class="sticky left-0 z-10 min-w-56 bg-surface-subtle/95 px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Employee') }}</th>
+                        <th class="min-w-36 px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Group') }}</th>
+                        @foreach ($rosterGridDays as $day)
+                            <th class="min-w-24 px-2 py-table-header-y text-center text-[11px] font-semibold uppercase tracking-wider text-muted" wire:key="roster-grid-day-{{ $day['date'] }}">
+                                <div>{{ $day['day'] }}</div>
+                                <div class="font-normal normal-case tracking-normal">{{ $day['label'] }}</div>
+                            </th>
+                        @endforeach
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-border-default bg-surface-card">
+                    @forelse ($rosterGridRows as $row)
+                        @php($employee = $row['employee'])
+                        @if ($loop->first || $row['group'] !== $rosterGridRows[$loop->index - 1]['group'])
+                            <tr wire:key="roster-grid-group-{{ $loop->index }}">
+                                <td colspan="{{ count($rosterGridDays) + 2 }}" class="bg-surface-subtle px-table-cell-x py-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                                    {{ $row['group'] }}
+                                </td>
+                            </tr>
+                        @endif
+                        <tr wire:key="roster-grid-row-{{ $employee->id }}" class="hover:bg-surface-subtle/50">
+                            <td class="sticky left-0 z-10 bg-surface-card px-table-cell-x py-table-cell-y align-top">
+                                <div class="text-sm font-medium text-ink">{{ $employee->full_name }}</div>
+                                <div class="text-xs text-muted tabular-nums">{{ $employee->employee_number }}</div>
+                            </td>
+                            <td class="px-table-cell-x py-table-cell-y align-top text-sm text-muted">{{ $row['group'] }}</td>
+                            @foreach ($rosterGridDays as $day)
+                                @php($cell = $row['cells'][$day['date']])
+                                <td class="px-2 py-2 text-center align-top" wire:key="roster-grid-cell-{{ $employee->id }}-{{ $day['date'] }}">
+                                    @if ($cell['state'] === 'empty')
+                                        <span class="text-muted">{{ $cell['label'] }}</span>
+                                    @else
+                                        <div title="{{ $cell['title'] }}" class="inline-flex min-w-16 flex-col items-center rounded-lg border border-border-default bg-surface-subtle px-2 py-1">
+                                            <span class="font-semibold text-ink">{{ $cell['label'] }}</span>
+                                            <x-ui.badge :variant="$cell['variant']">{{ $this->statusLabel($cell['state']) }}</x-ui.badge>
+                                        </div>
+                                    @endif
+                                    <button type="button" wire:click="saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}')" class="mt-1 block w-full text-[11px] font-medium text-accent hover:underline">
+                                        {{ __('Override') }}
+                                    </button>
+                                </td>
+                            @endforeach
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="{{ count($rosterGridDays) + 2 }}" class="px-table-cell-x py-table-cell-y text-sm text-muted">
+                                {{ __('No employees available for the roster grid.') }}
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </x-ui.card>
+
+    <div class="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <x-ui.card>
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-base font-semibold text-ink">{{ __('Coverage and validation') }}</h3>
+                    <p class="mt-1 text-sm text-muted">{{ __('Review shortages, overlap warnings, and missing assignment inputs before publish.') }}</p>
+                </div>
+                @if ($rosterValidationRan)
+                    <x-ui.badge variant="{{ collect($rosterValidationFindings)->where('severity', 'error')->isEmpty() ? 'success' : 'danger' }}">{{ __('Validated') }}</x-ui.badge>
+                @endif
+            </div>
+
+            <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                @forelse ($rosterCoverageRows as $row)
+                    <div class="rounded-2xl border border-border-default p-3">
+                        <div class="text-xs font-semibold uppercase tracking-wide text-muted">{{ $row['date'] }} / {{ $row['shift'] }}</div>
+                        <div class="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
+                            <div><div class="font-semibold text-ink">{{ $row['assigned'] }}</div><div class="text-muted">{{ __('Assigned') }}</div></div>
+                            <div><div class="font-semibold text-ink">{{ $row['required'] }}</div><div class="text-muted">{{ __('Required') }}</div></div>
+                            <div><div class="font-semibold text-ink">{{ $row['shortage'] }}</div><div class="text-muted">{{ __('Short') }}</div></div>
+                        </div>
+                    </div>
+                @empty
+                    <p class="text-sm text-muted">{{ __('No coverage rows yet. Save or preview roster assignments to populate coverage.') }}</p>
+                @endforelse
+            </div>
+
+            <div class="mt-4 space-y-2">
+                @forelse ($rosterValidationFindings as $finding)
+                    <x-ui.alert :variant="$finding['severity'] === 'error' ? 'danger' : 'warning'">
+                        {{ $finding['message'] }}
+                    </x-ui.alert>
+                @empty
+                    <x-ui.alert variant="success">{{ __('No validation findings for the current roster view.') }}</x-ui.alert>
+                @endforelse
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2">
+                <x-ui.button type="button" variant="secondary" wire:click="acceptRosterWarnings">{{ __('Accept warnings') }}</x-ui.button>
+            </div>
+        </x-ui.card>
+
+        <x-ui.card>
+            <h3 class="text-base font-semibold text-ink">{{ __('Publish review') }}</h3>
+            <p class="mt-1 text-sm text-muted">{{ __('Publish reviewed draft rows for the selected period and queue employee notification intents.') }}</p>
+            <div class="mt-4 space-y-3">
+                <x-ui.input id="attendance-roster-revision-note" wire:model="rosterRevisionNote" label="{{ __('Revision note') }}" :error="$errors->first('rosterRevisionNote')" />
+                <x-ui.button type="button" variant="primary" wire:click="publishReviewedRosters">{{ __('Publish reviewed drafts') }}</x-ui.button>
+            </div>
+
+            <div class="mt-6 border-t border-border-default pt-4">
+                <h4 class="text-sm font-semibold text-ink">{{ __('Swap shifts') }}</h4>
+                <div class="mt-3 grid gap-3 md:grid-cols-3">
+                    <x-ui.select wire:model="swapFromEmployeeId" label="{{ __('From') }}">
+                        <option value="">{{ __('Choose') }}</option>
+                        @foreach ($employees as $employee)
+                            <option value="{{ $employee->id }}">{{ $employee->full_name }}</option>
+                        @endforeach
+                    </x-ui.select>
+                    <x-ui.select wire:model="swapToEmployeeId" label="{{ __('To') }}">
+                        <option value="">{{ __('Choose') }}</option>
+                        @foreach ($employees as $employee)
+                            <option value="{{ $employee->id }}">{{ $employee->full_name }}</option>
+                        @endforeach
+                    </x-ui.select>
+                    <x-ui.input type="date" wire:model="swapDate" label="{{ __('Date') }}" :error="$errors->first('swapDate')" />
+                </div>
+                <x-ui.button type="button" variant="secondary" class="mt-3" wire:click="swapRosterCells">{{ __('Swap') }}</x-ui.button>
+            </div>
+        </x-ui.card>
+    </div>
+
+    <x-ui.card>
+        <h3 class="text-base font-semibold text-ink">{{ __('Spreadsheet intake') }}</h3>
+        <p class="mt-1 text-sm text-muted">{{ __('Paste rows as employee_number, date, shift_code, policy_group_code, notes. Rows become draft one-day roster rows or dated overrides on existing assignments.') }}</p>
+        <div class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.5fr)]">
+            <div>
+                <x-ui.textarea wire:model.live.debounce.300ms="spreadsheetRosterRows" rows="8" label="{{ __('Rows') }}" :error="$errors->first('spreadsheetRosterRows')" />
+            </div>
+            <div class="space-y-3">
+                <x-ui.button type="button" variant="primary" wire:click="importSpreadsheetRosterRows">{{ __('Import draft rows') }}</x-ui.button>
+                <div class="rounded-2xl border border-border-default p-3">
+                    <div class="text-xs font-semibold uppercase tracking-wide text-muted">{{ __('Preview') }}</div>
+                    <div class="mt-2 space-y-1 text-sm text-muted">
+                        @forelse ($spreadsheetPreviewRows as $row)
+                            <div>{{ $row['employee_number'] }} / {{ $row['date'] }} / {{ $row['shift_code'] }} / {{ $row['policy_code'] }}</div>
+                        @empty
+                            <div>{{ __('No parsed rows yet.') }}</div>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+        </div>
     </x-ui.card>
 
     <div class="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
