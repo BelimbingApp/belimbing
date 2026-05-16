@@ -32,7 +32,7 @@ function createLeaveAssignment(array $overrides = []): array
     $company = Company::query()->findOrFail(Company::LICENSEE_ID);
     $employee = Employee::factory()->create(['company_id' => $company->id]);
 
-    $type = LeaveType::query()->create(array_merge([
+    $typeAttributes = array_merge([
         'company_id' => $company->id,
         'code' => MalaysiaStatutoryLeaveTypes::CODE_ANNUAL,
         'name' => 'Annual Leave',
@@ -42,7 +42,21 @@ function createLeaveAssignment(array $overrides = []): array
         'interacts_with_payroll' => false,
         'compulsory_attachment' => false,
         'status' => LeaveType::STATUS_ACTIVE,
-    ], $overrides['leave_type'] ?? []));
+    ], $overrides['leave_type'] ?? []);
+
+    $payItemCode = $typeAttributes['payroll_pay_item_code'] ?? null;
+    unset($typeAttributes['payroll_pay_item_code']);
+
+    $type = LeaveType::query()->create($typeAttributes);
+
+    if ($payItemCode !== null) {
+        \App\Modules\People\Payroll\Models\PayrollLeaveTypePayItem::query()->create([
+            'company_id' => $company->id,
+            'leave_type_id' => $type->id,
+            'payroll_pay_item_code' => $payItemCode,
+            'effective_from' => '2026-01-01',
+        ]);
+    }
 
     $entitlement = LeaveEntitlementPolicy::query()->create([
         'company_id' => $company->id,
