@@ -851,7 +851,7 @@ it('routes a fixed weekly roster pattern through the day_types map when a holida
         'kind' => 'public_holiday',
     ]);
 
-    $standardShift = AttendanceShiftTemplate::query()->create([
+    AttendanceShiftTemplate::query()->create([
         'company_id' => $company->id,
         'code' => 'PROD_DAY',
         'name' => 'Production day',
@@ -860,7 +860,7 @@ it('routes a fixed weekly roster pattern through the day_types map when a holida
         'expected_work_minutes' => 480,
         'effective_from' => '2026-01-01',
     ]);
-    $holidayShift = AttendanceShiftTemplate::query()->create([
+    AttendanceShiftTemplate::query()->create([
         'company_id' => $company->id,
         'code' => 'PROD_HOLIDAY_HALF',
         'name' => 'Production half-day on holidays',
