@@ -301,9 +301,32 @@ A licensee's local working tree looks the same regardless of category — direct
 
 ## 8. Module Boot and Discovery
 
-Two stages: composer at install time, BLB at runtime.
+Two stages: composer at install time, BLB at runtime. The shape differs between nested-git phases and composer-ized phases — be explicit about both.
 
-### 8.1 Install-time (composer)
+### 8.1 Where plugins live on disk
+
+**Phase 1–3 (nested-git):** plugins are git checkouts at canonical paths.
+
+```
+app/Modules/People/Payroll/         # blb-payroll-my checkout (own .git)
+app/Modules/People/Attendance/      # blb-attendance checkout (own .git)
+extensions/sb-group/qac/            # licensee extension (own .git)
+vendor/                             # PHP libraries only (phpoffice, etc.) — NOT plugins
+```
+
+Plugins do not live in `vendor/`. Only the PHP libraries they depend on do.
+
+**Phase 4 (composer-ized):** plugins are installed composer packages.
+
+```
+vendor/blb/payroll-my/              # installed via composer require
+vendor/blb/attendance/              # installed via composer require
+extensions/sb-group/qac/            # licensee extensions stay path-based
+```
+
+This is the standard composer layout. BLB does not move code out of `vendor/` (see §8.5 for the reasoning).
+
+### 8.2 Install-time (composer)
 
 When the operator runs `composer install` (phase 1–3 with merge-plugin; phase 4 with standalone packages), composer:
 
@@ -314,13 +337,38 @@ When the operator runs `composer install` (phase 1–3 with merge-plugin; phase 
 
 BLB does not duplicate any of this. If composer succeeds, every plugin's PHP dependencies are present and autoloadable.
 
-### 8.2 Runtime detection
+### 8.3 Phase 4 distribution options
 
-On boot, BLB scans `app/Base/`, `app/Modules/*/*/`, and `extensions/*/*/` for module roots. A module root is identified by a `ServiceProvider.php` plus a `composer.json` whose `extra.blb` block declares it as a BLB plugin.
+Composer supports several distribution mechanisms; BLB does not mandate any single one. Each plugin author chooses what fits.
+
+- **Packagist (public).** First-party open-source BLB plugins (`blb-payroll-my`). Free registration; `composer require blb/payroll-my` works everywhere.
+- **Private Packagist / Satis.** Commercial or licensee-private plugins. Self-hosted or paid service; root `composer.json` adds the private repo URL.
+- **VCS repository.** Any git repo, no registry needed. Root `composer.json` declares the repo URL; composer pulls directly from git. Good for closed-source plugins without running a registry.
+- **Composer path repository.** Local development against a host app. Root `composer.json` declares a path; composer symlinks the local checkout into `vendor/`.
+
+The framework is portable across all of these. No mandatory dependency on Packagist or any other central infrastructure.
+
+### 8.4 Runtime detection
+
+On boot, BLB scans for modules:
+
+- **Phase 1–3:** `app/Base/`, `app/Modules/*/*/`, `extensions/*/*/`. A module root is identified by a `ServiceProvider.php` plus a `composer.json` whose `extra.blb` block declares it as a BLB plugin.
+- **Phase 4:** add a scan of `vendor/` for installed composer packages with `type: blb-plugin` and an `extra.blb` block. Path-based scans (`app/Modules/`, `extensions/`) stay in place for licensee path-based plugins.
 
 A plugin not present on disk is simply not loaded. No fatal error.
 
-### 8.3 BLB-side dependency check
+### 8.5 Why plugins stay in `vendor/` at Phase 4
+
+Moving composer-installed plugin code from `vendor/` to a canonical `app/Modules/.../` path would be possible (Drupal and WordPress do it via `composer/installers`-style routing) but is rejected here:
+
+- `composer update` writes to `vendor/`. A post-install move makes the update flow lossy or repeated; symlinks help on Linux/Mac but are awkward on Windows dev environments.
+- Stack traces, IDE indexing, and "go to definition" become misleading when a file's reported path is not where the file actually lives.
+- The mechanism (custom installer plugin or `extra.installer-paths`) is extra BLB-maintained code that fights composer's worldview.
+- The motivation — "consistent paths across phases" — is better served by **discovery being location-agnostic**, not by forcing all plugin code into one path. BLB's runtime resolves a plugin by name, not by path.
+
+Path-based discovery in Phase 1–3 is a transitional state, not a desired invariant. By Phase 4 the framework should look at composer's view of the world, not impose a custom view on top of it. Plugins live where composer puts them; BLB finds them by manifest.
+
+### 8.6 BLB-side dependency check
 
 BLB's manifest reader walks each loaded plugin's `extra.blb.requires-modules` and `extra.blb.optional-modules`:
 
@@ -329,7 +377,7 @@ BLB's manifest reader walks each loaded plugin's `extra.blb.requires-modules` an
 
 This is distinct from composer's PHP-package check: composer answers "is `phpoffice/phpspreadsheet` installed?"; BLB answers "is the `people/attendance` plugin enabled in this deployment?".
 
-### 8.4 Service-provider order
+### 8.7 Service-provider order
 
 Modules register their service providers in BLB-module dependency order. The framework's existing module bootstrapping is path-based today; it will need to honor the `extra.blb.requires-modules` graph.
 
