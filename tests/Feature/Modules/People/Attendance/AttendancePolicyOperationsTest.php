@@ -49,7 +49,6 @@ it('returns stable validation findings for unsafe attendance policy setup', func
             'rounding_method_invalid',
             'lateness_grace_invalid',
             'overtime_export_pay_item_missing',
-            'allowance_pay_item_missing',
             'allowance_condition_amount_invalid',
             'allowance_condition_predicate_missing',
         );
@@ -456,7 +455,6 @@ it('lets managers create attendance allowance rules', function (): void {
         ->set('allowancePolicyGroupId', (string) $policyGroup->id)
         ->set('allowanceCode', 'night_allowance')
         ->set('allowanceName', 'Night allowance')
-        ->set('allowancePayItemCode', 'night_allowance')
         ->set('allowanceAmount', '25.00')
         ->set('allowanceConditionPreset', 'clock_out_after')
         ->set('allowanceClockOutAfter', '22:00')
@@ -473,7 +471,6 @@ it('lets managers create attendance allowance rules', function (): void {
         ->firstOrFail();
 
     expect($rule->attendance_policy_group_id)->toBe($policyGroup->id)
-        ->and($rule->payroll_pay_item_code)->toBe('night_allowance')
         ->and($rule->condition_rows[0]['amount'])->toBe(25)
         ->and($rule->condition_rows[0]['predicate'])->toBe(['clock_out_after' => '22:00']);
 

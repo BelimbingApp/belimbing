@@ -107,12 +107,6 @@
                             <option value="{{ $shift->id }}">{{ $shift->code }} - {{ $shift->name }}</option>
                         @endforeach
                     </x-ui.select>
-                    <x-ui.select id="attendance-allowance-pay-item" wire:model="allowancePayItemCode" label="{{ __('Payroll pay item') }}" help="{{ __('Select the payroll pay item used when payroll handoff classifies this allowance.') }}" :error="$errors->first('allowancePayItemCode')">
-                        <option value="">{{ __('Select a payroll pay item') }}</option>
-                        @foreach ($payrollPayItems as $payItem)
-                            <option value="{{ $payItem->code }}">{{ $payItem->code }} - {{ $payItem->name }}</option>
-                        @endforeach
-                    </x-ui.select>
                     <x-ui.input id="attendance-allowance-effective-from" type="date" wire:model="allowanceEffectiveFrom" label="{{ __('Effective from') }}" required :error="$errors->first('allowanceEffectiveFrom')" />
                     <x-ui.select id="attendance-allowance-type" wire:model="allowanceType" label="{{ __('Type') }}" :error="$errors->first('allowanceType')">
                         <option value="daily">{{ __('Daily') }}</option>

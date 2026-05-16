@@ -1,6 +1,6 @@
 # people/12_attendance-event-decoupling
 
-**Status:** In progress — Phase 1 complete (2026-05-16). Phases 2–6 pending.
+**Status:** In progress — Phases 1 and 2 complete (2026-05-16). Phases 3–6 pending.
 **Last Updated:** 2026-05-16
 **Owners:** unassigned. See [Distribution Notes](#distribution-notes) for per-phase pickup guidance.
 **Sources:**
@@ -128,28 +128,37 @@ Phases progress strictly in order: each depends on the previous being complete a
 
 **Dependencies:** Phase 1 complete.
 
+**Status:** Complete (2026-05-16). All 178 People feature tests + 51 Attendance tests + architectural tests green. {claud/opus-4.7}
+
 **Tasks:**
 
-- [ ] Design the table schema for `people_payroll_attendance_rule_pay_items`. Columns: `id`, `company_id`, `attendance_allowance_rule_id` (FK), `payroll_pay_item_code`, `effective_from`, `effective_to`, `created_at`, `updated_at`, `metadata` JSON. Unique on `(attendance_allowance_rule_id, effective_from)`.
-- [ ] Create migration `0320_03_01_*_create_people_payroll_attendance_rule_pay_items_table.php` (use the next available `MM_DD` slot under the Payroll band).
-- [ ] Data-migration step in the same migration's `up()`: copy existing `AttendanceAllowanceRule.payroll_pay_item_code` values into mapping rows with `effective_from = NOW()`, skipping nulls.
-- [ ] Update `RecordAttendanceAllowanceContribution` listener to look up pay-item code from the mapping table (latest effective row for the rule, scoped by company).
-- [ ] Remove the pay-item-code form fields and dropdown from `AllowanceRules` Livewire — `allowancePayItemCode`, `payrollPayItemValidationRules`, the dropdown render slot.
-- [ ] Remove the dropdown loader `payrollPayItems()` from `InteractsWithAttendanceScreen` trait (or keep with a deprecation note for one release).
-- [ ] Build the Payroll-side Livewire screen: list of Attendance allowance rules with current pay-item assignment, with edit-in-place or per-row edit. New file under `app/Modules/People/Payroll/Livewire/`.
-- [ ] Add a route + menu entry under Payroll for the mapping UI.
-- [ ] Update `AttendancePolicyValidationService` — remove the `allowance_pay_item_missing` warning, or move its equivalent into a Payroll-side validation surface.
-- [ ] Update `AttendancePolicySimulationService` — the `payroll_pay_item_code` field in simulation output is now read from the mapping (or removed if simulation does not need it).
-- [ ] Update `DevAttendanceSeeder` — stop seeding `payroll_pay_item_code` on allowance rules; if a corresponding dev seeder for Payroll needs to seed the mapping, add it there.
-- [ ] Update allowance-rule templates in `AllowanceRules::allowanceTemplates()` — remove `pay_item_code` template fields, or note them as Payroll-side recommendations.
-- [ ] Drop the `payroll_pay_item_code` column from `people_attendance_allowance_rules` (migration with proper down).
-- [ ] Re-run the architectural test from Phase 1.
+- [x] Design the table schema for `people_payroll_attendance_rule_pay_items`. Columns: `id`, `company_id`, `attendance_allowance_rule_id` (FK), `payroll_pay_item_code`, `effective_from`, `effective_to`, `created_at`, `updated_at`, `metadata` JSON. Unique on `(attendance_allowance_rule_id, effective_from)`. {claud/opus-4.7}
+- [x] Create migration `0320_03_01_000007_create_people_payroll_attendance_rule_pay_items_table.php`. {claud/opus-4.7}
+- [x] Data-migration step in the same migration's `up()`: copy existing `AttendanceAllowanceRule.payroll_pay_item_code` values into mapping rows with `effective_from` from the rule's own effective_from, skipping nulls. {claud/opus-4.7}
+- [x] Update `RecordAttendanceAllowanceContribution` listener to look up pay-item code from the mapping table (latest effective row for the rule, by date). {claud/opus-4.7}
+- [x] Remove the pay-item-code form fields and dropdown from `AllowanceRules` Livewire — `allowancePayItemCode`, the dropdown render slot, validation, save/edit/template paths. {claud/opus-4.7}
+- [x] `payrollPayItems()` / `payrollPayItemValidationRules()` on the `InteractsWithAttendanceScreen` trait are kept (transitional) — still used by the `PolicyGroups` screen for `payroll_defaults` JSON fields. Phase 4 audit removes them. {claud/opus-4.7}
+- [x] Build the Payroll-side Livewire screen: `AttendanceAllowanceMapping` at `app/Modules/People/Payroll/Livewire/AttendanceAllowanceMapping.php` with companion blade `livewire/people/payroll/attendance-allowance-mapping.blade.php`. Lists rules + current mapping + history; inline edit form for assignment with effective-date. {claud/opus-4.7}
+- [x] Add a route + menu entry under Payroll for the mapping UI. {claud/opus-4.7}
+- [x] Update `AttendancePolicyValidationService` — removed the `allowance_pay_item_missing` warning. {claud/opus-4.7}
+- [x] Update `AttendancePolicySimulationService` — dropped the `payroll_pay_item_code` field from simulation output. Validator blade and table blade updated to match. {claud/opus-4.7}
+- [x] Update `DevAttendanceSeeder` — stopped seeding `payroll_pay_item_code` on allowance rules. {claud/opus-4.7}
+- [x] Update allowance-rule templates in `AllowanceRules::allowanceTemplates()` — removed `pay_item_code` template fields. {claud/opus-4.7}
+- [x] Drop the `payroll_pay_item_code` column from `people_attendance_allowance_rules` via `0320_03_01_000008_drop_payroll_pay_item_code_from_attendance_allowance_rules.php`. Lives in Payroll migrations dir (not Attendance) because it must run after the `_000007_*` data migration. {claud/opus-4.7}
+- [x] Re-run the architectural test from Phase 1. {claud/opus-4.7}
+
+**Phase 2 implementation notes:**
+
+- The drop-column migration lives in `app/Modules/People/Payroll/Database/Migrations/` rather than Attendance's directory. Reason: it must run after the Payroll-band `_000007_*` data migration. Putting it in Attendance with a `0320_02_*` timestamp would run it before the data copy. Putting it in Attendance with a `0320_03_*` timestamp confuses the directory-band convention. Cleanest: it is a Payroll-driven cleanup of an Attendance table, so it lives in Payroll's migration dir.
+- The `InteractsWithAttendanceScreen` trait still carries `payrollPayItems()` and `payrollPayItemValidationRules()`. These are no longer used by the allowance-rule form (the target of Phase 2) but are still called by the `PolicyGroups` form for `policyLatenessPayItem`, `policyNormalOvertimePayItem`, etc. — fields that feed `AttendancePolicyGroup.payroll_defaults` JSON. Those fields are Phase 4 audit territory; the helpers retire then.
+- The `allowance_pay_item_missing` validation finding is gone from `AttendancePolicyValidationService`. The validator no longer warns about missing pay-item codes because the assignment lives in Payroll now. If the operator wants a "rules without mapping" report, the Payroll-side mapping screen surfaces it directly (rules with no current mapping show "No mapping — payroll handoff will skip this rule").
+- Pay-item-code validation in the new Payroll-side mapping screen uses the same `Rule::exists('people_payroll_pay_items', ...)` pattern that previously lived on the Attendance trait. The validation moved with the data.
 
 **Exit criterion:**
-- `payroll_pay_item_code` column does not exist on `people_attendance_allowance_rules`.
-- The mapping table has rows for every previously populated rule.
-- Approving an allowance rule still results in the listener writing the correct `PayrollInput` (via the mapping table lookup).
-- All Attendance and Payroll tests green.
+- [x] `payroll_pay_item_code` column does not exist on `people_attendance_allowance_rules` (verified via `Schema::hasColumn` after `migrate:fresh`).
+- [x] The mapping table has rows for every previously populated rule (data migration runs in the same `up()` step).
+- [x] An allowance materialisation event with a matching mapping row results in a `PayrollInput` via the listener.
+- [x] All Attendance and Payroll tests green (178 People tests passing).
 
 ---
 
