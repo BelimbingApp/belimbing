@@ -15,6 +15,8 @@ use App\Modules\People\Attendance\Models\AttendanceRosterAssignment;
 use App\Modules\People\Attendance\Models\AttendanceShiftTemplate;
 use App\Modules\People\Attendance\Services\AttendancePolicySimulationService;
 use App\Modules\People\Attendance\Services\AttendancePolicyValidationService;
+use App\Modules\People\Settings\Models\EmployeeWorkProfile;
+use App\Modules\People\Settings\Models\PeopleReferenceEntry;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Livewire\Livewire;
@@ -584,6 +586,130 @@ it('lets managers create roster assignments from the guided roster builder', fun
     expect($assignment->attendance_shift_template_id)->toBe($shift->id)
         ->and($assignment->attendance_policy_group_id)->toBe($policyGroup->id)
         ->and($assignment->publish_state)->toBe('published');
+});
+
+it('lets managers bulk-create roster assignments from filtered employee selections', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $direct = PeopleReferenceEntry::query()->create([
+        'company_id' => $company->id,
+        'type' => PeopleReferenceEntry::TYPE_WORKFORCE_CLASS,
+        'code' => 'DIRECT',
+        'name' => 'Direct Labor',
+    ]);
+    $office = PeopleReferenceEntry::query()->create([
+        'company_id' => $company->id,
+        'type' => PeopleReferenceEntry::TYPE_WORKFORCE_CLASS,
+        'code' => 'OFFICE',
+        'name' => 'Office Labor',
+    ]);
+    $productionEmployees = Employee::factory()->active()->count(3)->create(['company_id' => $company->id]);
+    $officeEmployee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $productionEmployees->each(fn (Employee $employee) => EmployeeWorkProfile::query()->create([
+        'employee_id' => $employee->id,
+        'workforce_class_id' => $direct->id,
+        'pay_rate_type' => 'hourly',
+    ]));
+    EmployeeWorkProfile::query()->create([
+        'employee_id' => $officeEmployee->id,
+        'workforce_class_id' => $office->id,
+        'pay_rate_type' => 'monthly',
+    ]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard',
+        'effective_from' => '2026-01-01',
+    ]);
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day Shift',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Rosters::class)
+        ->assertSee('Build roster assignments')
+        ->set('rosterWorkforceClassId', (string) $direct->id)
+        ->call('selectAllFilteredRosterEmployees')
+        ->assertSet('rosterSelectAllFiltered', true)
+        ->assertSee('3 selected')
+        ->set('rosterShiftTemplateId', (string) $shift->id)
+        ->set('rosterPolicyGroupId', (string) $policyGroup->id)
+        ->set('rosterEffectiveFrom', '2026-07-01')
+        ->set('rosterEffectiveTo', '2026-07-31')
+        ->call('saveRosterAssignment')
+        ->assertHasNoErrors()
+        ->assertSee('3 roster assignments saved.');
+
+    expect(AttendanceRosterAssignment::query()
+        ->where('company_id', $company->id)
+        ->whereIn('employee_id', $productionEmployees->pluck('id'))
+        ->count())->toBe(3)
+        ->and(AttendanceRosterAssignment::query()
+            ->where('company_id', $company->id)
+            ->where('employee_id', $officeEmployee->id)
+            ->exists())->toBeFalse();
+});
+
+it('skips overlapping employees while saving valid bulk roster assignments', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $employees = Employee::factory()->active()->count(2)->create(['company_id' => $company->id]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard',
+        'effective_from' => '2026-01-01',
+    ]);
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day Shift',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+
+    AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employees[0]->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => '2026-07-01',
+        'effective_to' => '2026-07-31',
+        'publish_state' => 'published',
+        'lock_state' => 'open',
+        'revision' => 1,
+        'exceptions' => [],
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Rosters::class)
+        ->set('selectedRosterEmployeeIds', $employees->pluck('id')->map(fn (int $id): string => (string) $id)->all())
+        ->set('rosterShiftTemplateId', (string) $shift->id)
+        ->set('rosterPolicyGroupId', (string) $policyGroup->id)
+        ->set('rosterEffectiveFrom', '2026-07-15')
+        ->set('rosterEffectiveTo', '2026-08-15')
+        ->call('saveRosterAssignment')
+        ->assertHasNoErrors()
+        ->assertSee('Roster assignment saved. 1 skipped because of existing roster overlaps.');
+
+    expect(AttendanceRosterAssignment::query()
+        ->where('company_id', $company->id)
+        ->where('employee_id', $employees[0]->id)
+        ->count())->toBe(1)
+        ->and(AttendanceRosterAssignment::query()
+            ->where('company_id', $company->id)
+            ->where('employee_id', $employees[1]->id)
+            ->count())->toBe(1);
 });
 
 it('lets managers build shift templates inline from guided templates and import JSON', function (): void {
