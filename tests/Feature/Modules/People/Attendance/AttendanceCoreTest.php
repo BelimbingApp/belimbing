@@ -504,7 +504,7 @@ it('rolls the payroll period date forward for cross-midnight shifts attributed t
         'ends_at' => '05:00:00',
         'crosses_midnight' => true,
         'expected_work_minutes' => 480,
-        'payroll_attribution' => 'shift_end_date',
+        'cross_midnight_attribution' => 'shift_end_date',
         'effective_from' => '2026-01-01',
     ]);
     $startDateShift = AttendanceShiftTemplate::query()->create([
@@ -515,7 +515,7 @@ it('rolls the payroll period date forward for cross-midnight shifts attributed t
         'ends_at' => '05:00:00',
         'crosses_midnight' => true,
         'expected_work_minutes' => 480,
-        'payroll_attribution' => 'shift_start_date',
+        'cross_midnight_attribution' => 'shift_start_date',
         'effective_from' => '2026-01-01',
     ]);
     $policyGroup = AttendancePolicyGroup::query()->create([
@@ -939,7 +939,6 @@ it('approves overtime and queues one neutral payroll input', function (): void {
         'code' => 'STD',
         'name' => 'Standard Attendance',
         'effective_from' => '2026-01-01',
-        'payroll_defaults' => ['overtime_pay_item_code' => 'OT15'],
     ]);
     $day = AttendanceDay::query()->create([
         'company_id' => $company->id,
@@ -957,6 +956,7 @@ it('approves overtime and queues one neutral payroll input', function (): void {
         'ends_at' => '2026-05-13 19:00:00',
         'requested_minutes' => 120,
         'reason' => 'Production support',
+        'policy_snapshot' => ['overtime_pay_item_code' => 'OT15'],
     ]);
     $calendar = PayrollCalendar::query()->create([
         'company_id' => $company->id,

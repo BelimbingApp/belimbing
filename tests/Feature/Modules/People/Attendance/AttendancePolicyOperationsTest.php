@@ -288,7 +288,7 @@ it('lets managers build, save, and edit policies inline on the studio page', fun
     expect($policy->lateness_rules['grace']['in'])->toBe(5)
         ->and($policy->work_hour_rules['daily_rounding'])->toBe(['method' => 'nearest', 'minutes' => 15])
         ->and($policy->overtime_export_rules['normal'][0]['pay_item_code'])->toBe('overtime')
-        ->and($policy->payroll_defaults['currency'])->toBe('MYR');
+        ->and($policy->currency)->toBe('MYR');
 
     Livewire::test(PolicyGroups::class)
         ->call('editPolicyGroup', $policy->id)
@@ -420,7 +420,7 @@ it('downloads policy template JSON directly from the list without entering the b
         'code' => 'EXPORT_ME',
         'name' => 'Export me',
         'effective_from' => '2026-01-01',
-        'payroll_defaults' => ['currency' => 'MYR'],
+        'currency' => 'MYR',
     ]);
 
     $this->actingAs($user);
@@ -633,7 +633,7 @@ it('lets managers build shift templates inline from guided templates and import 
                 'in' => ['before_minutes' => 30, 'after_minutes' => 10],
                 'out' => ['before_minutes' => 10, 'after_minutes' => 90],
             ],
-            'payroll_attribution' => 'shift_start_date',
+            'cross_midnight_attribution' => 'shift_start_date',
         ])))
         ->call('importShiftTemplate')
         ->assertHasNoErrors()
