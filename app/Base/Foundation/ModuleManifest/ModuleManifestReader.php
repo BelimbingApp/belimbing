@@ -109,6 +109,8 @@ class ModuleManifestReader
             module: (string) ($blb['module'] ?? ''),
             role: (string) ($blb['role'] ?? 'unknown'),
             path: dirname($composerPath),
+            version: (string) ($blb['version'] ?? ''),
+            description: (string) ($blb['description'] ?? ($data['description'] ?? '')),
             requiresModules: $this->normaliseModuleMap($blb['requires-modules'] ?? []),
             optionalModules: $this->normaliseModuleMap($blb['optional-modules'] ?? []),
             publishesEvents: $this->normaliseStringList($blb['publishes-events'] ?? []),

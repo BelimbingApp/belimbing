@@ -21,6 +21,8 @@ final readonly class ModuleManifest
         public string $module,
         public string $role,
         public string $path,
+        public string $version = '',
+        public string $description = '',
         public array $requiresModules = [],
         public array $optionalModules = [],
         public array $publishesEvents = [],

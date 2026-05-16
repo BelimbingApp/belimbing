@@ -20,6 +20,8 @@ it('reads extra.blb metadata from People sub-module composer.json files', functi
     $attendance = collect($manifests)->firstWhere('name', 'blb/people-attendance');
 
     expect($attendance->role)->toBe('source')
+        ->and($attendance->version)->not->toBe('')
+        ->and($attendance->description)->not->toBe('')
         ->and($attendance->publishesEvents)->toContain(
             'App\\Modules\\People\\Attendance\\Events\\AttendanceOvertimeApproved',
             'App\\Modules\\People\\Attendance\\Events\\AttendanceAllowanceMaterialized',
@@ -28,6 +30,8 @@ it('reads extra.blb metadata from People sub-module composer.json files', functi
     $payroll = collect($manifests)->firstWhere('name', 'blb/payroll-my');
 
     expect($payroll->role)->toBe('plugin')
+        ->and($payroll->version)->not->toBe('')
+        ->and($payroll->description)->not->toBe('')
         ->and($payroll->consumesEvents)->toContain(
             'App\\Modules\\People\\Attendance\\Events\\AttendanceOvertimeApproved',
             'App\\Modules\\People\\Attendance\\Events\\AttendanceAllowanceMaterialized',
