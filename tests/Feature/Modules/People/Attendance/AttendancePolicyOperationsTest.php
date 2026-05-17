@@ -1,6 +1,8 @@
 <?php
 
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Company\Models\Department;
+use App\Modules\Core\Company\Models\DepartmentType;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\People\Attendance\Livewire\AllowanceRules;
 use App\Modules\People\Attendance\Livewire\Approvals;
@@ -777,6 +779,63 @@ it('shows saved and unsaved roster assignments in the roster grid', function ():
         ->assertSee('Published')
         ->assertSee('NIGHT')
         ->assertSee('Preview');
+});
+
+it('narrows the list-mode calendar via the filter prose without flipping into form mode', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+
+    $productionType = DepartmentType::query()->create([
+        'code' => 'unit-prod',
+        'name' => 'Production unit',
+        'category' => 'operations',
+        'is_active' => true,
+    ]);
+    $officeType = DepartmentType::query()->create([
+        'code' => 'unit-office',
+        'name' => 'Office unit',
+        'category' => 'operations',
+        'is_active' => true,
+    ]);
+
+    $production = Department::query()->create([
+        'company_id' => $company->id,
+        'department_type_id' => $productionType->id,
+        'name' => 'Production',
+    ]);
+    $office = Department::query()->create([
+        'company_id' => $company->id,
+        'department_type_id' => $officeType->id,
+        'name' => 'Office',
+    ]);
+
+    $productionEmployee = Employee::factory()->active()->create([
+        'company_id' => $company->id,
+        'department_id' => $production->id,
+        'full_name' => 'Production Pat',
+    ]);
+    $officeEmployee = Employee::factory()->active()->create([
+        'company_id' => $company->id,
+        'department_id' => $office->id,
+        'full_name' => 'Office Olive',
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Rosters::class)
+        ->assertSet('mode', 'list')
+        ->assertSee('Production Pat')
+        ->assertSee('Office Olive')
+        ->assertSee('all departments')
+        ->set('rosterDepartmentId', (string) $production->id)
+        ->assertSet('mode', 'list')
+        ->assertSee('Production Pat')
+        ->assertDontSee('Office Olive')
+        ->assertSee('Production')
+        ->call('clearRosterFilters')
+        ->assertSee('Production Pat')
+        ->assertSee('Office Olive')
+        ->assertSee('all departments');
 });
 
 it('opens to the calendar as the list-mode primary surface and supports week navigation', function (): void {

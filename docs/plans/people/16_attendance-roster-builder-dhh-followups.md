@@ -1,6 +1,6 @@
 # 16_attendance-roster-builder-dhh-followups.md
 
-Status: Identified
+Status: In Progress
 Last Updated: 2026-05-17
 Sources: `docs/plans/people/15_attendance-roster-builder-ux.md`, `docs/plans/people/sbg_attendance_ref/Roster Builder Review v2 _DHH_ - standalone.html`, `app/Modules/People/Attendance/Livewire/Rosters.php`, `resources/core/views/livewire/people/attendance/partials/rosters-form.blade.php`, `resources/core/views/livewire/people/attendance/partials/rosters-list.blade.php`, `resources/core/views/livewire/people/attendance/partials/rosters-grid.blade.php`
 Agents: {claude/opus-4.7}
@@ -63,8 +63,8 @@ The calendar grid partial (`rosters-grid.blade.php`) stays the primary renderer 
 ### Phase 2 — Filter prose line
 
 - [ ] Replace the form-mode filter row's grid of selects with a single sentence-form rendering of the active filters (population, site, role). {agent/model}
-- [ ] Promote the same sentence into list mode so supervisors can narrow the calendar without flipping to form mode. {agent/model}
-- [ ] Each underlined phrase opens a small popover with the existing filter controls; the rest of the row stays static. {agent/model}
+- [x] Promote the same sentence into list mode so supervisors can narrow the calendar without flipping to form mode. First-generation prose surfaces three dimensions (department, workforce class, status) above the Calendar tab; the remaining seven filter properties stay reachable via form mode for now. {claude/opus-4.7}
+- [x] Each underlined phrase opens a small popover with the existing filter controls; the rest of the row stays static. Popovers are Alpine-local with `click.outside` to close, `wire:model.live` selects bound to the existing Livewire properties, and a Clear-filters affordance appears beside the sentence whenever any non-default filter is set. {claude/opus-4.7}
 
 ### Phase 3 — Calendar zoom levels
 
