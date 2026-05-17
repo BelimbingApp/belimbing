@@ -672,6 +672,24 @@ it('treats employees without a work calendar as normal day type', function (): v
     expect($dayType)->toBe(AttendanceDay::DAY_TYPE_NORMAL);
 });
 
+it('preloads holiday and calendar lookups so the roster grid resolves day types without per-cell queries', function (): void {
+    [, $employee, $workCalendar] = employeeWithMalaysiaWorkCalendar();
+    createWesakCalendarException($workCalendar);
+
+    $resolver = new AttendanceCalendarResolver;
+    $resolver->preload([$employee], '2026-05-11', '2026-05-17');
+
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+
+    expect($resolver->dayType($employee, ATTENDANCE_HOLIDAY_DATE))->toBe(AttendanceDay::DAY_TYPE_HOLIDAY)
+        ->and($resolver->dayType($employee, '2026-05-17'))->toBe(AttendanceDay::DAY_TYPE_REST)
+        ->and($resolver->dayType($employee, '2026-05-16'))->toBe(AttendanceDay::DAY_TYPE_OFF)
+        ->and($resolver->dayType($employee, '2026-05-15'))->toBe(AttendanceDay::DAY_TYPE_NORMAL);
+
+    expect(DB::getQueryLog())->toBeEmpty();
+});
+
 it('routes a fixed weekly roster pattern through the day_types map when a holiday falls on a working weekday', function (): void {
     [$company, $employee, $workCalendar] = employeeWithMalaysiaWorkCalendar();
     createWesakCalendarException($workCalendar);

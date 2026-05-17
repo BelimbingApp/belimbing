@@ -19,6 +19,7 @@ use App\Modules\People\Attendance\Services\AttendancePolicyValidationService;
 use App\Modules\People\Settings\Models\EmployeeWorkProfile;
 use App\Modules\People\Settings\Models\PeopleNotificationDeliveryLog;
 use App\Modules\People\Settings\Models\PeopleReferenceEntry;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Livewire\Livewire;
@@ -568,7 +569,9 @@ it('lets managers create roster assignments from the guided roster builder', fun
 
     Livewire::test(Rosters::class)
         ->assertSee('Roster Builder')
-        ->assertSee('Set up policies')
+        ->assertSee('New roster assignment')
+        ->call('startNewRosterAssignment')
+        ->assertSet('mode', 'form')
         ->set('rosterEmployeeId', (string) $employee->id)
         ->set('rosterShiftTemplateId', (string) $shift->id)
         ->set('rosterPolicyGroupId', (string) $policyGroup->id)
@@ -577,6 +580,7 @@ it('lets managers create roster assignments from the guided roster builder', fun
         ->set('rosterPublishState', 'published')
         ->call('saveRosterAssignment')
         ->assertHasNoErrors()
+        ->assertSet('mode', 'list')
         ->assertSee('Roster assignment saved.')
         ->assertSee($employee->full_name);
 
@@ -636,7 +640,8 @@ it('lets managers bulk-create roster assignments from filtered employee selectio
     $this->actingAs($user);
 
     Livewire::test(Rosters::class)
-        ->assertSee('Build roster assignments')
+        ->call('startNewRosterAssignment')
+        ->assertSee('Filter the workforce')
         ->set('rosterWorkforceClassId', (string) $direct->id)
         ->call('selectAllFilteredRosterEmployees')
         ->assertSet('rosterSelectAllFiltered', true)
@@ -647,6 +652,7 @@ it('lets managers bulk-create roster assignments from filtered employee selectio
         ->set('rosterEffectiveTo', '2026-07-31')
         ->call('saveRosterAssignment')
         ->assertHasNoErrors()
+        ->assertSet('mode', 'list')
         ->assertSee('3 roster assignments saved.');
 
     expect(AttendanceRosterAssignment::query()
@@ -760,6 +766,7 @@ it('shows saved and unsaved roster assignments in the roster grid', function ():
     $this->actingAs($user);
 
     Livewire::test(Rosters::class)
+        ->call('startNewRosterAssignment')
         ->set('rosterEffectiveFrom', '2026-08-01')
         ->set('rosterEffectiveTo', '2026-08-07')
         ->set('selectedRosterEmployeeIds', [(string) $employees[1]->id])
@@ -770,6 +777,58 @@ it('shows saved and unsaved roster assignments in the roster grid', function ():
         ->assertSee('Published')
         ->assertSee('NIGHT')
         ->assertSee('Preview');
+});
+
+it('opens to the calendar as the list-mode primary surface and supports week navigation', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard Attendance',
+        'effective_from' => '2026-01-01',
+    ]);
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day Shift',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+
+    $thisWeekStart = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY);
+
+    AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => $thisWeekStart->toDateString(),
+        'effective_to' => $thisWeekStart->addDays(6)->toDateString(),
+        'publish_state' => 'published',
+        'lock_state' => 'open',
+        'revision' => 1,
+        'exceptions' => [],
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Rosters::class)
+        ->assertSet('mode', 'list')
+        ->assertSee('Calendar')
+        ->assertSee('Records')
+        ->assertSee('Roster grid')
+        ->assertSee($employee->full_name)
+        ->assertSee('DAY')
+        ->call('goToNextWeek')
+        ->assertSet('listWeekAnchor', $thisWeekStart->addDays(7)->toDateString())
+        ->call('goToPreviousWeek')
+        ->assertSet('listWeekAnchor', $thisWeekStart->toDateString())
+        ->call('goToThisWeek')
+        ->assertSet('listWeekAnchor', '');
 });
 
 it('supports roster cell overrides and resolves them into attendance days', function (): void {

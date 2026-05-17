@@ -1,9 +1,9 @@
 # 15_attendance-roster-builder-ux.md
 
 Status: Complete
-Last Updated: 2026-05-16
-Sources: `docs/plans/people/09_attendance-module-design.md`, `docs/plans/people/11_attendance-shift-and-allowance-coverage.md`, `app/Modules/People/Attendance/Livewire/Rosters.php`, `resources/core/views/livewire/people/attendance/partials/rosters-form.blade.php`
-Agents: {codex/gpt-5}
+Last Updated: 2026-05-17
+Sources: `docs/plans/people/09_attendance-module-design.md`, `docs/plans/people/11_attendance-shift-and-allowance-coverage.md`, `docs/plans/people/sbg_attendance_ref/Roster Builder Review v2 _DHH_ - standalone.html`, `app/Modules/People/Attendance/Livewire/Rosters.php`, `resources/core/views/livewire/people/attendance/partials/rosters-form.blade.php`
+Agents: {codex/gpt-5, claude/opus-4.7}
 
 ## Problem Essence
 
@@ -79,6 +79,17 @@ The roster grid should show, at minimum:
 - row-level warning count;
 - published vs draft distinction.
 
+## Page Structure
+
+The Roster Builder follows the BLB list-first convention used by `ShiftTemplates`, `PolicyGroups`, and `AllowanceRules`:
+
+- **List mode (default)** — page header with a "New roster assignment" CTA. The body opens to a **calendar grid** (employees × dates) inside a Calendar tab, with a week-period switcher (Prev / This week / Next) above it. A second Records tab holds the assignments table with per-row Delete for the audit/admin path. Read-only inventory cards for roster patterns and spreadsheet intake live below the tabs.
+- **Form mode** — entered via the New CTA. Page header swaps to a "Back to rosters" link. Body is the filter + selection + form + grid preview + coverage + publish review. Saving flips back to list mode and surfaces the new assignment in the calendar (and the records table).
+
+**Why the calendar IS the list:** A roster's purpose is to answer "who is working when?" — and the native shape of that answer is a grid, not a table of records. The records table is still useful for audit and per-row admin, but as a secondary view. This reconciles with the broader BLB list-first convention by recognizing that the right list shape depends on the data: tabular for policy groups and shift templates, calendar for rosters. The DHH-lens review (`docs/plans/people/sbg_attendance_ref/Roster Builder Review v2 _DHH_ - standalone.html`) lands on the same conclusion — the entire page is the grid plus a single action band.
+
+Period navigation in list mode uses `listWeekAnchor` (Monday of the week being browsed) and is isolated from `rosterEffectiveFrom/To` so browsing the calendar never mutates the draft form. Validation, coverage, and publish review remain form-mode surfaces because they are creation/draft tools, not browsing tools.
+
 ## Phases
 
 ### Phase 1 - Make Selection Scalable
@@ -98,7 +109,8 @@ The roster grid should show, at minimum:
 ### Phase 3 - Roster Grid
 
 - [x] Build a week/month grid with employees as rows and dates as columns. The first slice renders the filtered employee page across the selected date range, capped to 31 days for scanability. {codex/gpt-5}
-- [x] Show shift code, draft/published state, and selected unsaved preview state in each cell. Rest/off/holiday state, leave conflict markers, and override markers remain open. {codex/gpt-5}
+- [x] Show shift code, draft/published state, and selected unsaved preview state in each cell. Rest/off/holiday state now renders in each cell via `AttendanceCalendarResolver::dayType()` with a quiet word on empty days and an "on rest/off/holiday" marker when a shift falls on a non-working day; the resolver gained a batched `preload()` so per-render queries stay flat. Cells use a thin coloured left-border to encode draft/published/preview state instead of an inline badge, and the "Edit" override surfaces on hover/focus rather than persistently. Leave-conflict markers remain open. {codex/gpt-5, claude/opus-4.7}
+- [x] Names render via `Employee::displayName()` (preferring `short_name` over `full_name`); the legal `full_name` stays in the cell `title` tooltip for screen readers and disambiguation. Sticky name column narrowed to 160px and the per-row Group column was dropped in favour of the sticky group section headers. {claude/opus-4.7}
 - [x] Add row grouping or sticky separators for production vs office, department, organization unit, or workforce class. The grid groups rows by the best available department / organization / workforce label. {codex/gpt-5}
 - [x] Support quick cell override for one employee/date without leaving the grid. Overrides persist as dated assignment exceptions and the attendance resolver honors them. {codex/gpt-5}
 - [x] Add keyboard-friendly navigation for editing many adjacent cells. The first-generation grid uses native focusable override controls in each cell; richer spreadsheet keyboard editing can be a later refinement if needed. {codex/gpt-5}
