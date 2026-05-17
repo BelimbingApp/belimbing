@@ -43,7 +43,7 @@
                         @php($dayType = $cell['day_type'] ?? 'normal')
                         @php($dayTypeInk = DayTypeVocabulary::inkClass($dayType))
                         @php($isEmpty = $cell['state'] === 'empty')
-                        <td wire:key="roster-grid-cell-{{ $employee->id }}-{{ $day['date'] }}" class="p-0 align-top">
+                        <td wire:key="roster-grid-cell-{{ $employee->id }}-{{ $day['date'] }}" class="relative p-0 align-top" @if($canManage) x-data="{ open: false, shift: {{ (int) ($cell['shift_template_id'] ?? 0) }}, policy: {{ (int) ($cell['policy_group_id'] ?? 0) }} }" @endif>
                             <x-ui.day-tile
                                 :day-type="$dayType"
                                 :state="$isEmpty ? null : $cell['state']"
@@ -57,9 +57,36 @@
                                 @endif
                             </x-ui.day-tile>
                             @if ($canManage)
-                                <button type="button" wire:click="saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}')" aria-label="{{ __('Edit override :date for :employee', ['date' => $day['date'], 'employee' => $employee->displayName()]) }}" class="mt-0.5 block w-full text-[10px] font-medium text-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100 focus:opacity-100 motion-reduce:opacity-100">
+                                <button type="button" @click="open = ! open" :aria-expanded="open" aria-label="{{ __('Edit override :date for :employee', ['date' => $day['date'], 'employee' => $employee->displayName()]) }}" class="mt-0.5 block w-full text-[10px] font-medium text-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100 focus:opacity-100 motion-reduce:opacity-100">
                                     {{ __('Edit') }}
                                 </button>
+                                <div x-show="open" x-cloak @click.outside="open = false" x-transition.origin.top.left class="absolute left-1/2 z-30 mt-1 w-56 -translate-x-1/2 rounded-2xl border border-border-default bg-surface-card p-3 text-left shadow-lg" role="region" aria-label="{{ __('Override :date', ['date' => $day['date']]) }}">
+                                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Override') }} {{ \Carbon\CarbonImmutable::parse($day['date'])->format('M j') }}</div>
+                                    <div class="mt-2 space-y-2">
+                                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-muted">
+                                            {{ __('Shift') }}
+                                            <select x-model.number="shift" class="mt-1 w-full rounded-2xl border border-border-default bg-surface-card px-2 py-1 text-sm text-ink">
+                                                <option value="0">{{ __('Choose shift') }}</option>
+                                                @foreach ($shiftTemplates as $shift)
+                                                    <option value="{{ $shift->id }}">{{ $shift->code }} — {{ $shift->name }}</option>
+                                                @endforeach
+                                            </select>
+                                        </label>
+                                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-muted">
+                                            {{ __('Policy') }}
+                                            <select x-model.number="policy" class="mt-1 w-full rounded-2xl border border-border-default bg-surface-card px-2 py-1 text-sm text-ink">
+                                                <option value="0">{{ __('Choose policy') }}</option>
+                                                @foreach ($policyGroups as $group)
+                                                    <option value="{{ $group->id }}">{{ $group->code }} — {{ $group->name }}</option>
+                                                @endforeach
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <div class="mt-3 flex justify-end gap-2">
+                                        <button type="button" @click="open = false" class="text-xs font-medium text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ __('Cancel') }}</button>
+                                        <button type="button" @click="$wire.saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}', shift, policy); open = false" :disabled="! shift || ! policy" class="rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-on disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1">{{ __('Save') }}</button>
+                                    </div>
+                                </div>
                             @endif
                         </td>
                     @endforeach

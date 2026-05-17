@@ -841,6 +841,67 @@ it('narrows the list-mode calendar via the filter prose without flipping into fo
         ->assertSee('all departments');
 });
 
+it('applies a per-cell shift override from list mode without requiring form state', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard',
+        'effective_from' => '2026-01-01',
+    ]);
+    $shift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day Shift',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+
+    $thisWeekStart = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY);
+    $targetDate = $thisWeekStart->addDay()->toDateString();
+
+    $this->actingAs($user);
+
+    // List mode never sets rosterShiftTemplateId / rosterPolicyGroupId, so the
+    // call has to carry the explicit choice. Previously it silently failed
+    // because saveCellOverride() depended on the form state.
+    Livewire::test(Rosters::class)
+        ->assertSet('mode', 'list')
+        ->assertSet('rosterShiftTemplateId', '')
+        ->assertSet('rosterPolicyGroupId', '')
+        ->call('saveCellOverride', $employee->id, $targetDate, $shift->id, $policyGroup->id)
+        ->assertHasNoErrors();
+
+    $assignment = AttendanceRosterAssignment::query()
+        ->where('company_id', $company->id)
+        ->where('employee_id', $employee->id)
+        ->whereDate('effective_from', $targetDate)
+        ->first();
+
+    expect($assignment)->not->toBeNull()
+        ->and((int) $assignment->attendance_shift_template_id)->toBe($shift->id)
+        ->and((int) $assignment->attendance_policy_group_id)->toBe($policyGroup->id);
+});
+
+it('flashes a soft error when the cell override is called without shift or policy', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Rosters::class)
+        ->call('saveCellOverride', $employee->id, '2026-09-10', null, null)
+        ->assertHasNoErrors()
+        ->assertSee('Pick a shift and a policy before applying the override.');
+
+    expect(AttendanceRosterAssignment::query()->where('employee_id', $employee->id)->exists())->toBeFalse();
+});
+
 it('edits a roster assignment in place, bumping the revision and flipping back to list mode', function (): void {
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
@@ -1094,7 +1155,7 @@ it('rejects cell overrides for employees and roster dimensions outside the curre
         ->set('rosterShiftTemplateId', (string) $shift->id)
         ->set('rosterPolicyGroupId', (string) $policyGroup->id)
         ->call('saveCellOverride', $foreignEmployee->id, '2026-08-03')
-        ->assertHasErrors('rosterShiftTemplateId');
+        ->assertSee('Pick a shift and a policy before applying the override.');
 
     expect(AttendanceRosterAssignment::query()
         ->where('company_id', $company->id)
