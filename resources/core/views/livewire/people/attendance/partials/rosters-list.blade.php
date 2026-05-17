@@ -75,7 +75,8 @@
                 <div class="mt-4">
                     @include('livewire.people.attendance.partials.rosters-grid', [
                         'showPreviewLegend' => false,
-                        'gridIntro' => __('Who is working :period. Click "Edit" on any cell to change one date without leaving the roster.', ['period' => $listPeriodLabel ?: __('this period')]),
+                        'compact' => $listScope === 'month',
+                        'gridIntro' => __('Who is working :period. Click any cell to override one date without leaving the roster.', ['period' => $listPeriodLabel ?: __('this period')]),
                     ])
                 </div>
             </x-ui.card>

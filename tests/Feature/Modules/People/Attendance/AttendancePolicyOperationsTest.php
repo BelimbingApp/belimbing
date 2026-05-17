@@ -874,7 +874,9 @@ it('applies a per-cell shift override from list mode without requiring form stat
         ->assertSet('rosterShiftTemplateId', '')
         ->assertSet('rosterPolicyGroupId', '')
         ->call('saveCellOverride', $employee->id, $targetDate, $shift->id, $policyGroup->id)
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->assertSee('DAY')
+        ->assertSee('Roster cell override saved.');
 
     $assignment = AttendanceRosterAssignment::query()
         ->where('company_id', $company->id)
