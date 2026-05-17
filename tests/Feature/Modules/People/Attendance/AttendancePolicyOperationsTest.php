@@ -26,6 +26,9 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Livewire\Livewire;
 
+const ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME = 'Office Olive';
+const ATTENDANCE_POLICY_PRODUCTION_EMPLOYEE_NAME = 'Production Pat';
+
 it('returns stable validation findings for unsafe attendance policy setup', function (): void {
     $company = Company::factory()->minimal()->create();
     $policyGroup = AttendancePolicyGroup::query()->create([
@@ -809,32 +812,32 @@ it('narrows the list-mode calendar via the filter prose without flipping into fo
         'name' => 'Office',
     ]);
 
-    $productionEmployee = Employee::factory()->active()->create([
+    Employee::factory()->active()->create([
         'company_id' => $company->id,
         'department_id' => $production->id,
-        'full_name' => 'Production Pat',
+        'full_name' => ATTENDANCE_POLICY_PRODUCTION_EMPLOYEE_NAME,
     ]);
-    $officeEmployee = Employee::factory()->active()->create([
+    Employee::factory()->active()->create([
         'company_id' => $company->id,
         'department_id' => $office->id,
-        'full_name' => 'Office Olive',
+        'full_name' => ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME,
     ]);
 
     $this->actingAs($user);
 
     Livewire::test(Rosters::class)
         ->assertSet('mode', 'list')
-        ->assertSee('Production Pat')
-        ->assertSee('Office Olive')
+        ->assertSee(ATTENDANCE_POLICY_PRODUCTION_EMPLOYEE_NAME)
+        ->assertSee(ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME)
         ->assertSee('all departments')
         ->set('rosterDepartmentId', (string) $production->id)
         ->assertSet('mode', 'list')
-        ->assertSee('Production Pat')
-        ->assertDontSee('Office Olive')
+        ->assertSee(ATTENDANCE_POLICY_PRODUCTION_EMPLOYEE_NAME)
+        ->assertDontSee(ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME)
         ->assertSee('Production')
         ->call('clearRosterFilters')
-        ->assertSee('Production Pat')
-        ->assertSee('Office Olive')
+        ->assertSee(ATTENDANCE_POLICY_PRODUCTION_EMPLOYEE_NAME)
+        ->assertSee(ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME)
         ->assertSee('all departments');
 });
 

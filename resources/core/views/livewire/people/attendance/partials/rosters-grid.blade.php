@@ -83,7 +83,7 @@
                                 </div>
                             @endif
                             @if ($canManage)
-                                <button type="button" wire:click="saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}')" aria-label="{{ __('Override :date for :employee', ['date' => $day['date'], 'employee' => $employee->displayName()]) }}" class="mt-0.5 block w-full text-[10px] font-medium text-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100 focus:opacity-100 motion-reduce:opacity-100">
+                                <button type="button" wire:click="saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}')" aria-label="{{ __('Edit override :date for :employee', ['date' => $day['date'], 'employee' => $employee->displayName()]) }}" class="mt-0.5 block w-full text-[10px] font-medium text-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100 focus:opacity-100 motion-reduce:opacity-100">
                                     {{ __('Edit') }}
                                 </button>
                             @endif

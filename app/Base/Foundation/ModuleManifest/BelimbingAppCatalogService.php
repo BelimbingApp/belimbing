@@ -201,7 +201,7 @@ class BelimbingAppCatalogService
             description: (string) ($blb['description'] ?? ($manifestData['description'] ?? '')),
             defaultBranch: $defaultBranch,
             defaultBranchSha: $sha,
-            fetchedAt: new DateTimeImmutable(),
+            fetchedAt: new DateTimeImmutable,
             manifest: $blb,
         );
     }
@@ -242,9 +242,11 @@ class BelimbingAppCatalogService
 
     private function rowToEntry(object $row): PluginCatalogEntry
     {
-        $manifest = is_string($row->manifest)
-            ? (json_decode($row->manifest, true) ?: [])
-            : [];
+        $manifest = [];
+        if (is_string($row->manifest)) {
+            $decodedManifest = json_decode($row->manifest, true);
+            $manifest = is_array($decodedManifest) ? $decodedManifest : [];
+        }
 
         return new PluginCatalogEntry(
             repoName: (string) $row->repo_name,
