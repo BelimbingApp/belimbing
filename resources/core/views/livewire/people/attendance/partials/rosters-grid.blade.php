@@ -1,3 +1,4 @@
+@use('App\Modules\People\Attendance\Support\DayTypeVocabulary')
 @php($showPreviewLegend = $showPreviewLegend ?? true)
 @php($gridIntro = $gridIntro ?? __('Existing assignments show draft or published state; rest, off, and holiday days surface from each employee\'s work calendar.'))
 
@@ -21,17 +22,7 @@
 
 <div class="mt-4 overflow-x-auto rounded-2xl border border-border-default">
     <table class="min-w-full divide-y divide-border-default text-xs">
-        <thead class="bg-surface-subtle/80">
-            <tr>
-                <th class="sticky left-0 z-10 w-40 min-w-40 bg-surface-subtle/95 px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Employee') }}</th>
-                @foreach ($rosterGridDays as $day)
-                    <th class="min-w-20 px-1.5 py-table-header-y text-center text-[11px] font-semibold uppercase tracking-wider text-muted" wire:key="roster-grid-day-{{ $day['date'] }}">
-                        <div>{{ $day['day'] }}</div>
-                        <div class="font-normal normal-case tracking-normal text-muted">{{ $day['label'] }}</div>
-                    </th>
-                @endforeach
-            </tr>
-        </thead>
+        <x-ui.day-strip :days="$rosterGridDays" :leading-label="__('Employee')" />
         <tbody class="divide-y divide-border-default bg-surface-card">
             @forelse ($rosterGridRows as $row)
                 @php($employee = $row['employee'])
@@ -49,39 +40,22 @@
                     </td>
                     @foreach ($rosterGridDays as $day)
                         @php($cell = $row['cells'][$day['date']])
-                        @php($dayTypeClass = match ($cell['day_type'] ?? 'normal') {
-                            'rest' => 'bg-day-rest',
-                            'off' => 'bg-day-off',
-                            'holiday' => 'bg-day-holiday',
-                            default => '',
-                        })
-                        @php($stateBorderClass = match ($cell['state']) {
-                            'published' => 'border-l-2 border-status-success',
-                            'draft' => 'border-l-2 border-status-warning',
-                            'preview' => 'border-l-2 border-status-info border-dashed',
-                            default => '',
-                        })
-                        @php($dayTypeInkClass = match ($cell['day_type'] ?? 'normal') {
-                            'holiday' => 'text-day-holiday-ink',
-                            'rest' => 'text-day-rest-ink',
-                            'off' => 'text-day-off-ink',
-                            default => 'text-muted',
-                        })
-                        <td class="{{ $dayTypeClass }} group px-1 py-1 text-center align-top" wire:key="roster-grid-cell-{{ $employee->id }}-{{ $day['date'] }}" title="{{ $cell['title'] }}">
-                            @if ($cell['state'] === 'empty')
-                                @if (($cell['day_type'] ?? 'normal') === 'normal')
-                                    <span class="text-muted">·</span>
-                                @else
-                                    <span class="text-[10px] font-medium uppercase tracking-wide {{ $dayTypeInkClass }}">{{ $cell['label'] }}</span>
+                        @php($dayType = $cell['day_type'] ?? 'normal')
+                        @php($dayTypeInk = DayTypeVocabulary::inkClass($dayType))
+                        @php($isEmpty = $cell['state'] === 'empty')
+                        <td wire:key="roster-grid-cell-{{ $employee->id }}-{{ $day['date'] }}" class="p-0 align-top">
+                            <x-ui.day-tile
+                                :day-type="$dayType"
+                                :state="$isEmpty ? null : $cell['state']"
+                                :tooltip="$cell['title']"
+                                :empty="$isEmpty"
+                                :empty-label="$cell['label']"
+                            >
+                                <span class="text-[12px] font-semibold leading-tight text-ink">{{ $cell['label'] }}</span>
+                                @if ($cell['on_non_working_day'] ?? false)
+                                    <span class="text-[9px] font-medium uppercase leading-tight tracking-wide {{ $dayTypeInk }}">{{ $cell['day_type_label'] }}</span>
                                 @endif
-                            @else
-                                <div class="inline-flex min-w-14 flex-col items-center rounded-md bg-surface-card {{ $stateBorderClass }} px-1.5 py-0.5">
-                                    <span class="text-[12px] font-semibold leading-tight text-ink">{{ $cell['label'] }}</span>
-                                    @if ($cell['on_non_working_day'] ?? false)
-                                        <span class="text-[9px] font-medium uppercase leading-tight tracking-wide {{ $dayTypeInkClass }}">{{ $cell['day_type_label'] }}</span>
-                                    @endif
-                                </div>
-                            @endif
+                            </x-ui.day-tile>
                             @if ($canManage)
                                 <button type="button" wire:click="saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}')" aria-label="{{ __('Edit override :date for :employee', ['date' => $day['date'], 'employee' => $employee->displayName()]) }}" class="mt-0.5 block w-full text-[10px] font-medium text-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100 focus:opacity-100 motion-reduce:opacity-100">
                                     {{ __('Edit') }}

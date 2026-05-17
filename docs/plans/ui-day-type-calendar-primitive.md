@@ -1,6 +1,6 @@
 # ui-day-type-calendar-primitive.md
 
-Status: Identified
+Status: In Progress
 Last Updated: 2026-05-17
 Sources: `docs/plans/people/15_attendance-roster-builder-ux.md`, `app/Modules/People/Attendance/Services/AttendanceCalendarResolver.php`, `resources/core/css/tokens.css`, `resources/core/views/livewire/people/attendance/partials/rosters-grid.blade.php`, `resources/core/views/AGENTS.md`
 Agents: {claude/opus-4.7}
@@ -49,24 +49,26 @@ A PHP consumer should be able to resolve day-type metadata as a single object wi
 
 ### Phase 1 — Vocabulary helper
 
-- [ ] Add a single source of truth for day-type label + surface class + ink class (PHP enum or value object, exposed via the `AttendanceDay` model namespace). {agent/model}
-- [ ] Refactor `rosters-grid.blade.php` and `Rosters::dayTypeLabel()` to consume the helper instead of their inline match() ladders. {agent/model}
-- [ ] Cover the helper with a small unit test asserting label + classes for each day type, including dark-mode tokens. {agent/model}
+- [x] Add a single source of truth for day-type label + surface class + ink class as a final static helper class `App\Modules\People\Attendance\Support\DayTypeVocabulary` so existing `AttendanceDay::DAY_TYPE_*` string constants stay the canonical values. {claude/opus-4.7}
+- [x] Refactor `rosters-grid.blade.php` and `Rosters::dayTypeLabel()` to consume the helper instead of their inline match() ladders. {claude/opus-4.7}
+- [x] Cover the helper with a focused test asserting label + classes for each day type. Dark-mode tokens flow through CSS variables so the helper stays the same. {claude/opus-4.7}
 
 ### Phase 2 — `x-ui.day-tile`
 
-- [ ] Extract the per-cell pill markup from `rosters-grid.blade.php` into `resources/core/views/components/ui/day-tile.blade.php`. {agent/model}
-- [ ] Accept `dayType`, `label`, optional `state` (published/draft/preview/empty), optional `tooltip`, and a default slot for inner content. {agent/model}
-- [ ] Reuse the existing state border encoding (`border-status-success/warning/info`); document the prop list per the components inventory in `resources/core/views/AGENTS.md`. {agent/model}
+- [x] Extract the per-cell pill markup from `rosters-grid.blade.php` into `resources/core/views/components/ui/day-tile.blade.php`. {claude/opus-4.7}
+- [x] Accept `dayType`, `empty`, `state` (published/draft/preview), `tooltip`, and `emptyLabel`, plus a default slot for inner content. {claude/opus-4.7}
+- [x] Reuse the existing state border encoding (`border-status-success/warning/info`); component documentation lives in the blade preamble. The components inventory in `resources/core/views/AGENTS.md` should be extended once `day-strip` and `calendar-grid` also ship. {claude/opus-4.7}
 
 ### Phase 3 — `x-ui.day-strip` and `x-ui.calendar-grid`
 
-- [ ] Extract the day-header row and the grouped-rows scaffolding from `rosters-grid.blade.php` into `day-strip` and `calendar-grid` components. {agent/model}
-- [ ] Replace the inline roster grid markup with a composition of the new primitives. The Livewire data shape stays unchanged. {agent/model}
-- [ ] Render Leave conflict overlays and a Payroll period picker prototype using the same primitives to validate the contract before declaring it stable. {agent/model}
+- [x] Extract the day-header row from `rosters-grid.blade.php` into `resources/core/views/components/ui/day-strip.blade.php`. {claude/opus-4.7}
+- [ ] Extract the grouped-rows scaffolding (full table with employee column, group section headers, and per-cell composition) into `x-ui.calendar-grid`. *(Deferred — the abstraction needs a second consumer before the per-cell slot API stabilises; see Phase 4.)*
+- [x] Replace the inline roster grid markup with a composition of `x-ui.day-strip` + `x-ui.day-tile`. The Livewire data shape stays unchanged. {claude/opus-4.7}
+- [ ] Render Leave conflict overlays and a Payroll period picker prototype using the same primitives to validate the contract before declaring it stable. *(Deferred — covered by Phase 4.)*
 
 ### Phase 4 — Cross-module adoption
 
 - [ ] Migrate the People Leave calendar to consume the primitives. {agent/model}
 - [ ] Migrate the Claim period picker to consume the primitives. {agent/model}
 - [ ] Add a UI Reference page demonstrating the three primitives with sample data so other agents discover them before re-implementing. {agent/model}
+- [ ] Once a second consumer exists, extract `x-ui.calendar-grid` (full table scaffolding) from `rosters-grid.blade.php`. {agent/model}

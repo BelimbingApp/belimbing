@@ -13,97 +13,35 @@
         </x-ui.alert>
     @endif
 
+    @if ($editingRosterAssignmentId !== '' && $editingEmployee !== null)
+        <x-ui.alert variant="info">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <span>{{ __('Editing roster assignment for :name (:number). Changes update this assignment in place and bump its revision.', ['name' => $editingEmployee->displayName(), 'number' => $editingEmployee->employee_number]) }}</span>
+                <x-ui.button type="button" size="sm" variant="ghost" wire:click="cancelRosterForm">{{ __('Cancel edit') }}</x-ui.button>
+            </div>
+        </x-ui.alert>
+    @endif
+
     <x-ui.card>
         <form wire:submit="saveRosterAssignment" class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.55fr)]">
             <div class="space-y-4">
-                <div class="rounded-2xl border border-border-default p-card-inner">
-                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                        <label class="space-y-1 md:col-span-2">
-                            <span class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Search') }}</span>
-                            <input wire:model.live.debounce.300ms="rosterSearch" type="search" class="w-full rounded-2xl border border-border-default bg-surface-card px-3 py-2 text-sm text-default" placeholder="{{ __('Employee name, number, or designation') }}" />
-                        </label>
+                @if ($editingRosterAssignmentId === '')
+                <div class="space-y-3">
+                    @include('livewire.people.attendance.partials.rosters-filter-prose')
 
-                        <x-ui.select wire:model.live="rosterEmployeeStatus" label="{{ __('Status') }}">
-                            <option value="">{{ __('All') }}</option>
-                            <option value="active">{{ __('Active') }}</option>
-                            <option value="probation">{{ __('Probation') }}</option>
-                            <option value="pending">{{ __('Pending') }}</option>
-                            <option value="inactive">{{ __('Inactive') }}</option>
-                            <option value="terminated">{{ __('Terminated') }}</option>
-                        </x-ui.select>
-
-                        <x-ui.select wire:model.live="rosterPayRateType" label="{{ __('Pay basis') }}">
-                            <option value="">{{ __('All') }}</option>
-                            <option value="monthly">{{ __('Monthly') }}</option>
-                            <option value="daily">{{ __('Daily') }}</option>
-                            <option value="hourly">{{ __('Hourly') }}</option>
-                            <option value="piece_rate">{{ __('Piece rate') }}</option>
-                        </x-ui.select>
-
-                        <x-ui.select wire:model.live="rosterDepartmentId" label="{{ __('Department') }}">
-                            <option value="">{{ __('All') }}</option>
-                            @foreach ($departments as $department)
-                                <option value="{{ $department->id }}">{{ $department->name }}</option>
-                            @endforeach
-                        </x-ui.select>
-
-                        <x-ui.select wire:model.live="rosterSupervisorId" label="{{ __('Supervisor') }}">
-                            <option value="">{{ __('All') }}</option>
-                            @foreach ($supervisors as $supervisor)
-                                <option value="{{ $supervisor->id }}">{{ $supervisor->full_name }} - {{ $supervisor->employee_number }}</option>
-                            @endforeach
-                        </x-ui.select>
-
-                        <x-ui.select wire:model.live="rosterOrganizationUnitId" label="{{ __('Organization') }}">
-                            <option value="">{{ __('All') }}</option>
-                            @foreach ($organizationUnits as $entry)
-                                <option value="{{ $entry->id }}">{{ $entry->name }}</option>
-                            @endforeach
-                        </x-ui.select>
-
-                        <x-ui.select wire:model.live="rosterCostCenterId" label="{{ __('Cost center') }}">
-                            <option value="">{{ __('All') }}</option>
-                            @foreach ($costCenters as $entry)
-                                <option value="{{ $entry->id }}">{{ $entry->name }}</option>
-                            @endforeach
-                        </x-ui.select>
-
-                        <x-ui.select wire:model.live="rosterWorkforceClassId" label="{{ __('Workforce class') }}">
-                            <option value="">{{ __('All') }}</option>
-                            @foreach ($workforceClasses as $entry)
-                                <option value="{{ $entry->id }}">{{ $entry->name }}</option>
-                            @endforeach
-                        </x-ui.select>
-
-                        <x-ui.select wire:model.live="rosterEmploymentGroupId" label="{{ __('Employment group') }}">
-                            <option value="">{{ __('All') }}</option>
-                            @foreach ($employmentGroups as $entry)
-                                <option value="{{ $entry->id }}">{{ $entry->name }}</option>
-                            @endforeach
-                        </x-ui.select>
-
-                        <x-ui.select wire:model.live="rosterWorkCalendarId" label="{{ __('Work calendar') }}">
-                            <option value="">{{ __('All') }}</option>
-                            @foreach ($workCalendars as $entry)
-                                <option value="{{ $entry->id }}">{{ $entry->name }}</option>
-                            @endforeach
-                        </x-ui.select>
-                    </div>
-
-                    <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border-default pt-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
                         <div class="text-sm text-muted">
-                            {{ __('Showing :shown of :total filtered employees. :selected selected.', ['shown' => $employees->count(), 'total' => $filteredEmployeeCount, 'selected' => $selectedEmployeeCount]) }}
+                            {{ __(':selected selected.', ['selected' => $selectedEmployeeCount]) }}
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <x-ui.button type="button" size="sm" variant="secondary" wire:click="selectVisibleRosterEmployees">{{ __('Select visible') }}</x-ui.button>
                             <x-ui.button type="button" size="sm" variant="secondary" wire:click="selectAllFilteredRosterEmployees">{{ __('Select all filtered') }}</x-ui.button>
                             <x-ui.button type="button" size="sm" variant="ghost" wire:click="clearRosterSelection">{{ __('Clear selection') }}</x-ui.button>
-                            <x-ui.button type="button" size="sm" variant="ghost" wire:click="clearRosterFilters">{{ __('Clear filters') }}</x-ui.button>
                         </div>
                     </div>
 
                     @error('selectedRosterEmployeeIds')
-                        <p class="mt-2 text-sm text-status-danger">{{ $message }}</p>
+                        <p class="text-sm text-status-danger">{{ $message }}</p>
                     @enderror
                 </div>
 
@@ -156,6 +94,7 @@
                 @if (method_exists($employees, 'links'))
                     <div>{{ $employees->links() }}</div>
                 @endif
+                @endif {{-- /editingRosterAssignmentId === '' --}}
             </div>
 
             <div class="space-y-4">
@@ -273,19 +212,55 @@
                 @endif
             </div>
 
-            <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                @forelse ($rosterCoverageRows as $row)
-                    <div class="rounded-2xl border border-border-default p-3">
-                        <div class="text-xs font-semibold uppercase tracking-wide text-muted">{{ $row['date'] }} / {{ $row['shift'] }}</div>
-                        <div class="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
-                            <div><div class="font-semibold text-ink">{{ $row['assigned'] }}</div><div class="text-muted">{{ __('Assigned') }}</div></div>
-                            <div><div class="font-semibold text-ink">{{ $row['required'] }}</div><div class="text-muted">{{ __('Required') }}</div></div>
-                            <div><div class="font-semibold text-ink">{{ $row['shortage'] }}</div><div class="text-muted">{{ __('Short') }}</div></div>
-                        </div>
-                    </div>
-                @empty
+            <div class="mt-4">
+                @if (empty($rosterCoverageMatrix['shifts']) || empty($rosterCoverageMatrix['dates']))
                     <p class="text-sm text-muted">{{ __('No coverage rows yet. Save or preview roster assignments to populate coverage.') }}</p>
-                @endforelse
+                @else
+                    <div class="overflow-x-auto rounded-2xl border border-border-default">
+                        <table class="min-w-full divide-y divide-border-default text-xs">
+                            <thead class="bg-surface-subtle/80">
+                                <tr>
+                                    <th class="sticky left-0 z-10 min-w-24 bg-surface-subtle/95 px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Shift') }}</th>
+                                    @foreach ($rosterCoverageMatrix['dates'] as $dateKey)
+                                        <th class="min-w-16 px-1.5 py-table-header-y text-center text-[11px] font-semibold uppercase tracking-wider text-muted" wire:key="coverage-date-{{ $dateKey }}">
+                                            {{ \Carbon\CarbonImmutable::parse($dateKey)->format('M j') }}
+                                        </th>
+                                    @endforeach
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-border-default bg-surface-card">
+                                @foreach ($rosterCoverageMatrix['shifts'] as $shiftKey)
+                                    <tr wire:key="coverage-shift-{{ $shiftKey }}">
+                                        <td class="sticky left-0 z-10 bg-surface-card px-table-cell-x py-1.5 align-middle font-medium text-ink">{{ $shiftKey }}</td>
+                                        @foreach ($rosterCoverageMatrix['dates'] as $dateKey)
+                                            @php($cell = $rosterCoverageMatrix['cells'][$shiftKey][$dateKey] ?? null)
+                                            @php($bgClass = match ($cell['severity'] ?? 'empty') {
+                                                'shortage' => 'bg-status-danger-subtle',
+                                                'surplus' => 'bg-status-info-subtle',
+                                                'met' => 'bg-status-success-subtle',
+                                                'neutral' => 'bg-surface-subtle/50',
+                                                default => '',
+                                            })
+                                            @php($inkClass = match ($cell['severity'] ?? 'empty') {
+                                                'shortage' => 'text-status-danger',
+                                                'surplus' => 'text-status-info',
+                                                'met' => 'text-status-success',
+                                                default => 'text-muted',
+                                            })
+                                            <td class="{{ $bgClass }} px-1.5 py-1.5 text-center" title="{{ $cell ? __(':assigned of :required assigned', ['assigned' => $cell['assigned'], 'required' => $cell['required'] ?: '—']) : __('No assignments') }}" wire:key="coverage-cell-{{ $shiftKey }}-{{ $dateKey }}">
+                                                @if ($cell)
+                                                    <span class="text-[12px] font-semibold tabular-nums {{ $inkClass }}">{{ $cell['assigned'] }}@if ($cell['required'] > 0)<span class="text-muted">/{{ $cell['required'] }}</span>@endif</span>
+                                                @else
+                                                    <span class="text-muted">·</span>
+                                                @endif
+                                            </td>
+                                        @endforeach
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
             </div>
 
             <div class="mt-4 space-y-2">

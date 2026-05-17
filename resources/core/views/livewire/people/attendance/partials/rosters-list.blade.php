@@ -2,11 +2,17 @@
 @php($listPeriodFirst = $rosterGridDays[0]['date'] ?? null)
 @php($listPeriodLast = $rosterGridDays[array_key_last($rosterGridDays)]['date'] ?? null)
 @php($listPeriodLabel = $listPeriodFirst && $listPeriodLast
-    ? \Carbon\CarbonImmutable::parse($listPeriodFirst)->format('M j').' — '.\Carbon\CarbonImmutable::parse($listPeriodLast)->format('M j')
+    ? ($listScope === 'month'
+        ? \Carbon\CarbonImmutable::parse($listPeriodFirst)->format('F Y')
+        : \Carbon\CarbonImmutable::parse($listPeriodFirst)->format('M j').' — '.\Carbon\CarbonImmutable::parse($listPeriodLast)->format('M j'))
     : '')
-@php($listPeriodIsThisWeek = $listPeriodFirst === \Carbon\CarbonImmutable::today()->startOfWeek(\Carbon\CarbonImmutable::MONDAY)->toDateString())
-@php($filterContext = $this->rosterListFilterContext($departments, $workforceClasses))
-
+@php($today = \Carbon\CarbonImmutable::today())
+@php($listPeriodIsCurrent = $listScope === 'month'
+    ? ($listPeriodFirst === $today->startOfMonth()->toDateString())
+    : ($listPeriodFirst === $today->startOfWeek(\Carbon\CarbonImmutable::MONDAY)->toDateString()))
+@php($currentLabel = $listScope === 'month' ? __('This month') : __('This week'))
+@php($prevLabel = $listScope === 'month' ? __('Previous month') : __('Previous week'))
+@php($nextLabel = $listScope === 'month' ? __('Next month') : __('Next week'))
 <div class="space-y-4">
     @if ($rosterIncomplete)
         <x-ui.alert variant="warning">
@@ -26,6 +32,16 @@
     ]" default="calendar">
         <x-ui.tab id="calendar">
             <x-ui.card>
+                @if (! empty($rosterListSummary))
+                    <p class="mb-3 text-sm {{ $rosterListSummary['hasIssues'] ? 'text-ink' : 'text-muted' }}">
+                        @if ($rosterListSummary['hasIssues'])
+                            <span class="font-medium">{{ $rosterListSummary['sentence'] }}</span>
+                        @else
+                            {{ $rosterListSummary['sentence'] }}
+                        @endif
+                    </p>
+                @endif
+
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-baseline gap-3">
                         <h3 class="text-base font-semibold text-ink">{{ __('Roster') }}</h3>
@@ -33,79 +49,28 @@
                             <span class="text-sm text-muted">{{ $listPeriodLabel }}</span>
                         @endif
                     </div>
-                    <div class="flex items-center gap-2">
-                        <x-ui.button type="button" size="sm" variant="ghost" wire:click="goToPreviousWeek" aria-label="{{ __('Previous week') }}">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="inline-flex rounded-xl border border-border-default p-0.5" role="group" aria-label="{{ __('Calendar scope') }}">
+                            <button type="button" wire:click="setListScope('week')" class="rounded-lg px-3 py-1 text-xs font-medium @if($listScope === 'week') bg-surface-subtle text-ink @else text-muted hover:text-ink @endif focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1">{{ __('Week') }}</button>
+                            <button type="button" wire:click="setListScope('month')" class="rounded-lg px-3 py-1 text-xs font-medium @if($listScope === 'month') bg-surface-subtle text-ink @else text-muted hover:text-ink @endif focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1">{{ __('Month') }}</button>
+                        </span>
+                        <x-ui.button type="button" size="sm" variant="ghost" wire:click="goToPreviousWeek" aria-label="{{ $prevLabel }}">
                             <x-icon name="heroicon-o-chevron-left" class="h-4 w-4" />
                             <span>{{ __('Prev') }}</span>
                         </x-ui.button>
-                        <x-ui.button type="button" size="sm" :variant="$listPeriodIsThisWeek ? 'secondary' : 'ghost'" wire:click="goToThisWeek">
-                            {{ __('This week') }}
+                        <x-ui.button type="button" size="sm" :variant="$listPeriodIsCurrent ? 'secondary' : 'ghost'" wire:click="goToThisWeek">
+                            {{ $currentLabel }}
                         </x-ui.button>
-                        <x-ui.button type="button" size="sm" variant="ghost" wire:click="goToNextWeek" aria-label="{{ __('Next week') }}">
+                        <x-ui.button type="button" size="sm" variant="ghost" wire:click="goToNextWeek" aria-label="{{ $nextLabel }}">
                             <span>{{ __('Next') }}</span>
                             <x-icon name="heroicon-o-chevron-right" class="h-4 w-4" />
                         </x-ui.button>
                     </div>
                 </div>
 
-                <p class="mt-4 flex flex-wrap items-baseline gap-x-1 gap-y-2 text-sm text-ink-soft" x-data="{ open: null }">
-                    {{ __('Showing') }}
-                    <span class="font-semibold text-ink tabular-nums">{{ method_exists($employees, 'total') ? $employees->total() : $employees->count() }}</span>
-                    {{ __('of') }}
-                    <span class="font-semibold text-ink tabular-nums">{{ $companyEmployeeCount }}</span>
-                    {{ __('employees in') }}
-
-                    {{-- Department --}}
-                    <span class="relative inline-block" @click.outside="open === 'department' && (open = null)">
-                        <button type="button" id="roster-filter-prose-department-toggle" @click="open = (open === 'department' ? null : 'department')" :aria-expanded="open === 'department'" aria-controls="roster-filter-prose-department-panel" class="font-medium text-ink underline decoration-dashed decoration-border-default underline-offset-4 hover:decoration-accent focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ $filterContext['departmentLabel'] }}</button>
-                        <div id="roster-filter-prose-department-panel" x-show="open === 'department'" x-cloak x-transition.origin.top.left class="absolute left-0 z-20 mt-2 w-64 rounded-2xl border border-border-default bg-surface-card p-3 shadow-lg" role="region" aria-labelledby="roster-filter-prose-department-toggle">
-                            <x-ui.select id="roster-filter-prose-department" wire:model.live="rosterDepartmentId" label="{{ __('Department') }}">
-                                <option value="">{{ __('All departments') }}</option>
-                                @foreach ($departments as $department)
-                                    <option value="{{ $department->id }}">{{ $department->name }}</option>
-                                @endforeach
-                            </x-ui.select>
-                        </div>
-                    </span>
-
-                    <span>,</span>
-
-                    {{-- Workforce class --}}
-                    <span class="relative inline-block" @click.outside="open === 'workforce' && (open = null)">
-                        <button type="button" id="roster-filter-prose-workforce-toggle" @click="open = (open === 'workforce' ? null : 'workforce')" :aria-expanded="open === 'workforce'" aria-controls="roster-filter-prose-workforce-panel" class="font-medium text-ink underline decoration-dashed decoration-border-default underline-offset-4 hover:decoration-accent focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ $filterContext['workforceClassLabel'] }}</button>
-                        <div id="roster-filter-prose-workforce-panel" x-show="open === 'workforce'" x-cloak x-transition.origin.top.left class="absolute left-0 z-20 mt-2 w-64 rounded-2xl border border-border-default bg-surface-card p-3 shadow-lg" role="region" aria-labelledby="roster-filter-prose-workforce-toggle">
-                            <x-ui.select id="roster-filter-prose-workforce" wire:model.live="rosterWorkforceClassId" label="{{ __('Workforce class') }}">
-                                <option value="">{{ __('All workforce classes') }}</option>
-                                @foreach ($workforceClasses as $entry)
-                                    <option value="{{ $entry->id }}">{{ $entry->name }}</option>
-                                @endforeach
-                            </x-ui.select>
-                        </div>
-                    </span>
-
-                    <span>,</span>
-
-                    {{-- Status --}}
-                    <span class="relative inline-block" @click.outside="open === 'status' && (open = null)">
-                        <button type="button" id="roster-filter-prose-status-toggle" @click="open = (open === 'status' ? null : 'status')" :aria-expanded="open === 'status'" aria-controls="roster-filter-prose-status-panel" class="font-medium text-ink underline decoration-dashed decoration-border-default underline-offset-4 hover:decoration-accent focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ $filterContext['statusLabel'] }}</button>
-                        <div id="roster-filter-prose-status-panel" x-show="open === 'status'" x-cloak x-transition.origin.top.left class="absolute left-0 z-20 mt-2 w-56 rounded-2xl border border-border-default bg-surface-card p-3 shadow-lg" role="region" aria-labelledby="roster-filter-prose-status-toggle">
-                            <x-ui.select id="roster-filter-prose-status" wire:model.live="rosterEmployeeStatus" label="{{ __('Status') }}">
-                                <option value="">{{ __('Any status') }}</option>
-                                <option value="active">{{ __('Active') }}</option>
-                                <option value="probation">{{ __('Probation') }}</option>
-                                <option value="pending">{{ __('Pending') }}</option>
-                                <option value="inactive">{{ __('Inactive') }}</option>
-                                <option value="terminated">{{ __('Terminated') }}</option>
-                            </x-ui.select>
-                        </div>
-                    </span>
-
-                    <span>.</span>
-
-                    @if ($filterContext['hasActiveFilters'])
-                        <button type="button" wire:click="clearRosterFilters" class="ml-2 text-xs font-medium text-accent hover:underline focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ __('Clear filters') }}</button>
-                    @endif
-                </p>
+                <div class="mt-4">
+                    @include('livewire.people.attendance.partials.rosters-filter-prose')
+                </div>
 
                 <div class="mt-4">
                     @include('livewire.people.attendance.partials.rosters-grid', [
@@ -160,6 +125,7 @@
                                     <td class="px-table-cell-x py-table-cell-y text-xs text-muted tabular-nums">{{ $assignment->revision }}</td>
                                     <td class="px-table-cell-x py-table-cell-y">
                                         <div class="flex justify-end gap-2">
+                                            <x-ui.button type="button" size="sm" variant="secondary" wire:click="editRosterAssignment({{ $assignment->id }})">{{ __('Edit') }}</x-ui.button>
                                             <x-ui.button type="button" size="sm" variant="danger" wire:click="deleteRosterAssignment({{ $assignment->id }})" wire:confirm="{{ __('Delete this roster assignment?') }}">{{ __('Delete') }}</x-ui.button>
                                         </div>
                                     </td>

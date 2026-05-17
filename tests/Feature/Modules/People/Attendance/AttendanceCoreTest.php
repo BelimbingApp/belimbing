@@ -24,6 +24,7 @@ use App\Modules\People\Attendance\Services\AttendanceLifecycleService;
 use App\Modules\People\Attendance\Services\AttendanceOvertimeService;
 use App\Modules\People\Attendance\Services\AttendancePolicyGroupResolver;
 use App\Modules\People\Attendance\Services\ClockEventIngestionService;
+use App\Modules\People\Attendance\Support\DayTypeVocabulary;
 use App\Modules\People\Payroll\Listeners\RecordAttendanceOvertimeContribution;
 use App\Modules\People\Payroll\Models\PayrollCalendar;
 use App\Modules\People\Payroll\Models\PayrollInput;
@@ -671,6 +672,28 @@ it('treats employees without a work calendar as normal day type', function (): v
     $dayType = app(AttendanceCalendarResolver::class)->dayType($employee, '2026-05-17');
 
     expect($dayType)->toBe(AttendanceDay::DAY_TYPE_NORMAL);
+});
+
+it('returns consistent label + surface + ink classes for every day type', function (): void {
+    expect(DayTypeVocabulary::label(AttendanceDay::DAY_TYPE_NORMAL))->toBe('Normal')
+        ->and(DayTypeVocabulary::label(AttendanceDay::DAY_TYPE_REST))->toBe('Rest')
+        ->and(DayTypeVocabulary::label(AttendanceDay::DAY_TYPE_OFF))->toBe('Off')
+        ->and(DayTypeVocabulary::label(AttendanceDay::DAY_TYPE_HOLIDAY))->toBe('Holiday');
+
+    expect(DayTypeVocabulary::surfaceClass(AttendanceDay::DAY_TYPE_NORMAL))->toBe('')
+        ->and(DayTypeVocabulary::surfaceClass(AttendanceDay::DAY_TYPE_REST))->toBe('bg-day-rest')
+        ->and(DayTypeVocabulary::surfaceClass(AttendanceDay::DAY_TYPE_OFF))->toBe('bg-day-off')
+        ->and(DayTypeVocabulary::surfaceClass(AttendanceDay::DAY_TYPE_HOLIDAY))->toBe('bg-day-holiday');
+
+    expect(DayTypeVocabulary::inkClass(AttendanceDay::DAY_TYPE_NORMAL))->toBe('text-muted')
+        ->and(DayTypeVocabulary::inkClass(AttendanceDay::DAY_TYPE_REST))->toBe('text-day-rest-ink')
+        ->and(DayTypeVocabulary::inkClass(AttendanceDay::DAY_TYPE_OFF))->toBe('text-day-off-ink')
+        ->and(DayTypeVocabulary::inkClass(AttendanceDay::DAY_TYPE_HOLIDAY))->toBe('text-day-holiday-ink');
+
+    expect(DayTypeVocabulary::isNonWorking(AttendanceDay::DAY_TYPE_NORMAL))->toBeFalse()
+        ->and(DayTypeVocabulary::isNonWorking(AttendanceDay::DAY_TYPE_REST))->toBeTrue()
+        ->and(DayTypeVocabulary::isNonWorking(AttendanceDay::DAY_TYPE_OFF))->toBeTrue()
+        ->and(DayTypeVocabulary::isNonWorking(AttendanceDay::DAY_TYPE_HOLIDAY))->toBeTrue();
 });
 
 it('preloads holiday and calendar lookups so the roster grid resolves day types without per-cell queries', function (): void {

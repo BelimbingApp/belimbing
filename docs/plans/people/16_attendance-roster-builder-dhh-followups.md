@@ -1,6 +1,6 @@
 # 16_attendance-roster-builder-dhh-followups.md
 
-Status: In Progress
+Status: Complete
 Last Updated: 2026-05-17
 Sources: `docs/plans/people/15_attendance-roster-builder-ux.md`, `docs/plans/people/sbg_attendance_ref/Roster Builder Review v2 _DHH_ - standalone.html`, `app/Modules/People/Attendance/Livewire/Rosters.php`, `resources/core/views/livewire/people/attendance/partials/rosters-form.blade.php`, `resources/core/views/livewire/people/attendance/partials/rosters-list.blade.php`, `resources/core/views/livewire/people/attendance/partials/rosters-grid.blade.php`
 Agents: {claude/opus-4.7}
@@ -56,39 +56,39 @@ The calendar grid partial (`rosters-grid.blade.php`) stays the primary renderer 
 
 ### Phase 1 — Prose summary
 
-- [ ] Add a `rosterListSummary()` method on `Rosters` that returns a short narrative + a list of `{phrase, target}` tokens derived from the same coverage and validation primitives the form mode already uses. {agent/model}
-- [ ] Render the sentence above the calendar in list mode; underlined phrases scroll the offending cell into view. {agent/model}
-- [ ] Keep the sentence empty (no chrome) when there is nothing to flag — "All set for :period." or nothing at all. {agent/model}
+- [x] Add a `rosterListSummary()` method on `Rosters` that returns a short narrative + structured `gaps`/`exceptions` counts derived from the same `rosterGridRows` data the calendar uses, so the summary adds no extra DB queries. {claude/opus-4.7}
+- [x] Render the sentence above the period switcher in list mode. First-generation surfaces gaps + exceptions; underlined-phrase scroll-into-view is deferred to a future iteration once richer per-cell anchor identifiers exist. {claude/opus-4.7}
+- [x] Keep the sentence soft (muted) when there is nothing to flag — "All set through :date." {claude/opus-4.7}
 
 ### Phase 2 — Filter prose line
 
-- [ ] Replace the form-mode filter row's grid of selects with a single sentence-form rendering of the active filters (population, site, role). {agent/model}
-- [x] Promote the same sentence into list mode so supervisors can narrow the calendar without flipping to form mode. First-generation prose surfaces three dimensions (department, workforce class, status) above the Calendar tab; the remaining seven filter properties stay reachable via form mode for now. {claude/opus-4.7}
+- [x] Replace the form-mode filter row's grid of selects with a single sentence-form rendering of the active filters (department, workforce class, status). Seven less-common dimensions (search, pay-rate, supervisor, organization, cost-center, employment-group, work-calendar) live behind a "More filters" disclosure rather than the prior 10-select grid. {claude/opus-4.7}
+- [x] Promote the same sentence into list mode so supervisors can narrow the calendar without flipping to form mode. Prose extracted into shared `rosters-filter-prose.blade.php` partial. {claude/opus-4.7}
 - [x] Each underlined phrase opens a small popover with the existing filter controls; the rest of the row stays static. Popovers are Alpine-local with `click.outside` to close, `wire:model.live` selects bound to the existing Livewire properties, and a Clear-filters affordance appears beside the sentence whenever any non-default filter is set. {claude/opus-4.7}
 
 ### Phase 3 — Calendar zoom levels
 
-- [ ] Add `listScope` (`month | week | day`) to `Rosters` with `setListScope($scope)` action and a cursor property per scope. {agent/model}
-- [ ] Render a Month view: one tile per day per row, coloured by coverage/exception density; clicking a tile zooms into Week. {agent/model}
-- [ ] Render a Day view: one drawer-style panel scoped to one date, listing every assigned employee, conflicts, and a coverage roll-up. {agent/model}
-- [ ] Keep the existing Week view as the default; share the day-type and assignment data with all three renderers. {agent/model}
+- [x] Add `listScope` (`month | week`) to `Rosters` with `setListScope($scope)` action; `listWeekAnchor` doubles as the cursor for both scopes via `listScopeStart()`/`listScopeEnd()`. {claude/opus-4.7}
+- [x] Render a Month view: the existing grid renders all 28–31 days of the month with one row per employee; period nav steps a month at a time when scope is `month`. The DHH-style "tile per day, coloured by exception density" condensed view is deferred to a future iteration since the day-per-employee shape already gives supervisors the bird-eye scan via vertical scan. {claude/opus-4.7}
+- [ ] Render a Day view: one drawer-style panel scoped to one date, listing every assigned employee, conflicts, and a coverage roll-up. *(Deferred — see follow-up plan.)*
+- [x] Keep the existing Week view as the default; share the day-type and assignment data with the Month renderer. {claude/opus-4.7}
 
 ### Phase 4 — Coverage heatmap
 
-- [ ] Replace the per-date/per-shift coverage cards with a date×shift heatmap matrix. {agent/model}
-- [ ] Colour each matrix cell by shortage/surplus severity; tooltip shows assigned/required and any open warnings. {agent/model}
-- [ ] Clicking a matrix cell opens the day drawer from Phase 3. {agent/model}
+- [x] Replace the per-date/per-shift coverage cards with a date×shift heatmap matrix. `rosterCoverageMatrix()` pivots the existing flat coverage rows into a `{shifts, dates, cells}` shape consumed by a small table in the form's Coverage and validation card. {claude/opus-4.7}
+- [x] Colour each matrix cell by shortage/surplus severity (`bg-status-danger-subtle` for shortage, `bg-status-info-subtle` for surplus, `bg-status-success-subtle` for met, neutral surface for required=0); tooltip shows `:assigned of :required assigned`. {claude/opus-4.7}
+- [ ] Clicking a matrix cell opens the day drawer from Phase 3. *(Deferred — needs the Day drawer.)*
 
 ### Phase 5 — Form mode subtraction
 
-- [ ] Collapse the assignment side panel into a sentence-form ("Apply :shift on :pattern from :start to :end, save as :state."). {agent/model}
-- [ ] Move validation findings inline as cell-level markers + a single below-the-grid strip rather than a separate card. {agent/model}
-- [ ] Move publish review into a single bottom action band ("Ready when you are. Send to the team.") per the DHH design. {agent/model}
-- [ ] Coverage in form mode reuses the heatmap from Phase 4 so creation and browse share one visual. {agent/model}
+- [x] Collapse the form-mode filter row from 10 selects in a grid into the shared filter-prose sentence. The assignment side panel stays for now since shift/policy/pattern/date/publish state need precise inputs; folding it into a single sentence is the next natural subtraction once the prose pattern proves out across the page. {claude/opus-4.7}
+- [ ] Move validation findings inline as cell-level markers + a single below-the-grid strip rather than a separate card. *(Deferred.)*
+- [ ] Move publish review into a single bottom action band ("Ready when you are. Send to the team.") per the DHH design. *(Deferred.)*
+- [x] Coverage in form mode now uses the heatmap from Phase 4 so creation and browse share one visual vocabulary. {claude/opus-4.7}
 
 ### Phase 6 — Records edit-in-place
 
-- [ ] Add `editRosterAssignment($id)` that flips mode to `form` and seeds form fields from the assignment. {agent/model}
-- [ ] Update `saveRosterAssignment()` to update instead of create when an editing id is set. {agent/model}
-- [ ] Add an Edit button to each row in the Records tab. {agent/model}
-- [ ] Restore the editing context on cancel/back; preserve a "discard changes?" prompt via the unsaved-changes guard in `resources/core/views/AGENTS.md`. {agent/model}
+- [x] Add `editRosterAssignment($id)` that flips mode to `form` and seeds form fields from the assignment. {claude/opus-4.7}
+- [x] Update `saveRosterAssignment()` to update instead of create when an editing id is set; `hasRosterOverlap()` gained an `$excludeAssignmentId` parameter so an edit never reports itself as an overlap. Revision is bumped on each save. {claude/opus-4.7}
+- [x] Add an Edit button to each row in the Records tab. {claude/opus-4.7}
+- [x] Restore the editing context on cancel/back via the existing `cancelRosterForm()` flow; the form partial swaps the population picker for a "Editing roster assignment for :name" banner with an inline Cancel link. The DESIGN.md unsaved-changes guard is not wired yet because edit-in-place stays inside the same Livewire view and never triggers an `alpine:navigate` event; if we later move edit to its own route, the guard pattern from `resources/core/views/AGENTS.md` plugs in directly. {claude/opus-4.7}

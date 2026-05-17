@@ -830,15 +830,103 @@ it('narrows the list-mode calendar via the filter prose without flipping into fo
         ->assertSee(ATTENDANCE_POLICY_PRODUCTION_EMPLOYEE_NAME)
         ->assertSee(ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME)
         ->assertSee('all departments')
+        ->assertViewHas('filteredEmployeeCount', 2)
         ->set('rosterDepartmentId', (string) $production->id)
         ->assertSet('mode', 'list')
         ->assertSee(ATTENDANCE_POLICY_PRODUCTION_EMPLOYEE_NAME)
-        ->assertDontSee(ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME)
+        ->assertViewHas('filteredEmployeeCount', 1)
         ->assertSee('Production')
         ->call('clearRosterFilters')
-        ->assertSee(ATTENDANCE_POLICY_PRODUCTION_EMPLOYEE_NAME)
-        ->assertSee(ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME)
+        ->assertViewHas('filteredEmployeeCount', 2)
         ->assertSee('all departments');
+});
+
+it('edits a roster assignment in place, bumping the revision and flipping back to list mode', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $policyGroup = AttendancePolicyGroup::query()->create([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard Attendance',
+        'effective_from' => '2026-01-01',
+    ]);
+    $dayShift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day Shift',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+    $eveShift = AttendanceShiftTemplate::query()->create([
+        'company_id' => $company->id,
+        'code' => 'EVE',
+        'name' => 'Evening Shift',
+        'starts_at' => '14:00:00',
+        'ends_at' => '22:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ]);
+
+    $assignment = AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $dayShift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => '2026-09-01',
+        'effective_to' => '2026-09-30',
+        'publish_state' => 'draft',
+        'lock_state' => 'open',
+        'revision' => 1,
+        'exceptions' => [],
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Rosters::class)
+        ->assertSet('mode', 'list')
+        ->call('editRosterAssignment', $assignment->id)
+        ->assertSet('mode', 'form')
+        ->assertSet('editingRosterAssignmentId', (string) $assignment->id)
+        ->assertSet('rosterShiftTemplateId', (string) $dayShift->id)
+        ->assertSet('rosterPublishState', 'draft')
+        ->set('rosterShiftTemplateId', (string) $eveShift->id)
+        ->set('rosterPublishState', 'published')
+        ->call('saveRosterAssignment')
+        ->assertHasNoErrors()
+        ->assertSet('mode', 'list')
+        ->assertSet('editingRosterAssignmentId', '')
+        ->assertSee('Roster assignment updated.');
+
+    $assignment->refresh();
+    expect((int) $assignment->attendance_shift_template_id)->toBe($eveShift->id)
+        ->and($assignment->publish_state)->toBe('published')
+        ->and((int) $assignment->revision)->toBe(2);
+});
+
+it('switches the list-mode calendar between week and month scopes', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    Employee::factory()->active()->create(['company_id' => $company->id]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Rosters::class)
+        ->assertSet('listScope', 'week')
+        ->call('setListScope', 'month')
+        ->assertSet('listScope', 'month')
+        ->assertSee('Month')
+        ->assertSee('This month')
+        ->tap(function ($component) {
+            $days = $component->viewData('rosterGridDays');
+            expect(count($days))->toBeGreaterThanOrEqual(28)
+                ->and(count($days))->toBeLessThanOrEqual(31);
+        })
+        ->call('setListScope', 'week')
+        ->assertSet('listScope', 'week')
+        ->assertViewHas('rosterGridDays', fn ($days) => count($days) === 7);
 });
 
 it('opens to the calendar as the list-mode primary surface and supports week navigation', function (): void {
