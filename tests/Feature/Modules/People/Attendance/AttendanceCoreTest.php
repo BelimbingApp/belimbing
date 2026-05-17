@@ -37,6 +37,7 @@ use Livewire\Livewire;
 const ATTENDANCE_EFFECTIVE_FROM = '2026-01-01';
 const ATTENDANCE_TEST_DATE = '2026-05-13';
 const ATTENDANCE_HOLIDAY_DATE = '2026-05-14';
+const ATTENDANCE_FRIDAY_DATE = '2026-05-15';
 const ATTENDANCE_DAY_SHIFT_NAME = 'Day Shift';
 const ATTENDANCE_STANDARD_POLICY_NAME = 'Standard Attendance';
 const ATTENDANCE_PROPOSED_CLOCK_IN = '2026-05-13 08:05:00';
@@ -453,7 +454,7 @@ it('resolves attendance days from rotating roster assignments', function (): voi
     expect($day->shiftTemplate?->is($nightShift))->toBeTrue()
         ->and($day->status)->toBe(AttendanceDay::STATUS_SCHEDULED)
         ->and($day->expected_minutes)->toBe(720)
-        ->and($day->shift_ends_at?->toDateString())->toBe('2026-05-15');
+        ->and($day->shift_ends_at?->toDateString())->toBe(ATTENDANCE_FRIDAY_DATE);
 });
 
 it('rolls the payroll period date forward for cross-midnight shifts attributed to shift_end_date', function (): void {
@@ -660,7 +661,7 @@ it('derives weekly rest and off day types from the work calendar metadata', func
     // 2026-05-15 is a Friday → normal.
     expect($resolver->dayType($employee, '2026-05-17'))->toBe(AttendanceDay::DAY_TYPE_REST)
         ->and($resolver->dayType($employee, '2026-05-16'))->toBe(AttendanceDay::DAY_TYPE_OFF)
-        ->and($resolver->dayType($employee, '2026-05-15'))->toBe(AttendanceDay::DAY_TYPE_NORMAL);
+        ->and($resolver->dayType($employee, ATTENDANCE_FRIDAY_DATE))->toBe(AttendanceDay::DAY_TYPE_NORMAL);
 });
 
 it('treats employees without a work calendar as normal day type', function (): void {
@@ -685,7 +686,7 @@ it('preloads holiday and calendar lookups so the roster grid resolves day types 
     expect($resolver->dayType($employee, ATTENDANCE_HOLIDAY_DATE))->toBe(AttendanceDay::DAY_TYPE_HOLIDAY)
         ->and($resolver->dayType($employee, '2026-05-17'))->toBe(AttendanceDay::DAY_TYPE_REST)
         ->and($resolver->dayType($employee, '2026-05-16'))->toBe(AttendanceDay::DAY_TYPE_OFF)
-        ->and($resolver->dayType($employee, '2026-05-15'))->toBe(AttendanceDay::DAY_TYPE_NORMAL);
+        ->and($resolver->dayType($employee, ATTENDANCE_FRIDAY_DATE))->toBe(AttendanceDay::DAY_TYPE_NORMAL);
 
     expect(DB::getQueryLog())->toBeEmpty();
 });

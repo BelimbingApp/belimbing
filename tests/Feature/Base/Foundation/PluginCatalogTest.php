@@ -9,6 +9,8 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
+const PLUGIN_CATALOG_PAYROLL_MODULE = 'people/payroll';
+
 beforeEach(function (): void {
     setupAuthzRoles();
 });
@@ -41,7 +43,7 @@ function fakeBelimbingAppCatalog(): void
             'description' => 'Composer-level description',
             'extra' => [
                 'blb' => [
-                    'module' => 'people/payroll',
+                    'module' => PLUGIN_CATALOG_PAYROLL_MODULE,
                     'role' => 'plugin',
                     'version' => '0.1.0',
                     'description' => 'Payroll — Malaysia reference plugin.',
@@ -52,7 +54,7 @@ function fakeBelimbingAppCatalog(): void
             'name' => 'blb/payroll-sg',
             'extra' => [
                 'blb' => [
-                    'module' => 'people/payroll-sg',
+                    'module' => PLUGIN_CATALOG_PAYROLL_MODULE.'-sg',
                     'role' => 'plugin',
                     'version' => '0.0.1',
                     'description' => 'Payroll — Singapore (hypothetical).',
@@ -72,7 +74,7 @@ test('catalog refresh fetches BelimbingApp repos with blb-plugin topic', functio
 
     expect($entries)->toHaveCount(2)
         ->and($entries[0]->repoName)->toBe('blb-payroll-my')
-        ->and($entries[0]->moduleIdentifier)->toBe('people/payroll')
+        ->and($entries[0]->moduleIdentifier)->toBe(PLUGIN_CATALOG_PAYROLL_MODULE)
         ->and($entries[0]->version)->toBe('0.1.0');
 });
 
@@ -84,7 +86,7 @@ test('catalog tab renders cached entries with the Installed badge on live module
 
     Livewire::test(PluginManager::class, ['tab' => 'available'])
         ->assertSee('blb-payroll-my')
-        ->assertSee('people/payroll')
+        ->assertSee(PLUGIN_CATALOG_PAYROLL_MODULE)
         ->assertSee('blb-payroll-sg')
         ->assertSee('Installed')                 // people/payroll is locally installed
         ->assertSee('git clone https://github.com/BelimbingApp/blb-payroll-sg.git'); // SG not installed → command shown

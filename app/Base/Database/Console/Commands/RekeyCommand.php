@@ -152,7 +152,13 @@ final class RekeyCommand extends Command
             return $backupId;
         }
 
-        $this->persistRewrappedManifest($disk, $file, $data, $dek, $currentKek, $currentFingerprint, $commit, $backupId);
+        $this->persistRewrappedManifest(
+            $disk,
+            $file,
+            $data,
+            $dek,
+            new RekeyManifestWriteContext($currentKek, $currentFingerprint, $commit, $backupId),
+        );
 
         return 'rekeyed';
     }
@@ -165,24 +171,21 @@ final class RekeyCommand extends Command
         string $file,
         array $data,
         string $dek,
-        string $currentKek,
-        string $currentFingerprint,
-        bool $commit,
-        string $backupId,
+        RekeyManifestWriteContext $context,
     ): void {
         $newNonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-        $newWrapped = sodium_crypto_secretbox($dek, $newNonce, $currentKek);
+        $newWrapped = sodium_crypto_secretbox($dek, $newNonce, $context->currentKek);
         sodium_memzero($dek);
 
         $data['wrapped_dek'] = base64_encode($newWrapped);
         $data['dek_nonce'] = base64_encode($newNonce);
-        $data['kek_fingerprint'] = $currentFingerprint;
+        $data['kek_fingerprint'] = $context->currentFingerprint;
 
-        if ($commit) {
+        if ($context->commit) {
             $disk->put($file, (string) json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-            $this->components->twoColumnDetail('Re-keyed', $backupId);
+            $this->components->twoColumnDetail('Re-keyed', $context->backupId);
         } else {
-            $this->components->twoColumnDetail('Would re-key', $backupId);
+            $this->components->twoColumnDetail('Would re-key', $context->backupId);
         }
     }
 
@@ -248,4 +251,14 @@ final class RekeyCommand extends Command
 
         return $raw;
     }
+}
+
+final readonly class RekeyManifestWriteContext
+{
+    public function __construct(
+        public string $currentKek,
+        public string $currentFingerprint,
+        public bool $commit,
+        public string $backupId,
+    ) {}
 }

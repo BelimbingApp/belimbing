@@ -58,7 +58,7 @@
                     {{-- Department --}}
                     <span class="relative inline-block" @click.outside="open === 'department' && (open = null)">
                         <button type="button" id="roster-filter-prose-department-toggle" @click="open = (open === 'department' ? null : 'department')" :aria-expanded="open === 'department'" aria-controls="roster-filter-prose-department-panel" class="font-medium text-ink underline decoration-dashed decoration-border-default underline-offset-4 hover:decoration-accent focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ $filterContext['departmentLabel'] }}</button>
-                        <div id="roster-filter-prose-department-panel" x-show="open === 'department'" x-cloak x-transition.origin.top.left class="absolute left-0 z-20 mt-2 w-64 rounded-2xl border border-border-default bg-surface-card p-3 shadow-lg" role="dialog" aria-labelledby="roster-filter-prose-department-toggle">
+                        <div id="roster-filter-prose-department-panel" x-show="open === 'department'" x-cloak x-transition.origin.top.left class="absolute left-0 z-20 mt-2 w-64 rounded-2xl border border-border-default bg-surface-card p-3 shadow-lg" role="region" aria-labelledby="roster-filter-prose-department-toggle">
                             <x-ui.select id="roster-filter-prose-department" wire:model.live="rosterDepartmentId" label="{{ __('Department') }}">
                                 <option value="">{{ __('All departments') }}</option>
                                 @foreach ($departments as $department)
@@ -73,7 +73,7 @@
                     {{-- Workforce class --}}
                     <span class="relative inline-block" @click.outside="open === 'workforce' && (open = null)">
                         <button type="button" id="roster-filter-prose-workforce-toggle" @click="open = (open === 'workforce' ? null : 'workforce')" :aria-expanded="open === 'workforce'" aria-controls="roster-filter-prose-workforce-panel" class="font-medium text-ink underline decoration-dashed decoration-border-default underline-offset-4 hover:decoration-accent focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ $filterContext['workforceClassLabel'] }}</button>
-                        <div id="roster-filter-prose-workforce-panel" x-show="open === 'workforce'" x-cloak x-transition.origin.top.left class="absolute left-0 z-20 mt-2 w-64 rounded-2xl border border-border-default bg-surface-card p-3 shadow-lg" role="dialog" aria-labelledby="roster-filter-prose-workforce-toggle">
+                        <div id="roster-filter-prose-workforce-panel" x-show="open === 'workforce'" x-cloak x-transition.origin.top.left class="absolute left-0 z-20 mt-2 w-64 rounded-2xl border border-border-default bg-surface-card p-3 shadow-lg" role="region" aria-labelledby="roster-filter-prose-workforce-toggle">
                             <x-ui.select id="roster-filter-prose-workforce" wire:model.live="rosterWorkforceClassId" label="{{ __('Workforce class') }}">
                                 <option value="">{{ __('All workforce classes') }}</option>
                                 @foreach ($workforceClasses as $entry)
@@ -88,7 +88,7 @@
                     {{-- Status --}}
                     <span class="relative inline-block" @click.outside="open === 'status' && (open = null)">
                         <button type="button" id="roster-filter-prose-status-toggle" @click="open = (open === 'status' ? null : 'status')" :aria-expanded="open === 'status'" aria-controls="roster-filter-prose-status-panel" class="font-medium text-ink underline decoration-dashed decoration-border-default underline-offset-4 hover:decoration-accent focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ $filterContext['statusLabel'] }}</button>
-                        <div id="roster-filter-prose-status-panel" x-show="open === 'status'" x-cloak x-transition.origin.top.left class="absolute left-0 z-20 mt-2 w-56 rounded-2xl border border-border-default bg-surface-card p-3 shadow-lg" role="dialog" aria-labelledby="roster-filter-prose-status-toggle">
+                        <div id="roster-filter-prose-status-panel" x-show="open === 'status'" x-cloak x-transition.origin.top.left class="absolute left-0 z-20 mt-2 w-56 rounded-2xl border border-border-default bg-surface-card p-3 shadow-lg" role="region" aria-labelledby="roster-filter-prose-status-toggle">
                             <x-ui.select id="roster-filter-prose-status" wire:model.live="rosterEmployeeStatus" label="{{ __('Status') }}">
                                 <option value="">{{ __('Any status') }}</option>
                                 <option value="active">{{ __('Active') }}</option>
