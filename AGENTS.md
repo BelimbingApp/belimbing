@@ -4,7 +4,7 @@
 Belimbing (BLB) is a Laravel-based framework:
 - **PHP:** 8.5+
 - **Framework:** Laravel 13
-- **App Server:** FrankenPHP 1.12.2 (required for BLB's PHP worker model)
+- **App Server:** FrankenPHP 1.12.3 (required for BLB's PHP worker model)
 - **Frontend/Logic:** Livewire 4 + Tailwind CSS 4 + Alpine.js 3
 - **Testing:** Pest 4
 - **Linting:** Laravel Pint
