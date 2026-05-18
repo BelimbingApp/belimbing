@@ -3,6 +3,8 @@
 @php($compact = $compact ?? false)
 @php($gridIntro = $gridIntro ?? __('Existing assignments show draft or published state; rest, off, and holiday days surface from each employee\'s work calendar.'))
 @php($cellMinWidth = $compact ? 'min-w-9' : 'min-w-14')
+@php($headerMinWidth = $compact ? 'min-w-9' : 'min-w-20')
+@php($headerPadding = $compact ? 'px-0.5' : 'px-1.5')
 
 <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
     <div>
@@ -24,7 +26,32 @@
 
 <div class="mt-4 overflow-x-auto rounded-2xl border border-border-default">
     <table class="min-w-full divide-y divide-border-default text-xs">
-        <x-ui.day-strip :days="$rosterGridDays" :leading-label="__('Employee')" :compact="$compact" />
+        <thead class="bg-surface-subtle/80">
+            <tr>
+                <th scope="col" class="sticky left-0 z-10 w-40 min-w-40 bg-surface-subtle/95 px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    {{ __('Employee') }}
+                </th>
+                @foreach ($rosterGridDays as $day)
+                    @php($isToday = $day['is_today'] ?? false)
+                    @php($isWeekend = $day['is_weekend'] ?? false)
+                    @php($isHoliday = $day['is_holiday'] ?? false)
+                    @php($headerSurface = $isHoliday ? 'bg-day-holiday' : '')
+                    @php($headerInk = match (true) {
+                        $isHoliday => 'text-day-holiday-ink',
+                        $isToday => 'text-accent',
+                        $isWeekend => 'text-muted',
+                        default => 'text-muted',
+                    })
+                    @php($dayLabel = $compact ? ($day['day_short'] ?? substr($day['day'], 0, 1)) : $day['day'])
+                    <th scope="col" class="{{ $headerSurface }} {{ $headerMinWidth }} {{ $headerPadding }} py-table-header-y text-center text-[11px] font-semibold uppercase tracking-wider {{ $headerInk }} @if($isToday) underline decoration-accent decoration-2 underline-offset-4 @endif" wire:key="roster-grid-day-header-{{ $day['date'] }}" @if($isHoliday) title="{{ __('Holiday') }}" @endif>
+                        <div>{{ $dayLabel }}</div>
+                        @if (! $compact)
+                            <div class="font-normal normal-case tracking-normal text-muted">{{ $day['label'] }}</div>
+                        @endif
+                    </th>
+                @endforeach
+            </tr>
+        </thead>
         <tbody class="divide-y divide-border-default bg-surface-card">
             @forelse ($rosterGridRows as $row)
                 @php($employee = $row['employee'])
@@ -74,7 +101,7 @@
                                         @endif
                                     </x-ui.day-tile>
                                 </button>
-                                <div x-show="open" x-cloak @click.outside="open = false" x-transition.origin.top.left class="absolute left-1/2 z-30 mt-1 w-56 -translate-x-1/2 rounded-2xl border border-border-default bg-surface-card p-3 text-left shadow-lg" role="region" aria-label="{{ __('Override :date', ['date' => $day['date']]) }}">
+                                <section x-show="open" x-cloak @click.outside="open = false" x-transition.origin.top.left class="absolute left-1/2 z-30 mt-1 w-56 -translate-x-1/2 rounded-2xl border border-border-default bg-surface-card p-3 text-left shadow-lg" aria-label="{{ __('Override :date', ['date' => $day['date']]) }}">
                                     <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Override') }} {{ \Carbon\CarbonImmutable::parse($day['date'])->format('M j') }}</div>
                                     <div class="mt-2 space-y-2">
                                         <label class="block text-[11px] font-semibold uppercase tracking-wider text-muted">
@@ -100,7 +127,7 @@
                                         <button type="button" @click="open = false" class="text-xs font-medium text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ __('Cancel') }}</button>
                                         <button type="button" @click="$wire.saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}', shift, policy).then(() => { open = false })" :disabled="! shift || ! policy" class="rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-on disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1">{{ __('Save') }}</button>
                                     </div>
-                                </div>
+                                </section>
                             @else
                                 <x-ui.day-tile
                                     :day-type="$dayType"

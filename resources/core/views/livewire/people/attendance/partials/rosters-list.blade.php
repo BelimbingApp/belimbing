@@ -50,10 +50,11 @@
                         @endif
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
-                        <span class="inline-flex rounded-xl border border-border-default p-0.5" role="group" aria-label="{{ __('Calendar scope') }}">
+                        <fieldset class="inline-flex rounded-xl border border-border-default p-0.5">
+                            <legend class="sr-only">{{ __('Calendar scope') }}</legend>
                             <button type="button" wire:click="setListScope('week')" class="rounded-lg px-3 py-1 text-xs font-medium @if($listScope === 'week') bg-surface-subtle text-ink @else text-muted hover:text-ink @endif focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1">{{ __('Week') }}</button>
                             <button type="button" wire:click="setListScope('month')" class="rounded-lg px-3 py-1 text-xs font-medium @if($listScope === 'month') bg-surface-subtle text-ink @else text-muted hover:text-ink @endif focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1">{{ __('Month') }}</button>
-                        </span>
+                        </fieldset>
                         <x-ui.button type="button" size="sm" variant="ghost" wire:click="goToPreviousWeek" aria-label="{{ $prevLabel }}">
                             <x-icon name="heroicon-o-chevron-left" class="h-4 w-4" />
                             <span>{{ __('Prev') }}</span>
