@@ -66,9 +66,18 @@ Prefer one file until it is hard to use. **Split:** (a) **master**—essence, ou
 
 **Legacy:** new plans live here. Unmigrated work stays under `docs/todo/` per `docs/todo/AGENTS.md`. On move: git history, fix links, optional **Sources** to old path.
 
-## Do not
+## Hard Rules
 
-Questionnaire-style plans; observability-only sections duplicating the doc; plan only in agent session state; autopush/autocommit; stale or contradictory content; neutral option-padding when a recommendation exists; omit **Last Updated** / **Sources** on substantial plans; **Phases** as prose-only when steps are concrete—use checkboxes; code in the plan.
+- No questionnaire-style plans.
+- No questionnaire-style prompts in chat while drafting a plan; provide a recommendation-driven proposal directly.
+- No neutral option-padding when a recommendation exists.
+- No observability-only sections that duplicate this doc.
+- No plan kept only in agent session state unless the user explicitly asks to implement without a docs/plans file.
+- No autopush or autocommit.
+- No stale or contradictory content.
+- Do not omit **Last Updated** or **Sources**.
+- Do not leave **Phases** as prose-only when steps are concrete; use checkboxes.
+- No code in the plan.
 
 ## Litmus
 
