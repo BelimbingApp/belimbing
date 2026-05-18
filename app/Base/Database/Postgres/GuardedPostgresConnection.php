@@ -2,17 +2,52 @@
 
 namespace App\Base\Database\Postgres;
 
-use Closure;
 use Illuminate\Database\PostgresConnection;
 
 final class GuardedPostgresConnection extends PostgresConnection
 {
-    protected function run($query, $bindings, Closure $callback)
+    private bool $guardsMigrationIdentifiers = false;
+
+    private bool $migrationIdentifierGuardRegistered = false;
+
+    /**
+     * Enable PostgreSQL identifier-length checks only for a migration operation.
+     *
+     * @template TReturn
+     *
+     * @param  callable(): TReturn  $callback
+     * @return TReturn
+     */
+    public function guardMigrationIdentifiers(callable $callback): mixed
     {
-        if (PostgresIdentifierGuard::shouldInspectSql((string) $query)) {
-            PostgresIdentifierGuard::assertSqlIdentifiersWithinLimit((string) $query);
+        $this->registerMigrationIdentifierGuard();
+
+        $previous = $this->guardsMigrationIdentifiers;
+        $this->guardsMigrationIdentifiers = true;
+
+        try {
+            return $callback();
+        } finally {
+            $this->guardsMigrationIdentifiers = $previous;
+        }
+    }
+
+    private function registerMigrationIdentifierGuard(): void
+    {
+        if ($this->migrationIdentifierGuardRegistered) {
+            return;
         }
 
-        return parent::run($query, $bindings, $callback);
+        $this->beforeExecuting(function (string $query): void {
+            if (! $this->guardsMigrationIdentifiers) {
+                return;
+            }
+
+            if (PostgresIdentifierGuard::shouldInspectSql($query)) {
+                PostgresIdentifierGuard::assertSqlIdentifiersWithinLimit($query);
+            }
+        });
+
+        $this->migrationIdentifierGuardRegistered = true;
     }
 }

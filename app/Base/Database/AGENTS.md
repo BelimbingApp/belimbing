@@ -132,7 +132,9 @@ The admin UI at `admin/system/database-tables` (local env only) also lets you to
 
 ## PostgreSQL Identifier Limit
 
-BLB replaces Laravel's PostgreSQL connection with `App\Base\Database\Postgres\GuardedPostgresConnection`, which rejects schema-changing SQL containing identifiers over PostgreSQL's 63-byte limit before the statement reaches the database.
+BLB rejects PostgreSQL migration DDL containing identifiers over PostgreSQL's 63-byte limit before the statement reaches the database. The guard is enabled only while BLB migration execution runs (`migrate`, `migrate:rollback`, `migrate:reset`; `migrate:fresh` delegates its rebuild phase to `migrate`), so normal application queries do not pay identifier-inspection overhead.
+
+The guard covers both Laravel schema builder SQL and raw `DB::statement()` DDL executed inside those migration commands.
 
 Use explicit short names for long indexes and constraints:
 

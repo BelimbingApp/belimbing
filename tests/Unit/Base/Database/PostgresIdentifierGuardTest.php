@@ -68,26 +68,28 @@ it('ignores quoted content inside SQL strings and comments', function (): void {
     expect(true)->toBeTrue();
 });
 
-it('guards SQL executed through the PostgreSQL connection', function (): void {
+it('guards SQL executed through the PostgreSQL connection during migration operations', function (): void {
     $identifier = str_repeat('a', PostgresIdentifierGuard::MAX_IDENTIFIER_BYTES + 1);
     $connection = new GuardedPostgresConnection(fn () => throw new RuntimeException('PDO should not resolve while pretending'));
 
-    expect(fn () => $connection->pretend(
-        fn (GuardedPostgresConnection $database) => $database->statement('create table "'.$identifier.'" ("id" bigint not null)')
+    expect(fn () => $connection->guardMigrationIdentifiers(
+        fn () => $connection->pretend(
+            fn (GuardedPostgresConnection $database) => $database->statement('create table "'.$identifier.'" ("id" bigint not null)')
+        )
     ))->toThrow(PostgresIdentifierTooLongException::class);
 });
 
-it('does not inspect normal browsing queries through the PostgreSQL connection', function (): void {
+it('does not inspect queries through the PostgreSQL connection outside migration operations', function (): void {
     $identifier = str_repeat('a', PostgresIdentifierGuard::MAX_IDENTIFIER_BYTES + 1);
     $connection = new GuardedPostgresConnection(fn () => throw new RuntimeException('PDO should not resolve while pretending'));
 
     $queries = $connection->pretend(
-        fn (GuardedPostgresConnection $database) => $database->select('select "'.$identifier.'" from "company_departments"')
+        fn (GuardedPostgresConnection $database) => $database->statement('create table "'.$identifier.'" ("id" bigint not null)')
     );
 
     expect($queries)
         ->toHaveCount(1)
-        ->and($queries[0]['query'])->toBe('select "'.$identifier.'" from "company_departments"');
+        ->and($queries[0]['query'])->toBe('create table "'.$identifier.'" ("id" bigint not null)');
 });
 
 it('only inspects schema-changing SQL statements', function (string $sql, bool $expected): void {

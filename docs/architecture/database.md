@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Define the architectural standards for database migrations, seeding, and schema conventions in Belimbing.
-**Last Updated:** 2026-05-12
+**Last Updated:** 2026-05-18
 
 ## Overview
 
@@ -12,6 +12,7 @@ To manage this complexity, the framework enforces:
 1.  **Layered Naming Conventions**: To ensure correct execution order (Base → Core → Operation/Commerce).
 2.  **Auto-Discovery**: To load migrations dynamically without manual registration.
 3.  **Registry-Based Seeding**: To orchestrate seeding across modules without a monolithic `DatabaseSeeder`.
+4.  **Migration-Scoped PostgreSQL Identifier Guarding**: To fail schema changes before PostgreSQL silently truncates overlong identifiers.
 
 ---
 
@@ -80,7 +81,17 @@ For registry implementation details, code examples, execution flow, dev vs produ
 
 ---
 
-## 4. Directory Structure
+## 4. PostgreSQL Identifier Guard
+
+PostgreSQL limits identifiers to 63 bytes and silently truncates overlong names. BLB treats that as a migration-time schema error rather than allowing truncated table, column, index, or constraint names to be created.
+
+The guard is scoped to migration commands, where durable schema objects are created or changed. `App\Base\Database\Postgres\GuardedPostgresConnection` registers a pre-execution callback through Laravel's connection hook, but it is active only inside BLB's migration command wrappers. Normal application browsing queries do not execute the identifier guard path.
+
+The guarded path covers Laravel schema builder SQL and raw DDL executed with `DB::statement()` during `migrate`, `migrate:rollback`, and `migrate:reset`. `migrate:fresh` delegates its rebuild phase to `migrate`, so migrations run through BLB's primary fresh workflow are covered without guarding the selective drop phase. Developers should use explicit short names for generated indexes and constraints when Laravel's default names would exceed PostgreSQL's limit.
+
+---
+
+## 5. Directory Structure
 
 All database assets live within their module to support portability.
 
@@ -102,7 +113,7 @@ app/Modules/Core/Geonames/
 
 ---
 
-## 5. Migration Registry
+## 6. Migration Registry
 
 This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to prevent conflicts and document dependencies. Each module must have a unique `MM_DD` identifier within its owner range.
 
@@ -199,7 +210,7 @@ When adding a module, choose the owner first, reserve the next `MM_DD` that pres
 
 ---
 
-## 6. Related Documentation
+## 7. Related Documentation
 
 -   **[app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md)** — Single source for migrate/seeding CLI, RegistersSeeders trait, discovery paths, dev vs production seeders, development workflow, and database portability.
 -   **docs/architecture/file-structure.md** — Full project directory layout.
