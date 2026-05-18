@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -25,7 +26,7 @@ return new class extends Migration
             $table->timestamp('occurred_at')->useCurrent()->index();
             $table->timestamp('created_at')->useCurrent();
 
-            $table->index(['auditable_type', 'auditable_id', 'occurred_at']);
+            $table->index(['auditable_type', 'auditable_id', 'occurred_at'], 'base_audit_mutations_auditable_occurred_index');
             $table->index(['actor_type', 'actor_id', 'occurred_at']);
         });
     }

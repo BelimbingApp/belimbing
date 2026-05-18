@@ -1,9 +1,11 @@
 <?php
+
 namespace App\Base\Database\Console\Commands;
 
 use App\Base\Database\Console\Concerns\PrintsTableUnstableUsage;
 use App\Base\Database\Models\TableRegistry;
 use Illuminate\Console\Command;
+use Illuminate\Support\Str;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
@@ -15,7 +17,7 @@ class TableUnstableCommand extends Command
     use PrintsTableUnstableUsage;
 
     protected $signature = 'blb:table:unstable
-                            {tables?* : Table name(s) (or trailing * prefix match) to mark unstable}
+                            {tables?* : Table name(s) or * wildcard pattern(s) to mark unstable}
                             {--list : Show current stable/unstable status of all tables}';
 
     protected $description = 'Mark database tables as unstable so migrate:fresh will drop them';
@@ -75,7 +77,7 @@ class TableUnstableCommand extends Command
      *
      * Supports:
      * - Exact names: users, companies
-     * - Prefix wildcards: ai_* (matches ai_providers, ai_provider_models, ...)
+     * - Wildcards: ai_*, people_*_entitlement_*
      *
      * @param  array<int, string>  $args
      * @return array<int, string>
@@ -90,17 +92,16 @@ class TableUnstableCommand extends Command
                 continue;
             }
 
-            if (str_ends_with($arg, '*')) {
-                $prefix = substr($arg, 0, -1);
-
-                if ($prefix === '') {
+            if (str_contains($arg, '*')) {
+                if ($arg === '*') {
                     continue;
                 }
 
                 $matched = TableRegistry::query()
                     ->stable()
-                    ->where('table_name', 'like', $prefix.'%')
                     ->pluck('table_name')
+                    ->filter(fn (string $tableName): bool => Str::is($arg, $tableName))
+                    ->values()
                     ->all();
 
                 $names = array_merge($names, $matched);

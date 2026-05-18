@@ -123,7 +123,7 @@ BLB should keep the imported iPayroll label only as `source_label` or migration 
 
 - [x] Add a People Settings area for typed dictionaries with search, create/edit, deactivate/reactivate, audit trail, import, export, and row-count visibility. The workbench route is `people.settings.index`; reference entries include status/source/audit timestamps and CSV export/import services. {GitHub Copilot/gpt-5.5}
 - [x] Implement organization and workforce dictionaries first: cost centers, organization units with configured levels, employment groups, job titles, workforce classes, and job grades. {GitHub Copilot/gpt-5.5}
-- [x] Let employee records reference the organization dictionaries with historical safety, including hire/resign dates, pay basis, and cost-center/reporting filters needed by the employee workbench. `employee_work_profiles` links employees to typed People Settings references. {GitHub Copilot/gpt-5.5}
+- [x] Let employee records reference the organization dictionaries with historical safety, including hire/resign dates, pay basis, and cost-center/reporting filters needed by the employee workbench. `people_employee_work_profiles` links employees to typed People Settings references. {GitHub Copilot/gpt-5.5}
 - [x] Add saved employee views and reusable filters so iPayroll's "Save To Query" behavior becomes a typed BLB feature rather than ad hoc report state. `people_saved_employee_views` persists named filters/sorts by company/user/visibility. {GitHub Copilot/gpt-5.5}
 
 ### Phase 3 — SBG setup import bridge
@@ -142,9 +142,9 @@ BLB should keep the imported iPayroll label only as `source_label` or migration 
 
 ### Phase 5 — Employee account access and request controls
 
-- [x] Build an employee account access admin screen showing employee, mapped user, display name, email, active state, and account status without exposing unnecessary personal data in bulk views. The People Settings workbench has an account access tab over `employee_portal_accesses`. {GitHub Copilot/gpt-5.5}
+- [x] Build an employee account access admin screen showing employee, mapped user, display name, email, active state, and account status without exposing unnecessary personal data in bulk views. The People Settings workbench has an account access tab over `people_employee_portal_accesses`. {GitHub Copilot/gpt-5.5}
 - [x] Add activation, deactivation, batch update, and access-invitation notification flows with audit events and delivery logs. `EmployeePortalAccess` supports activate/revoke/invited timestamps; `EmployeePortalAccessService` records invitation delivery logs. {GitHub Copilot/gpt-5.5}
-- [x] Tie employee profile-change requests to an approval workflow so iPayroll's "Employee Request" behavior becomes controlled profile-change requests rather than direct edits. `employee_profile_change_requests` models submitted/reviewed status and requested changes. {GitHub Copilot/gpt-5.5}
+- [x] Tie employee profile-change requests to an approval workflow so iPayroll's "Employee Request" behavior becomes controlled profile-change requests rather than direct edits. `people_employee_profile_change_requests` models submitted/reviewed status and requested changes. {GitHub Copilot/gpt-5.5}
 - [x] Add import checks that flag employees missing account-ready email/login identifiers before activation. Employee account access provisioning derives login/email explicitly and leaves access pending until identifiers are present/confirmed. {GitHub Copilot/gpt-5.5}
 
 ### Phase 6 — Calendar, leave, attendance, and organization chart readiness

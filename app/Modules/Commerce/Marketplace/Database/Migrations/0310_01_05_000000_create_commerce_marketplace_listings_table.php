@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -28,7 +29,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['company_id', 'channel', 'external_listing_id'], 'commerce_marketplace_listing_external_unique');
-            $table->index(['company_id', 'channel', 'external_sku']);
+            $table->index(['company_id', 'channel', 'external_sku'], 'commerce_marketplace_listings_company_channel_sku_index');
             $table->index(['company_id', 'item_id']);
         });
     }

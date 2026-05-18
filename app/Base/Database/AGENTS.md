@@ -130,6 +130,17 @@ php artisan migrate:fresh --seed --dev
 
 The admin UI at `admin/system/database-tables` (local env only) also lets you toggle stability per-table.
 
+## PostgreSQL Identifier Limit
+
+BLB replaces Laravel's PostgreSQL connection with `App\Base\Database\Postgres\GuardedPostgresConnection`, which rejects SQL containing quoted identifiers over PostgreSQL's 63-byte limit before the statement reaches the database.
+
+Use explicit short names for long indexes and constraints:
+
+```php
+$table->unique(['long_column_a', 'long_column_b'], 'short_unique_name');
+$table->foreignId('long_related_id')->constrained('related_table', indexName: 'short_fk_name');
+```
+
 ## Agent Guardrails
 
 - **NEVER wipe the entire database as a shortcut** (local or otherwise). BLB enforces **table stability** so `migrate:fresh` only rebuilds tables explicitly marked unstable.

@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -37,7 +38,7 @@ return new class extends Migration
 
             // Composite indexes for common queries
             $table->index(['company_id', 'relationship_type_id']);
-            $table->index(['related_company_id', 'relationship_type_id']);
+            $table->index(['related_company_id', 'relationship_type_id'], 'company_relationships_related_type_index');
             $table->index(['effective_from', 'effective_to']);
 
             // Unique constraint to prevent duplicate relationships

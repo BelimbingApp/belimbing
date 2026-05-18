@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database;
 
 use App\Base\Database\Console\Commands\BackupCommand;
@@ -11,10 +12,12 @@ use App\Base\Database\Console\Commands\RollbackCommand;
 use App\Base\Database\Console\Commands\StatusCommand;
 use App\Base\Database\Console\Commands\TableUnstableCommand;
 use App\Base\Database\Console\Commands\WipeCommand;
+use App\Base\Database\Postgres\GuardedPostgresConnection;
 use App\Base\Database\Services\Backup\Encryption\AppKeyEncryption;
 use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
 use App\Base\Database\Services\Backup\Encryption\NoneEncryption;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Console\Migrations\FreshCommand as LaravelFreshCommand;
 use Illuminate\Database\Console\Migrations\MigrateCommand as LaravelMigrateCommand;
 use Illuminate\Database\Console\Migrations\RefreshCommand as LaravelRefreshCommand;
@@ -33,6 +36,13 @@ class ServiceProvider extends BaseServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/Config/backup.php', 'backup');
+
+        Connection::resolverFor('pgsql', fn ($connection, string $database = '', string $prefix = '', array $config = []) => new GuardedPostgresConnection(
+            $connection,
+            $database,
+            $prefix,
+            $config,
+        ));
 
         $this->app->singleton(EncryptionModeRegistry::class, function () {
             $registry = new EncryptionModeRegistry;

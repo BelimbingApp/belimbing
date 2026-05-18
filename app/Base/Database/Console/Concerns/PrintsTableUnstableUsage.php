@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Console\Concerns;
 
 trait PrintsTableUnstableUsage
@@ -9,7 +10,8 @@ trait PrintsTableUnstableUsage
         $this->line('');
         $this->line('    <comment>php artisan blb:table:unstable table_name</comment>     Mark one table');
         $this->line('    <comment>php artisan blb:table:unstable table_a table_b</comment> Mark multiple tables');
-        $this->line('    <comment>php artisan blb:table:unstable ai_*</comment>           Trailing wildcard (prefix match)');
+        $this->line('    <comment>php artisan blb:table:unstable ai_*</comment>           Prefix wildcard');
+        $this->line('    <comment>php artisan blb:table:unstable people_*_entitlement_*</comment> Multi-part wildcard');
         $this->line('');
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -38,7 +39,7 @@ return new class extends Migration
             $table->timestamp('delivered_at')->nullable();
             $table->timestamps();
 
-            $table->index(['conversation_id', 'direction']);
+            $table->index(['conversation_id', 'direction'], 'ai_channel_messages_conversation_direction_index');
             $table->index('delivery_status');
         });
     }

@@ -1,0 +1,16 @@
+<?php
+
+namespace App\Base\Database\Postgres;
+
+use Closure;
+use Illuminate\Database\PostgresConnection;
+
+final class GuardedPostgresConnection extends PostgresConnection
+{
+    protected function run($query, $bindings, Closure $callback)
+    {
+        PostgresIdentifierGuard::assertSqlIdentifiersWithinLimit((string) $query);
+
+        return parent::run($query, $bindings, $callback);
+    }
+}
