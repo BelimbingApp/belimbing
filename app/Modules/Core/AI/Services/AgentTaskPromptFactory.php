@@ -1,13 +1,14 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
-use App\Base\Foundation\Enums\BlbErrorCode;
 use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Workflow\Models\StatusHistory;
 use App\Modules\Core\AI\DTO\PromptPackage;
 use App\Modules\Core\AI\DTO\PromptSection;
 use App\Modules\Core\AI\DTO\WorkspaceManifest;
 use App\Modules\Core\AI\DTO\WorkspaceValidationResult;
+use App\Modules\Core\AI\Enums\AIErrorCode;
 use App\Modules\Core\AI\Enums\PromptSectionType;
 use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
 use App\Modules\Core\AI\Models\OperationDispatch;
@@ -56,7 +57,7 @@ class AgentTaskPromptFactory
 
             throw new BlbConfigurationException(
                 'Agent task workspace validation failed: '.implode('; ', $validation->errors),
-                BlbErrorCode::WORKSPACE_VALIDATION_FAILED,
+                AIErrorCode::WORKSPACE_VALIDATION_FAILED,
                 ['errors' => $validation->errors, 'employee_id' => $dispatch->employee_id],
             );
         }

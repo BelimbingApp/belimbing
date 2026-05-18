@@ -1,12 +1,13 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Workspace;
 
-use App\Base\Foundation\Enums\BlbErrorCode;
 use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Modules\Core\AI\DTO\PromptPackage;
 use App\Modules\Core\AI\DTO\PromptSection;
 use App\Modules\Core\AI\DTO\WorkspaceManifest;
 use App\Modules\Core\AI\DTO\WorkspaceValidationResult;
+use App\Modules\Core\AI\Enums\AIErrorCode;
 use App\Modules\Core\AI\Enums\PromptSectionType;
 use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
 
@@ -103,7 +104,7 @@ class PromptPackageFactory
         if (! is_string($content)) {
             throw new BlbConfigurationException(
                 "Failed to read workspace file: {$path} (slot: {$slot->value})",
-                BlbErrorCode::WORKSPACE_FILE_UNREADABLE,
+                AIErrorCode::WORKSPACE_FILE_UNREADABLE,
                 ['path' => $path, 'slot' => $slot->value],
             );
         }

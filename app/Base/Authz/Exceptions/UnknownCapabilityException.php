@@ -1,7 +1,8 @@
 <?php
+
 namespace App\Base\Authz\Exceptions;
 
-use App\Base\Foundation\Enums\BlbErrorCode;
+use App\Base\Authz\Enums\AuthzErrorCode;
 use App\Base\Foundation\Exceptions\BlbDataContractException;
 
 final class UnknownCapabilityException extends BlbDataContractException
@@ -10,7 +11,7 @@ final class UnknownCapabilityException extends BlbDataContractException
     {
         return new self(
             'Unknown capability ['.$capability.'].',
-            BlbErrorCode::AUTHZ_UNKNOWN_CAPABILITY,
+            AuthzErrorCode::AUTHZ_UNKNOWN_CAPABILITY,
             ['capability' => $capability],
         );
     }

@@ -1,9 +1,9 @@
 <?php
 
+use App\Base\Database\Enums\DatabaseErrorCode;
 use App\Base\Database\Exceptions\PostgresIdentifierTooLongException;
 use App\Base\Database\Postgres\GuardedPostgresConnection;
 use App\Base\Database\Postgres\PostgresIdentifierGuard;
-use App\Base\Foundation\Enums\BlbErrorCode;
 
 it('allows PostgreSQL identifiers at the byte limit', function (): void {
     $identifier = str_repeat('a', PostgresIdentifierGuard::MAX_IDENTIFIER_BYTES);
@@ -23,7 +23,7 @@ it('rejects PostgreSQL identifiers over the byte limit', function (): void {
             'alter table "people" add constraint "'.$identifier.'" unique ("id")'
         );
     } catch (PostgresIdentifierTooLongException $exception) {
-        expect($exception->reasonCode)->toBe(BlbErrorCode::DATABASE_IDENTIFIER_TOO_LONG)
+        expect($exception->reasonCode)->toBe(DatabaseErrorCode::DATABASE_IDENTIFIER_TOO_LONG)
             ->and($exception->context)->toBe([
                 'identifier' => $identifier,
                 'byte_length' => PostgresIdentifierGuard::MAX_IDENTIFIER_BYTES + 1,
