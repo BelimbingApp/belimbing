@@ -29,6 +29,50 @@ use Livewire\Livewire;
 const ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME = 'Office Olive';
 const ATTENDANCE_POLICY_PRODUCTION_EMPLOYEE_NAME = 'Production Pat';
 
+function attendancePolicyGroupForOperationsTest(Company $company, array $attributes = []): AttendancePolicyGroup
+{
+    return AttendancePolicyGroup::query()->create(array_replace([
+        'company_id' => $company->id,
+        'code' => 'STD',
+        'name' => 'Standard',
+        'effective_from' => '2026-01-01',
+    ], $attributes));
+}
+
+function attendanceShiftTemplateForOperationsTest(Company $company, array $attributes = []): AttendanceShiftTemplate
+{
+    return AttendanceShiftTemplate::query()->create(array_replace([
+        'company_id' => $company->id,
+        'code' => 'DAY',
+        'name' => 'Day Shift',
+        'starts_at' => '08:00:00',
+        'ends_at' => '17:00:00',
+        'expected_work_minutes' => 480,
+        'effective_from' => '2026-01-01',
+    ], $attributes));
+}
+
+function attendanceRosterAssignmentForOperationsTest(
+    Company $company,
+    Employee $employee,
+    AttendanceShiftTemplate $shift,
+    AttendancePolicyGroup $policyGroup,
+    array $attributes = [],
+): AttendanceRosterAssignment {
+    return AttendanceRosterAssignment::query()->create(array_replace([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => '2026-09-01',
+        'effective_to' => '2026-09-01',
+        'publish_state' => 'draft',
+        'lock_state' => 'open',
+        'revision' => 1,
+        'exceptions' => [],
+    ], $attributes));
+}
+
 it('returns stable validation findings for unsafe attendance policy setup', function (): void {
     $company = Company::factory()->minimal()->create();
     $policyGroup = AttendancePolicyGroup::query()->create([
@@ -554,21 +598,8 @@ it('lets managers create roster assignments from the guided roster builder', fun
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
     $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day Shift',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
 
     $this->actingAs($user);
 
@@ -674,33 +705,13 @@ it('skips overlapping employees while saving valid bulk roster assignments', fun
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
     $employees = Employee::factory()->active()->count(2)->create(['company_id' => $company->id]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day Shift',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
 
-    AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employees[0]->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
+    attendanceRosterAssignmentForOperationsTest($company, $employees[0], $shift, $policyGroup, [
         'effective_from' => '2026-07-01',
         'effective_to' => '2026-07-31',
         'publish_state' => 'published',
-        'lock_state' => 'open',
-        'revision' => 1,
-        'exceptions' => [],
     ]);
 
     $this->actingAs($user);
@@ -729,43 +740,20 @@ it('shows saved and unsaved roster assignments in the roster grid', function ():
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
     $employees = Employee::factory()->active()->count(2)->create(['company_id' => $company->id]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
-    $dayShift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day Shift',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-    $nightShift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $dayShift = attendanceShiftTemplateForOperationsTest($company);
+    $nightShift = attendanceShiftTemplateForOperationsTest($company, [
         'code' => 'NIGHT',
         'name' => 'Night Shift',
         'starts_at' => '20:00:00',
         'ends_at' => '05:00:00',
         'crosses_midnight' => true,
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
     ]);
 
-    AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employees[0]->id,
-        'attendance_shift_template_id' => $dayShift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
+    attendanceRosterAssignmentForOperationsTest($company, $employees[0], $dayShift, $policyGroup, [
         'effective_from' => '2026-08-01',
         'effective_to' => '2026-08-07',
         'publish_state' => 'published',
-        'lock_state' => 'open',
-        'revision' => 1,
-        'exceptions' => [],
     ]);
 
     $this->actingAs($user);
@@ -845,21 +833,8 @@ it('applies a per-cell shift override from list mode without requiring form stat
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
     $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day Shift',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
 
     $thisWeekStart = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY);
     $targetDate = $thisWeekStart->addDay()->toDateString();
@@ -908,42 +883,18 @@ it('edits a roster assignment in place, bumping the revision and flipping back t
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
     $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard Attendance',
-        'effective_from' => '2026-01-01',
-    ]);
-    $dayShift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day Shift',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-    $eveShift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
+    $policyGroup = attendancePolicyGroupForOperationsTest($company, ['name' => 'Standard Attendance']);
+    $dayShift = attendanceShiftTemplateForOperationsTest($company);
+    $eveShift = attendanceShiftTemplateForOperationsTest($company, [
         'code' => 'EVE',
         'name' => 'Evening Shift',
         'starts_at' => '14:00:00',
         'ends_at' => '22:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
     ]);
 
-    $assignment = AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $dayShift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
+    $assignment = attendanceRosterAssignmentForOperationsTest($company, $employee, $dayShift, $policyGroup, [
         'effective_from' => '2026-09-01',
         'effective_to' => '2026-09-30',
-        'publish_state' => 'draft',
-        'lock_state' => 'open',
-        'revision' => 1,
-        'exceptions' => [],
     ]);
 
     $this->actingAs($user);
@@ -996,35 +947,15 @@ it('opens to the calendar as the list-mode primary surface and supports week nav
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
     $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard Attendance',
-        'effective_from' => '2026-01-01',
-    ]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day Shift',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
+    $policyGroup = attendancePolicyGroupForOperationsTest($company, ['name' => 'Standard Attendance']);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
 
     $thisWeekStart = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY);
 
-    AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
+    attendanceRosterAssignmentForOperationsTest($company, $employee, $shift, $policyGroup, [
         'effective_from' => $thisWeekStart->toDateString(),
         'effective_to' => $thisWeekStart->addDays(6)->toDateString(),
         'publish_state' => 'published',
-        'lock_state' => 'open',
-        'revision' => 1,
-        'exceptions' => [],
     ]);
 
     $this->actingAs($user);
@@ -1049,30 +980,14 @@ it('supports roster cell overrides and resolves them into attendance days', func
     $company = Company::query()->findOrFail($user->company_id);
     $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
     $otherCompany = Company::factory()->minimal()->create();
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
-    $dayShift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day Shift',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-    $nightShift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $dayShift = attendanceShiftTemplateForOperationsTest($company);
+    $nightShift = attendanceShiftTemplateForOperationsTest($company, [
         'code' => 'NIGHT',
         'name' => 'Night Shift',
         'starts_at' => '20:00:00',
         'ends_at' => '05:00:00',
         'crosses_midnight' => true,
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
     ]);
     $foreignPolicyGroup = AttendancePolicyGroup::query()->create([
         'company_id' => $otherCompany->id,
@@ -1080,17 +995,10 @@ it('supports roster cell overrides and resolves them into attendance days', func
         'name' => 'Foreign',
         'effective_from' => '2026-01-01',
     ]);
-    AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $dayShift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
+    attendanceRosterAssignmentForOperationsTest($company, $employee, $dayShift, $policyGroup, [
         'effective_from' => '2026-08-01',
         'effective_to' => '2026-08-07',
         'publish_state' => 'published',
-        'lock_state' => 'open',
-        'revision' => 1,
-        'exceptions' => [],
     ]);
 
     $this->actingAs($user);
@@ -1106,16 +1014,10 @@ it('supports roster cell overrides and resolves them into attendance days', func
     expect($day->attendance_shift_template_id)->toBe($nightShift->id);
 
     $tamperedEmployee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $tamperedAssignment = AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $tamperedEmployee->id,
-        'attendance_shift_template_id' => $dayShift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
+    $tamperedAssignment = attendanceRosterAssignmentForOperationsTest($company, $tamperedEmployee, $dayShift, $policyGroup, [
         'effective_from' => '2026-08-01',
         'effective_to' => '2026-08-07',
         'publish_state' => 'published',
-        'lock_state' => 'open',
-        'revision' => 1,
         'exceptions' => [[
             'date' => '2026-08-04',
             'attendance_shift_template_id' => $nightShift->id,
@@ -1135,21 +1037,8 @@ it('rejects cell overrides for employees and roster dimensions outside the curre
     $company = Company::query()->findOrFail($user->company_id);
     $otherCompany = Company::factory()->minimal()->create();
     $foreignEmployee = Employee::factory()->active()->create(['company_id' => $otherCompany->id]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day Shift',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
 
     $this->actingAs($user);
 
@@ -1170,32 +1059,11 @@ it('imports spreadsheet roster rows and publishes reviewed drafts with notificat
     $company = Company::query()->findOrFail($user->company_id);
     $employee = Employee::factory()->active()->create(['company_id' => $company->id, 'employee_number' => 'EMP-SPREAD']);
     $otherEmployee = Employee::factory()->active()->create(['company_id' => $company->id, 'employee_number' => 'EMP-OTHER']);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day Shift',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-    $unselectedDraft = AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $otherEmployee->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
+    $unselectedDraft = attendanceRosterAssignmentForOperationsTest($company, $otherEmployee, $shift, $policyGroup, [
         'effective_from' => '2026-09-01',
         'effective_to' => '2026-09-01',
-        'publish_state' => 'draft',
-        'lock_state' => 'open',
-        'revision' => 1,
-        'exceptions' => [],
     ]);
 
     $this->actingAs($user);
@@ -1232,32 +1100,11 @@ it('imports spreadsheet roster rows and publishes reviewed drafts with notificat
 it('emits stable roster operator JSON from the attendance roster command', function (): void {
     $company = Company::factory()->minimal()->create();
     $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-    $policyGroup = AttendancePolicyGroup::query()->create([
-        'company_id' => $company->id,
-        'code' => 'STD',
-        'name' => 'Standard',
-        'effective_from' => '2026-01-01',
-    ]);
-    $shift = AttendanceShiftTemplate::query()->create([
-        'company_id' => $company->id,
-        'code' => 'DAY',
-        'name' => 'Day Shift',
-        'starts_at' => '08:00:00',
-        'ends_at' => '17:00:00',
-        'expected_work_minutes' => 480,
-        'effective_from' => '2026-01-01',
-    ]);
-    AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
+    attendanceRosterAssignmentForOperationsTest($company, $employee, $shift, $policyGroup, [
         'effective_from' => '2026-09-01',
         'effective_to' => '2026-09-01',
-        'publish_state' => 'draft',
-        'lock_state' => 'open',
-        'revision' => 1,
-        'exceptions' => [],
     ]);
 
     Artisan::call('blb:attendance:roster', [

@@ -74,7 +74,7 @@
                                         @endif
                                     </x-ui.day-tile>
                                 </button>
-                                <div x-show="open" x-cloak @click.outside="open = false" x-transition.origin.top.left class="absolute left-1/2 z-30 mt-1 w-56 -translate-x-1/2 rounded-2xl border border-border-default bg-surface-card p-3 text-left shadow-lg" role="region" aria-label="{{ __('Override :date', ['date' => $day['date']]) }}">
+                                <section x-show="open" x-cloak @click.outside="open = false" x-transition.origin.top.left class="absolute left-1/2 z-30 mt-1 w-56 -translate-x-1/2 rounded-2xl border border-border-default bg-surface-card p-3 text-left shadow-lg" aria-label="{{ __('Override :date', ['date' => $day['date']]) }}">
                                     <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Override') }} {{ \Carbon\CarbonImmutable::parse($day['date'])->format('M j') }}</div>
                                     <div class="mt-2 space-y-2">
                                         <label class="block text-[11px] font-semibold uppercase tracking-wider text-muted">
@@ -100,7 +100,7 @@
                                         <button type="button" @click="open = false" class="text-xs font-medium text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ __('Cancel') }}</button>
                                         <button type="button" @click="$wire.saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}', shift, policy).then(() => { open = false })" :disabled="! shift || ! policy" class="rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-on disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1">{{ __('Save') }}</button>
                                     </div>
-                                </div>
+                                </section>
                             @else
                                 <x-ui.day-tile
                                     :day-type="$dayType"
