@@ -9,7 +9,9 @@ final class GuardedPostgresConnection extends PostgresConnection
 {
     protected function run($query, $bindings, Closure $callback)
     {
-        PostgresIdentifierGuard::assertSqlIdentifiersWithinLimit((string) $query);
+        if (PostgresIdentifierGuard::shouldInspectSql((string) $query)) {
+            PostgresIdentifierGuard::assertSqlIdentifiersWithinLimit((string) $query);
+        }
 
         return parent::run($query, $bindings, $callback);
     }

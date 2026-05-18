@@ -132,7 +132,7 @@ The admin UI at `admin/system/database-tables` (local env only) also lets you to
 
 ## PostgreSQL Identifier Limit
 
-BLB replaces Laravel's PostgreSQL connection with `App\Base\Database\Postgres\GuardedPostgresConnection`, which rejects SQL containing quoted identifiers over PostgreSQL's 63-byte limit before the statement reaches the database.
+BLB replaces Laravel's PostgreSQL connection with `App\Base\Database\Postgres\GuardedPostgresConnection`, which rejects schema-changing SQL containing identifiers over PostgreSQL's 63-byte limit before the statement reaches the database.
 
 Use explicit short names for long indexes and constraints:
 

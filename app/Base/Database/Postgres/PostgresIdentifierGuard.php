@@ -8,6 +8,15 @@ final class PostgresIdentifierGuard
 {
     public const MAX_IDENTIFIER_BYTES = 63;
 
+    /**
+     * Runtime guarding is limited to schema-changing statements; normal
+     * browsing queries should not pay the identifier parser cost.
+     */
+    public static function shouldInspectSql(string $sql): bool
+    {
+        return in_array(self::firstKeyword($sql), ['alter', 'create', 'drop'], true);
+    }
+
     public static function assertSqlIdentifiersWithinLimit(string $sql): void
     {
         foreach (self::identifiers($sql) as $identifier) {
@@ -23,6 +32,39 @@ final class PostgresIdentifierGuard
         }
     }
 
+    private static function firstKeyword(string $sql): string
+    {
+        $length = strlen($sql);
+        $offset = 0;
+
+        while ($offset < $length) {
+            $char = $sql[$offset];
+
+            if (ctype_space($char)) {
+                $offset++;
+
+                continue;
+            }
+
+            $commentEnd = self::skipComment($sql, $offset, $length);
+            if ($commentEnd !== null) {
+                $offset = $commentEnd;
+
+                continue;
+            }
+
+            if (self::isBareIdentifierStart($char)) {
+                [$keyword] = self::readBareIdentifier($sql, $offset, $length);
+
+                return strtolower($keyword);
+            }
+
+            return '';
+        }
+
+        return '';
+    }
+
     /**
      * @return list<string>
      */
@@ -34,18 +76,10 @@ final class PostgresIdentifierGuard
 
         while ($offset < $length) {
             $char = $sql[$offset];
-            $next = $sql[$offset + 1] ?? '';
 
-            if ($char === '-' && $next === '-') {
-                $newline = strpos($sql, "\n", $offset + 2);
-                $offset = $newline === false ? $length : $newline + 1;
-
-                continue;
-            }
-
-            if ($char === '/' && $next === '*') {
-                $end = strpos($sql, '*/', $offset + 2);
-                $offset = $end === false ? $length : $end + 2;
+            $commentEnd = self::skipComment($sql, $offset, $length);
+            if ($commentEnd !== null) {
+                $offset = $commentEnd;
 
                 continue;
             }
@@ -82,6 +116,26 @@ final class PostgresIdentifierGuard
         }
 
         return $identifiers;
+    }
+
+    private static function skipComment(string $sql, int $offset, int $length): ?int
+    {
+        $char = $sql[$offset];
+        $next = $sql[$offset + 1] ?? '';
+
+        if ($char === '-' && $next === '-') {
+            $newline = strpos($sql, "\n", $offset + 2);
+
+            return $newline === false ? $length : $newline + 1;
+        }
+
+        if ($char === '/' && $next === '*') {
+            $end = strpos($sql, '*/', $offset + 2);
+
+            return $end === false ? $length : $end + 2;
+        }
+
+        return null;
     }
 
     private static function skipSingleQuotedString(string $sql, int $offset, int $length): int
