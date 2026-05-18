@@ -3,8 +3,6 @@
 @php($compact = $compact ?? false)
 @php($gridIntro = $gridIntro ?? __('Existing assignments show draft or published state; rest, off, and holiday days surface from each employee\'s work calendar.'))
 @php($cellMinWidth = $compact ? 'min-w-9' : 'min-w-14')
-@php($headerMinWidth = $compact ? 'min-w-9' : 'min-w-20')
-@php($headerPadding = $compact ? 'px-0.5' : 'px-1.5')
 
 <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
     <div>
@@ -26,32 +24,7 @@
 
 <div class="mt-4 overflow-x-auto rounded-2xl border border-border-default">
     <table class="min-w-full divide-y divide-border-default text-xs">
-        <thead class="bg-surface-subtle/80">
-            <tr>
-                <th scope="col" class="sticky left-0 z-10 w-40 min-w-40 bg-surface-subtle/95 px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">
-                    {{ __('Employee') }}
-                </th>
-                @foreach ($rosterGridDays as $day)
-                    @php($isToday = $day['is_today'] ?? false)
-                    @php($isWeekend = $day['is_weekend'] ?? false)
-                    @php($isHoliday = $day['is_holiday'] ?? false)
-                    @php($headerSurface = $isHoliday ? 'bg-day-holiday' : '')
-                    @php($headerInk = match (true) {
-                        $isHoliday => 'text-day-holiday-ink',
-                        $isToday => 'text-accent',
-                        $isWeekend => 'text-muted',
-                        default => 'text-muted',
-                    })
-                    @php($dayLabel = $compact ? ($day['day_short'] ?? substr($day['day'], 0, 1)) : $day['day'])
-                    <th scope="col" class="{{ $headerSurface }} {{ $headerMinWidth }} {{ $headerPadding }} py-table-header-y text-center text-[11px] font-semibold uppercase tracking-wider {{ $headerInk }} @if($isToday) underline decoration-accent decoration-2 underline-offset-4 @endif" wire:key="roster-grid-day-header-{{ $day['date'] }}" @if($isHoliday) title="{{ __('Holiday') }}" @endif>
-                        <div>{{ $dayLabel }}</div>
-                        @if (! $compact)
-                            <div class="font-normal normal-case tracking-normal text-muted">{{ $day['label'] }}</div>
-                        @endif
-                    </th>
-                @endforeach
-            </tr>
-        </thead>
+        <x-ui.day-strip :days="$rosterGridDays" :leading-label="__('Employee')" :compact="$compact" />
         <tbody class="divide-y divide-border-default bg-surface-card">
             @forelse ($rosterGridRows as $row)
                 @php($employee = $row['employee'])
