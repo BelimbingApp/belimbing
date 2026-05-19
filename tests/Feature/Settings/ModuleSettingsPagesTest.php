@@ -1,5 +1,9 @@
 <?php
 
+const EBAY_SCOPE_INVENTORY = 'https://api.ebay.com/oauth/api_scope/sell.inventory';
+const EBAY_SCOPE_FULFILLMENT = 'https://api.ebay.com/oauth/api_scope/sell.fulfillment';
+const EBAY_SCOPE_ACCOUNT = 'https://api.ebay.com/oauth/api_scope/sell.account';
+
 use App\Base\Integration\Services\OAuthTokenStore;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
@@ -54,15 +58,15 @@ test('eBay settings page renders its setup fields and persists values', function
         ->assertDontSee('Ham auto parts');
 
     $scopes = [
-        'https://api.ebay.com/oauth/api_scope/sell.inventory',
-        'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+        EBAY_SCOPE_INVENTORY,
+        EBAY_SCOPE_FULFILLMENT,
     ];
 
     Livewire::test(EbaySettings::class)
         ->assertSet('values.marketplace__ebay__scopes', [
-            'https://api.ebay.com/oauth/api_scope/sell.inventory',
-            'https://api.ebay.com/oauth/api_scope/sell.account',
-            'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+            EBAY_SCOPE_INVENTORY,
+            EBAY_SCOPE_ACCOUNT,
+            EBAY_SCOPE_FULFILLMENT,
         ]);
 
     Livewire::test(EbaySettings::class)
@@ -94,7 +98,7 @@ test('eBay settings normalizes legacy whitespace scopes into checkbox values', f
 
     app(SettingsService::class)->set(
         'marketplace.ebay.scopes',
-        "https://api.ebay.com/oauth/api_scope/sell.inventory\nhttps://api.ebay.com/oauth/api_scope/sell.fulfillment",
+        EBAY_SCOPE_INVENTORY."\n".EBAY_SCOPE_FULFILLMENT,
         $scope,
     );
 
@@ -105,8 +109,8 @@ test('eBay settings normalizes legacy whitespace scopes into checkbox values', f
         ->assertHasNoErrors();
 
     expect(app(SettingsService::class)->get('marketplace.ebay.scopes', scope: $scope))->toBe([
-        'https://api.ebay.com/oauth/api_scope/sell.inventory',
-        'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+        EBAY_SCOPE_INVENTORY,
+        EBAY_SCOPE_FULFILLMENT,
     ]);
 });
 
@@ -138,7 +142,7 @@ test('eBay OAuth authorize URL uses the eBay RuName instead of the callback URL'
     $settings->set('marketplace.ebay.client_id', 'client-oauth-url', $scope);
     $settings->set('marketplace.ebay.client_secret', 'secret-oauth-url', $scope, encrypted: true);
     $settings->set('marketplace.ebay.ru_name', 'KiatNg-Belimbin-SBX-runame', $scope);
-    $settings->set('marketplace.ebay.scopes', ['https://api.ebay.com/oauth/api_scope/sell.account'], $scope);
+    $settings->set('marketplace.ebay.scopes', [EBAY_SCOPE_ACCOUNT], $scope);
 
     $this->actingAs($user);
 
@@ -161,8 +165,8 @@ test('eBay settings connection test verifies the saved OAuth grant against a saf
     $settings->set('marketplace.ebay.client_secret', 'secret-connection-test', $scope, encrypted: true);
     $settings->set('marketplace.ebay.ru_name', 'KiatNg-Belimbin-SBX-runame', $scope);
     $settings->set('marketplace.ebay.scopes', [
-        'https://api.ebay.com/oauth/api_scope/sell.account',
-        'https://api.ebay.com/oauth/api_scope/sell.inventory',
+        EBAY_SCOPE_ACCOUNT,
+        EBAY_SCOPE_INVENTORY,
     ], $scope);
 
     app(OAuthTokenStore::class)->persist(
@@ -174,8 +178,8 @@ test('eBay settings connection test verifies the saved OAuth grant against a saf
             'expires_in' => 3600,
         ],
         [
-            'https://api.ebay.com/oauth/api_scope/sell.account',
-            'https://api.ebay.com/oauth/api_scope/sell.inventory',
+            EBAY_SCOPE_ACCOUNT,
+            EBAY_SCOPE_INVENTORY,
         ],
     );
 
@@ -212,8 +216,8 @@ test('eBay settings connection test explains when OAuth has not been connected y
     $settings->set('marketplace.ebay.client_secret', 'secret-without-oauth', $scope, encrypted: true);
     $settings->set('marketplace.ebay.ru_name', 'KiatNg-Belimbin-SBX-runame', $scope);
     $settings->set('marketplace.ebay.scopes', [
-        'https://api.ebay.com/oauth/api_scope/sell.account',
-        'https://api.ebay.com/oauth/api_scope/sell.inventory',
+        EBAY_SCOPE_ACCOUNT,
+        EBAY_SCOPE_INVENTORY,
     ], $scope);
 
     Http::fake();
