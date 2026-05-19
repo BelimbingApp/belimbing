@@ -60,7 +60,7 @@ test('catalog workbench can create categories templates and attributes', functio
 
     $this->get(route('commerce.catalog.index'))
         ->assertOk()
-        ->assertSee('Catalog Workbench');
+        ->assertSee('Catalog');
 
     Livewire::test(Index::class)
         ->set('categoryName', CATALOG_TEST_CATEGORY_NAME)
@@ -137,6 +137,19 @@ test('catalog workbench supports searching and inline editing catalog rows', fun
         'code' => 'paint_code',
         'name' => 'Paint Code',
     ]);
+    Attribute::factory()->create([
+        'company_id' => $user->company_id,
+        'category_id' => $category->id,
+        'product_template_id' => null,
+        'code' => 'condition_grade',
+        'name' => 'Condition Grade',
+        'is_required' => true,
+    ]);
+    Item::factory()->create([
+        'company_id' => $user->company_id,
+        'category_id' => $category->id,
+        'product_template_id' => $template->id,
+    ]);
 
     Livewire::test(Index::class)
         ->assertSee(CATALOG_TEST_ATTRIBUTE_NAME)
@@ -157,10 +170,15 @@ test('catalog workbench supports searching and inline editing catalog rows', fun
         ->assertSet('sortDir', 'desc')
         ->call('saveCategoryField', $category->id, 'name', 'Lighting Parts')
         ->call('saveCategoryField', $category->id, 'sort_order', '12')
+        ->set('search', '')
         ->call('setTab', 'templates')
         ->assertSet('sortBy', 'name')
         ->call('sort', 'category_name')
         ->assertSet('sortBy', 'category_name')
+        ->assertSee('Template attrs')
+        ->assertSee('Manage attributes')
+        ->assertSee('Create item')
+        ->assertSee('3')
         ->call('saveTemplateField', $template->id, 'category_id', (string) $replacementCategory->id)
         ->call('toggleTemplateActive', $template->id)
         ->call('setTab', 'attributes')
@@ -181,4 +199,28 @@ test('catalog workbench supports searching and inline editing catalog rows', fun
         ->type->toBe(Attribute::TYPE_SELECT)
         ->options->toBe(['Used', 'New'])
         ->is_required->toBeTrue();
+});
+
+test('catalog template actions focus attribute work on the selected template', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $category = Category::factory()->create([
+        'company_id' => $user->company_id,
+        'name' => CATALOG_TEST_CATEGORY_NAME,
+    ]);
+    $template = ProductTemplate::factory()
+        ->forCategory($category)
+        ->create(['name' => CATALOG_TEST_TEMPLATE_NAME]);
+
+    Livewire::test(Index::class)
+        ->call('setTab', 'templates')
+        ->call('manageTemplateAttributes', $template->id)
+        ->assertSet('tab', 'attributes')
+        ->assertSet('filterTemplateId', (string) $template->id)
+        ->call('addTemplateAttribute', $template->id)
+        ->assertSet('tab', 'attributes')
+        ->assertSet('attributeCategoryId', $category->id)
+        ->assertSet('attributeProductTemplateId', $template->id)
+        ->assertSet('showCreateModal', true);
 });

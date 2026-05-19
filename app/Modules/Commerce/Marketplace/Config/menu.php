@@ -1,4 +1,5 @@
 <?php
+
 return [
     'items' => [
         [
@@ -17,11 +18,11 @@ return [
         ],
         [
             'id' => 'commerce.marketplace.ebay-setting',
-            'label' => 'eBay Settings',
+            'label' => 'eBay Setup',
             'icon' => 'heroicon-o-cog-6-tooth',
             'route' => 'commerce.marketplace.ebay.settings',
             'permission' => 'commerce.marketplace.manage',
-            'parent' => 'commerce.marketplace',
+            'parent' => 'commerce.settings',
         ],
     ],
 ];

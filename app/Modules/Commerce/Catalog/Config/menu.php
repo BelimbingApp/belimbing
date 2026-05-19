@@ -1,9 +1,10 @@
 <?php
+
 return [
     'items' => [
         [
             'id' => 'commerce.catalog',
-            'label' => 'Catalog Workbench',
+            'label' => 'Catalog',
             'icon' => 'heroicon-o-rectangle-stack',
             'route' => 'commerce.catalog.index',
             'permission' => 'commerce.catalog.view',

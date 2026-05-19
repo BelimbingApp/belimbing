@@ -68,6 +68,27 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                             </x-ui.edit-in-place.select>
 
                             <x-ui.edit-in-place.text
+                                :label="__('Qty')"
+                                :value="$item->quantity_on_hand"
+                                field="quantity_on_hand"
+                                save-method="saveField"
+                                inputmode="numeric"
+                                tabular
+                                :help="__('Units available for this SKU or tracked item. Use 1 for one-off used parts.')"
+                                :error="$errors->first('quantity_on_hand')"
+                            />
+
+                            <x-ui.edit-in-place.text
+                                :label="__('Storage location')"
+                                :value="$item->storage_location"
+                                field="storage_location"
+                                save-method="saveField"
+                                :empty="__('No location set.')"
+                                :help="__('Internal place to find this stock.')"
+                                :error="$errors->first('storage_location')"
+                            />
+
+                            <x-ui.edit-in-place.text
                                 :label="__('Unit Cost')"
                                 :value="$this->formatMoneyInput($item->unit_cost_amount)"
                                 :display="$this->formatMoney($item->unit_cost_amount, $item->currency_code)"

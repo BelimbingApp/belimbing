@@ -3,11 +3,12 @@
 use App\Base\Integration\Services\OAuthTokenStore;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
-use App\Modules\Commerce\Inventory\Livewire\Settings as InventorySettings;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConnectionTester;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings as EbaySettings;
+use App\Modules\Commerce\Settings\Livewire\Settings as CommerceSettings;
+use App\Modules\Core\Geonames\Models\Country;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -49,7 +50,7 @@ test('eBay settings page renders its setup fields and persists values', function
         ->assertSee('Sell Inventory')
         ->assertSee('User Tokens')
         ->assertSee('Seller permissions shown on eBay consent')
-        ->assertDontSee('Commerce defaults')
+        ->assertDontSee('Commerce Settings')
         ->assertDontSee('Ham auto parts');
 
     $scopes = [
@@ -230,18 +231,31 @@ test('eBay settings connection test explains when OAuth has not been connected y
     Http::assertNothingSent();
 });
 
-test('inventory settings page renders only its own group and persists the default currency', function (): void {
+test('commerce settings page renders only its own group and persists the default currency', function (): void {
     $user = createAdminUser();
+    Country::query()->create([
+        'iso' => 'US',
+        'iso3' => 'USA',
+        'iso_numeric' => '840',
+        'country' => 'United States',
+        'population' => 0,
+        'continent' => 'NA',
+        'currency_code' => 'USD',
+        'currency_name' => 'US Dollar',
+    ]);
+
     $this->actingAs($user);
 
-    $this->get(route('commerce.inventory.settings'))
+    $this->get(route('commerce.settings'))
         ->assertOk()
-        ->assertSee('Commerce defaults')
+        ->assertSee('Commerce Settings')
         ->assertSee('Default currency')
+        ->assertSee('US Dollar (USD)')
+        ->assertSee('Options come from Geonames country data')
         ->assertDontSee('OAuth app credentials')
         ->assertDontSee('Ham auto parts');
 
-    Livewire::test(InventorySettings::class)
+    Livewire::test(CommerceSettings::class)
         ->set('values.commerce__default_currency_code', 'usd')
         ->call('save')
         ->assertHasNoErrors();

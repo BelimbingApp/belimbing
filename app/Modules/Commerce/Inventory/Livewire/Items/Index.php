@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Inventory\Livewire\Items;
 
 use App\Base\Foundation\Livewire\SearchablePaginatedList;
@@ -24,6 +25,8 @@ class Index extends SearchablePaginatedList
             'sku' => 'commerce_inventory_items.sku',
             'title' => 'commerce_inventory_items.title',
             'status' => 'commerce_inventory_items.status',
+            'quantity_on_hand' => 'commerce_inventory_items.quantity_on_hand',
+            'storage_location' => 'commerce_inventory_items.storage_location',
             'unit_cost_amount' => 'commerce_inventory_items.unit_cost_amount',
             'target_price_amount' => 'commerce_inventory_items.target_price_amount',
             'created_at' => 'commerce_inventory_items.created_at',
@@ -36,6 +39,8 @@ class Index extends SearchablePaginatedList
             'sku' => 'asc',
             'title' => 'asc',
             'status' => 'asc',
+            'quantity_on_hand' => 'desc',
+            'storage_location' => 'asc',
             'unit_cost_amount' => 'asc',
             'target_price_amount' => 'asc',
             'created_at' => 'desc',
@@ -74,7 +79,8 @@ class Index extends SearchablePaginatedList
             $builder->where('sku', 'like', '%'.$search.'%')
                 ->orWhere('title', 'like', '%'.$search.'%')
                 ->orWhere('notes', 'like', '%'.$search.'%')
-                ->orWhere('status', 'like', '%'.$search.'%');
+                ->orWhere('status', 'like', '%'.$search.'%')
+                ->orWhere('storage_location', 'like', '%'.$search.'%');
         });
     }
 }

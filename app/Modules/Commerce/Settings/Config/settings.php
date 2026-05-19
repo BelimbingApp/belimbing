@@ -1,18 +1,19 @@
 <?php
+
 return [
     'editable' => [
         'commerce' => [
-            'label' => 'Commerce defaults',
+            'label' => 'Commerce',
             'description' => 'Company-level defaults used by Commerce records before channel-specific data exists.',
             'fields' => [
                 [
                     'key' => 'commerce.default_currency_code',
                     'label' => 'Default currency',
-                    'type' => 'text',
+                    'type' => 'select',
                     'scope' => 'company',
                     'default' => 'MYR',
-                    'placeholder' => 'USD',
-                    'help' => 'Used when creating new Commerce records. Existing item currency snapshots are not rewritten.',
+                    'options' => [],
+                    'help' => 'Used for new Commerce records. Options come from Geonames country data.',
                     'rules' => ['required', 'string', 'size:3'],
                     'normalize' => 'uppercase',
                 ],

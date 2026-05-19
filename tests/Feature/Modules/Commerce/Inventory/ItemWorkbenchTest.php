@@ -34,14 +34,20 @@ test('authenticated users can view the inventory workbench', function (): void {
         'company_id' => $user->company_id,
         'sku' => 'ITEM-TEST123',
         'title' => 'Driver side headlight assembly',
+        'quantity_on_hand' => 3,
+        'storage_location' => 'Shelf A-03',
     ]);
 
     $this->actingAs($user)
         ->get(route('commerce.inventory.items.index'))
         ->assertOk()
-        ->assertSee('Inventory Workbench')
+        ->assertSee('Inventory')
+        ->assertSee('Qty')
+        ->assertSee('Location')
         ->assertSee('ITEM-TEST123')
-        ->assertSee('Driver side headlight assembly');
+        ->assertSee('Driver side headlight assembly')
+        ->assertSee('3')
+        ->assertSee('Shelf A-03');
 });
 
 test('item can be created from the browser workbench component', function (): void {
@@ -59,6 +65,8 @@ test('item can be created from the browser workbench component', function (): vo
         ->set('title', '2008 Honda Civic driver side headlight')
         ->set('notes', 'Light scuff on lower-left lens.')
         ->set('status', Item::STATUS_DRAFT)
+        ->set('quantityOnHand', 2)
+        ->set('storageLocation', 'Rack B-12')
         ->set('unitCostAmount', '40.00')
         ->set('targetPriceAmount', '120.00')
         ->call('store');
@@ -73,10 +81,48 @@ test('item can be created from the browser workbench component', function (): vo
         ->not()->toBeNull()
         ->and($item->company_id)->toBe($user->company_id)
         ->and($item->status)->toBe(Item::STATUS_DRAFT)
+        ->and($item->quantity_on_hand)->toBe(2)
+        ->and($item->storage_location)->toBe('Rack B-12')
         ->and($item->unit_cost_amount)->toBe(4000)
         ->and($item->target_price_amount)->toBe(12000)
         ->and($item->currency_code)->toBe('USD')
         ->and($item->sku)->toBe('HAM-HEADLIGHT-0001');
+});
+
+test('item can be created from a catalog template', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $category = Category::factory()->create([
+        'company_id' => $user->company_id,
+        'name' => 'Lighting',
+    ]);
+    $template = ProductTemplate::factory()
+        ->forCategory($category)
+        ->create(['name' => 'Headlight Assembly']);
+
+    $this->get(route('commerce.inventory.items.create', ['template_id' => $template->id]))
+        ->assertOk()
+        ->assertSee('Template')
+        ->assertSee('Headlight Assembly');
+
+    Livewire::test(Create::class)
+        ->set('sku', 'HAM-TEMPLATE-0001')
+        ->set('title', 'Template-created headlight')
+        ->set('status', Item::STATUS_DRAFT)
+        ->set('currencyCode', 'MYR')
+        ->set('productTemplateId', $template->id)
+        ->call('store')
+        ->assertHasNoErrors();
+
+    $item = Item::query()
+        ->where('sku', 'HAM-TEMPLATE-0001')
+        ->first();
+
+    expect($item)
+        ->not()->toBeNull()
+        ->category_id->toBe($category->id)
+        ->product_template_id->toBe($template->id);
 });
 
 test('item sku must be unique within a company', function (): void {
@@ -142,6 +188,8 @@ test('item facts can be updated directly from the detail page component', functi
         'sku' => 'ITEM-EDIT123',
         'title' => 'Unedited inventory item',
         'status' => Item::STATUS_DRAFT,
+        'quantity_on_hand' => 1,
+        'storage_location' => 'Old Shelf',
         'unit_cost_amount' => 4000,
         'target_price_amount' => 12000,
         'currency_code' => 'MYR',
@@ -152,6 +200,8 @@ test('item facts can be updated directly from the detail page component', functi
         ->call('saveField', 'title', 'Edited inventory item')
         ->call('saveField', 'notes', 'Updated condition notes.')
         ->call('saveField', 'status', Item::STATUS_READY)
+        ->call('saveField', 'quantity_on_hand', '5')
+        ->call('saveField', 'storage_location', 'Shelf C-09')
         ->call('saveMoneyField', 'unit_cost_amount', '45.50')
         ->call('saveMoneyField', 'target_price_amount', '130.00')
         ->call('saveField', 'currency_code', 'myr');
@@ -162,6 +212,8 @@ test('item facts can be updated directly from the detail page component', functi
         ->and($item->title)->toBe('Edited inventory item')
         ->and($item->notes)->toBe('Updated condition notes.')
         ->and($item->status)->toBe(Item::STATUS_READY)
+        ->and($item->quantity_on_hand)->toBe(5)
+        ->and($item->storage_location)->toBe('Shelf C-09')
         ->and($item->unit_cost_amount)->toBe(4550)
         ->and($item->target_price_amount)->toBe(13000)
         ->and($item->currency_code)->toBe('MYR');

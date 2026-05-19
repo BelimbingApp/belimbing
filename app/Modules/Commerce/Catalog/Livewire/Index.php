@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Catalog\Livewire;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
@@ -92,6 +93,31 @@ class Index extends Component
             $this->setTab($tab);
         }
 
+        $this->showCreateModal = true;
+    }
+
+    public function manageTemplateAttributes(int $templateId): void
+    {
+        ProductTemplate::query()
+            ->where('company_id', $this->companyId())
+            ->findOrFail($templateId);
+
+        $this->setTab('attributes');
+        $this->filterTemplateId = (string) $templateId;
+        $this->filterCategoryId = '';
+        $this->filterType = '';
+        $this->search = '';
+    }
+
+    public function addTemplateAttribute(int $templateId): void
+    {
+        $template = ProductTemplate::query()
+            ->where('company_id', $this->companyId())
+            ->findOrFail($templateId);
+
+        $this->setTab('attributes');
+        $this->attributeCategoryId = $template->category_id;
+        $this->attributeProductTemplateId = $template->id;
         $this->showCreateModal = true;
     }
 

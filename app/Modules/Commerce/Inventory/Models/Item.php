@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Inventory\Models;
 
 use App\Modules\Commerce\Catalog\Models\AttributeValue;
@@ -25,6 +26,8 @@ use Illuminate\Support\Carbon;
  * @property string $sku
  * @property string $status
  * @property string $title
+ * @property int $quantity_on_hand
+ * @property string|null $storage_location
  * @property string|null $notes
  * @property int|null $unit_cost_amount
  * @property int|null $target_price_amount
@@ -65,6 +68,8 @@ class Item extends Model
         'sku',
         'status',
         'title',
+        'quantity_on_hand',
+        'storage_location',
         'notes',
         'unit_cost_amount',
         'target_price_amount',

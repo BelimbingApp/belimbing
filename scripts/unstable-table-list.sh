@@ -11,6 +11,7 @@ php artisan blb:table:unstable \
   base_authz_principal_capabilities \
   base_integration_oauth_tokens \
   commerce_catalog_attributes \
+  commerce_inventory_items \
   commerce_marketplace_listings \
   ai_browser_sessions \
   ai_channel_conversations \

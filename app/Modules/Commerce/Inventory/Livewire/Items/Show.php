@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Inventory\Livewire\Items;
 
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -52,6 +53,10 @@ class Show extends Component
 
         if ($field === 'sku') {
             $value = strtoupper(trim((string) $value));
+        }
+
+        if ($field === 'storage_location' && trim((string) $value) === '') {
+            $value = null;
         }
 
         $this->saveValidatedField(
@@ -152,6 +157,8 @@ class Show extends Component
                     ->ignore($this->item),
             ],
             'title' => ['required', 'string', 'max:255'],
+            'quantity_on_hand' => ['required', 'integer', 'min:0', 'max:999999'],
+            'storage_location' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:5000'],
             'status' => ['required', Rule::in(Item::statuses())],
             'currency_code' => ['required', 'string', 'size:3'],

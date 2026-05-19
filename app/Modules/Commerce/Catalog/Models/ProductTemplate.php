@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Modules\Commerce\Catalog\Models;
 
 use App\Modules\Commerce\Catalog\Database\Factories\ProductTemplateFactory;
+use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Core\Company\Models\Company;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -21,6 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Company $company
  * @property-read Category|null $category
  * @property-read Collection<int, Attribute> $attributes
+ * @property-read Collection<int, Item> $items
  */
 class ProductTemplate extends Model
 {
@@ -76,5 +79,13 @@ class ProductTemplate extends Model
     public function attributes(): HasMany
     {
         return $this->hasMany(Attribute::class, 'product_template_id')->orderBy('sort_order')->orderBy('name');
+    }
+
+    /**
+     * @return HasMany<Item, $this>
+     */
+    public function items(): HasMany
+    {
+        return $this->hasMany(Item::class, 'product_template_id');
     }
 }
