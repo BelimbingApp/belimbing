@@ -49,21 +49,6 @@ class Index extends Component
         $this->resetPage('unlistedPage');
     }
 
-    public function connect(EbayOAuthService $oauth): mixed
-    {
-        $this->authorizeConnectionManage();
-
-        try {
-            session(['marketplace.ebay.oauth_return_route' => 'commerce.marketplace.ebay.index']);
-
-            return redirect()->away($oauth->authorizationUrl($this->companyId()));
-        } catch (Throwable $exception) {
-            session()->flash('error', $exception->getMessage());
-
-            return null;
-        }
-    }
-
     public function pullListings(MarketplaceChannelRegistry $channels): void
     {
         $this->authorizeSyncRun();
@@ -314,14 +299,6 @@ class Index extends Component
         }
 
         return $companyId;
-    }
-
-    private function authorizeConnectionManage(): void
-    {
-        app(AuthorizationService::class)->authorize(
-            Actor::forUser(Auth::user()),
-            'commerce.marketplace.manage',
-        );
     }
 
     private function authorizeSyncRun(): void

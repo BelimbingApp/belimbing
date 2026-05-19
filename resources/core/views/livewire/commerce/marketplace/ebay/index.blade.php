@@ -54,13 +54,15 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                     </div>
                 </dl>
 
+                @unless ($token)
+                    <div class="mt-5 rounded-lg border border-border-default bg-surface-subtle/70 p-3 text-sm text-muted">
+                        {{ __('Set up the eBay connection in') }}
+                        <a href="{{ route('commerce.marketplace.ebay.settings') }}" class="font-medium text-accent hover:underline" wire:navigate>
+                            {{ __('eBay settings') }}</a>{{ __(', then return here to pull listings and orders.') }}
+                    </div>
+                @endunless
+
                 <div class="mt-5 flex flex-wrap gap-2">
-                    @unless ($token)
-                        <x-ui.button type="button" variant="primary" wire:click="connect">
-                            <x-icon name="heroicon-o-link" class="h-4 w-4" />
-                            {{ __('Connect eBay') }}
-                        </x-ui.button>
-                    @endunless
                     <x-ui.button type="button" variant="outline" wire:click="pullListings" wire:loading.attr="disabled">
                         <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
                         {{ __('Pull Listings') }}

@@ -9,6 +9,7 @@ use App\Base\Settings\DTO\Scope;
 use App\Base\Settings\Livewire\SettingsForm;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConnectionTester;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Throwable;
 
@@ -85,6 +86,18 @@ class Settings extends SettingsForm
             EbayConnectionTester::STATUS_FAILED => 'danger',
             default => 'info',
         };
+    }
+
+    public function render(): View
+    {
+        $group = $this->groupConfig();
+
+        return view('livewire.commerce.marketplace.ebay.settings', [
+            'groupId' => $this->group(),
+            'group' => $group,
+            'pageTitle' => __(':label Settings', ['label' => $group['label'] ?? __('Module')]),
+            'pageSubtitle' => __($group['description'] ?? 'Operator-editable module settings stored in base_settings.'),
+        ]);
     }
 
     protected function group(): string

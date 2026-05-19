@@ -47,7 +47,11 @@ test('ebay marketplace page is visible to admins', function (): void {
     $this->actingAs($user)
         ->get(route('commerce.marketplace.ebay.index'))
         ->assertOk()
-        ->assertSee('eBay Marketplace');
+        ->assertSee('eBay Marketplace')
+        ->assertSee('Set up the eBay connection in')
+        ->assertSee('eBay settings')
+        ->assertSee(route('commerce.marketplace.ebay.settings'), false)
+        ->assertDontSee('Connect eBay');
 });
 
 test('ebay listing pull materializes offers and links by sku', function (): void {
