@@ -90,7 +90,7 @@ final class PostgresIdentifierGuard
                 continue;
             }
 
-            if ($char === '$' && preg_match('/\\G\\$[A-Za-z_][A-Za-z0-9_]*\\$|\\G\\$\\$/', $sql, $matches, 0, $offset) === 1) {
+            if ($char === '$' && preg_match('/\\G\\$[A-Za-z_]\\w*\\$|\\G\\$\\$/', $sql, $matches, 0, $offset) === 1) {
                 $delimiter = $matches[0];
                 $end = strpos($sql, $delimiter, $offset + strlen($delimiter));
                 $offset = $end === false ? $length : $end + strlen($delimiter);

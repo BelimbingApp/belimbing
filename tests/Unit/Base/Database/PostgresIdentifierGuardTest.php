@@ -5,11 +5,16 @@ use App\Base\Database\Exceptions\PostgresIdentifierTooLongException;
 use App\Base\Database\Postgres\GuardedPostgresConnection;
 use App\Base\Database\Postgres\PostgresIdentifierGuard;
 
+const CREATE_TABLE_SQL = 'create table ';
+const ID_BIGINT_COLUMN_SQL = ' ("id" bigint not null)';
+
+final class PostgresIdentifierGuardTestPdoResolutionException extends RuntimeException {}
+
 it('allows PostgreSQL identifiers at the byte limit', function (): void {
     $identifier = str_repeat('a', PostgresIdentifierGuard::MAX_IDENTIFIER_BYTES);
 
     PostgresIdentifierGuard::assertSqlIdentifiersWithinLimit(
-        'create table "'.$identifier.'" ("id" bigint not null)'
+        CREATE_TABLE_SQL.'"'.$identifier.'"'.ID_BIGINT_COLUMN_SQL
     );
 
     expect(true)->toBeTrue();
@@ -40,7 +45,7 @@ it('rejects unquoted PostgreSQL identifiers over the byte limit', function (): v
     $identifier = str_repeat('a', PostgresIdentifierGuard::MAX_IDENTIFIER_BYTES + 1);
 
     expect(fn () => PostgresIdentifierGuard::assertSqlIdentifiersWithinLimit(
-        'create table '.$identifier.' (id bigint not null)'
+        CREATE_TABLE_SQL.$identifier.' (id bigint not null)'
     ))
         ->toThrow(PostgresIdentifierTooLongException::class);
 });
@@ -51,7 +56,7 @@ it('counts identifier bytes rather than characters', function (): void {
     expect(strlen($identifier))->toBe(64);
 
     expect(fn () => PostgresIdentifierGuard::assertSqlIdentifiersWithinLimit(
-        'create table "'.$identifier.'" ("id" bigint not null)'
+        CREATE_TABLE_SQL.'"'.$identifier.'"'.ID_BIGINT_COLUMN_SQL
     ))
         ->toThrow(PostgresIdentifierTooLongException::class);
 });
@@ -70,26 +75,26 @@ it('ignores quoted content inside SQL strings and comments', function (): void {
 
 it('guards SQL executed through the PostgreSQL connection during migration operations', function (): void {
     $identifier = str_repeat('a', PostgresIdentifierGuard::MAX_IDENTIFIER_BYTES + 1);
-    $connection = new GuardedPostgresConnection(fn () => throw new RuntimeException('PDO should not resolve while pretending'));
+    $connection = new GuardedPostgresConnection(fn () => throw new PostgresIdentifierGuardTestPdoResolutionException('PDO should not resolve while pretending'));
 
     expect(fn () => $connection->guardMigrationIdentifiers(
         fn () => $connection->pretend(
-            fn (GuardedPostgresConnection $database) => $database->statement('create table "'.$identifier.'" ("id" bigint not null)')
+            fn (GuardedPostgresConnection $database) => $database->statement(CREATE_TABLE_SQL.'"'.$identifier.'"'.ID_BIGINT_COLUMN_SQL)
         )
     ))->toThrow(PostgresIdentifierTooLongException::class);
 });
 
 it('does not inspect queries through the PostgreSQL connection outside migration operations', function (): void {
     $identifier = str_repeat('a', PostgresIdentifierGuard::MAX_IDENTIFIER_BYTES + 1);
-    $connection = new GuardedPostgresConnection(fn () => throw new RuntimeException('PDO should not resolve while pretending'));
+    $connection = new GuardedPostgresConnection(fn () => throw new PostgresIdentifierGuardTestPdoResolutionException('PDO should not resolve while pretending'));
 
     $queries = $connection->pretend(
-        fn (GuardedPostgresConnection $database) => $database->statement('create table "'.$identifier.'" ("id" bigint not null)')
+        fn (GuardedPostgresConnection $database) => $database->statement(CREATE_TABLE_SQL.'"'.$identifier.'"'.ID_BIGINT_COLUMN_SQL)
     );
 
     expect($queries)
         ->toHaveCount(1)
-        ->and($queries[0]['query'])->toBe('create table "'.$identifier.'" ("id" bigint not null)');
+        ->and($queries[0]['query'])->toBe(CREATE_TABLE_SQL.'"'.$identifier.'"'.ID_BIGINT_COLUMN_SQL);
 });
 
 it('only inspects schema-changing SQL statements', function (string $sql, bool $expected): void {
