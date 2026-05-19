@@ -53,6 +53,7 @@ cd belimbing
 | Topic | Link |
 |-------|------|
 | Project vision & principles | [docs/brief.md](./docs/brief.md) |
+| Privacy policy | [PRIVACY.md](./PRIVACY.md) |
 | Architecture & directory conventions | [docs/architecture/](./docs/architecture/) |
 | Development environment setup | [docs/guides/development-setup.md](./docs/guides/development-setup.md) |
 | Guides (theming, extensions) | [docs/guides/](./docs/guides/) |
