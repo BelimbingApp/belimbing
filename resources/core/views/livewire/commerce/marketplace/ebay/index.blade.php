@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Modules\Commerce\Marketplace\Livewire\Ebay\Index $this */
+
+use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
+
+/** @var Index $this */
 ?>
 
 <div>
@@ -52,10 +55,12 @@
                 </dl>
 
                 <div class="mt-5 flex flex-wrap gap-2">
-                    <x-ui.button type="button" variant="primary" wire:click="connect">
-                        <x-icon name="heroicon-o-link" class="h-4 w-4" />
-                        {{ __('Connect eBay') }}
-                    </x-ui.button>
+                    @unless ($token)
+                        <x-ui.button type="button" variant="primary" wire:click="connect">
+                            <x-icon name="heroicon-o-link" class="h-4 w-4" />
+                            {{ __('Connect eBay') }}
+                        </x-ui.button>
+                    @endunless
                     <x-ui.button type="button" variant="outline" wire:click="pullListings" wire:loading.attr="disabled">
                         <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
                         {{ __('Pull Listings') }}
@@ -131,7 +136,7 @@
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Reconciliation') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('eBay Listing') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('BLB Item') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Belimbing Item') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Price') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Synced') }}</th>
@@ -185,7 +190,7 @@
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm text-ink tabular-nums">
                                     <div>{{ $this->formatMoney($listing->price_amount, $listing->currency_code) }}</div>
                                     @if ($listing->item?->target_price_amount !== null)
-                                        <div class="mt-1 text-xs text-muted">{{ __('BLB: :price', ['price' => $this->formatMoney($listing->item->target_price_amount, $listing->item->currency_code)]) }}</div>
+                                        <div class="mt-1 text-xs text-muted">{{ __('Belimbing: :price', ['price' => $this->formatMoney($listing->item->target_price_amount, $listing->item->currency_code)]) }}</div>
                                     @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
@@ -251,7 +256,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No active BLB inventory is missing from eBay.') }}</td>
+                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No active Belimbing inventory is missing from eBay.') }}</td>
                             </tr>
                         @endforelse
                     </tbody>

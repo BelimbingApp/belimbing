@@ -5,6 +5,22 @@ return [
         'marketplace_ebay' => [
             'label' => 'eBay marketplace',
             'description' => 'OAuth app credentials, marketplace defaults, and Sell API scopes for the eBay adapter.',
+            'help_title' => 'How to configure eBay OAuth',
+            'help_intro' => 'eBay uses a Redirect URL name (RuName) during OAuth. The RuName is not shown on the Application Keys card; open User Tokens for the Sandbox or Production keyset to create or view it.',
+            'help_steps' => [
+                [
+                    'before_link' => 'Open the ',
+                    'link_label' => 'eBay Developer Console',
+                    'url' => 'https://developer.ebay.com/my/keys',
+                    'after_link' => ', choose the matching Sandbox or Production app, then click User Tokens next to the App ID.',
+                ],
+                'In User Tokens, create or select the Redirect URL name (RuName) for that environment. If eBay says there are no Redirect URLs, follow its prompt to add one first.',
+                'Set Display Title to Belimbing so the eBay consent page names the app clearly.',
+                'Enter a public HTTPS Privacy Policy URL. eBay requires this for User access tokens because Belimbing will read seller account, listing, and order data. The upstream project policy is https://github.com/belimbingapp/belimbing/blob/main/PRIVACY.md; production installations should publish their own policy if their data practices differ.',
+                'Copy the Belimbing Callback URL from this page into both eBay’s Auth Accepted URL and Auth Declined URL fields. Belimbing owns the callback and will show the right success or declined result.',
+                'Select OAuth, not Auth’n’Auth, then save the eBay sign-in settings.',
+                'Copy the generated RuName back into Belimbing’s Redirect URL name field, save settings, click Connect eBay, approve the requested scopes, then run Test connection.',
+            ],
             'fields' => [
                 [
                     'key' => 'marketplace.ebay.environment',
@@ -47,24 +63,35 @@ return [
                     'rules' => ['nullable', 'string', 'max:500'],
                 ],
                 [
-                    'key' => 'marketplace.ebay.redirect_uri',
-                    'label' => 'Redirect URI',
+                    'key' => 'marketplace.ebay.ru_name',
+                    'label' => 'Redirect URL name (RuName)',
+                    'type' => 'text',
+                    'scope' => 'company',
+                    'placeholder' => 'Your_App-YourApp-SBX-abcde',
+                    'help' => 'The eBay-generated Redirect URL name from the User Tokens page. It usually looks like Your_App-YourApp-SBX-abcde. eBay sends this value as redirect_uri during OAuth; it is not the callback URL below.',
+                    'rules' => ['nullable', 'string', 'max:255'],
+                ],
+                [
+                    'key' => 'marketplace.ebay.callback_url',
+                    'label' => 'Callback URL',
                     'type' => 'readonly',
                     'value_route' => 'commerce.marketplace.ebay.oauth.callback',
-                    'help' => 'Copy this BLB-generated URI into the eBay developer app accepted redirect URLs.',
+                    'help' => 'Copy this Belimbing-generated URL into the eBay RuName Auth Accepted URL field.',
                 ],
                 [
                     'key' => 'marketplace.ebay.scopes',
                     'label' => 'OAuth scopes',
                     'type' => 'checkbox-list',
+                    'advanced' => true,
+                    'advanced_label' => 'Advanced OAuth settings',
+                    'advanced_help' => 'Belimbing recommends the standard eBay access set. Change scopes only when debugging app approval, sandbox access, or a deliberately read-only setup.',
                     'scope' => 'company',
                     'default' => [
                         'https://api.ebay.com/oauth/api_scope/sell.inventory',
                         'https://api.ebay.com/oauth/api_scope/sell.account',
                         'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
-                        'https://api.ebay.com/oauth/api_scope/commerce.taxonomy',
                     ],
-                    'help' => 'Select the API families BLB will request during seller OAuth.',
+                    'help' => 'Recommended seller OAuth scopes are selected by default so Belimbing can sync listings, read orders, import seller setup data, and prepare the publish path. Taxonomy/category metadata uses a separate application-token flow later, not this seller consent grant.',
                     'options' => [
                         'https://api.ebay.com/oauth/api_scope/sell.inventory' => [
                             'label' => 'Sell Inventory',
@@ -76,11 +103,7 @@ return [
                         ],
                         'https://api.ebay.com/oauth/api_scope/sell.fulfillment' => [
                             'label' => 'Sell Fulfillment',
-                            'help' => 'Read orders so BLB can reconcile sales and mark inventory sold.',
-                        ],
-                        'https://api.ebay.com/oauth/api_scope/commerce.taxonomy' => [
-                            'label' => 'Commerce Taxonomy',
-                            'help' => 'Read category trees, category suggestions, required aspects, and fitment metadata.',
+                            'help' => 'Read orders so Belimbing can reconcile sales and mark inventory sold.',
                         ],
                     ],
                     'rules' => ['required', 'array', 'min:1'],

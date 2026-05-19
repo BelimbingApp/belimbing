@@ -83,7 +83,7 @@ it('cleans retained payloads according to retention policy', function (): void {
         'operation' => 'commerce.marketplace.ebay.locations.pull',
         'transport' => 'http',
         'protocol' => 'rest',
-        'endpoint' => 'https://api.sandbox.ebay.com/sell/account/v1/location',
+        'endpoint' => 'https://api.sandbox.ebay.com/sell/inventory/v1/location',
         'request_headers' => ['Authorization' => ['[redacted]']],
         'request_body' => ['kind' => 'json', 'value' => ['a' => 'b']],
         'response_status' => 200,

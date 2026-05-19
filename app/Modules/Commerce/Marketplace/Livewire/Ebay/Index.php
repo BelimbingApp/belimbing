@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Livewire\Ebay;
 
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -53,6 +54,8 @@ class Index extends Component
         $this->authorizeConnectionManage();
 
         try {
+            session(['marketplace.ebay.oauth_return_route' => 'commerce.marketplace.ebay.index']);
+
             return redirect()->away($oauth->authorizationUrl($this->companyId()));
         } catch (Throwable $exception) {
             session()->flash('error', $exception->getMessage());
