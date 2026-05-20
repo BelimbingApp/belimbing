@@ -38,6 +38,7 @@ use Illuminate\Support\Carbon;
  * @property-read Category|null $category
  * @property-read ProductTemplate|null $productTemplate
  * @property-read Collection<int, ItemPhoto> $photos
+ * @property-read Collection<int, ItemFitment> $fitments
  * @property-read Collection<int, AttributeValue> $catalogAttributeValues
  * @property-read Collection<int, Description> $descriptions
  * @property-read Collection<int, Listing> $marketplaceListings
@@ -122,6 +123,14 @@ class Item extends Model
     public function photos(): HasMany
     {
         return $this->hasMany(ItemPhoto::class, 'item_id')->orderBy('sort_order');
+    }
+
+    /**
+     * @return HasMany<ItemFitment, $this>
+     */
+    public function fitments(): HasMany
+    {
+        return $this->hasMany(ItemFitment::class, 'item_id')->orderBy('display_year')->orderBy('display_make')->orderBy('display_model');
     }
 
     /**

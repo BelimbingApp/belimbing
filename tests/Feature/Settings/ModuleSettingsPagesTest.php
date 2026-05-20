@@ -7,6 +7,7 @@ use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConnectionTester;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings as EbaySettings;
+use App\Modules\Commerce\Marketplace\Models\AccountResource;
 use App\Modules\Commerce\Settings\Livewire\Settings as CommerceSettings;
 use App\Modules\Core\Geonames\Models\Country;
 use Illuminate\Http\Client\Request;
@@ -46,6 +47,9 @@ test('eBay settings page renders its setup fields and persists values', function
         ->assertSee('Select <code>OAuth</code>, not <code>Auth’n’Auth</code>', false)
         ->assertSee('Connect eBay')
         ->assertSee('Test connection')
+        ->assertSee('Seller setup choices')
+        ->assertSee('Refresh from eBay')
+        ->assertSee('No eBay setup choices have been imported yet')
         ->assertSee(route('commerce.marketplace.ebay.oauth.callback'))
         ->assertSee('Copy')
         ->assertSee('navigator.clipboard.writeText', false)
@@ -90,6 +94,82 @@ test('eBay settings page renders its setup fields and persists values', function
         ->and($settings->get('marketplace.ebay.scopes', scope: $scope))->toBe($scopes)
         ->and(app(EbayConfiguration::class)->forCompany($user->company_id)['redirect_uri'])->toBe('KiatNg-Belimbin-SBX-runame')
         ->and(app(EbayConfiguration::class)->forCompany($user->company_id)['callback_url'])->toBe(route('commerce.marketplace.ebay.oauth.callback'));
+});
+
+test('eBay settings imports seller setup choices and stores selected defaults', function (): void {
+    $user = createAdminUser();
+    $scope = Scope::company($user->company_id);
+    $settings = app(SettingsService::class);
+
+    $settings->set('marketplace.ebay.environment', 'sandbox', $scope);
+    $settings->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
+    $settings->set('marketplace.ebay.client_id', 'client-setup-import', $scope);
+    $settings->set('marketplace.ebay.client_secret', 'secret-setup-import', $scope, encrypted: true);
+    $settings->set('marketplace.ebay.ru_name', 'KiatNg-Belimbin-SBX-runame', $scope);
+    $settings->set('marketplace.ebay.scopes', [
+        EBAY_SCOPE_ACCOUNT,
+        EBAY_SCOPE_INVENTORY,
+    ], $scope);
+
+    app(OAuthTokenStore::class)->persist(
+        EbayConfiguration::CHANNEL,
+        $scope,
+        [
+            'access_token' => 'access-token-setup-import',
+            'refresh_token' => 'refresh-token-setup-import',
+            'expires_in' => 3600,
+        ],
+        [
+            EBAY_SCOPE_ACCOUNT,
+            EBAY_SCOPE_INVENTORY,
+        ],
+    );
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/account/v1/payment_policy*' => Http::response([
+            'paymentPolicies' => [
+                ['paymentPolicyId' => 'PAY-1', 'name' => 'Standard payment', 'marketplaceId' => 'EBAY_US'],
+            ],
+        ]),
+        'https://api.sandbox.ebay.com/sell/account/v1/fulfillment_policy*' => Http::response([
+            'fulfillmentPolicies' => [
+                ['fulfillmentPolicyId' => 'FUL-1', 'name' => 'Ground shipping', 'marketplaceId' => 'EBAY_US'],
+            ],
+        ]),
+        'https://api.sandbox.ebay.com/sell/account/v1/return_policy*' => Http::response([
+            'returnPolicies' => [
+                ['returnPolicyId' => 'RET-1', 'name' => '30-day returns', 'marketplaceId' => 'EBAY_US'],
+            ],
+        ]),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/location*' => Http::response([
+            'locations' => [
+                [
+                    'merchantLocationKey' => 'california_shop',
+                    'name' => 'California shop',
+                    'merchantLocationStatus' => 'ENABLED',
+                ],
+            ],
+        ]),
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(EbaySettings::class)
+        ->call('importAccountSetup')
+        ->assertSee('Standard payment')
+        ->assertSee('California shop')
+        ->set('defaultPaymentPolicyId', 'PAY-1')
+        ->set('defaultFulfillmentPolicyId', 'FUL-1')
+        ->set('defaultReturnPolicyId', 'RET-1')
+        ->set('defaultMerchantLocationKey', 'california_shop')
+        ->call('saveAccountSetupDefaults')
+        ->assertHasNoErrors();
+
+    expect(AccountResource::query()->where('company_id', $user->company_id)->count())->toBe(4)
+        ->and($settings->get('marketplace.ebay.default_payment_policy_id', scope: $scope))->toBe('PAY-1')
+        ->and($settings->get('marketplace.ebay.default_fulfillment_policy_id', scope: $scope))->toBe('FUL-1')
+        ->and($settings->get('marketplace.ebay.default_return_policy_id', scope: $scope))->toBe('RET-1')
+        ->and($settings->get('marketplace.ebay.default_merchant_location_key', scope: $scope))->toBe('california_shop');
 });
 
 test('eBay settings normalizes legacy whitespace scopes into checkbox values', function (): void {

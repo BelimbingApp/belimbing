@@ -11,7 +11,9 @@ php artisan blb:table:unstable \
   base_authz_principal_capabilities \
   base_integration_oauth_tokens \
   commerce_catalog_attributes \
+  commerce_inventory_item_fitments \
   commerce_inventory_items \
+  commerce_marketplace_account_resources \
   commerce_marketplace_aspect_mappings \
   commerce_marketplace_listing_drafts \
   commerce_marketplace_metadata \

@@ -236,6 +236,123 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                 </x-ui.card>
 
                 <x-ui.card>
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Fitment') }}</h2>
+                            <p class="mt-1 text-sm text-muted">{{ __('Vehicle or application compatibility confirmed for this item. Marketplace publishing will use this instead of title text alone.') }}</p>
+                        </div>
+                        <x-ui.badge>{{ $item->fitments->count() }}</x-ui.badge>
+                    </div>
+
+                    @if ($item->fitments->isEmpty())
+                        <x-ui.alert variant="info">
+                            {{ __('No fitment captured yet. Add compatible vehicles, or explicitly mark the item as universal fit when that is true.') }}
+                        </x-ui.alert>
+                    @else
+                        <div class="space-y-3">
+                            @foreach ($item->fitments as $fitment)
+                                <div wire:key="item-fitment-{{ $fitment->id }}" class="flex items-start justify-between gap-3 border-b border-border-default pb-3 last:border-0 last:pb-0">
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <p class="text-sm font-medium text-ink">
+                                                @if ($fitment->is_universal)
+                                                    {{ __('Universal fit') }}
+                                                @else
+                                                    {{ collect([$fitment->display_year, $fitment->display_make, $fitment->display_model, $fitment->display_trim, $fitment->display_engine])->filter()->implode(' ') }}
+                                                @endif
+                                            </p>
+                                            <x-ui.badge>{{ __(Illuminate\Support\Str::headline($fitment->confidence)) }}</x-ui.badge>
+                                            <x-ui.badge>{{ __(Illuminate\Support\Str::headline($fitment->source)) }}</x-ui.badge>
+                                        </div>
+
+                                        @if (! $fitment->is_universal && ($fitment->compatibility_properties ?? []) !== [])
+                                            <dl class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                                                @foreach ($fitment->compatibility_properties as $name => $value)
+                                                    <div class="flex gap-1">
+                                                        <dt class="font-medium text-ink">{{ $name }}:</dt>
+                                                        <dd>{{ $value }}</dd>
+                                                    </div>
+                                                @endforeach
+                                            </dl>
+                                        @endif
+
+                                        @if ($fitment->notes)
+                                            <p class="mt-2 text-sm text-muted">{{ $fitment->notes }}</p>
+                                        @endif
+                                    </div>
+
+                                    @if ($this->canEdit())
+                                        <button
+                                            type="button"
+                                            wire:click="deleteFitment({{ $fitment->id }})"
+                                            wire:confirm="{{ __('Remove this fitment entry?') }}"
+                                            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-subtle hover:text-status-danger"
+                                            aria-label="{{ __('Remove fitment') }}"
+                                            title="{{ __('Remove') }}"
+                                        >
+                                            <x-icon name="heroicon-o-x-mark" class="h-4 w-4" />
+                                        </button>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @if ($this->canEdit())
+                        <div class="mt-4 space-y-4 border-t border-border-default pt-4">
+                            <form wire:submit="addFitment" class="space-y-4">
+                                <x-ui.checkbox
+                                    id="item-fitment-universal"
+                                    wire:model.live="fitmentUniversal"
+                                    :label="__('Universal fit')"
+                                    :help="__('Use only when the part intentionally fits broadly and does not need vehicle-specific compatibility.')"
+                                />
+
+                                @unless ($fitmentUniversal)
+                                    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                                        <x-ui.input id="item-fitment-year" wire:model="fitmentYear" :label="__('Year')" :error="$errors->first('fitmentYear')" />
+                                        <x-ui.input id="item-fitment-make" wire:model="fitmentMake" :label="__('Make')" :error="$errors->first('fitmentMake')" />
+                                        <x-ui.input id="item-fitment-model" wire:model="fitmentModel" :label="__('Model')" :error="$errors->first('fitmentModel')" />
+                                        <x-ui.input id="item-fitment-trim" wire:model="fitmentTrim" :label="__('Trim')" :error="$errors->first('fitmentTrim')" />
+                                        <x-ui.input id="item-fitment-engine" wire:model="fitmentEngine" :label="__('Engine')" :error="$errors->first('fitmentEngine')" />
+                                    </div>
+                                @endunless
+
+                                <x-ui.textarea
+                                    id="item-fitment-notes"
+                                    wire:model="fitmentNotes"
+                                    :label="__('Fitment notes')"
+                                    rows="2"
+                                    :help="__('Optional source or qualifier for this compatibility claim.')"
+                                    :error="$errors->first('fitmentNotes')"
+                                />
+
+                                <x-ui.button type="submit" variant="primary" size="sm">
+                                    <x-icon name="heroicon-o-plus" class="h-4 w-4" />
+                                    {{ __('Add fitment') }}
+                                </x-ui.button>
+                            </form>
+
+                            <form wire:submit="importFitments" class="space-y-3 border-t border-border-default pt-4">
+                                <x-ui.textarea
+                                    id="item-fitment-bulk"
+                                    wire:model="fitmentBulk"
+                                    :label="__('Bulk fitment')"
+                                    rows="4"
+                                    :help="__('One row per vehicle/application: Year, Make, Model, Trim, Engine, Notes. CSV quoting is supported.')"
+                                    :error="$errors->first('fitmentBulk')"
+                                />
+
+                                <x-ui.button type="submit" variant="outline" size="sm">
+                                    <x-icon name="heroicon-o-arrow-up-tray" class="h-4 w-4" />
+                                    {{ __('Import fitment rows') }}
+                                </x-ui.button>
+                            </form>
+                        </div>
+                    @endif
+                </x-ui.card>
+
+                <x-ui.card>
                     <div x-data="{ helpOpen: false }">
                         <div class="mb-3 flex items-center justify-between gap-3">
                             <div class="flex items-center gap-2">

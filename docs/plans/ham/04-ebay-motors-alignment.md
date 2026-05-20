@@ -1,6 +1,6 @@
 # ham/04-ebay-motors-alignment
 
-**Status:** In Progress; Phase 0 generic eBay metadata/auth and listing-draft foundations started
+**Status:** In Progress; Phase 0 complete; Phase 1 fitment capture started
 **Last Updated:** 2026-05-20
 **Sources:**
 - User context: Ham operates from California and sells through the eBay store `rpm*parts`; Belimbing must help him align with US eBay Motors discovery, not only generic marketplace listing.
@@ -88,7 +88,7 @@ Goal: give Belimbing the platform primitives needed to reason about eBay Motors 
 - [x] Declare Ham's eBay Motors identifiers in the Ham extension: listing marketplace `EBAY_US`, Motors metadata marketplace `EBAY_MOTORS_US`, and Motors category tree `100`. {Amp/claude-sonnet-4.5}
 - [x] Add cached marketplace metadata storage and a first generic eBay category-aspects pull/cache path that accepts marketplace and category-tree identifiers from the caller. {Amp/claude-sonnet-4.5}
 - [x] Extend cached metadata coverage to compatibility-enabled categories, automotive parts compatibility policy, item condition policy, compatibility property values, and richer metadata refresh/staleness state. {Amp/claude-sonnet-4.5}
-- [ ] Add policy/location import support so Belimbing can present selectable payment, return, fulfillment, and merchant-location choices instead of relying only on manually typed IDs.
+- [x] Add policy/location import support so Belimbing can present selectable payment, return, fulfillment, and merchant-location choices instead of relying only on manually typed IDs. {Amp/claude-sonnet-4.5}
 - [x] Add a durable marketplace listing draft/readiness model separate from synced external listing snapshots. {Amp/claude-sonnet-4.5}
 - [x] Define the aspect mapping contract: internal attribute, eBay aspect name, category scope, value normalization, enum validation, required/recommended status, and mapping confidence. {Amp/claude-sonnet-4.5}
 - [x] Define how Belimbing stores imported eBay catalog/product references such as `epid` and product-specific facts so they can suggest aspects without becoming unreviewed truth. {Amp/claude-sonnet-4.5}
@@ -97,9 +97,10 @@ Goal: give Belimbing the platform primitives needed to reason about eBay Motors 
 
 Goal: make vehicle compatibility a first-class data concept Belimbing can capture before publishing exists.
 
-- [ ] Add a fitment model for auto-parts compatibility that stores normalized compatibility property name/value sets, category context, source, confidence, operator notes, and optional display labels such as year/make/model/trim/engine.
-- [ ] Support item-level fitment on Commerce inventory items, with a clear universal-fit path that requires explicit operator confirmation.
-- [ ] Add operator UI for adding, editing, bulk-entering, and reviewing fitment entries from an inventory item.
+- [x] Add a fitment model for auto-parts compatibility that stores normalized compatibility property name/value sets, category context, source, confidence, operator notes, and optional display labels such as year/make/model/trim/engine. {Amp/claude-sonnet-4.5}
+- [x] Support item-level fitment on Commerce inventory items, with a clear universal-fit path that requires explicit operator confirmation. {Amp/claude-sonnet-4.5}
+- [x] Add operator UI for adding, bulk-entering, deleting, and reviewing fitment entries from an inventory item. {Amp/claude-sonnet-4.5}
+- [ ] Add in-place editing for existing fitment entries once the first operator flow proves the field shape.
 - [ ] Treat existing flat Ham fitment attributes as import/bootstrap inputs and provide a path to convert them into canonical fitment entries.
 - [ ] Add early fitment-set reuse or batch-apply tools for repeated vehicle/application families, because used auto-parts sellers often list several parts from the same donor vehicle.
 - [ ] Seed Ham auto-parts attributes for identifiers and confidence details: brand, manufacturer part number, OEM number, interchange number, placement/side, tested status, condition grade, and defect notes.

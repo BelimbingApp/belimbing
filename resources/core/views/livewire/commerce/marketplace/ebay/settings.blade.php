@@ -1,10 +1,17 @@
 <?php
 
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings;
+use App\Modules\Commerce\Marketplace\Models\AccountResource;
+use Illuminate\Database\Eloquent\Collection;
 
 /** @var Settings $this */
 /** @var array<string, mixed> $group */
 /** @var string $groupId */
+/** @var Collection<int, AccountResource> $accountResources */
+$paymentPolicies = $accountResources->where('kind', AccountResource::KIND_PAYMENT_POLICY);
+$fulfillmentPolicies = $accountResources->where('kind', AccountResource::KIND_FULFILLMENT_POLICY);
+$returnPolicies = $accountResources->where('kind', AccountResource::KIND_RETURN_POLICY);
+$inventoryLocations = $accountResources->where('kind', AccountResource::KIND_INVENTORY_LOCATION);
 ?>
 
 <div>
@@ -75,6 +82,93 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings;
                         <span wire:loading wire:target="testConnection">{{ __('Testing...') }}</span>
                     </x-ui.button>
                 </div>
+            </div>
+        </x-ui.card>
+
+        <x-ui.card>
+            <div class="space-y-5">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="min-w-0 space-y-2">
+                        <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Seller setup choices') }}</h2>
+                        <p class="text-sm text-muted">
+                            {{ __('Import eBay business policies and merchant locations, then choose the defaults Belimbing should use for listing drafts.') }}
+                        </p>
+                    </div>
+
+                    <x-ui.button type="button" variant="outline" wire:click="importAccountSetup" wire:loading.attr="disabled" wire:target="importAccountSetup">
+                        <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
+                        <span wire:loading.remove wire:target="importAccountSetup">{{ __('Refresh from eBay') }}</span>
+                        <span wire:loading wire:target="importAccountSetup">{{ __('Refreshing...') }}</span>
+                    </x-ui.button>
+                </div>
+
+                @if ($accountResources->isEmpty())
+                    <x-ui.alert variant="info">
+                        {{ __('No eBay setup choices have been imported yet. Connect eBay, grant the Sell Account and Sell Inventory scopes, then refresh from eBay.') }}
+                    </x-ui.alert>
+                @else
+                    <div class="grid gap-4 lg:grid-cols-2">
+                        <x-ui.select
+                            id="ebay-default-payment-policy"
+                            wire:model="defaultPaymentPolicyId"
+                            :label="__('Default payment policy')"
+                            :help="__('Payment policy used when a draft does not choose a different eBay policy.')"
+                        >
+                            <option value="">{{ __('Choose when publishing') }}</option>
+                            @foreach ($paymentPolicies as $policy)
+                                <option value="{{ $policy->external_id }}">{{ $policy->name }} ({{ $policy->external_id }})</option>
+                            @endforeach
+                        </x-ui.select>
+
+                        <x-ui.select
+                            id="ebay-default-fulfillment-policy"
+                            wire:model="defaultFulfillmentPolicyId"
+                            :label="__('Default fulfillment policy')"
+                            :help="__('Shipping/handling policy used when a draft does not choose a different eBay policy.')"
+                        >
+                            <option value="">{{ __('Choose when publishing') }}</option>
+                            @foreach ($fulfillmentPolicies as $policy)
+                                <option value="{{ $policy->external_id }}">{{ $policy->name }} ({{ $policy->external_id }})</option>
+                            @endforeach
+                        </x-ui.select>
+
+                        <x-ui.select
+                            id="ebay-default-return-policy"
+                            wire:model="defaultReturnPolicyId"
+                            :label="__('Default return policy')"
+                            :help="__('Return policy used when a draft does not choose a different eBay policy.')"
+                        >
+                            <option value="">{{ __('Choose when publishing') }}</option>
+                            @foreach ($returnPolicies as $policy)
+                                <option value="{{ $policy->external_id }}">{{ $policy->name }} ({{ $policy->external_id }})</option>
+                            @endforeach
+                        </x-ui.select>
+
+                        <x-ui.select
+                            id="ebay-default-merchant-location"
+                            wire:model="defaultMerchantLocationKey"
+                            :label="__('Default merchant location')"
+                            :help="__('Inventory location key used when a draft does not choose a different eBay location.')"
+                        >
+                            <option value="">{{ __('Choose when publishing') }}</option>
+                            @foreach ($inventoryLocations as $location)
+                                <option value="{{ $location->external_id }}">
+                                    {{ $location->name }} ({{ $location->external_id }}){{ $location->status ? ' · '.$location->status : '' }}
+                                </option>
+                            @endforeach
+                        </x-ui.select>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <x-ui.button type="button" variant="primary" wire:click="saveAccountSetupDefaults" wire:loading.attr="disabled" wire:target="saveAccountSetupDefaults">
+                            <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                            {{ __('Save setup defaults') }}
+                        </x-ui.button>
+                        <p class="text-xs text-muted">
+                            {{ __('Imported choices are refreshed from eBay; selected defaults are stored in Belimbing settings.') }}
+                        </p>
+                    </div>
+                @endif
             </div>
         </x-ui.card>
 

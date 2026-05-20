@@ -11,6 +11,7 @@ use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Livewire\Items\Create;
 use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 use App\Modules\Commerce\Inventory\Models\Item;
+use App\Modules\Commerce\Inventory\Models\ItemFitment;
 use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use App\Modules\Commerce\Inventory\Services\DefaultCurrencyResolver;
 use Illuminate\Http\UploadedFile;
@@ -264,6 +265,86 @@ test('item photos can be uploaded and deleted from the detail page component', f
     expect(ItemPhoto::query()->whereKey($photo->id)->exists())->toBeFalse();
     expect(MediaAsset::query()->whereKey($asset->id)->exists())->toBeFalse();
     Storage::disk('local')->assertMissing($asset->storage_key);
+});
+
+test('item fitments can be added and removed from the detail page component', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'BMW-FITMENT-1',
+        'title' => 'BMW rear caliper pair',
+    ]);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->assertSee('Fitment')
+        ->set('fitmentYear', '2011')
+        ->set('fitmentMake', 'BMW')
+        ->set('fitmentModel', '135i')
+        ->set('fitmentTrim', 'Base Coupe 2-Door')
+        ->set('fitmentEngine', '3.0L')
+        ->set('fitmentNotes', 'Confirmed from donor vehicle.')
+        ->call('addFitment')
+        ->assertHasNoErrors()
+        ->assertSee('2011 BMW 135i');
+
+    $fitment = ItemFitment::query()->where('item_id', $item->id)->firstOrFail();
+
+    expect($fitment->company_id)->toBe($user->company_id)
+        ->and($fitment->is_universal)->toBeFalse()
+        ->and($fitment->compatibility_properties)->toBe([
+            'Year' => '2011',
+            'Make' => 'BMW',
+            'Model' => '135i',
+            'Trim' => 'Base Coupe 2-Door',
+            'Engine' => '3.0L',
+        ])
+        ->and($fitment->confidence)->toBe(ItemFitment::CONFIDENCE_SELLER_CONFIRMED);
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->call('deleteFitment', $fitment->id)
+        ->assertDontSee('2011 BMW 135i');
+
+    expect(ItemFitment::query()->whereKey($fitment->id)->exists())->toBeFalse();
+});
+
+test('item fitment requires either compatibility values or explicit universal fit', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->call('addFitment')
+        ->assertHasErrors(['fitmentYear']);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->set('fitmentUniversal', true)
+        ->call('addFitment')
+        ->assertHasNoErrors()
+        ->assertSee('Universal fit');
+
+    $fitment = ItemFitment::query()->where('item_id', $item->id)->firstOrFail();
+
+    expect($fitment->is_universal)->toBeTrue()
+        ->and($fitment->compatibility_properties)->toBeNull();
+});
+
+test('item fitments can be imported in bulk rows', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->set('fitmentBulk', "2011,BMW,135i,Base Coupe,3.0L\n2012,BMW,135i,Base Coupe,3.0L")
+        ->call('importFitments')
+        ->assertHasNoErrors()
+        ->assertSee('2011 BMW 135i')
+        ->assertSee('2012 BMW 135i');
+
+    expect(ItemFitment::query()->where('item_id', $item->id)->count())->toBe(2);
 });
 
 test('item detail page can edit catalog attributes and description versions', function (): void {
