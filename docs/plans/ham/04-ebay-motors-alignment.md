@@ -87,11 +87,11 @@ Goal: give Belimbing the platform primitives needed to reason about eBay Motors 
 - [x] Add eBay client-credentials/app-token support for Taxonomy and Metadata API calls that do not use Ham's seller OAuth token. {Amp/claude-sonnet-4.5}
 - [x] Declare Ham's eBay Motors identifiers in the Ham extension: listing marketplace `EBAY_US`, Motors metadata marketplace `EBAY_MOTORS_US`, and Motors category tree `100`. {Amp/claude-sonnet-4.5}
 - [x] Add cached marketplace metadata storage and a first generic eBay category-aspects pull/cache path that accepts marketplace and category-tree identifiers from the caller. {Amp/claude-sonnet-4.5}
-- [ ] Extend cached metadata coverage to compatibility-enabled categories, automotive parts compatibility policy, item condition policy, and richer metadata refresh/staleness state.
+- [x] Extend cached metadata coverage to compatibility-enabled categories, automotive parts compatibility policy, item condition policy, compatibility property values, and richer metadata refresh/staleness state. {Amp/claude-sonnet-4.5}
 - [ ] Add policy/location import support so Belimbing can present selectable payment, return, fulfillment, and merchant-location choices instead of relying only on manually typed IDs.
 - [x] Add a durable marketplace listing draft/readiness model separate from synced external listing snapshots. {Amp/claude-sonnet-4.5}
-- [ ] Define the aspect mapping contract: internal attribute, eBay aspect name, category scope, value normalization, enum validation, required/recommended status, and mapping confidence.
-- [ ] Define how Belimbing stores imported eBay catalog/product references such as `epid` and product-specific facts so they can suggest aspects without becoming unreviewed truth.
+- [x] Define the aspect mapping contract: internal attribute, eBay aspect name, category scope, value normalization, enum validation, required/recommended status, and mapping confidence. {Amp/claude-sonnet-4.5}
+- [x] Define how Belimbing stores imported eBay catalog/product references such as `epid` and product-specific facts so they can suggest aspects without becoming unreviewed truth. {Amp/claude-sonnet-4.5}
 
 ### Phase 1 — Fitment foundation and operator capture
 

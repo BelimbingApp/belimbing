@@ -21,6 +21,10 @@ use Illuminate\Support\Carbon;
  */
 class MarketplaceMetadata extends Model
 {
+    public const REFRESH_STATE_FRESH = 'fresh';
+
+    public const REFRESH_STATE_STALE = 'stale';
+
     protected $table = 'commerce_marketplace_metadata';
 
     /**
@@ -48,5 +52,20 @@ class MarketplaceMetadata extends Model
             'fetched_at' => 'datetime',
             'expires_at' => 'datetime',
         ];
+    }
+
+    public function isFresh(?Carbon $now = null): bool
+    {
+        return $this->expires_at === null || $this->expires_at->greaterThan($now ?? Carbon::now());
+    }
+
+    public function isStale(?Carbon $now = null): bool
+    {
+        return ! $this->isFresh($now);
+    }
+
+    public function refreshState(?Carbon $now = null): string
+    {
+        return $this->isFresh($now) ? self::REFRESH_STATE_FRESH : self::REFRESH_STATE_STALE;
     }
 }
