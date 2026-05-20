@@ -85,7 +85,7 @@ The first implementation priority is therefore **Belimbing ↔ eBay Motors align
 Goal: give Belimbing the platform primitives needed to reason about eBay Motors before building operator-facing fitment workflows.
 
 - [x] Add eBay client-credentials/app-token support for Taxonomy and Metadata API calls that do not use Ham's seller OAuth token. {Amp/claude-sonnet-4.5}
-- [ ] Declare Ham's eBay Motors identifiers in the Ham extension: listing marketplace `EBAY_US`, Motors metadata marketplace `EBAY_MOTORS_US`, and Motors category tree `100`.
+- [x] Declare Ham's eBay Motors identifiers in the Ham extension: listing marketplace `EBAY_US`, Motors metadata marketplace `EBAY_MOTORS_US`, and Motors category tree `100`. {Amp/claude-sonnet-4.5}
 - [x] Add cached marketplace metadata storage and a first generic eBay category-aspects pull/cache path that accepts marketplace and category-tree identifiers from the caller. {Amp/claude-sonnet-4.5}
 - [ ] Extend cached metadata coverage to compatibility-enabled categories, automotive parts compatibility policy, item condition policy, and richer metadata refresh/staleness state.
 - [ ] Add policy/location import support so Belimbing can present selectable payment, return, fulfillment, and merchant-location choices instead of relying only on manually typed IDs.
