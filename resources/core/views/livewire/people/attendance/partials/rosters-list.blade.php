@@ -58,6 +58,52 @@
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                         @if ($canManage)
+                            {{-- Actual mode toggle --}}
+                            <x-ui.button
+                                type="button"
+                                size="sm"
+                                :variant="$actualMode ? 'secondary' : 'ghost'"
+                                wire:click="$toggle('actualMode')"
+                                title="{{ __('Toggle planned vs actual overlay') }}"
+                            >
+                                <x-icon name="heroicon-o-eye" class="h-4 w-4" />
+                                {{ $actualMode ? __('Actual on') : __('Actual') }}
+                            </x-ui.button>
+
+                            {{-- Lock / Unlock period --}}
+                            @if ($currentPeriodLocked)
+                                <span class="inline-flex items-center gap-1 text-xs font-medium text-warning">
+                                    <svg class="h-3.5 w-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/></svg>
+                                    {{ __('Locked') }}
+                                </span>
+                                @if ($canUnlock)
+                                    <x-ui.button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        x-data="{ reason: '' }"
+                                        x-on:click="reason = window.prompt('{{ __('Unlock reason (required):') }}'); if (reason !== null && reason.trim() !== '') { $wire.unlockRosterPeriod('{{ $gridPeriodStart }}', '{{ $gridPeriodEnd }}', reason.trim()) }"
+                                        title="{{ __('Unlock this roster period') }}"
+                                    >
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+                                        {{ __('Unlock') }}
+                                    </x-ui.button>
+                                @endif
+                            @else
+                                <x-ui.button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    wire:click="lockRosterPeriod('{{ $gridPeriodStart }}', '{{ $gridPeriodEnd }}')"
+                                    wire:confirm="{{ __('Lock this roster period? Cell overrides will be blocked until a manager unlocks it.') }}"
+                                    title="{{ __('Lock this roster period') }}"
+                                >
+                                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/></svg>
+                                    {{ __('Lock') }}
+                                </x-ui.button>
+                            @endif
+
+                            {{-- CSV export --}}
                             <x-ui.button type="button" size="sm" variant="ghost" wire:click="exportRosterCsv" title="{{ __('Export visible roster as CSV') }}">
                                 <x-icon name="heroicon-o-arrow-down-tray" class="h-4 w-4" />
                                 <span class="sr-only">{{ __('Export CSV') }}</span>
@@ -93,6 +139,9 @@
                         'showPreviewLegend' => false,
                         'compact' => $listScope === 'month',
                         'gridIntro' => $listPeriodLabel ? __('Range: :period', ['period' => $listPeriodLabel]) : null,
+                        'lockedDates' => $lockedDates ?? [],
+                        'actualOutcomes' => $actualOutcomes ?? [],
+                        'actualMode' => $actualMode ?? false,
                     ])
                 </div>
 

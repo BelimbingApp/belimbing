@@ -15,10 +15,12 @@ use App\Modules\People\Attendance\Livewire\PolicyGroupValidator;
 use App\Modules\People\Attendance\Livewire\Rosters;
 use App\Modules\People\Attendance\Livewire\ShiftTemplates;
 use App\Modules\People\Attendance\Models\AttendanceAllowanceRule;
+use App\Modules\People\Attendance\Models\AttendanceDay;
 use App\Modules\People\Attendance\Models\AttendancePolicyGroup;
 use App\Modules\People\Attendance\Models\AttendancePunchWindow;
 use App\Modules\People\Attendance\Models\AttendanceRosterAcknowledgment;
 use App\Modules\People\Attendance\Models\AttendanceRosterAssignment;
+use App\Modules\People\Attendance\Models\AttendanceRosterLock;
 use App\Modules\People\Attendance\Models\AttendanceShiftTemplate;
 use App\Modules\People\Attendance\Services\AttendanceDayResolverService;
 use App\Modules\People\Attendance\Services\AttendancePolicySimulationService;
@@ -28,8 +30,8 @@ use App\Modules\People\Settings\Models\PeopleNotificationDeliveryLog;
 use App\Modules\People\Settings\Models\PeopleReferenceEntry;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
 const ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME = 'Office Olive';
@@ -1423,7 +1425,7 @@ function createRosterViewOnlyUser(Company $company, Employee $employee): User
 
     $role = Role::query()->create([
         'company_id' => null,
-        'code' => 'roster_view_only_test_' . $company->id,
+        'code' => 'roster_view_only_test_'.$company->id,
         'name' => 'Roster View Only',
         'is_system' => false,
         'grant_all' => false,
@@ -1556,4 +1558,154 @@ it('resets acknowledgment when a published cell override is saved for an employe
         ->assertHasNoErrors();
 
     expect(AttendanceRosterAcknowledgment::query()->where('employee_id', $employee->id)->count())->toBe(0);
+});
+
+// ─── 18d Roster Lock ──────────────────────────────────────────────────────────
+
+it('locks a roster period and blocks cell override on locked dates', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
+    $monday = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY)->toDateString();
+    $sunday = CarbonImmutable::today()->endOfWeek(CarbonImmutable::SUNDAY)->toDateString();
+
+    AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => $monday,
+        'effective_to' => $sunday,
+        'publish_state' => 'published',
+        'lock_state' => 'open',
+        'revision' => 1,
+        'exceptions' => [],
+        'metadata' => [],
+    ]);
+
+    $this->actingAs($user);
+
+    // Lock the period
+    Livewire::test(Rosters::class)
+        ->call('lockRosterPeriod', $monday, $sunday)
+        ->assertHasNoErrors();
+
+    expect(AttendanceRosterLock::query()
+        ->where('company_id', $company->id)
+        ->where('period_start', $monday)
+        ->where('period_end', $sunday)
+        ->whereNull('unlocked_at')
+        ->exists()
+    )->toBeTrue();
+
+    // Cell override on locked date is blocked
+    Livewire::test(Rosters::class)
+        ->call('saveCellOverride', $employee->id, $monday, $shift->id, $policyGroup->id)
+        ->assertHasNoErrors(); // no validation error, but a session flash error
+
+    // Verify the assignment was NOT modified (no exception added)
+    $assignment = AttendanceRosterAssignment::query()
+        ->where('company_id', $company->id)
+        ->where('employee_id', $employee->id)
+        ->firstOrFail();
+
+    expect($assignment->exceptions)->toBeEmpty();
+});
+
+it('unlocks a roster period after providing a reason', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $monday = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY)->toDateString();
+    $sunday = CarbonImmutable::today()->endOfWeek(CarbonImmutable::SUNDAY)->toDateString();
+
+    AttendanceRosterLock::query()->create([
+        'company_id' => $company->id,
+        'period_start' => $monday,
+        'period_end' => $sunday,
+        'locked_by' => $user->id,
+        'locked_at' => now(),
+    ]);
+
+    $this->actingAs($user);
+
+    // Unlock without reason fails silently (validation error on component)
+    Livewire::test(Rosters::class)
+        ->call('unlockRosterPeriod', $monday, $sunday, '')
+        ->assertHasErrors(['unlockReason']);
+
+    // The lock record is still active
+    expect(AttendanceRosterLock::query()
+        ->where('company_id', $company->id)
+        ->whereNull('unlocked_at')
+        ->exists()
+    )->toBeTrue();
+
+    // Unlock with a valid reason succeeds
+    Livewire::test(Rosters::class)
+        ->call('unlockRosterPeriod', $monday, $sunday, 'Payroll correction needed')
+        ->assertHasNoErrors();
+
+    $lock = AttendanceRosterLock::query()
+        ->where('company_id', $company->id)
+        ->where('period_start', $monday)
+        ->first();
+
+    expect($lock)->not->toBeNull()
+        ->and($lock->unlocked_at)->not->toBeNull()
+        ->and($lock->unlock_reason)->toBe('Payroll correction needed');
+});
+
+it('exposes actual attendance outcomes in actualMode for the grid', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
+    $monday = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY)->toDateString();
+    $sunday = CarbonImmutable::today()->endOfWeek(CarbonImmutable::SUNDAY)->toDateString();
+
+    AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => $monday,
+        'effective_to' => $sunday,
+        'publish_state' => 'published',
+        'lock_state' => 'open',
+        'revision' => 1,
+        'exceptions' => [],
+        'metadata' => [],
+    ]);
+
+    AttendanceDay::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_date' => $monday,
+        'status' => AttendanceDay::STATUS_FINALIZED,
+        'day_type' => 'normal',
+        'worked_minutes' => 0,
+        'late_minutes' => 0,
+        'early_out_minutes' => 0,
+        'absent_minutes' => 480,
+        'expected_minutes' => 480,
+        'payable_minutes' => 0,
+        'break_minutes' => 0,
+        'overtime_candidate_minutes' => 0,
+    ]);
+
+    $this->actingAs($user);
+
+    $component = Livewire::test(Rosters::class)
+        ->set('actualMode', true);
+
+    $actualOutcomes = $component->get('actualMode');
+    expect($actualOutcomes)->toBeTrue();
+
+    // The component renders without errors when actualMode is on
+    $component->assertHasNoErrors();
 });

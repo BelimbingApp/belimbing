@@ -35,6 +35,7 @@ return [
         'accept',
         'rework',
         'cancel',
+        'unlock',
         'upload',
         'follow-up',
         'hod-approve',

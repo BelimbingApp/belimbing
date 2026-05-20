@@ -1,6 +1,6 @@
 # 18_roster_master.md
 
-**Status:** In Progress
+**Status:** Complete
 **Last Updated:** 2026-05-20
 **Sources:**
 - `docs/plans/people/15_attendance-roster-builder-ux.md` — foundation UX (complete)
@@ -141,6 +141,6 @@ Not adopting: arbitrary formula cells, merge cells, multi-sheet files.
 | [18a — Surface Completion](./18a_roster-surface-completion.md) | Complete deferred plan-16 work; rename and routing | Complete |
 | [18b — Grid Interaction](./18b_roster-grid-interaction.md) | Excel-parity grid interaction layer | Complete |
 | [18c — Self-Service](./18c_roster-self-service.md) | Employee My Schedule, acknowledgment, print, export | Complete |
-| [18d — Payroll Reconciliation](./18d_roster-payroll-reconciliation.md) | Payroll lock + planned vs actual reconciliation + OT flag | Identified |
+| [18d — Payroll Reconciliation](./18d_roster-payroll-reconciliation.md) | Payroll lock + planned vs actual reconciliation + OT flag | Complete |
 
 Future — not yet planned: swap marketplace, live working-now snapshot, AI pattern suggestion.

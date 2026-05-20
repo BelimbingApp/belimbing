@@ -5,6 +5,9 @@
     $gridIntro = $gridIntro ?? __('Existing assignments show draft or published state; rest, off, and holiday days surface from each employee\'s work calendar.');
     $cellMinWidth = $compact ? 'min-w-9' : 'min-w-14';
     $showDayDrawer = $showDayDrawer ?? true;
+    $lockedDates = $lockedDates ?? [];
+    $actualOutcomes = $actualOutcomes ?? [];
+    $actualMode = $actualMode ?? false;
     $dayDrawerData = [];
     if ($showDayDrawer && !empty($rosterGridRows)) {
         foreach ($rosterGridDays as $day) {
@@ -108,14 +111,18 @@
                         @php($isEmpty = $cell['state'] === 'empty')
                         @php($cellShiftId = (int) ($cell['shift_template_id'] ?? 0))
                         @php($cellPolicyId = (int) ($cell['policy_group_id'] ?? 0))
+                        @php($isDateLocked = isset($lockedDates[$day['date']]))
+                        @php($actualOutcome = $actualMode ? ($actualOutcomes[$employee->id . '-' . $day['date']] ?? null) : null)
+                        @php($actualTint = match($actualOutcome) { 'absent' => 'ring-2 ring-red-400 ring-inset', 'late', 'early' => 'ring-2 ring-warning ring-inset', 'matched' => 'ring-2 ring-success ring-inset', default => '' })
+                        @php($isEditable = $canManage && ! $isDateLocked && ! $actualMode)
                         <td wire:key="roster-grid-cell-{{ $employee->id }}-{{ $day['date'] }}"
-                            class="relative p-0 align-top"
+                            class="relative p-0 align-top {{ $actualTint }}"
                             data-employee="{{ $employee->id }}"
                             data-date="{{ $day['date'] }}"
                             data-shift="{{ $cellShiftId }}"
                             data-policy="{{ $cellPolicyId }}"
                             data-state="{{ $cell['state'] }}"
-                            @if($canManage)
+                            @if($isEditable)
                                 x-data="{ open: false, shift: {{ $cellShiftId }}, policy: {{ $cellPolicyId }} }"
                                 :data-cell-shift="{{ $cellShiftId }}"
                                 :data-cell-policy="{{ $cellPolicyId }}"
@@ -129,7 +136,7 @@
                                 "
                             @endif
                         >
-                            @if ($canManage)
+                            @if ($isEditable)
                                 <button
                                     type="button"
                                     @click="shift = parseInt($root.dataset.cellShift) || 0; policy = parseInt($root.dataset.cellPolicy) || 0; open = ! open"
@@ -147,6 +154,9 @@
                                         <span class="text-[12px] font-semibold leading-tight text-ink">{{ $cell['label'] }}</span>
                                         @if ($cell['on_non_working_day'] ?? false)
                                             <span class="text-[9px] font-medium uppercase leading-tight tracking-wide {{ $dayTypeInk }}">{{ $cell['day_type_label'] }}</span>
+                                        @endif
+                                        @if (! $isEmpty && ($cell['on_non_working_day'] ?? false))
+                                            <span class="text-[9px] font-medium uppercase leading-tight tracking-wide text-warning" title="{{ __('Shift on non-working day') }}">⚠</span>
                                         @endif
                                     </x-ui.day-tile>
                                 </button>
@@ -182,16 +192,20 @@
                                     </div>
                                 </section>
                             @else
+                                {{-- Read-only tile: locked period, actual mode, or non-manager --}}
                                 <x-ui.day-tile
                                     :day-type="$dayType"
                                     :state="$isEmpty ? null : $cell['state']"
-                                    :tooltip="$cell['title']"
+                                    :tooltip="$isDateLocked ? __('Locked period') : $cell['title']"
                                     :empty="$isEmpty"
                                     :empty-label="$cell['label']"
                                 >
-                                    <span class="text-[12px] font-semibold leading-tight text-ink">{{ $cell['label'] }}</span>
+                                    <span class="text-[12px] font-semibold leading-tight {{ $isDateLocked && ! $isEmpty ? 'text-muted' : 'text-ink' }}">{{ $cell['label'] }}</span>
                                     @if ($cell['on_non_working_day'] ?? false)
                                         <span class="text-[9px] font-medium uppercase leading-tight tracking-wide {{ $dayTypeInk }}">{{ $cell['day_type_label'] }}</span>
+                                    @endif
+                                    @if ($actualOutcome && $actualOutcome !== 'matched' && $actualOutcome !== 'no_record')
+                                        <span class="text-[9px] font-medium uppercase leading-tight tracking-wide {{ $actualOutcome === 'absent' ? 'text-danger' : 'text-warning' }}">{{ __($actualOutcome) }}</span>
                                     @endif
                                 </x-ui.day-tile>
                             @endif
