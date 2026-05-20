@@ -11,6 +11,7 @@ use App\Modules\Commerce\Marketplace\Ebay\EbayAccountSetupImporter;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConnectionTester;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
+use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection;
@@ -38,12 +39,18 @@ class Settings extends SettingsForm
 
     public ?string $defaultMerchantLocationKey = null;
 
+    /**
+     * @var array<int, array{marketplace_id: string|null, category_tree_id: string|null, category_id: string|null}>
+     */
+    public array $templateCategoryMappings = [];
+
     public function mount(SettingsService $settings): void
     {
         parent::mount($settings);
 
         $this->loadConnectionTest($settings);
         $this->loadAccountSetupDefaults($settings);
+        $this->loadTemplateCategoryMappings();
     }
 
     public function testConnection(EbayConnectionTester $tester): void
@@ -107,6 +114,33 @@ class Settings extends SettingsForm
         session()->flash('success', __('eBay setup defaults saved.'));
     }
 
+    public function saveTemplateCategoryMappings(): void
+    {
+        app(AuthorizationService::class)->authorize(
+            Actor::forUser(Auth::user()),
+            'commerce.marketplace.manage',
+        );
+
+        $templates = ProductTemplate::query()
+            ->where('company_id', $this->companyId())
+            ->whereIn('id', array_keys($this->templateCategoryMappings))
+            ->get();
+
+        foreach ($templates as $template) {
+            $mapping = $this->templateCategoryMappings[$template->id] ?? [];
+            $metadata = $template->metadata ?? [];
+            data_set($metadata, 'marketplace.ebay.marketplace_id', $this->nullableDefault($mapping['marketplace_id'] ?? null));
+            data_set($metadata, 'marketplace.ebay.category_tree_id', $this->nullableDefault($mapping['category_tree_id'] ?? null));
+            data_set($metadata, 'marketplace.ebay.category_id', $this->nullableDefault($mapping['category_id'] ?? null));
+
+            $template->metadata = $metadata;
+            $template->save();
+        }
+
+        $this->loadTemplateCategoryMappings();
+        session()->flash('success', __('eBay category mappings saved.'));
+    }
+
     public function connectButtonLabel(): string
     {
         return app(EbayOAuthService::class)->tokenForCompany($this->companyId()) === null
@@ -144,6 +178,7 @@ class Settings extends SettingsForm
             'pageTitle' => __(':label Settings', ['label' => $group['label'] ?? __('Module')]),
             'pageSubtitle' => __($group['description'] ?? 'Operator-editable module settings stored in base_settings.'),
             'accountResources' => $this->accountResources(),
+            'productTemplates' => $this->productTemplates(),
         ]);
     }
 
@@ -187,6 +222,31 @@ class Settings extends SettingsForm
             ->orderBy('kind')
             ->orderBy('name')
             ->get();
+    }
+
+    /**
+     * @return Collection<int, ProductTemplate>
+     */
+    private function productTemplates(): Collection
+    {
+        return ProductTemplate::query()
+            ->where('company_id', $this->companyId())
+            ->with('category')
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function loadTemplateCategoryMappings(): void
+    {
+        $this->templateCategoryMappings = $this->productTemplates()
+            ->mapWithKeys(function (ProductTemplate $template): array {
+                return [$template->id => [
+                    'marketplace_id' => data_get($template->metadata, 'marketplace.ebay.marketplace_id') ?: 'EBAY_MOTORS_US',
+                    'category_tree_id' => data_get($template->metadata, 'marketplace.ebay.category_tree_id') ?: '100',
+                    'category_id' => data_get($template->metadata, 'marketplace.ebay.category_id'),
+                ]];
+            })
+            ->all();
     }
 
     private function nullableDefault(mixed $value): ?string
