@@ -1,14 +1,53 @@
 @use('App\Modules\People\Attendance\Support\DayTypeVocabulary')
-@php($showPreviewLegend = $showPreviewLegend ?? true)
-@php($compact = $compact ?? false)
-@php($gridIntro = $gridIntro ?? __('Existing assignments show draft or published state; rest, off, and holiday days surface from each employee\'s work calendar.'))
-@php($cellMinWidth = $compact ? 'min-w-9' : 'min-w-14')
+@php
+    $showPreviewLegend = $showPreviewLegend ?? true;
+    $compact = $compact ?? false;
+    $gridIntro = $gridIntro ?? __('Existing assignments show draft or published state; rest, off, and holiday days surface from each employee\'s work calendar.');
+    $cellMinWidth = $compact ? 'min-w-9' : 'min-w-14';
+    $showDayDrawer = $showDayDrawer ?? true;
+    $dayDrawerData = [];
+    if ($showDayDrawer && !empty($rosterGridRows)) {
+        foreach ($rosterGridDays as $day) {
+            $entries = [];
+            foreach ($rosterGridRows as $row) {
+                $cell = $row['cells'][$day['date']] ?? null;
+                if (! $cell) {
+                    continue;
+                }
+                $entries[] = [
+                    'name'    => $row['employee']->displayName(),
+                    'shift'   => $cell['label'] ?? '',
+                    'state'   => $cell['state'] ?? 'empty',
+                    'dayType' => $cell['day_type'] ?? 'normal',
+                    'title'   => $cell['title'] ?? '',
+                    'empty'   => ($cell['state'] ?? 'empty') === 'empty',
+                ];
+            }
+            $dayDrawerData[$day['date']] = [
+                'label'     => \Carbon\CarbonImmutable::parse($day['date'])->format('j M, D'),
+                'isHoliday' => $day['is_holiday'] ?? false,
+                'isWeekend' => $day['is_weekend'] ?? false,
+                'entries'   => $entries,
+                'assigned'  => count(array_filter($entries, fn ($e) => ! $e['empty'])),
+            ];
+        }
+    }
+@endphp
+
+<div x-data="{
+    dayData: @js($dayDrawerData ?? []),
+    activeDate: null,
+    get activeDay() { return this.dayData[this.activeDate] ?? null },
+    open(date) { this.activeDate = date },
+    close() { this.activeDate = null }
+}" @show-day-drawer.window="open($event.detail.date)" class="relative">
 
 <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-    <div>
-        <h3 class="text-base font-semibold text-ink">{{ __('Roster grid') }}</h3>
-        <p class="mt-1 text-sm text-muted">{{ $gridIntro }}</p>
-    </div>
+    @if ($gridIntro)
+        <p class="text-sm text-muted">{{ $gridIntro }}</p>
+    @else
+        <div></div>
+    @endif
     <div class="flex flex-wrap items-center gap-2">
         <x-ui.badge variant="success">{{ __('Published') }}</x-ui.badge>
         <x-ui.badge variant="warning">{{ __('Draft') }}</x-ui.badge>
@@ -24,7 +63,7 @@
 
 <div class="mt-4 overflow-x-auto rounded-2xl border border-border-default">
     <table class="min-w-full divide-y divide-border-default text-xs">
-        <x-ui.day-strip :days="$rosterGridDays" :leading-label="__('Employee')" :compact="$compact" />
+        <x-ui.day-strip :days="$rosterGridDays" :leading-label="__('Employee')" :compact="$compact" :clickable="$showDayDrawer" />
         <tbody class="divide-y divide-border-default bg-surface-card">
             @forelse ($rosterGridRows as $row)
                 @php($employee = $row['employee'])
@@ -75,7 +114,7 @@
                                     </x-ui.day-tile>
                                 </button>
                                 <section x-show="open" x-cloak @click.outside="open = false" x-transition.origin.top.left class="absolute left-1/2 z-30 mt-1 w-56 -translate-x-1/2 rounded-2xl border border-border-default bg-surface-card p-3 text-left shadow-lg" aria-label="{{ __('Override :date', ['date' => $day['date']]) }}">
-                                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Override') }} {{ \Carbon\CarbonImmutable::parse($day['date'])->format('M j') }}</div>
+                                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Override') }} {{ \Carbon\CarbonImmutable::parse($day['date'])->format('j M') }}</div>
                                     <div class="mt-2 space-y-2">
                                         <label class="block text-[11px] font-semibold uppercase tracking-wider text-muted">
                                             {{ __('Shift') }}
@@ -128,3 +167,70 @@
         </tbody>
     </table>
 </div>
+
+@if ($showDayDrawer)
+{{-- Day drawer: slides in when a date column header is clicked --}}
+<div
+    x-show="activeDate"
+    x-cloak
+    x-transition:enter="transition ease-out duration-150"
+    x-transition:enter-start="opacity-0 translate-x-4"
+    x-transition:enter-end="opacity-100 translate-x-0"
+    x-transition:leave="transition ease-in duration-100"
+    x-transition:leave-start="opacity-100 translate-x-0"
+    x-transition:leave-end="opacity-0 translate-x-4"
+    @keydown.escape.window="close()"
+    class="absolute right-0 top-10 z-20 w-72 rounded-2xl border border-border-default bg-surface-card shadow-lg"
+>
+    <template x-if="activeDay">
+        <div>
+            <div class="flex items-start justify-between gap-2 border-b border-border-default px-4 py-3">
+                <div>
+                    <div class="text-sm font-semibold text-ink" x-text="activeDay.label"></div>
+                    <template x-if="activeDay.isHoliday">
+                        <span class="mt-0.5 inline-flex items-center rounded-full bg-day-holiday px-2 py-0.5 text-[10px] font-medium text-day-holiday-ink">{{ __('Holiday') }}</span>
+                    </template>
+                    <template x-if="!activeDay.isHoliday && activeDay.isWeekend">
+                        <span class="mt-0.5 inline-flex items-center rounded-full bg-day-rest px-2 py-0.5 text-[10px] font-medium text-day-rest-ink">{{ __('Weekend') }}</span>
+                    </template>
+                </div>
+                <button type="button" @click="close()" class="mt-0.5 rounded-md text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent" aria-label="{{ __('Close') }}">
+                    <x-icon name="heroicon-o-x-mark" class="h-4 w-4" />
+                </button>
+            </div>
+
+            <div class="max-h-80 overflow-y-auto px-4 py-2">
+                <template x-if="activeDay.entries.length === 0">
+                    <p class="py-4 text-center text-sm text-muted">{{ __('No employees in the current view.') }}</p>
+                </template>
+                <template x-for="(entry, i) in activeDay.entries" :key="i">
+                    <div class="flex items-center justify-between gap-2 border-b border-border-default/50 py-2 last:border-0">
+                        <div class="min-w-0">
+                            <div class="truncate text-sm font-medium text-ink" x-text="entry.name"></div>
+                            <div class="text-[11px] text-muted" x-text="entry.title || entry.shift"></div>
+                        </div>
+                        <template x-if="!entry.empty && entry.state === 'published'">
+                            <span class="shrink-0 rounded-full bg-status-success/10 px-2 py-0.5 text-[10px] font-semibold text-status-success">{{ __('Published') }}</span>
+                        </template>
+                        <template x-if="!entry.empty && entry.state === 'draft'">
+                            <span class="shrink-0 rounded-full bg-status-warning/10 px-2 py-0.5 text-[10px] font-semibold text-status-warning">{{ __('Draft') }}</span>
+                        </template>
+                        <template x-if="entry.empty">
+                            <span class="shrink-0 text-[11px] text-muted">—</span>
+                        </template>
+                    </div>
+                </template>
+            </div>
+
+            <div class="border-t border-border-default px-4 py-2.5">
+                <span class="text-[11px] text-muted">
+                    <span class="font-semibold text-ink" x-text="activeDay.assigned"></span>
+                    {{ __('assigned') }}
+                </span>
+            </div>
+        </div>
+    </template>
+</div>
+@endif
+
+</div>{{-- /Alpine day drawer wrapper --}}

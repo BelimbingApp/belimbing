@@ -4,7 +4,7 @@
 @php($listPeriodLabel = $listPeriodFirst && $listPeriodLast
     ? ($listScope === 'month'
         ? \Carbon\CarbonImmutable::parse($listPeriodFirst)->format('F Y')
-        : \Carbon\CarbonImmutable::parse($listPeriodFirst)->format('M j').' — '.\Carbon\CarbonImmutable::parse($listPeriodLast)->format('M j'))
+        : \Carbon\CarbonImmutable::parse($listPeriodFirst)->format('j M').' – '.\Carbon\CarbonImmutable::parse($listPeriodLast)->format('j M'))
     : '')
 @php($today = \Carbon\CarbonImmutable::today())
 @php($listPeriodIsCurrent = $listScope === 'month'
@@ -77,7 +77,7 @@
                     @include('livewire.people.attendance.partials.rosters-grid', [
                         'showPreviewLegend' => false,
                         'compact' => $listScope === 'month',
-                        'gridIntro' => __('Who is working :period. Click any cell to override one date without leaving the roster.', ['period' => $listPeriodLabel ?: __('this period')]),
+                        'gridIntro' => $listPeriodLabel ? __('Range: :period', ['period' => $listPeriodLabel]) : null,
                     ])
                 </div>
             </x-ui.card>

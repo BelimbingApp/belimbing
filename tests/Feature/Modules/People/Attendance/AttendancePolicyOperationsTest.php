@@ -604,7 +604,7 @@ it('lets managers create roster assignments from the guided roster builder', fun
     $this->actingAs($user);
 
     Livewire::test(Rosters::class)
-        ->assertSee('Roster Builder')
+        ->assertSee('Roster')
         ->assertSee('New roster assignment')
         ->call('startNewRosterAssignment')
         ->assertSet('mode', 'form')
@@ -765,7 +765,7 @@ it('shows saved and unsaved roster assignments in the roster grid', function ():
         ->set('selectedRosterEmployeeIds', [(string) $employees[1]->id])
         ->set('rosterShiftTemplateId', (string) $nightShift->id)
         ->set('rosterPolicyGroupId', (string) $policyGroup->id)
-        ->assertSee('Roster grid')
+        ->assertSee('Employee')
         ->assertSee('DAY')
         ->assertSee('Published')
         ->assertSee('NIGHT')
@@ -964,7 +964,7 @@ it('opens to the calendar as the list-mode primary surface and supports week nav
         ->assertSet('mode', 'list')
         ->assertSee('Calendar')
         ->assertSee('Records')
-        ->assertSee('Roster grid')
+        ->assertSee('Employee')
         ->assertSee($employee->full_name)
         ->assertSee('DAY')
         ->call('goToNextWeek')

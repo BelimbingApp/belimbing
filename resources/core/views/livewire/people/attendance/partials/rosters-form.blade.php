@@ -247,7 +247,7 @@
                                                 'met' => 'text-status-success',
                                                 default => 'text-muted',
                                             })
-                                            <td class="{{ $bgClass }} px-1.5 py-1.5 text-center" title="{{ $cell ? __(':assigned of :required assigned', ['assigned' => $cell['assigned'], 'required' => $cell['required'] ?: '—']) : __('No assignments') }}" wire:key="coverage-cell-{{ $shiftKey }}-{{ $dateKey }}">
+                                            <td class="{{ $bgClass }} cursor-pointer px-1.5 py-1.5 text-center hover:ring-1 hover:ring-inset hover:ring-accent/40" title="{{ $cell ? __(':assigned of :required assigned', ['assigned' => $cell['assigned'], 'required' => $cell['required'] ?: '—']) : __('No assignments') }}" wire:key="coverage-cell-{{ $shiftKey }}-{{ $dateKey }}" @click="$dispatch('show-day-drawer', { date: '{{ $dateKey }}' })">
                                                 @if ($cell)
                                                     <span class="text-[12px] font-semibold tabular-nums {{ $inkClass }}">{{ $cell['assigned'] }}@if ($cell['required'] > 0)<span class="text-muted">/{{ $cell['required'] }}</span>@endif</span>
                                                 @else
@@ -278,34 +278,50 @@
             </div>
         </x-ui.card>
 
-        <x-ui.card>
-            <h3 class="text-base font-semibold text-ink">{{ __('Publish review') }}</h3>
-            <p class="mt-1 text-sm text-muted">{{ __('Publish reviewed draft rows for the selected period and queue employee notification intents.') }}</p>
-            <div class="mt-4 space-y-3">
-                <x-ui.input id="attendance-roster-revision-note" wire:model="rosterRevisionNote" label="{{ __('Revision note') }}" :error="$errors->first('rosterRevisionNote')" />
-                <x-ui.button type="button" variant="primary" wire:click="publishReviewedRosters">{{ __('Publish reviewed drafts') }}</x-ui.button>
-            </div>
-
-            <div class="mt-6 border-t border-border-default pt-4">
-                <h4 class="text-sm font-semibold text-ink">{{ __('Swap shifts') }}</h4>
-                <div class="mt-3 grid gap-3 md:grid-cols-3">
-                    <x-ui.select wire:model="swapFromEmployeeId" label="{{ __('From') }}">
-                        <option value="">{{ __('Choose') }}</option>
-                        @foreach ($employees as $employee)
-                            <option value="{{ $employee->id }}">{{ $employee->full_name }}</option>
-                        @endforeach
-                    </x-ui.select>
-                    <x-ui.select wire:model="swapToEmployeeId" label="{{ __('To') }}">
-                        <option value="">{{ __('Choose') }}</option>
-                        @foreach ($employees as $employee)
-                            <option value="{{ $employee->id }}">{{ $employee->full_name }}</option>
-                        @endforeach
-                    </x-ui.select>
-                    <x-ui.input type="date" wire:model="swapDate" label="{{ __('Date') }}" :error="$errors->first('swapDate')" />
+        @php($publishReady = $rosterValidationRan && collect($rosterValidationFindings)->where('severity', 'error')->isEmpty() && ! $rosterIncomplete)
+        @if ($publishReady)
+            {{-- All-clear publish band: no blocking findings, collapse to single action row --}}
+            <div class="rounded-2xl border border-status-success/30 bg-status-success/5 p-4">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <div class="flex-1">
+                        <p class="text-sm font-medium text-ink">{{ __('All clear — ready to publish.') }}</p>
+                        <x-ui.input id="attendance-roster-revision-note-band" wire:model="rosterRevisionNote" class="mt-2" :placeholder="__('Revision note (optional)')" :error="$errors->first('rosterRevisionNote')" />
+                    </div>
+                    <x-ui.button type="button" variant="primary" wire:click="publishReviewedRosters" class="shrink-0">
+                        {{ __('Publish to the team →') }}
+                    </x-ui.button>
                 </div>
-                <x-ui.button type="button" variant="secondary" class="mt-3" wire:click="swapRosterCells">{{ __('Swap') }}</x-ui.button>
             </div>
-        </x-ui.card>
+        @else
+            <x-ui.card>
+                <h3 class="text-base font-semibold text-ink">{{ __('Publish') }}</h3>
+                <p class="mt-1 text-sm text-muted">{{ __('Validate first to unlock the all-clear publish band. Or publish with open warnings at your own risk.') }}</p>
+                <div class="mt-4 space-y-3">
+                    <x-ui.input id="attendance-roster-revision-note" wire:model="rosterRevisionNote" label="{{ __('Revision note') }}" :error="$errors->first('rosterRevisionNote')" />
+                    <x-ui.button type="button" variant="primary" wire:click="publishReviewedRosters">{{ __('Publish reviewed drafts') }}</x-ui.button>
+                </div>
+
+                <div class="mt-6 border-t border-border-default pt-4">
+                    <h4 class="text-sm font-semibold text-ink">{{ __('Swap shifts') }}</h4>
+                    <div class="mt-3 grid gap-3 md:grid-cols-3">
+                        <x-ui.select wire:model="swapFromEmployeeId" label="{{ __('From') }}">
+                            <option value="">{{ __('Choose') }}</option>
+                            @foreach ($employees as $employee)
+                                <option value="{{ $employee->id }}">{{ $employee->full_name }}</option>
+                            @endforeach
+                        </x-ui.select>
+                        <x-ui.select wire:model="swapToEmployeeId" label="{{ __('To') }}">
+                            <option value="">{{ __('Choose') }}</option>
+                            @foreach ($employees as $employee)
+                                <option value="{{ $employee->id }}">{{ $employee->full_name }}</option>
+                            @endforeach
+                        </x-ui.select>
+                        <x-ui.input type="date" wire:model="swapDate" label="{{ __('Date') }}" :error="$errors->first('swapDate')" />
+                    </div>
+                    <x-ui.button type="button" variant="secondary" class="mt-3" wire:click="swapRosterCells">{{ __('Swap') }}</x-ui.button>
+                </div>
+            </x-ui.card>
+        @endif
     </div>
 
 </div>
