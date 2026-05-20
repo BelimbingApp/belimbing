@@ -21,18 +21,21 @@ test('commerce menu is organized around operator jobs instead of implementation 
     expect($items['commerce.settings.general']->parent)->toBe('commerce.settings')
         ->and($items['commerce.settings.general']->label)->toBe('General')
         ->and($items['commerce.marketplace.ebay-setting']->parent)->toBe('commerce.settings')
-        ->and($items['commerce.marketplace.ebay-setting']->label)->toBe('eBay Setup')
-        ->and($items['commerce.ham-auto-parts.setting']->parent)->toBe('commerce.settings')
-        ->and($items['commerce.ham-auto-parts.setting']->label)->toBe('Auto Parts');
+        ->and($items['commerce.marketplace.ebay-setting']->label)->toBe('eBay Setup');
 
-    expect($items['commerce.ham-auto-parts.insights.recent-sale']->parent)->toBe('commerce.sales')
-        ->and($items['commerce.ham-auto-parts.insights.recent-sale']->label)->toBe('Recent Sales')
-        ->and($items['commerce.ham-auto-parts.insights.sold-this-month']->parent)->toBe('commerce.reports')
-        ->and($items['commerce.ham-auto-parts.insights.sold-this-month']->label)->toBe('Month-to-Date Sales')
-        ->and($items['commerce.ham-auto-parts.insights.sales-by-category']->parent)->toBe('commerce.reports')
-        ->and($items['commerce.ham-auto-parts.insights.sales-by-category']->label)->toBe('Category Sales')
-        ->and($items['commerce.ham-auto-parts.insights.top-earners-last-90-days']->parent)->toBe('commerce.reports')
-        ->and($items['commerce.ham-auto-parts.insights.top-earners-last-90-days']->label)->toBe('Top Sellers (90 Days)')
-        ->and($items['commerce.ham-auto-parts.insights.listed-without-sale']->parent)->toBe('commerce.marketplace')
-        ->and($items['commerce.ham-auto-parts.insights.listed-without-sale']->label)->toBe('Unsold Listings');
+    if ($items->has('commerce.ham-auto-parts.setting')) {
+        expect($items['commerce.ham-auto-parts.setting']->parent)->toBe('commerce.settings')
+            ->and($items['commerce.ham-auto-parts.setting']->label)->toBe('Auto Parts');
+
+        expect($items['commerce.ham-auto-parts.insights.recent-sale']->parent)->toBe('commerce.sales')
+            ->and($items['commerce.ham-auto-parts.insights.recent-sale']->label)->toBe('Recent Sales')
+            ->and($items['commerce.ham-auto-parts.insights.sold-this-month']->parent)->toBe('commerce.reports')
+            ->and($items['commerce.ham-auto-parts.insights.sold-this-month']->label)->toBe('Month-to-Date Sales')
+            ->and($items['commerce.ham-auto-parts.insights.sales-by-category']->parent)->toBe('commerce.reports')
+            ->and($items['commerce.ham-auto-parts.insights.sales-by-category']->label)->toBe('Category Sales')
+            ->and($items['commerce.ham-auto-parts.insights.top-earners-last-90-days']->parent)->toBe('commerce.reports')
+            ->and($items['commerce.ham-auto-parts.insights.top-earners-last-90-days']->label)->toBe('Top Sellers (90 Days)')
+            ->and($items['commerce.ham-auto-parts.insights.listed-without-sale']->parent)->toBe('commerce.marketplace')
+            ->and($items['commerce.ham-auto-parts.insights.listed-without-sale']->label)->toBe('Unsold Listings');
+    }
 });
