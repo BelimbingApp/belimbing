@@ -26,6 +26,7 @@ class Index extends SearchablePaginatedList
             'title' => 'commerce_inventory_items.title',
             'status' => 'commerce_inventory_items.status',
             'quantity_on_hand' => 'commerce_inventory_items.quantity_on_hand',
+            'fitments_count' => 'fitments_count',
             'storage_location' => 'commerce_inventory_items.storage_location',
             'unit_cost_amount' => 'commerce_inventory_items.unit_cost_amount',
             'target_price_amount' => 'commerce_inventory_items.target_price_amount',
@@ -40,6 +41,7 @@ class Index extends SearchablePaginatedList
             'title' => 'asc',
             'status' => 'asc',
             'quantity_on_hand' => 'desc',
+            'fitments_count' => 'desc',
             'storage_location' => 'asc',
             'unit_cost_amount' => 'asc',
             'target_price_amount' => 'asc',
@@ -69,6 +71,8 @@ class Index extends SearchablePaginatedList
         $companyId = Auth::user()?->company_id;
 
         return Item::query()
+            ->with('fitments')
+            ->withCount('fitments')
             ->when($companyId !== null, fn (EloquentBuilder $query) => $query->where('company_id', $companyId))
             ->when($companyId === null, fn (EloquentBuilder $query) => $query->whereRaw('1 = 0'));
     }

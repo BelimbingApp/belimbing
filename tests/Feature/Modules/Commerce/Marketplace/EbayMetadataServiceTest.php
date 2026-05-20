@@ -72,6 +72,45 @@ test('pulls and caches eBay Motors category aspects with application auth', func
     });
 });
 
+test('pulls and caches eBay category tree and subtree metadata', function (): void {
+    $user = createAdminUser();
+    configureEbayMetadataEnvironment($user->company_id);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100' => Http::response([
+            'categoryTreeId' => '100',
+            'rootCategoryNode' => [
+                'category' => ['categoryId' => '6000', 'categoryName' => 'eBay Motors'],
+            ],
+        ]),
+        'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_category_subtree*' => Http::response([
+            'categorySubtreeNode' => [
+                'category' => ['categoryId' => '33563', 'categoryName' => 'Calipers & Brackets'],
+            ],
+        ]),
+    ]);
+
+    $tree = app(EbayMetadataService::class)->categoryTree($user->company_id, 'EBAY_MOTORS_US', '100');
+    $subtree = app(EbayMetadataService::class)->categorySubtree($user->company_id, 'EBAY_MOTORS_US', '100', '33563');
+
+    expect($tree->kind)->toBe(EbayMetadataService::KIND_CATEGORY_TREE)
+        ->and($tree->key)->toBe('100')
+        ->and($tree->payload['rootCategoryNode']['category']['categoryName'])->toBe('eBay Motors')
+        ->and($subtree->kind)->toBe(EbayMetadataService::KIND_CATEGORY_SUBTREE)
+        ->and($subtree->key)->toBe('100:33563')
+        ->and($subtree->payload['categorySubtreeNode']['category']['categoryName'])->toBe('Calipers & Brackets');
+
+    Http::assertSent(function (Request $request): bool {
+        return $request->url() === 'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100'
+            && $request->hasHeader('X-EBAY-C-MARKETPLACE-ID', 'EBAY_MOTORS_US');
+    });
+
+    Http::assertSent(function (Request $request): bool {
+        return str_starts_with($request->url(), 'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_category_subtree')
+            && $request['category_id'] === '33563';
+    });
+});
+
 test('reuses fresh category aspect metadata without calling eBay', function (): void {
     $user = createAdminUser();
     configureEbayMetadataEnvironment($user->company_id);

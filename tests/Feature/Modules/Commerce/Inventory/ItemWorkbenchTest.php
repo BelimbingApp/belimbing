@@ -9,6 +9,7 @@ use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Catalog\Models\Description as CatalogDescription;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Livewire\Items\Create;
+use App\Modules\Commerce\Inventory\Livewire\Items\Index;
 use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Inventory\Models\ItemFitment;
@@ -345,6 +346,179 @@ test('item fitments can be imported in bulk rows', function (): void {
         ->assertSee('2012 BMW 135i');
 
     expect(ItemFitment::query()->where('item_id', $item->id)->count())->toBe(2);
+});
+
+test('item fitments can be edited from the detail page component', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $fitment = ItemFitment::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'is_universal' => false,
+        'compatibility_properties' => ['Year' => '2011', 'Make' => 'BMW', 'Model' => '135i'],
+        'display_year' => '2011',
+        'display_make' => 'BMW',
+        'display_model' => '135i',
+        'source' => ItemFitment::SOURCE_OPERATOR,
+        'confidence' => ItemFitment::CONFIDENCE_SELLER_CONFIRMED,
+    ]);
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->call('editFitment', $fitment->id)
+        ->assertSet('fitmentYear', '2011')
+        ->set('fitmentYear', '2012')
+        ->set('fitmentTrim', 'M Sport')
+        ->set('fitmentEngine', 'N55 3.0L')
+        ->set('fitmentNotes', 'Corrected after donor VIN review.')
+        ->call('updateFitment')
+        ->assertHasNoErrors()
+        ->assertSet('editingFitmentId', null)
+        ->assertSee('2012 BMW 135i');
+
+    expect($fitment->fresh())
+        ->display_year->toBe('2012')
+        ->display_trim->toBe('M Sport')
+        ->display_engine->toBe('N55 3.0L')
+        ->notes->toBe('Corrected after donor VIN review.')
+        ->compatibility_properties->toBe([
+            'Year' => '2012',
+            'Make' => 'BMW',
+            'Model' => '135i',
+            'Trim' => 'M Sport',
+            'Engine' => 'N55 3.0L',
+        ]);
+});
+
+test('item fitment can be bootstrapped from configured catalog attributes', function (): void {
+    config()->set('commerce.inventory.fitment_attribute_codes', [
+        'Year' => 'fitment_year',
+        'Make' => 'fitment_make',
+        'Model' => 'fitment_model',
+        'Trim' => 'fitment_trim',
+        'Engine' => 'fitment_engine',
+    ]);
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+
+    foreach ([
+        'fitment_year' => '2011',
+        'fitment_make' => 'BMW',
+        'fitment_model' => '135i',
+        'fitment_trim' => 'Base Coupe',
+        'fitment_engine' => '3.0L',
+    ] as $code => $value) {
+        $attribute = CatalogAttribute::factory()->create([
+            'company_id' => $user->company_id,
+            'code' => $code,
+        ]);
+
+        AttributeValue::factory()->create([
+            'item_id' => $item->id,
+            'attribute_id' => $attribute->id,
+            'value' => ['text' => $value],
+            'display_value' => $value,
+        ]);
+    }
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->assertSee('Create from attributes')
+        ->call('bootstrapFitmentFromAttributes')
+        ->assertHasNoErrors()
+        ->assertSee('2011 BMW 135i');
+
+    $fitment = ItemFitment::query()->where('item_id', $item->id)->firstOrFail();
+
+    expect($fitment->compatibility_properties)->toBe([
+        'Year' => '2011',
+        'Make' => 'BMW',
+        'Model' => '135i',
+        'Trim' => 'Base Coupe',
+        'Engine' => '3.0L',
+    ])->and($fitment->notes)->toBe('Created from item attributes.');
+});
+
+test('item fitments can be copied from another item in the same company', function (): void {
+    $user = createAdminUser();
+    $otherUser = createAdminUser();
+    $this->actingAs($user);
+
+    $source = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'DONOR-135I',
+        'title' => 'BMW donor vehicle',
+    ]);
+    $target = Item::factory()->create(['company_id' => $user->company_id]);
+    $outsideCompanySource = Item::factory()->create(['company_id' => $otherUser->company_id]);
+
+    ItemFitment::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $source->id,
+        'is_universal' => false,
+        'compatibility_properties' => ['Year' => '2011', 'Make' => 'BMW', 'Model' => '135i'],
+        'display_year' => '2011',
+        'display_make' => 'BMW',
+        'display_model' => '135i',
+        'source' => ItemFitment::SOURCE_OPERATOR,
+        'confidence' => ItemFitment::CONFIDENCE_SELLER_CONFIRMED,
+    ]);
+    ItemFitment::query()->create([
+        'company_id' => $otherUser->company_id,
+        'item_id' => $outsideCompanySource->id,
+        'is_universal' => true,
+        'source' => ItemFitment::SOURCE_OPERATOR,
+        'confidence' => ItemFitment::CONFIDENCE_SELLER_CONFIRMED,
+    ]);
+
+    Livewire::test(Show::class, ['item' => $target])
+        ->assertSee('DONOR-135I')
+        ->set('copyFitmentsFromItemId', $outsideCompanySource->id)
+        ->call('copyFitmentsFromItem')
+        ->assertHasErrors(['copyFitmentsFromItemId'])
+        ->set('copyFitmentsFromItemId', $source->id)
+        ->call('copyFitmentsFromItem')
+        ->assertHasNoErrors()
+        ->assertSee('2011 BMW 135i');
+
+    $copied = ItemFitment::query()->where('item_id', $target->id)->firstOrFail();
+
+    expect($copied->compatibility_properties)->toBe(['Year' => '2011', 'Make' => 'BMW', 'Model' => '135i'])
+        ->and($copied->notes)->toBe('Copied from DONOR-135I.');
+});
+
+test('inventory list shows fitment coverage and supports fitment count sorting', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $withoutFitment = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'NO-FITMENT',
+    ]);
+    $withFitment = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'HAS-FITMENT',
+    ]);
+
+    ItemFitment::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $withFitment->id,
+        'is_universal' => true,
+        'source' => ItemFitment::SOURCE_OPERATOR,
+        'confidence' => ItemFitment::CONFIDENCE_SELLER_CONFIRMED,
+    ]);
+
+    Livewire::test(Index::class)
+        ->assertSee('Fitment')
+        ->assertSee('Universal')
+        ->assertSee('None')
+        ->call('sort', 'fitments_count')
+        ->assertSeeInOrder([$withFitment->sku, $withoutFitment->sku])
+        ->call('sort', 'fitments_count')
+        ->assertSeeInOrder([$withoutFitment->sku, $withFitment->sku]);
 });
 
 test('item detail page can edit catalog attributes and description versions', function (): void {

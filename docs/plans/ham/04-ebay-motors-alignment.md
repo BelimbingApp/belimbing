@@ -1,6 +1,6 @@
 # ham/04-ebay-motors-alignment
 
-**Status:** In Progress; Phase 0 complete; Phase 1 fitment capture started
+**Status:** In Progress; Phases 0 and 1 complete
 **Last Updated:** 2026-05-20
 **Sources:**
 - User context: Ham operates from California and sells through the eBay store `rpm*parts`; Belimbing must help him align with US eBay Motors discovery, not only generic marketplace listing.
@@ -100,20 +100,20 @@ Goal: make vehicle compatibility a first-class data concept Belimbing can captur
 - [x] Add a fitment model for auto-parts compatibility that stores normalized compatibility property name/value sets, category context, source, confidence, operator notes, and optional display labels such as year/make/model/trim/engine. {Amp/claude-sonnet-4.5}
 - [x] Support item-level fitment on Commerce inventory items, with a clear universal-fit path that requires explicit operator confirmation. {Amp/claude-sonnet-4.5}
 - [x] Add operator UI for adding, bulk-entering, deleting, and reviewing fitment entries from an inventory item. {Amp/claude-sonnet-4.5}
-- [ ] Add in-place editing for existing fitment entries once the first operator flow proves the field shape.
-- [ ] Treat existing flat Ham fitment attributes as import/bootstrap inputs and provide a path to convert them into canonical fitment entries.
-- [ ] Add early fitment-set reuse or batch-apply tools for repeated vehicle/application families, because used auto-parts sellers often list several parts from the same donor vehicle.
-- [ ] Seed Ham auto-parts attributes for identifiers and confidence details: brand, manufacturer part number, OEM number, interchange number, placement/side, tested status, condition grade, and defect notes.
-- [ ] Show fitment coverage on inventory item detail and list surfaces so Ham can tell which parts are ready for Motors work.
+- [x] Add in-place editing for existing fitment entries once the first operator flow proves the field shape. {Amp/claude-sonnet-4.5}
+- [x] Treat existing flat Ham fitment attributes as import/bootstrap inputs and provide a path to convert them into canonical fitment entries. {Amp/claude-sonnet-4.5}
+- [x] Add early fitment-set reuse or batch-apply tools for repeated vehicle/application families, because used auto-parts sellers often list several parts from the same donor vehicle. {Amp/claude-sonnet-4.5}
+- [x] Seed Ham auto-parts attributes for identifiers and confidence details: brand, manufacturer part number, OEM number, interchange number, placement/side, tested status, condition grade, and defect notes. {Amp/claude-sonnet-4.5}
+- [x] Show fitment coverage on inventory item detail and list surfaces so Ham can tell which parts are ready for Motors work. {Amp/claude-sonnet-4.5}
 
 ### Phase 2 — eBay Motors metadata sync
 
 Goal: make Belimbing aware of what eBay expects for the selected Motors category.
 
-- [ ] Sync or cache eBay Motors category data for the US marketplace, starting from the relevant Motors category tree.
-- [ ] Fetch required and recommended item specifics for selected categories through eBay Taxonomy APIs.
-- [ ] Fetch automotive parts compatibility policies and item condition policies through eBay Metadata APIs, including compatibility limits and policy flags where available.
-- [ ] Store enough metadata to compute readiness offline for normal UI use, while keeping refresh/retry behavior explicit.
+- [x] Sync or cache eBay Motors category data for the US marketplace, starting from the relevant Motors category tree. {Amp/claude-sonnet-4.5}
+- [x] Fetch required and recommended item specifics for selected categories through eBay Taxonomy APIs. {Amp/claude-sonnet-4.5}
+- [x] Fetch automotive parts compatibility policies and item condition policies through eBay Metadata APIs, including compatibility limits and policy flags where available. {Amp/claude-sonnet-4.5}
+- [x] Store enough metadata to compute readiness offline for normal UI use, while keeping refresh/retry behavior explicit. {Amp/claude-sonnet-4.5}
 - [ ] Add a mapping surface between Belimbing catalog categories/templates and eBay Motors categories.
 - [ ] Add policy and location selection defaults for Ham once eBay account data has been imported.
 - [ ] Import catalog/ePID-backed product specifics where eBay exposes them for a listing or comparable product, then map those specifics into the same aspect-readiness pipeline as seller-entered attributes.
