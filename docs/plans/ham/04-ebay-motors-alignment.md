@@ -1,6 +1,6 @@
 # ham/04-ebay-motors-alignment
 
-**Status:** In Progress; Phases 0, 1, and 2 complete; Phase 3 started
+**Status:** In Progress; Phases 0, 1, 2, and 3 complete; Phase 4 publish/revise backend in progress
 **Last Updated:** 2026-05-20
 **Sources:**
 - User context: Ham operates from California and sells through the eBay store `rpm*parts`; Belimbing must help him align with US eBay Motors discovery, not only generic marketplace listing.
@@ -10,7 +10,7 @@
 - eBay developer docs: Taxonomy API category aspects and compatibility properties; Metadata API automotive parts compatibility and item condition policies; eBay Motors Parts & Accessories compatibility guidance.
 - Oracle review, 2026-05-20 — sharpened gaps between Ham's store, eBay Motors best practice, and Belimbing's missing Motors implementation surfaces.
 - Example Ham listing supplied by user: eBay item `236800746699`, ePID `1122066940`, a BMW 135i Brembo rear brake caliper pair. Direct page extraction was blocked from this environment, but eBay product/search snippets show catalog-backed specifics such as part numbers `34206785237` / `34206785238`, type `Brake Caliper`, finish `Powder-Coated`, color `Silver`, piston quantity `2`, and `Performance Part: No`.
-**Agents:** Amp/claude-sonnet-4.5
+**Agents:** Amp/claude-sonnet-4.5, Codex/gpt-5
 
 ## Problem Essence
 
@@ -70,8 +70,8 @@ The first implementation priority is therefore **Belimbing ↔ eBay Motors align
 - Legacy flat Ham fitment attributes such as year/make/model/trim/engine are transitional bootstrap fields. Once the fitment model lands, they must not remain the canonical eBay Motors publish source.
 - An item can be marked as universal fit only when the seller intentionally confirms that no vehicle-specific compatibility applies. Universal fit is a listing claim, not a default fallback for missing data.
 - eBay Motors readiness is computed from Belimbing data plus eBay metadata for the selected marketplace and category. It returns actionable gaps, not only pass/fail.
-- A marketplace listing draft is the durable local contract for publishing. It records the selected eBay category, mapped aspects, policy and location selections, chosen photo set, readiness snapshot, metadata version checked, and publish/revise status.
-- The eBay channel publishes Motors listings as a sequence of explicit operations: inventory item upsert, product compatibility upsert when applicable, offer create/update, and offer publish/withdraw. Failures from each operation are recorded in the integration exchange and summarized on the draft.
+- A marketplace listing draft is the durable local contract for publishing. It records the seller listing marketplace separately from the metadata marketplace/category context, plus mapped aspects, policy and location selections, chosen photo set, readiness snapshot, metadata version checked, and publish/revise status.
+- The eBay channel publishes Motors listings as a sequence of explicit operations: inventory item upsert, product compatibility upsert when applicable, offer create/update, and offer publish/withdraw. Failures from each operation are recorded in the integration exchange and summarized on the draft; successful operation exchanges are retained alongside the Belimbing-managed listing snapshot.
 - Publish-ready media means eBay-accessible HTTPS image URLs or another eBay-supported image handoff. Internal signed Belimbing media URLs are not assumed to be publish-safe.
 - eBay policy readiness validates policy suitability, not just the presence of policy IDs. Return policy, fulfillment policy, payment policy, and merchant location must be checked against the selected category/marketplace requirements where eBay exposes enough metadata.
 - Imported eBay product/catalog specifics can prefill or suggest aspects only when their source is visible. The operator must be able to accept, override, or reject catalog-derived values before Belimbing publishes or revises a listing.
@@ -140,11 +140,11 @@ Goal: let Ham know what is missing before any publish/revise call.
 Goal: publish and revise eBay Motors listings using official eBay APIs and the data Belimbing has validated.
 
 - [x] Extend eBay listing draft payloads to include selected Motors category, required aspects, item condition mapping, publish-safe photos, policies, merchant location, SKU, quantity, price, and structured fitment. {Amp/claude-sonnet-4.5}
-- [ ] Implement publish as explicit eBay operations: inventory item upsert, product compatibility upsert when applicable, offer create/update, and offer publish/withdraw.
-- [ ] Publish a new eBay Motors listing from a ready Belimbing item through official eBay APIs.
-- [ ] Revise an existing eBay listing when fitment, item specifics, photos, price, quantity, title, or description changes.
+- [x] Implement publish as explicit eBay operations: inventory item upsert, product compatibility upsert when applicable, offer create/update, and offer publish/withdraw. {Codex/gpt-5}
+- [x] Publish a new eBay Motors listing from a ready Belimbing item through official eBay APIs. {Codex/gpt-5}
+- [x] Revise an existing eBay listing when fitment, item specifics, photos, price, quantity, title, or description changes. {Codex/gpt-5}
 - [ ] Mark Belimbing-created eBay listings as Belimbing-managed and surface drift if the eBay listing later changes outside Belimbing.
-- [ ] Preserve eBay operation results and failures in the integration exchange so support can diagnose API issues without exposing raw errors as the primary operator experience.
+- [x] Preserve eBay operation results and failures in the integration exchange so support can diagnose API issues without exposing raw errors as the primary operator experience. {Codex/gpt-5}
 - [ ] Keep imported/synced existing eBay listings reconcilable with Belimbing items and fitment records.
 
 ### Phase 5 — Import, cleanup, and scale Ham’s existing store

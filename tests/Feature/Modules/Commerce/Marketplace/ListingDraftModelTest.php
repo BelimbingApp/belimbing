@@ -22,6 +22,7 @@ test('listing drafts store readiness state separately from synced marketplace li
         'listing_id' => $listing->id,
         'channel' => 'ebay',
         'marketplace_id' => 'EBAY_US',
+        'metadata_marketplace_id' => 'EBAY_MOTORS_US',
         'external_sku' => 'BMW-CALIPER-PAIR',
         'title' => 'BMW 135i Brembo rear brake caliper pair',
         'category_id' => '33563',
@@ -48,5 +49,6 @@ test('listing drafts store readiness state separately from synced marketplace li
         ->and($draft->policy_ids['return'])->toBe('RET-1')
         ->and($draft->photo_asset_ids)->toBe([10, 11])
         ->and($draft->readiness_snapshot['missing'])->toBe(['fitment'])
+        ->and($draft->metadata_marketplace_id)->toBe('EBAY_MOTORS_US')
         ->and($draft->metadata_checked_at?->toDateTimeString())->toBe('2026-05-20 12:00:00');
 });

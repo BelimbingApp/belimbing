@@ -15,6 +15,7 @@ return new class extends Migration
             $table->foreignId('listing_id')->nullable()->constrained('commerce_marketplace_listings')->nullOnDelete();
             $table->string('channel');
             $table->string('marketplace_id');
+            $table->string('metadata_marketplace_id')->nullable();
             $table->string('external_sku')->nullable();
             $table->string('title')->nullable();
             $table->string('category_id')->nullable();

@@ -40,17 +40,17 @@ class EbayListingReadinessService
         $config = $this->configuration->forCompany($companyId);
         $sellerMarketplaceId = (string) $config['marketplace_id'];
         $templateMapping = $this->templateMapping($item);
-        $marketplaceId = $templateMapping['marketplace_id'] ?? $sellerMarketplaceId;
+        $metadataMarketplaceId = $templateMapping['marketplace_id'] ?? $sellerMarketplaceId;
         $categoryTreeId = $templateMapping['category_tree_id'] ?? null;
         $categoryId = $templateMapping['category_id'] ?? null;
         $policyIds = $this->policyIds($companyId);
-        $mappedAspects = $this->mappedAspects($item, $marketplaceId, $categoryId, $categoryTreeId);
+        $mappedAspects = $this->mappedAspects($item, $metadataMarketplaceId, $categoryId, $categoryTreeId);
         $productReferences = ProductReference::query()
             ->where('company_id', $companyId)
             ->where('channel', EbayConfiguration::CHANNEL)
             ->where('item_id', $item->id)
             ->get();
-        $aspectFacts = $this->aspectFacts($item, $marketplaceId, $categoryId, $categoryTreeId, $productReferences->all());
+        $aspectFacts = $this->aspectFacts($item, $metadataMarketplaceId, $categoryId, $categoryTreeId, $productReferences->all());
 
         [$blockers, $warnings] = $this->gaps(
             item: $item,
@@ -59,7 +59,7 @@ class EbayListingReadinessService
             merchantLocationKey: $this->merchantLocationKey($companyId),
             mappedAspects: $mappedAspects,
             productReferenceCount: $productReferences->count(),
-            marketplaceId: $marketplaceId,
+            metadataMarketplaceId: $metadataMarketplaceId,
             sellerMarketplaceId: $sellerMarketplaceId,
             categoryTreeId: $categoryTreeId,
             aspectFacts: $aspectFacts,
@@ -72,9 +72,10 @@ class EbayListingReadinessService
                 'company_id' => $companyId,
                 'item_id' => $item->id,
                 'channel' => EbayConfiguration::CHANNEL,
-                'marketplace_id' => $marketplaceId,
+                'marketplace_id' => $sellerMarketplaceId,
             ],
             [
+                'metadata_marketplace_id' => $metadataMarketplaceId,
                 'external_sku' => $item->sku,
                 'title' => $item->title,
                 'category_id' => $categoryId,
@@ -89,6 +90,8 @@ class EbayListingReadinessService
                     'blockers' => $blockers,
                     'warnings' => $warnings,
                     'facts' => [
+                        'listing_marketplace_id' => $sellerMarketplaceId,
+                        'metadata_marketplace_id' => $metadataMarketplaceId,
                         'category_tree_id' => $categoryTreeId,
                         'category_id' => $categoryId,
                         'fitment_count' => $item->fitments->count(),
@@ -106,7 +109,7 @@ class EbayListingReadinessService
                     ])->values()->all(),
                 ],
                 'metadata_checked_at' => Carbon::now(),
-                'metadata_version_key' => $this->metadataVersionKey($marketplaceId, $categoryTreeId, $categoryId),
+                'metadata_version_key' => $this->metadataVersionKey($metadataMarketplaceId, $categoryTreeId, $categoryId),
                 'last_failure_summary' => null,
             ],
         );
@@ -223,7 +226,7 @@ class EbayListingReadinessService
         ?string $merchantLocationKey,
         array $mappedAspects,
         int $productReferenceCount,
-        string $marketplaceId,
+        string $metadataMarketplaceId,
         string $sellerMarketplaceId,
         ?string $categoryTreeId,
         array $aspectFacts,
@@ -264,18 +267,18 @@ class EbayListingReadinessService
         foreach ($policyIds as $kind => $policyId) {
             if ($policyId === null) {
                 $blockers[] = $this->gap('policy_'.$kind, __('Choose a default :kind policy in eBay settings.', ['kind' => $kind]), 'settings');
-            } elseif (! $this->hasEnabledAccountResource($item->company_id, [$sellerMarketplaceId, $marketplaceId], 'policy', $policyId)) {
+            } elseif (! $this->hasEnabledAccountResource($item->company_id, [$sellerMarketplaceId, $metadataMarketplaceId], 'policy', $policyId)) {
                 $warnings[] = $this->gap('policy_'.$kind.'_unverified', __('Re-import eBay setup choices to confirm the saved :kind policy is still enabled.', ['kind' => $kind]), 'settings');
             }
         }
 
         if ($merchantLocationKey === null) {
             $blockers[] = $this->gap('merchant_location', __('Choose a default merchant location in eBay settings.'), 'settings');
-        } elseif (! $this->hasEnabledAccountResource($item->company_id, [$sellerMarketplaceId, $marketplaceId], AccountResource::KIND_INVENTORY_LOCATION, $merchantLocationKey)) {
+        } elseif (! $this->hasEnabledAccountResource($item->company_id, [$sellerMarketplaceId, $metadataMarketplaceId], AccountResource::KIND_INVENTORY_LOCATION, $merchantLocationKey)) {
             $warnings[] = $this->gap('merchant_location_unverified', __('Re-import eBay setup choices to confirm the saved merchant location is still enabled.'), 'settings');
         }
 
-        foreach ($this->requiredAspectNames($marketplaceId, $categoryTreeId, $categoryId) as $aspectName) {
+        foreach ($this->requiredAspectNames($metadataMarketplaceId, $categoryTreeId, $categoryId) as $aspectName) {
             if (! array_key_exists($aspectName, $mappedAspects)) {
                 $blockers[] = $this->gap('aspect_'.$aspectName, __('Map or enter required eBay aspect: :aspect.', ['aspect' => $aspectName]), 'attributes');
             }
@@ -287,7 +290,7 @@ class EbayListingReadinessService
             }
         }
 
-        if ($this->categoryHasConditionPolicy($marketplaceId, $categoryId) && ! $this->hasAnyAspect($aspectFacts, ['Condition', 'Condition Grade', 'Type'])) {
+        if ($this->categoryHasConditionPolicy($metadataMarketplaceId, $categoryId) && ! $this->hasAnyAspect($aspectFacts, ['Condition', 'Condition Grade', 'Type'])) {
             $blockers[] = $this->gap('condition_mapping', __('Map a Belimbing condition attribute before publishing to this eBay category.'), 'attributes');
         }
 
@@ -307,7 +310,7 @@ class EbayListingReadinessService
             $warnings[] = $this->gap('package_shipping_facts', __('Confirm package weight and dimensions before publishing if the selected shipping policy requires them.'), 'item_facts');
         }
 
-        if (! $this->hasFreshCategoryMetadata($marketplaceId, $categoryTreeId, $categoryId)) {
+        if (! $this->hasFreshCategoryMetadata($metadataMarketplaceId, $categoryTreeId, $categoryId)) {
             $warnings[] = $this->gap('metadata_stale', __('Refresh eBay metadata before publishing so category rules are current.'), 'settings');
         }
 

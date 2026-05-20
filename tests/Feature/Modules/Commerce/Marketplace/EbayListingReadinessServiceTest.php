@@ -194,12 +194,15 @@ test('eBay listing readiness uses template mapping policies aspects and product 
     $draft = app(EbayListingReadinessService::class)->refreshForItem($item->fresh());
 
     expect($draft->readiness_status)->toBe(EbayListingReadinessService::STATUS_READY)
-        ->and($draft->marketplace_id)->toBe('EBAY_MOTORS_US')
+        ->and($draft->marketplace_id)->toBe('EBAY_US')
+        ->and($draft->metadata_marketplace_id)->toBe('EBAY_MOTORS_US')
         ->and($draft->category_id)->toBe('33563')
         ->and($draft->mapped_aspects)->toBe(['Brand' => 'BMW'])
         ->and($draft->policy_ids)->toBe(['return' => 'RET-1', 'fulfillment' => 'FUL-1', 'payment' => 'PAY-1'])
         ->and($draft->merchant_location_key)->toBe('california_shop')
         ->and($draft->readiness_snapshot['blockers'])->toBe([])
+        ->and($draft->readiness_snapshot['facts']['listing_marketplace_id'])->toBe('EBAY_US')
+        ->and($draft->readiness_snapshot['facts']['metadata_marketplace_id'])->toBe('EBAY_MOTORS_US')
         ->and($draft->readiness_snapshot['aspects'][0]['source'])->toBe('catalog_attribute')
         ->and($draft->readiness_snapshot['product_references'][0]['external_product_id'])->toBe('1122066940');
 });
@@ -290,7 +293,8 @@ test('eBay listing payload builder prepares inventory offer compatibility and pu
         'company_id' => $user->company_id,
         'item_id' => $item->id,
         'channel' => EbayConfiguration::CHANNEL,
-        'marketplace_id' => 'EBAY_MOTORS_US',
+        'marketplace_id' => 'EBAY_US',
+        'metadata_marketplace_id' => 'EBAY_MOTORS_US',
         'external_sku' => 'BMW-CALIPER-1',
         'title' => 'BMW rear brake caliper pair',
         'category_id' => '33563',
@@ -304,10 +308,18 @@ test('eBay listing payload builder prepares inventory offer compatibility and pu
 
     $payload = app(EbayListingPayloadBuilder::class)->build($draft);
 
-    expect($payload['inventory_item']['product']['imageUrls'])->toBe(['https://cdn.example.test/caliper.jpg'])
+    expect($payload['marketplace_id'])->toBe('EBAY_US')
+        ->and($payload['metadata_marketplace_id'])->toBe('EBAY_MOTORS_US')
+        ->and($payload['inventory_item']['product']['imageUrls'])->toBe(['https://cdn.example.test/caliper.jpg'])
+        ->and($payload['inventory_item']['product']['aspects'])->toBe(['Brand' => ['BMW'], 'Condition' => ['Used']])
         ->and($payload['inventory_item']['availability']['shipToLocationAvailability']['quantity'])->toBe(2)
         ->and($payload['inventory_item']['condition'])->toBe('Used')
-        ->and($payload['compatibility']['applications'][0]['properties'])->toBe(['Year' => '2011', 'Make' => 'BMW', 'Model' => '135i'])
+        ->and($payload['compatibility']['applications'][0]['compatibilityProperties'])->toBe([
+            ['name' => 'year', 'value' => '2011'],
+            ['name' => 'make', 'value' => 'BMW'],
+            ['name' => 'model', 'value' => '135i'],
+        ])
         ->and($payload['offer']['pricingSummary']['price'])->toBe(['value' => '250.00', 'currency' => 'USD'])
+        ->and($payload['offer']['marketplaceId'])->toBe('EBAY_US')
         ->and($payload['operations'])->toBe(['inventory_item_upsert', 'compatibility_upsert', 'offer_create_or_update', 'offer_publish']);
 });

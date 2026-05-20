@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $listing_id
  * @property string $channel
  * @property string $marketplace_id
+ * @property string|null $metadata_marketplace_id
  * @property string|null $external_sku
  * @property string|null $title
  * @property string|null $category_id
@@ -50,6 +51,7 @@ class ListingDraft extends Model
         'listing_id',
         'channel',
         'marketplace_id',
+        'metadata_marketplace_id',
         'external_sku',
         'title',
         'category_id',

@@ -23,6 +23,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         private readonly IntegrationGateway $integration,
         private readonly SalesOrderMaterializer $salesOrders,
         private readonly EbayProductReferenceImporter $productReferences,
+        private readonly EbayListingOperationService $listingOperations,
     ) {}
 
     public function key(): string
@@ -130,17 +131,17 @@ class EbayMarketplaceChannel implements MarketplaceChannel
 
     public function createListing(Item $item): array
     {
-        throw MarketplaceOperationException::writePathNotEnabled($this->key());
+        return $this->listingOperations->createListing($item);
     }
 
     public function reviseListing(Listing $listing): array
     {
-        throw MarketplaceOperationException::writePathNotEnabled($this->key());
+        return $this->listingOperations->reviseListing($listing);
     }
 
     public function endListing(Listing $listing): array
     {
-        throw MarketplaceOperationException::writePathNotEnabled($this->key());
+        return $this->listingOperations->endListing($listing);
     }
 
     /**
