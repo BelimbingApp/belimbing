@@ -113,7 +113,7 @@
                                         @endif
                                     </x-ui.day-tile>
                                 </button>
-                                <section x-show="open" x-cloak @click.outside="open = false" x-transition.origin.top.left class="absolute left-1/2 z-30 mt-1 w-56 -translate-x-1/2 rounded-2xl border border-border-default bg-surface-card p-3 text-left shadow-lg" aria-label="{{ __('Override :date', ['date' => $day['date']]) }}">
+                                <section x-show="open" x-cloak @click.outside="open = false" x-transition.origin.top.left class="absolute left-1/2 z-30 mt-1 w-56 -translate-x-1/2 rounded-2xl border border-border-default bg-surface-card p-3 text-left shadow-lg" role="dialog" tabindex="-1" aria-label="{{ __('Override :date', ['date' => $day['date']]) }}">
                                     <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Override') }} {{ \Carbon\CarbonImmutable::parse($day['date'])->format('j M') }}</div>
                                     <div class="mt-2 space-y-2">
                                         <label class="block text-[11px] font-semibold uppercase tracking-wider text-muted">

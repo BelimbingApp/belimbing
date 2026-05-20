@@ -3,6 +3,11 @@
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\People\Leave\CountryPacks\Malaysia\MalaysiaStatutoryLeaveTypes;
+use App\Modules\People\Leave\Data\LeaveEncashmentData;
+use App\Modules\People\Leave\Data\LeaveLedgerEntryData;
+use App\Modules\People\Leave\Data\LeaveLedgerEntryOptions;
+use App\Modules\People\Leave\Data\LeaveLedgerEntrySource;
+use App\Modules\People\Leave\Data\LeaveLedgerEntrySubject;
 use App\Modules\People\Leave\Exceptions\LeaveLedgerImmutableException;
 use App\Modules\People\Leave\Exceptions\LeaveRequestValidationException;
 use App\Modules\People\Leave\Models\LeaveAssignment;
@@ -23,9 +28,46 @@ use App\Modules\People\Leave\Services\SubmitLeaveRequestService;
 use App\Modules\People\Leave\Services\WithdrawLeaveRequestService;
 use App\Modules\People\Payroll\Models\PayrollCalendar;
 use App\Modules\People\Payroll\Models\PayrollInput;
+use App\Modules\People\Payroll\Models\PayrollLeaveTypePayItem;
 use App\Modules\People\Payroll\Models\PayrollPeriod;
 use App\Modules\People\Payroll\Models\PayrollRun;
 use App\Modules\People\Settings\Models\PeopleNotificationDeliveryLog;
+
+/**
+ * @param  array{
+ *     companyId: int,
+ *     employeeId: int,
+ *     leaveTypeId: int,
+ *     leaveYear: int,
+ *     entryType: string,
+ *     quantity: float|int,
+ *     unit: string,
+ *     sourceType: string,
+ *     sourceId?: int|null,
+ *     occurredOn?: DateTimeInterface|null
+ * }  $attributes
+ */
+function recordLeaveLedgerEntry(LeaveBalanceLedgerService $ledger, array $attributes): LeaveBalanceLedgerEntry
+{
+    return $ledger->record(new LeaveLedgerEntryData(
+        subject: new LeaveLedgerEntrySubject(
+            companyId: $attributes['companyId'],
+            employeeId: $attributes['employeeId'],
+            leaveTypeId: $attributes['leaveTypeId'],
+            leaveYear: $attributes['leaveYear'],
+        ),
+        entryType: $attributes['entryType'],
+        quantity: (float) $attributes['quantity'],
+        unit: $attributes['unit'],
+        source: new LeaveLedgerEntrySource(
+            type: $attributes['sourceType'],
+            id: $attributes['sourceId'] ?? null,
+        ),
+        options: new LeaveLedgerEntryOptions(
+            occurredOn: $attributes['occurredOn'] ?? null,
+        ),
+    ));
+}
 
 function createLeaveAssignment(array $overrides = []): array
 {
@@ -50,7 +92,7 @@ function createLeaveAssignment(array $overrides = []): array
     $type = LeaveType::query()->create($typeAttributes);
 
     if ($payItemCode !== null) {
-        \App\Modules\People\Payroll\Models\PayrollLeaveTypePayItem::query()->create([
+        PayrollLeaveTypePayItem::query()->create([
             'company_id' => $company->id,
             'leave_type_id' => $type->id,
             'payroll_pay_item_code' => $payItemCode,
@@ -166,16 +208,16 @@ function createOpenPayrollRun(Company $company, string $startsOn, string $endsOn
 test('balance ledger is append-only: update throws', function (): void {
     [$company, $employee, , $type] = createLeaveAssignment();
 
-    $entry = app(LeaveBalanceLedgerService::class)->record(
-        companyId: $company->id,
-        employeeId: $employee->id,
-        leaveTypeId: $type->id,
-        leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING,
-        quantity: 10.0,
-        unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-    );
+    $entry = recordLeaveLedgerEntry(app(LeaveBalanceLedgerService::class), [
+        'companyId' => $company->id,
+        'employeeId' => $employee->id,
+        'leaveTypeId' => $type->id,
+        'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING,
+        'quantity' => 10.0,
+        'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+    ]);
 
     $entry->quantity = 99;
     expect(fn () => $entry->save())->toThrow(LeaveLedgerImmutableException::class);
@@ -185,12 +227,12 @@ test('balance ledger is append-only: update throws', function (): void {
 test('submit creates a workflow-attached request and writes per-day breakdown', function (): void {
     [$company, $employee, $assignment, $type] = createLeaveAssignment();
 
-    app(LeaveBalanceLedgerService::class)->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 21.0, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-        occurredOn: new DateTimeImmutable('2026-01-01'),
-    );
+    recordLeaveLedgerEntry(app(LeaveBalanceLedgerService::class), [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 21.0, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+        'occurredOn' => new DateTimeImmutable('2026-01-01'),
+    ]);
 
     $request = app(SubmitLeaveRequestService::class)->submit(
         employee: $employee,
@@ -215,12 +257,12 @@ test('submit creates a workflow-attached request and writes per-day breakdown', 
 test('submit preview excludes state substitute holidays when a state code is supplied', function (): void {
     [$company, $employee, $assignment, $type] = createLeaveAssignment();
 
-    app(LeaveBalanceLedgerService::class)->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 21.0, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-        occurredOn: new DateTimeImmutable('2026-01-01'),
-    );
+    recordLeaveLedgerEntry(app(LeaveBalanceLedgerService::class), [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 21.0, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+        'occurredOn' => new DateTimeImmutable('2026-01-01'),
+    ]);
 
     $request = app(SubmitLeaveRequestService::class)->submit(
         employee: $employee,
@@ -255,11 +297,11 @@ test('submit rejects when compulsory attachment is missing', function (): void {
     [$company, $employee, $assignment, $type] = createLeaveAssignment([
         'leave_type' => ['code' => 'sick_leave', 'name' => 'Sick Leave', 'compulsory_attachment' => true],
     ]);
-    app(LeaveBalanceLedgerService::class)->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 14, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-    );
+    recordLeaveLedgerEntry(app(LeaveBalanceLedgerService::class), [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 14, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+    ]);
 
     expectLeaveValidation(fn () => app(SubmitLeaveRequestService::class)->submit(
         employee: $employee,
@@ -275,11 +317,11 @@ test('submit rejects when request crosses a month boundary and policy forbids it
         'request_policy' => ['no_cross_month_split' => true],
     ]);
 
-    app(LeaveBalanceLedgerService::class)->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 21, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-    );
+    recordLeaveLedgerEntry(app(LeaveBalanceLedgerService::class), [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 21, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+    ]);
 
     expectLeaveValidation(fn () => app(SubmitLeaveRequestService::class)->submit(
         employee: $employee,
@@ -301,11 +343,11 @@ test('submit rejects back-dated requests outside the configured back-date window
         ],
     ]);
 
-    app(LeaveBalanceLedgerService::class)->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 21, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-    );
+    recordLeaveLedgerEntry(app(LeaveBalanceLedgerService::class), [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 21, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+    ]);
 
     expectLeaveValidation(fn () => app(SubmitLeaveRequestService::class)->submit(
         employee: $employee,
@@ -331,11 +373,11 @@ test('submit requires short-notice handling when advance notice is missed', func
         ],
     ]);
 
-    app(LeaveBalanceLedgerService::class)->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 21, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-    );
+    recordLeaveLedgerEntry(app(LeaveBalanceLedgerService::class), [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 21, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+    ]);
 
     expectLeaveValidation(fn () => app(SubmitLeaveRequestService::class)->submit(
         employee: $employee,
@@ -360,11 +402,11 @@ test('submit requires short-notice handling when advance notice is missed', func
 test('submit rejects overlapping active leave when multiple applications per day are disabled', function (): void {
     [$company, $employee, $assignment, $type] = createLeaveAssignment();
 
-    app(LeaveBalanceLedgerService::class)->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 21, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-    );
+    recordLeaveLedgerEntry(app(LeaveBalanceLedgerService::class), [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 21, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+    ]);
 
     app(SubmitLeaveRequestService::class)->submit(
         employee: $employee,
@@ -386,11 +428,11 @@ test('submit rejects overlapping active leave when multiple applications per day
 test('submit treats pending requests as encumbered balance when policy enables it', function (): void {
     [$company, $employee, $assignment, $type] = createLeaveAssignment();
 
-    app(LeaveBalanceLedgerService::class)->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 5, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-    );
+    recordLeaveLedgerEntry(app(LeaveBalanceLedgerService::class), [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 5, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+    ]);
 
     app(SubmitLeaveRequestService::class)->submit(
         employee: $employee,
@@ -413,11 +455,11 @@ test('approve auto-applies, writes taken ledger entry and decreases balance', fu
     [$company, $employee, $assignment, $type] = createLeaveAssignment();
     $ledger = app(LeaveBalanceLedgerService::class);
 
-    $ledger->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 21, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-    );
+    recordLeaveLedgerEntry($ledger, [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 21, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+    ]);
     expect($ledger->balanceFor($employee->id, $type->id, 2026))->toBe(21.0);
 
     $request = app(SubmitLeaveRequestService::class)->submit(
@@ -446,11 +488,11 @@ test('withdrawing an applied request writes a reversing cancelled entry restorin
     [$company, $employee, $assignment, $type] = createLeaveAssignment();
     $ledger = app(LeaveBalanceLedgerService::class);
 
-    $ledger->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 21, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-    );
+    recordLeaveLedgerEntry($ledger, [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 21, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+    ]);
 
     $request = app(SubmitLeaveRequestService::class)->submit(
         employee: $employee, assignment: $assignment,
@@ -476,11 +518,11 @@ test('withdrawing an applied request writes a reversing cancelled entry restorin
 
 test('cancelling a submitted request transitions to cancelled with audit event', function (): void {
     [$company, $employee, $assignment, $type] = createLeaveAssignment();
-    app(LeaveBalanceLedgerService::class)->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 21, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-    );
+    recordLeaveLedgerEntry(app(LeaveBalanceLedgerService::class), [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 21, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+    ]);
 
     $request = app(SubmitLeaveRequestService::class)->submit(
         employee: $employee, assignment: $assignment,
@@ -530,12 +572,12 @@ test('carry-forward applies cap and writes carried_forward + expired ledger entr
     [$company, $employee, , $type, $entitlement] = createLeaveAssignment();
     $ledger = app(LeaveBalanceLedgerService::class);
 
-    $ledger->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2025,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 10.5, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-        occurredOn: new DateTimeImmutable('2025-01-01'),
-    );
+    recordLeaveLedgerEntry($ledger, [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2025,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 10.5, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+        'occurredOn' => new DateTimeImmutable('2025-01-01'),
+    ]);
 
     $outcome = app(CarryForwardService::class)->compute(
         companyId: $company->id,
@@ -560,19 +602,19 @@ test('encashment debits the ledger and creates a PayrollInput earning line', fun
     $today = now();
     createOpenPayrollRun($company, $today->copy()->startOfMonth()->toDateString(), $today->copy()->endOfMonth()->toDateString());
 
-    $ledger->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 10, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-    );
+    recordLeaveLedgerEntry($ledger, [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 10, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+    ]);
 
-    $entry = app(LeaveEncashmentService::class)->encash(
+    $entry = app(LeaveEncashmentService::class)->encash(new LeaveEncashmentData(
         companyId: $company->id,
         employeeId: $employee->id,
         leaveTypeId: $type->id,
         leaveYear: 2026,
         days: 4,
-    );
+    ));
 
     expect($entry->entry_type)->toBe(LeaveBalanceLedgerEntry::ENTRY_ENCASHED)
         ->and($ledger->balanceFor($employee->id, $type->id, 2026))->toBe(6.0);
@@ -586,16 +628,16 @@ test('encashment debits the ledger and creates a PayrollInput earning line', fun
 test('balance statement aggregates ledger entries per leave type', function (): void {
     [$company, $employee, , $type] = createLeaveAssignment();
     $ledger = app(LeaveBalanceLedgerService::class);
-    $ledger->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_OPENING, quantity: 21, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
-    );
-    $ledger->record(
-        companyId: $company->id, employeeId: $employee->id, leaveTypeId: $type->id, leaveYear: 2026,
-        entryType: LeaveBalanceLedgerEntry::ENTRY_TAKEN, quantity: -4, unit: 'day',
-        sourceType: LeaveBalanceLedgerEntry::SOURCE_LEAVE_REQUEST,
-    );
+    recordLeaveLedgerEntry($ledger, [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_OPENING, 'quantity' => 21, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_MANUAL_ADJUSTMENT,
+    ]);
+    recordLeaveLedgerEntry($ledger, [
+        'companyId' => $company->id, 'employeeId' => $employee->id, 'leaveTypeId' => $type->id, 'leaveYear' => 2026,
+        'entryType' => LeaveBalanceLedgerEntry::ENTRY_TAKEN, 'quantity' => -4, 'unit' => 'day',
+        'sourceType' => LeaveBalanceLedgerEntry::SOURCE_LEAVE_REQUEST,
+    ]);
 
     $stmt = app(LeaveBalanceStatementBuilder::class)->build($employee->id, 2026);
 
