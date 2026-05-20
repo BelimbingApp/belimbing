@@ -4,7 +4,7 @@ An open-source business process framework designed to help build, operate, and e
 
 ## The Workforce Model
 
-Belimbing treats AI agents as employees. Assign them roles, supervisors, and permissions. They follow your org structure, respect delegation rules, and act through the same authorization system as human users. Every action is auditable.
+Belimbing treats AI agents as employees. Agents are issued capabilities within the same authorization system that governs human users — no separate permission model, no elevated trust by default. Every action is auditable.
 
 Meet **Lara**, she is a Belimbing AI resident.
 
@@ -29,7 +29,7 @@ Belimbing is in active development and not yet ready for production. However, yo
 
 **Layered module architecture** — Three layers: Base (framework infrastructure — AI, Authz, Workflow, Database, Settings, and 10 more), Core (governance modules — Company, User, Employee, AI, Geonames, Address, Workflow), and Business (domain modules — IT). Each layer has clear boundaries and discovery-driven registration.
 
-**Playbook-driven development** — 7 structured playbooks that guide human developers, Lara, and other AI coding agents through common tasks (new modules, schema changes, features, workflow integration, console commands, inline editing, discovery infrastructure). Convention over configuration, enforced by the playbooks themselves.
+**Plugin and extension system** — Modular architecture with discovery-driven registration and per-module `composer.json` manifests. An admin dashboard lists installed plugins with dependency health and surfaces available extensions from the BelimbingApp catalog with copyable install commands. Extension developer guides live at `docs/guides/extensions/`.
 
 **Authorization system** — Capability-based RBAC with delegation constraints, principal types for both humans and agents, policy engine, and middleware. The same system that governs human users governs AI agents — no separate permission model.
 
