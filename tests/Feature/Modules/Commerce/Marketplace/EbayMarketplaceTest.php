@@ -7,6 +7,7 @@ use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMarketplaceChannel;
 use App\Modules\Commerce\Marketplace\Models\Listing;
+use App\Modules\Commerce\Marketplace\Models\ProductReference;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
 use App\Modules\Commerce\Sales\Models\Order;
 use App\Modules\Commerce\Sales\Models\OrderLine;
@@ -74,7 +75,11 @@ test('ebay listing pull materializes offers and links by sku', function (): void
             'inventoryItems' => [
                 [
                     'sku' => EBAY_FIXTURE_SKU,
-                    'product' => ['title' => EBAY_FIXTURE_TITLE],
+                    'product' => [
+                        'title' => EBAY_FIXTURE_TITLE,
+                        'epid' => '1122066940',
+                        'aspects' => ['Brand' => ['Honda']],
+                    ],
                 ],
             ],
         ]),
@@ -103,6 +108,7 @@ test('ebay listing pull materializes offers and links by sku', function (): void
     $result = app(EbayMarketplaceChannel::class)->pullListings($user->company_id);
 
     $listing = Listing::query()->where('external_listing_id', EBAY_FIXTURE_LISTING_ID)->first();
+    $reference = ProductReference::query()->where('external_product_id', '1122066940')->first();
 
     expect($result->fetched)->toBe(1)
         ->and($result->created)->toBe(1)
@@ -110,7 +116,11 @@ test('ebay listing pull materializes offers and links by sku', function (): void
         ->and($listing)->not()->toBeNull()
         ->and($listing->item_id)->toBe($item->id)
         ->and($listing->price_amount)->toBe(12000)
-        ->and($listing->currency_code)->toBe('USD');
+        ->and($listing->currency_code)->toBe('USD')
+        ->and($reference)->not()->toBeNull()
+        ->and($reference->item_id)->toBe($item->id)
+        ->and($reference->reference_type)->toBe(ProductReference::TYPE_EBAY_EPID)
+        ->and($reference->facts['aspects']['Brand'])->toBe(['Honda']);
 
     Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/sell/inventory/v1/offer')
         && $request->hasHeader('X-EBAY-C-MARKETPLACE-ID', 'EBAY_US'));

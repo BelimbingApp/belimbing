@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Ebay;
 
 use App\Base\Foundation\ValueObjects\Money;
@@ -21,6 +22,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         private readonly EbayOAuthService $oauth,
         private readonly IntegrationGateway $integration,
         private readonly SalesOrderMaterializer $salesOrders,
+        private readonly EbayProductReferenceImporter $productReferences,
     ) {}
 
     public function key(): string
@@ -217,6 +219,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         foreach ($offerResponse['offers'] ?? [] as $offer) {
             $fetched++;
             $listing = $this->upsertOffer($companyId, $offer, $inventoryItem);
+            $this->productReferences->importFromListing($listing);
             $listing->wasRecentlyCreated ? $created++ : $updated++;
 
             if ($listing->item_id !== null) {

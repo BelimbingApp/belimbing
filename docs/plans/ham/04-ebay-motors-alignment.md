@@ -1,6 +1,6 @@
 # ham/04-ebay-motors-alignment
 
-**Status:** In Progress; Phases 0 and 1 complete
+**Status:** In Progress; Phases 0, 1, and 2 complete; Phase 3 started
 **Last Updated:** 2026-05-20
 **Sources:**
 - User context: Ham operates from California and sells through the eBay store `rpm*parts`; Belimbing must help him align with US eBay Motors discovery, not only generic marketplace listing.
@@ -114,20 +114,23 @@ Goal: make Belimbing aware of what eBay expects for the selected Motors category
 - [x] Fetch required and recommended item specifics for selected categories through eBay Taxonomy APIs. {Amp/claude-sonnet-4.5}
 - [x] Fetch automotive parts compatibility policies and item condition policies through eBay Metadata APIs, including compatibility limits and policy flags where available. {Amp/claude-sonnet-4.5}
 - [x] Store enough metadata to compute readiness offline for normal UI use, while keeping refresh/retry behavior explicit. {Amp/claude-sonnet-4.5}
-- [ ] Add a mapping surface between Belimbing catalog categories/templates and eBay Motors categories.
-- [ ] Add policy and location selection defaults for Ham once eBay account data has been imported.
-- [ ] Import catalog/ePID-backed product specifics where eBay exposes them for a listing or comparable product, then map those specifics into the same aspect-readiness pipeline as seller-entered attributes.
+- [x] Add a mapping surface between Belimbing catalog categories/templates and eBay Motors categories. {Amp/claude-sonnet-4.5}
+- [x] Add policy and location selection defaults for Ham once eBay account data has been imported. {Amp/claude-sonnet-4.5}
+- [x] Import catalog/ePID-backed product specifics where eBay exposes them for a listing or comparable product, then map those specifics into the same aspect-readiness pipeline as seller-entered attributes. {Amp/claude-sonnet-4.5}
 
 ### Phase 3 — Listing readiness and confidence checklist
 
 Goal: let Ham know what is missing before any publish/revise call.
 
-- [ ] Add an eBay Motors readiness panel backed by the durable listing draft, not by transient form state.
-- [ ] Check for eBay category, required aspects, recommended identifiers, photos, fitment or universal-fit status, condition mapping, seller policies, price, quantity, and description readiness.
-- [ ] Check publish blockers: merchant location, policy suitability, public image URL availability, package/shipping facts when required, account connection state, and stale metadata.
+- [x] Add an eBay Motors readiness panel backed by the durable listing draft, not by transient form state. {Amp/claude-sonnet-4.5}
+- [x] Check first-pass readiness for eBay category, required aspects, recommended identifiers, photos, fitment or universal-fit status, seller policies, price, quantity, and description readiness. {Amp/claude-sonnet-4.5}
+- [ ] Add condition mapping readiness once eBay condition policy mapping from catalog attributes is available.
+- [x] Check first-pass publish blockers: merchant location, imported policy/location verification, public HTTPS photo URL availability, account connection state, and stale metadata. {Amp/claude-sonnet-4.5}
+- [ ] Check package/shipping facts when required by the selected category and fulfillment policy.
 - [ ] Map Belimbing attributes to eBay aspects with value normalization and enum validation before marking a draft ready.
-- [ ] Show aspect source and confidence: seller-entered, imported from Ham's existing listing, eBay catalog/ePID suggestion, AI suggestion, or default.
-- [ ] Explain each gap in operator language and link directly to the field or setup page that fixes it.
+- [x] Show the initial aspect source/confidence trail for values mapped from Belimbing catalog attributes. {Amp/claude-sonnet-4.5}
+- [ ] Extend source/confidence to imported Ham listings, eBay catalog/ePID suggestions, AI suggestions, and defaults.
+- [x] Explain each readiness gap in operator language and link directly to the field or setup page that fixes it. {Amp/claude-sonnet-4.5}
 - [ ] Add title guidance that emphasizes part type, brand, part numbers, placement, and meaningful variants without using title text as the only compatibility record.
 - [ ] Add photo/confidence guidance for used parts: multiple angles, part number close-up when available, defects, connectors/mount points, and tested/untested evidence.
 

@@ -179,7 +179,7 @@ $inventoryLocations = $accountResources->where('kind', AccountResource::KIND_INV
                 <div>
                     <h2 class="text-base font-medium tracking-tight text-ink">{{ __('eBay category mappings') }}</h2>
                     <p class="mt-1 text-sm text-muted">
-                        {{ __('Map Belimbing templates to eBay category IDs before readiness checks or publishing. For Ham auto parts, use eBay Motors marketplace EBAY_MOTORS_US and category tree 100.') }}
+                        {{ __('Map Belimbing templates to eBay category IDs before readiness checks or publishing. For US eBay Motors, use marketplace EBAY_MOTORS_US and category tree 100.') }}
                     </p>
                 </div>
 

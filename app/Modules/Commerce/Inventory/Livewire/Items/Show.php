@@ -15,6 +15,9 @@ use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Inventory\Models\ItemFitment;
 use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use App\Modules\Commerce\Inventory\Services\InventoryItemService;
+use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
+use App\Modules\Commerce\Marketplace\Ebay\EbayListingReadinessService;
+use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +59,15 @@ class Show extends Component
     public ?int $editingFitmentId = null;
 
     public ?int $copyFitmentsFromItemId = null;
+
+    public function refreshEbayReadiness(EbayListingReadinessService $readiness): void
+    {
+        $this->authorizeUpdate();
+
+        $readiness->refreshForItem($this->item);
+        $this->item->refresh();
+        session()->flash('success', __('eBay readiness refreshed.'));
+    }
 
     public function mount(Item $item): void
     {
@@ -442,6 +454,7 @@ class Show extends Component
                 ->limit(100)
                 ->get(),
             'canBootstrapFitmentFromAttributes' => $this->fitmentAttributeCodes() !== [],
+            'ebayListingDraft' => $this->ebayListingDraft(),
         ]);
     }
 
@@ -570,5 +583,15 @@ class Show extends Component
         $codes = config('commerce.inventory.fitment_attribute_codes', []);
 
         return is_array($codes) ? array_filter($codes, 'is_string') : [];
+    }
+
+    private function ebayListingDraft(): ?ListingDraft
+    {
+        return ListingDraft::query()
+            ->where('company_id', $this->item->company_id)
+            ->where('item_id', $this->item->id)
+            ->where('channel', EbayConfiguration::CHANNEL)
+            ->latest('updated_at')
+            ->first();
     }
 }

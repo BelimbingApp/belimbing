@@ -3,6 +3,7 @@
 use App\Base\Integration\Services\OAuthTokenStore;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
+use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConnectionTester;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
@@ -170,6 +171,31 @@ test('eBay settings imports seller setup choices and stores selected defaults', 
         ->and($settings->get('marketplace.ebay.default_fulfillment_policy_id', scope: $scope))->toBe('FUL-1')
         ->and($settings->get('marketplace.ebay.default_return_policy_id', scope: $scope))->toBe('RET-1')
         ->and($settings->get('marketplace.ebay.default_merchant_location_key', scope: $scope))->toBe('california_shop');
+});
+
+test('eBay settings saves template category mappings for readiness', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $template = ProductTemplate::factory()->create([
+        'company_id' => $user->company_id,
+        'name' => 'Brake Caliper',
+    ]);
+
+    Livewire::test(EbaySettings::class)
+        ->assertSee('eBay category mappings')
+        ->assertSee('Brake Caliper')
+        ->set("templateCategoryMappings.{$template->id}.marketplace_id", 'EBAY_MOTORS_US')
+        ->set("templateCategoryMappings.{$template->id}.category_tree_id", '100')
+        ->set("templateCategoryMappings.{$template->id}.category_id", '33563')
+        ->call('saveTemplateCategoryMappings')
+        ->assertHasNoErrors();
+
+    expect(data_get($template->fresh()->metadata, 'marketplace.ebay'))->toBe([
+        'marketplace_id' => 'EBAY_MOTORS_US',
+        'category_tree_id' => '100',
+        'category_id' => '33563',
+    ]);
 });
 
 test('eBay settings normalizes legacy whitespace scopes into checkbox values', function (): void {

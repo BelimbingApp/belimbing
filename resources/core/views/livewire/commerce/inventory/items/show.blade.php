@@ -1,11 +1,13 @@
 <?php
 
 use App\Modules\Commerce\Inventory\Livewire\Items\Show;
+use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
 /** @var Show $this */
+/** @var ListingDraft|null $ebayListingDraft */
 ?>
 
 <div>
@@ -27,7 +29,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div class="lg:col-span-2 space-y-6">
-                <x-ui.card>
+                <x-ui.card id="item-facts">
                     @if ($this->canEdit())
                         <dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <x-ui.edit-in-place.text
@@ -170,7 +172,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     @endif
                 </x-ui.card>
 
-                <x-ui.card>
+                <x-ui.card id="catalog-fit">
                     <div class="mb-3 flex items-center justify-between gap-3">
                         <div>
                             <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Catalog Fit') }}</h2>
@@ -235,7 +237,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     @endif
                 </x-ui.card>
 
-                <x-ui.card>
+                <x-ui.card id="fitment">
                     <div class="mb-3 flex items-center justify-between gap-3">
                         <div>
                             <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Fitment') }}</h2>
@@ -409,7 +411,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     @endif
                 </x-ui.card>
 
-                <x-ui.card>
+                <x-ui.card id="descriptions">
                     <div x-data="{ helpOpen: false }">
                         <div class="mb-3 flex items-center justify-between gap-3">
                             <div class="flex items-center gap-2">
@@ -542,7 +544,101 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
             </div>
 
             <div class="space-y-6">
-                <x-ui.card>
+                <x-ui.card id="ebay-readiness">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('eBay readiness') }}</h2>
+                            <p class="mt-1 text-sm text-muted">{{ __('Checks this item against the saved eBay Motors draft requirements before publishing.') }}</p>
+                        </div>
+                        @if ($ebayListingDraft)
+                            <x-ui.badge :variant="$ebayListingDraft->readiness_status === 'ready' ? 'success' : 'warning'">
+                                {{ __(Illuminate\Support\Str::headline($ebayListingDraft->readiness_status)) }}
+                            </x-ui.badge>
+                        @else
+                            <x-ui.badge>{{ __('Unchecked') }}</x-ui.badge>
+                        @endif
+                    </div>
+
+                    @if ($ebayListingDraft)
+                        @php($snapshot = $ebayListingDraft->readiness_snapshot ?? [])
+                        @php($blockers = $snapshot['blockers'] ?? [])
+                        @php($warnings = $snapshot['warnings'] ?? [])
+                        @php($gapLinks = [
+                            'item_facts' => ['label' => __('Edit item facts'), 'href' => '#item-facts'],
+                            'fitment' => ['label' => __('Edit fitment'), 'href' => '#fitment'],
+                            'photos' => ['label' => __('Edit photos'), 'href' => '#photos'],
+                            'descriptions' => ['label' => __('Edit descriptions'), 'href' => '#descriptions'],
+                            'attributes' => ['label' => __('Edit attributes'), 'href' => '#attributes'],
+                            'settings' => ['label' => __('Open eBay settings'), 'href' => route('commerce.marketplace.ebay.settings')],
+                        ])
+
+                        @if ($blockers === [] && $warnings === [])
+                            <x-ui.alert variant="success">{{ __('This item has no current eBay readiness gaps.') }}</x-ui.alert>
+                        @else
+                            <div class="space-y-3">
+                                @if ($blockers !== [])
+                                    <div>
+                                        <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Blockers') }}</p>
+                                        <ul class="mt-2 space-y-1 text-sm text-muted">
+                                            @foreach ($blockers as $gap)
+                                                <li class="flex gap-2">
+                                                    <span class="text-status-danger">•</span>
+                                                    <span>
+                                                        {{ $gap['label'] ?? '' }}
+                                                        @if (isset($gap['action'], $gapLinks[$gap['action']]))
+                                                            <a href="{{ $gapLinks[$gap['action']]['href'] }}" class="ml-1 text-accent hover:underline" @if ($gap['action'] === 'settings') wire:navigate @endif>{{ $gapLinks[$gap['action']]['label'] }}</a>
+                                                        @endif
+                                                    </span>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+
+                                @if ($warnings !== [])
+                                    <div>
+                                        <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Warnings') }}</p>
+                                        <ul class="mt-2 space-y-1 text-sm text-muted">
+                                            @foreach ($warnings as $gap)
+                                                <li class="flex gap-2">
+                                                    <span>•</span>
+                                                    <span>
+                                                        {{ $gap['label'] ?? '' }}
+                                                        @if (isset($gap['action'], $gapLinks[$gap['action']]))
+                                                            <a href="{{ $gapLinks[$gap['action']]['href'] }}" class="ml-1 text-accent hover:underline" @if ($gap['action'] === 'settings') wire:navigate @endif>{{ $gapLinks[$gap['action']]['label'] }}</a>
+                                                        @endif
+                                                    </span>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+
+                        <dl class="mt-4 grid grid-cols-2 gap-3 border-t border-border-default pt-4 text-sm">
+                            <div>
+                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Category') }}</dt>
+                                <dd class="mt-1 font-mono text-ink">{{ $ebayListingDraft->category_id ?? '—' }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Checked') }}</dt>
+                                <dd class="mt-1 text-ink">{{ $ebayListingDraft->metadata_checked_at?->diffForHumans() ?? __('Never') }}</dd>
+                            </div>
+                        </dl>
+                    @else
+                        <p class="text-sm text-muted">{{ __('Readiness has not been checked for this item yet.') }}</p>
+                    @endif
+
+                    @if ($this->canEdit())
+                        <x-ui.button type="button" variant="outline" size="sm" class="mt-4" wire:click="refreshEbayReadiness" wire:loading.attr="disabled" wire:target="refreshEbayReadiness">
+                            <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
+                            {{ __('Refresh readiness') }}
+                        </x-ui.button>
+                    @endif
+                </x-ui.card>
+
+                <x-ui.card id="photos">
                     <div
                         x-data="{ dragging: false, dragDepth: 0, autoUploadOnFinish: false }"
                         class="relative"
@@ -652,7 +748,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     </div>
                 </x-ui.card>
 
-                <x-ui.card>
+                <x-ui.card id="attributes">
                     <div class="mb-3 flex items-center justify-between">
                         <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Attributes') }}</h2>
                         <x-ui.badge>{{ $item->catalogAttributeValues->count() }}</x-ui.badge>
