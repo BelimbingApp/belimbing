@@ -10,6 +10,8 @@ use Illuminate\Support\Carbon;
 
 class EbayMetadataService
 {
+    private const TAXONOMY_CATEGORY_TREE_PATH = '/commerce/taxonomy/v1/category_tree/';
+
     public const KIND_CATEGORY_TREE = 'category_tree';
 
     public const KIND_CATEGORY_SUBTREE = 'category_subtree';
@@ -32,79 +34,87 @@ class EbayMetadataService
 
     public function categoryTree(int $companyId, string $marketplaceId, string $categoryTreeId, bool $forceRefresh = false): MarketplaceMetadata
     {
-        $path = '/commerce/taxonomy/v1/category_tree/'.$categoryTreeId;
+        $path = self::TAXONOMY_CATEGORY_TREE_PATH.$categoryTreeId;
 
-        return $this->pullMetadata(
+        return $this->pullMetadata(new EbayMetadataPull(
             companyId: $companyId,
             marketplaceId: $marketplaceId,
             kind: self::KIND_CATEGORY_TREE,
             key: $categoryTreeId,
             operation: 'metadata.category_tree.pull',
             path: $path,
-            query: [],
-            forceRefresh: $forceRefresh,
-            metadata: ['category_tree_id' => $categoryTreeId],
-        );
+            options: new EbayMetadataPullOptions(
+                query: [],
+                forceRefresh: $forceRefresh,
+                metadata: ['category_tree_id' => $categoryTreeId],
+            ),
+        ));
     }
 
     public function categorySubtree(int $companyId, string $marketplaceId, string $categoryTreeId, string $categoryId, bool $forceRefresh = false): MarketplaceMetadata
     {
-        $path = '/commerce/taxonomy/v1/category_tree/'.$categoryTreeId.'/get_category_subtree';
+        $path = self::TAXONOMY_CATEGORY_TREE_PATH.$categoryTreeId.'/get_category_subtree';
 
-        return $this->pullMetadata(
+        return $this->pullMetadata(new EbayMetadataPull(
             companyId: $companyId,
             marketplaceId: $marketplaceId,
             kind: self::KIND_CATEGORY_SUBTREE,
             key: $categoryTreeId.':'.$categoryId,
             operation: 'metadata.category_subtree.pull',
             path: $path,
-            query: ['category_id' => $categoryId],
-            forceRefresh: $forceRefresh,
-            metadata: [
-                'category_tree_id' => $categoryTreeId,
-                'category_id' => $categoryId,
-            ],
-        );
+            options: new EbayMetadataPullOptions(
+                query: ['category_id' => $categoryId],
+                forceRefresh: $forceRefresh,
+                metadata: [
+                    'category_tree_id' => $categoryTreeId,
+                    'category_id' => $categoryId,
+                ],
+            ),
+        ));
     }
 
     public function categoryAspects(int $companyId, string $marketplaceId, string $categoryTreeId, string $categoryId, bool $forceRefresh = false): MarketplaceMetadata
     {
-        $path = '/commerce/taxonomy/v1/category_tree/'.$categoryTreeId.'/get_item_aspects_for_category';
+        $path = self::TAXONOMY_CATEGORY_TREE_PATH.$categoryTreeId.'/get_item_aspects_for_category';
 
-        return $this->pullMetadata(
+        return $this->pullMetadata(new EbayMetadataPull(
             companyId: $companyId,
             marketplaceId: $marketplaceId,
             kind: self::KIND_CATEGORY_ASPECTS,
             key: $categoryTreeId.':'.$categoryId,
             operation: 'metadata.category_aspects.pull',
             path: $path,
-            query: ['category_id' => $categoryId],
-            forceRefresh: $forceRefresh,
-            metadata: [
-                'category_tree_id' => $categoryTreeId,
-                'category_id' => $categoryId,
-            ],
-        );
+            options: new EbayMetadataPullOptions(
+                query: ['category_id' => $categoryId],
+                forceRefresh: $forceRefresh,
+                metadata: [
+                    'category_tree_id' => $categoryTreeId,
+                    'category_id' => $categoryId,
+                ],
+            ),
+        ));
     }
 
     public function compatibilityProperties(int $companyId, string $marketplaceId, string $categoryTreeId, string $categoryId, bool $forceRefresh = false): MarketplaceMetadata
     {
-        $path = '/commerce/taxonomy/v1/category_tree/'.$categoryTreeId.'/get_compatibility_properties';
+        $path = self::TAXONOMY_CATEGORY_TREE_PATH.$categoryTreeId.'/get_compatibility_properties';
 
-        return $this->pullMetadata(
+        return $this->pullMetadata(new EbayMetadataPull(
             companyId: $companyId,
             marketplaceId: $marketplaceId,
             kind: self::KIND_COMPATIBILITY_PROPERTIES,
             key: $categoryTreeId.':'.$categoryId,
             operation: 'metadata.compatibility_properties.pull',
             path: $path,
-            query: ['category_id' => $categoryId],
-            forceRefresh: $forceRefresh,
-            metadata: [
-                'category_tree_id' => $categoryTreeId,
-                'category_id' => $categoryId,
-            ],
-        );
+            options: new EbayMetadataPullOptions(
+                query: ['category_id' => $categoryId],
+                forceRefresh: $forceRefresh,
+                metadata: [
+                    'category_tree_id' => $categoryTreeId,
+                    'category_id' => $categoryId,
+                ],
+            ),
+        ));
     }
 
     /**
@@ -119,7 +129,7 @@ class EbayMetadataService
         array $filters = [],
         bool $forceRefresh = false,
     ): MarketplaceMetadata {
-        $path = '/commerce/taxonomy/v1/category_tree/'.$categoryTreeId.'/get_compatibility_property_values';
+        $path = self::TAXONOMY_CATEGORY_TREE_PATH.$categoryTreeId.'/get_compatibility_property_values';
         $query = [
             'category_id' => $categoryId,
             'compatibility_property' => $compatibilityProperty,
@@ -129,7 +139,7 @@ class EbayMetadataService
             $query['filter'] = $this->compatibilityFilter($filters);
         }
 
-        return $this->pullMetadata(
+        return $this->pullMetadata(new EbayMetadataPull(
             companyId: $companyId,
             marketplaceId: $marketplaceId,
             kind: self::KIND_COMPATIBILITY_PROPERTY_VALUES,
@@ -141,15 +151,17 @@ class EbayMetadataService
             ]),
             operation: 'metadata.compatibility_property_values.pull',
             path: $path,
-            query: $query,
-            forceRefresh: $forceRefresh,
-            metadata: [
-                'category_tree_id' => $categoryTreeId,
-                'category_id' => $categoryId,
-                'compatibility_property' => $compatibilityProperty,
-                'compatibility_filters' => $filters,
-            ],
-        );
+            options: new EbayMetadataPullOptions(
+                query: $query,
+                forceRefresh: $forceRefresh,
+                metadata: [
+                    'category_tree_id' => $categoryTreeId,
+                    'category_id' => $categoryId,
+                    'compatibility_property' => $compatibilityProperty,
+                    'compatibility_filters' => $filters,
+                ],
+            ),
+        ));
     }
 
     /**
@@ -157,18 +169,20 @@ class EbayMetadataService
      */
     public function automotivePartsCompatibilityPolicies(int $companyId, string $marketplaceId, array $categoryIds = [], bool $forceRefresh = false): MarketplaceMetadata
     {
-        return $this->pullMetadata(
+        return $this->pullMetadata(new EbayMetadataPull(
             companyId: $companyId,
             marketplaceId: $marketplaceId,
             kind: self::KIND_AUTOMOTIVE_PARTS_COMPATIBILITY_POLICIES,
             key: $this->policyKey($categoryIds),
             operation: 'metadata.automotive_parts_compatibility_policies.pull',
             path: '/sell/metadata/v1/marketplace/'.$marketplaceId.'/get_automotive_parts_compatibility_policies',
-            query: $this->categoryPolicyQuery($categoryIds),
-            forceRefresh: $forceRefresh,
-            metadata: ['category_ids' => $categoryIds],
-            headers: ['Accept-Encoding' => 'gzip'],
-        );
+            options: new EbayMetadataPullOptions(
+                query: $this->categoryPolicyQuery($categoryIds),
+                forceRefresh: $forceRefresh,
+                metadata: ['category_ids' => $categoryIds],
+                headers: ['Accept-Encoding' => 'gzip'],
+            ),
+        ));
     }
 
     /**
@@ -176,41 +190,29 @@ class EbayMetadataService
      */
     public function itemConditionPolicies(int $companyId, string $marketplaceId, array $categoryIds = [], bool $forceRefresh = false): MarketplaceMetadata
     {
-        return $this->pullMetadata(
+        return $this->pullMetadata(new EbayMetadataPull(
             companyId: $companyId,
             marketplaceId: $marketplaceId,
             kind: self::KIND_ITEM_CONDITION_POLICIES,
             key: $this->policyKey($categoryIds),
             operation: 'metadata.item_condition_policies.pull',
             path: '/sell/metadata/v1/marketplace/'.$marketplaceId.'/get_item_condition_policies',
-            query: $this->categoryPolicyQuery($categoryIds),
-            forceRefresh: $forceRefresh,
-            metadata: ['category_ids' => $categoryIds],
-            headers: ['Accept-Encoding' => 'gzip'],
-        );
+            options: new EbayMetadataPullOptions(
+                query: $this->categoryPolicyQuery($categoryIds),
+                forceRefresh: $forceRefresh,
+                metadata: ['category_ids' => $categoryIds],
+                headers: ['Accept-Encoding' => 'gzip'],
+            ),
+        ));
     }
 
-    /**
-     * @param  array<string, string>  $query
-     * @param  array<string, mixed>  $metadata
-     * @param  array<string, string>  $headers
-     */
-    private function pullMetadata(
-        int $companyId,
-        string $marketplaceId,
-        string $kind,
-        string $key,
-        string $operation,
-        string $path,
-        array $query,
-        bool $forceRefresh,
-        array $metadata = [],
-        array $headers = [],
-    ): MarketplaceMetadata {
-        $config = $this->configuration->requireApplicationConfigured($companyId);
+    private function pullMetadata(EbayMetadataPull $pull): MarketplaceMetadata
+    {
+        $options = $pull->options ?? new EbayMetadataPullOptions(query: [], forceRefresh: false);
+        $config = $this->configuration->requireApplicationConfigured($pull->companyId);
 
-        if (! $forceRefresh) {
-            $cached = $this->findFresh($config, $marketplaceId, $kind, $key);
+        if (! $options->forceRefresh) {
+            $cached = $this->findFresh($config, $pull->marketplaceId, $pull->kind, $pull->key);
 
             if ($cached instanceof MarketplaceMetadata) {
                 return $cached;
@@ -219,33 +221,33 @@ class EbayMetadataService
 
         $response = $this->integration->send(new IntegrationRequest(
             system: EbayConfiguration::CHANNEL,
-            operation: 'commerce.marketplace.ebay.'.$operation,
+            operation: 'commerce.marketplace.ebay.'.$pull->operation,
             method: 'GET',
-            endpoint: rtrim((string) $config['api_base_url'], '/').$path,
-            protocolOperation: 'GET '.$path,
+            endpoint: rtrim((string) $config['api_base_url'], '/').$pull->path,
+            protocolOperation: 'GET '.$pull->path,
             provider: EbayConfiguration::CHANNEL,
             headers: [
-                ...$headers,
-                'Authorization' => 'Bearer '.$this->applicationTokens->accessToken($companyId),
-                'X-EBAY-C-MARKETPLACE-ID' => $marketplaceId,
+                ...$options->headers,
+                'Authorization' => 'Bearer '.$this->applicationTokens->accessToken($pull->companyId),
+                'X-EBAY-C-MARKETPLACE-ID' => $pull->marketplaceId,
             ],
-            query: $query,
+            query: $options->query,
             ownerType: 'company',
-            ownerId: $companyId,
+            ownerId: $pull->companyId,
             timeoutSeconds: 30,
             retryTimes: 1,
             metadata: [
-                ...$metadata,
+                ...$options->metadata,
                 'environment' => $config['environment'],
-                'marketplace_id' => $marketplaceId,
-                'metadata_kind' => $kind,
+                'marketplace_id' => $pull->marketplaceId,
+                'metadata_kind' => $pull->kind,
             ],
         ));
 
         if ($response->failed()) {
             throw MarketplaceOperationException::requestFailed(
                 EbayConfiguration::CHANNEL,
-                $operation,
+                $pull->operation,
                 $response->status,
                 $response->exchange?->id,
             );
@@ -258,9 +260,9 @@ class EbayMetadataService
             [
                 'channel' => EbayConfiguration::CHANNEL,
                 'environment' => $config['environment'],
-                'marketplace_id' => $marketplaceId,
-                'kind' => $kind,
-                'key' => $key,
+                'marketplace_id' => $pull->marketplaceId,
+                'kind' => $pull->kind,
+                'key' => $pull->key,
             ],
             [
                 'payload' => $payload,

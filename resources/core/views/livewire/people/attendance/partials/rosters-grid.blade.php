@@ -132,7 +132,8 @@
                             @if ($canManage)
                                 <button
                                     type="button"
-                                    @click="shift = parseInt($root.dataset.cellShift) || 0; policy = parseInt($root.dataset.cellPolicy) || 0; open = ! open"
+                                    x-ref="overrideTrigger"
+                                    @click="shift = parseInt($root.dataset.cellShift) || 0; policy = parseInt($root.dataset.cellPolicy) || 0; open = ! open; if (! open) { $nextTick(() => $refs.overrideTrigger?.focus()) }"
                                     :aria-expanded="open"
                                     aria-label="{{ __('Edit override :date for :employee', ['date' => $day['date'], 'employee' => $employee->displayName()]) }}"
                                     class="block w-full {{ $cellMinWidth }} cursor-pointer text-center focus:outline-none focus:ring-2 focus:ring-accent focus:ring-inset focus:rounded-md"
@@ -154,7 +155,7 @@
                                 <div class="roster-fill-handle absolute bottom-0 right-0 z-10 hidden h-3 w-3 -translate-x-px -translate-y-px cursor-crosshair rounded-full border-2 border-white bg-accent shadow-sm"
                                      data-fill-handle="{{ $employee->id }}:{{ $day['date'] }}"
                                      onmousedown="window.rosterGrid?.startFillDrag(event, '{{ $employee->id }}', '{{ $day['date'] }}')"></div>
-                                <section x-show="open" x-cloak @click.outside="open = false" x-transition.origin.top.left class="absolute left-1/2 z-30 mt-1 w-56 -translate-x-1/2 rounded-2xl border border-border-default bg-surface-card p-3 text-left shadow-lg" aria-label="{{ __('Override :date', ['date' => $day['date']]) }}">
+                                <section x-show="open" x-cloak x-ref="overrideDialog" x-effect="if (open) { $nextTick(() => $refs.overrideDialog?.focus()) }" @keydown.escape.prevent.stop="open = false; $nextTick(() => $refs.overrideTrigger?.focus())" @click.outside="if (open) { open = false; $nextTick(() => $refs.overrideTrigger?.focus()) }" x-transition.origin.top.left class="absolute left-1/2 z-30 mt-1 w-56 -translate-x-1/2 rounded-2xl border border-border-default bg-surface-card p-3 text-left shadow-lg" role="dialog" tabindex="-1" aria-label="{{ __('Override :date', ['date' => $day['date']]) }}">
                                     <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Override') }} {{ \Carbon\CarbonImmutable::parse($day['date'])->format('j M') }}</div>
                                     <div class="mt-2 space-y-2">
                                         <label class="block text-[11px] font-semibold uppercase tracking-wider text-muted">
@@ -177,8 +178,8 @@
                                         </label>
                                     </div>
                                     <div class="mt-3 flex justify-end gap-2">
-                                        <button type="button" @click="open = false" class="text-xs font-medium text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ __('Cancel') }}</button>
-                                        <button type="button" @click="$wire.saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}', shift, policy).then(() => { open = false })" :disabled="! shift || ! policy" class="rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-on disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1">{{ __('Save') }}</button>
+                                        <button type="button" @click="open = false; $nextTick(() => $refs.overrideTrigger?.focus())" class="text-xs font-medium text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ __('Cancel') }}</button>
+                                        <button type="button" @click="$wire.saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}', shift, policy).then(() => { open = false; $nextTick(() => $refs.overrideTrigger?.focus()) })" :disabled="! shift || ! policy" class="rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-on disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1">{{ __('Save') }}</button>
                                     </div>
                                 </section>
                             @else

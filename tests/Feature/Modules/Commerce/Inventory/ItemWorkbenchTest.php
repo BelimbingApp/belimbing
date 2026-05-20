@@ -20,6 +20,8 @@ use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 const INVENTORY_OEM_NUMBER_ATTRIBUTE_NAME = 'OEM Number';
+const INVENTORY_HEADLIGHT_TEMPLATE_NAME = 'Headlight Assembly';
+const INVENTORY_BMW_135I_FITMENT_LABEL = '2011 BMW 135i';
 
 test('guests are redirected to login from inventory item pages', function (): void {
     $item = Item::factory()->create();
@@ -101,12 +103,12 @@ test('item can be created from a catalog template', function (): void {
     ]);
     $template = ProductTemplate::factory()
         ->forCategory($category)
-        ->create(['name' => 'Headlight Assembly']);
+        ->create(['name' => INVENTORY_HEADLIGHT_TEMPLATE_NAME]);
 
     $this->get(route('commerce.inventory.items.create', ['template_id' => $template->id]))
         ->assertOk()
         ->assertSee('Template')
-        ->assertSee('Headlight Assembly');
+        ->assertSee(INVENTORY_HEADLIGHT_TEMPLATE_NAME);
 
     Livewire::test(Create::class)
         ->set('sku', 'HAM-TEMPLATE-0001')
@@ -288,7 +290,7 @@ test('item fitments can be added and removed from the detail page component', fu
         ->set('fitmentNotes', 'Confirmed from donor vehicle.')
         ->call('addFitment')
         ->assertHasNoErrors()
-        ->assertSee('2011 BMW 135i');
+        ->assertSee(INVENTORY_BMW_135I_FITMENT_LABEL);
 
     $fitment = ItemFitment::query()->where('item_id', $item->id)->firstOrFail();
 
@@ -305,7 +307,7 @@ test('item fitments can be added and removed from the detail page component', fu
 
     Livewire::test(Show::class, ['item' => $item->fresh()])
         ->call('deleteFitment', $fitment->id)
-        ->assertDontSee('2011 BMW 135i');
+        ->assertDontSee(INVENTORY_BMW_135I_FITMENT_LABEL);
 
     expect(ItemFitment::query()->whereKey($fitment->id)->exists())->toBeFalse();
 });
@@ -342,7 +344,7 @@ test('item fitments can be imported in bulk rows', function (): void {
         ->set('fitmentBulk', "2011,BMW,135i,Base Coupe,3.0L\n2012,BMW,135i,Base Coupe,3.0L")
         ->call('importFitments')
         ->assertHasNoErrors()
-        ->assertSee('2011 BMW 135i')
+        ->assertSee(INVENTORY_BMW_135I_FITMENT_LABEL)
         ->assertSee('2012 BMW 135i');
 
     expect(ItemFitment::query()->where('item_id', $item->id)->count())->toBe(2);
@@ -582,7 +584,7 @@ test('item detail page assigns catalog fit and filters applicable attributes', f
     $template = ProductTemplate::factory()
         ->forCategory($category)
         ->create([
-            'name' => 'Headlight Assembly',
+            'name' => INVENTORY_HEADLIGHT_TEMPLATE_NAME,
         ]);
     $otherTemplate = ProductTemplate::factory()
         ->forCategory($otherCategory)

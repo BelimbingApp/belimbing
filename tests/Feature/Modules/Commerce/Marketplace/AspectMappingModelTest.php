@@ -4,6 +4,8 @@ use App\Modules\Commerce\Catalog\Models\Attribute;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Models\AspectMapping;
 
+const EBAY_MOTORS_BRAKE_CATEGORY_ID = '33563';
+
 test('aspect mappings persist the eBay aspect contract for a catalog attribute', function (): void {
     $user = createAdminUser();
     $attribute = Attribute::factory()->create([
@@ -18,7 +20,7 @@ test('aspect mappings persist the eBay aspect contract for a catalog attribute',
         'channel' => EbayConfiguration::CHANNEL,
         'marketplace_id' => 'EBAY_MOTORS_US',
         'category_tree_id' => '100',
-        'category_id' => '33563',
+        'category_id' => EBAY_MOTORS_BRAKE_CATEGORY_ID,
         'internal_attribute_code' => 'manufacturer_part_number',
         'ebay_aspect_name' => 'Manufacturer Part Number',
         'value_normalization' => AspectMapping::NORMALIZATION_TEXT,
@@ -55,7 +57,7 @@ test('aspect mapping scope prefers category-specific mappings over global mappin
         'channel' => EbayConfiguration::CHANNEL,
         'marketplace_id' => 'EBAY_MOTORS_US',
         'category_tree_id' => '100',
-        'category_id' => '33563',
+        'category_id' => EBAY_MOTORS_BRAKE_CATEGORY_ID,
         'internal_attribute_code' => 'brand',
         'ebay_aspect_name' => 'Brand',
         'requirement_status' => AspectMapping::REQUIREMENT_REQUIRED,
@@ -66,18 +68,18 @@ test('aspect mapping scope prefers category-specific mappings over global mappin
         'channel' => EbayConfiguration::CHANNEL,
         'marketplace_id' => 'EBAY_MOTORS_US',
         'category_tree_id' => '100',
-        'category_id' => '33563',
+        'category_id' => EBAY_MOTORS_BRAKE_CATEGORY_ID,
         'internal_attribute_code' => 'disabled',
         'ebay_aspect_name' => 'Disabled',
         'is_enabled' => false,
     ]);
 
     $mappings = AspectMapping::query()
-        ->forCategory($user->company_id, EbayConfiguration::CHANNEL, 'EBAY_MOTORS_US', '33563', '100')
+        ->forCategory($user->company_id, EbayConfiguration::CHANNEL, 'EBAY_MOTORS_US', EBAY_MOTORS_BRAKE_CATEGORY_ID, '100')
         ->get();
 
     expect($mappings)->toHaveCount(2)
-        ->and($mappings->pluck('category_id')->all())->toBe(['33563', AspectMapping::CATEGORY_ALL])
+        ->and($mappings->pluck('category_id')->all())->toBe([EBAY_MOTORS_BRAKE_CATEGORY_ID, AspectMapping::CATEGORY_ALL])
         ->and($mappings->pluck('requirement_status')->all())->toBe([
             AspectMapping::REQUIREMENT_REQUIRED,
             AspectMapping::REQUIREMENT_RECOMMENDED,

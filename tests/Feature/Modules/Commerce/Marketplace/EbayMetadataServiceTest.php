@@ -11,6 +11,10 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 
+const EBAY_METADATA_CATEGORY_TREE_ID = '100';
+const EBAY_METADATA_CATEGORY_ID = '33563';
+const EBAY_METADATA_CATEGORY_KEY = '100:33563';
+
 function configureEbayMetadataEnvironment(int $companyId): void
 {
     $scope = Scope::company($companyId);
@@ -52,14 +56,14 @@ test('pulls and caches eBay Motors category aspects with application auth', func
         ], 200, ['ETag' => '"aspect-etag"']),
     ]);
 
-    $metadata = app(EbayMetadataService::class)->categoryAspects($user->company_id, 'EBAY_MOTORS_US', '100', '33563');
+    $metadata = app(EbayMetadataService::class)->categoryAspects($user->company_id, 'EBAY_MOTORS_US', EBAY_METADATA_CATEGORY_TREE_ID, EBAY_METADATA_CATEGORY_ID);
 
     expect($metadata)->toBeInstanceOf(MarketplaceMetadata::class)
         ->and($metadata->channel)->toBe(EbayConfiguration::CHANNEL)
         ->and($metadata->environment)->toBe('sandbox')
         ->and($metadata->marketplace_id)->toBe('EBAY_MOTORS_US')
         ->and($metadata->kind)->toBe(EbayMetadataService::KIND_CATEGORY_ASPECTS)
-        ->and($metadata->key)->toBe('100:33563')
+        ->and($metadata->key)->toBe(EBAY_METADATA_CATEGORY_KEY)
         ->and($metadata->payload['aspects'][0]['localizedAspectName'])->toBe('Brand')
         ->and($metadata->etag)->toBe('"aspect-etag"')
         ->and($metadata->expires_at)->not->toBeNull();
@@ -68,7 +72,7 @@ test('pulls and caches eBay Motors category aspects with application auth', func
         return str_starts_with($request->url(), 'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_item_aspects_for_category')
             && $request->hasHeader('Authorization', 'Bearer application-token-metadata')
             && $request->hasHeader('X-EBAY-C-MARKETPLACE-ID', 'EBAY_MOTORS_US')
-            && $request['category_id'] === '33563';
+            && $request['category_id'] === EBAY_METADATA_CATEGORY_ID;
     });
 });
 
@@ -120,7 +124,7 @@ test('reuses fresh category aspect metadata without calling eBay', function (): 
         'environment' => 'sandbox',
         'marketplace_id' => 'EBAY_MOTORS_US',
         'kind' => EbayMetadataService::KIND_CATEGORY_ASPECTS,
-        'key' => '100:33563',
+        'key' => EBAY_METADATA_CATEGORY_KEY,
         'payload' => ['aspects' => [['localizedAspectName' => 'Type']]],
         'fetched_at' => Carbon::now(),
         'expires_at' => Carbon::now()->addHour(),
@@ -128,7 +132,7 @@ test('reuses fresh category aspect metadata without calling eBay', function (): 
 
     Http::fake();
 
-    $metadata = app(EbayMetadataService::class)->categoryAspects($user->company_id, 'EBAY_MOTORS_US', '100', '33563');
+    $metadata = app(EbayMetadataService::class)->categoryAspects($user->company_id, 'EBAY_MOTORS_US', EBAY_METADATA_CATEGORY_TREE_ID, EBAY_METADATA_CATEGORY_ID);
 
     expect($metadata->payload['aspects'][0]['localizedAspectName'])->toBe('Type');
     Http::assertNothingSent();
@@ -143,7 +147,7 @@ test('refreshes stale category metadata and exposes refresh state', function ():
         'environment' => 'sandbox',
         'marketplace_id' => 'EBAY_MOTORS_US',
         'kind' => EbayMetadataService::KIND_CATEGORY_ASPECTS,
-        'key' => '100:33563',
+        'key' => EBAY_METADATA_CATEGORY_KEY,
         'payload' => ['aspects' => [['localizedAspectName' => 'Old Type']]],
         'fetched_at' => Carbon::now()->subDays(2),
         'expires_at' => Carbon::now()->subMinute(),
@@ -158,7 +162,7 @@ test('refreshes stale category metadata and exposes refresh state', function ():
         ]),
     ]);
 
-    $metadata = app(EbayMetadataService::class)->categoryAspects($user->company_id, 'EBAY_MOTORS_US', '100', '33563');
+    $metadata = app(EbayMetadataService::class)->categoryAspects($user->company_id, 'EBAY_MOTORS_US', EBAY_METADATA_CATEGORY_TREE_ID, EBAY_METADATA_CATEGORY_ID);
 
     expect($metadata->id)->toBe($stale->id)
         ->and($metadata->payload['aspects'][0]['localizedAspectName'])->toBe('Fresh Type')
@@ -186,18 +190,18 @@ test('pulls compatibility properties and filtered property values', function ():
         ]),
     ]);
 
-    $properties = app(EbayMetadataService::class)->compatibilityProperties($user->company_id, 'EBAY_MOTORS_US', '100', '33563');
+    $properties = app(EbayMetadataService::class)->compatibilityProperties($user->company_id, 'EBAY_MOTORS_US', EBAY_METADATA_CATEGORY_TREE_ID, EBAY_METADATA_CATEGORY_ID);
     $values = app(EbayMetadataService::class)->compatibilityPropertyValues(
         $user->company_id,
         'EBAY_MOTORS_US',
-        '100',
-        '33563',
+        EBAY_METADATA_CATEGORY_TREE_ID,
+        EBAY_METADATA_CATEGORY_ID,
         'Model',
         ['Year' => '2011', 'Make' => 'BMW'],
     );
 
     expect($properties->kind)->toBe(EbayMetadataService::KIND_COMPATIBILITY_PROPERTIES)
-        ->and($properties->key)->toBe('100:33563')
+        ->and($properties->key)->toBe(EBAY_METADATA_CATEGORY_KEY)
         ->and($properties->payload['compatibilityProperties'][0]['name'])->toBe('Year')
         ->and($values->kind)->toBe(EbayMetadataService::KIND_COMPATIBILITY_PROPERTY_VALUES)
         ->and($values->payload['compatibilityPropertyValues'][0]['value'])->toBe('135i');
@@ -205,12 +209,12 @@ test('pulls compatibility properties and filtered property values', function ():
     Http::assertSent(function (Request $request): bool {
         return str_starts_with($request->url(), 'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_compatibility_properties')
             && $request->hasHeader('X-EBAY-C-MARKETPLACE-ID', 'EBAY_MOTORS_US')
-            && $request['category_id'] === '33563';
+            && $request['category_id'] === EBAY_METADATA_CATEGORY_ID;
     });
 
     Http::assertSent(function (Request $request): bool {
         return str_starts_with($request->url(), 'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_compatibility_property_values')
-            && $request['category_id'] === '33563'
+            && $request['category_id'] === EBAY_METADATA_CATEGORY_ID
             && $request['compatibility_property'] === 'Model'
             && $request['filter'] === 'Year:2011,Make:BMW';
     });
@@ -225,7 +229,7 @@ test('pulls automotive compatibility and item condition policies by category', f
             'automotivePartsCompatibilityPolicies' => [
                 [
                     'categoryTreeId' => '100',
-                    'categoryId' => '33563',
+                    'categoryId' => EBAY_METADATA_CATEGORY_ID,
                     'compatibilityBasedOn' => 'ASSEMBLY',
                     'maxNumberOfCompatibleVehicles' => 300,
                 ],
@@ -234,7 +238,7 @@ test('pulls automotive compatibility and item condition policies by category', f
         'https://api.sandbox.ebay.com/sell/metadata/v1/marketplace/EBAY_MOTORS_US/get_item_condition_policies*' => Http::response([
             'itemConditionPolicies' => [
                 [
-                    'categoryId' => '33563',
+                    'categoryId' => EBAY_METADATA_CATEGORY_ID,
                     'itemConditions' => [
                         ['conditionId' => '3000', 'conditionDescription' => 'Used'],
                     ],
@@ -243,11 +247,11 @@ test('pulls automotive compatibility and item condition policies by category', f
         ]),
     ]);
 
-    $compatibility = app(EbayMetadataService::class)->automotivePartsCompatibilityPolicies($user->company_id, 'EBAY_MOTORS_US', ['33563']);
-    $conditions = app(EbayMetadataService::class)->itemConditionPolicies($user->company_id, 'EBAY_MOTORS_US', ['33563']);
+    $compatibility = app(EbayMetadataService::class)->automotivePartsCompatibilityPolicies($user->company_id, 'EBAY_MOTORS_US', [EBAY_METADATA_CATEGORY_ID]);
+    $conditions = app(EbayMetadataService::class)->itemConditionPolicies($user->company_id, 'EBAY_MOTORS_US', [EBAY_METADATA_CATEGORY_ID]);
 
     expect($compatibility->kind)->toBe(EbayMetadataService::KIND_AUTOMOTIVE_PARTS_COMPATIBILITY_POLICIES)
-        ->and($compatibility->key)->toBe('33563')
+        ->and($compatibility->key)->toBe(EBAY_METADATA_CATEGORY_ID)
         ->and($compatibility->payload['automotivePartsCompatibilityPolicies'][0]['compatibilityBasedOn'])->toBe('ASSEMBLY')
         ->and($conditions->kind)->toBe(EbayMetadataService::KIND_ITEM_CONDITION_POLICIES)
         ->and($conditions->payload['itemConditionPolicies'][0]['itemConditions'][0]['conditionId'])->toBe('3000');
@@ -287,7 +291,7 @@ test('surfaces eBay metadata failures with the integration exchange id', functio
         'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_item_aspects_for_category*' => Http::response(['errors' => [['message' => 'nope']]], 500),
     ]);
 
-    expect(fn () => app(EbayMetadataService::class)->categoryAspects($user->company_id, 'EBAY_MOTORS_US', '100', '33563'))
+    expect(fn () => app(EbayMetadataService::class)->categoryAspects($user->company_id, 'EBAY_MOTORS_US', EBAY_METADATA_CATEGORY_TREE_ID, EBAY_METADATA_CATEGORY_ID))
         ->toThrow(function (MarketplaceOperationException $exception): void {
             expect($exception->context['status'])->toBe(500)
                 ->and($exception->context['exchange_id'] ?? null)->toStartWith('ix_');

@@ -28,8 +28,8 @@ use App\Modules\People\Settings\Models\PeopleNotificationDeliveryLog;
 use App\Modules\People\Settings\Models\PeopleReferenceEntry;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
 const ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME = 'Office Olive';
@@ -1423,7 +1423,7 @@ function createRosterViewOnlyUser(Company $company, Employee $employee): User
 
     $role = Role::query()->create([
         'company_id' => null,
-        'code' => 'roster_view_only_test_' . $company->id,
+        'code' => 'roster_view_only_test_'.$company->id,
         'name' => 'Roster View Only',
         'is_system' => false,
         'grant_all' => false,
