@@ -12,6 +12,7 @@ use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use App\Modules\Commerce\Marketplace\Models\MarketplaceMetadata;
 use App\Modules\Commerce\Marketplace\Models\ProductReference;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 class EbayListingReadinessService
 {
@@ -44,12 +45,12 @@ class EbayListingReadinessService
         $categoryId = $templateMapping['category_id'] ?? null;
         $policyIds = $this->policyIds($companyId);
         $mappedAspects = $this->mappedAspects($item, $marketplaceId, $categoryId, $categoryTreeId);
-        $aspectFacts = $this->aspectFacts($item, $marketplaceId, $categoryId, $categoryTreeId);
         $productReferences = ProductReference::query()
             ->where('company_id', $companyId)
             ->where('channel', EbayConfiguration::CHANNEL)
             ->where('item_id', $item->id)
             ->get();
+        $aspectFacts = $this->aspectFacts($item, $marketplaceId, $categoryId, $categoryTreeId, $productReferences->all());
 
         [$blockers, $warnings] = $this->gaps(
             item: $item,
@@ -94,8 +95,15 @@ class EbayListingReadinessService
                         'photo_count' => $item->photos->count(),
                         'mapped_aspect_count' => count($mappedAspects),
                         'product_reference_count' => $productReferences->count(),
+                        'public_photo_count' => $this->publicPhotoUrls($item)->count(),
                     ],
                     'aspects' => $aspectFacts,
+                    'product_references' => $productReferences->map(fn (ProductReference $reference): array => [
+                        'type' => $reference->reference_type,
+                        'external_product_id' => $reference->external_product_id,
+                        'source' => $reference->source,
+                        'review_status' => $reference->review_status,
+                    ])->values()->all(),
                 ],
                 'metadata_checked_at' => Carbon::now(),
                 'metadata_version_key' => $this->metadataVersionKey($marketplaceId, $categoryTreeId, $categoryId),
@@ -152,16 +160,17 @@ class EbayListingReadinessService
      */
     private function mappedAspects(Item $item, string $marketplaceId, ?string $categoryId, ?string $categoryTreeId): array
     {
-        return collect($this->aspectFacts($item, $marketplaceId, $categoryId, $categoryTreeId))
-            ->filter(fn (array $fact): bool => $fact['value'] !== null)
-            ->mapWithKeys(fn (array $fact): array => [$fact['name'] => $fact['value']])
+        return collect($this->aspectFacts($item, $marketplaceId, $categoryId, $categoryTreeId, []))
+            ->filter(fn (array $fact): bool => $fact['value'] !== null && ($fact['validation'] ?? 'ok') === 'ok')
+            ->mapWithKeys(fn (array $fact): array => [$fact['name'] => $fact['normalized_value'] ?? $fact['value']])
             ->all();
     }
 
     /**
-     * @return list<array{name: string, value: string|null, source: string, confidence: string, internal_attribute_code: string}>
+     * @param  list<ProductReference>  $productReferences
+     * @return list<array{name: string, value: string|null, normalized_value?: string|null, source: string, confidence: string, internal_attribute_code?: string, validation?: string, message?: string}>
      */
-    private function aspectFacts(Item $item, string $marketplaceId, ?string $categoryId, ?string $categoryTreeId): array
+    private function aspectFacts(Item $item, string $marketplaceId, ?string $categoryId, ?string $categoryTreeId, array $productReferences): array
     {
         if ($categoryId === null) {
             return [];
@@ -169,29 +178,42 @@ class EbayListingReadinessService
 
         $attributeValues = $item->catalogAttributeValues->keyBy(fn (AttributeValue $value): string => (string) $value->attribute?->code);
 
-        return AspectMapping::query()
+        $mappedFacts = AspectMapping::query()
             ->forCategory($item->company_id, EbayConfiguration::CHANNEL, $marketplaceId, $categoryId, $categoryTreeId)
             ->get()
             ->map(function (AspectMapping $mapping) use ($attributeValues): array {
                 $value = $attributeValues->get($mapping->internal_attribute_code)?->display_value;
                 $value = is_string($value) && trim($value) !== '' ? trim($value) : null;
+                $normalized = $this->normalizeAspectValue($value, $mapping->value_normalization);
+                $validation = $this->validateAspectValue($normalized, $mapping->enum_values);
 
-                return [
+                return array_filter([
                     'name' => $mapping->ebay_aspect_name,
                     'value' => $value,
+                    'normalized_value' => $normalized,
                     'source' => 'catalog_attribute',
                     'confidence' => $mapping->mapping_confidence,
                     'internal_attribute_code' => $mapping->internal_attribute_code,
-                ];
+                    'validation' => $validation === null ? 'ok' : 'invalid',
+                    'message' => $validation,
+                ], fn (mixed $entry): bool => $entry !== null);
             })
             ->values()
             ->all();
+
+        $mappedNames = collect($mappedFacts)->pluck('name')->all();
+        $suggestedFacts = collect($productReferences)
+            ->flatMap(fn (ProductReference $reference): array => $this->suggestedAspectFacts($reference, $mappedNames))
+            ->values()
+            ->all();
+
+        return [...$mappedFacts, ...$suggestedFacts];
     }
 
     /**
      * @param  array{return: string|null, fulfillment: string|null, payment: string|null}  $policyIds
      * @param  array<string, mixed>  $mappedAspects
-     * @param  list<array{name: string, value: string|null, source: string, confidence: string, internal_attribute_code: string}>  $aspectFacts
+     * @param  list<array{name: string, value: string|null, normalized_value?: string|null, source: string, confidence: string, internal_attribute_code?: string, validation?: string, message?: string}>  $aspectFacts
      * @return array{0: list<array{key: string, label: string}>, 1: list<array{key: string, label: string}>}
      */
     private function gaps(
@@ -235,6 +257,10 @@ class EbayListingReadinessService
             $warnings[] = $this->gap('description', __('Accept a listing description before publishing.'), 'descriptions');
         }
 
+        if ($item->photos->count() > 0 && $item->photos->count() < 3) {
+            $warnings[] = $this->gap('photo_coverage', __('Add more photos when possible: multiple angles, labels, connectors, mounts, and visible defects.'), 'photos');
+        }
+
         foreach ($policyIds as $kind => $policyId) {
             if ($policyId === null) {
                 $blockers[] = $this->gap('policy_'.$kind, __('Choose a default :kind policy in eBay settings.', ['kind' => $kind]), 'settings');
@@ -255,12 +281,30 @@ class EbayListingReadinessService
             }
         }
 
+        foreach ($aspectFacts as $fact) {
+            if (($fact['validation'] ?? 'ok') === 'invalid') {
+                $blockers[] = $this->gap('aspect_invalid_'.$fact['name'], (string) ($fact['message'] ?? __('Fix an invalid eBay aspect value.')), 'attributes');
+            }
+        }
+
+        if ($this->categoryHasConditionPolicy($marketplaceId, $categoryId) && ! $this->hasAnyAspect($aspectFacts, ['Condition', 'Condition Grade', 'Type'])) {
+            $blockers[] = $this->gap('condition_mapping', __('Map a Belimbing condition attribute before publishing to this eBay category.'), 'attributes');
+        }
+
         if (! $this->hasAnyAspect($aspectFacts, ['Brand'])) {
             $warnings[] = $this->gap('identifier_brand', __('Add a brand identifier when it is known.'), 'attributes');
         }
 
         if (! $this->hasAnyAspect($aspectFacts, ['Manufacturer Part Number', 'MPN', 'OE/OEM Part Number', 'Interchange Part Number'])) {
             $warnings[] = $this->gap('identifier_part_number', __('Add manufacturer, OEM, or interchange part numbers when available.'), 'attributes');
+        }
+
+        if (! $this->titleIncludesUsefulSpecific($item->title, $mappedAspects)) {
+            $warnings[] = $this->gap('title_guidance', __('Improve the title with useful specifics such as part type, brand, part number, side, or placement.'), 'item_facts');
+        }
+
+        if (($policyIds['fulfillment'] ?? null) !== null) {
+            $warnings[] = $this->gap('package_shipping_facts', __('Confirm package weight and dimensions before publishing if the selected shipping policy requires them.'), 'item_facts');
         }
 
         if (! $this->hasFreshCategoryMetadata($marketplaceId, $categoryTreeId, $categoryId)) {
@@ -374,7 +418,7 @@ class EbayListingReadinessService
     }
 
     /**
-     * @param  list<array{name: string, value: string|null, source: string, confidence: string, internal_attribute_code: string}>  $aspectFacts
+     * @param  list<array{name: string, value: string|null, normalized_value?: string|null, source: string, confidence: string, internal_attribute_code?: string, validation?: string, message?: string}>  $aspectFacts
      * @param  list<string>  $names
      */
     private function hasAnyAspect(array $aspectFacts, array $names): bool
@@ -384,10 +428,111 @@ class EbayListingReadinessService
 
     private function hasPublishSafePhotos(Item $item): bool
     {
-        return $item->photos->contains(function ($photo): bool {
-            $url = $photo->mediaAsset?->metadata['public_url'] ?? null;
+        return $this->publicPhotoUrls($item)->isNotEmpty();
+    }
 
-            return is_string($url) && str_starts_with($url, 'https://');
-        });
+    private function publicPhotoUrls(Item $item): Collection
+    {
+        return $item->photos
+            ->map(fn ($photo): mixed => $photo->mediaAsset?->metadata['public_url'] ?? null)
+            ->filter(fn (mixed $url): bool => is_string($url) && str_starts_with($url, 'https://'))
+            ->values();
+    }
+
+    private function normalizeAspectValue(?string $value, string $normalization): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return match ($normalization) {
+            AspectMapping::NORMALIZATION_NUMBER => is_numeric($value) ? (string) (float) $value : $value,
+            AspectMapping::NORMALIZATION_BOOLEAN => in_array(strtolower($value), ['1', 'true', 'yes', 'y'], true) ? 'Yes' : (in_array(strtolower($value), ['0', 'false', 'no', 'n'], true) ? 'No' : $value),
+            default => trim($value),
+        };
+    }
+
+    /**
+     * @param  array<int, string>|null  $enumValues
+     */
+    private function validateAspectValue(?string $value, ?array $enumValues): ?string
+    {
+        if ($value === null || $enumValues === null || $enumValues === []) {
+            return null;
+        }
+
+        if (in_array($value, $enumValues, true)) {
+            return null;
+        }
+
+        return __('The eBay aspect value ":value" is not allowed for the selected category.', ['value' => $value]);
+    }
+
+    /**
+     * @param  list<string>  $alreadyMappedNames
+     * @return list<array{name: string, value: string|null, source: string, confidence: string}>
+     */
+    private function suggestedAspectFacts(ProductReference $reference, array $alreadyMappedNames): array
+    {
+        $aspects = $reference->facts['aspects'] ?? [];
+
+        if (! is_array($aspects)) {
+            return [];
+        }
+
+        return collect($aspects)
+            ->map(function (mixed $value, mixed $name) use ($alreadyMappedNames): ?array {
+                if (! is_string($name) || in_array($name, $alreadyMappedNames, true)) {
+                    return null;
+                }
+
+                $value = is_array($value) ? reset($value) : $value;
+
+                return is_scalar($value) && trim((string) $value) !== '' ? [
+                    'name' => $name,
+                    'value' => trim((string) $value),
+                    'source' => 'ebay_product_reference',
+                    'confidence' => AspectMapping::CONFIDENCE_SUGGESTED,
+                ] : null;
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function categoryHasConditionPolicy(string $marketplaceId, ?string $categoryId): bool
+    {
+        if ($categoryId === null) {
+            return false;
+        }
+
+        $metadata = MarketplaceMetadata::query()
+            ->where('channel', EbayConfiguration::CHANNEL)
+            ->where('marketplace_id', $marketplaceId)
+            ->where('kind', EbayMetadataService::KIND_ITEM_CONDITION_POLICIES)
+            ->where(function ($query) use ($categoryId): void {
+                $query->where('key', $categoryId)
+                    ->orWhere('key', 'all');
+            })
+            ->latest('fetched_at')
+            ->first();
+
+        return collect($metadata?->payload['itemConditionPolicies'] ?? [])
+            ->contains(fn (mixed $policy): bool => in_array($categoryId, (array) data_get($policy, 'categoryIds', []), true)
+                || data_get($policy, 'categoryId') === $categoryId);
+    }
+
+    /**
+     * @param  array<string, mixed>  $mappedAspects
+     */
+    private function titleIncludesUsefulSpecific(string $title, array $mappedAspects): bool
+    {
+        $title = strtolower($title);
+
+        return collect($mappedAspects)
+            ->filter(fn (mixed $value, string $name): bool => in_array($name, ['Brand', 'Manufacturer Part Number', 'MPN', 'OE/OEM Part Number', 'Interchange Part Number', 'Placement on Vehicle'], true)
+                && is_string($value)
+                && trim($value) !== '')
+            ->contains(fn (string $value): bool => str_contains($title, strtolower($value)));
     }
 }

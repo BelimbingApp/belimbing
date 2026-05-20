@@ -124,21 +124,22 @@ Goal: let Ham know what is missing before any publish/revise call.
 
 - [x] Add an eBay Motors readiness panel backed by the durable listing draft, not by transient form state. {Amp/claude-sonnet-4.5}
 - [x] Check first-pass readiness for eBay category, required aspects, recommended identifiers, photos, fitment or universal-fit status, seller policies, price, quantity, and description readiness. {Amp/claude-sonnet-4.5}
-- [ ] Add condition mapping readiness once eBay condition policy mapping from catalog attributes is available.
+- [x] Add condition mapping readiness once eBay condition policy mapping from catalog attributes is available. {Amp/claude-sonnet-4.5}
 - [x] Check first-pass publish blockers: merchant location, imported policy/location verification, public HTTPS photo URL availability, account connection state, and stale metadata. {Amp/claude-sonnet-4.5}
-- [ ] Check package/shipping facts when required by the selected category and fulfillment policy.
-- [ ] Map Belimbing attributes to eBay aspects with value normalization and enum validation before marking a draft ready.
+- [x] Check package/shipping facts when required by the selected category and fulfillment policy. {Amp/claude-sonnet-4.5}
+- [x] Map Belimbing attributes to eBay aspects with value normalization and enum validation before marking a draft ready. {Amp/claude-sonnet-4.5}
 - [x] Show the initial aspect source/confidence trail for values mapped from Belimbing catalog attributes. {Amp/claude-sonnet-4.5}
-- [ ] Extend source/confidence to imported Ham listings, eBay catalog/ePID suggestions, AI suggestions, and defaults.
+- [x] Extend source/confidence to eBay catalog/ePID suggestions and imported listing product-reference data. {Amp/claude-sonnet-4.5}
+- [ ] Extend source/confidence to future AI suggestions and defaults once those suggestion sources exist.
 - [x] Explain each readiness gap in operator language and link directly to the field or setup page that fixes it. {Amp/claude-sonnet-4.5}
-- [ ] Add title guidance that emphasizes part type, brand, part numbers, placement, and meaningful variants without using title text as the only compatibility record.
-- [ ] Add photo/confidence guidance for used parts: multiple angles, part number close-up when available, defects, connectors/mount points, and tested/untested evidence.
+- [x] Add title guidance that emphasizes part type, brand, part numbers, placement, and meaningful variants without using title text as the only compatibility record. {Amp/claude-sonnet-4.5}
+- [x] Add photo/confidence guidance for used parts: multiple angles, part number close-up when available, defects, connectors/mount points, and tested/untested evidence. {Amp/claude-sonnet-4.5}
 
 ### Phase 4 — eBay publish/revise with structured compatibility
 
 Goal: publish and revise eBay Motors listings using official eBay APIs and the data Belimbing has validated.
 
-- [ ] Extend eBay listing draft payloads to include selected Motors category, required aspects, item condition mapping, publish-safe photos, policies, merchant location, SKU, quantity, price, and structured fitment.
+- [x] Extend eBay listing draft payloads to include selected Motors category, required aspects, item condition mapping, publish-safe photos, policies, merchant location, SKU, quantity, price, and structured fitment. {Amp/claude-sonnet-4.5}
 - [ ] Implement publish as explicit eBay operations: inventory item upsert, product compatibility upsert when applicable, offer create/update, and offer publish/withdraw.
 - [ ] Publish a new eBay Motors listing from a ready Belimbing item through official eBay APIs.
 - [ ] Revise an existing eBay listing when fitment, item specifics, photos, price, quantity, title, or description changes.
