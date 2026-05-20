@@ -12,6 +12,10 @@ class EbayMetadataService
 {
     private const TAXONOMY_CATEGORY_TREE_PATH = '/commerce/taxonomy/v1/category_tree/';
 
+    public const KIND_CATEGORY_TREE = 'category_tree';
+
+    public const KIND_CATEGORY_SUBTREE = 'category_subtree';
+
     public const KIND_CATEGORY_ASPECTS = 'category_aspects';
 
     public const KIND_COMPATIBILITY_PROPERTIES = 'compatibility_properties';
@@ -27,6 +31,47 @@ class EbayMetadataService
         private readonly EbayApplicationTokenService $applicationTokens,
         private readonly IntegrationGateway $integration,
     ) {}
+
+    public function categoryTree(int $companyId, string $marketplaceId, string $categoryTreeId, bool $forceRefresh = false): MarketplaceMetadata
+    {
+        $path = self::TAXONOMY_CATEGORY_TREE_PATH.$categoryTreeId;
+
+        return $this->pullMetadata(new EbayMetadataPull(
+            companyId: $companyId,
+            marketplaceId: $marketplaceId,
+            kind: self::KIND_CATEGORY_TREE,
+            key: $categoryTreeId,
+            operation: 'metadata.category_tree.pull',
+            path: $path,
+            options: new EbayMetadataPullOptions(
+                query: [],
+                forceRefresh: $forceRefresh,
+                metadata: ['category_tree_id' => $categoryTreeId],
+            ),
+        ));
+    }
+
+    public function categorySubtree(int $companyId, string $marketplaceId, string $categoryTreeId, string $categoryId, bool $forceRefresh = false): MarketplaceMetadata
+    {
+        $path = self::TAXONOMY_CATEGORY_TREE_PATH.$categoryTreeId.'/get_category_subtree';
+
+        return $this->pullMetadata(new EbayMetadataPull(
+            companyId: $companyId,
+            marketplaceId: $marketplaceId,
+            kind: self::KIND_CATEGORY_SUBTREE,
+            key: $categoryTreeId.':'.$categoryId,
+            operation: 'metadata.category_subtree.pull',
+            path: $path,
+            options: new EbayMetadataPullOptions(
+                query: ['category_id' => $categoryId],
+                forceRefresh: $forceRefresh,
+                metadata: [
+                    'category_tree_id' => $categoryTreeId,
+                    'category_id' => $categoryId,
+                ],
+            ),
+        ));
+    }
 
     public function categoryAspects(int $companyId, string $marketplaceId, string $categoryTreeId, string $categoryId, bool $forceRefresh = false): MarketplaceMetadata
     {

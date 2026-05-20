@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace;
 
+use App\Modules\Commerce\Marketplace\Console\Commands\EbayMetadataRefreshCommand;
 use App\Modules\Commerce\Marketplace\Console\Commands\EbayPoliciesCommand;
 use App\Modules\Commerce\Marketplace\Console\Commands\EbayPullCommand;
 use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannel;
@@ -32,6 +34,7 @@ class ServiceProvider extends BaseServiceProvider
 
         if ($this->app->runningInConsole()) {
             $this->commands([
+                EbayMetadataRefreshCommand::class,
                 EbayPullCommand::class,
                 EbayPoliciesCommand::class,
             ]);

@@ -34,13 +34,17 @@
     }
 @endphp
 
-<div x-data="{
-    dayData: @js($dayDrawerData ?? []),
-    activeDate: null,
-    get activeDay() { return this.dayData[this.activeDate] ?? null },
-    open(date) { this.activeDate = date },
-    close() { this.activeDate = null }
-}" @show-day-drawer.window="open($event.detail.date)" class="relative">
+<style>
+.roster-selected { outline: 2px solid var(--color-accent, #6366f1); outline-offset: -2px; }
+.roster-fill-preview { background-color: color-mix(in srgb, var(--color-accent, #6366f1) 12%, transparent); }
+.roster-copied { outline: 2px dashed var(--color-accent, #6366f1); outline-offset: -2px; }
+</style>
+
+<div x-data="rosterGrid(@js($dayDrawerData ?? []))"
+     @show-day-drawer.window="openDrawer($event.detail.date)"
+     @grid-cell-select.window="handleCellSelect($event.detail)"
+     @keydown.window="handleKeydown($event)"
+     class="relative">
 
 <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
     @if ($gridIntro)
@@ -74,7 +78,7 @@
                         </td>
                     </tr>
                 @endif
-                <tr wire:key="roster-grid-row-{{ $employee->id }}" class="hover:bg-surface-subtle/50">
+                <tr wire:key="roster-grid-row-{{ $employee->id }}" data-row-employee="{{ $employee->id }}" class="hover:bg-surface-subtle/50">
                     <td class="sticky left-0 z-10 w-40 min-w-40 bg-surface-card px-table-cell-x py-1.5 align-top">
                         <div class="truncate text-sm font-medium text-ink" title="{{ $employee->full_name }}">{{ $employee->displayName() }}</div>
                     </td>
@@ -85,11 +89,25 @@
                         @php($isEmpty = $cell['state'] === 'empty')
                         @php($cellShiftId = (int) ($cell['shift_template_id'] ?? 0))
                         @php($cellPolicyId = (int) ($cell['policy_group_id'] ?? 0))
-                        <td wire:key="roster-grid-cell-{{ $employee->id }}-{{ $day['date'] }}" class="relative p-0 align-top"
+                        <td wire:key="roster-grid-cell-{{ $employee->id }}-{{ $day['date'] }}"
+                            class="relative p-0 align-top"
+                            data-employee="{{ $employee->id }}"
+                            data-date="{{ $day['date'] }}"
+                            data-shift="{{ $cellShiftId }}"
+                            data-policy="{{ $cellPolicyId }}"
+                            data-state="{{ $cell['state'] }}"
                             @if($canManage)
                                 x-data="{ open: false, shift: {{ $cellShiftId }}, policy: {{ $cellPolicyId }} }"
                                 :data-cell-shift="{{ $cellShiftId }}"
                                 :data-cell-policy="{{ $cellPolicyId }}"
+                                @click.capture="
+                                    if ($event.shiftKey || $event.ctrlKey || $event.metaKey) {
+                                        $dispatch('grid-cell-select', { empId: {{ $employee->id }}, date: '{{ $day['date'] }}', extendShift: $event.shiftKey, toggle: $event.ctrlKey || $event.metaKey });
+                                        $event.stopPropagation();
+                                    } else {
+                                        $dispatch('grid-cell-select', { empId: {{ $employee->id }}, date: '{{ $day['date'] }}', extendShift: false, toggle: false });
+                                    }
+                                "
                             @endif
                         >
                             @if ($canManage)
@@ -113,6 +131,10 @@
                                         @endif
                                     </x-ui.day-tile>
                                 </button>
+                                {{-- Fill handle: shown on focused cell, used to drag-fill adjacent cells --}}
+                                <div class="roster-fill-handle absolute bottom-0 right-0 z-10 hidden h-3 w-3 -translate-x-px -translate-y-px cursor-crosshair rounded-full border-2 border-white bg-accent shadow-sm"
+                                     data-fill-handle="{{ $employee->id }}:{{ $day['date'] }}"
+                                     onmousedown="window.rosterGrid?.startFillDrag(event, '{{ $employee->id }}', '{{ $day['date'] }}')"></div>
                                 <section x-show="open" x-cloak @click.outside="open = false" x-transition.origin.top.left class="absolute left-1/2 z-30 mt-1 w-56 -translate-x-1/2 rounded-2xl border border-border-default bg-surface-card p-3 text-left shadow-lg" role="dialog" tabindex="-1" aria-label="{{ __('Override :date', ['date' => $day['date']]) }}">
                                     <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Override') }} {{ \Carbon\CarbonImmutable::parse($day['date'])->format('j M') }}</div>
                                     <div class="mt-2 space-y-2">
@@ -179,7 +201,7 @@
     x-transition:leave="transition ease-in duration-100"
     x-transition:leave-start="opacity-100 translate-x-0"
     x-transition:leave-end="opacity-0 translate-x-4"
-    @keydown.escape.window="close()"
+    @keydown.escape.window="closeDrawer()"
     class="absolute right-0 top-10 z-20 w-72 rounded-2xl border border-border-default bg-surface-card shadow-lg"
 >
     <template x-if="activeDay">
@@ -194,7 +216,7 @@
                         <span class="mt-0.5 inline-flex items-center rounded-full bg-day-rest px-2 py-0.5 text-[10px] font-medium text-day-rest-ink">{{ __('Weekend') }}</span>
                     </template>
                 </div>
-                <button type="button" @click="close()" class="mt-0.5 rounded-md text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent" aria-label="{{ __('Close') }}">
+                <button type="button" @click="closeDrawer()" class="mt-0.5 rounded-md text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent" aria-label="{{ __('Close') }}">
                     <x-icon name="heroicon-o-x-mark" class="h-4 w-4" />
                 </button>
             </div>
@@ -233,4 +255,328 @@
 </div>
 @endif
 
-</div>{{-- /Alpine day drawer wrapper --}}
+</div>{{-- /Alpine rosterGrid wrapper --}}
+
+<script>
+function rosterGrid(dayData) {
+    return {
+        // Day drawer
+        dayData: dayData || {},
+        activeDate: null,
+        get activeDay() { return this.dayData[this.activeDate] ?? null; },
+        openDrawer(date) { this.activeDate = date; },
+        closeDrawer() { this.activeDate = null; },
+
+        // Grid layout (built from DOM on init)
+        employees: [],  // ordered employee ID strings
+        dates: [],      // ordered date strings (Y-m-d)
+
+        // Selection state
+        selection: [],  // [{empId, date}]
+        anchor: null,   // {empIdx, dateIdx}
+        focus: null,    // {empIdx, dateIdx}
+
+        // Copy buffer
+        copyBuffer: null,  // null | [{empOffset, dateOffset, shift, policy}]
+        copySourceKeys: [], // 'empId:date' strings for marching-ants display
+
+        // Fill drag state
+        dragging: false,
+        fillSourceKeys: [],   // 'empId:date' strings being dragged from
+        fillPreviewKeys: [],  // 'empId:date' strings in the drag preview
+
+        init() {
+            window.rosterGrid = this;
+            this.$nextTick(() => this._buildLayout());
+            this.$el.addEventListener('livewire:updated', () => {
+                this.$nextTick(() => { this._buildLayout(); this._highlight(); });
+            });
+        },
+
+        _buildLayout() {
+            const table = this.$el.querySelector('table');
+            if (!table) return;
+            this.dates = Array.from(table.querySelectorAll('thead th[data-col-date]')).map(th => th.dataset.colDate);
+            this.employees = Array.from(table.querySelectorAll('tbody tr[data-row-employee]')).map(tr => tr.dataset.rowEmployee);
+        },
+
+        _td(empId, date) {
+            return this.$el.querySelector(`td[data-employee="${empId}"][data-date="${date}"]`);
+        },
+
+        _cellData(empId, date) {
+            const td = this._td(empId, date);
+            if (!td) return null;
+            return { shift: parseInt(td.dataset.shift) || 0, policy: parseInt(td.dataset.policy) || 0, state: td.dataset.state || 'empty' };
+        },
+
+        _key(empId, date) { return `${empId}:${date}`; },
+
+        _idx(empId, date) {
+            const eIdx = this.employees.indexOf(String(empId));
+            const dIdx = this.dates.indexOf(date);
+            return (eIdx === -1 || dIdx === -1) ? null : { empIdx: eIdx, dateIdx: dIdx };
+        },
+
+        _range(from, to) {
+            const out = [];
+            const step = from <= to ? 1 : -1;
+            for (let i = from; i !== to + step; i += step) out.push(i);
+            return out;
+        },
+
+        _highlight() {
+            this.$el.querySelectorAll('td.roster-selected').forEach(td => td.classList.remove('roster-selected'));
+            this.$el.querySelectorAll('td.roster-fill-preview').forEach(td => td.classList.remove('roster-fill-preview'));
+            this.$el.querySelectorAll('td.roster-copied').forEach(td => td.classList.remove('roster-copied'));
+            this.$el.querySelectorAll('.roster-fill-handle').forEach(h => h.classList.add('hidden'));
+
+            this.selection.forEach(({ empId, date }) => this._td(empId, date)?.classList.add('roster-selected'));
+            this.fillPreviewKeys.forEach(k => {
+                const [empId, date] = k.split(':');
+                this._td(empId, date)?.classList.add('roster-fill-preview');
+            });
+            this.copySourceKeys.forEach(k => {
+                const [empId, date] = k.split(':');
+                this._td(empId, date)?.classList.add('roster-copied');
+            });
+
+            // Show fill handle on focused cell
+            if (this.focus && this.selection.length > 0) {
+                const empId = this.employees[this.focus.empIdx];
+                const date = this.dates[this.focus.dateIdx];
+                const handle = this.$el.querySelector(`[data-fill-handle="${empId}:${date}"]`);
+                handle?.classList.remove('hidden');
+            }
+        },
+
+        // Cell selection
+        handleCellSelect({ empId, date, extendShift, toggle }) {
+            const idx = this._idx(empId, date);
+            if (!idx) return;
+
+            if (extendShift && this.anchor) {
+                // Rectangle from anchor to target
+                const minE = Math.min(this.anchor.empIdx, idx.empIdx);
+                const maxE = Math.max(this.anchor.empIdx, idx.empIdx);
+                const minD = Math.min(this.anchor.dateIdx, idx.dateIdx);
+                const maxD = Math.max(this.anchor.dateIdx, idx.dateIdx);
+                this.selection = [];
+                for (let e = minE; e <= maxE; e++) {
+                    for (let d = minD; d <= maxD; d++) {
+                        this.selection.push({ empId: this.employees[e], date: this.dates[d] });
+                    }
+                }
+                this.focus = idx;
+            } else if (toggle) {
+                const key = this._key(empId, date);
+                const exists = this.selection.findIndex(s => this._key(s.empId, s.date) === key);
+                if (exists >= 0) {
+                    this.selection.splice(exists, 1);
+                } else {
+                    this.selection.push({ empId: String(empId), date });
+                    this.anchor = idx;
+                    this.focus = idx;
+                }
+            } else {
+                this.selection = [{ empId: String(empId), date }];
+                this.anchor = idx;
+                this.focus = idx;
+            }
+
+            this._highlight();
+        },
+
+        clearSelection() {
+            this.selection = [];
+            this.anchor = null;
+            this.focus = null;
+            this.copyBuffer = null;
+            this.copySourceKeys = [];
+            this._highlight();
+        },
+
+        // Copy
+        copySelection() {
+            if (this.selection.length === 0) return;
+            const minE = Math.min(...this.selection.map(s => this._idx(s.empId, s.date)?.empIdx ?? 0));
+            const minD = Math.min(...this.selection.map(s => this._idx(s.empId, s.date)?.dateIdx ?? 0));
+            this.copyBuffer = this.selection.map(s => {
+                const idx = this._idx(s.empId, s.date);
+                const data = this._cellData(s.empId, s.date);
+                return { empOffset: (idx?.empIdx ?? 0) - minE, dateOffset: (idx?.dateIdx ?? 0) - minD, shift: data?.shift || 0, policy: data?.policy || 0 };
+            });
+            this.copySourceKeys = this.selection.map(s => this._key(s.empId, s.date));
+            this._highlight();
+        },
+
+        // Paste
+        pasteAtFocus() {
+            if (!this.copyBuffer || !this.focus) return;
+            const overrides = this.copyBuffer.map(c => {
+                const eIdx = this.focus.empIdx + c.empOffset;
+                const dIdx = this.focus.dateIdx + c.dateOffset;
+                if (eIdx < 0 || eIdx >= this.employees.length || dIdx < 0 || dIdx >= this.dates.length) return null;
+                return { employee_id: parseInt(this.employees[eIdx]), date: this.dates[dIdx], shift_template_id: c.shift, policy_group_id: c.policy };
+            }).filter(Boolean);
+            if (overrides.length > 0) this.$wire.saveCellOverrides(overrides);
+            this.copySourceKeys = [];
+            this.copyBuffer = null;
+            this._highlight();
+        },
+
+        // Delete
+        deleteSelection() {
+            if (this.selection.length === 0) return;
+            const hasPublished = this.selection.some(s => this._cellData(s.empId, s.date)?.state === 'published');
+            if (hasPublished && !confirm('Some selected cells are published. Clear them and return to draft?')) return;
+            const overrides = this.selection.map(s => ({ employee_id: parseInt(s.empId), date: s.date, shift_template_id: 0, policy_group_id: 0 }));
+            this.$wire.saveCellOverrides(overrides);
+            this.clearSelection();
+        },
+
+        // Fill drag
+        startFillDrag(event, empId, date) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (this.selection.length === 0) {
+                this.selection = [{ empId: String(empId), date }];
+                this.anchor = this._idx(empId, date);
+                this.focus = this.anchor;
+            }
+            this.dragging = true;
+            this.fillSourceKeys = this.selection.map(s => this._key(s.empId, s.date));
+            this.fillPreviewKeys = [...this.fillSourceKeys];
+            this._highlight();
+
+            const onMove = (e) => {
+                const el = document.elementFromPoint(e.clientX, e.clientY);
+                const td = el?.closest?.('td[data-employee]');
+                if (td) this._updateFillPreview(td.dataset.employee, td.dataset.date);
+            };
+            const onUp = (e) => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                const el = document.elementFromPoint(e.clientX, e.clientY);
+                const td = el?.closest?.('td[data-employee]');
+                if (td) this._commitFill(td.dataset.employee, td.dataset.date);
+                this.dragging = false;
+                this.fillPreviewKeys = [];
+                this._highlight();
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        },
+
+        _updateFillPreview(targetEmpId, targetDate) {
+            const targetIdx = this._idx(targetEmpId, targetDate);
+            if (!targetIdx) return;
+
+            const srcEIdxs = [...new Set(this.selection.map(s => this._idx(s.empId, s.date)?.empIdx).filter(x => x != null))];
+            const srcDIdxs = [...new Set(this.selection.map(s => this._idx(s.empId, s.date)?.dateIdx).filter(x => x != null))].sort((a, b) => a - b);
+            const minSE = Math.min(...srcEIdxs), maxSE = Math.max(...srcEIdxs);
+            const minSD = Math.min(...srcDIdxs), maxSD = Math.max(...srcDIdxs);
+
+            const keys = new Set(this.fillSourceKeys);
+            if (targetIdx.dateIdx > maxSD) {
+                srcEIdxs.forEach(e => { this._range(maxSD + 1, targetIdx.dateIdx).forEach(d => { if (d < this.dates.length) keys.add(this._key(this.employees[e], this.dates[d])); }); });
+            } else if (targetIdx.dateIdx < minSD) {
+                srcEIdxs.forEach(e => { this._range(targetIdx.dateIdx, minSD - 1).forEach(d => { if (d >= 0) keys.add(this._key(this.employees[e], this.dates[d])); }); });
+            } else if (targetIdx.empIdx > maxSE) {
+                srcDIdxs.forEach(d => { this._range(maxSE + 1, targetIdx.empIdx).forEach(e => { if (e < this.employees.length) keys.add(this._key(this.employees[e], this.dates[d])); }); });
+            } else if (targetIdx.empIdx < minSE) {
+                srcDIdxs.forEach(d => { this._range(targetIdx.empIdx, minSE - 1).forEach(e => { if (e >= 0) keys.add(this._key(this.employees[e], this.dates[d])); }); });
+            }
+            this.fillPreviewKeys = Array.from(keys);
+            this._highlight();
+        },
+
+        _detectCyclePeriod(seq) {
+            const n = seq.length;
+            for (let p = 1; p <= Math.min(14, Math.floor(n / 2)); p++) {
+                if (seq.every((_, i) => i < p || seq[i].shift === seq[i % p].shift)) return p;
+            }
+            return n;
+        },
+
+        _commitFill(targetEmpId, targetDate) {
+            const targetIdx = this._idx(targetEmpId, targetDate);
+            if (!targetIdx || this.selection.length === 0) return;
+
+            const srcEIdxs = [...new Set(this.selection.map(s => this._idx(s.empId, s.date)?.empIdx).filter(x => x != null))].sort((a, b) => a - b);
+            const srcDIdxs = [...new Set(this.selection.map(s => this._idx(s.empId, s.date)?.dateIdx).filter(x => x != null))].sort((a, b) => a - b);
+            const minSE = Math.min(...srcEIdxs), maxSE = Math.max(...srcEIdxs);
+            const minSD = Math.min(...srcDIdxs), maxSD = Math.max(...srcDIdxs);
+
+            // Source sequence for cycle detection (first row's shifts ordered by date)
+            const srcSeq = srcDIdxs.map(d => this._cellData(this.employees[srcEIdxs[0]], this.dates[d]) || { shift: 0, policy: 0 });
+            const period = this._detectCyclePeriod(srcSeq);
+
+            const overrides = [];
+
+            if (targetIdx.dateIdx > maxSD) {
+                const fillDs = this._range(maxSD + 1, targetIdx.dateIdx);
+                srcEIdxs.forEach(e => {
+                    fillDs.forEach((d, i) => {
+                        if (d >= this.dates.length) return;
+                        const src = this._cellData(this.employees[srcEIdxs[e - minSE] ?? srcEIdxs[0]], this.dates[srcDIdxs[i % period]]);
+                        if (!src || !src.shift || !src.policy) return;
+                        overrides.push({ employee_id: parseInt(this.employees[e]), date: this.dates[d], shift_template_id: src.shift, policy_group_id: src.policy });
+                    });
+                });
+            } else if (targetIdx.dateIdx < minSD) {
+                const fillDs = this._range(targetIdx.dateIdx, minSD - 1).reverse();
+                srcEIdxs.forEach(e => {
+                    fillDs.forEach((d, i) => {
+                        if (d < 0) return;
+                        const src = this._cellData(this.employees[srcEIdxs[e - minSE] ?? srcEIdxs[0]], this.dates[srcDIdxs[i % period]]);
+                        if (!src || !src.shift || !src.policy) return;
+                        overrides.push({ employee_id: parseInt(this.employees[e]), date: this.dates[d], shift_template_id: src.shift, policy_group_id: src.policy });
+                    });
+                });
+            } else if (targetIdx.empIdx > maxSE) {
+                const fillEs = this._range(maxSE + 1, targetIdx.empIdx);
+                fillEs.forEach((e, rowI) => {
+                    srcDIdxs.forEach((d, colI) => {
+                        const srcE = srcEIdxs[rowI % srcEIdxs.length];
+                        const src = this._cellData(this.employees[srcE], this.dates[d]);
+                        if (!src || !src.shift || !src.policy) return;
+                        overrides.push({ employee_id: parseInt(this.employees[e]), date: this.dates[d], shift_template_id: src.shift, policy_group_id: src.policy });
+                    });
+                });
+            } else if (targetIdx.empIdx < minSE) {
+                const fillEs = this._range(targetIdx.empIdx, minSE - 1).reverse();
+                fillEs.forEach((e, rowI) => {
+                    srcDIdxs.forEach((d, colI) => {
+                        const srcE = srcEIdxs[rowI % srcEIdxs.length];
+                        const src = this._cellData(this.employees[srcE], this.dates[d]);
+                        if (!src || !src.shift || !src.policy) return;
+                        overrides.push({ employee_id: parseInt(this.employees[e]), date: this.dates[d], shift_template_id: src.shift, policy_group_id: src.policy });
+                    });
+                });
+            }
+
+            if (overrides.length > 0) this.$wire.saveCellOverrides(overrides);
+        },
+
+        // Keyboard
+        handleKeydown(event) {
+            if (this.selection.length === 0 && !this.copyBuffer) return;
+            if (['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName)) return;
+
+            if ((event.ctrlKey || event.metaKey) && event.key === 'c') {
+                this.copySelection();
+                event.preventDefault();
+            } else if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
+                this.pasteAtFocus();
+                event.preventDefault();
+            } else if (event.key === 'Delete' || event.key === 'Backspace') {
+                this.deleteSelection();
+                event.preventDefault();
+            } else if (event.key === 'Escape') {
+                this.clearSelection();
+            }
+        },
+    };
+}
+</script>

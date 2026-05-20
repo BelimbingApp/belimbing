@@ -282,16 +282,23 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     </div>
 
                                     @if ($this->canEdit())
-                                        <button
-                                            type="button"
-                                            wire:click="deleteFitment({{ $fitment->id }})"
-                                            wire:confirm="{{ __('Remove this fitment entry?') }}"
-                                            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-subtle hover:text-status-danger"
-                                            aria-label="{{ __('Remove fitment') }}"
-                                            title="{{ __('Remove') }}"
-                                        >
-                                            <x-icon name="heroicon-o-x-mark" class="h-4 w-4" />
-                                        </button>
+                                        <div class="flex shrink-0 items-center gap-1">
+                                            <x-ui.button type="button" variant="ghost" size="sm" wire:click="editFitment({{ $fitment->id }})">
+                                                <x-icon name="heroicon-o-pencil-square" class="h-4 w-4" />
+                                                {{ __('Edit') }}
+                                            </x-ui.button>
+
+                                            <button
+                                                type="button"
+                                                wire:click="deleteFitment({{ $fitment->id }})"
+                                                wire:confirm="{{ __('Remove this fitment entry?') }}"
+                                                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-subtle hover:text-status-danger"
+                                                aria-label="{{ __('Remove fitment') }}"
+                                                title="{{ __('Remove') }}"
+                                            >
+                                                <x-icon name="heroicon-o-x-mark" class="h-4 w-4" />
+                                            </button>
+                                        </div>
                                     @endif
                                 </div>
                             @endforeach
@@ -300,7 +307,13 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                     @if ($this->canEdit())
                         <div class="mt-4 space-y-4 border-t border-border-default pt-4">
-                            <form wire:submit="addFitment" class="space-y-4">
+                            <form wire:submit="{{ $editingFitmentId === null ? 'addFitment' : 'updateFitment' }}" class="space-y-4">
+                                @if ($editingFitmentId !== null)
+                                    <x-ui.alert variant="info">
+                                        {{ __('Editing fitment entry. Save changes or cancel before adding another entry.') }}
+                                    </x-ui.alert>
+                                @endif
+
                                 <x-ui.checkbox
                                     id="item-fitment-universal"
                                     wire:model.live="fitmentUniversal"
@@ -327,11 +340,55 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     :error="$errors->first('fitmentNotes')"
                                 />
 
-                                <x-ui.button type="submit" variant="primary" size="sm">
-                                    <x-icon name="heroicon-o-plus" class="h-4 w-4" />
-                                    {{ __('Add fitment') }}
-                                </x-ui.button>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <x-ui.button type="submit" variant="primary" size="sm">
+                                        <x-icon name="{{ $editingFitmentId === null ? 'heroicon-o-plus' : 'heroicon-o-check' }}" class="h-4 w-4" />
+                                        {{ $editingFitmentId === null ? __('Add fitment') : __('Save fitment') }}
+                                    </x-ui.button>
+
+                                    @if ($editingFitmentId !== null)
+                                        <x-ui.button type="button" variant="ghost" size="sm" wire:click="cancelFitmentEdit">
+                                            {{ __('Cancel') }}
+                                        </x-ui.button>
+                                    @endif
+                                </div>
                             </form>
+
+                            @if ($editingFitmentId === null && ($canBootstrapFitmentFromAttributes || $fitmentSourceItems->isNotEmpty()))
+                                <div class="grid gap-4 border-t border-border-default pt-4 lg:grid-cols-2">
+                                    @if ($canBootstrapFitmentFromAttributes)
+                                        <div class="space-y-2">
+                                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Bootstrap') }}</p>
+                                            <p class="text-sm text-muted">{{ __('Create one fitment entry from configured item attributes such as year, make, model, trim, and engine.') }}</p>
+                                            <x-ui.button type="button" variant="outline" size="sm" wire:click="bootstrapFitmentFromAttributes">
+                                                <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
+                                                {{ __('Create from attributes') }}
+                                            </x-ui.button>
+                                        </div>
+                                    @endif
+
+                                    @if ($fitmentSourceItems->isNotEmpty())
+                                        <form wire:submit="copyFitmentsFromItem" class="space-y-3">
+                                            <x-ui.combobox
+                                                id="item-fitment-copy-source"
+                                                wire:model="copyFitmentsFromItemId"
+                                                :label="__('Copy fitment from item')"
+                                                :placeholder="__('Search by SKU or title')"
+                                                :options="$fitmentSourceItems->map(fn ($source) => [
+                                                    'value' => (string) $source->id,
+                                                    'label' => $source->sku . ' — ' . $source->title . ' (' . trans_choice(':count entry|:count entries', $source->fitments_count, ['count' => $source->fitments_count]) . ')',
+                                                ])->all()"
+                                                :error="$errors->first('copyFitmentsFromItemId')"
+                                            />
+
+                                            <x-ui.button type="submit" variant="outline" size="sm">
+                                                <x-icon name="heroicon-o-clipboard-document" class="h-4 w-4" />
+                                                {{ __('Copy fitment') }}
+                                            </x-ui.button>
+                                        </form>
+                                    @endif
+                                </div>
+                            @endif
 
                             <form wire:submit="importFitments" class="space-y-3 border-t border-border-default pt-4">
                                 <x-ui.textarea

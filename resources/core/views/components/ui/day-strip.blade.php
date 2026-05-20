@@ -49,7 +49,7 @@
                 };
                 $dayLabel = $compact ? ($day['day_short'] ?? substr($day['day'], 0, 1)) : $day['day'];
             @endphp
-            <th scope="col" class="{{ $headerSurface }} {{ $colMinWidth }} {{ $colPadding }} py-table-header-y text-center text-[11px] font-semibold uppercase tracking-wider {{ $headerInk }}" wire:key="day-strip-{{ $day['date'] }}" @if($isHoliday) title="{{ __('Holiday') }}" @endif>
+            <th scope="col" class="{{ $headerSurface }} {{ $colMinWidth }} {{ $colPadding }} py-table-header-y text-center text-[11px] font-semibold uppercase tracking-wider {{ $headerInk }}" wire:key="day-strip-{{ $day['date'] }}" data-col-date="{{ $day['date'] }}" @if($isHoliday) title="{{ __('Holiday') }}" @endif>
                 @if ($clickable)
                     <button type="button" @click="$dispatch('show-day-drawer', { date: '{{ $day['date'] }}' })" class="w-full hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent focus:rounded-sm transition-colors">
                         <div>{{ $dayLabel }}</div>

@@ -68,6 +68,13 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Index;
                                 :label="__('Qty')"
                             />
                             <x-ui.sortable-th
+                                column="fitments_count"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('fitments_count')"
+                                :label="__('Fitment')"
+                            />
+                            <x-ui.sortable-th
                                 column="storage_location"
                                 :sort-by="$sortBy"
                                 :sort-dir="$sortDir"
@@ -117,6 +124,15 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Index;
                                     <x-ui.badge :variant="$this->statusVariant($item->status)">{{ __(Illuminate\Support\Str::headline($item->status)) }}</x-ui.badge>
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm text-muted tabular-nums">{{ number_format($item->quantity_on_hand) }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
+                                    @if ($item->fitments->contains('is_universal', true))
+                                        <x-ui.badge variant="info">{{ __('Universal') }}</x-ui.badge>
+                                    @elseif ($item->fitments_count > 0)
+                                        <x-ui.badge>{{ trans_choice(':count entry|:count entries', $item->fitments_count, ['count' => $item->fitments_count]) }}</x-ui.badge>
+                                    @else
+                                        <span class="text-muted">{{ __('None') }}</span>
+                                    @endif
+                                </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $item->storage_location ?: '—' }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm text-muted tabular-nums">{{ $this->formatMoney($item->unit_cost_amount, $item->currency_code) }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm text-muted tabular-nums">{{ $this->formatMoney($item->target_price_amount, $item->currency_code) }}</td>
@@ -124,7 +140,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Index;
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No items found. Create the first item to begin the workbench.') }}</td>
+                                <td colspan="9" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No items found. Create the first item to begin the workbench.') }}</td>
                             </tr>
                         @endforelse
                     </tbody>

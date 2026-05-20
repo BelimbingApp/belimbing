@@ -12,6 +12,9 @@ use Illuminate\Support\Collection;
 
 trait ResolvesRosterPolicySchedule
 {
+    /**
+     * @return array<string, mixed>|null
+     */
     private function exceptionForGridDate(AttendanceRosterAssignment $assignment, string $date): ?array
     {
         foreach ($assignment->exceptions ?? [] as $exception) {
@@ -41,6 +44,9 @@ trait ResolvesRosterPolicySchedule
         return is_string($shiftCode) && $shiftCode !== '' ? $shiftCode : null;
     }
 
+    /**
+     * @param  array<string, mixed>  $definition
+     */
     private function rotatingPatternShiftCodeForGrid(array $definition, string $effectiveFrom, string $date): ?string
     {
         $cycleDays = max(1, (int) ($definition['cycle_days'] ?? 1));
@@ -123,6 +129,9 @@ trait ResolvesRosterPolicySchedule
         return $date >= $start && $date <= $end;
     }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
     private function rosterCoverageRows(): array
     {
         $days = $this->rosterGridDays();
@@ -158,6 +167,16 @@ trait ResolvesRosterPolicySchedule
         return $rows;
     }
 
+    /**
+     * Pivot the flat coverage rows into a date × shift heatmap matrix.
+     *
+     * @param  list<array{date: string, shift: string, assigned: int, required: int, shortage: int, surplus: int, warnings: int}>  $rows
+     * @return array{
+     *     shifts: list<string>,
+     *     dates: list<string>,
+     *     cells: array<string, array<string, array{assigned: int, required: int, shortage: int, surplus: int, severity: string}|null>>,
+     * }
+     */
     private function rosterCoverageMatrix(array $rows): array
     {
         $shifts = [];
@@ -201,6 +220,9 @@ trait ResolvesRosterPolicySchedule
         return ['shifts' => $shifts, 'dates' => $dates, 'cells' => $cells];
     }
 
+    /**
+     * @return list<array{severity: string, code: string, message: string}>
+     */
     private function rosterValidationFindings(): array
     {
         $findings = [];
@@ -245,6 +267,9 @@ trait ResolvesRosterPolicySchedule
         return $findings;
     }
 
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
     private function rosterTemplates(): Collection
     {
         $templates = collect();

@@ -12,15 +12,29 @@ use App\Modules\People\Attendance\Models\AttendanceShiftTemplate;
 use App\Modules\People\Settings\Models\PeopleReferenceEntry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 trait BuildsRosterRenderingData
 {
+    /**
+     * @return array<string, mixed>
+     */
     private function renderDataForReadySchema(int $companyId): array
     {
+        $hasWorkProfiles = $this->workProfileTableExists();
         $employees = $this->filteredEmployeesQuery()
             ->orderBy('full_name')
             ->orderBy('id')
             ->paginate(25);
+
+        if (! $hasWorkProfiles) {
+            $employees->getCollection()->transform(function (Employee $employee): Employee {
+                $employee->setRelation('workProfile', null);
+
+                return $employee;
+            });
+        }
 
         $rosterGridDays = $this->rosterGridDays();
         $rosterGridRows = $this->rosterGridRows($employees->getCollection());
@@ -74,6 +88,9 @@ trait BuildsRosterRenderingData
         ];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     private function renderDataForUnreadySchema(): array
     {
         return [
@@ -111,6 +128,16 @@ trait BuildsRosterRenderingData
             ->first();
     }
 
+    /**
+     * @param  Collection<int, PeopleReferenceEntry>  $workforceClasses
+     * @param  Collection<int, Department>  $departments
+     * @return array{
+     *     hasActiveFilters: bool,
+     *     departmentLabel: string,
+     *     workforceClassLabel: string,
+     *     statusLabel: string,
+     * }
+     */
     public function rosterListFilterContext(Collection $departments, Collection $workforceClasses): array
     {
         $departmentLabel = __('all departments');
@@ -157,6 +184,15 @@ trait BuildsRosterRenderingData
         ];
     }
 
+    /**
+     * Build a short narrative for the calendar in list mode that names how many
+     * gaps and exceptions live in the visible window. Counts come from the
+     * already-computed grid rows, so this adds no DB queries.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  list<array{date: string, day: string, label: string}>  $days
+     * @return array{gaps: int, exceptions: int, sentence: string, hasIssues: bool}
+     */
     private function rosterListSummary(Collection $rows, array $days): array
     {
         ['gaps' => $gaps, 'exceptions' => $exceptions] = $this->countRosterIssues($rows, $days);
@@ -171,6 +207,11 @@ trait BuildsRosterRenderingData
         ];
     }
 
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  list<array{date: string, day: string, label: string}>  $days
+     * @return array{gaps: int, exceptions: int}
+     */
     private function countRosterIssues(Collection $rows, array $days): array
     {
         $gaps = 0;
@@ -232,6 +273,9 @@ trait BuildsRosterRenderingData
             ->get();
     }
 
+    /**
+     * @return array<string, string>
+     */
     private function rosterFilters(): array
     {
         return [
@@ -248,6 +292,9 @@ trait BuildsRosterRenderingData
         ];
     }
 
+    /**
+     * @return list<string>
+     */
     private function rosterFilterProperties(): array
     {
         return [
@@ -273,6 +320,24 @@ trait BuildsRosterRenderingData
         $query->where($column, (int) $value);
     }
 
+    private function workProfileTableExists(): bool
+    {
+        return Schema::hasTable('people_employee_work_profiles');
+    }
+
+    private function hasWorkProfileFilterSelection(): bool
+    {
+        return $this->rosterOrganizationUnitId !== ''
+            || $this->rosterCostCenterId !== ''
+            || $this->rosterWorkforceClassId !== ''
+            || $this->rosterEmploymentGroupId !== ''
+            || $this->rosterWorkCalendarId !== ''
+            || $this->rosterPayRateType !== '';
+    }
+
+    /**
+     * @return list<int>
+     */
     private function selectedRosterEmployeeIds(): array
     {
         if ($this->rosterSelectAllFiltered) {
@@ -300,12 +365,19 @@ trait BuildsRosterRenderingData
             ->all();
     }
 
+    /**
+     * @return Builder<Employee>
+     */
     private function filteredEmployeesQuery(): Builder
     {
+        $hasWorkProfiles = $this->workProfileTableExists();
         $query = Employee::query()
             ->select('employees.*')
-            ->leftJoin('people_employee_work_profiles', 'people_employee_work_profiles.employee_id', '=', 'employees.id')
             ->where('employees.company_id', $this->companyId());
+
+        if ($hasWorkProfiles) {
+            $query->leftJoin('people_employee_work_profiles', 'people_employee_work_profiles.employee_id', '=', 'employees.id');
+        }
 
         $search = trim($this->rosterSearch);
         if ($search !== '') {
@@ -321,21 +393,34 @@ trait BuildsRosterRenderingData
 
         $this->applyIntegerFilter($query, 'employees.department_id', $this->rosterDepartmentId);
         $this->applyIntegerFilter($query, 'employees.supervisor_id', $this->rosterSupervisorId);
-        $this->applyIntegerFilter($query, 'people_employee_work_profiles.organization_unit_id', $this->rosterOrganizationUnitId);
-        $this->applyIntegerFilter($query, 'people_employee_work_profiles.cost_center_id', $this->rosterCostCenterId);
-        $this->applyIntegerFilter($query, 'people_employee_work_profiles.workforce_class_id', $this->rosterWorkforceClassId);
-        $this->applyIntegerFilter($query, 'people_employee_work_profiles.employment_group_id', $this->rosterEmploymentGroupId);
-        $this->applyIntegerFilter($query, 'people_employee_work_profiles.work_calendar_id', $this->rosterWorkCalendarId);
 
-        if ($this->rosterPayRateType !== '') {
-            $query->where('people_employee_work_profiles.pay_rate_type', $this->rosterPayRateType);
+        if ($hasWorkProfiles) {
+            $this->applyIntegerFilter($query, 'people_employee_work_profiles.organization_unit_id', $this->rosterOrganizationUnitId);
+            $this->applyIntegerFilter($query, 'people_employee_work_profiles.cost_center_id', $this->rosterCostCenterId);
+            $this->applyIntegerFilter($query, 'people_employee_work_profiles.workforce_class_id', $this->rosterWorkforceClassId);
+            $this->applyIntegerFilter($query, 'people_employee_work_profiles.employment_group_id', $this->rosterEmploymentGroupId);
+            $this->applyIntegerFilter($query, 'people_employee_work_profiles.work_calendar_id', $this->rosterWorkCalendarId);
+
+            if ($this->rosterPayRateType !== '') {
+                $query->where('people_employee_work_profiles.pay_rate_type', $this->rosterPayRateType);
+            }
+        } elseif ($this->hasWorkProfileFilterSelection()) {
+            $query->whereRaw('1 = 0');
         }
 
         if ($this->rosterEmployeeStatus !== '') {
             $query->where('employees.status', $this->rosterEmployeeStatus);
         }
 
-        return $query->with(['department.type', 'workProfile.organizationUnit', 'workProfile.costCenter', 'workProfile.workforceClass']);
+        $relations = ['department.type'];
+
+        if ($hasWorkProfiles) {
+            $relations[] = 'workProfile.organizationUnit';
+            $relations[] = 'workProfile.costCenter';
+            $relations[] = 'workProfile.workforceClass';
+        }
+
+        return $query->with($relations);
     }
 
     private function resetForm(): void

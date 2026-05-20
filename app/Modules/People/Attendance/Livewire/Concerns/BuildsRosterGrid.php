@@ -26,6 +26,11 @@ trait BuildsRosterGrid
         return CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY);
     }
 
+    /**
+     * Start of the currently-browsed period, regardless of zoom level. Month
+     * scope returns the first day of the month containing the anchor; week
+     * scope returns the Monday of the anchor's week.
+     */
     private function listScopeStart(): CarbonImmutable
     {
         $anchor = $this->listWeekAnchor !== ''
@@ -68,6 +73,9 @@ trait BuildsRosterGrid
             : $this->safeGridEndDate($this->safeGridStartDate());
     }
 
+    /**
+     * @return list<array{date: string, day: string, label: string}>
+     */
     private function rosterGridDays(): array
     {
         $start = $this->gridPeriodStart();
@@ -85,6 +93,10 @@ trait BuildsRosterGrid
         return $days;
     }
 
+    /**
+     * @param  Collection<int, Employee>  $employees
+     * @return Collection<int, array<string, mixed>>
+     */
     private function rosterGridRows(Collection $employees): Collection
     {
         if ($employees->isEmpty()) {
@@ -138,6 +150,12 @@ trait BuildsRosterGrid
             ?? '-';
     }
 
+    /**
+     * @param  array{date: string, day: string, label: string}  $day
+     * @param  Collection<int, AttendanceRosterAssignment>  $employeeAssignments
+     * @param  array<int, true>  $selectedLookup
+     * @return array<string, mixed>
+     */
     private function rosterGridCell(
         Employee $employee,
         array $day,
@@ -161,6 +179,10 @@ trait BuildsRosterGrid
         return $this->buildEmptyCell($dayType, $dayTypeLabel);
     }
 
+    /**
+     * @param  array{date: string, day: string, label: string}  $day
+     * @return array<string, mixed>
+     */
     private function buildAssignedCell(
         AttendanceRosterAssignment $assignment,
         array $day,
@@ -189,6 +211,9 @@ trait BuildsRosterGrid
         ];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     private function buildPreviewCell(string $proposedShift, string $dayType, string $dayTypeLabel): array
     {
         $title = __('Unsaved roster preview');
@@ -210,6 +235,9 @@ trait BuildsRosterGrid
         ];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     private function buildEmptyCell(string $dayType, string $dayTypeLabel): array
     {
         $isNormal = $dayType === AttendanceDay::DAY_TYPE_NORMAL;
@@ -235,6 +263,15 @@ trait BuildsRosterGrid
         return DayTypeVocabulary::label($dayType);
     }
 
+    /**
+     * Add per-date markers — is_today, is_weekend, and whether this date is a
+     * public holiday for at least one rendered employee — so the roster grid
+     * can highlight columns without recomputing day types from row data.
+     *
+     * @param  list<array{date: string, day: string, label: string}>  $days
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return list<array{date: string, day: string, day_short: string, label: string, is_today: bool, is_weekend: bool, is_holiday: bool}>
+     */
     private function enrichGridDays(array $days, Collection $rows): array
     {
         $today = CarbonImmutable::today()->toDateString();
@@ -288,6 +325,9 @@ trait BuildsRosterGrid
         return $end->greaterThan($start->addDays(30)) ? $start->addDays(30) : $end;
     }
 
+    /**
+     * @param  Collection<int, AttendanceRosterAssignment>  $assignments
+     */
     private function assignmentForGridDate(Collection $assignments, string $date): ?AttendanceRosterAssignment
     {
         return $assignments

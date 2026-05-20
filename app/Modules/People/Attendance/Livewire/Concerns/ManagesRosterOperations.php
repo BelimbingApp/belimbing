@@ -9,6 +9,7 @@ use App\Modules\People\Attendance\Models\AttendanceRosterPattern;
 use App\Modules\People\Attendance\Models\AttendanceShiftTemplate;
 use App\Modules\People\Settings\Models\PeopleNotificationDeliveryLog;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 trait ManagesRosterOperations
@@ -134,6 +135,116 @@ trait ManagesRosterOperations
 
         $this->lastDraftAssignmentIds = [$created->id];
         session()->flash('success', __('Roster cell override saved.'));
+    }
+
+    /**
+     * @param  list<array{employee_id: int, date: string, shift_template_id: int, policy_group_id: int}>  $overrides
+     *
+     * Zero shift_template_id or policy_group_id means "clear the cell override".
+     * Validated entries must fall within the current grid period and belong to
+     * the current company. All writes are wrapped in one transaction.
+     */
+    public function saveCellOverrides(array $overrides): void
+    {
+        if (! $this->ensureSchemaReady()) {
+            return;
+        }
+
+        $this->authorizeAttendance('people.attendance.manage');
+
+        $companyId = $this->companyId();
+        $gridStart = $this->gridPeriodStart()->toDateString();
+        $gridEnd = $this->gridPeriodEnd()->toDateString();
+
+        $valid = [];
+        foreach ($overrides as $o) {
+            if (! is_array($o)) {
+                continue;
+            }
+            $empId = (int) ($o['employee_id'] ?? 0);
+            $date = (string) ($o['date'] ?? '');
+            if ($empId <= 0 || $date === '' || $date < $gridStart || $date > $gridEnd) {
+                continue;
+            }
+            if (! Employee::query()->where('company_id', $companyId)->whereKey($empId)->exists()) {
+                continue;
+            }
+            $valid[] = [
+                'employee_id' => $empId,
+                'date' => $date,
+                'shift_template_id' => (int) ($o['shift_template_id'] ?? 0),
+                'policy_group_id' => (int) ($o['policy_group_id'] ?? 0),
+            ];
+        }
+
+        if ($valid === []) {
+            return;
+        }
+
+        $createdIds = [];
+        $savedCount = 0;
+
+        DB::transaction(function () use ($valid, $companyId, &$createdIds, &$savedCount): void {
+            foreach ($valid as $o) {
+                $isClear = $o['shift_template_id'] === 0 || $o['policy_group_id'] === 0;
+                $assignment = $this->assignmentForEmployeeDate($o['employee_id'], $o['date']);
+
+                if ($isClear) {
+                    if (! $assignment instanceof AttendanceRosterAssignment) {
+                        continue;
+                    }
+                    $from = $assignment->effective_from?->toDateString();
+                    $to = $assignment->effective_to?->toDateString();
+                    if ($from === $o['date'] && ($to === null || $to === $o['date'])) {
+                        if ($assignment->publish_state === 'draft') {
+                            $assignment->delete();
+                            $savedCount++;
+                        }
+                    } else {
+                        $this->removeExceptionOverride($assignment, $o['date']);
+                        $savedCount++;
+                    }
+
+                    continue;
+                }
+
+                $shift = $this->activeShiftTemplateForDate($o['shift_template_id'], $o['date']);
+                $policy = $this->activePolicyGroupForDate($o['policy_group_id'], $o['date']);
+                if (! $shift instanceof AttendanceShiftTemplate || ! $policy instanceof AttendancePolicyGroup) {
+                    continue;
+                }
+
+                if ($assignment instanceof AttendanceRosterAssignment) {
+                    $this->appendExceptionOverride($assignment, $o['date'], (int) $shift->id, (int) $policy->id, 'cell_override_batch');
+                } else {
+                    $created = AttendanceRosterAssignment::query()->create([
+                        'company_id' => $companyId,
+                        'employee_id' => $o['employee_id'],
+                        'attendance_shift_template_id' => (int) $shift->id,
+                        'attendance_policy_group_id' => (int) $policy->id,
+                        'effective_from' => $o['date'],
+                        'effective_to' => $o['date'],
+                        'publish_state' => 'draft',
+                        'lock_state' => 'open',
+                        'revision' => 1,
+                        'exceptions' => [],
+                        'metadata' => ['created_from' => 'attendance_roster_cell_override_batch'],
+                    ]);
+                    $createdIds[] = $created->id;
+                }
+                $savedCount++;
+            }
+        });
+
+        $this->lastDraftAssignmentIds = [...$this->lastDraftAssignmentIds, ...$createdIds];
+
+        if ($savedCount > 0) {
+            session()->flash('success', trans_choice(
+                'Cell override saved.|:count cell overrides saved.',
+                $savedCount,
+                ['count' => $savedCount],
+            ));
+        }
     }
 
     public function swapRosterCells(): void
@@ -500,6 +611,9 @@ trait ManagesRosterOperations
         $this->mode = 'form';
     }
 
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
     private function appendExceptionOverride(AttendanceRosterAssignment $assignment, string $date, int $shiftTemplateId, int $policyGroupId, string $source, array $metadata = []): void
     {
         $exceptions = collect($assignment->exceptions ?? [])
@@ -526,6 +640,22 @@ trait ManagesRosterOperations
         ])->save();
     }
 
+    private function removeExceptionOverride(AttendanceRosterAssignment $assignment, string $date): void
+    {
+        $exceptions = collect($assignment->exceptions ?? [])
+            ->reject(fn (mixed $row): bool => is_array($row) && ($row['date'] ?? null) === $date)
+            ->values()
+            ->all();
+
+        $assignment->forceFill([
+            'exceptions' => $exceptions,
+            'revision' => ((int) $assignment->revision) + 1,
+        ])->save();
+    }
+
+    /**
+     * @return array{rows: list<array<string, mixed>>, errors: list<string>}
+     */
     private function parseSpreadsheetRows(): array
     {
         $text = trim($this->spreadsheetRosterRows);
