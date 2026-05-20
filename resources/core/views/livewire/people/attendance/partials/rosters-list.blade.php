@@ -14,7 +14,7 @@
 @php($prevLabel = $listScope === 'month' ? __('Previous month') : __('Previous week'))
 @php($nextLabel = $listScope === 'month' ? __('Next month') : __('Next week'))
 <div class="space-y-4">
-    @if ($rosterIncomplete)
+    @if ($rosterIncomplete && ! $isMySchedule)
         <x-ui.alert variant="warning">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <span>{{ __('Roster setup needs employees, shifts, and policy groups before you can publish.') }}</span>
@@ -26,10 +26,12 @@
         </x-ui.alert>
     @endif
 
-    <x-ui.tabs :tabs="[
-        ['id' => 'calendar', 'label' => __('Calendar'), 'icon' => 'heroicon-o-calendar-days'],
-        ['id' => 'records', 'label' => __('Records'), 'icon' => 'heroicon-o-table-cells'],
-    ]" default="calendar">
+    <x-ui.tabs :tabs="$isMySchedule
+        ? [['id' => 'calendar', 'label' => __('Calendar'), 'icon' => 'heroicon-o-calendar-days']]
+        : [
+            ['id' => 'calendar', 'label' => __('Calendar'), 'icon' => 'heroicon-o-calendar-days'],
+            ['id' => 'records', 'label' => __('Records'), 'icon' => 'heroicon-o-table-cells'],
+          ]" default="calendar">
         <x-ui.tab id="calendar">
             <x-ui.card>
                 @if (! empty($rosterListSummary))
@@ -44,12 +46,23 @@
 
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-baseline gap-3">
-                        <h3 class="text-base font-semibold text-ink">{{ __('Roster') }}</h3>
+                        <h3 class="text-base font-semibold text-ink">{{ $isMySchedule ? __('Your shifts') : __('Roster') }}</h3>
                         @if ($listPeriodLabel !== '')
                             <span class="text-sm text-muted">{{ $listPeriodLabel }}</span>
                         @endif
+                        @if ($canManage && ! empty($acknowledgmentCount))
+                            <span class="text-xs text-muted" title="{{ __('Acknowledged / Total') }}">
+                                {{ __(':ack / :total ack.', ['ack' => $acknowledgmentCount['acknowledged'], 'total' => $acknowledgmentCount['total']]) }}
+                            </span>
+                        @endif
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
+                        @if ($canManage)
+                            <x-ui.button type="button" size="sm" variant="ghost" wire:click="exportRosterCsv" title="{{ __('Export visible roster as CSV') }}">
+                                <x-icon name="heroicon-o-arrow-down-tray" class="h-4 w-4" />
+                                <span class="sr-only">{{ __('Export CSV') }}</span>
+                            </x-ui.button>
+                        @endif
                         <fieldset class="inline-flex rounded-xl border border-border-default p-0.5">
                             <legend class="sr-only">{{ __('Calendar scope') }}</legend>
                             <button type="button" wire:click="setListScope('week')" class="rounded-lg px-3 py-1 text-xs font-medium @if($listScope === 'week') bg-surface-subtle text-ink @else text-muted hover:text-ink @endif focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1">{{ __('Week') }}</button>
@@ -69,9 +82,11 @@
                     </div>
                 </div>
 
-                <div class="mt-4">
-                    @include('livewire.people.attendance.partials.rosters-filter-prose')
-                </div>
+                @if (! $isMySchedule)
+                    <div class="mt-4">
+                        @include('livewire.people.attendance.partials.rosters-filter-prose')
+                    </div>
+                @endif
 
                 <div class="mt-4">
                     @include('livewire.people.attendance.partials.rosters-grid', [
@@ -80,9 +95,27 @@
                         'gridIntro' => $listPeriodLabel ? __('Range: :period', ['period' => $listPeriodLabel]) : null,
                     ])
                 </div>
+
+                @if ($isMySchedule && $listScope === 'week')
+                    <div class="mt-4 flex items-center gap-3">
+                        @if ($acknowledgedForPeriod)
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-status-success/10 px-3 py-1.5 text-sm font-medium text-status-success">
+                                <x-icon name="heroicon-o-check-circle" class="h-4 w-4" />
+                                {{ __('Acknowledged') }}
+                            </span>
+                        @else
+                            <x-ui.button type="button" variant="primary" size="sm" wire:click="acknowledgeSchedule('{{ $gridPeriodStart }}', '{{ $gridPeriodEnd }}')">
+                                <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                                {{ __('Acknowledge this week') }}
+                            </x-ui.button>
+                            <span class="text-xs text-muted">{{ __('Tap to confirm you\'ve seen your shifts for this week.') }}</span>
+                        @endif
+                    </div>
+                @endif
             </x-ui.card>
         </x-ui.tab>
 
+        @if (! $isMySchedule)
         <x-ui.tab id="records">
             <x-ui.card>
                 <div class="overflow-x-auto -mx-card-inner px-card-inner">
@@ -148,8 +181,10 @@
                 </div>
             </x-ui.card>
         </x-ui.tab>
+        @endif
     </x-ui.tabs>
 
+    @if (! $isMySchedule)
     <div class="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
         <x-ui.card>
             <div class="flex items-center justify-between gap-3">
@@ -207,4 +242,5 @@
             </div>
         </x-ui.card>
     </div>
+    @endif
 </div>
