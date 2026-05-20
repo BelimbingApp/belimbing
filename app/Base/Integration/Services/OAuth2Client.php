@@ -97,6 +97,35 @@ class OAuth2Client
     }
 
     /**
+     * @param  list<string>  $scopes
+     * @return array<string, mixed>
+     */
+    public function clientCredentialsToken(
+        string $tokenEndpoint,
+        string $clientId,
+        string $clientSecret,
+        array $scopes = [],
+        ?OAuth2TokenRequestContext $context = null,
+    ): array {
+        $context ??= new OAuth2TokenRequestContext(system: self::DEFAULT_SYSTEM);
+
+        $payload = ['grant_type' => 'client_credentials'];
+
+        if ($scopes !== []) {
+            $payload['scope'] = implode(' ', $scopes);
+        }
+
+        return $this->tokenRequest(
+            tokenEndpoint: $tokenEndpoint,
+            clientId: $clientId,
+            clientSecret: $clientSecret,
+            payload: $payload,
+            operation: 'oauth2.client_credentials.exchange',
+            context: $context,
+        );
+    }
+
+    /**
      * @param  array<string, string>  $payload
      * @return array<string, mixed>
      */
