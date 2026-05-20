@@ -40,6 +40,7 @@
                 $isToday = $day['is_today'] ?? false;
                 $isWeekend = $day['is_weekend'] ?? false;
                 $isHoliday = $day['is_holiday'] ?? false;
+                $isLocked = $day['is_locked'] ?? false;
                 $headerSurface = $isHoliday ? 'bg-day-holiday' : '';
                 $headerInk = match (true) {
                     $isHoliday => 'text-day-holiday-ink',
@@ -49,16 +50,26 @@
                 };
                 $dayLabel = $compact ? ($day['day_short'] ?? substr($day['day'], 0, 1)) : $day['day'];
             @endphp
-            <th scope="col" class="{{ $headerSurface }} {{ $colMinWidth }} {{ $colPadding }} py-table-header-y text-center text-[11px] font-semibold uppercase tracking-wider {{ $headerInk }}" wire:key="day-strip-{{ $day['date'] }}" data-col-date="{{ $day['date'] }}" @if($isHoliday) title="{{ __('Holiday') }}" @endif>
+            <th scope="col" class="{{ $headerSurface }} {{ $colMinWidth }} {{ $colPadding }} py-table-header-y text-center text-[11px] font-semibold uppercase tracking-wider {{ $headerInk }}" wire:key="day-strip-{{ $day['date'] }}" data-col-date="{{ $day['date'] }}" @if($isHoliday) title="{{ __('Holiday') }}" @elseif($isLocked) title="{{ __('Locked') }}" @endif>
                 @if ($clickable)
                     <button type="button" @click="$dispatch('show-day-drawer', { date: '{{ $day['date'] }}' })" class="w-full hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent focus:rounded-sm transition-colors">
-                        <div>{{ $dayLabel }}</div>
+                        <div class="flex items-center justify-center gap-0.5">
+                            @if ($isLocked)
+                                <svg class="h-2.5 w-2.5 shrink-0 text-warning" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/></svg>
+                            @endif
+                            {{ $dayLabel }}
+                        </div>
                         @if (! $compact)
                             <div class="font-normal normal-case tracking-normal text-muted">{{ $day['label'] }}</div>
                         @endif
                     </button>
                 @else
-                    <div>{{ $dayLabel }}</div>
+                    <div class="flex items-center justify-center gap-0.5">
+                        @if ($isLocked)
+                            <svg class="h-2.5 w-2.5 shrink-0 text-warning" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/></svg>
+                        @endif
+                        {{ $dayLabel }}
+                    </div>
                     @if (! $compact)
                         <div class="font-normal normal-case tracking-normal text-muted">{{ $day['label'] }}</div>
                     @endif
