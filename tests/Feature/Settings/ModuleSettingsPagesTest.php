@@ -1,9 +1,5 @@
 <?php
 
-const EBAY_SCOPE_INVENTORY = 'https://api.ebay.com/oauth/api_scope/sell.inventory';
-const EBAY_SCOPE_FULFILLMENT = 'https://api.ebay.com/oauth/api_scope/sell.fulfillment';
-const EBAY_SCOPE_ACCOUNT = 'https://api.ebay.com/oauth/api_scope/sell.account';
-
 use App\Base\Integration\Services\OAuthTokenStore;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
@@ -16,6 +12,10 @@ use App\Modules\Core\Geonames\Models\Country;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
+
+const EBAY_SCOPE_INVENTORY = 'https://api.ebay.com/oauth/api_scope/sell.inventory';
+const EBAY_SCOPE_FULFILLMENT = 'https://api.ebay.com/oauth/api_scope/sell.fulfillment';
+const EBAY_SCOPE_ACCOUNT = 'https://api.ebay.com/oauth/api_scope/sell.account';
 
 test('eBay settings page renders its setup fields and persists values', function (): void {
     $user = createAdminUser();
