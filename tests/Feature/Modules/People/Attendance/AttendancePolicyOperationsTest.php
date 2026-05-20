@@ -1,9 +1,13 @@
 <?php
 
+use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalRole;
+use App\Base\Authz\Models\Role;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\Department;
 use App\Modules\Core\Company\Models\DepartmentType;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Models\User;
 use App\Modules\People\Attendance\Livewire\AllowanceRules;
 use App\Modules\People\Attendance\Livewire\Approvals;
 use App\Modules\People\Attendance\Livewire\PolicyGroups;
@@ -13,6 +17,7 @@ use App\Modules\People\Attendance\Livewire\ShiftTemplates;
 use App\Modules\People\Attendance\Models\AttendanceAllowanceRule;
 use App\Modules\People\Attendance\Models\AttendancePolicyGroup;
 use App\Modules\People\Attendance\Models\AttendancePunchWindow;
+use App\Modules\People\Attendance\Models\AttendanceRosterAcknowledgment;
 use App\Modules\People\Attendance\Models\AttendanceRosterAssignment;
 use App\Modules\People\Attendance\Models\AttendanceShiftTemplate;
 use App\Modules\People\Attendance\Services\AttendanceDayResolverService;
@@ -24,6 +29,7 @@ use App\Modules\People\Settings\Models\PeopleReferenceEntry;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
 const ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME = 'Office Olive';
@@ -1405,4 +1411,149 @@ it('batch overrides silently skips entries outside the grid period or from other
         ->assertHasNoErrors();
 
     expect(AttendanceRosterAssignment::query()->where('company_id', $company->id)->count())->toBe(0);
+});
+
+/**
+ * Create a user with only `people.attendance.roster.view` (My Schedule mode).
+ * The user's `employee_id` is set to $employee->id.
+ */
+function createRosterViewOnlyUser(Company $company, Employee $employee): User
+{
+    setupAuthzRoles();
+
+    $role = Role::query()->create([
+        'company_id' => null,
+        'code' => 'roster_view_only_test_'.$company->id,
+        'name' => 'Roster View Only',
+        'is_system' => false,
+        'grant_all' => false,
+    ]);
+
+    DB::table('base_authz_role_capabilities')->insert([
+        'role_id' => $role->id,
+        'capability_key' => 'people.attendance.roster.view',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $user = User::factory()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+    ]);
+
+    PrincipalRole::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $user->id,
+        'role_id' => $role->id,
+    ]);
+
+    return $user;
+}
+
+it('renders My Schedule filtered to the current employee when the user lacks attendance.manage', function (): void {
+    $adminUser = createAdminUser();
+    $company = Company::query()->findOrFail($adminUser->company_id);
+
+    $myEmployee = Employee::factory()->active()->create(['company_id' => $company->id, 'full_name' => 'My Self']);
+    $otherEmployee = Employee::factory()->active()->create(['company_id' => $company->id, 'full_name' => 'Other Person']);
+
+    $viewOnlyUser = createRosterViewOnlyUser($company, $myEmployee);
+
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
+    $monday = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY)->toDateString();
+
+    AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $myEmployee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => $monday,
+        'effective_to' => $monday,
+        'publish_state' => 'published',
+        'lock_state' => 'open',
+        'revision' => 1,
+        'exceptions' => [],
+        'metadata' => [],
+    ]);
+
+    $this->actingAs($viewOnlyUser);
+
+    Livewire::test(Rosters::class)
+        ->assertSee('My Schedule')
+        ->assertSee($myEmployee->full_name)
+        ->assertDontSee($otherEmployee->full_name);
+});
+
+it('lets an employee acknowledge their schedule for the current period', function (): void {
+    $adminUser = createAdminUser();
+    $company = Company::query()->findOrFail($adminUser->company_id);
+    $myEmployee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $viewOnlyUser = createRosterViewOnlyUser($company, $myEmployee);
+
+    $monday = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY)->toDateString();
+    $sunday = CarbonImmutable::today()->endOfWeek(CarbonImmutable::SUNDAY)->toDateString();
+
+    $this->actingAs($viewOnlyUser);
+
+    expect(AttendanceRosterAcknowledgment::query()
+        ->where('employee_id', $myEmployee->id)
+        ->where('period_start', $monday)
+        ->exists()
+    )->toBeFalse();
+
+    Livewire::test(Rosters::class)
+        ->call('acknowledgeSchedule', $monday, $sunday)
+        ->assertHasNoErrors();
+
+    expect(AttendanceRosterAcknowledgment::query()
+        ->where('employee_id', $myEmployee->id)
+        ->where('period_start', $monday)
+        ->where('period_end', $sunday)
+        ->exists()
+    )->toBeTrue();
+});
+
+it('resets acknowledgment when a published cell override is saved for an employee', function (): void {
+    $adminUser = createAdminUser();
+    $company = Company::query()->findOrFail($adminUser->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
+    $monday = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY)->toDateString();
+    $sunday = CarbonImmutable::today()->endOfWeek(CarbonImmutable::SUNDAY)->toDateString();
+
+    $assignment = AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => $monday,
+        'effective_to' => $sunday,
+        'publish_state' => 'published',
+        'lock_state' => 'open',
+        'revision' => 1,
+        'exceptions' => [],
+        'metadata' => [],
+    ]);
+
+    AttendanceRosterAcknowledgment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'period_start' => $monday,
+        'period_end' => $sunday,
+        'acknowledged_at' => now(),
+    ]);
+
+    expect(AttendanceRosterAcknowledgment::query()->where('employee_id', $employee->id)->count())->toBe(1);
+
+    $this->actingAs($adminUser);
+
+    Livewire::test(Rosters::class)
+        ->call('saveCellOverride', $employee->id, $monday, $shift->id, $policyGroup->id)
+        ->assertHasNoErrors();
+
+    expect(AttendanceRosterAcknowledgment::query()->where('employee_id', $employee->id)->count())->toBe(0);
 });

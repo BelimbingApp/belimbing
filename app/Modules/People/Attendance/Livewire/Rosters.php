@@ -7,6 +7,7 @@ use App\Modules\People\Attendance\Livewire\Concerns\BuildsRosterRenderingData;
 use App\Modules\People\Attendance\Livewire\Concerns\InteractsWithAttendanceScreen;
 use App\Modules\People\Attendance\Livewire\Concerns\ManagesRosterOperations;
 use App\Modules\People\Attendance\Livewire\Concerns\ManagesRosterSelection;
+use App\Modules\People\Attendance\Livewire\Concerns\ManagesRosterSelfService;
 use App\Modules\People\Attendance\Livewire\Concerns\ResolvesRosterPolicySchedule;
 use App\Modules\People\Settings\Models\PeopleReferenceEntry;
 use Illuminate\Contracts\View\View;
@@ -20,6 +21,7 @@ class Rosters extends Component
     use InteractsWithAttendanceScreen;
     use ManagesRosterOperations;
     use ManagesRosterSelection;
+    use ManagesRosterSelfService;
     use ResolvesRosterPolicySchedule;
     use WithPagination;
 
@@ -127,14 +129,25 @@ class Rosters extends Component
     {
         $companyId = $this->companyId();
         $schemaReady = $this->schemaReady();
+        $isMySchedule = $this->isMyScheduleMode();
+        $canManage = $this->canAttendance('people.attendance.manage');
 
         $viewData = $schemaReady
             ? $this->renderDataForReadySchema($companyId)
             : $this->renderDataForUnreadySchema();
 
+        $gridStart = $this->gridPeriodStart()->toDateString();
+        $gridEnd = $this->gridPeriodEnd()->toDateString();
+        $rosterGridRows = $viewData['rosterGridRows'] ?? collect();
+
         return view('livewire.people.attendance.rosters', [
             'schemaReady' => $schemaReady,
-            'canManage' => $this->canAttendance('people.attendance.manage'),
+            'canManage' => $canManage,
+            'isMySchedule' => $isMySchedule,
+            'acknowledgedForPeriod' => $isMySchedule && $schemaReady ? $this->acknowledgedForPeriod($gridStart, $gridEnd) : false,
+            'acknowledgmentCount' => $canManage && $schemaReady ? $this->acknowledgmentCountForPeriod($rosterGridRows, $gridStart, $gridEnd) : null,
+            'gridPeriodStart' => $gridStart,
+            'gridPeriodEnd' => $gridEnd,
             'organizationUnits' => $this->referenceOptions(PeopleReferenceEntry::TYPE_ORGANIZATION_UNIT, $schemaReady),
             'costCenters' => $this->referenceOptions(PeopleReferenceEntry::TYPE_COST_CENTER, $schemaReady),
             'employmentGroups' => $this->referenceOptions(PeopleReferenceEntry::TYPE_EMPLOYMENT_GROUP, $schemaReady),

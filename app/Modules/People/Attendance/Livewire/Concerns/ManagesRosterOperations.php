@@ -629,6 +629,8 @@ trait ManagesRosterOperations
             'metadata' => $metadata,
         ];
 
+        $wasPublished = $assignment->publish_state === 'published';
+
         $assignment->forceFill([
             'exceptions' => $exceptions,
             'revision' => ((int) $assignment->revision) + 1,
@@ -638,6 +640,10 @@ trait ManagesRosterOperations
                 'last_exception_at' => now()->toIso8601String(),
             ],
         ])->save();
+
+        if ($wasPublished && $assignment->employee_id !== null) {
+            $this->resetAcknowledgmentForEmployeeDate((int) $assignment->employee_id, $date);
+        }
     }
 
     private function removeExceptionOverride(AttendanceRosterAssignment $assignment, string $date): void

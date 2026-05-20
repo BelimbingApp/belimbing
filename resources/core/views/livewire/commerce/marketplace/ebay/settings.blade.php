@@ -2,12 +2,14 @@
 
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
+use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use Illuminate\Database\Eloquent\Collection;
 
 /** @var Settings $this */
 /** @var array<string, mixed> $group */
 /** @var string $groupId */
 /** @var Collection<int, AccountResource> $accountResources */
+/** @var Collection<int, ProductTemplate> $productTemplates */
 $paymentPolicies = $accountResources->where('kind', AccountResource::KIND_PAYMENT_POLICY);
 $fulfillmentPolicies = $accountResources->where('kind', AccountResource::KIND_FULFILLMENT_POLICY);
 $returnPolicies = $accountResources->where('kind', AccountResource::KIND_RETURN_POLICY);
@@ -168,6 +170,73 @@ $inventoryLocations = $accountResources->where('kind', AccountResource::KIND_INV
                             {{ __('Imported choices are refreshed from eBay; selected defaults are stored in Belimbing settings.') }}
                         </p>
                     </div>
+                @endif
+            </div>
+        </x-ui.card>
+
+        <x-ui.card>
+            <div class="space-y-5">
+                <div>
+                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('eBay category mappings') }}</h2>
+                    <p class="mt-1 text-sm text-muted">
+                        {{ __('Map Belimbing templates to eBay category IDs before readiness checks or publishing. For Ham auto parts, use eBay Motors marketplace EBAY_MOTORS_US and category tree 100.') }}
+                    </p>
+                </div>
+
+                @if ($productTemplates->isEmpty())
+                    <x-ui.alert variant="info">{{ __('No catalog templates exist yet. Create templates in Catalog before mapping eBay categories.') }}</x-ui.alert>
+                @else
+                    <div class="overflow-x-auto -mx-card-inner px-card-inner">
+                        <table class="min-w-full divide-y divide-border-default text-sm">
+                            <thead class="bg-surface-subtle/80">
+                                <tr>
+                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Template') }}</th>
+                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Marketplace') }}</th>
+                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Category tree') }}</th>
+                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('eBay category ID') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-border-default">
+                                @foreach ($productTemplates as $template)
+                                    <tr wire:key="ebay-template-category-{{ $template->id }}">
+                                        <td class="px-table-cell-x py-table-cell-y">
+                                            <div class="text-sm font-medium text-ink">{{ $template->name }}</div>
+                                            <div class="mt-1 text-xs text-muted">{{ $template->category?->name ?? __('Any category') }}</div>
+                                        </td>
+                                        <td class="px-table-cell-x py-table-cell-y min-w-48">
+                                            <x-ui.input
+                                                id="ebay-template-{{ $template->id }}-marketplace"
+                                                wire:model="templateCategoryMappings.{{ $template->id }}.marketplace_id"
+                                                :label="__('Marketplace')"
+                                                :error="$errors->first('templateCategoryMappings.' . $template->id . '.marketplace_id')"
+                                            />
+                                        </td>
+                                        <td class="px-table-cell-x py-table-cell-y min-w-36">
+                                            <x-ui.input
+                                                id="ebay-template-{{ $template->id }}-category-tree"
+                                                wire:model="templateCategoryMappings.{{ $template->id }}.category_tree_id"
+                                                :label="__('Tree')"
+                                                :error="$errors->first('templateCategoryMappings.' . $template->id . '.category_tree_id')"
+                                            />
+                                        </td>
+                                        <td class="px-table-cell-x py-table-cell-y min-w-48">
+                                            <x-ui.input
+                                                id="ebay-template-{{ $template->id }}-category-id"
+                                                wire:model="templateCategoryMappings.{{ $template->id }}.category_id"
+                                                :label="__('Category ID')"
+                                                :error="$errors->first('templateCategoryMappings.' . $template->id . '.category_id')"
+                                            />
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <x-ui.button type="button" variant="primary" wire:click="saveTemplateCategoryMappings" wire:loading.attr="disabled" wire:target="saveTemplateCategoryMappings">
+                        <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                        {{ __('Save category mappings') }}
+                    </x-ui.button>
                 @endif
             </div>
         </x-ui.card>

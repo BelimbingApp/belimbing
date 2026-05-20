@@ -1,6 +1,6 @@
 # 18_roster_master.md
 
-**Status:** Identified
+**Status:** In Progress
 **Last Updated:** 2026-05-20
 **Sources:**
 - `docs/plans/people/15_attendance-roster-builder-ux.md` — foundation UX (complete)
@@ -88,15 +88,15 @@ The mode distinction is in page state, not page name: viewing a published week a
 | Feature | Status |
 |---|---|
 | Single-cell select | Done (via override button) |
-| Rectangular range select (Shift-click / Shift-Arrow) | Planned — 18b |
-| Drag-to-fill handle | Planned — 18b |
-| Cycle-aware fill (BLB exceeds Excel here) | Planned — 18b |
-| Copy / paste (Ctrl-C / Ctrl-V, client-side clipboard) | Planned — 18b |
-| Delete / clear selected cells | Planned — 18b |
-| Arrow-key cell navigation | Planned — 18b |
-| Undo for batch cell ops | Planned — 18b |
-| Print layout (A4 notice board) | Planned — 18c |
-| Export to XLSX / CSV | Planned — 18c |
+| Rectangular range select (Shift-click / Shift-Arrow) | Done — 18b |
+| Drag-to-fill handle | Done — 18b |
+| Cycle-aware fill (BLB exceeds Excel here) | Done — 18b |
+| Copy / paste (Ctrl-C / Ctrl-V, client-side clipboard) | Done — 18b |
+| Delete / clear selected cells | Done — 18b |
+| Arrow-key cell navigation | Done — 18b |
+| Undo for batch cell ops | Done — 18b |
+| Print layout (A4 notice board) | Done — 18c |
+| Export to XLSX / CSV | Done — 18c |
 | Freeze panes (sticky name col + date header) | Done |
 
 Not adopting: arbitrary formula cells, merge cells, multi-sheet files.
@@ -138,9 +138,9 @@ Not adopting: arbitrary formula cells, merge cells, multi-sheet files.
 
 | Companion | Scope | Status |
 |---|---|---|
-| [18a — Surface Completion](./18a_roster-surface-completion.md) | Complete deferred plan-16 work; rename and routing | Identified |
-| [18b — Grid Interaction](./18b_roster-grid-interaction.md) | Excel-parity grid interaction layer | Identified |
-| [18c — Self-Service](./18c_roster-self-service.md) | Employee My Schedule, acknowledgment, print, export | Identified |
+| [18a — Surface Completion](./18a_roster-surface-completion.md) | Complete deferred plan-16 work; rename and routing | Complete |
+| [18b — Grid Interaction](./18b_roster-grid-interaction.md) | Excel-parity grid interaction layer | Complete |
+| [18c — Self-Service](./18c_roster-self-service.md) | Employee My Schedule, acknowledgment, print, export | Complete |
 | [18d — Payroll Reconciliation](./18d_roster-payroll-reconciliation.md) | Payroll lock + planned vs actual reconciliation + OT flag | Identified |
 
 Future — not yet planned: swap marketplace, live working-now snapshot, AI pattern suggestion.

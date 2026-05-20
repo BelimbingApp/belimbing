@@ -1,6 +1,6 @@
 # 18a_roster-surface-completion.md
 
-**Status:** Identified
+**Status:** Complete
 **Last Updated:** 2026-05-20
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan

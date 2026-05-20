@@ -1,6 +1,6 @@
 # 18b_roster-grid-interaction.md
 
-**Status:** Built
+**Status:** Complete
 **Last Updated:** 2026-05-20
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan

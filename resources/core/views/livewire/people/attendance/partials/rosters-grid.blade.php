@@ -38,6 +38,25 @@
 .roster-selected { outline: 2px solid var(--color-accent, #6366f1); outline-offset: -2px; }
 .roster-fill-preview { background-color: color-mix(in srgb, var(--color-accent, #6366f1) 12%, transparent); }
 .roster-copied { outline: 2px dashed var(--color-accent, #6366f1); outline-offset: -2px; }
+
+@media print {
+    @page { size: A4 landscape; margin: 10mm; }
+    /* Hide layout chrome */
+    body > div > div > div:first-child,
+    body > div > div > div:last-child { display: none !important; }
+    main { overflow: visible !important; padding: 0 !important; }
+    /* Hide non-roster UI within the page */
+    .roster-print-hide { display: none !important; }
+    /* Remove backgrounds; use borders for photocopier safety */
+    .roster-grid-print table td,
+    .roster-grid-print table th {
+        background: white !important;
+        border: 1px solid #000 !important;
+        font-size: 10pt !important;
+    }
+    .roster-grid-print .roster-grid-cell-label { font-size: 10pt !important; font-weight: 600; }
+    .roster-grid-print table { border-collapse: collapse !important; width: 100% !important; }
+}
 </style>
 
 <div x-data="rosterGrid(@js($dayDrawerData ?? []))"
@@ -46,7 +65,7 @@
      @keydown.window="handleKeydown($event)"
      class="relative">
 
-<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+<div class="roster-print-hide flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
     @if ($gridIntro)
         <p class="text-sm text-muted">{{ $gridIntro }}</p>
     @else
@@ -65,7 +84,7 @@
     </div>
 </div>
 
-<div class="mt-4 overflow-x-auto rounded-2xl border border-border-default">
+<div class="roster-grid-print mt-4 overflow-x-auto rounded-2xl border border-border-default">
     <table class="min-w-full divide-y divide-border-default text-xs">
         <x-ui.day-strip :days="$rosterGridDays" :leading-label="__('Employee')" :compact="$compact" :clickable="$showDayDrawer" />
         <tbody class="divide-y divide-border-default bg-surface-card">
