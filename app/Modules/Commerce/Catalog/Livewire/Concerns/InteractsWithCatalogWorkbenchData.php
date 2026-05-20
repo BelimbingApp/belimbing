@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Catalog\Livewire\Concerns;
 
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -8,6 +9,7 @@ use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\Auth;
 
 trait InteractsWithCatalogWorkbenchData
@@ -65,7 +67,7 @@ trait InteractsWithCatalogWorkbenchData
             ->select($templateTable.'.*')
             ->where($templateTable.self::COLUMN_COMPANY_ID, $companyId)
             ->with('category')
-            ->withCount('attributes')
+            ->withCount(['attributes', 'items'])
             ->when($this->search !== '', fn (Builder $query) => $query->where(function (Builder $query) use ($templateTable): void {
                 $query->where($templateTable.self::COLUMN_CODE, 'like', '%'.$this->search.'%')
                     ->orWhere($templateTable.self::COLUMN_NAME, 'like', '%'.$this->search.'%')
@@ -77,7 +79,10 @@ trait InteractsWithCatalogWorkbenchData
             $query->leftJoin($categoryTable.' as sort_categories', $templateTable.self::COLUMN_CATEGORY_ID, '=', 'sort_categories.id');
         }
 
-        return $this->applyTemplateSort($query, $templateTable)->paginate(20);
+        return $this->withTemplateUsageMetrics(
+            $this->applyTemplateSort($query, $templateTable)->paginate(20),
+            $companyId,
+        );
     }
 
     /**
@@ -210,6 +215,74 @@ trait InteractsWithCatalogWorkbenchData
         return [
             'attributes_count' => 'desc',
             'product_templates_count' => 'desc',
+        ];
+    }
+
+    /**
+     * @param  Paginator<int, ProductTemplate>  $templates
+     * @return Paginator<int, ProductTemplate>
+     */
+    private function withTemplateUsageMetrics(Paginator $templates, int $companyId): Paginator
+    {
+        $templateRows = $templates->getCollection();
+
+        if ($templateRows->isEmpty()) {
+            return $templates;
+        }
+
+        $templateIds = $templateRows->pluck('id')->all();
+        $categoryIds = $templateRows->pluck('category_id')->filter()->unique()->all();
+
+        $globalCounts = $this->attributeScopeCounts(
+            Attribute::query()
+                ->where('company_id', $companyId)
+                ->whereNull('category_id')
+                ->whereNull('product_template_id'),
+        );
+
+        $categoryCounts = $categoryIds === []
+            ? collect()
+            : Attribute::query()
+                ->where('company_id', $companyId)
+                ->whereIn('category_id', $categoryIds)
+                ->whereNull('product_template_id')
+                ->selectRaw('category_id, count(*) as total_count, sum(case when is_required then 1 else 0 end) as required_count')
+                ->groupBy('category_id')
+                ->get()
+                ->keyBy('category_id');
+
+        $templateCounts = Attribute::query()
+            ->where('company_id', $companyId)
+            ->whereIn('product_template_id', $templateIds)
+            ->selectRaw('product_template_id, count(*) as total_count, sum(case when is_required then 1 else 0 end) as required_count')
+            ->groupBy('product_template_id')
+            ->get()
+            ->keyBy('product_template_id');
+
+        $templates->setCollection($templateRows->each(function (ProductTemplate $template) use ($globalCounts, $categoryCounts, $templateCounts): void {
+            $categoryCount = $template->category_id !== null ? $categoryCounts->get($template->category_id) : null;
+            $templateCount = $templateCounts->get($template->id);
+
+            $template->setAttribute('applicable_attributes_count', $globalCounts['total'] + (int) ($categoryCount?->total_count ?? 0) + (int) ($templateCount?->total_count ?? 0));
+            $template->setAttribute('required_attributes_count', $globalCounts['required'] + (int) ($categoryCount?->required_count ?? 0) + (int) ($templateCount?->required_count ?? 0));
+        }));
+
+        return $templates;
+    }
+
+    /**
+     * @param  Builder<Attribute>  $query
+     * @return array{total: int, required: int}
+     */
+    private function attributeScopeCounts(Builder $query): array
+    {
+        $counts = $query
+            ->selectRaw('count(*) as total_count, sum(case when is_required then 1 else 0 end) as required_count')
+            ->first();
+
+        return [
+            'total' => (int) ($counts?->total_count ?? 0),
+            'required' => (int) ($counts?->required_count ?? 0),
         ];
     }
 

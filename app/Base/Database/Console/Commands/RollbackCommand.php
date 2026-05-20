@@ -1,11 +1,14 @@
 <?php
+
 namespace App\Base\Database\Console\Commands;
 
+use App\Base\Database\Concerns\GuardsPostgresMigrationIdentifiers;
 use App\Base\Database\Concerns\InteractsWithModuleMigrations;
 use Illuminate\Database\Console\Migrations\RollbackCommand as IlluminateRollbackCommand;
 
 class RollbackCommand extends IlluminateRollbackCommand
 {
+    use GuardsPostgresMigrationIdentifiers;
     use InteractsWithModuleMigrations;
 
     /**
@@ -25,6 +28,9 @@ class RollbackCommand extends IlluminateRollbackCommand
     {
         $this->loadAllModuleMigrations();
 
-        return parent::handle();
+        return $this->guardPostgresMigrationIdentifiers(
+            $this->option('database'),
+            fn (): int => parent::handle(),
+        );
     }
 }

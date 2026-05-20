@@ -1,13 +1,16 @@
 <?php
+
 namespace App\Base\Database\Console\Commands;
 
 use App\Base\Database\Concerns\GuardsGlobalReset;
+use App\Base\Database\Concerns\GuardsPostgresMigrationIdentifiers;
 use App\Base\Database\Concerns\InteractsWithModuleMigrations;
 use Illuminate\Database\Console\Migrations\ResetCommand as IlluminateResetCommand;
 
 class ResetCommand extends IlluminateResetCommand
 {
     use GuardsGlobalReset;
+    use GuardsPostgresMigrationIdentifiers;
     use InteractsWithModuleMigrations;
 
     /**
@@ -31,6 +34,9 @@ class ResetCommand extends IlluminateResetCommand
 
         $this->loadAllModuleMigrations();
 
-        return (int) parent::handle();
+        return $this->guardPostgresMigrationIdentifiers(
+            $this->option('database'),
+            fn (): int => (int) parent::handle(),
+        );
     }
 }

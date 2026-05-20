@@ -18,12 +18,12 @@ Initialization phase — design freedom, not a license to shortcut. Build produc
 
 ### Core Principles
 
-- **System Stewardship:** beyond your task, notice entropy: inconsistent patterns, leaky abstractions, duplication, structural drift.
-  - **Boy-scout rule:** fix in passing — dead code, stale references, naming, orphaned artifacts.
+- **Low Entropy:** system-wide, not ticket-only. Drift noticed anywhere (even off-task): fix or plan now — no silent deferral.
+  - **Small corrections:** fix immediately; do not defer.
+  - **Larger corrections:** add a plan under `docs/plans/` in this pass; implementation may follow later, but the plan must exist now.
   - **Completeness:** when modifying an artifact, consider its full purpose. Ask "what else belongs here?"
-  - **Larger drift:** capture as a follow-up plan in `docs/plans/`, don't silently absorb.
 - **Strategic Programming (Ousterhout):** invest 10–20% extra effort in design over the tactical path. When plurality is on the roadmap — not speculation — and cost-now is small while cost-later requires a data migration over existing rows, design for it now. Speculative or expensive-to-carry items still get deferred.
-- **Destructive Evolution:** best current design over backward compatibility. Drop tables, refactor schemas, rewrite APIs freely — no migration paths for seed/schema data. Persisted user data (prefs, content, configs) is harder to discard than tables; shape it for known-recurring needs from day one.
+- **Destructive Evolution:** best current design over backward compatibility. Drop or rewrite schemas on unstable tables only; stable tables survive `migrate:fresh` (per `app/Base/Database/AGENTS.md`). Rewrite APIs freely — no migration paths for seed/schema data. Persisted user data (prefs, content, configs) is harder to discard than tables; shape it for known-recurring needs from day one.
 - **Deep Modules (Ousterhout):** powerful functionality through simple interfaces. Hide complexity; do not leak implementation details. Define errors out of existence where the type system can carry the proof.
 - **Honesty:** names, persisted values, APIs, docs, UI copy must be truthful and grounded in code/data. Prefer shared types and existing rules over ad hoc strings or duplicated logic.
 

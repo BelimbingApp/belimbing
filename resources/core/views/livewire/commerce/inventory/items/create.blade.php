@@ -53,7 +53,35 @@
                     :error="$errors->first('title')"
                 />
 
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <x-ui.select
+                        id="inventory-item-category"
+                        wire:model.live="categoryId"
+                        label="{{ __('Category') }}"
+                        :help="__('Broad catalog group for this item.')"
+                        :error="$errors->first('categoryId')"
+                    >
+                        <option value="">{{ __('No category') }}</option>
+                        @foreach ($categories as $category)
+                            <option value="{{ $category->id }}">{{ $category->name }}</option>
+                        @endforeach
+                    </x-ui.select>
+
+                    <x-ui.select
+                        id="inventory-item-template"
+                        wire:model.live="productTemplateId"
+                        label="{{ __('Template') }}"
+                        :help="__('Item type that decides which catalog attributes apply.')"
+                        :error="$errors->first('productTemplateId')"
+                    >
+                        <option value="">{{ __('No template') }}</option>
+                        @foreach ($productTemplates as $template)
+                            <option value="{{ $template->id }}">{{ $template->name }}</option>
+                        @endforeach
+                    </x-ui.select>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <x-ui.select
                         id="inventory-item-status"
                         wire:model="status"
@@ -65,6 +93,30 @@
                             <option value="{{ $statusOption }}">{{ __(Illuminate\Support\Str::headline($statusOption)) }}</option>
                         @endforeach
                     </x-ui.select>
+
+                    <x-ui.input
+                        id="inventory-item-quantity-on-hand"
+                        wire:model="quantityOnHand"
+                        label="{{ __('Qty') }}"
+                        type="number"
+                        min="0"
+                        required
+                        :help="__('Units available for this SKU or tracked item. Use 1 for one-off used parts.')"
+                        :error="$errors->first('quantityOnHand')"
+                    />
+
+                    <x-ui.input
+                        id="inventory-item-storage-location"
+                        wire:model="storageLocation"
+                        label="{{ __('Storage location') }}"
+                        type="text"
+                        placeholder="{{ __('e.g., Shelf A-03') }}"
+                        :help="__('Internal place to find this stock.')"
+                        :error="$errors->first('storageLocation')"
+                    />
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
 
                     <x-ui.input
                         id="inventory-item-unit-cost-amount"

@@ -152,7 +152,7 @@ abstract class SettingsForm extends Component
     /**
      * @return array<string, mixed>
      */
-    private function groupConfig(): array
+    protected function groupConfig(): array
     {
         $groups = config('settings.editable', []);
 

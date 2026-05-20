@@ -2,6 +2,7 @@
 
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\People\Claim\Data\ClaimSubmissionInput;
 use App\Modules\People\Claim\Models\ClaimAssignment;
 use App\Modules\People\Claim\Models\ClaimAssignmentLine;
 use App\Modules\People\Claim\Models\ClaimLine;
@@ -10,6 +11,7 @@ use App\Modules\People\Claim\Models\ClaimPolicyBand;
 use App\Modules\People\Claim\Models\ClaimRequest;
 use App\Modules\People\Claim\Models\ClaimType;
 use App\Modules\People\Claim\Services\ClaimPolicyEvaluationService;
+use DateTimeImmutable;
 
 /**
  * @return array{employee: Employee, type: ClaimType, policy: ClaimPolicy, assignment: ClaimAssignment, line: ClaimAssignmentLine}
@@ -124,13 +126,16 @@ function makeClaimWith(array $f, string $status, float $requested, float $approv
 function evaluateSubmission(array $f, float $newRequested, string $incurred = '2026-06-15'): array
 {
     return app(ClaimPolicyEvaluationService::class)->evaluateBeforeSubmission(
-        employeeId: $f['employee']->id,
         claimType: $f['type'],
         policy: $f['policy'],
-        incurredOn: new DateTimeImmutable($incurred),
-        requestedAmount: $newRequested,
-        attachmentCount: 0,
-        providerName: null,
+        input: new ClaimSubmissionInput(
+            employeeId: $f['employee']->id,
+            incurredOn: new DateTimeImmutable($incurred),
+            requestedAmount: $newRequested,
+            attachmentCount: 0,
+            providerName: null,
+            employee: $f['employee'],
+        ),
     );
 }
 

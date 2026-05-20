@@ -10,6 +10,14 @@ class EbayConfiguration
 {
     public const CHANNEL = 'ebay';
 
+    public const DEFAULT_LISTING_MARKETPLACE_ID = 'EBAY_US';
+
+    public const APPLICATION_TOKEN_ACCOUNT_KEY = 'application';
+
+    public const APPLICATION_SCOPES = [
+        'https://api.ebay.com/oauth/api_scope',
+    ];
+
     public function __construct(
         private readonly SettingsService $settings,
     ) {}
@@ -21,6 +29,7 @@ class EbayConfiguration
      *     client_id: string|null,
      *     client_secret: string|null,
      *     redirect_uri: string|null,
+     *     callback_url: string,
      *     scopes: list<string>,
      *     api_base_url: string,
      *     auth_url: string,
@@ -34,10 +43,11 @@ class EbayConfiguration
 
         return [
             'environment' => $environment,
-            'marketplace_id' => strtoupper((string) $this->settings->get('marketplace.ebay.marketplace_id', 'EBAY_US', $scope)),
+            'marketplace_id' => strtoupper((string) $this->settings->get('marketplace.ebay.marketplace_id', self::DEFAULT_LISTING_MARKETPLACE_ID, $scope)),
             'client_id' => $this->nullableSetting('marketplace.ebay.client_id', $scope),
             'client_secret' => $this->nullableSetting('marketplace.ebay.client_secret', $scope),
-            'redirect_uri' => route('commerce.marketplace.ebay.oauth.callback'),
+            'redirect_uri' => $this->nullableSetting('marketplace.ebay.ru_name', $scope),
+            'callback_url' => route('commerce.marketplace.ebay.oauth.callback'),
             'scopes' => $this->scopes($scope),
             'api_base_url' => $environment === 'live' ? 'https://api.ebay.com' : 'https://api.sandbox.ebay.com',
             'auth_url' => $environment === 'live' ? 'https://auth.ebay.com/oauth2/authorize' : 'https://auth.sandbox.ebay.com/oauth2/authorize',
@@ -49,12 +59,42 @@ class EbayConfiguration
     {
         $config = $this->forCompany($companyId);
 
+        foreach (['client_id', 'client_secret', 'redirect_uri'] as $key) {
+            if ($config[$key] === null || $config[$key] === '') {
+                $settingKey = $key === 'redirect_uri' ? 'marketplace.ebay.ru_name' : 'marketplace.ebay.'.$key;
+
+                throw MarketplaceOperationException::missingConfiguration(self::CHANNEL, $settingKey);
+            }
+        }
+
+        return $config;
+    }
+
+    /**
+     * @return array{
+     *     environment: string,
+     *     marketplace_id: string,
+     *     client_id: string,
+     *     client_secret: string,
+     *     redirect_uri: string|null,
+     *     callback_url: string,
+     *     scopes: list<string>,
+     *     api_base_url: string,
+     *     auth_url: string,
+     *     token_url: string
+     * }
+     */
+    public function requireApplicationConfigured(int $companyId): array
+    {
+        $config = $this->forCompany($companyId);
+
         foreach (['client_id', 'client_secret'] as $key) {
             if ($config[$key] === null || $config[$key] === '') {
                 throw MarketplaceOperationException::missingConfiguration(self::CHANNEL, 'marketplace.ebay.'.$key);
             }
         }
 
+        /** @var array{environment: string, marketplace_id: string, client_id: string, client_secret: string, redirect_uri: string|null, callback_url: string, scopes: list<string>, api_base_url: string, auth_url: string, token_url: string} $config */
         return $config;
     }
 

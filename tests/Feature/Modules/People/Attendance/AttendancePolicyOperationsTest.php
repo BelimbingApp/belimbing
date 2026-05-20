@@ -604,7 +604,7 @@ it('lets managers create roster assignments from the guided roster builder', fun
     $this->actingAs($user);
 
     Livewire::test(Rosters::class)
-        ->assertSee('Roster Builder')
+        ->assertSee('Roster')
         ->assertSee('New roster assignment')
         ->call('startNewRosterAssignment')
         ->assertSet('mode', 'form')
@@ -765,7 +765,7 @@ it('shows saved and unsaved roster assignments in the roster grid', function ():
         ->set('selectedRosterEmployeeIds', [(string) $employees[1]->id])
         ->set('rosterShiftTemplateId', (string) $nightShift->id)
         ->set('rosterPolicyGroupId', (string) $policyGroup->id)
-        ->assertSee('Roster grid')
+        ->assertSee('Employee')
         ->assertSee('DAY')
         ->assertSee('Published')
         ->assertSee('NIGHT')
@@ -964,7 +964,7 @@ it('opens to the calendar as the list-mode primary surface and supports week nav
         ->assertSet('mode', 'list')
         ->assertSee('Calendar')
         ->assertSee('Records')
-        ->assertSee('Roster grid')
+        ->assertSee('Employee')
         ->assertSee($employee->full_name)
         ->assertSee('DAY')
         ->call('goToNextWeek')
@@ -1322,4 +1322,87 @@ it('keeps operational timecard controls off the approvals surface', function ():
         ->assertSee('Overtime Queue')
         ->assertDontSee('Attendance Days')
         ->assertDontSee('Search employee...');
+});
+
+it('saves batch cell overrides across a date range in one call', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
+
+    $thisWeekStart = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY);
+    $dates = [$thisWeekStart->toDateString(), $thisWeekStart->addDay()->toDateString(), $thisWeekStart->addDays(2)->toDateString()];
+
+    $this->actingAs($user);
+
+    Livewire::test(Rosters::class)
+        ->call('saveCellOverrides', [
+            ['employee_id' => $employee->id, 'date' => $dates[0], 'shift_template_id' => $shift->id, 'policy_group_id' => $policyGroup->id],
+            ['employee_id' => $employee->id, 'date' => $dates[1], 'shift_template_id' => $shift->id, 'policy_group_id' => $policyGroup->id],
+            ['employee_id' => $employee->id, 'date' => $dates[2], 'shift_template_id' => $shift->id, 'policy_group_id' => $policyGroup->id],
+        ])
+        ->assertHasNoErrors()
+        ->assertSee('3 cell overrides saved.');
+
+    expect(AttendanceRosterAssignment::query()->where('company_id', $company->id)->where('employee_id', $employee->id)->count())->toBe(3);
+});
+
+it('batch clear removes draft cell assignments', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
+
+    $date = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY)->toDateString();
+
+    $assignment = AttendanceRosterAssignment::query()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+        'attendance_shift_template_id' => $shift->id,
+        'attendance_policy_group_id' => $policyGroup->id,
+        'effective_from' => $date,
+        'effective_to' => $date,
+        'publish_state' => 'draft',
+        'lock_state' => 'open',
+        'revision' => 1,
+        'exceptions' => [],
+        'metadata' => [],
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Rosters::class)
+        ->call('saveCellOverrides', [
+            ['employee_id' => $employee->id, 'date' => $date, 'shift_template_id' => 0, 'policy_group_id' => 0],
+        ])
+        ->assertHasNoErrors();
+
+    expect(AttendanceRosterAssignment::query()->find($assignment->id))->toBeNull();
+});
+
+it('batch overrides silently skips entries outside the grid period or from other companies', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $otherCompany = Company::factory()->create();
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $foreignEmployee = Employee::factory()->active()->create(['company_id' => $otherCompany->id]);
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
+
+    $thisWeekStart = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY);
+
+    $this->actingAs($user);
+
+    Livewire::test(Rosters::class)
+        ->call('saveCellOverrides', [
+            // Foreign company employee — should be skipped
+            ['employee_id' => $foreignEmployee->id, 'date' => $thisWeekStart->toDateString(), 'shift_template_id' => $shift->id, 'policy_group_id' => $policyGroup->id],
+            // Date outside grid period (2 years in the future) — skipped
+            ['employee_id' => $employee->id, 'date' => $thisWeekStart->addYears(2)->toDateString(), 'shift_template_id' => $shift->id, 'policy_group_id' => $policyGroup->id],
+        ])
+        ->assertHasNoErrors();
+
+    expect(AttendanceRosterAssignment::query()->where('company_id', $company->id)->count())->toBe(0);
 });

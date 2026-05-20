@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Livewire\Ebay;
 
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -46,19 +47,6 @@ class Index extends Component
     {
         $this->resetPage();
         $this->resetPage('unlistedPage');
-    }
-
-    public function connect(EbayOAuthService $oauth): mixed
-    {
-        $this->authorizeConnectionManage();
-
-        try {
-            return redirect()->away($oauth->authorizationUrl($this->companyId()));
-        } catch (Throwable $exception) {
-            session()->flash('error', $exception->getMessage());
-
-            return null;
-        }
     }
 
     public function pullListings(MarketplaceChannelRegistry $channels): void
@@ -311,14 +299,6 @@ class Index extends Component
         }
 
         return $companyId;
-    }
-
-    private function authorizeConnectionManage(): void
-    {
-        app(AuthorizationService::class)->authorize(
-            Actor::forUser(Auth::user()),
-            'commerce.marketplace.manage',
-        );
     }
 
     private function authorizeSyncRun(): void

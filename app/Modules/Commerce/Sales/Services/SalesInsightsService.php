@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Sales\Services;
 
 use App\Modules\Commerce\Marketplace\Models\Listing;
@@ -143,7 +144,7 @@ class SalesInsightsService
     }
 
     /**
-     * Recent sales as a chronological list (newest first).
+     * Recent Sales as a chronological list (newest first).
      *
      * Unlike {@see soldInPeriod()} which collapses to a single aggregate, this
      * returns one row per sale with its display title resolved at query time —

@@ -12,7 +12,7 @@
 
 ## Problem Essence
 
-Ham's ~2,000 active listings inevitably contain multi-hundred-dollar dead capital — items live on eBay for hundreds of days without selling. Phase 7's "Listed without a sale" page makes the *problem* visible, but the diagnosis-and-remedy work (figure out why this one isn't moving, decide what to do, execute) still sits in Ham's head — exactly the kind of compounding cognitive cost that's expensive when he's also undergoing chemotherapy. Lara can absorb that diagnosis and propose a specific recovery action per listing; the operator's role becomes one-click approval over a queue, not original analysis.
+Ham's ~2,000 active listings inevitably contain multi-hundred-dollar dead capital — items live on eBay for hundreds of days without selling. Phase 7's "Unsold Listings" page makes the *problem* visible, but the diagnosis-and-remedy work (figure out why this one isn't moving, decide what to do, execute) still sits in Ham's head — exactly the kind of compounding cognitive cost that's expensive when he's also undergoing chemotherapy. Lara can absorb that diagnosis and propose a specific recovery action per listing; the operator's role becomes one-click approval over a queue, not original analysis.
 
 ## Desired Outcome
 
@@ -37,7 +37,7 @@ The feature ships in two stages aligned with the master plan's write-path readin
 
 4. **Advisory record (`lara_advisories` table)** — durable per-(listing × generated-at) row capturing the model output plus disposition. Fields: `id`, `subject_type`/`subject_id` (polymorphic-free; for now just `listing_id` + a single-row pivot), `task` (= `advise-aging-stock`), `generated_at`, `action_class`, `suggested_changes` (JSON), `reasoning`, `confidence`, `status` (`pending` | `approved` | `rejected` | `executed` | `expired`), `approved_at`, `approved_by_user_id`, `executed_at`, `outcome_recorded_at`, `outcome_class` (`sold` | `still_aging` | `withdrawn`). Polymorphic-free per the project's preference; if a future advisor targets `Item` instead of `Listing`, that gets its own table or a discriminator column.
 
-5. **Operator UI** — extension of the existing Phase 7 "Listed without a sale" Livewire page rather than a new top-level page. Each row gains a "💡 Lara's take" affordance: clicking it triggers (or surfaces, if cached) one advisory; approve/reject/edit are inline actions on the same row. A header-level "Advise all (N)" button kicks off a batch run with a per-row progress indicator and a clear cost estimate up front (see Cost discipline).
+5. **Operator UI** — extension of the existing Phase 7 "Unsold Listings" Livewire page rather than a new top-level page. Each row gains a "💡 Lara's take" affordance: clicking it triggers (or surfaces, if cached) one advisory; approve/reject/edit are inline actions on the same row. A header-level "Advise all (N)" button kicks off a batch run with a per-row progress indicator and a clear cost estimate up front (see Cost discipline).
 
 6. **Loop closure** — the table tracks acceptance, execute, and outcome rates. A small admin dashboard surfaces these so the operator (and the plan owner) can decide whether the advisor is actually paying off; if acceptance rate dips below a threshold, that's the signal to revise the prompt.
 
@@ -128,7 +128,7 @@ Strict JSON. Top-level fields: `action_class` (enum from the five above), `sugge
 
 ### Phase 3 — Operator surface (advisory-only)
 
-- [ ] Workbench UI extension on the existing "Listed without a sale" page (or sibling — see Public Contract).
+- [ ] Workbench UI extension on the existing "Unsold Listings" page (or sibling — see Public Contract).
 - [ ] "💡 Lara's take" per-row action: triggers `adviseListing`, persists, displays the advisory card inline.
 - [ ] "Advise all (N)" header action: per-row progress, up-front cost estimate, batch advisory generation.
 - [ ] Approve / Reject / Edit inline — record disposition. Approve does *not* call eBay.

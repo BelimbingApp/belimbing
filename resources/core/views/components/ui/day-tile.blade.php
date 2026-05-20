@@ -9,8 +9,8 @@
         dayType     — Normal | rest | off | holiday (per AttendanceDay::DAY_TYPE_*)
         emptyLabel  — Label rendered when the slot is empty and the day is non-working
                       (e.g. "Rest", "Off", "Holiday"). Defaults to the vocabulary label.
-        state       — 'published' | 'draft' | 'preview' | null. Drives the left-border
-                      colour around the slot content.
+        state       — 'published' | 'draft' | 'preview' | null. Drives the top-border
+                      colour on the slot content pill.
         tooltip     — Optional `title` attribute for hover hints (also used as
                       accessible name when the slot contains only visual chrome).
         empty       — Pass `true` to render the empty placeholder (single dot
@@ -43,9 +43,9 @@
     $inkClass = DayTypeVocabulary::inkClass($dayType);
     $isNonWorking = DayTypeVocabulary::isNonWorking($dayType);
     $stateBorderClass = match ($state) {
-        'published' => 'border-l-2 border-status-success',
-        'draft' => 'border-l-2 border-status-warning',
-        'preview' => 'border-l-2 border-status-info border-dashed',
+        'published' => 'border-t-2 border-status-success',
+        'draft' => 'border-t-2 border-status-warning',
+        'preview' => 'border-t-2 border-dashed border-status-info',
         default => '',
     };
     $resolvedEmptyLabel = $emptyLabel ?? DayTypeVocabulary::label($dayType);

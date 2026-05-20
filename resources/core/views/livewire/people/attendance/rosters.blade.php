@@ -6,11 +6,11 @@ use App\Modules\People\Attendance\Livewire\Rosters;
 ?>
 
 <div>
-    <x-slot name="title">{{ __('Roster Builder') }}</x-slot>
+    <x-slot name="title">{{ __('Roster') }}</x-slot>
 
     <div class="space-y-section-gap">
         <x-ui.page-header
-            :title="__('Roster Builder')"
+            :title="__('Roster')"
             :subtitle="$mode === 'list'
                 ? __('Roster assignments pair employees with a shift and policy group over a date range. Attendance days resolve against the assignment that covers their date.')
                 : __('Filter the workforce, pick a shift and policy, then save the assignment as a draft or published roster.')">
@@ -23,7 +23,7 @@ use App\Modules\People\Attendance\Livewire\Rosters;
                 @else
                     <x-ui.button type="button" variant="secondary" wire:click="cancelRosterForm">
                         <x-icon name="heroicon-o-arrow-left" class="h-4 w-4" />
-                        {{ __('Back to rosters') }}
+                        {{ __('Back') }}
                     </x-ui.button>
                 @endif
             </x-slot>

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Ebay\Http\Controllers;
 
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
@@ -28,9 +29,10 @@ class EbayOAuthCallbackController
 
         $oauth->exchangeCode($companyId, $code);
         session()->forget('marketplace.ebay.oauth_state');
+        $returnRoute = (string) session()->pull('marketplace.ebay.oauth_return_route', 'commerce.marketplace.ebay.index');
 
         return redirect()
-            ->route('commerce.marketplace.ebay.index')
+            ->route($returnRoute)
             ->with('success', __('eBay OAuth connection saved.'));
     }
 }

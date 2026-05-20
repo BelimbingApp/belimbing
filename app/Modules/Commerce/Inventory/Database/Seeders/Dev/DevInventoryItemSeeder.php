@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Inventory\Database\Seeders\Dev;
 
 use App\Base\Database\Seeders\DevSeeder;
@@ -50,7 +51,7 @@ class DevInventoryItemSeeder extends DevSeeder
                 'sku' => 'ITEM-DEMO-CAMERA',
                 'status' => Item::STATUS_READY,
                 'title' => 'Mirrorless camera body with battery',
-                'notes' => 'Used electronics example showing the same Inventory Workbench can represent non-auto goods.',
+                'notes' => 'Used electronics example showing the same Inventory can represent non-auto goods.',
                 'unit_cost_amount' => 95000,
                 'target_price_amount' => 145000,
             ],

@@ -9,12 +9,12 @@ use App\Modules\Commerce\Catalog\Livewire\Index;
 ?>
 
 <div>
-    <x-slot name="title">{{ __('Catalog Workbench') }}</x-slot>
+    <x-slot name="title">{{ __('Catalog') }}</x-slot>
 
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('Catalog Workbench')" :subtitle="__('Define what facts matter for each kind of item, then reuse those fields when listing parts for sale.')">
+        <x-ui.page-header :title="__('Catalog')" :subtitle="__('Define what facts matter for each kind of item, then reuse those fields when listing parts for sale.')">
             <x-slot name="help">
-                {{ __('Catalog defines the reusable structure for describing items. Categories group broad kinds of items, templates describe repeatable item types, and attributes are the exact fields to capture. Inventory then stores those facts for one physical item so Lara, eBay publishing, and reports can use consistent data instead of free text.') }}
+                {{ __('Catalog defines the reusable structure for describing items. Categories group broad kinds of items, templates describe repeatable item types, and attributes are the exact fields to capture. A template is not a physical item; it is the reusable blueprint for one kind of item, such as Headlight Assembly or Alternator. Inventory then stores those facts for one physical item so Lara, eBay publishing, and reports can use consistent data instead of free text.') }}
             </x-slot>
 
             <x-slot name="actions">
@@ -48,6 +48,7 @@ use App\Modules\Commerce\Catalog\Livewire\Index;
                         size="sm"
                         persistence="none"
                         wire-action="setTab"
+                        wire:key="catalog-tabs-{{ $tab }}"
                         class="w-full lg:w-auto"
                     >
                         <x-ui.tab id="categories" />
@@ -219,8 +220,11 @@ use App\Modules\Commerce\Catalog\Livewire\Index;
                                     column="attributes_count"
                                     :sort-by="$sortBy"
                                     :sort-dir="$sortDir"
-                                    :label="__('Attributes')"
+                                    :label="__('Template attrs')"
                                 />
+                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Applies') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Items') }}</th>
+                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                             </tr>
                         </thead>
                         <tbody class="bg-surface-card divide-y divide-border-default">
@@ -277,10 +281,31 @@ use App\Modules\Commerce\Catalog\Livewire\Index;
                                         </button>
                                     </td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $template->attributes_count }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
+                                        <span class="font-medium text-ink tabular-nums">{{ $template->applicable_attributes_count }}</span>
+                                        <span>{{ __('attrs') }}</span>
+                                        <span class="text-muted/70">/</span>
+                                        <span class="tabular-nums">{{ $template->required_attributes_count }}</span>
+                                        <span>{{ __('required') }}</span>
+                                    </td>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm text-muted tabular-nums">{{ $template->items_count }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm">
+                                        <div class="flex items-center justify-end gap-2">
+                                            <button type="button" wire:click="manageTemplateAttributes({{ $template->id }})" class="text-accent hover:underline">
+                                                {{ __('Manage attributes') }}
+                                            </button>
+                                            <button type="button" wire:click="addTemplateAttribute({{ $template->id }})" class="text-accent hover:underline">
+                                                {{ __('Add attribute') }}
+                                            </button>
+                                            <a href="{{ route('commerce.inventory.items.create', ['template_id' => $template->id]) }}" class="text-accent hover:underline" wire:navigate>
+                                                {{ __('Create item') }}
+                                            </a>
+                                        </div>
+                                    </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No templates found.') }}</td>
+                                    <td colspan="9" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No templates found.') }}</td>
                                 </tr>
                             @endforelse
                         </tbody>

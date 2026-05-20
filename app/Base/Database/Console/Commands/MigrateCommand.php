@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Base\Database\Console\Commands;
 
+use App\Base\Database\Concerns\GuardsPostgresMigrationIdentifiers;
 use App\Base\Database\Concerns\InteractsWithModuleMigrations;
 use App\Base\Database\Exceptions\CircularSeederDependencyException;
 use App\Base\Database\Models\SeederRegistry;
@@ -16,6 +18,7 @@ use Symfony\Component\Console\Input\InputOption;
 #[AsCommand(name: 'migrate')]
 class MigrateCommand extends IlluminateMigrateCommand
 {
+    use GuardsPostgresMigrationIdentifiers;
     use InteractsWithModuleMigrations;
 
     /**
@@ -67,7 +70,10 @@ class MigrateCommand extends IlluminateMigrateCommand
 
         $this->loadAllModuleMigrations();
 
-        return parent::handle();
+        return $this->guardPostgresMigrationIdentifiers(
+            $this->option('database'),
+            fn (): int => parent::handle(),
+        );
     }
 
     /**
