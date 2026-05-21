@@ -322,6 +322,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
             'status' => $listing->isBelimbingManaged() ? ListingDraft::STATUS_PUBLISHED : ListingDraft::STATUS_IMPORTED,
             'management_state' => $listing->management_state,
             'aspect_values' => $listingAspects !== [] ? $listingAspects : $draft->aspect_values,
+            'readiness_snapshot' => $this->mergeListingFactsIntoReadinessSnapshot($draft->readiness_snapshot, $listing),
             'publish_intent' => null,
             'last_failure_summary' => null,
         ]);
@@ -365,6 +366,24 @@ class EbayMarketplaceChannel implements MarketplaceChannel
                 return [];
             })
             ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $snapshot
+     * @return array<string, mixed>
+     */
+    private function mergeListingFactsIntoReadinessSnapshot(?array $snapshot, Listing $listing): array
+    {
+        $snapshot = is_array($snapshot) ? $snapshot : [];
+        $facts = is_array($snapshot['facts'] ?? null) ? $snapshot['facts'] : [];
+
+        $snapshot['facts'] = array_merge($facts, [
+            'inventory_api_visible' => $listing->hasInventoryItemSnapshot(),
+            'inventory_api_writable' => $listing->hasInventoryApiWritePath(),
+            'adoption_state' => $listing->adoptionState(),
+        ]);
+
+        return $snapshot;
     }
 
     /**

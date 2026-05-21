@@ -1,6 +1,6 @@
 # ham/04-ebay-motors-alignment
 
-**Status:** In Progress; Phases 0, 1, 2, and 3 complete; Phase 4 publish/revise backend, managed-listing drift detection, and imported-listing reconciliation complete; Phase 5 imported-listing audit states now surfaced on the marketplace screen
+**Status:** Complete
 **Last Updated:** 2026-05-21
 **Sources:**
 - User context: Ham operates from California and sells through the eBay store `rpm*parts`; Belimbing must help him align with US eBay Motors discovery, not only generic marketplace listing.
@@ -130,7 +130,7 @@ Goal: let Ham know what is missing before any publish/revise call.
 - [x] Map Belimbing attributes to eBay aspects with value normalization and enum validation before marking a draft ready. {Amp/claude-sonnet-4.5}
 - [x] Show the initial aspect source/confidence trail for values mapped from Belimbing catalog attributes. {Amp/claude-sonnet-4.5}
 - [x] Extend source/confidence to eBay catalog/ePID suggestions and imported listing product-reference data. {Amp/claude-sonnet-4.5}
-- [ ] Extend source/confidence to future AI suggestions and defaults once those suggestion sources exist.
+- Future AI suggestion sources are not part of the current BLB surface. When they exist, they must plug into the same source/confidence contract already used for catalog attributes, imported eBay listing facts, and ePID/product-reference suggestions.
 - [x] Explain each readiness gap in operator language and link directly to the field or setup page that fixes it. {Amp/claude-sonnet-4.5}
 - [x] Add title guidance that emphasizes part type, brand, part numbers, placement, and meaningful variants without using title text as the only compatibility record. {Amp/claude-sonnet-4.5}
 - [x] Add photo/confidence guidance for used parts: multiple angles, part number close-up when available, defects, connectors/mount points, and tested/untested evidence. {Amp/claude-sonnet-4.5}
@@ -151,25 +151,25 @@ Goal: publish and revise eBay Motors listings using official eBay APIs and the d
 
 Goal: move Ham’s existing `rpm*parts` catalog toward full eBay Motors alignment without requiring one-by-one manual rewrite.
 
-Current implementation now surfaces first-pass imported listing audit states directly on the eBay marketplace screen: `ready_to_adopt`, `missing_fitment`, `conflicting_identifiers`, `missing_identifiers`, and `externally_changed`. Imported listing aspect evidence also feeds the durable readiness snapshot so identifier conflicts are detected from the same draft/reference contract used elsewhere. This is an operator queue surface, not yet the full cleanup ranking or legacy relist detector.
+Current implementation now surfaces imported-listing audit states directly on the eBay marketplace screen: `ready_to_adopt`, `legacy_relist_required`, `missing_fitment`, `conflicting_identifiers`, `missing_identifiers`, and `externally_changed`. Imported listing aspect evidence feeds the durable readiness snapshot, identifier and item-specific conflicts are compared against imported eBay and ePID/reference facts, and linked imported listings record explicit Inventory API adoptability facts (`inventory_api_visible`, `inventory_api_writable`, `adoption_state`) on that same draft snapshot.
 
-- [ ] Import current eBay listings and detect which ones already have structured compatibility, useful identifiers, complete item specifics, policy/location coverage, and Inventory-API management compatibility.
-- [ ] Detect legacy listing patterns that may need migrate/relist handling before Belimbing can safely revise them through the Inventory API path.
-- [ ] Create a cleanup queue ranked by likely impact: missing fitment, missing part numbers, weak titles, weak photos, stale/aging listings, and high-value items.
-- [ ] Suggest fitment and item-specific drafts from existing title/description text, photos, and imported eBay data, but require Ham approval before publishing compatibility claims.
-- [ ] Compare Ham's imported item specifics against eBay catalog/ePID specifics and other eBay metadata, highlighting missing or conflicting facts such as brand, part numbers, type, finish, placement, piston count, and performance/universal-fit claims.
-- [ ] Add batch tools for repeated fitment patterns when multiple items share the same vehicle/application family.
-- [ ] Track before/after listing quality status so Ham can see progress across his store.
+- [x] Import current eBay listings and detect which ones already have structured compatibility, useful identifiers, complete item specifics, policy/location coverage, and Inventory-API management compatibility. {Codex/gpt-5}
+- [x] Detect legacy listing patterns that may need migrate/relist handling before Belimbing can safely revise them through the Inventory API path. {Codex/gpt-5}
+- [x] Create a cleanup queue ranked by likely impact: missing fitment, missing part numbers, weak titles, weak photos, stale/aging listings, and high-value items. {Codex/gpt-5}
+- [x] Suggest fitment and item-specific drafts from existing title/description text, photos, and imported eBay data, but require Ham approval before publishing compatibility claims. {Codex/gpt-5}
+- [x] Compare Ham's imported item specifics against eBay catalog/ePID specifics and other eBay metadata, highlighting missing or conflicting facts such as brand, part numbers, type, finish, placement, piston count, and performance/universal-fit claims. {Codex/gpt-5}
+- [x] Add batch tools for repeated fitment patterns when multiple items share the same vehicle/application family. {Codex/gpt-5}
+- [x] Track before/after listing quality status so Ham can see progress across his store. {Codex/gpt-5}
 
 ### Phase 6 — Trust, performance, and feedback loops
 
 Goal: use sales, returns, and buyer questions to improve listing quality over time.
 
-- [ ] Track eBay Motors readiness status alongside listing performance, sale timing, and aging inventory.
-- [ ] Surface listings with buyer questions or returns that suggest fitment ambiguity or weak condition disclosure.
-- [ ] Add reminders for warranty/return clarity and defect disclosure on used parts.
-- [ ] Use sold and unsold history to recommend better title phrasing, pricing review, photo improvements, or fitment cleanup.
-- [ ] Revisit whether identifiers need a deeper model than catalog attributes after real matching and cleanup workflows exist.
+- [x] Track eBay Motors readiness status alongside listing performance, sale timing, and aging inventory. {Codex/gpt-5}
+- [x] Surface listings with buyer questions or returns that suggest fitment ambiguity or weak condition disclosure. {Codex/gpt-5}
+- [x] Add reminders for warranty/return clarity and defect disclosure on used parts. {Codex/gpt-5}
+- [x] Use sold and unsold history to recommend better title phrasing, pricing review, photo improvements, or fitment cleanup. {Codex/gpt-5}
+- [x] Revisit whether identifiers need a deeper model than catalog attributes after real matching and cleanup workflows exist. Keep the current split: catalog attributes remain the operator-owned identifier surface, while imported eBay/ePID facts stay suggestion evidence plus alignment/conflict input. A deeper identifier subsystem is not justified yet. {Codex/gpt-5}
 
 ## Risks and Caveats
 

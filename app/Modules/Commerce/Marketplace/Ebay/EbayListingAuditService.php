@@ -29,6 +29,7 @@ class EbayListingAuditService
      *     missingFitmentListings: int,
      *     conflictingIdentifierListings: int,
      *     missingIdentifierListings: int,
+     *     legacyRelistRequiredListings: int,
      *     driftedListings: int
      * }
      */
@@ -53,6 +54,9 @@ class EbayListingAuditService
             'missingIdentifierListings' => $listings->filter(
                 fn (Listing $listing): bool => $this->state($listing) === Listing::RECONCILIATION_MISSING_IDENTIFIERS
             )->count(),
+            'legacyRelistRequiredListings' => $listings->filter(
+                fn (Listing $listing): bool => $this->state($listing) === Listing::RECONCILIATION_LEGACY_RELIST_REQUIRED
+            )->count(),
             'driftedListings' => $listings->filter(
                 fn (Listing $listing): bool => $this->state($listing) === Listing::RECONCILIATION_DRIFTED
             )->count(),
@@ -73,6 +77,10 @@ class EbayListingAuditService
 
         if ($listing->isImported()) {
             $draft = $listing->draft;
+
+            if ($listing->adoptionState() === Listing::ADOPTION_LEGACY_RELIST_REQUIRED) {
+                return Listing::RECONCILIATION_LEGACY_RELIST_REQUIRED;
+            }
 
             if ($draft instanceof ListingDraft && $draft->hasGapKey('fitment')) {
                 return Listing::RECONCILIATION_MISSING_FITMENT;
@@ -105,6 +113,7 @@ class EbayListingAuditService
         return match ($this->state($listing)) {
             Listing::RECONCILIATION_UNLINKED => __('Unlinked'),
             Listing::RECONCILIATION_EXTERNALLY_CHANGED => __('Externally Changed'),
+            Listing::RECONCILIATION_LEGACY_RELIST_REQUIRED => __('Legacy Relist Required'),
             Listing::RECONCILIATION_MISSING_FITMENT => __('Missing Fitment'),
             Listing::RECONCILIATION_CONFLICTING_IDENTIFIERS => __('Conflicting Identifiers'),
             Listing::RECONCILIATION_MISSING_IDENTIFIERS => __('Missing Identifiers'),
@@ -118,6 +127,7 @@ class EbayListingAuditService
     {
         return match ($this->state($listing)) {
             Listing::RECONCILIATION_EXTERNALLY_CHANGED,
+            Listing::RECONCILIATION_LEGACY_RELIST_REQUIRED,
             Listing::RECONCILIATION_MISSING_FITMENT,
             Listing::RECONCILIATION_CONFLICTING_IDENTIFIERS,
             Listing::RECONCILIATION_DRIFTED => 'danger',

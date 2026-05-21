@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * Marketplace listing materialized from an external channel.
@@ -63,9 +64,17 @@ class Listing extends Model
 
     public const RECONCILIATION_CONFLICTING_IDENTIFIERS = 'conflicting_identifiers';
 
+    public const RECONCILIATION_LEGACY_RELIST_REQUIRED = 'legacy_relist_required';
+
     public const RECONCILIATION_EXTERNALLY_CHANGED = 'externally_changed';
 
     public const RECONCILIATION_DRIFTED = 'drifted';
+
+    public const ADOPTION_UNKNOWN = 'unknown';
+
+    public const ADOPTION_INVENTORY_API_ADOPTABLE = 'inventory_api_adoptable';
+
+    public const ADOPTION_LEGACY_RELIST_REQUIRED = 'legacy_relist_required';
 
     protected $table = 'commerce_marketplace_listings';
 
@@ -146,5 +155,33 @@ class Listing extends Model
     public function isExternallyChanged(): bool
     {
         return $this->isBelimbingManaged() && $this->drift_status === self::DRIFT_DRIFTED;
+    }
+
+    public function hasInventoryApiOfferId(): bool
+    {
+        return $this->external_offer_id !== null && trim($this->external_offer_id) !== '';
+    }
+
+    public function hasInventoryItemSnapshot(): bool
+    {
+        return Str::of((string) data_get($this->raw_payload, 'inventory_item.sku'))->trim()->isNotEmpty();
+    }
+
+    public function hasInventoryApiWritePath(): bool
+    {
+        return $this->hasInventoryApiOfferId() && $this->hasInventoryItemSnapshot();
+    }
+
+    public function adoptionState(): string
+    {
+        if ($this->hasInventoryApiWritePath()) {
+            return self::ADOPTION_INVENTORY_API_ADOPTABLE;
+        }
+
+        if ($this->external_listing_id !== null && trim($this->external_listing_id) !== '') {
+            return self::ADOPTION_LEGACY_RELIST_REQUIRED;
+        }
+
+        return self::ADOPTION_UNKNOWN;
     }
 }

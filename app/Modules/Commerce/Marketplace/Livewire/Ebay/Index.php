@@ -9,6 +9,7 @@ use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayListingAuditService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
+use App\Modules\Commerce\Marketplace\Ebay\EbayStoreAlignmentService;
 use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -94,6 +95,7 @@ class Index extends Component
     {
         $companyId = $this->companyId();
         $token = $oauth->tokenForCompany($companyId);
+        $dashboard = $this->storeAlignment()->dashboard($companyId);
 
         return view('livewire.commerce.marketplace.ebay.index', [
             'config' => $configuration->forCompany($companyId),
@@ -102,6 +104,10 @@ class Index extends Component
             'unlistedItems' => $this->unlistedItems($companyId),
             'stats' => $this->stats($companyId),
             'recentExchanges' => $this->recentExchanges($companyId),
+            'cleanupQueue' => $dashboard['cleanupQueue'],
+            'qualitySummary' => $dashboard['qualitySummary'],
+            'trustSignals' => $dashboard['trustSignals'],
+            'fitmentBatchCandidates' => $dashboard['fitmentBatchCandidates'],
         ]);
     }
 
@@ -249,5 +255,10 @@ class Index extends Component
     private function audit(): EbayListingAuditService
     {
         return app(EbayListingAuditService::class);
+    }
+
+    private function storeAlignment(): EbayStoreAlignmentService
+    {
+        return app(EbayStoreAlignmentService::class);
     }
 }

@@ -224,8 +224,13 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
     $user = createAdminUser();
     $this->actingAs($user);
 
+    $sharedTemplate = ProductTemplate::factory()->create([
+        'company_id' => $user->company_id,
+    ]);
+
     $readyItem = Item::factory()->create([
         'company_id' => $user->company_id,
+        'product_template_id' => $sharedTemplate->id,
         'sku' => 'AUDIT-READY-1',
         'status' => Item::STATUS_LISTED,
         'target_price_amount' => 12000,
@@ -233,6 +238,7 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
     ]);
     $fitmentItem = Item::factory()->create([
         'company_id' => $user->company_id,
+        'product_template_id' => $sharedTemplate->id,
         'sku' => 'AUDIT-FITMENT-1',
         'status' => Item::STATUS_READY,
         'target_price_amount' => 13000,
@@ -240,6 +246,7 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
     ]);
     $identifierItem = Item::factory()->create([
         'company_id' => $user->company_id,
+        'product_template_id' => $sharedTemplate->id,
         'sku' => 'AUDIT-ID-1',
         'status' => Item::STATUS_READY,
         'target_price_amount' => 14000,
@@ -247,17 +254,57 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
     ]);
     $managedItem = Item::factory()->create([
         'company_id' => $user->company_id,
+        'product_template_id' => $sharedTemplate->id,
         'sku' => 'AUDIT-MANAGED-1',
         'status' => Item::STATUS_LISTED,
         'target_price_amount' => 15000,
         'currency_code' => 'USD',
     ]);
+    $legacyItem = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'product_template_id' => $sharedTemplate->id,
+        'sku' => 'AUDIT-LEGACY-1',
+        'status' => Item::STATUS_READY,
+        'target_price_amount' => 15500,
+        'currency_code' => 'USD',
+    ]);
     $conflictItem = Item::factory()->create([
         'company_id' => $user->company_id,
+        'product_template_id' => $sharedTemplate->id,
         'sku' => 'AUDIT-CONFLICT-1',
         'status' => Item::STATUS_READY,
         'target_price_amount' => 16000,
         'currency_code' => 'USD',
+    ]);
+    $fitmentSourceItem = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'product_template_id' => $sharedTemplate->id,
+        'sku' => 'FIT-SOURCE-1',
+        'title' => 'BMW donor vehicle set',
+        'status' => Item::STATUS_READY,
+    ]);
+    $fitmentTargetItem = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'product_template_id' => $sharedTemplate->id,
+        'sku' => 'FIT-TARGET-1',
+        'title' => 'BMW spare dust shield',
+        'status' => Item::STATUS_READY,
+    ]);
+
+    $legacyItem->forceFill([
+        'created_at' => now()->subDays(60),
+        'updated_at' => now()->subDays(60),
+    ])->saveQuietly();
+
+    ItemFitment::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $fitmentSourceItem->id,
+        'compatibility_properties' => ['Year' => '2011', 'Make' => 'BMW', 'Model' => '135i'],
+        'display_year' => '2011',
+        'display_make' => 'BMW',
+        'display_model' => '135i',
+        'source' => ItemFitment::SOURCE_OPERATOR,
+        'confidence' => ItemFitment::CONFIDENCE_SELLER_CONFIRMED,
     ]);
 
     $readyListing = Listing::query()->create([
@@ -275,7 +322,7 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
         'price_amount' => 12000,
         'currency_code' => 'USD',
         'last_synced_at' => now(),
-        'raw_payload' => [],
+        'raw_payload' => ['inventory_item' => ['sku' => $readyItem->sku]],
     ]);
     $fitmentListing = Listing::query()->create([
         'company_id' => $user->company_id,
@@ -292,7 +339,7 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
         'price_amount' => 13000,
         'currency_code' => 'USD',
         'last_synced_at' => now(),
-        'raw_payload' => [],
+        'raw_payload' => ['inventory_item' => ['sku' => $fitmentItem->sku]],
     ]);
     $identifierListing = Listing::query()->create([
         'company_id' => $user->company_id,
@@ -309,7 +356,7 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
         'price_amount' => 14000,
         'currency_code' => 'USD',
         'last_synced_at' => now(),
-        'raw_payload' => [],
+        'raw_payload' => ['inventory_item' => ['sku' => $identifierItem->sku]],
     ]);
     $managedListing = Listing::query()->create([
         'company_id' => $user->company_id,
@@ -324,6 +371,23 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
         'management_state' => Listing::MANAGEMENT_BELIMBING_MANAGED,
         'drift_status' => Listing::DRIFT_DRIFTED,
         'drift_summary' => 'Externally changed: price.',
+        'price_amount' => 15500,
+        'currency_code' => 'USD',
+        'last_synced_at' => now(),
+        'raw_payload' => [],
+    ]);
+    $legacyListing = Listing::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $legacyItem->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_listing_id' => 'audit-legacy-1',
+        'external_offer_id' => null,
+        'external_sku' => $legacyItem->sku,
+        'marketplace_id' => 'EBAY_US',
+        'title' => 'Legacy relist bumper cover',
+        'status' => 'ACTIVE',
+        'management_state' => Listing::MANAGEMENT_IMPORTED,
+        'drift_status' => Listing::DRIFT_UNKNOWN,
         'price_amount' => 15500,
         'currency_code' => 'USD',
         'last_synced_at' => now(),
@@ -344,7 +408,7 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
         'price_amount' => 16000,
         'currency_code' => 'USD',
         'last_synced_at' => now(),
-        'raw_payload' => [],
+        'raw_payload' => ['inventory_item' => ['sku' => $conflictItem->sku]],
     ]);
 
     foreach ([
@@ -352,6 +416,7 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
         [$fitmentItem, $fitmentListing, [['key' => 'fitment', 'label' => 'Add fitment.', 'action' => 'fitment']], []],
         [$identifierItem, $identifierListing, [], [['key' => 'identifier_part_number', 'label' => 'Add part number.', 'action' => 'attributes']]],
         [$managedItem, $managedListing, [], []],
+        [$legacyItem, $legacyListing, [], []],
         [$conflictItem, $conflictListing, [], [['key' => 'identifier_conflict', 'label' => 'Review conflict.', 'action' => 'attributes']]],
     ] as [$item, $listing, $blockers, $warnings]) {
         ListingDraft::query()->create([
@@ -384,17 +449,57 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
         ]);
     }
 
+    $order = Order::query()->create([
+        'company_id' => $user->company_id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_order_id' => 'ORDER-AUDIT-1',
+        'marketplace_id' => 'EBAY_US',
+        'buyer_username' => 'bmw-buyer',
+        'status' => 'CANCELLED',
+        'ordered_at' => now()->subDays(2),
+        'last_synced_at' => now()->subDay(),
+        'raw_payload' => [
+            'buyerCheckoutNotes' => 'Will this fit my 2011 BMW 135i?',
+            'cancelStatus' => 'CANCELLED_BY_BUYER',
+        ],
+    ]);
+    OrderLine::query()->create([
+        'company_id' => $user->company_id,
+        'order_id' => $order->id,
+        'item_id' => $legacyItem->id,
+        'listing_id' => $legacyListing->id,
+        'external_line_item_id' => 'ORDER-AUDIT-1-L1',
+        'external_listing_id' => $legacyListing->external_listing_id,
+        'external_sku' => $legacyItem->sku,
+        'title' => $legacyListing->title,
+        'quantity' => 1,
+        'line_total_amount' => 15500,
+        'currency_code' => 'USD',
+        'raw_payload' => [],
+    ]);
+
     Livewire::actingAs($user)
         ->test(MarketplaceIndex::class)
+        ->assertSee('Store Progress')
+        ->assertSee('Cleanup Queue')
+        ->assertSee('Trust Signals')
+        ->assertSee('Fitment Reuse')
         ->assertSee('Ready to Adopt')
         ->assertSee('Missing Fitment')
         ->assertSee('Conflicting Identifiers')
+        ->assertSee('Legacy Relist Required')
         ->assertSee('Missing Identifiers')
         ->assertSee('Externally Changed')
         ->assertSee('Conflicting IDs')
+        ->assertSee('Relist Required')
+        ->assertSee('Buyer question')
+        ->assertSee('Return / cancellation signal')
+        ->assertSee('Review pricing, title, and fitment for aging stock with no sale yet.')
+        ->assertSee('Copy fitment from FIT-SOURCE-1 (1 entries).')
         ->assertSee('Linked')
         ->assertSee('Missing fitment rotor')
         ->assertSee('Externally changed headlight')
+        ->assertSee('Legacy relist bumper cover')
         ->assertSee('Conflicting identifiers caliper');
 });
 
@@ -470,6 +575,9 @@ test('ebay listing pull materializes offers and links by sku', function (): void
         ->and($draft->management_state)->toBe('imported')
         ->and($draft->status)->toBe('imported')
         ->and($draft->aspect_values['Brand']['value'])->toBe(['Honda'])
+        ->and(data_get($draft->readiness_snapshot, 'facts.inventory_api_visible'))->toBeTrue()
+        ->and(data_get($draft->readiness_snapshot, 'facts.inventory_api_writable'))->toBeTrue()
+        ->and(data_get($draft->readiness_snapshot, 'facts.adoption_state'))->toBe(Listing::ADOPTION_INVENTORY_API_ADOPTABLE)
         ->and($reference)->not()->toBeNull()
         ->and($reference->item_id)->toBe($item->id)
         ->and($reference->listing_draft_id)->toBe($draft->id)
@@ -616,6 +724,9 @@ test('ebay listing pull refreshes existing belimbing-managed draft linkage and p
         ->and($draft->management_state)->toBe('belimbing_managed')
         ->and($draft->status)->toBe('published')
         ->and($draft->aspect_values['Manufacturer Part Number']['value'])->toBe(['34206785237'])
+        ->and(data_get($draft->readiness_snapshot, 'facts.inventory_api_visible'))->toBeTrue()
+        ->and(data_get($draft->readiness_snapshot, 'facts.inventory_api_writable'))->toBeTrue()
+        ->and(data_get($draft->readiness_snapshot, 'facts.adoption_state'))->toBe(Listing::ADOPTION_INVENTORY_API_ADOPTABLE)
         ->and($reference->listing_draft_id)->toBe($draft->id)
         ->and($reference->target_key)->toBe('draft:'.$draft->id);
 });
