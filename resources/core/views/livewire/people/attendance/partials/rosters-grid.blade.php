@@ -1,8 +1,7 @@
 @use('App\Modules\People\Attendance\Support\DayTypeVocabulary')
 @php
-    $showPreviewLegend = $showPreviewLegend ?? true;
     $compact = $compact ?? false;
-    $gridIntro = $gridIntro ?? __('Existing assignments show draft or published state; rest, off, and holiday days surface from each employee\'s work calendar.');
+    $gridIntro = $gridIntro ?? __('Assigned cells reflect the current roster; rest, off, and holiday days surface from each employee\'s work calendar.');
     $cellMinWidth = $compact ? 'min-w-9' : 'min-w-14';
     $showDayDrawer = $showDayDrawer ?? true;
     $lockedDates = $lockedDates ?? [];
@@ -38,9 +37,12 @@
 @endphp
 
 <style>
-.roster-selected { outline: 2px solid var(--color-accent, #6366f1); outline-offset: -2px; }
+.roster-selected { outline: 2px solid var(--color-accent, #6366f1); outline-offset: 0; }
 .roster-fill-preview { background-color: color-mix(in srgb, var(--color-accent, #6366f1) 12%, transparent); }
 .roster-copied { outline: 2px dashed var(--color-accent, #6366f1); outline-offset: -2px; }
+.roster-fill-handle { opacity: 0; pointer-events: none; transition: opacity 100ms; }
+td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacity: 1; pointer-events: auto; }
+.roster-row-selected { border-left: 3px solid var(--color-accent, #6366f1) !important; background-color: color-mix(in srgb, var(--color-accent, #6366f1) 8%, transparent) !important; }
 
 @media print {
     @page { size: A4 landscape; margin: 10mm; }
@@ -75,17 +77,126 @@
         <div></div>
     @endif
     <div class="flex flex-wrap items-center gap-2">
-        <x-ui.badge variant="success">{{ __('Published') }}</x-ui.badge>
-        <x-ui.badge variant="warning">{{ __('Draft') }}</x-ui.badge>
-        @if ($showPreviewLegend)
-            <x-ui.badge variant="info">{{ __('Preview') }}</x-ui.badge>
-        @endif
+        <span class="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent">{{ __('Assigned') }}</span>
         <span class="text-[11px] text-muted">·</span>
         <span class="inline-flex items-center gap-1 rounded-full bg-day-rest px-2 py-0.5 text-[11px] font-medium text-day-rest-ink">{{ __('Rest') }}</span>
         <span class="inline-flex items-center gap-1 rounded-full bg-day-off px-2 py-0.5 text-[11px] font-medium text-day-off-ink">{{ __('Off') }}</span>
         <span class="inline-flex items-center gap-1 rounded-full bg-day-holiday px-2 py-0.5 text-[11px] font-medium text-day-holiday-ink">{{ __('Holiday') }}</span>
     </div>
 </div>
+
+@if ($canManage)
+<div class="roster-print-hide mt-3 flex items-center gap-3 rounded-xl border border-border-default bg-surface-card px-3 py-2">
+    <div class="flex min-w-[9rem] items-center rounded-md bg-surface-subtle px-2.5 py-1 text-xs">
+        <template x-if="barCount === 0"><span class="text-muted">{{ __('Select a cell') }}</span></template>
+        <template x-if="barCount === 1"><span class="font-medium text-ink" x-text="barAddress"></span></template>
+        <template x-if="barCount > 1"><span class="font-medium text-ink" x-text="barCount + ' {{ __('cells') }}'"></span></template>
+    </div>
+    <div class="h-4 w-px shrink-0 bg-border-default"></div>
+    <select :value="barShift" @change="barShift = parseInt($event.target.value) || 0; saveBar()" :disabled="barCount === 0"
+            class="rounded-lg border border-border-default bg-surface-card px-2 py-1 text-sm text-ink disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-accent">
+        <option value="0">{{ __('Shift') }}</option>
+        @foreach ($shiftTemplates as $shiftTpl)
+            <option value="{{ $shiftTpl->id }}">{{ $shiftTpl->code }} — {{ $shiftTpl->name }}</option>
+        @endforeach
+    </select>
+    <select :value="barPolicy" @change="barPolicy = parseInt($event.target.value) || 0; saveBar()" :disabled="barCount === 0"
+            class="rounded-lg border border-border-default bg-surface-card px-2 py-1 text-sm text-ink disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-accent">
+        <option value="0">{{ __('Policy') }}</option>
+        @foreach ($policyGroups as $policyGrp)
+            <option value="{{ $policyGrp->id }}">{{ $policyGrp->code }} — {{ $policyGrp->name }}</option>
+        @endforeach
+    </select>
+    {{-- History button: only when a single cell is selected --}}
+    <template x-if="barCount === 1">
+        <button type="button"
+                @click="openHistory()"
+                class="ml-auto flex items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent">
+            <x-icon name="heroicon-o-clock" class="h-3.5 w-3.5" />
+            {{ __('History') }}
+        </button>
+    </template>
+</div>
+@endif
+
+{{-- Cell history drawer --}}
+@if ($canManage)
+<div
+    x-show="$wire.cellHistoryOpen"
+    x-cloak
+    x-transition:enter="transition ease-out duration-150"
+    x-transition:enter-start="opacity-0 translate-x-4"
+    x-transition:enter-end="opacity-100 translate-x-0"
+    x-transition:leave="transition ease-in duration-100"
+    x-transition:leave-start="opacity-100 translate-x-0"
+    x-transition:leave-end="opacity-0 translate-x-4"
+    class="absolute right-0 top-10 z-30 w-80 rounded-2xl border border-border-default bg-surface-card shadow-lg"
+>
+    <div class="flex items-start justify-between gap-2 border-b border-border-default px-4 py-3">
+        <div>
+            <div class="text-sm font-semibold text-ink">{{ __('Change history') }}</div>
+            <div class="text-xs text-muted" wire:stream="cellHistoryContext">
+                <span x-text="$wire.cellHistoryEmployeeName"></span>
+                <span class="mx-1">·</span>
+                <span x-text="$wire.cellHistoryDate"></span>
+            </div>
+        </div>
+        <button type="button" wire:click="closeCellHistory()"
+                class="mt-0.5 rounded-md text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent"
+                aria-label="{{ __('Close') }}">
+            <x-icon name="heroicon-o-x-mark" class="h-4 w-4" />
+        </button>
+    </div>
+
+    <div class="max-h-96 overflow-y-auto px-4 py-2">
+        <template x-if="$wire.cellHistoryRows.length === 0">
+            <p class="py-6 text-center text-sm text-muted">{{ __('No history yet for this cell.') }}</p>
+        </template>
+        <template x-for="(row, i) in $wire.cellHistoryRows" :key="row.id">
+            <div class="border-b border-border-default/50 py-2.5 last:border-0">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-[11px] text-muted" x-text="row.changed_at"></span>
+                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          :class="{
+                              'bg-status-success/10 text-status-success': row.action === 'created',
+                              'bg-danger/10 text-danger': row.action === 'deleted',
+                              'bg-warning/10 text-warning': row.action === 'locked',
+                              'bg-surface-subtle text-muted': row.action === 'updated',
+                          }"
+                          x-text="row.action"></span>
+                </div>
+                <div class="mt-0.5 text-xs font-medium text-ink" x-text="row.changed_by"></div>
+                <div class="mt-1 flex items-center gap-1.5 text-xs text-muted">
+                    <template x-if="row.prev_shift">
+                        <span x-text="(row.prev_shift ?? '—') + ' / ' + (row.prev_policy ?? '—')"></span>
+                    </template>
+                    <template x-if="row.prev_shift">
+                        <x-icon name="heroicon-o-arrow-right" class="h-3 w-3 shrink-0 text-muted" />
+                    </template>
+                    <span class="font-medium text-ink"
+                          x-text="(row.new_shift ?? '—') + ' / ' + (row.new_policy ?? '—')"></span>
+                </div>
+                <template x-if="row.note || row.job">
+                    <div class="mt-1 text-[11px] text-muted">
+                        <template x-if="row.job">
+                            <span class="mr-1 rounded bg-surface-subtle px-1 py-0.5 text-[10px] font-medium text-ink" x-text="row.job"></span>
+                        </template>
+                        <span x-text="row.note ?? ''"></span>
+                    </div>
+                </template>
+            </div>
+        </template>
+    </div>
+
+    <div class="border-t border-border-default px-4 py-2.5">
+        <a :href="`{{ route('people.attendance.roster.employee-history') }}?employee_id=${$wire.cellHistoryEmployeeId}`"
+           target="_blank"
+           class="text-xs font-medium text-accent hover:underline">
+            {{ __('Open full history') }} →
+        </a>
+    </div>
+</div>
+@endif
 
 <div class="roster-grid-print mt-4 overflow-x-auto rounded-2xl border border-border-default">
     <table class="min-w-full divide-y divide-border-default text-xs">
@@ -100,8 +211,13 @@
                         </td>
                     </tr>
                 @endif
-                <tr wire:key="roster-grid-row-{{ $employee->id }}" data-row-employee="{{ $employee->id }}" class="hover:bg-surface-subtle/50">
-                    <td class="sticky left-0 z-10 w-40 min-w-40 bg-surface-card px-table-cell-x py-1.5 align-top">
+                <tr wire:key="roster-grid-row-{{ $employee->id }}" data-row-employee="{{ $employee->id }}" class="group hover:bg-surface-subtle/50">
+                    <td class="sticky left-0 z-10 w-40 min-w-40 bg-surface-card group-hover:bg-surface-subtle px-table-cell-x py-1.5 align-top{{ $canManage ? ' cursor-pointer select-none' : '' }}"
+                        data-name-cell="{{ $employee->id }}"
+                        @if ($canManage)
+                        @click="handleRowSelect($event, '{{ $employee->id }}')"
+                        @endif
+                    >
                         <div class="truncate text-sm font-medium text-ink" title="{{ $employee->full_name }}">{{ $employee->displayName() }}</div>
                     </td>
                     @foreach ($rosterGridDays as $day)
@@ -116,34 +232,21 @@
                         @php($actualTint = match($actualOutcome) { 'absent' => 'ring-2 ring-red-400 ring-inset', 'late', 'early' => 'ring-2 ring-warning ring-inset', 'matched' => 'ring-2 ring-success ring-inset', default => '' })
                         @php($isEditable = $canManage && ! $isDateLocked && ! $actualMode)
                         <td wire:key="roster-grid-cell-{{ $employee->id }}-{{ $day['date'] }}"
-                            class="relative p-0 align-top {{ $actualTint }}"
+                            class="relative p-0 align-middle {{ $actualTint }}"
                             data-employee="{{ $employee->id }}"
                             data-date="{{ $day['date'] }}"
                             data-shift="{{ $cellShiftId }}"
                             data-policy="{{ $cellPolicyId }}"
                             data-state="{{ $cell['state'] }}"
-                            @if($isEditable)
-                                x-data="{ open: false, shift: {{ $cellShiftId }}, policy: {{ $cellPolicyId }} }"
-                                :data-cell-shift="{{ $cellShiftId }}"
-                                :data-cell-policy="{{ $cellPolicyId }}"
-                                @click.capture="
-                                    if ($event.shiftKey || $event.ctrlKey || $event.metaKey) {
-                                        $dispatch('grid-cell-select', { empId: {{ $employee->id }}, date: '{{ $day['date'] }}', extendShift: $event.shiftKey, toggle: $event.ctrlKey || $event.metaKey });
-                                        $event.stopPropagation();
-                                    } else {
-                                        $dispatch('grid-cell-select', { empId: {{ $employee->id }}, date: '{{ $day['date'] }}', extendShift: false, toggle: false });
-                                    }
-                                "
+                            @if ($canManage)
+                                @click="$dispatch('grid-cell-select', { empId: {{ $employee->id }}, date: '{{ $day['date'] }}', extendShift: $event.shiftKey, toggle: $event.ctrlKey || $event.metaKey })"
                             @endif
                         >
                             @if ($isEditable)
                                 <button
                                     type="button"
-                                    x-ref="overrideTrigger"
-                                    @click="shift = parseInt($root.dataset.cellShift) || 0; policy = parseInt($root.dataset.cellPolicy) || 0; open = ! open; if (! open) { $nextTick(() => $refs.overrideTrigger?.focus()) }"
-                                    :aria-expanded="open"
-                                    aria-label="{{ __('Edit override :date for :employee', ['date' => $day['date'], 'employee' => $employee->displayName()]) }}"
-                                    class="block w-full {{ $cellMinWidth }} cursor-pointer text-center focus:outline-none focus:ring-2 focus:ring-accent focus:ring-inset focus:rounded-md"
+                                    aria-label="{{ __('Select :date for :employee', ['date' => $day['date'], 'employee' => $employee->displayName()]) }}"
+                                    class="block w-full {{ $cellMinWidth }} cursor-pointer text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset focus-visible:rounded-md"
                                 >
                                     <x-ui.day-tile
                                         :day-type="$dayType"
@@ -152,46 +255,16 @@
                                         :empty="$isEmpty"
                                         :empty-label="$cell['label']"
                                     >
-                                        <span class="text-[12px] font-semibold leading-tight text-ink">{{ $cell['label'] }}</span>
+                                        <span class="text-[12px] font-semibold leading-tight text-current">{{ $cell['label'] }}</span>
                                         @if ($cell['on_non_working_day'] ?? false)
                                             <span class="text-[9px] font-medium uppercase leading-tight tracking-wide {{ $dayTypeInk }}">{{ $cell['day_type_label'] }}</span>
                                         @endif
-                                        @if (! $isEmpty && ($cell['on_non_working_day'] ?? false))
-                                            <span class="text-[9px] font-medium uppercase leading-tight tracking-wide text-warning" title="{{ __('Shift on non-working day') }}">⚠</span>
-                                        @endif
                                     </x-ui.day-tile>
                                 </button>
-                                {{-- Fill handle: shown on focused cell, used to drag-fill adjacent cells --}}
-                                <div class="roster-fill-handle absolute bottom-0 right-0 z-10 hidden h-3 w-3 -translate-x-px -translate-y-px cursor-crosshair rounded-full border-2 border-white bg-accent shadow-sm"
+                                {{-- Fill handle: visible on hover via CSS; activates drag-fill on mousedown --}}
+                                <div class="roster-fill-handle absolute bottom-0 right-0 z-10 h-3 w-3 -translate-x-px -translate-y-px cursor-crosshair rounded-full border-2 border-white bg-accent shadow-sm"
                                      data-fill-handle="{{ $employee->id }}:{{ $day['date'] }}"
                                      onmousedown="window.rosterGrid?.startFillDrag(event, '{{ $employee->id }}', '{{ $day['date'] }}')"></div>
-                                <section x-show="open" x-cloak x-ref="overrideDialog" x-effect="if (open) { $nextTick(() => $refs.overrideDialog?.focus()) }" @keydown.escape.prevent.stop="open = false; $nextTick(() => $refs.overrideTrigger?.focus())" @click.outside="if (open) { open = false; $nextTick(() => $refs.overrideTrigger?.focus()) }" x-transition.origin.top.left class="absolute left-1/2 z-30 mt-1 w-56 -translate-x-1/2 rounded-2xl border border-border-default bg-surface-card p-3 text-left shadow-lg" role="dialog" tabindex="-1" aria-label="{{ __('Override :date', ['date' => $day['date']]) }}">
-                                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Override') }} {{ \Carbon\CarbonImmutable::parse($day['date'])->format('j M') }}</div>
-                                    <div class="mt-2 space-y-2">
-                                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-muted">
-                                            {{ __('Shift') }}
-                                            <select x-model.number="shift" class="mt-1 w-full rounded-2xl border border-border-default bg-surface-card px-2 py-1 text-sm text-ink">
-                                                <option value="0">{{ __('Choose shift') }}</option>
-                                                @foreach ($shiftTemplates as $shift)
-                                                    <option value="{{ $shift->id }}">{{ $shift->code }} — {{ $shift->name }}</option>
-                                                @endforeach
-                                            </select>
-                                        </label>
-                                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-muted">
-                                            {{ __('Policy') }}
-                                            <select x-model.number="policy" class="mt-1 w-full rounded-2xl border border-border-default bg-surface-card px-2 py-1 text-sm text-ink">
-                                                <option value="0">{{ __('Choose policy') }}</option>
-                                                @foreach ($policyGroups as $group)
-                                                    <option value="{{ $group->id }}">{{ $group->code }} — {{ $group->name }}</option>
-                                                @endforeach
-                                            </select>
-                                        </label>
-                                    </div>
-                                    <div class="mt-3 flex justify-end gap-2">
-                                        <button type="button" @click="open = false; $nextTick(() => $refs.overrideTrigger?.focus())" class="text-xs font-medium text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:rounded-sm">{{ __('Cancel') }}</button>
-                                        <button type="button" @click="$wire.saveCellOverride({{ $employee->id }}, '{{ $day['date'] }}', shift, policy).then(() => { open = false; $nextTick(() => $refs.overrideTrigger?.focus()) })" :disabled="! shift || ! policy" class="rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-on disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1">{{ __('Save') }}</button>
-                                    </div>
-                                </section>
                             @else
                                 {{-- Read-only tile: locked period, actual mode, or non-manager --}}
                                 <x-ui.day-tile
@@ -201,7 +274,7 @@
                                     :empty="$isEmpty"
                                     :empty-label="$cell['label']"
                                 >
-                                    <span class="text-[12px] font-semibold leading-tight {{ $isDateLocked && ! $isEmpty ? 'text-muted' : 'text-ink' }}">{{ $cell['label'] }}</span>
+                                    <span class="text-[12px] font-semibold leading-tight {{ $isDateLocked && ! $isEmpty ? 'text-muted' : 'text-current' }}">{{ $cell['label'] }}</span>
                                     @if ($cell['on_non_working_day'] ?? false)
                                         <span class="text-[9px] font-medium uppercase leading-tight tracking-wide {{ $dayTypeInk }}">{{ $cell['day_type_label'] }}</span>
                                     @endif
@@ -265,11 +338,8 @@
                             <div class="truncate text-sm font-medium text-ink" x-text="entry.name"></div>
                             <div class="text-[11px] text-muted" x-text="entry.title || entry.shift"></div>
                         </div>
-                        <template x-if="!entry.empty && entry.state === 'published'">
-                            <span class="shrink-0 rounded-full bg-status-success/10 px-2 py-0.5 text-[10px] font-semibold text-status-success">{{ __('Published') }}</span>
-                        </template>
-                        <template x-if="!entry.empty && entry.state === 'draft'">
-                            <span class="shrink-0 rounded-full bg-status-warning/10 px-2 py-0.5 text-[10px] font-semibold text-status-warning">{{ __('Draft') }}</span>
+                        <template x-if="!entry.empty">
+                            <span class="shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent" x-text="entry.shift"></span>
                         </template>
                         <template x-if="entry.empty">
                             <span class="shrink-0 text-[11px] text-muted">—</span>
@@ -292,8 +362,8 @@
 </div>{{-- /Alpine rosterGrid wrapper --}}
 
 <script>
-function rosterGrid(dayData) {
-    return {
+document.addEventListener('alpine:init', () => {
+Alpine.data('rosterGrid', (dayData) => ({
         // Day drawer
         dayData: dayData || {},
         activeDate: null,
@@ -310,6 +380,10 @@ function rosterGrid(dayData) {
         anchor: null,   // {empIdx, dateIdx}
         focus: null,    // {empIdx, dateIdx}
 
+        // Row selection (employee-level, for bulk toolbar ops)
+        selectedRows: [],   // employee ID strings
+        rowAnchor: null,    // empIdx for shift-click range
+
         // Copy buffer
         copyBuffer: null,  // null | [{empOffset, dateOffset, shift, policy}]
         copySourceKeys: [], // 'empId:date' strings for marching-ants display
@@ -318,6 +392,13 @@ function rosterGrid(dayData) {
         dragging: false,
         fillSourceKeys: [],   // 'empId:date' strings being dragged from
         fillPreviewKeys: [],  // 'empId:date' strings in the drag preview
+
+        // Formula bar state
+        barShift: 0,
+        barPolicy: 0,
+        barAddress: '',
+        barMulti: false,
+        barCount: 0,
 
         init() {
             window.rosterGrid = this;
@@ -363,7 +444,7 @@ function rosterGrid(dayData) {
             this.$el.querySelectorAll('td.roster-selected').forEach(td => td.classList.remove('roster-selected'));
             this.$el.querySelectorAll('td.roster-fill-preview').forEach(td => td.classList.remove('roster-fill-preview'));
             this.$el.querySelectorAll('td.roster-copied').forEach(td => td.classList.remove('roster-copied'));
-            this.$el.querySelectorAll('.roster-fill-handle').forEach(h => h.classList.add('hidden'));
+            this.$el.querySelectorAll('.roster-fill-handle').forEach(h => h.classList.remove('roster-handle-visible'));
 
             this.selection.forEach(({ empId, date }) => this._td(empId, date)?.classList.add('roster-selected'));
             this.fillPreviewKeys.forEach(k => {
@@ -375,12 +456,60 @@ function rosterGrid(dayData) {
                 this._td(empId, date)?.classList.add('roster-copied');
             });
 
-            // Show fill handle on focused cell
+            // Keep fill handle visible on the focused cell (CSS hover shows it on any cell)
             if (this.focus && this.selection.length > 0) {
                 const empId = this.employees[this.focus.empIdx];
                 const date = this.dates[this.focus.dateIdx];
                 const handle = this.$el.querySelector(`[data-fill-handle="${empId}:${date}"]`);
-                handle?.classList.remove('hidden');
+                handle?.classList.add('roster-handle-visible');
+            }
+
+            this._updateBar();
+            this._highlightRows();
+        },
+
+        _highlightRows() {
+            this.$el.querySelectorAll('td[data-name-cell]').forEach(td => {
+                const empId = td.dataset.nameCell;
+                td.classList.toggle('roster-row-selected', this.selectedRows.includes(empId));
+            });
+        },
+
+        _updateBar() {
+            if (this.selection.length === 0) {
+                this.barCount = 0; this.barAddress = ''; this.barShift = 0; this.barPolicy = 0; this.barMulti = false;
+                return;
+            }
+            this.barCount = this.selection.length;
+            this.barMulti = this.selection.length > 1;
+            if (!this.barMulti) {
+                const s = this.selection[0];
+                const data = this._cellData(s.empId, s.date);
+                this.barShift = data?.shift || 0;
+                this.barPolicy = data?.policy || 0;
+                const tr = this.$el.querySelector(`tr[data-row-employee="${s.empId}"]`);
+                const name = tr?.querySelector('td:first-child .truncate')?.textContent?.trim() || `#${s.empId}`;
+                this.barAddress = `${name} — ${s.date}`;
+            } else {
+                const shifts = new Set(this.selection.map(s => this._cellData(s.empId, s.date)?.shift || 0));
+                const policies = new Set(this.selection.map(s => this._cellData(s.empId, s.date)?.policy || 0));
+                this.barShift = shifts.size === 1 ? [...shifts][0] : 0;
+                this.barPolicy = policies.size === 1 ? [...policies][0] : 0;
+                this.barAddress = '';
+            }
+        },
+
+        saveBar() {
+            if (!this.barShift || !this.barPolicy || this.barCount === 0) return;
+            if (this.barCount === 1) {
+                const s = this.selection[0];
+                this.$wire.saveCellOverride(parseInt(s.empId), s.date, this.barShift, this.barPolicy);
+            } else {
+                const overrides = this.selection.map(s => ({
+                    employee_id: parseInt(s.empId), date: s.date,
+                    shift_template_id: this.barShift, policy_group_id: this.barPolicy,
+                }));
+                this.$wire.saveCellOverrides(overrides);
             }
         },
 
@@ -421,12 +550,41 @@ function rosterGrid(dayData) {
             this._highlight();
         },
 
+        // Row selection
+        handleRowSelect(event, empId) {
+            const empIdx = this.employees.indexOf(String(empId));
+            if (empIdx === -1) return;
+
+            if (event.shiftKey && this.rowAnchor !== null) {
+                const min = Math.min(this.rowAnchor, empIdx);
+                const max = Math.max(this.rowAnchor, empIdx);
+                const rangeIds = this.employees.slice(min, max + 1);
+                rangeIds.forEach(id => { if (!this.selectedRows.includes(id)) this.selectedRows.push(id); });
+            } else if (event.ctrlKey || event.metaKey) {
+                const pos = this.selectedRows.indexOf(String(empId));
+                if (pos >= 0) { this.selectedRows.splice(pos, 1); }
+                else { this.selectedRows.push(String(empId)); this.rowAnchor = empIdx; }
+            } else {
+                // Toggle off if this is the only selected row, otherwise select just this one
+                if (this.selectedRows.length === 1 && this.selectedRows[0] === String(empId)) {
+                    this.selectedRows = [];
+                    this.rowAnchor = null;
+                } else {
+                    this.selectedRows = [String(empId)];
+                    this.rowAnchor = empIdx;
+                }
+            }
+            this._highlightRows();
+        },
+
         clearSelection() {
             this.selection = [];
             this.anchor = null;
             this.focus = null;
             this.copyBuffer = null;
             this.copySourceKeys = [];
+            this.selectedRows = [];
+            this.rowAnchor = null;
             this._highlight();
         },
 
@@ -462,8 +620,6 @@ function rosterGrid(dayData) {
         // Delete
         deleteSelection() {
             if (this.selection.length === 0) return;
-            const hasPublished = this.selection.some(s => this._cellData(s.empId, s.date)?.state === 'published');
-            if (hasPublished && !confirm('Some selected cells are published. Clear them and return to draft?')) return;
             const overrides = this.selection.map(s => ({ employee_id: parseInt(s.empId), date: s.date, shift_template_id: 0, policy_group_id: 0 }));
             this.$wire.saveCellOverrides(overrides);
             this.clearSelection();
@@ -593,6 +749,13 @@ function rosterGrid(dayData) {
             if (overrides.length > 0) this.$wire.saveCellOverrides(overrides);
         },
 
+        // Cell history
+        openHistory() {
+            if (this.selection.length !== 1) return;
+            const s = this.selection[0];
+            this.$wire.loadCellHistory(parseInt(s.empId), s.date);
+        },
+
         // Keyboard
         handleKeydown(event) {
             if (this.selection.length === 0 && !this.copyBuffer) return;
@@ -611,6 +774,6 @@ function rosterGrid(dayData) {
                 this.clearSelection();
             }
         },
-    };
-}
+}));
+});
 </script>

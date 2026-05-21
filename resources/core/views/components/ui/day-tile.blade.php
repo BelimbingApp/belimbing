@@ -1,33 +1,24 @@
 {{--
     Day tile: a single calendar cell for any (employee × date) or (date) surface
-    in BLB. Encodes the day-type tint (Normal/Rest/Off/Holiday) and an optional
-    state border for draft/published/preview content. Inner content is supplied
-    by the default slot so callers can put a shift code, a leave chip, a punch
-    icon, etc.
+    in BLB. Encodes the day-type tint (Normal/Rest/Off/Holiday). Assigned cells
+    render their slot content inside an accent pill; empty non-working cells show
+    a day-type label; empty normal cells render nothing.
 
     Props:
-        dayType     — Normal | rest | off | holiday (per AttendanceDay::DAY_TYPE_*)
-        emptyLabel  — Label rendered when the slot is empty and the day is non-working
-                      (e.g. "Rest", "Off", "Holiday"). Defaults to the vocabulary label.
-        state       — 'published' | 'draft' | 'preview' | null. Drives the top-border
-                      colour on the slot content pill.
-        tooltip     — Optional `title` attribute for hover hints (also used as
-                      accessible name when the slot contains only visual chrome).
-        empty       — Pass `true` to render the empty placeholder (single dot
-                      for Normal, day-type label for non-working). When `false`
-                      the default slot is rendered inside a state-bordered pill.
+        dayType     — normal | rest | off | holiday (per AttendanceDay::DAY_TYPE_*)
+        emptyLabel  — Label for non-working empty days. Defaults to vocabulary label.
+        state       — Retained for callers that still pass it; no longer drives styling.
+        tooltip     — Optional title attribute for hover hints.
+        empty       — true renders the empty placeholder; false renders the slot.
 
     Slot:
-        Default — content rendered inside the state-bordered pill when not empty.
+        Default — content rendered when not empty (inside the accent pill).
 
     Usage:
         <x-ui.day-tile day-type="rest" empty />
-        <x-ui.day-tile day-type="normal" state="published">
+        <x-ui.day-tile day-type="normal">
             <span class="text-[12px] font-semibold">DAY</span>
         </x-ui.day-tile>
-
-    The day-type vocabulary helper (`DayTypeVocabulary`) resolves label + surface
-    class + ink class so this primitive stays consistent with the roster grid.
 --}}
 @use('App\Modules\People\Attendance\Support\DayTypeVocabulary')
 @props([
@@ -42,12 +33,6 @@
     $surfaceClass = DayTypeVocabulary::surfaceClass($dayType);
     $inkClass = DayTypeVocabulary::inkClass($dayType);
     $isNonWorking = DayTypeVocabulary::isNonWorking($dayType);
-    $stateBorderClass = match ($state) {
-        'published' => 'border-t-2 border-status-success',
-        'draft' => 'border-t-2 border-status-warning',
-        'preview' => 'border-t-2 border-dashed border-status-info',
-        default => '',
-    };
     $resolvedEmptyLabel = $emptyLabel ?? DayTypeVocabulary::label($dayType);
 @endphp
 
@@ -55,11 +40,9 @@
     @if ($empty)
         @if ($isNonWorking)
             <span class="text-[10px] font-medium uppercase tracking-wide {{ $inkClass }}">{{ $resolvedEmptyLabel }}</span>
-        @else
-            <span class="text-muted">·</span>
         @endif
     @else
-        <div class="inline-flex min-w-14 flex-col items-center rounded-md bg-surface-card {{ $stateBorderClass }} px-1.5 py-0.5">
+        <div class="inline-flex flex-col items-center rounded-full bg-accent/10 text-accent px-2.5 py-0.5">
             {{ $slot }}
         </div>
     @endif
