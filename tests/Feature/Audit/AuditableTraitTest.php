@@ -76,6 +76,40 @@ it('logs field values on model creation', function (): void {
     expect($mutation->old_values)->toBeNull();
 });
 
+it('enriches mutation rows with audit subject metadata', function (): void {
+    $model = AuditTestModelWithSubject::query()->create(['name' => 'Alice']);
+
+    flushAuditBuffer();
+
+    $mutation = AuditMutation::query()
+        ->where('auditable_type', AuditTestModelWithSubject::class)
+        ->where('auditable_id', $model->id)
+        ->where('source', 'listener')
+        ->first();
+
+    expect($mutation)->not->toBeNull();
+    expect($mutation->subject_name)->toBe('employee');
+    expect($mutation->subject_id)->toBe(42);
+    expect($mutation->subject_identifier)->toBeNull();
+});
+
+it('writes expanded audit subject entries from model metadata', function (): void {
+    AuditTestModelWithSubjectEntries::query()->create(['name' => 'Alice']);
+
+    flushAuditBuffer();
+
+    $expanded = AuditMutation::query()
+        ->where('auditable_type', AuditTestModelWithSubjectEntries::class)
+        ->where('source', 'expanded')
+        ->orderBy('subject_identifier')
+        ->get();
+
+    expect($expanded)->toHaveCount(2);
+    expect($expanded->pluck('subject_identifier')->all())->toBe(['2026-05-15', '2026-05-16']);
+    expect($expanded->first()->subject_name)->toBe('employee');
+    expect($expanded->first()->new_values)->toBe(['shift_code' => 'DAY', 'policy_code' => 'STD']);
+});
+
 it('logs old and new values on update with only dirty fields', function (): void {
     $model = AuditTestModel::query()->create(['name' => 'Alice', 'email' => AUDIT_TEST_EMAIL]);
     flushAuditBuffer();
@@ -260,6 +294,45 @@ class AuditTestModelWithEncrypted extends Model
     {
         return [
             'encrypted_field' => 'encrypted',
+        ];
+    }
+}
+
+class AuditTestModelWithSubject extends Model
+{
+    protected $table = AUDIT_TEST_TABLE;
+
+    protected $guarded = [];
+
+    /** @return array{name: string, id: int} */
+    public function getAuditSubject(): array
+    {
+        return ['name' => 'employee', 'id' => 42];
+    }
+}
+
+class AuditTestModelWithSubjectEntries extends AuditTestModelWithSubject
+{
+    /** @return list<array<string, mixed>> */
+    public function getAuditSubjectEntries(): array
+    {
+        return [
+            [
+                'subject_name' => 'employee',
+                'subject_id' => 42,
+                'subject_identifier' => '2026-05-15',
+                'event' => 'created',
+                'old_values' => null,
+                'new_values' => ['shift_code' => 'DAY', 'policy_code' => 'STD'],
+            ],
+            [
+                'subject_name' => 'employee',
+                'subject_id' => 42,
+                'subject_identifier' => '2026-05-16',
+                'event' => 'created',
+                'old_values' => null,
+                'new_values' => ['shift_code' => 'DAY', 'policy_code' => 'STD'],
+            ],
         ];
     }
 }

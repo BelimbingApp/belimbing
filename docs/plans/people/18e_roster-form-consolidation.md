@@ -4,14 +4,14 @@
 **Last Updated:** 2026-05-21
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan
-- `docs/plans/base-audit-subject-index.md` — delegated to a separate agent; adds `subject_name`, `subject_id`, `subject_identifier` to `base_audit_mutations`. Once complete, Phase 2's `people_attendance_roster_cell_log` table and `AttendanceRosterAssignmentObserver` are replaced by enriched rows on the mutations table (see base plan Phase 3–4).
+- `docs/plans/base-audit-subject-index.md` — delegated audit replacement; adds `subject_name`, `subject_id`, `subject_identifier`, and expanded roster rows to `base_audit_mutations`. Phase 2's `people_attendance_roster_cell_log` table and `AttendanceRosterAssignmentObserver` are replaced by enriched rows on the mutations table.
 - `docs/plans/people/18b_roster-grid-interaction.md` — grid interaction layer (complete)
 - `resources/core/views/livewire/people/attendance/partials/rosters-form.blade.php` — form to be retired
 - `resources/core/views/livewire/people/attendance/partials/rosters-grid.blade.php` — grid to receive folded features
 - `resources/core/views/livewire/people/attendance/partials/rosters-list.blade.php` — list view to receive folded sections
 - `app/Modules/People/Attendance/Livewire/Concerns/ManagesRosterOperations.php` — backend operations
 - `app/Modules/People/Attendance/Services/AttendanceDayResolverService.php` — resolver to be updated
-**Agents:** claude/sonnet-4.6
+**Agents:** claude/sonnet-4.6; amp/gpt-5
 
 ## Problem Essence
 
@@ -65,7 +65,7 @@ The form mode is eliminated. Every operation a manager needs is reachable from t
 - [x] Grid UI: "History" button in the formula bar when a single cell is selected; opens a side drawer listing log rows for that employee × date — timestamp, actor, action badge, from → to shift/policy, note, job. {claude/sonnet-4.6}
 - [x] History drawer has an "Open full history" link (new tab) → `RosterEmployeeHistory` Livewire component with date filter and paginated table. {claude/sonnet-4.6}
 - [x] Cleanup: batch user-name lookup in `ManagesRosterCellHistory` (was N+1); removed stale draft/published wording from grid intro and dead `hasPublished` guard from `deleteSelection()`. {claude/sonnet-4.6}
-- [ ] **Superseded by audit delegation**: once `docs/plans/base-audit-subject-index.md` Phase 3–4 ships, replace `people_attendance_roster_cell_log`, `AttendanceRosterAssignmentObserver`, and `ManagesRosterCellHistory` queries with enriched `base_audit_mutations` rows.
+- [x] **Superseded by audit delegation**: `people_attendance_roster_cell_log`, `AttendanceRosterAssignmentObserver`, and `ManagesRosterCellHistory` queries are replaced with enriched `base_audit_mutations` rows. {amp/gpt-5}
 
 ### Phase 3 — Employee row selection via name column
 
@@ -100,4 +100,4 @@ The form mode is eliminated. Every operation a manager needs is reachable from t
 - [x] Remove `$showPreviewLegend` from grid include; no preview references remain in the grid partial. {claude/sonnet-4.6}
 - [x] Remove `rosterValidationFindings()`, `validateRosterDraft()`, `acceptRosterWarnings()`, `rosterCoverageRows()`, `rosterCoverageMatrix()`, `rosterTemplates()`, `applyRosterTemplate()`, `publishReviewedRosters()`, and associated dead properties (`rosterRequiredPerShift`, `rosterTemplateKey`, `rosterValidationRan`, `rosterWarningsAccepted`, `rosterRevisionNote`, `rosterPublishState`). {claude/sonnet-4.6}
 - [x] Remove `editingRosterAssignmentId` form-edit path: `editRosterAssignment()`, `updateExistingRosterAssignment()`, and the editing property removed. Edit button removed from assignment list. {claude/sonnet-4.6}
-- [x] Drop `publish_state` column and compound index from `AttendanceRosterAssignment` migration (edit in place); `'people_*'` wildcard in `scripts/unstable-table-list.sh` already covers this table. Pending `php artisan migrate` on dev. {claude/sonnet-4.6}
+- [x] Keep `publish_state` as transitional schema metadata because current roster operations, the command surface, and dev seeders still reference it; user-facing draft/published behaviour remains removed. Dropping the column requires a separate code sweep. {claude/sonnet-4.6; amp/gpt-5}

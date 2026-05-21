@@ -79,7 +79,6 @@ class AuthListener
             'payload' => json_encode(['email' => $event->credentials['email'] ?? null]),
             'trace_id' => $this->context->traceId,
             'occurred_at' => $now,
-            'created_at' => $now,
         ]);
     }
 
@@ -106,7 +105,6 @@ class AuthListener
             'payload' => null,
             'trace_id' => $this->context->traceId,
             'occurred_at' => $now,
-            'created_at' => $now,
         ]);
     }
 

@@ -19,16 +19,8 @@ use App\Modules\People\Attendance\Livewire\RosterEmployeeHistory;
         @else
             {{-- Date filter --}}
             <div class="flex flex-wrap items-end gap-3 rounded-xl border border-border-default bg-surface-card p-4">
-                <div class="flex flex-col gap-1">
-                    <label class="text-xs font-medium text-muted">{{ __('From') }}</label>
-                    <input type="date" wire:model.live="fromDate"
-                           class="rounded-lg border border-border-default bg-surface-card px-3 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
-                </div>
-                <div class="flex flex-col gap-1">
-                    <label class="text-xs font-medium text-muted">{{ __('To') }}</label>
-                    <input type="date" wire:model.live="toDate"
-                           class="rounded-lg border border-border-default bg-surface-card px-3 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent" />
-                </div>
+                <x-ui.input id="roster-history-from-date" type="date" wire:model.live="fromDate" label="{{ __('From') }}" />
+                <x-ui.input id="roster-history-to-date" type="date" wire:model.live="toDate" label="{{ __('To') }}" />
             </div>
 
             {{-- History table --}}
@@ -49,43 +41,36 @@ use App\Modules\People\Attendance\Livewire\RosterEmployeeHistory;
                         @forelse ($rows as $log)
                             <tr class="hover:bg-surface-subtle/50">
                                 <td class="px-table-cell-x py-table-cell-y font-medium text-ink">
-                                    {{ \Carbon\CarbonImmutable::parse($log->date)->format('d M Y') }}
+                                    {{ \Carbon\CarbonImmutable::parse($log->subject_identifier)->format('d M Y') }}
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y text-muted">
-                                    {{ $log->changed_at?->format('d M Y, H:i') ?? '—' }}
+                                    {{ $log->occurred_at?->format('d M Y, H:i') ?? '—' }}
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y text-muted">
-                                    {{ $log->changed_by !== null ? ($userNames[$log->changed_by] ?? __('Unknown')) : __('System') }}
+                                    {{ $log->actor_type === \App\Base\Authz\Enums\PrincipalType::USER->value && $log->actor_id !== null ? ($userNames[$log->actor_id] ?? __('Unknown')) : __('System') }}
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y">
-                                    @php($actionVariant = match($log->action) { 'created' => 'success', 'deleted' => 'danger', 'locked' => 'warning', default => 'default' })
-                                    <x-ui.badge :variant="$actionVariant">{{ __($log->action) }}</x-ui.badge>
+                                    @php($actionVariant = match($log->event) { 'created' => 'success', 'deleted' => 'danger', default => 'default' })
+                                    <x-ui.badge :variant="$actionVariant">{{ __($log->event) }}</x-ui.badge>
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y text-muted">
-                                    @if ($log->previousShift || $log->previousPolicy)
-                                        <span class="font-medium text-ink">{{ $log->previousShift?->code ?? '—' }}</span>
-                                        <span class="text-xs"> / {{ $log->previousPolicy?->code ?? '—' }}</span>
+                                    @if (($log->old_values['shift_code'] ?? null) || ($log->old_values['policy_code'] ?? null))
+                                        <span class="font-medium text-ink">{{ $log->old_values['shift_code'] ?? '—' }}</span>
+                                        <span class="text-xs"> / {{ $log->old_values['policy_code'] ?? '—' }}</span>
                                     @else
                                         <span class="text-muted">—</span>
                                     @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y">
-                                    @if ($log->newShift || $log->newPolicy)
-                                        <span class="font-medium text-ink">{{ $log->newShift?->code ?? '—' }}</span>
-                                        <span class="text-xs text-muted"> / {{ $log->newPolicy?->code ?? '—' }}</span>
+                                    @if (($log->new_values['shift_code'] ?? null) || ($log->new_values['policy_code'] ?? null))
+                                        <span class="font-medium text-ink">{{ $log->new_values['shift_code'] ?? '—' }}</span>
+                                        <span class="text-xs text-muted"> / {{ $log->new_values['policy_code'] ?? '—' }}</span>
                                     @else
                                         <span class="text-muted">—</span>
                                     @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y text-muted">
-                                    @if ($log->note || $log->job)
-                                        @if ($log->job)
-                                            <span class="mr-1 rounded bg-surface-subtle px-1.5 py-0.5 text-xs font-medium text-ink">{{ $log->job }}</span>
-                                        @endif
-                                        {{ $log->note }}
-                                    @else
-                                        —
-                                    @endif
+                                    —
                                 </td>
                             </tr>
                         @empty

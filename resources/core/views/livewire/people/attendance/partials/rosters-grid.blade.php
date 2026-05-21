@@ -464,7 +464,7 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
                 <div class="flex justify-end gap-2 pt-1">
                     <x-ui.button type="button" variant="secondary" @click="swapModalOpen = false">{{ __('Cancel') }}</x-ui.button>
                     <x-ui.button type="button" variant="primary"
-                                 :disabled="!swapTargetEmpId || !swapDateStr"
+                                 x-bind:disabled="!swapTargetEmpId || !swapDateStr"
                                  @click="confirmSwap()">{{ __('Confirm swap') }}</x-ui.button>
                 </div>
             </div>

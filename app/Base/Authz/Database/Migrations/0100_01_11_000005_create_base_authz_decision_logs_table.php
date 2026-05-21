@@ -25,7 +25,7 @@ return new class extends Migration
             $table->json('applied_policies')->nullable();
             $table->json('context')->nullable();
             $table->string('trace_id', 12)->nullable()->index();
-            $table->timestamp('occurred_at')->useCurrent()->index();
+            $table->timestamp('occurred_at')->index();
             $table->timestamps();
 
             $table->index(['actor_type', 'actor_id', 'occurred_at']);

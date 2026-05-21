@@ -24,6 +24,27 @@ class Employee extends Model
 }
 ```
 
+Models can also expose audit subject metadata with duck-typed methods. No module imports Audit classes:
+
+```php
+public function getAuditSubject(): ?array
+{
+    return ['name' => 'employee', 'id' => $this->employee_id];
+}
+
+public function getAuditSubjectEntries(string $event, array $oldValues = [], array $newValues = []): array
+{
+    return [[
+        'subject_name' => 'employee',
+        'subject_id' => $this->employee_id,
+        'subject_identifier' => '2026-05-15',
+        'event' => $event,
+        'old_values' => ['shift_code' => 'DAY'],
+        'new_values' => ['shift_code' => 'NIGHT'],
+    ]];
+}
+```
+
 ## Opting Out
 
 ```php

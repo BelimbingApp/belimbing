@@ -73,8 +73,9 @@ class MutationListener
 
         $context = app(RequestContext::class);
         $now = now();
+        $subject = $this->resolveAuditSubject($model);
 
-        app(AuditBuffer::class)->bufferMutation([
+        $entry = [
             'company_id' => $context->companyId,
             'actor_type' => $context->actorType,
             'actor_id' => $context->actorId,
@@ -84,13 +85,70 @@ class MutationListener
             'user_agent' => $context->userAgent,
             'auditable_type' => $model->getMorphClass(),
             'auditable_id' => $model->getKey(),
+            'subject_name' => $subject['name'],
+            'subject_id' => $subject['id'],
+            'subject_identifier' => null,
+            'source' => 'listener',
             'event' => $event,
-            'old_values' => json_encode($oldValues !== [] ? $oldValues : null),
-            'new_values' => json_encode($newValues !== [] ? $newValues : null),
+            'old_values' => $this->encodeValues($oldValues),
+            'new_values' => $this->encodeValues($newValues),
             'trace_id' => $context->traceId,
             'occurred_at' => $now,
-            'created_at' => $now,
-        ]);
+        ];
+
+        $buffer = app(AuditBuffer::class);
+        $buffer->bufferMutation($entry);
+
+        foreach ($this->resolveAuditSubjectEntries($model, $event, $oldValues, $newValues) as $subjectEntry) {
+            $buffer->bufferMutation(array_replace($entry, [
+                'subject_name' => $subjectEntry['subject_name'] ?? $entry['subject_name'],
+                'subject_id' => $subjectEntry['subject_id'] ?? $entry['subject_id'],
+                'subject_identifier' => $subjectEntry['subject_identifier'] ?? null,
+                'source' => 'expanded',
+                'event' => $subjectEntry['event'] ?? $event,
+                'old_values' => $this->encodeValues($subjectEntry['old_values'] ?? null),
+                'new_values' => $this->encodeValues($subjectEntry['new_values'] ?? null),
+            ]));
+        }
+    }
+
+    /**
+     * @return array{name: string|null, id: int|null}
+     */
+    private function resolveAuditSubject(Model $model): array
+    {
+        if (! method_exists($model, 'getAuditSubject')) {
+            return ['name' => null, 'id' => null];
+        }
+
+        $subject = $model->getAuditSubject();
+
+        if (! is_array($subject) || ! isset($subject['name'], $subject['id']) || ! is_string($subject['name'])) {
+            return ['name' => null, 'id' => null];
+        }
+
+        return ['name' => $subject['name'], 'id' => (int) $subject['id']];
+    }
+
+    /**
+     * @param  array<string, mixed>  $oldValues
+     * @param  array<string, mixed>  $newValues
+     * @return iterable<int, array<string, mixed>>
+     */
+    private function resolveAuditSubjectEntries(Model $model, string $event, array $oldValues, array $newValues): iterable
+    {
+        if (! method_exists($model, 'getAuditSubjectEntries')) {
+            return [];
+        }
+
+        $entries = $model->getAuditSubjectEntries($event, $oldValues, $newValues);
+
+        return is_iterable($entries) ? $entries : [];
+    }
+
+    private function encodeValues(mixed $values): string
+    {
+        return json_encode($values !== [] ? $values : null);
     }
 
     /**

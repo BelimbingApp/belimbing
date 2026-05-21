@@ -21,8 +21,10 @@ class AuditAction extends Model
     protected $table = 'base_audit_actions';
 
     /**
-     * Disable updated_at since this table is append-only.
+     * Disable Eloquent timestamps since this table stores only event time.
      */
+    public const CREATED_AT = null;
+
     public const UPDATED_AT = null;
 
     /**

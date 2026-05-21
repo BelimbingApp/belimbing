@@ -63,6 +63,19 @@ Resolution order:
 
 Same buffered-flush pattern as `DatabaseDecisionLogger`: entries collected in-memory during request, batch-INSERT after response sent via `app->terminating()`.
 
+### Subject Index
+
+Mutation rows keep the technical model pointer (`auditable_type` / `auditable_id`) and may also carry an audit-subject index (`subject_name`, `subject_id`, `subject_identifier`). The subject index answers business questions such as "all changes for employee 7" or "changes for employee 7 on 2026-05-15" without forcing each module to create its own log table.
+
+The Audit module remains the only writer to audit tables. Business models can describe subject meaning through optional duck-typed methods:
+
+| Method | Purpose |
+|---|---|
+| `getAuditSubject()` | Returns one parent subject (`name`, `id`) for the normal listener row. |
+| `getAuditSubjectEntries()` | Returns zero or more subject-slot rows with `subject_identifier` and human-readable `old_values` / `new_values`. |
+
+Rows with `source = listener` are the automatic model mutation rows. Rows with `source = expanded` are listener-written subject-slot rows derived from model metadata.
+
 ---
 
 ## Architecture
@@ -72,8 +85,7 @@ Same buffered-flush pattern as `DatabaseDecisionLogger`: entries collected in-me
 | Component | Responsibility |
 |---|---|
 | **RequestContext** | DTO singleton. Captures IP, URL, user agent, actor, role, trace_id once per request. |
-| **Auditable** | Eloquent trait. Auto-registers observer for create/update/delete. Captures dirty fields and original values. |
-| **AuditService** | Public contract for explicit action logging. |
+| **MutationListener** | Global Eloquent listener. Captures create/update/delete diffs for all non-excluded models and applies optional subject metadata. |
 | **AuditBuffer** | Internal. Collects mutation and action entries, batch-INSERTs on terminating(). |
 
 ### File Structure
@@ -82,21 +94,21 @@ Same buffered-flush pattern as `DatabaseDecisionLogger`: entries collected in-me
 app/Base/Audit/
 ├── Config/
 │   └── audit.php
-├── Contracts/
-│   └── AuditService.php
-├── Concerns/
-│   └── Auditable.php
 ├── Database/
 │   └── Migrations/
 │       ├── 0100_01_17_000000_create_base_audit_mutations_table.php
 │       └── 0100_01_17_000001_create_base_audit_actions_table.php
 ├── DTO/
 │   └── RequestContext.php
+├── Listeners/
+│   ├── MutationListener.php
+│   ├── AuthListener.php
+│   ├── CommandListener.php
+│   └── JobListener.php
 ├── Models/
 │   ├── AuditMutation.php
 │   └── AuditAction.php
 ├── Services/
-│   ├── DatabaseAuditService.php
 │   └── AuditBuffer.php
 ├── AGENTS.md
 └── ServiceProvider.php

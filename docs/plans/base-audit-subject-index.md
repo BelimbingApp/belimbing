@@ -1,6 +1,6 @@
 # base-audit-subject-index.md
 
-**Status:** In Progress — trace ID cleanup shipped; subject index pending
+**Status:** Complete
 **Last Updated:** 2026-05-21
 **Sources:**
 - `app/Base/Audit/Listeners/MutationListener.php` — global Eloquent mutation listener
@@ -60,42 +60,42 @@ Full browser user-agent strings are too noisy for a permanent mutation log. `Req
 
 - [x] Check table stability and add affected audit/Authz tables to `scripts/unstable-table-list.sh`; `base_audit_actions` and `base_authz_decision_logs` now join `base_audit_mutations` for destructive local rebuilds. {amp/gpt-5}
 - [x] Choose the schema-change path explicitly before editing: destructive local rebuild after marking audit/Authz log tables unstable. {amp/gpt-5}
-- [ ] Edit `0100_01_17_000000_create_base_audit_mutations_table.php` in place only after the chosen schema path is approved: add `subject_name` (string, nullable), `subject_id` (bigint unsigned, nullable), `subject_identifier` (string, nullable), `source` (string, default `listener`).
-- [ ] Add the matching fields to `AuditMutation` fillable/casts or document that all enriched rows use low-level inserts intentionally.
-- [ ] Add composite index `(subject_name, subject_id, subject_identifier, occurred_at)`; if partial, use explicit PostgreSQL DDL with a short index name.
-- [ ] Remove `useCurrent()` from audit timestamps and rely on app-set `now()`.
-- [ ] Decide whether `created_at` remains on audit mutations/actions. Prefer removing it unless ingestion-lag diagnostics are a stated requirement.
-- [ ] Replace long stored user-agent strings with a compact client label in `RequestContext`; keep raw user-agent only if intentionally bounded to short-retention action data.
+- [x] Edit `0100_01_17_000000_create_base_audit_mutations_table.php` in place only after the chosen schema path is approved: add `subject_name` (string, nullable), `subject_id` (bigint unsigned, nullable), `subject_identifier` (string, nullable), `source` (string, default `listener`). {amp/gpt-5}
+- [x] Add the matching fields to `AuditMutation` fillable/casts or document that all enriched rows use low-level inserts intentionally. {amp/gpt-5}
+- [x] Add composite index `(subject_name, subject_id, subject_identifier, occurred_at)`; if partial, use explicit PostgreSQL DDL with a short index name. {amp/gpt-5}
+- [x] Remove `useCurrent()` from audit timestamps and rely on app-set `now()`. {amp/gpt-5}
+- [x] Decide whether `created_at` remains on audit mutations/actions. Removed from Audit mutation/action tables; `occurred_at` is the event time. {amp/gpt-5}
+- [x] Replace long stored user-agent strings with a compact client label in `RequestContext`; keep raw user-agent only if intentionally bounded to short-retention action data. {amp/gpt-5}
 - [x] Replace UUID `correlation_id` with a human-friendly `trace_id` shared by Audit and Authz decision logs. Implemented as 12-character Crockford Base32, stored ungrouped, no `trc_` prefix. {amp/gpt-5}
 - [x] Run migration on dev and verify destructive local rebuild semantics for the trace ID schema edits (`migrate:fresh --seed --dev`; schema check confirms trace columns exist and audit mutation `correlation_id` is gone). {amp/gpt-5}
 
 ### Phase 2 — `MutationListener` subject enrichment hook
 
-- [ ] Define `getAuditSubject(): array|null` as a documented convention (not a formal interface — PHP duck-typing is sufficient). Return `['name' => string, 'id' => int]` or null.
-- [ ] `MutationListener` calls `getAuditSubject()` on the model if the method exists; writes result into `subject_name` / `subject_id` on the mutation row.
-- [ ] Add `getAuditSubject()` to `AttendanceRosterAssignment` returning `['name' => 'employee', 'id' => employee_id]`.
-- [ ] Document the convention in `app/Base/Audit/AGENTS.md`, `docs/Base/Audit/audit.md`, or an inline docblock on `MutationListener` so future model authors know to implement it.
+- [x] Define `getAuditSubject(): array|null` as a documented convention (not a formal interface — PHP duck-typing is sufficient). Return `['name' => string, 'id' => int]` or null. {amp/gpt-5}
+- [x] `MutationListener` calls `getAuditSubject()` on the model if the method exists; writes result into `subject_name` / `subject_id` on the mutation row. {amp/gpt-5}
+- [x] Add `getAuditSubject()` to `AttendanceRosterAssignment` returning `['name' => 'employee', 'id' => employee_id]`. {amp/gpt-5}
+- [x] Document the convention in `app/Base/Audit/AGENTS.md`, `docs/Base/Audit/audit.md`, or an inline docblock on `MutationListener` so future model authors know to implement it. {amp/gpt-5}
 
 ### Phase 3 — Audit-owned subject-slot expansion
 
-- [ ] Define `getAuditSubjectEntries()` as the duck-typed model convention for expanded audit rows. It returns plain arrays describing subject-slot rows: `subject_name`, `subject_id`, `subject_identifier`, `event`, `old_values`, and `new_values`.
-- [ ] `MutationListener` writes expanded rows returned by `getAuditSubjectEntries()` with `source = 'expanded'`; business modules do not import Audit classes and do not write directly to audit tables.
-- [ ] Add `getAuditSubjectEntries()` to `AttendanceRosterAssignment` so roster range and exception changes produce per-date rows with `subject_name = 'employee'`, `subject_id = employee_id`, `subject_identifier = ISO date`, and human-readable `{shift_code, policy_code}` summaries.
-- [ ] Keep the raw listener row only if it provides value for forensic model-level diffs; otherwise document why expanded rows replace it for this model and implement suppression inside Audit, not inside People.
-- [ ] Update `ManagesRosterCellHistory::loadCellHistory()` to query `base_audit_mutations` instead of `people_attendance_roster_cell_log`.
-- [ ] Update `RosterEmployeeHistory` component similarly.
+- [x] Define `getAuditSubjectEntries()` as the duck-typed model convention for expanded audit rows. It returns plain arrays describing subject-slot rows: `subject_name`, `subject_id`, `subject_identifier`, `event`, `old_values`, and `new_values`. {amp/gpt-5}
+- [x] `MutationListener` writes expanded rows returned by `getAuditSubjectEntries()` with `source = 'expanded'`; business modules do not import Audit classes and do not write directly to audit tables. {amp/gpt-5}
+- [x] Add `getAuditSubjectEntries()` to `AttendanceRosterAssignment` so roster range and exception changes produce per-date rows with `subject_name = 'employee'`, `subject_id = employee_id`, `subject_identifier = ISO date`, and human-readable `{shift_code, policy_code}` summaries. {amp/gpt-5}
+- [x] Keep the raw listener row only if it provides value for forensic model-level diffs; otherwise document why expanded rows replace it for this model and implement suppression inside Audit, not inside People. Raw listener rows are retained for forensic field-level diffs; expanded rows are additional per-cell indexes. {amp/gpt-5}
+- [x] Update `ManagesRosterCellHistory::loadCellHistory()` to query `base_audit_mutations` instead of `people_attendance_roster_cell_log`. {amp/gpt-5}
+- [x] Update `RosterEmployeeHistory` component similarly. {amp/gpt-5}
 
 ### Phase 4 — Retire the cell log table
 
-- [ ] Edit `0320_02_05_000006_create_attendance_roster_cell_log.php` in place to drop the table (destructive evolution; table has no production data yet so no `is_stable` concern).
-- [ ] Remove `AttendanceRosterCellLog` model.
-- [ ] Remove `AttendanceRosterAssignmentObserver` and its service-provider registration.
-- [ ] Remove `ManagesRosterCellHistory` imports of the cell log model.
-- [ ] Run migration; confirm drawer and full-history page still work against `base_audit_mutations`.
+- [x] Edit `0320_02_05_000006_create_attendance_roster_cell_log.php` in place to drop the table (destructive evolution; table has no production data yet so no `is_stable` concern). {amp/gpt-5}
+- [x] Remove `AttendanceRosterCellLog` model. {amp/gpt-5}
+- [x] Remove `AttendanceRosterAssignmentObserver` and its service-provider registration. {amp/gpt-5}
+- [x] Remove `ManagesRosterCellHistory` imports of the cell log model. {amp/gpt-5}
+- [x] Run migration; confirm drawer and full-history page still work against `base_audit_mutations`. Schema rebuild passed with `php artisan migrate:fresh --seed --dev`; focused roster audit tests cover expanded rows. {amp/gpt-5}
 
 ### Phase 5 — Verification and docs
 
 - [x] Add focused tests for trace ID persistence and actor-role snapshot deduplication. {amp/gpt-5}
-- [ ] Add focused tests for subject enrichment, expanded roster rows, and compact client labels.
-- [ ] Update `docs/Base/Audit/audit.md` so the public module design matches the shipped global-listener architecture and no longer references removed trait/service concepts.
-- [ ] Update `docs/plans/people/18e_roster-form-consolidation.md` when the delegated audit replacement ships, ticking the superseded cell-log follow-up.
+- [x] Add focused tests for subject enrichment, expanded roster rows, and compact client labels. {amp/gpt-5}
+- [x] Update `docs/Base/Audit/audit.md` so the public module design matches the shipped global-listener architecture and no longer references removed trait/service concepts. {amp/gpt-5}
+- [x] Update `docs/plans/people/18e_roster-form-consolidation.md` when the delegated audit replacement ships, ticking the superseded cell-log follow-up. {amp/gpt-5}

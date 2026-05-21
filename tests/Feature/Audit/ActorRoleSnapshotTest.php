@@ -43,6 +43,17 @@ it('snapshots actor roles for the current company without duplicate role codes',
     expect($context->actorRole)->toBe('core_admin');
 });
 
+it('stores a compact client label instead of a full browser user agent', function (): void {
+    $user = createUserWithDuplicateRoleAssignments();
+
+    $this->actingAs($user);
+    request()->headers->set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36');
+
+    $context = RequestContext::fromRequest();
+
+    expect($context->userAgent)->toBe('Chrome 148 / Windows');
+});
+
 it('snapshots login event actor roles for the event user company without duplicate role codes', function (): void {
     $user = createUserWithDuplicateRoleAssignments();
 

@@ -47,7 +47,6 @@ class CommandListener
             ]),
             'trace_id' => $this->context->traceId,
             'occurred_at' => $now,
-            'created_at' => $now,
         ]);
     }
 }
