@@ -254,6 +254,180 @@ test('eBay listing readiness blocks invalid mapped enum values', function (): vo
         ->and(collect($draft->readiness_snapshot['blockers'])->pluck('key')->all())->toContain('aspect_invalid_Finish');
 });
 
+test('eBay listing readiness reads imported listing aspect evidence and flags identifier conflicts', function (): void {
+    $user = createAdminUser();
+    $scope = Scope::company($user->company_id);
+    $settings = app(SettingsService::class);
+    $settings->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
+    $settings->set('marketplace.ebay.default_return_policy_id', 'RET-1', $scope);
+    $settings->set('marketplace.ebay.default_fulfillment_policy_id', 'FUL-1', $scope);
+    $settings->set('marketplace.ebay.default_payment_policy_id', 'PAY-1', $scope);
+    $settings->set('marketplace.ebay.default_merchant_location_key', 'california_shop', $scope);
+    app(OAuthTokenStore::class)->persist(
+        EbayConfiguration::CHANNEL,
+        $scope,
+        [
+            'access_token' => 'access-token',
+            'refresh_token' => 'refresh-token',
+            'expires_in' => 3600,
+        ],
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    $template = ProductTemplate::factory()->create([
+        'company_id' => $user->company_id,
+        'metadata' => [
+            'marketplace' => [
+                'ebay' => [
+                    'marketplace_id' => 'EBAY_MOTORS_US',
+                    'category_tree_id' => '100',
+                    'category_id' => '33563',
+                ],
+            ],
+        ],
+    ]);
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'product_template_id' => $template->id,
+        'title' => 'BMW rear brake caliper pair',
+        'quantity_on_hand' => 1,
+        'target_price_amount' => 25000,
+        'currency_code' => 'USD',
+    ]);
+    $brand = CatalogAttribute::factory()->create([
+        'company_id' => $user->company_id,
+        'code' => 'brand',
+        'name' => 'Brand',
+    ]);
+    AttributeValue::factory()->create([
+        'item_id' => $item->id,
+        'attribute_id' => $brand->id,
+        'display_value' => 'BMW',
+        'value' => ['text' => 'BMW'],
+    ]);
+    AspectMapping::query()->create([
+        'company_id' => $user->company_id,
+        'catalog_attribute_id' => $brand->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'marketplace_id' => 'EBAY_MOTORS_US',
+        'category_tree_id' => '100',
+        'category_id' => '33563',
+        'internal_attribute_code' => 'brand',
+        'ebay_aspect_name' => 'Brand',
+        'value_normalization' => AspectMapping::NORMALIZATION_COPY,
+        'requirement_status' => AspectMapping::REQUIREMENT_REQUIRED,
+        'mapping_confidence' => AspectMapping::CONFIDENCE_MANUAL,
+        'is_enabled' => true,
+    ]);
+    MarketplaceMetadata::query()->create([
+        'channel' => EbayConfiguration::CHANNEL,
+        'environment' => 'sandbox',
+        'marketplace_id' => 'EBAY_MOTORS_US',
+        'kind' => EbayMetadataService::KIND_CATEGORY_ASPECTS,
+        'key' => '100:33563',
+        'payload' => ['aspects' => [[
+            'localizedAspectName' => 'Brand',
+            'aspectConstraint' => ['aspectRequired' => true],
+        ]]],
+        'fetched_at' => Carbon::now(),
+        'expires_at' => Carbon::now()->addDay(),
+    ]);
+    foreach ([
+        [AccountResource::KIND_RETURN_POLICY, 'RET-1', 'Returns'],
+        [AccountResource::KIND_FULFILLMENT_POLICY, 'FUL-1', 'Shipping'],
+        [AccountResource::KIND_PAYMENT_POLICY, 'PAY-1', 'Payments'],
+        [AccountResource::KIND_INVENTORY_LOCATION, 'california_shop', 'California shop'],
+    ] as [$kind, $externalId, $name]) {
+        AccountResource::query()->create([
+            'company_id' => $user->company_id,
+            'channel' => EbayConfiguration::CHANNEL,
+            'marketplace_id' => 'EBAY_US',
+            'kind' => $kind,
+            'external_id' => $externalId,
+            'name' => $name,
+            'status' => 'ENABLED',
+            'payload' => [],
+            'imported_at' => Carbon::now(),
+        ]);
+    }
+    ItemFitment::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'is_universal' => false,
+        'compatibility_properties' => ['Year' => '2011', 'Make' => 'BMW', 'Model' => '135i'],
+        'display_year' => '2011',
+        'display_make' => 'BMW',
+        'display_model' => '135i',
+        'source' => ItemFitment::SOURCE_OPERATOR,
+        'confidence' => ItemFitment::CONFIDENCE_SELLER_CONFIRMED,
+    ]);
+    $asset = MediaAsset::query()->create([
+        'disk' => 'local',
+        'storage_key' => 'testing/caliper.jpg',
+        'original_filename' => 'caliper.jpg',
+        'mime_type' => 'image/jpeg',
+        'kind' => MediaAsset::KIND_ORIGINAL,
+        'metadata' => ['public_url' => 'https://cdn.example.test/caliper.jpg'],
+    ]);
+    ItemPhoto::query()->create([
+        'item_id' => $item->id,
+        'media_asset_id' => $asset->id,
+        'sort_order' => 1,
+    ]);
+    CatalogDescription::factory()->create([
+        'item_id' => $item->id,
+        'is_accepted' => true,
+    ]);
+    $draft = ListingDraft::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'marketplace_id' => 'EBAY_US',
+        'metadata_marketplace_id' => 'EBAY_MOTORS_US',
+        'external_sku' => $item->sku,
+        'title' => $item->title,
+        'status' => ListingDraft::STATUS_IMPORTED,
+        'management_state' => ListingDraft::MANAGEMENT_IMPORTED,
+        'aspect_values' => [
+            'Manufacturer Part Number' => [
+                'value' => ['34206785237'],
+                'source' => 'ebay_listing',
+            ],
+        ],
+    ]);
+    ProductReference::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'listing_draft_id' => $draft->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'marketplace_id' => 'EBAY_MOTORS_US',
+        'reference_type' => ProductReference::TYPE_EBAY_EPID,
+        'external_product_id' => '1122066940',
+        'target_key' => 'draft:'.$draft->id,
+        'title' => 'BMW brake caliper',
+        'facts' => [
+            'aspects' => [
+                'Brand' => ['ATE'],
+                'Manufacturer Part Number' => ['34206785238'],
+            ],
+        ],
+        'source' => ProductReference::SOURCE_IMPORTED,
+        'review_status' => ProductReference::REVIEW_SUGGESTED,
+        'imported_at' => Carbon::now(),
+    ]);
+
+    $refreshed = app(EbayListingReadinessService::class)->refreshForItem($item->fresh());
+    $warnings = collect($refreshed->readiness_snapshot['warnings'])->pluck('key')->all();
+    $aspects = collect($refreshed->readiness_snapshot['aspects']);
+    $alignment = collect($refreshed->readiness_snapshot['identifier_alignment']);
+
+    expect($warnings)->toContain('identifier_conflict')
+        ->and($warnings)->not()->toContain('identifier_part_number')
+        ->and($aspects->contains(fn (array $fact): bool => $fact['name'] === 'Manufacturer Part Number' && $fact['source'] === 'ebay_listing'))->toBeTrue()
+        ->and($alignment->firstWhere('key', 'brand')['status'])->toBe('conflict')
+        ->and($alignment->firstWhere('key', 'part_number')['status'])->toBe('conflict');
+});
+
 test('eBay listing payload builder prepares inventory offer compatibility and publish operations', function (): void {
     $user = createAdminUser();
     $item = Item::factory()->create([

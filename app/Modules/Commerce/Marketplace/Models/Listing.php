@@ -8,6 +8,7 @@ use App\Modules\Core\Company\Models\Company;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -39,6 +40,32 @@ use Illuminate\Support\Carbon;
 class Listing extends Model
 {
     use HasFactory;
+
+    public const MANAGEMENT_IMPORTED = 'imported';
+
+    public const MANAGEMENT_BELIMBING_MANAGED = 'belimbing_managed';
+
+    public const DRIFT_UNKNOWN = 'unknown';
+
+    public const DRIFT_IN_SYNC = 'in_sync';
+
+    public const DRIFT_DRIFTED = 'drifted';
+
+    public const RECONCILIATION_UNLINKED = 'unlinked';
+
+    public const RECONCILIATION_MANAGED = 'managed';
+
+    public const RECONCILIATION_READY_TO_ADOPT = 'ready_to_adopt';
+
+    public const RECONCILIATION_MISSING_FITMENT = 'missing_fitment';
+
+    public const RECONCILIATION_MISSING_IDENTIFIERS = 'missing_identifiers';
+
+    public const RECONCILIATION_CONFLICTING_IDENTIFIERS = 'conflicting_identifiers';
+
+    public const RECONCILIATION_EXTERNALLY_CHANGED = 'externally_changed';
+
+    public const RECONCILIATION_DRIFTED = 'drifted';
 
     protected $table = 'commerce_marketplace_listings';
 
@@ -96,5 +123,28 @@ class Listing extends Model
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class);
+    }
+
+    /**
+     * @return HasOne<ListingDraft, $this>
+     */
+    public function draft(): HasOne
+    {
+        return $this->hasOne(ListingDraft::class);
+    }
+
+    public function isBelimbingManaged(): bool
+    {
+        return $this->management_state === self::MANAGEMENT_BELIMBING_MANAGED;
+    }
+
+    public function isImported(): bool
+    {
+        return $this->management_state === self::MANAGEMENT_IMPORTED;
+    }
+
+    public function isExternallyChanged(): bool
+    {
+        return $this->isBelimbingManaged() && $this->drift_status === self::DRIFT_DRIFTED;
     }
 }

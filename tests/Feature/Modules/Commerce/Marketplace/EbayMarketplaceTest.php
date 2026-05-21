@@ -14,6 +14,7 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMarketplaceChannel;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMetadataService;
+use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index as MarketplaceIndex;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
 use App\Modules\Commerce\Marketplace\Models\AspectMapping;
 use App\Modules\Commerce\Marketplace\Models\Listing;
@@ -27,6 +28,7 @@ use App\Modules\Commerce\Sales\Models\Sale;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Livewire\Livewire;
 
 const EBAY_FIXTURE_TITLE = '2008 Honda Civic driver side headlight';
 const EBAY_FIXTURE_LISTING_ID = '1234567890';
@@ -218,6 +220,184 @@ test('ebay marketplace page is visible to admins', function (): void {
         ->assertDontSee('Connect eBay');
 });
 
+test('ebay marketplace surfaces imported listing audit states', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $readyItem = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'AUDIT-READY-1',
+        'status' => Item::STATUS_LISTED,
+        'target_price_amount' => 12000,
+        'currency_code' => 'USD',
+    ]);
+    $fitmentItem = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'AUDIT-FITMENT-1',
+        'status' => Item::STATUS_READY,
+        'target_price_amount' => 13000,
+        'currency_code' => 'USD',
+    ]);
+    $identifierItem = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'AUDIT-ID-1',
+        'status' => Item::STATUS_READY,
+        'target_price_amount' => 14000,
+        'currency_code' => 'USD',
+    ]);
+    $managedItem = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'AUDIT-MANAGED-1',
+        'status' => Item::STATUS_LISTED,
+        'target_price_amount' => 15000,
+        'currency_code' => 'USD',
+    ]);
+    $conflictItem = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'AUDIT-CONFLICT-1',
+        'status' => Item::STATUS_READY,
+        'target_price_amount' => 16000,
+        'currency_code' => 'USD',
+    ]);
+
+    $readyListing = Listing::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $readyItem->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_listing_id' => 'audit-ready-1',
+        'external_offer_id' => 'offer-audit-ready-1',
+        'external_sku' => $readyItem->sku,
+        'marketplace_id' => 'EBAY_US',
+        'title' => 'Ready to adopt caliper',
+        'status' => 'ACTIVE',
+        'management_state' => Listing::MANAGEMENT_IMPORTED,
+        'drift_status' => Listing::DRIFT_UNKNOWN,
+        'price_amount' => 12000,
+        'currency_code' => 'USD',
+        'last_synced_at' => now(),
+        'raw_payload' => [],
+    ]);
+    $fitmentListing = Listing::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $fitmentItem->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_listing_id' => 'audit-fitment-1',
+        'external_offer_id' => 'offer-audit-fitment-1',
+        'external_sku' => $fitmentItem->sku,
+        'marketplace_id' => 'EBAY_US',
+        'title' => 'Missing fitment rotor',
+        'status' => 'ACTIVE',
+        'management_state' => Listing::MANAGEMENT_IMPORTED,
+        'drift_status' => Listing::DRIFT_UNKNOWN,
+        'price_amount' => 13000,
+        'currency_code' => 'USD',
+        'last_synced_at' => now(),
+        'raw_payload' => [],
+    ]);
+    $identifierListing = Listing::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $identifierItem->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_listing_id' => 'audit-id-1',
+        'external_offer_id' => 'offer-audit-id-1',
+        'external_sku' => $identifierItem->sku,
+        'marketplace_id' => 'EBAY_US',
+        'title' => 'Missing identifiers mirror',
+        'status' => 'ACTIVE',
+        'management_state' => Listing::MANAGEMENT_IMPORTED,
+        'drift_status' => Listing::DRIFT_UNKNOWN,
+        'price_amount' => 14000,
+        'currency_code' => 'USD',
+        'last_synced_at' => now(),
+        'raw_payload' => [],
+    ]);
+    $managedListing = Listing::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $managedItem->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_listing_id' => 'audit-managed-1',
+        'external_offer_id' => 'offer-audit-managed-1',
+        'external_sku' => $managedItem->sku,
+        'marketplace_id' => 'EBAY_US',
+        'title' => 'Externally changed headlight',
+        'status' => 'ACTIVE',
+        'management_state' => Listing::MANAGEMENT_BELIMBING_MANAGED,
+        'drift_status' => Listing::DRIFT_DRIFTED,
+        'drift_summary' => 'Externally changed: price.',
+        'price_amount' => 15500,
+        'currency_code' => 'USD',
+        'last_synced_at' => now(),
+        'raw_payload' => [],
+    ]);
+    $conflictListing = Listing::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $conflictItem->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_listing_id' => 'audit-conflict-1',
+        'external_offer_id' => 'offer-audit-conflict-1',
+        'external_sku' => $conflictItem->sku,
+        'marketplace_id' => 'EBAY_US',
+        'title' => 'Conflicting identifiers caliper',
+        'status' => 'ACTIVE',
+        'management_state' => Listing::MANAGEMENT_IMPORTED,
+        'drift_status' => Listing::DRIFT_UNKNOWN,
+        'price_amount' => 16000,
+        'currency_code' => 'USD',
+        'last_synced_at' => now(),
+        'raw_payload' => [],
+    ]);
+
+    foreach ([
+        [$readyItem, $readyListing, [], []],
+        [$fitmentItem, $fitmentListing, [['key' => 'fitment', 'label' => 'Add fitment.', 'action' => 'fitment']], []],
+        [$identifierItem, $identifierListing, [], [['key' => 'identifier_part_number', 'label' => 'Add part number.', 'action' => 'attributes']]],
+        [$managedItem, $managedListing, [], []],
+        [$conflictItem, $conflictListing, [], [['key' => 'identifier_conflict', 'label' => 'Review conflict.', 'action' => 'attributes']]],
+    ] as [$item, $listing, $blockers, $warnings]) {
+        ListingDraft::query()->create([
+            'company_id' => $user->company_id,
+            'item_id' => $item->id,
+            'listing_id' => $listing->id,
+            'channel' => EbayConfiguration::CHANNEL,
+            'marketplace_id' => 'EBAY_US',
+            'metadata_marketplace_id' => 'EBAY_MOTORS_US',
+            'external_sku' => $item->sku,
+            'title' => $listing->title,
+            'status' => $listing->isBelimbingManaged() ? ListingDraft::STATUS_PUBLISHED : ListingDraft::STATUS_IMPORTED,
+            'management_state' => $listing->management_state,
+            'readiness_status' => $blockers === [] ? 'ready' : 'blocked',
+            'readiness_snapshot' => [
+                'blockers' => $blockers,
+                'warnings' => $warnings,
+                'identifier_alignment' => $listing->external_listing_id === 'audit-conflict-1'
+                    ? [[
+                        'key' => 'part_number',
+                        'label' => 'Part Number',
+                        'status' => 'conflict',
+                        'sources' => [
+                            'ebay_listing' => ['34206785237'],
+                            'ebay_product_reference' => ['34206785238'],
+                        ],
+                    ]]
+                    : [],
+            ],
+        ]);
+    }
+
+    Livewire::actingAs($user)
+        ->test(MarketplaceIndex::class)
+        ->assertSee('Ready to Adopt')
+        ->assertSee('Missing Fitment')
+        ->assertSee('Conflicting Identifiers')
+        ->assertSee('Missing Identifiers')
+        ->assertSee('Externally Changed')
+        ->assertSee('Conflicting IDs')
+        ->assertSee('Linked')
+        ->assertSee('Missing fitment rotor')
+        ->assertSee('Externally changed headlight')
+        ->assertSee('Conflicting identifiers caliper');
+});
+
 test('ebay listing pull materializes offers and links by sku', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
@@ -231,6 +411,7 @@ test('ebay listing pull materializes offers and links by sku', function (): void
         'company_id' => $user->company_id,
         'sku' => EBAY_FIXTURE_SKU,
     ]);
+    seedReadyEbayListingInputs($item, $user->company_id);
 
     Http::fake([
         'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item*' => Http::response([
@@ -272,6 +453,11 @@ test('ebay listing pull materializes offers and links by sku', function (): void
 
     $listing = Listing::query()->where('external_listing_id', EBAY_FIXTURE_LISTING_ID)->first();
     $reference = ProductReference::query()->where('external_product_id', '1122066940')->first();
+    $draft = ListingDraft::query()
+        ->where('item_id', $item->id)
+        ->where('listing_id', $listing?->id)
+        ->latest('updated_at')
+        ->first();
 
     expect($result->fetched)->toBe(1)
         ->and($result->created)->toBe(1)
@@ -280,13 +466,158 @@ test('ebay listing pull materializes offers and links by sku', function (): void
         ->and($listing->item_id)->toBe($item->id)
         ->and($listing->price_amount)->toBe(12000)
         ->and($listing->currency_code)->toBe('USD')
+        ->and($draft)->not()->toBeNull()
+        ->and($draft->management_state)->toBe('imported')
+        ->and($draft->status)->toBe('imported')
+        ->and($draft->aspect_values['Brand']['value'])->toBe(['Honda'])
         ->and($reference)->not()->toBeNull()
         ->and($reference->item_id)->toBe($item->id)
+        ->and($reference->listing_draft_id)->toBe($draft->id)
         ->and($reference->reference_type)->toBe(ProductReference::TYPE_EBAY_EPID)
         ->and($reference->facts['aspects']['Brand'])->toBe(['Honda']);
 
     Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/sell/inventory/v1/offer')
         && $request->hasHeader('X-EBAY-C-MARKETPLACE-ID', 'EBAY_US'));
+});
+
+test('ebay listing pull refreshes existing belimbing-managed draft linkage and product references', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'BMW-CALIPER-IMPORT-1',
+        'status' => Item::STATUS_LISTED,
+    ]);
+    seedReadyEbayListingInputs($item, $user->company_id);
+
+    $listing = Listing::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_listing_id' => '4455667788',
+        'external_offer_id' => 'offer-import-1',
+        'external_sku' => 'BMW-CALIPER-IMPORT-1',
+        'marketplace_id' => 'EBAY_US',
+        'title' => 'BMW rear brake caliper pair',
+        'status' => 'ACTIVE',
+        'management_state' => 'belimbing_managed',
+        'drift_status' => 'in_sync',
+        'price_amount' => 25000,
+        'currency_code' => 'USD',
+        'raw_payload' => [
+            'publish_contract' => [
+                'inventory_item' => [
+                    'product' => [
+                        'title' => 'BMW rear brake caliper pair',
+                    ],
+                ],
+                'offer' => [
+                    'availableQuantity' => 1,
+                    'pricingSummary' => [
+                        'price' => [
+                            'value' => '250.00',
+                            'currency' => 'USD',
+                        ],
+                    ],
+                ],
+            ],
+        ],
+        'last_synced_at' => now()->subDay(),
+    ]);
+
+    $existingDraft = ListingDraft::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'listing_id' => $listing->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'marketplace_id' => 'EBAY_US',
+        'metadata_marketplace_id' => 'EBAY_MOTORS_US',
+        'external_sku' => 'BMW-CALIPER-IMPORT-1',
+        'title' => 'BMW rear brake caliper pair',
+        'status' => 'published',
+        'management_state' => 'belimbing_managed',
+        'readiness_status' => 'ready',
+    ]);
+
+    ProductReference::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'listing_id' => $listing->id,
+        'listing_draft_id' => $existingDraft->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'marketplace_id' => 'EBAY_US',
+        'reference_type' => ProductReference::TYPE_EBAY_EPID,
+        'external_product_id' => '1122066940',
+        'title' => 'BMW brake caliper',
+        'facts' => ['aspects' => ['Brand' => ['BMW']]],
+        'source' => ProductReference::SOURCE_IMPORTED,
+        'review_status' => ProductReference::REVIEW_SUGGESTED,
+        'imported_at' => Carbon::now()->subDay(),
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item*' => Http::response([
+            'total' => 1,
+            'inventoryItems' => [
+                [
+                    'sku' => 'BMW-CALIPER-IMPORT-1',
+                    'product' => [
+                        'title' => 'BMW rear brake caliper pair',
+                        'epid' => '1122066940',
+                        'aspects' => [
+                            'Brand' => ['BMW'],
+                            'Manufacturer Part Number' => ['34206785237'],
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer*' => Http::response([
+            'offers' => [
+                [
+                    'offerId' => 'offer-import-1',
+                    'sku' => 'BMW-CALIPER-IMPORT-1',
+                    'marketplaceId' => 'EBAY_US',
+                    'status' => 'PUBLISHED',
+                    'listing' => [
+                        'listingId' => '4455667788',
+                        'listingStatus' => 'ACTIVE',
+                    ],
+                    'pricingSummary' => [
+                        'price' => [
+                            'currency' => 'USD',
+                            'value' => '250.00',
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+
+    app(EbayMarketplaceChannel::class)->pullListings($user->company_id);
+
+    $draft = ListingDraft::query()
+        ->where('item_id', $item->id)
+        ->where('listing_id', $listing->id)
+        ->latest('updated_at')
+        ->firstOrFail();
+    $reference = ProductReference::query()
+        ->where('listing_id', $listing->id)
+        ->where('external_product_id', '1122066940')
+        ->firstOrFail();
+
+    expect($draft->id)->toBe($existingDraft->id)
+        ->and($draft->management_state)->toBe('belimbing_managed')
+        ->and($draft->status)->toBe('published')
+        ->and($draft->aspect_values['Manufacturer Part Number']['value'])->toBe(['34206785237'])
+        ->and($reference->listing_draft_id)->toBe($draft->id)
+        ->and($reference->target_key)->toBe('draft:'.$draft->id);
 });
 
 test('ebay registers as a marketplace channel provider', function (): void {

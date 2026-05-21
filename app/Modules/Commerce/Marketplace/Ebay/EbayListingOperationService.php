@@ -511,8 +511,8 @@ class EbayListingOperationService
                 'marketplace_id' => $draft->marketplace_id,
                 'title' => $title,
                 'status' => $status,
-                'management_state' => 'belimbing_managed',
-                'drift_status' => 'in_sync',
+                'management_state' => Listing::MANAGEMENT_BELIMBING_MANAGED,
+                'drift_status' => Listing::DRIFT_IN_SYNC,
                 'drift_summary' => null,
                 'price_amount' => is_string($price) ? (int) round(((float) $price) * 100) : null,
                 'currency_code' => is_string($currency) ? strtoupper($currency) : null,
@@ -538,7 +538,7 @@ class EbayListingOperationService
         $draft->update([
             'listing_id' => $listing->id,
             'status' => $status,
-            'management_state' => 'belimbing_managed',
+            'management_state' => ListingDraft::MANAGEMENT_BELIMBING_MANAGED,
             'publish_intent' => null,
             'last_failure_summary' => null,
         ]);

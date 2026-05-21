@@ -43,6 +43,7 @@ class EbayListingReadinessService
         $metadataMarketplaceId = $templateMapping['marketplace_id'] ?? $sellerMarketplaceId;
         $categoryTreeId = $templateMapping['category_tree_id'] ?? null;
         $categoryId = $templateMapping['category_id'] ?? null;
+        $existingDraft = $this->existingDraft($companyId, $item->id, $sellerMarketplaceId);
         $policyIds = $this->policyIds($companyId);
         $mappedAspects = $this->mappedAspects($item, $metadataMarketplaceId, $categoryId, $categoryTreeId);
         $productReferences = ProductReference::query()
@@ -50,7 +51,8 @@ class EbayListingReadinessService
             ->where('channel', EbayConfiguration::CHANNEL)
             ->where('item_id', $item->id)
             ->get();
-        $aspectFacts = $this->aspectFacts($item, $metadataMarketplaceId, $categoryId, $categoryTreeId, $productReferences->all());
+        $aspectFacts = $this->aspectFacts($item, $metadataMarketplaceId, $categoryId, $categoryTreeId, $productReferences->all(), $existingDraft);
+        $identifierAlignment = $this->identifierAlignment($aspectFacts);
 
         [$blockers, $warnings] = $this->gaps(
             item: $item,
@@ -63,6 +65,7 @@ class EbayListingReadinessService
             sellerMarketplaceId: $sellerMarketplaceId,
             categoryTreeId: $categoryTreeId,
             aspectFacts: $aspectFacts,
+            identifierAlignment: $identifierAlignment,
         );
 
         $readinessStatus = $blockers === [] ? self::STATUS_READY : self::STATUS_BLOCKED;
@@ -79,8 +82,8 @@ class EbayListingReadinessService
                 'external_sku' => $item->sku,
                 'title' => $item->title,
                 'category_id' => $categoryId,
-                'status' => 'draft',
-                'management_state' => 'local',
+                'status' => ListingDraft::STATUS_DRAFT,
+                'management_state' => ListingDraft::MANAGEMENT_LOCAL,
                 'mapped_aspects' => $mappedAspects,
                 'policy_ids' => $policyIds,
                 'merchant_location_key' => $this->merchantLocationKey($companyId),
@@ -101,6 +104,7 @@ class EbayListingReadinessService
                         'public_photo_count' => $this->publicPhotoUrls($item)->count(),
                     ],
                     'aspects' => $aspectFacts,
+                    'identifier_alignment' => $identifierAlignment,
                     'product_references' => $productReferences->map(fn (ProductReference $reference): array => [
                         'type' => $reference->reference_type,
                         'external_product_id' => $reference->external_product_id,
@@ -163,7 +167,8 @@ class EbayListingReadinessService
      */
     private function mappedAspects(Item $item, string $marketplaceId, ?string $categoryId, ?string $categoryTreeId): array
     {
-        return collect($this->aspectFacts($item, $marketplaceId, $categoryId, $categoryTreeId, []))
+        return collect($this->aspectFacts($item, $marketplaceId, $categoryId, $categoryTreeId, [], null))
+            ->where('source', 'catalog_attribute')
             ->filter(fn (array $fact): bool => $fact['value'] !== null && ($fact['validation'] ?? 'ok') === 'ok')
             ->mapWithKeys(fn (array $fact): array => [$fact['name'] => $fact['normalized_value'] ?? $fact['value']])
             ->all();
@@ -173,7 +178,7 @@ class EbayListingReadinessService
      * @param  list<ProductReference>  $productReferences
      * @return list<array{name: string, value: string|null, normalized_value?: string|null, source: string, confidence: string, internal_attribute_code?: string, validation?: string, message?: string}>
      */
-    private function aspectFacts(Item $item, string $marketplaceId, ?string $categoryId, ?string $categoryTreeId, array $productReferences): array
+    private function aspectFacts(Item $item, string $marketplaceId, ?string $categoryId, ?string $categoryTreeId, array $productReferences, ?ListingDraft $existingDraft): array
     {
         if ($categoryId === null) {
             return [];
@@ -204,19 +209,20 @@ class EbayListingReadinessService
             ->values()
             ->all();
 
-        $mappedNames = collect($mappedFacts)->pluck('name')->all();
+        $draftFacts = $this->draftAspectFacts($existingDraft, []);
         $suggestedFacts = collect($productReferences)
-            ->flatMap(fn (ProductReference $reference): array => $this->suggestedAspectFacts($reference, $mappedNames))
+            ->flatMap(fn (ProductReference $reference): array => $this->suggestedAspectFacts($reference, []))
             ->values()
             ->all();
 
-        return [...$mappedFacts, ...$suggestedFacts];
+        return [...$mappedFacts, ...$draftFacts, ...$suggestedFacts];
     }
 
     /**
      * @param  array{return: string|null, fulfillment: string|null, payment: string|null}  $policyIds
      * @param  array<string, mixed>  $mappedAspects
      * @param  list<array{name: string, value: string|null, normalized_value?: string|null, source: string, confidence: string, internal_attribute_code?: string, validation?: string, message?: string}>  $aspectFacts
+     * @param  list<array{key: string, label: string, status: string, sources: array<string, list<string>>}>  $identifierAlignment
      * @return array{0: list<array{key: string, label: string}>, 1: list<array{key: string, label: string}>}
      */
     private function gaps(
@@ -230,6 +236,7 @@ class EbayListingReadinessService
         string $sellerMarketplaceId,
         ?string $categoryTreeId,
         array $aspectFacts,
+        array $identifierAlignment,
     ): array {
         $blockers = [];
         $warnings = [];
@@ -302,6 +309,10 @@ class EbayListingReadinessService
             $warnings[] = $this->gap('identifier_part_number', __('Add manufacturer, OEM, or interchange part numbers when available.'), 'attributes');
         }
 
+        if ($this->hasIdentifierConflict($identifierAlignment)) {
+            $warnings[] = $this->gap('identifier_conflict', __('Review imported eBay identifiers that conflict with Belimbing facts before revising.'), 'attributes');
+        }
+
         if (! $this->titleIncludesUsefulSpecific($item->title, $mappedAspects)) {
             $warnings[] = $this->gap('title_guidance', __('Improve the title with useful specifics such as part type, brand, part number, side, or placement.'), 'item_facts');
         }
@@ -331,6 +342,16 @@ class EbayListingReadinessService
     private function gap(string $key, string $label, string $action): array
     {
         return compact('key', 'label', 'action');
+    }
+
+    private function existingDraft(int $companyId, int $itemId, string $sellerMarketplaceId): ?ListingDraft
+    {
+        return ListingDraft::query()
+            ->where('company_id', $companyId)
+            ->where('item_id', $itemId)
+            ->where('channel', EbayConfiguration::CHANNEL)
+            ->where('marketplace_id', $sellerMarketplaceId)
+            ->first();
     }
 
     /**
@@ -392,6 +413,63 @@ class EbayListingReadinessService
     }
 
     /**
+     * @param  list<array{name: string, value: string|null, normalized_value?: string|null, source: string, confidence: string, internal_attribute_code?: string, validation?: string, message?: string}>  $aspectFacts
+     * @return list<array{key: string, label: string, status: string, sources: array<string, list<string>>}>
+     */
+    private function identifierAlignment(array $aspectFacts): array
+    {
+        $groups = [
+            [
+                'key' => 'brand',
+                'label' => 'Brand',
+                'names' => ['Brand'],
+            ],
+            [
+                'key' => 'part_number',
+                'label' => 'Part Number',
+                'names' => ['Manufacturer Part Number', 'MPN', 'OE/OEM Part Number', 'Interchange Part Number'],
+            ],
+        ];
+
+        return collect($groups)
+            ->map(function (array $group) use ($aspectFacts): ?array {
+                $sources = collect($aspectFacts)
+                    ->filter(fn (array $fact): bool => $fact['value'] !== null && in_array($fact['name'], $group['names'], true))
+                    ->groupBy('source')
+                    ->map(fn (Collection $facts): array => $facts
+                        ->map(fn (array $fact): string => trim((string) ($fact['normalized_value'] ?? $fact['value'])))
+                        ->filter(fn (string $value): bool => $value !== '')
+                        ->unique()
+                        ->values()
+                        ->all())
+                    ->filter(fn (array $values): bool => $values !== [])
+                    ->all();
+
+                if ($sources === []) {
+                    return null;
+                }
+
+                $valueSets = collect($sources)
+                    ->map(fn (array $values): array => collect($values)->map(fn (string $value): string => strtolower($value))->sort()->values()->all())
+                    ->values();
+
+                $status = $valueSets->count() < 2
+                    ? 'partial'
+                    : ($valueSets->unique(fn (array $values): string => json_encode($values))->count() === 1 ? 'aligned' : 'conflict');
+
+                return [
+                    'key' => $group['key'],
+                    'label' => $group['label'],
+                    'status' => $status,
+                    'sources' => $sources,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
      * @param  list<string>  $marketplaceIds
      */
     private function hasEnabledAccountResource(int $companyId, array $marketplaceIds, string $kind, string $externalId): bool
@@ -427,6 +505,14 @@ class EbayListingReadinessService
     private function hasAnyAspect(array $aspectFacts, array $names): bool
     {
         return collect($aspectFacts)->contains(fn (array $fact): bool => $fact['value'] !== null && in_array($fact['name'], $names, true));
+    }
+
+    /**
+     * @param  list<array{key: string, label: string, status: string, sources: array<string, list<string>>}>  $identifierAlignment
+     */
+    private function hasIdentifierConflict(array $identifierAlignment): bool
+    {
+        return collect($identifierAlignment)->contains(fn (array $alignment): bool => $alignment['status'] === 'conflict');
     }
 
     private function hasPublishSafePhotos(Item $item): bool
@@ -469,6 +555,48 @@ class EbayListingReadinessService
         }
 
         return __('The eBay aspect value ":value" is not allowed for the selected category.', ['value' => $value]);
+    }
+
+    /**
+     * @param  list<string>  $alreadyMappedNames
+     * @return list<array{name: string, value: string|null, source: string, confidence: string}>
+     */
+    private function draftAspectFacts(?ListingDraft $draft, array $alreadyMappedNames): array
+    {
+        $aspectValues = $draft?->aspect_values ?? [];
+
+        if (! is_array($aspectValues)) {
+            return [];
+        }
+
+        return collect($aspectValues)
+            ->map(function (mixed $entry, mixed $name) use ($alreadyMappedNames): ?array {
+                if (! is_string($name) || trim($name) === '' || in_array($name, $alreadyMappedNames, true)) {
+                    return null;
+                }
+
+                $source = is_array($entry) && is_string($entry['source'] ?? null)
+                    ? trim((string) $entry['source'])
+                    : 'seller';
+                $value = is_array($entry) ? ($entry['value'] ?? null) : $entry;
+                $value = is_array($value) ? reset($value) : $value;
+
+                if (! is_scalar($value) || trim((string) $value) === '') {
+                    return null;
+                }
+
+                return [
+                    'name' => trim($name),
+                    'value' => trim((string) $value),
+                    'source' => $source,
+                    'confidence' => $source === 'ebay_listing'
+                        ? AspectMapping::CONFIDENCE_IMPORTED
+                        : AspectMapping::CONFIDENCE_MANUAL,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
     /**

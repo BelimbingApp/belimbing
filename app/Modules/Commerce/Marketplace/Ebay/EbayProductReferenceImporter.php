@@ -3,12 +3,13 @@
 namespace App\Modules\Commerce\Marketplace\Ebay;
 
 use App\Modules\Commerce\Marketplace\Models\Listing;
+use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use App\Modules\Commerce\Marketplace\Models\ProductReference;
 use Illuminate\Support\Carbon;
 
 class EbayProductReferenceImporter
 {
-    public function importFromListing(Listing $listing): ?ProductReference
+    public function importFromListing(Listing $listing, ?ListingDraft $draft = null): ?ProductReference
     {
         $epid = $this->epid($listing->raw_payload ?? []);
 
@@ -23,10 +24,10 @@ class EbayProductReferenceImporter
                 'channel' => EbayConfiguration::CHANNEL,
                 'reference_type' => ProductReference::TYPE_EBAY_EPID,
                 'external_product_id' => $epid,
-                'target_key' => 'listing:'.$listing->id,
             ],
             [
                 'item_id' => $listing->item_id,
+                'listing_draft_id' => $draft?->id,
                 'marketplace_id' => $listing->marketplace_id,
                 'title' => $listing->title,
                 'facts' => $this->facts($listing->raw_payload ?? []),

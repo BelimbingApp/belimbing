@@ -4,10 +4,10 @@ namespace App\Modules\Commerce\Marketplace\Livewire\Ebay;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
-use App\Base\Foundation\ValueObjects\Money;
 use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
+use App\Modules\Commerce\Marketplace\Ebay\EbayListingAuditService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
 use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
@@ -16,7 +16,6 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Throwable;
@@ -24,14 +23,6 @@ use Throwable;
 class Index extends Component
 {
     use WithPagination;
-
-    /**
-     * @var list<string>
-     */
-    private const array ACTIVE_LISTING_STATUSES = [
-        'ACTIVE',
-        'PUBLISHED',
-    ];
 
     public string $search = '';
 
@@ -136,7 +127,7 @@ class Index extends Component
         return Listing::query()
             ->where('company_id', $companyId)
             ->where('channel', EbayConfiguration::CHANNEL)
-            ->with('item')
+            ->with(['item', 'draft'])
             ->when($this->search !== '', function (Builder $query): void {
                 $query->where(function (Builder $query): void {
                     $query->where('external_sku', 'like', '%'.$this->search.'%')
@@ -178,23 +169,16 @@ class Index extends Component
             ->paginate(10, ['*'], 'unlistedPage');
     }
 
-    /**
-     * @return array{totalListings: int, linkedListings: int, unlinkedListings: int, driftedListings: int, unlistedItems: int}
-     */
     private function stats(int $companyId): array
     {
-        /** @var Collection<int, Listing> $listings */
         $listings = Listing::query()
             ->where('company_id', $companyId)
             ->where('channel', EbayConfiguration::CHANNEL)
-            ->with('item')
+            ->with(['item', 'draft'])
             ->get();
 
         return [
-            'totalListings' => $listings->count(),
-            'linkedListings' => $listings->whereNotNull('item_id')->count(),
-            'unlinkedListings' => $listings->whereNull('item_id')->count(),
-            'driftedListings' => $listings->filter(fn (Listing $listing): bool => $this->isDrifted($listing))->count(),
+            ...$this->audit()->stats($listings),
             'unlistedItems' => Item::query()
                 ->where('company_id', $companyId)
                 ->whereNotIn('status', [Item::STATUS_SOLD, Item::STATUS_ARCHIVED])
@@ -207,108 +191,40 @@ class Index extends Component
 
     public function reconciliationLabel(Listing $listing): string
     {
-        if ($listing->item_id === null) {
-            return __('Unlinked');
-        }
-
-        if ($listing->management_state === 'belimbing_managed' && $listing->drift_status === 'drifted') {
-            return __('Externally Changed');
-        }
-
-        if ($this->isDrifted($listing)) {
-            return __('Drifted');
-        }
-
-        return __('Matched');
+        return $this->audit()->label($listing);
     }
 
     public function reconciliationVariant(Listing $listing): string
     {
-        if ($listing->item_id === null) {
-            return 'warning';
-        }
-
-        if ($listing->management_state === 'belimbing_managed' && $listing->drift_status === 'drifted') {
-            return 'danger';
-        }
-
-        if ($this->isDrifted($listing)) {
-            return 'danger';
-        }
-
-        return 'success';
+        return $this->audit()->variant($listing);
     }
 
     public function listingStatusVariant(?string $status): string
     {
-        return in_array(Str::upper((string) $status), self::ACTIVE_LISTING_STATUSES, true)
-            ? 'success'
-            : 'default';
+        return $this->audit()->listingStatusVariant($status);
     }
 
     public function managementStateVariant(string $state): string
     {
-        return match ($state) {
-            'belimbing_managed' => 'success',
-            'imported' => 'default',
-            default => 'default',
-        };
+        return $this->audit()->managementStateVariant($state);
     }
 
     public function itemStatusVariant(?string $status): string
     {
-        return match ($status) {
-            Item::STATUS_DRAFT => 'default',
-            Item::STATUS_READY => 'info',
-            Item::STATUS_LISTED => 'accent',
-            Item::STATUS_SOLD => 'success',
-            Item::STATUS_ARCHIVED => 'default',
-            default => 'default',
-        };
+        return $this->audit()->itemStatusVariant($status);
     }
 
     public function formatMoney(?int $amount, ?string $currencyCode): string
     {
-        if ($amount === null || $currencyCode === null || $currencyCode === '') {
-            return __('n/a');
-        }
-
-        return Money::format($amount, $currencyCode);
+        return $this->audit()->formatMoney($amount, $currencyCode);
     }
 
     public function isDrifted(Listing $listing): bool
     {
-        $item = $listing->item;
-
-        if ($item === null) {
-            return false;
-        }
-
-        if ($listing->management_state === 'belimbing_managed' && $listing->drift_status === 'drifted') {
-            return true;
-        }
-
-        $listingActive = in_array(Str::upper((string) $listing->status), self::ACTIVE_LISTING_STATUSES, true);
-
-        if ($listingActive && $item->status !== Item::STATUS_LISTED) {
-            return true;
-        }
-
-        if (! $listingActive && $item->status === Item::STATUS_LISTED) {
-            return true;
-        }
-
-        if (
-            $item->target_price_amount !== null
-            && $listing->price_amount !== null
-            && $item->target_price_amount !== $listing->price_amount
-        ) {
-            return true;
-        }
-
-        return $item->currency_code !== null
-            && $listing->currency_code !== null
-            && $item->currency_code !== $listing->currency_code;
+        return in_array($this->audit()->state($listing), [
+            Listing::RECONCILIATION_EXTERNALLY_CHANGED,
+            Listing::RECONCILIATION_DRIFTED,
+        ], true);
     }
 
     private function companyId(): int
@@ -328,5 +244,10 @@ class Index extends Component
             Actor::forUser(Auth::user()),
             'commerce.marketplace.execute',
         );
+    }
+
+    private function audit(): EbayListingAuditService
+    {
+        return app(EbayListingAuditService::class);
     }
 }

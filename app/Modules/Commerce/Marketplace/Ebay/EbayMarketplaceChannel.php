@@ -10,6 +10,7 @@ use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannel;
 use App\Modules\Commerce\Marketplace\DTO\MarketplacePullResult;
 use App\Modules\Commerce\Marketplace\Exceptions\MarketplaceOperationException;
 use App\Modules\Commerce\Marketplace\Models\Listing;
+use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use App\Modules\Commerce\Sales\DTO\SalesOrderData;
 use App\Modules\Commerce\Sales\DTO\SalesOrderLineData;
 use App\Modules\Commerce\Sales\Services\SalesOrderMaterializer;
@@ -24,6 +25,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         private readonly SalesOrderMaterializer $salesOrders,
         private readonly EbayProductReferenceImporter $productReferences,
         private readonly EbayListingOperationService $listingOperations,
+        private readonly EbayListingReadinessService $readiness,
     ) {}
 
     public function key(): string
@@ -178,7 +180,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
                 'marketplace_id' => $offer['marketplaceId'] ?? null,
                 'title' => $inventoryItem['product']['title'] ?? null,
                 'status' => $offer['listing']['listingStatus'] ?? $offer['status'] ?? null,
-                'management_state' => $existing?->management_state ?? 'imported',
+                'management_state' => $existing?->management_state ?? Listing::MANAGEMENT_IMPORTED,
                 'drift_status' => $drift['status'],
                 'drift_summary' => $drift['summary'],
                 'price_amount' => is_string($price) && is_string($currency) ? Money::fromDecimalString($price, $currency)?->minorAmount : null,
@@ -201,17 +203,17 @@ class EbayMarketplaceChannel implements MarketplaceChannel
     private function externalDriftState(?Listing $existing, array $offer, array $inventoryItem): array
     {
         if (! $existing instanceof Listing) {
-            return ['status' => 'unknown', 'summary' => null];
+            return ['status' => Listing::DRIFT_UNKNOWN, 'summary' => null];
         }
 
-        if ($existing->management_state !== 'belimbing_managed') {
-            return ['status' => 'unknown', 'summary' => null];
+        if (! $existing->isBelimbingManaged()) {
+            return ['status' => Listing::DRIFT_UNKNOWN, 'summary' => null];
         }
 
         $contract = $existing->raw_payload['publish_contract'] ?? null;
 
         if (! is_array($contract)) {
-            return ['status' => 'unknown', 'summary' => null];
+            return ['status' => Listing::DRIFT_UNKNOWN, 'summary' => null];
         }
 
         $driftedFields = [];
@@ -244,11 +246,11 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         }
 
         if ($driftedFields === []) {
-            return ['status' => 'in_sync', 'summary' => null];
+            return ['status' => Listing::DRIFT_IN_SYNC, 'summary' => null];
         }
 
         return [
-            'status' => 'drifted',
+            'status' => Listing::DRIFT_DRIFTED,
             'summary' => 'Externally changed: '.implode(', ', $driftedFields).'.',
         ];
     }
@@ -290,7 +292,8 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         foreach ($offerResponse['offers'] ?? [] as $offer) {
             $fetched++;
             $listing = $this->upsertOffer($companyId, $offer, $inventoryItem);
-            $this->productReferences->importFromListing($listing);
+            $draft = $this->syncImportedListingDraft($listing);
+            $this->productReferences->importFromListing($listing, $draft);
             $listing->wasRecentlyCreated ? $created++ : $updated++;
 
             if ($listing->item_id !== null) {
@@ -299,6 +302,69 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         }
 
         return compact('fetched', 'created', 'updated', 'linked');
+    }
+
+    private function syncImportedListingDraft(Listing $listing): ?ListingDraft
+    {
+        $item = $listing->item;
+
+        if ($item === null) {
+            return null;
+        }
+
+        $draft = $this->readiness->refreshForItem($item->fresh());
+        $listingAspects = $this->listingAspectValues($listing);
+
+        $draft->update([
+            'listing_id' => $listing->id,
+            'external_sku' => $listing->external_sku ?? $item->sku,
+            'title' => $listing->title ?? $item->title,
+            'status' => $listing->isBelimbingManaged() ? ListingDraft::STATUS_PUBLISHED : ListingDraft::STATUS_IMPORTED,
+            'management_state' => $listing->management_state,
+            'aspect_values' => $listingAspects !== [] ? $listingAspects : $draft->aspect_values,
+            'publish_intent' => null,
+            'last_failure_summary' => null,
+        ]);
+
+        return $draft->fresh();
+    }
+
+    /**
+     * @return array<string, array{value: string|list<string>, source: string}>
+     */
+    private function listingAspectValues(Listing $listing): array
+    {
+        $aspects = data_get($listing->raw_payload, 'inventory_item.product.aspects');
+
+        if (! is_array($aspects)) {
+            return [];
+        }
+
+        return collect($aspects)
+            ->mapWithKeys(function (mixed $value, mixed $name): array {
+                if (! is_string($name) || trim($name) === '') {
+                    return [];
+                }
+
+                if (is_array($value)) {
+                    $normalized = collect($value)
+                        ->map(fn (mixed $entry): ?string => is_scalar($entry) && trim((string) $entry) !== '' ? trim((string) $entry) : null)
+                        ->filter()
+                        ->values()
+                        ->all();
+
+                    return $normalized === []
+                        ? []
+                        : [trim($name) => ['value' => $normalized, 'source' => 'ebay_listing']];
+                }
+
+                if (is_scalar($value) && trim((string) $value) !== '') {
+                    return [trim($name) => ['value' => trim((string) $value), 'source' => 'ebay_listing']];
+                }
+
+                return [];
+            })
+            ->all();
     }
 
     /**

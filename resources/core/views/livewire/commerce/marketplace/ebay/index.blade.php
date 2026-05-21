@@ -89,13 +89,13 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
             </x-ui.card>
 
             <x-ui.card class="xl:col-span-3">
-                <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
                     <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
                         <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Synced') }}</div>
                         <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['totalListings'] }}</div>
                     </div>
                     <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Matched') }}</div>
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Linked') }}</div>
                         <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['linkedListings'] }}</div>
                     </div>
                     <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
@@ -103,8 +103,24 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                         <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['unlinkedListings'] }}</div>
                     </div>
                     <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Drifted') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['driftedListings'] }}</div>
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Externally Changed') }}</div>
+                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['externallyChangedListings'] }}</div>
+                    </div>
+                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Ready to Adopt') }}</div>
+                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['readyToAdoptListings'] }}</div>
+                    </div>
+                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Missing Fitment') }}</div>
+                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['missingFitmentListings'] }}</div>
+                    </div>
+                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Conflicting IDs') }}</div>
+                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['conflictingIdentifierListings'] }}</div>
+                    </div>
+                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Missing Identifiers') }}</div>
+                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['missingIdentifierListings'] }}</div>
                     </div>
                     <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
                         <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Not Listed') }}</div>

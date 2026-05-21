@@ -40,6 +40,18 @@ use Illuminate\Support\Carbon;
  */
 class ListingDraft extends Model
 {
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_IMPORTED = 'imported';
+
+    public const STATUS_PUBLISHED = 'published';
+
+    public const MANAGEMENT_LOCAL = 'local';
+
+    public const MANAGEMENT_IMPORTED = 'imported';
+
+    public const MANAGEMENT_BELIMBING_MANAGED = 'belimbing_managed';
+
     protected $table = 'commerce_marketplace_listing_drafts';
 
     /**
@@ -104,5 +116,53 @@ class ListingDraft extends Model
     public function listing(): BelongsTo
     {
         return $this->belongsTo(Listing::class);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function blockerKeys(): array
+    {
+        return $this->gapKeys('blockers');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function warningKeys(): array
+    {
+        return $this->gapKeys('warnings');
+    }
+
+    public function hasGapKey(string $key): bool
+    {
+        return in_array($key, [...$this->blockerKeys(), ...$this->warningKeys()], true);
+    }
+
+    /**
+     * @param  list<string>  $keys
+     */
+    public function hasAnyGapKey(array $keys): bool
+    {
+        return collect([...$this->blockerKeys(), ...$this->warningKeys()])
+            ->contains(fn (string $gapKey): bool => in_array($gapKey, $keys, true));
+    }
+
+    public function hasIdentifierConflict(): bool
+    {
+        return collect(data_get($this->readiness_snapshot, 'identifier_alignment', []))
+            ->contains(fn (mixed $alignment): bool => is_array($alignment) && ($alignment['status'] ?? null) === 'conflict');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function gapKeys(string $bucket): array
+    {
+        return collect(data_get($this->readiness_snapshot, $bucket, []))
+            ->pluck('key')
+            ->filter(fn (mixed $key): bool => is_string($key) && trim($key) !== '')
+            ->values()
+            ->all();
     }
 }
