@@ -11,7 +11,9 @@ return new class extends Migration
         Schema::create('commerce_marketplace_aspect_mappings', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('company_id')->constrained('companies')->cascadeOnDelete();
-            $table->foreignId('catalog_attribute_id')->nullable()->constrained('commerce_catalog_attributes')->nullOnDelete();
+            $table->unsignedBigInteger('catalog_attribute_id')->nullable();
+            $table->foreign('catalog_attribute_id', 'cms_mkt_asp_map_attr_fk')
+                ->references('id')->on('commerce_catalog_attributes')->nullOnDelete();
             $table->string('channel');
             $table->string('marketplace_id');
             $table->string('category_tree_id')->nullable();

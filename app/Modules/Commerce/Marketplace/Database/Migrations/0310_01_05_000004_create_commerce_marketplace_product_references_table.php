@@ -13,7 +13,9 @@ return new class extends Migration
             $table->foreignId('company_id')->constrained('companies')->cascadeOnDelete();
             $table->foreignId('item_id')->nullable()->constrained('commerce_inventory_items')->cascadeOnDelete();
             $table->foreignId('listing_id')->nullable()->constrained('commerce_marketplace_listings')->cascadeOnDelete();
-            $table->foreignId('listing_draft_id')->nullable()->constrained('commerce_marketplace_listing_drafts')->cascadeOnDelete();
+            $table->unsignedBigInteger('listing_draft_id')->nullable();
+            $table->foreign('listing_draft_id', 'cms_mkt_prod_ref_draft_fk')
+                ->references('id')->on('commerce_marketplace_listing_drafts')->cascadeOnDelete();
             $table->string('channel');
             $table->string('marketplace_id')->nullable();
             $table->string('reference_type');
