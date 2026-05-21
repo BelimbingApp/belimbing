@@ -68,6 +68,10 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
      @show-day-drawer.window="openDrawer($event.detail.date)"
      @grid-cell-select.window="handleCellSelect($event.detail)"
      @keydown.window="handleKeydown($event)"
+     @open-swap-modal.window="openSwapModal($event.detail.empId)"
+     @open-bulk-assign-modal.window="openBulkModal($event.detail.empIds)"
+     @close-swap-modal.window="swapModalOpen = false"
+     @close-bulk-modal.window="bulkModalOpen = false"
      class="relative">
 
 <div class="roster-print-hide flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -413,6 +417,145 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
 </div>
 @endif
 
+@if ($canManage)
+{{-- Swap modal --}}
+<div x-show="swapModalOpen" x-cloak
+     @keydown.escape.window="swapModalOpen = false"
+     class="fixed inset-0 z-50 overflow-y-auto"
+     style="display: none;">
+    <div x-show="swapModalOpen"
+         x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+         @click="swapModalOpen = false"
+         class="fixed inset-0 bg-black/50"></div>
+    <div class="flex min-h-full items-center justify-center p-4">
+        <div x-show="swapModalOpen"
+             x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+             @click.stop
+             class="relative w-full max-w-md rounded-2xl border border-border-default bg-surface-card shadow-xl">
+            <div class="space-y-4 p-6">
+                <div>
+                    <h2 class="text-lg font-semibold text-ink">{{ __('Swap Shift') }}</h2>
+                    <p class="mt-1 text-sm text-muted">{{ __('Exchange the shift for a specific date between two employees.') }}</p>
+                </div>
+                <div class="rounded-lg border border-border-default bg-surface-subtle px-3 py-2 text-sm">
+                    <span class="text-muted">{{ __('From:') }}</span>
+                    <span class="ml-1 font-medium text-ink" x-text="swapFromName"></span>
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs font-medium text-muted">{{ __('Swap with') }}</label>
+                    <select x-model="swapTargetEmpId"
+                            class="w-full rounded-lg border border-border-default bg-surface-card px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
+                        <option value="">{{ __('— Select employee —') }}</option>
+                        <template x-for="emp in swapTargetList" :key="emp.id">
+                            <option :value="emp.id" x-text="emp.name"></option>
+                        </template>
+                    </select>
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs font-medium text-muted">{{ __('Date') }}</label>
+                    <input type="date" x-model="swapDateStr"
+                           class="w-full rounded-lg border border-border-default bg-surface-card px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent" />
+                </div>
+                @error('swapDate')
+                    <p class="text-xs text-red-600">{{ $message }}</p>
+                @enderror
+                <div class="flex justify-end gap-2 pt-1">
+                    <x-ui.button type="button" variant="secondary" @click="swapModalOpen = false">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="button" variant="primary"
+                                 :disabled="!swapTargetEmpId || !swapDateStr"
+                                 @click="confirmSwap()">{{ __('Confirm swap') }}</x-ui.button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- Bulk assign modal --}}
+<div x-show="bulkModalOpen" x-cloak
+     @keydown.escape.window="bulkModalOpen = false"
+     class="fixed inset-0 z-50 overflow-y-auto"
+     style="display: none;">
+    <div x-show="bulkModalOpen"
+         x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+         @click="bulkModalOpen = false"
+         class="fixed inset-0 bg-black/50"></div>
+    <div class="flex min-h-full items-center justify-center p-4">
+        <div x-show="bulkModalOpen"
+             x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95"
+             @click.stop
+             class="relative w-full max-w-lg rounded-2xl border border-border-default bg-surface-card shadow-xl">
+            <div class="space-y-4 p-6">
+                <div>
+                    <h2 class="text-lg font-semibold text-ink">{{ __('Bulk Assign') }}</h2>
+                    <p class="mt-1 text-sm text-muted">
+                        {{ __('Assigning to') }}
+                        <span class="font-semibold text-ink" x-text="bulkEmpIds.length"></span>
+                        {{ __('employee(s).') }}
+                    </p>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-1 block text-xs font-medium text-muted">{{ __('Shift') }} <span class="text-red-500">*</span></label>
+                        <select wire:model="rosterShiftTemplateId"
+                                class="w-full rounded-lg border border-border-default bg-surface-card px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
+                            <option value="">{{ __('— Select shift —') }}</option>
+                            @foreach ($shiftTemplates as $shiftTpl)
+                                <option value="{{ $shiftTpl->id }}">{{ $shiftTpl->code }} — {{ $shiftTpl->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('rosterShiftTemplateId')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs font-medium text-muted">{{ __('Policy') }} <span class="text-red-500">*</span></label>
+                        <select wire:model="rosterPolicyGroupId"
+                                class="w-full rounded-lg border border-border-default bg-surface-card px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
+                            <option value="">{{ __('— Select policy —') }}</option>
+                            @foreach ($policyGroups as $policyGrp)
+                                <option value="{{ $policyGrp->id }}">{{ $policyGrp->code }} — {{ $policyGrp->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('rosterPolicyGroupId')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                    </div>
+                </div>
+                @if ($rosterPatterns->isNotEmpty())
+                <div>
+                    <label class="mb-1 block text-xs font-medium text-muted">{{ __('Pattern (optional)') }}</label>
+                    <select wire:model="rosterPatternId"
+                            class="w-full rounded-lg border border-border-default bg-surface-card px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
+                        <option value="">{{ __('— No pattern —') }}</option>
+                        @foreach ($rosterPatterns as $pattern)
+                            <option value="{{ $pattern->id }}">{{ $pattern->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                @endif
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <x-ui.input id="bulk-assign-from" type="date" wire:model="rosterEffectiveFrom"
+                                label="{{ __('From') }}" :error="$errors->first('rosterEffectiveFrom')" />
+                    <x-ui.input id="bulk-assign-to" type="date" wire:model="rosterEffectiveTo"
+                                label="{{ __('To (blank = open-ended)') }}" :error="$errors->first('rosterEffectiveTo')" />
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs font-medium text-muted">{{ __('Note (optional)') }}</label>
+                    <textarea x-model="bulkNote" rows="2"
+                              class="w-full rounded-lg border border-border-default bg-surface-card px-2 py-1.5 text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent"
+                              placeholder="{{ __('Reason for this assignment') }}"></textarea>
+                </div>
+                @error('selectedRosterEmployeeIds')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
+                <div class="flex justify-end gap-2 pt-1">
+                    <x-ui.button type="button" variant="secondary" @click="bulkModalOpen = false">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="button" variant="primary" @click="confirmBulkAssign()">{{ __('Assign') }}</x-ui.button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
 </div>{{-- /Alpine rosterGrid wrapper --}}
 
 <script>
@@ -453,6 +596,18 @@ Alpine.data('rosterGrid', (dayData) => ({
         barAddress: '',
         barMulti: false,
         barCount: 0,
+
+        // Swap modal state
+        swapModalOpen: false,
+        swapFromName: '',
+        swapTargetEmpId: '',
+        swapDateStr: '',
+        swapTargetList: [],
+
+        // Bulk assign modal state
+        bulkModalOpen: false,
+        bulkEmpIds: [],
+        bulkNote: '',
 
         init() {
             window.rosterGrid = this;
@@ -820,6 +975,43 @@ Alpine.data('rosterGrid', (dayData) => ({
             if (this.selection.length !== 1) return;
             const s = this.selection[0];
             this.$wire.loadCellHistory(parseInt(s.empId), s.date);
+        },
+
+        // Swap modal
+        _empName(empId) {
+            const tr = this.$el.querySelector(`tr[data-row-employee="${empId}"]`);
+            return tr?.querySelector('td:first-child .truncate')?.textContent?.trim() || `#${empId}`;
+        },
+
+        openSwapModal(empId) {
+            const id = String(empId);
+            this.swapFromName = this._empName(id);
+            this.swapTargetList = this.employees
+                .filter(eid => eid !== id)
+                .map(eid => ({ id: eid, name: this._empName(eid) }));
+            this.swapTargetEmpId = '';
+            this.swapDateStr = this.dates[0] || '';
+            this.$wire.set('swapFromEmployeeId', id);
+            this.swapModalOpen = true;
+        },
+
+        confirmSwap() {
+            this.$wire.set('swapToEmployeeId', this.swapTargetEmpId);
+            this.$wire.set('swapDate', this.swapDateStr);
+            this.$wire.swapRosterCells();
+        },
+
+        // Bulk assign modal
+        openBulkModal(empIds) {
+            this.bulkEmpIds = empIds.map(String);
+            this.bulkNote = '';
+            this.$wire.set('selectedRosterEmployeeIds', this.bulkEmpIds);
+            this.bulkModalOpen = true;
+        },
+
+        confirmBulkAssign() {
+            this.$wire.set('rosterBulkNote', this.bulkNote);
+            this.$wire.saveRosterAssignment();
         },
 
         // Keyboard

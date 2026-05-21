@@ -1,10 +1,10 @@
 # 18e_roster-form-consolidation.md
 
-**Status:** In Progress — Phase 5 next
+**Status:** In Progress — Phase 6 next
 **Last Updated:** 2026-05-21
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan
-- `docs/plans/base-audit-entity-index.md` — delegated to a separate agent; adds `object_name`, `object_id`, `subject_identifier` to `base_audit_mutations`. Once complete, Phase 2's `people_attendance_roster_cell_log` table and `AttendanceRosterAssignmentObserver` are replaced by enriched rows on the mutations table (see base plan Phase 3–4).
+- `docs/plans/base-audit-subject-index.md` — delegated to a separate agent; adds `subject_name`, `subject_id`, `subject_identifier` to `base_audit_mutations`. Once complete, Phase 2's `people_attendance_roster_cell_log` table and `AttendanceRosterAssignmentObserver` are replaced by enriched rows on the mutations table (see base plan Phase 3–4).
 - `docs/plans/people/18b_roster-grid-interaction.md` — grid interaction layer (complete)
 - `resources/core/views/livewire/people/attendance/partials/rosters-form.blade.php` — form to be retired
 - `resources/core/views/livewire/people/attendance/partials/rosters-grid.blade.php` — grid to receive folded features
@@ -65,7 +65,7 @@ The form mode is eliminated. Every operation a manager needs is reachable from t
 - [x] Grid UI: "History" button in the formula bar when a single cell is selected; opens a side drawer listing log rows for that employee × date — timestamp, actor, action badge, from → to shift/policy, note, job. {claude/sonnet-4.6}
 - [x] History drawer has an "Open full history" link (new tab) → `RosterEmployeeHistory` Livewire component with date filter and paginated table. {claude/sonnet-4.6}
 - [x] Cleanup: batch user-name lookup in `ManagesRosterCellHistory` (was N+1); removed stale draft/published wording from grid intro and dead `hasPublished` guard from `deleteSelection()`. {claude/sonnet-4.6}
-- [ ] **Superseded by audit delegation**: once `docs/plans/base-audit-entity-index.md` Phase 3–4 ships, replace `people_attendance_roster_cell_log`, `AttendanceRosterAssignmentObserver`, and `ManagesRosterCellHistory` queries with enriched `base_audit_mutations` rows.
+- [ ] **Superseded by audit delegation**: once `docs/plans/base-audit-subject-index.md` Phase 3–4 ships, replace `people_attendance_roster_cell_log`, `AttendanceRosterAssignmentObserver`, and `ManagesRosterCellHistory` queries with enriched `base_audit_mutations` rows.
 
 ### Phase 3 — Employee row selection via name column
 
@@ -87,10 +87,10 @@ The form mode is eliminated. Every operation a manager needs is reachable from t
 
 ### Phase 5 — Swap and bulk assign modals
 
-- [ ] Swap modal: lists all other visible employees as targets (name, shift code for the selected date range); confirming calls the existing `swapRosterCells()`.
-- [ ] Bulk assign modal: exposes repeat-pattern selector, shift selector, policy selector, effective-from/to date inputs (defaulting to visible range); submit calls the existing `saveRosterAssignment()`.
-- [ ] Both modals surface validation errors inline; close on success and flash confirmation.
-- [ ] Bulk assign modal passes an optional note field that is forwarded to the audit log.
+- [x] Swap modal: lists all other visible employees as targets (name from DOM); confirming calls the existing `swapRosterCells()`. {claude/sonnet-4.6}
+- [x] Bulk assign modal: exposes repeat-pattern selector (when patterns exist), shift selector, policy selector, effective-from/to date inputs; submit calls the existing `saveRosterAssignment()`. {claude/sonnet-4.6}
+- [x] Both modals surface validation errors inline; close on success (`dispatch('close-swap-modal')` / `dispatch('close-bulk-modal')`) and flash confirmation. {claude/sonnet-4.6}
+- [x] Bulk assign modal passes an optional note field stored in assignment metadata (`rosterBulkNote` Livewire property); forwarding to audit log rows deferred pending audit observer update. {claude/sonnet-4.6}
 
 ### Phase 6 — Retire the form, preview state, and dead validation code
 
