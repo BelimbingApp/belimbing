@@ -9,6 +9,9 @@ use App\Modules\Commerce\Marketplace\Models\MarketplaceMetadata;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
+const EBAY_METADATA_REFRESH_CATEGORY_ID = '33563';
+const EBAY_METADATA_REFRESH_CATEGORY_KEY = '100:33563';
+const EBAY_METADATA_REFRESH_CATEGORY_FILTER = 'categoryIds:{33563}';
 function configureEbayMetadataRefreshCommandEnvironment(int $companyId): void
 {
     $scope = Scope::company($companyId);
@@ -47,7 +50,7 @@ test('eBay metadata refresh command caches tree and category metadata for a comp
             'rootCategoryNode' => ['category' => ['categoryId' => '6000', 'categoryName' => 'eBay Motors']],
         ]),
         'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_category_subtree*' => Http::response([
-            'categorySubtreeNode' => ['category' => ['categoryId' => '33563', 'categoryName' => 'Calipers & Brackets']],
+            'categorySubtreeNode' => ['category' => ['categoryId' => EBAY_METADATA_REFRESH_CATEGORY_ID, 'categoryName' => 'Calipers & Brackets']],
         ]),
         'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_item_aspects_for_category*' => Http::response([
             'aspects' => [
@@ -63,12 +66,12 @@ test('eBay metadata refresh command caches tree and category metadata for a comp
         ]),
         'https://api.sandbox.ebay.com/sell/metadata/v1/marketplace/EBAY_MOTORS_US/get_automotive_parts_compatibility_policies*' => Http::response([
             'automotivePartsCompatibilityPolicies' => [
-                ['categoryId' => '33563', 'compatibilityBasedOn' => 'ASSEMBLY'],
+                ['categoryId' => EBAY_METADATA_REFRESH_CATEGORY_ID, 'compatibilityBasedOn' => 'ASSEMBLY'],
             ],
         ]),
         'https://api.sandbox.ebay.com/sell/metadata/v1/marketplace/EBAY_MOTORS_US/get_item_condition_policies*' => Http::response([
             'itemConditionPolicies' => [
-                ['categoryId' => '33563', 'itemConditions' => [['conditionId' => '3000']]],
+                ['categoryId' => EBAY_METADATA_REFRESH_CATEGORY_ID, 'itemConditions' => [['conditionId' => '3000']]],
             ],
         ]),
     ]);
@@ -77,18 +80,18 @@ test('eBay metadata refresh command caches tree and category metadata for a comp
         '--company-id' => $user->company_id,
         '--marketplace-id' => 'EBAY_MOTORS_US',
         '--category-tree-id' => '100',
-        '--category-id' => ['33563'],
+        '--category-id' => [EBAY_METADATA_REFRESH_CATEGORY_ID],
     ])->assertSuccessful();
 
     expect(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_CATEGORY_TREE)->where('key', '100')->exists())->toBeTrue()
-        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_CATEGORY_SUBTREE)->where('key', '100:33563')->exists())->toBeTrue()
-        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_CATEGORY_ASPECTS)->where('key', '100:33563')->exists())->toBeTrue()
-        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_COMPATIBILITY_PROPERTIES)->where('key', '100:33563')->exists())->toBeTrue()
-        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_AUTOMOTIVE_PARTS_COMPATIBILITY_POLICIES)->where('key', '33563')->exists())->toBeTrue()
-        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_ITEM_CONDITION_POLICIES)->where('key', '33563')->exists())->toBeTrue();
+        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_CATEGORY_SUBTREE)->where('key', EBAY_METADATA_REFRESH_CATEGORY_KEY)->exists())->toBeTrue()
+        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_CATEGORY_ASPECTS)->where('key', EBAY_METADATA_REFRESH_CATEGORY_KEY)->exists())->toBeTrue()
+        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_COMPATIBILITY_PROPERTIES)->where('key', EBAY_METADATA_REFRESH_CATEGORY_KEY)->exists())->toBeTrue()
+        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_AUTOMOTIVE_PARTS_COMPATIBILITY_POLICIES)->where('key', EBAY_METADATA_REFRESH_CATEGORY_ID)->exists())->toBeTrue()
+        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_ITEM_CONDITION_POLICIES)->where('key', EBAY_METADATA_REFRESH_CATEGORY_ID)->exists())->toBeTrue();
 
     Http::assertSent(function (Request $request): bool {
         return str_starts_with($request->url(), 'https://api.sandbox.ebay.com/sell/metadata/v1/marketplace/EBAY_MOTORS_US/get_item_condition_policies')
-            && $request['filter'] === 'categoryIds:{33563}';
+            && $request['filter'] === EBAY_METADATA_REFRESH_CATEGORY_FILTER;
     });
 });
