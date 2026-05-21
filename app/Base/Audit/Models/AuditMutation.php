@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Audit\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -31,7 +32,7 @@ class AuditMutation extends Model
         'event',
         'old_values',
         'new_values',
-        'correlation_id',
+        'trace_id',
         'occurred_at',
     ];
 

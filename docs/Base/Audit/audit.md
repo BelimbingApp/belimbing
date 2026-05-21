@@ -14,7 +14,7 @@ Record every meaningful action and data mutation by any actor (human or AI) with
 
 ### Relationship to Existing Logs
 
-Authz `DecisionLog` and (future) AI `ae_tool_calls` remain **separate**. They serve different concerns with different schemas, retention policies, and query patterns. Audit provides a **correlation mechanism** (shared `correlation_id` UUID) to trace a full request lifecycle across all log types.
+Authz `DecisionLog` and (future) AI `ae_tool_calls` remain **separate**. They serve different concerns with different schemas, retention policies, and query patterns. Audit provides a **trace mechanism** (shared `trace_id`) to trace a full request lifecycle across all log types. Trace IDs are 12-character Crockford Base32 values stored without separators and suitable for display in 4-4-4 groups.
 
 ### Two Tables, One Module
 
@@ -71,7 +71,7 @@ Same buffered-flush pattern as `DatabaseDecisionLogger`: entries collected in-me
 
 | Component | Responsibility |
 |---|---|
-| **RequestContext** | DTO singleton. Captures IP, URL, user agent, actor, role, correlation_id once per request. |
+| **RequestContext** | DTO singleton. Captures IP, URL, user agent, actor, role, trace_id once per request. |
 | **Auditable** | Eloquent trait. Auto-registers observer for create/update/delete. Captures dirty fields and original values. |
 | **AuditService** | Public contract for explicit action logging. |
 | **AuditBuffer** | Internal. Collects mutation and action entries, batch-INSERTs on terminating(). |

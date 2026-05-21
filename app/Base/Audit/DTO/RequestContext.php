@@ -1,8 +1,10 @@
 <?php
+
 namespace App\Base\Audit\DTO;
 
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Support\TraceId;
 use Illuminate\Support\Str;
 
 /**
@@ -16,7 +18,7 @@ use Illuminate\Support\Str;
 final readonly class RequestContext
 {
     public function __construct(
-        public string $correlationId,
+        public string $traceId,
         public ?string $ipAddress = null,
         public ?string $url = null,
         public ?string $userAgent = null,
@@ -34,7 +36,7 @@ final readonly class RequestContext
         $request = request();
 
         return new self(
-            correlationId: (string) Str::uuid(),
+            traceId: TraceId::current(),
             ipAddress: $request->ip(),
             url: $request->fullUrl(),
             userAgent: $request->userAgent() !== null
@@ -57,7 +59,7 @@ final readonly class RequestContext
     public static function forConsole(?Actor $actor = null, ?string $command = null): self
     {
         return new self(
-            correlationId: (string) Str::uuid(),
+            traceId: TraceId::generate(),
             ipAddress: null,
             url: $command !== null ? 'artisan:'.$command : null,
             userAgent: null,
@@ -74,7 +76,7 @@ final readonly class RequestContext
     public static function forScheduler(?string $taskDescription = null): self
     {
         return new self(
-            correlationId: (string) Str::uuid(),
+            traceId: TraceId::generate(),
             ipAddress: null,
             url: $taskDescription !== null ? 'schedule:'.$taskDescription : null,
             userAgent: null,
@@ -94,7 +96,7 @@ final readonly class RequestContext
     public static function forQueue(?Actor $actor = null, ?string $jobClass = null): self
     {
         return new self(
-            correlationId: (string) Str::uuid(),
+            traceId: TraceId::generate(),
             ipAddress: null,
             url: $jobClass !== null ? 'queue:'.$jobClass : null,
             userAgent: null,

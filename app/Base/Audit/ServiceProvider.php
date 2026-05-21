@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Audit;
 
 use App\Base\Audit\DTO\RequestContext;
@@ -174,10 +175,23 @@ class ServiceProvider extends BaseServiceProvider
             return null;
         }
 
+        $companyId = Actor::forUser($user)->companyId;
+
         $roleNames = PrincipalRole::query()
             ->join('base_authz_roles', 'base_authz_roles.id', '=', 'base_authz_principal_roles.role_id')
             ->where('base_authz_principal_roles.principal_type', PrincipalType::USER->value)
             ->where('base_authz_principal_roles.principal_id', $user->getAuthIdentifier())
+            ->where(function ($query) use ($companyId): void {
+                if ($companyId !== null) {
+                    $query->where('base_authz_principal_roles.company_id', $companyId)
+                        ->orWhereNull('base_authz_principal_roles.company_id');
+
+                    return;
+                }
+
+                $query->whereNull('base_authz_principal_roles.company_id');
+            })
+            ->distinct()
             ->pluck('base_authz_roles.code')
             ->sort()
             ->implode(',');

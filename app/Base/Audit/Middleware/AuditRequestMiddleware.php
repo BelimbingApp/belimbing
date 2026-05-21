@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Audit\Middleware;
 
 use App\Base\Audit\DTO\RequestContext;
@@ -63,7 +64,7 @@ class AuditRequestMiddleware
                 'status' => $response->getStatusCode(),
                 'duration_ms' => $durationMs,
             ]),
-            'correlation_id' => $this->context->correlationId,
+            'trace_id' => $this->context->traceId,
             'occurred_at' => $now,
             'created_at' => $now,
         ]);

@@ -8,6 +8,8 @@ cd "${PROJECT_ROOT}"
 
 php artisan blb:table:unstable \
   base_audit_mutations \
+  base_audit_actions \
+  base_authz_decision_logs \
   base_authz_principal_capabilities \
   base_integration_oauth_tokens \
   commerce_catalog_attributes \

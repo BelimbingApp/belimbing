@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Audit\Models;
 
 use Illuminate\Database\Eloquent\Builder;
@@ -37,7 +38,7 @@ class AuditAction extends Model
         'user_agent',
         'event',
         'payload',
-        'correlation_id',
+        'trace_id',
         'occurred_at',
     ];
 

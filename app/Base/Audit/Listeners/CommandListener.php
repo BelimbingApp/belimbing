@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Audit\Listeners;
 
 use App\Base\Audit\DTO\RequestContext;
@@ -44,7 +45,7 @@ class CommandListener
                 'arguments' => $event->input->getArguments(),
                 'exit_code' => $event->exitCode,
             ]),
-            'correlation_id' => $this->context->correlationId,
+            'trace_id' => $this->context->traceId,
             'occurred_at' => $now,
             'created_at' => $now,
         ]);

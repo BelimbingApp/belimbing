@@ -27,7 +27,7 @@ beforeEach(function (): void {
     });
 
     app()->singleton(RequestContext::class, fn () => new RequestContext(
-        correlationId: 'test-correlation-id',
+        traceId: '7K9M2F4Q8XDW',
         ipAddress: '127.0.0.1',
         url: 'https://test.example.com/test',
         actorType: PrincipalType::USER->value,
@@ -68,7 +68,7 @@ it('logs field values on model creation', function (): void {
     expect($mutation)->not->toBeNull();
     expect($mutation->actor_type)->toBe(PrincipalType::USER->value);
     expect($mutation->actor_id)->toBe(42);
-    expect($mutation->correlation_id)->toBe('test-correlation-id');
+    expect($mutation->trace_id)->toBe('7K9M2F4Q8XDW');
 
     $newValues = $mutation->new_values;
     expect($newValues['name'])->toBe('Alice');

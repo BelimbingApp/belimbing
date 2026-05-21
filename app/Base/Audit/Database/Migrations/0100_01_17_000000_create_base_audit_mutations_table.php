@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('event', 20)->index();
             $table->jsonb('old_values')->nullable();
             $table->jsonb('new_values')->nullable();
-            $table->uuid('correlation_id')->nullable()->index();
+            $table->string('trace_id', 12)->nullable()->index();
             $table->timestamp('occurred_at')->useCurrent()->index();
             $table->timestamp('created_at')->useCurrent();
 

@@ -9,7 +9,7 @@ Framework-level audit trail for data mutations and explicit actions. All models 
 - **Mutations** are captured via global Eloquent event listeners (`eloquent.created/updated/deleted`).
 - **Actions** are captured automatically via middleware (HTTP), auth event listeners (login/logout), console event listeners (commands), and queue event listeners (jobs).
 - **Deferred writes** — same pattern as `Authz\DatabaseDecisionLogger`. Entries buffer in memory, batch-INSERT after response via `app->terminating()`.
-- **Correlation** via `correlation_id` UUID links audit entries to Authz decision logs within the same request.
+- **Trace correlation** via compact `trace_id` links audit entries to Authz decision logs within the same request/process. Trace IDs are 12-character Crockford Base32 values stored without separators; UI may display them as 4-4-4 groups.
 
 ## Model-Level Configuration (Optional)
 

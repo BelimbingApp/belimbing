@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Audit\Listeners;
 
 use App\Base\Audit\DTO\RequestContext;
@@ -86,7 +87,7 @@ class MutationListener
             'event' => $event,
             'old_values' => json_encode($oldValues !== [] ? $oldValues : null),
             'new_values' => json_encode($newValues !== [] ? $newValues : null),
-            'correlation_id' => $context->correlationId,
+            'trace_id' => $context->traceId,
             'occurred_at' => $now,
             'created_at' => $now,
         ]);

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Audit\Listeners;
 
 use App\Base\Audit\DTO\RequestContext;
@@ -54,7 +55,7 @@ class JobListener
                 'queue' => $job->getQueue(),
                 'connection' => $job->getConnectionName(),
             ]),
-            'correlation_id' => $this->context->correlationId,
+            'trace_id' => $this->context->traceId,
             'occurred_at' => $now,
             'created_at' => $now,
         ]);
