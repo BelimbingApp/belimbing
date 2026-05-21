@@ -66,6 +66,7 @@ The form mode is eliminated. Every operation a manager needs is reachable from t
 - [x] History drawer has an "Open full history" link (new tab) → `RosterEmployeeHistory` Livewire component with date filter and paginated table. {claude/sonnet-4.6}
 - [x] Cleanup: batch user-name lookup in `ManagesRosterCellHistory` (was N+1); removed stale draft/published wording from grid intro and dead `hasPublished` guard from `deleteSelection()`. {claude/sonnet-4.6}
 - [x] **Superseded by audit delegation**: `people_attendance_roster_cell_log`, `AttendanceRosterAssignmentObserver`, and `ManagesRosterCellHistory` queries are replaced with enriched `base_audit_mutations` rows. {amp/gpt-5}
+- [ ] **Note/job not surfaced in history drawer**: `ManagesRosterCellHistory::loadCellHistory()` hardcodes `note: null, job: null` because `AuditMutation.new_values` only carries `shift_code` / `policy_code`. The note/job live in the assignment's `metadata` or exception entry. Fix: include `note` and `job` keys in the per-date `new_values` written by `AttendanceRosterAssignment::buildExceptionAuditEntries()` and the range builders, then read them in `loadCellHistory()`. {planned}
 
 ### Phase 3 — Employee row selection via name column
 
