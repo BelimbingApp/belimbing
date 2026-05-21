@@ -340,6 +340,8 @@ test('ebay publish creates inventory compatibility offer and listing records', f
         ->and($result['external_offer_id'])->toBe('offer-publish-1')
         ->and($listing->marketplace_id)->toBe('EBAY_US')
         ->and($listing->status)->toBe('ACTIVE')
+        ->and($listing->management_state)->toBe('belimbing_managed')
+        ->and($listing->drift_status)->toBe('in_sync')
         ->and($item->fresh()->status)->toBe(Item::STATUS_LISTED)
         ->and($latestDraft->marketplace_id)->toBe('EBAY_US')
         ->and($latestDraft->metadata_marketplace_id)->toBe('EBAY_MOTORS_US')
@@ -415,6 +417,8 @@ test('ebay revise updates a published offer without republishing', function (): 
         'marketplace_id' => 'EBAY_US',
         'title' => 'BMW rear brake caliper pair',
         'status' => 'ACTIVE',
+        'management_state' => 'belimbing_managed',
+        'drift_status' => 'in_sync',
         'price_amount' => 25000,
         'currency_code' => 'USD',
         'listed_at' => now()->subDay(),
@@ -433,6 +437,8 @@ test('ebay revise updates a published offer without republishing', function (): 
 
     expect($result['external_offer_id'])->toBe('offer-revise-1')
         ->and($listing->status)->toBe('ACTIVE')
+        ->and($listing->management_state)->toBe('belimbing_managed')
+        ->and($listing->drift_status)->toBe('in_sync')
         ->and(collect($listing->raw_payload['operations'] ?? [])->pluck('name')->all())->toBe([
             'inventory_item_upsert',
             'compatibility_upsert',
@@ -467,6 +473,8 @@ test('ebay withdraw ends a published offer and returns the item to ready state',
         'marketplace_id' => 'EBAY_US',
         'title' => 'BMW rear brake caliper pair',
         'status' => 'ACTIVE',
+        'management_state' => 'belimbing_managed',
+        'drift_status' => 'in_sync',
         'price_amount' => 25000,
         'currency_code' => 'USD',
         'listed_at' => now()->subDay(),
@@ -507,6 +515,114 @@ test('ebay withdraw ends a published offer and returns the item to ready state',
         ->and($listing->ended_at)->not()->toBeNull()
         ->and($item->status)->toBe(Item::STATUS_READY)
         ->and($draft->status)->toBe('withdrawn');
+});
+
+test('ebay listing pull marks belimbing-managed listings as drifted when ebay changed them externally', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => EBAY_FIXTURE_SKU,
+        'title' => EBAY_FIXTURE_TITLE,
+        'status' => Item::STATUS_LISTED,
+        'target_price_amount' => 12000,
+        'currency_code' => 'USD',
+    ]);
+
+    Listing::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_listing_id' => EBAY_FIXTURE_LISTING_ID,
+        'external_offer_id' => 'offer-1',
+        'external_sku' => EBAY_FIXTURE_SKU,
+        'marketplace_id' => 'EBAY_US',
+        'title' => EBAY_FIXTURE_TITLE,
+        'status' => 'ACTIVE',
+        'management_state' => 'belimbing_managed',
+        'drift_status' => 'in_sync',
+        'price_amount' => 12000,
+        'currency_code' => 'USD',
+        'raw_payload' => [
+            'publish_contract' => [
+                'inventory_item' => [
+                    'product' => [
+                        'title' => EBAY_FIXTURE_TITLE,
+                    ],
+                ],
+                'offer' => [
+                    'availableQuantity' => 1,
+                    'pricingSummary' => [
+                        'price' => [
+                            'value' => '120.00',
+                            'currency' => 'USD',
+                        ],
+                    ],
+                ],
+            ],
+        ],
+        'last_synced_at' => now()->subDay(),
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item*' => Http::response([
+            'total' => 1,
+            'inventoryItems' => [
+                [
+                    'sku' => EBAY_FIXTURE_SKU,
+                    'product' => [
+                        'title' => 'Changed on eBay',
+                    ],
+                    'availability' => [
+                        'shipToLocationAvailability' => [
+                            'quantity' => 3,
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer*' => Http::response([
+            'offers' => [
+                [
+                    'offerId' => 'offer-1',
+                    'sku' => EBAY_FIXTURE_SKU,
+                    'marketplaceId' => 'EBAY_US',
+                    'status' => 'PUBLISHED',
+                    'availableQuantity' => 3,
+                    'listing' => [
+                        'listingId' => EBAY_FIXTURE_LISTING_ID,
+                        'listingStatus' => 'ACTIVE',
+                    ],
+                    'pricingSummary' => [
+                        'price' => [
+                            'currency' => 'USD',
+                            'value' => '130.00',
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+
+    app(EbayMarketplaceChannel::class)->pullListings($user->company_id);
+
+    $listing = Listing::query()->where('external_listing_id', EBAY_FIXTURE_LISTING_ID)->firstOrFail();
+
+    expect($listing->management_state)->toBe('belimbing_managed')
+        ->and($listing->drift_status)->toBe('drifted')
+        ->and($listing->drift_summary)->toContain('title')
+        ->and($listing->drift_summary)->toContain('price')
+        ->and($listing->drift_summary)->toContain('quantity');
+
+    $this->get(route('commerce.marketplace.ebay.index'))
+        ->assertSee('Externally Changed')
+        ->assertSee('Externally changed: title, price, quantity.');
 });
 
 test('ebay order pull materializes sales ledger rows and links inventory', function (): void {

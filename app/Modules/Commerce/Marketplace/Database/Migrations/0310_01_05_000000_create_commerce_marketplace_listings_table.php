@@ -19,6 +19,9 @@ return new class extends Migration
             $table->string('marketplace_id')->nullable();
             $table->string('title')->nullable();
             $table->string('status')->nullable()->index();
+            $table->string('management_state')->default('imported')->index();
+            $table->string('drift_status')->default('unknown')->index();
+            $table->text('drift_summary')->nullable();
             $table->unsignedBigInteger('price_amount')->nullable();
             $table->char('currency_code', 3)->nullable();
             $table->string('listing_url')->nullable();

@@ -152,17 +152,24 @@ class EbayMarketplaceChannel implements MarketplaceChannel
     {
         $sku = (string) ($offer['sku'] ?? $inventoryItem['sku'] ?? '');
         $listingId = $offer['listing']['listingId'] ?? null;
+        $externalKey = $listingId ?? (string) ($offer['offerId'] ?? $sku);
+        $existing = Listing::query()
+            ->where('company_id', $companyId)
+            ->where('channel', $this->key())
+            ->where('external_listing_id', $externalKey)
+            ->first();
         $item = $sku !== ''
             ? Item::query()->where('company_id', $companyId)->where('sku', strtoupper($sku))->first()
             : null;
         $price = $offer['pricingSummary']['price']['value'] ?? null;
         $currency = $offer['pricingSummary']['price']['currency'] ?? null;
+        $drift = $this->externalDriftState($existing, $offer, $inventoryItem);
 
         return Listing::query()->updateOrCreate(
             [
                 'company_id' => $companyId,
                 'channel' => $this->key(),
-                'external_listing_id' => $listingId ?? (string) ($offer['offerId'] ?? $sku),
+                'external_listing_id' => $externalKey,
             ],
             [
                 'item_id' => $item?->id,
@@ -171,6 +178,9 @@ class EbayMarketplaceChannel implements MarketplaceChannel
                 'marketplace_id' => $offer['marketplaceId'] ?? null,
                 'title' => $inventoryItem['product']['title'] ?? null,
                 'status' => $offer['listing']['listingStatus'] ?? $offer['status'] ?? null,
+                'management_state' => $existing?->management_state ?? 'imported',
+                'drift_status' => $drift['status'],
+                'drift_summary' => $drift['summary'],
                 'price_amount' => is_string($price) && is_string($currency) ? Money::fromDecimalString($price, $currency)?->minorAmount : null,
                 'currency_code' => is_string($currency) ? strtoupper($currency) : null,
                 'listing_url' => $listingId !== null ? 'https://www.ebay.com/itm/'.$listingId : null,
@@ -181,6 +191,66 @@ class EbayMarketplaceChannel implements MarketplaceChannel
                 ],
             ],
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $offer
+     * @param  array<string, mixed>  $inventoryItem
+     * @return array{status: string, summary: string|null}
+     */
+    private function externalDriftState(?Listing $existing, array $offer, array $inventoryItem): array
+    {
+        if (! $existing instanceof Listing) {
+            return ['status' => 'unknown', 'summary' => null];
+        }
+
+        if ($existing->management_state !== 'belimbing_managed') {
+            return ['status' => 'unknown', 'summary' => null];
+        }
+
+        $contract = $existing->raw_payload['publish_contract'] ?? null;
+
+        if (! is_array($contract)) {
+            return ['status' => 'unknown', 'summary' => null];
+        }
+
+        $driftedFields = [];
+        $expectedTitle = data_get($contract, 'inventory_item.product.title');
+        $actualTitle = data_get($inventoryItem, 'product.title');
+
+        if (is_string($expectedTitle) && is_string($actualTitle) && trim($expectedTitle) !== trim($actualTitle)) {
+            $driftedFields[] = 'title';
+        }
+
+        $expectedPrice = data_get($contract, 'offer.pricingSummary.price.value');
+        $actualPrice = data_get($offer, 'pricingSummary.price.value');
+
+        if ((string) $expectedPrice !== '' && (string) $actualPrice !== '' && (string) $expectedPrice !== (string) $actualPrice) {
+            $driftedFields[] = 'price';
+        }
+
+        $expectedCurrency = data_get($contract, 'offer.pricingSummary.price.currency');
+        $actualCurrency = data_get($offer, 'pricingSummary.price.currency');
+
+        if ((string) $expectedCurrency !== '' && (string) $actualCurrency !== '' && strtoupper((string) $expectedCurrency) !== strtoupper((string) $actualCurrency)) {
+            $driftedFields[] = 'currency';
+        }
+
+        $expectedQuantity = (string) data_get($contract, 'offer.availableQuantity', '');
+        $actualQuantity = (string) ($offer['availableQuantity'] ?? data_get($inventoryItem, 'availability.shipToLocationAvailability.quantity', ''));
+
+        if ($expectedQuantity !== '' && $actualQuantity !== '' && $expectedQuantity !== $actualQuantity) {
+            $driftedFields[] = 'quantity';
+        }
+
+        if ($driftedFields === []) {
+            return ['status' => 'in_sync', 'summary' => null];
+        }
+
+        return [
+            'status' => 'drifted',
+            'summary' => 'Externally changed: '.implode(', ', $driftedFields).'.',
+        ];
     }
 
     /**

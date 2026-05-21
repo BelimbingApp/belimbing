@@ -1,6 +1,6 @@
 # ham/04-ebay-motors-alignment
 
-**Status:** In Progress; Phases 0, 1, 2, and 3 complete; Phase 4 publish/revise backend in progress
+**Status:** In Progress; Phases 0, 1, 2, and 3 complete; Phase 4 publish/revise backend and managed-listing drift detection in progress
 **Last Updated:** 2026-05-20
 **Sources:**
 - User context: Ham operates from California and sells through the eBay store `rpm*parts`; Belimbing must help him align with US eBay Motors discovery, not only generic marketplace listing.
@@ -61,7 +61,7 @@ The first implementation priority is therefore **Belimbing ↔ eBay Motors align
 - **Aspect mapping is its own engine.** Belimbing attributes are not automatically eBay aspects. The eBay channel needs per-category mapping, value normalization, enum validation, and required/recommended checks.
 - **Readiness before publishing.** Belimbing should prevent blind publishing. Operators should see missing category, missing required aspects, missing identifiers, weak photo coverage, missing fitment/universal-fit status, policy gaps, and eBay account setup gaps before attempting publish.
 - **Publish blockers must be first-class readiness inputs.** eBay Motors publishing requires more than item facts: public HTTPS image URLs, selected seller policies, policy compliance, a merchant inventory location, quantity/price, and account setup must all be visible before publish.
-- **Belimbing-published eBay listings are Belimbing-managed.** Listings created through eBay Inventory APIs should be revised through Belimbing so the local draft/readiness state and eBay state do not diverge. The UI should make this ownership clear and surface detected drift.
+- **Belimbing-published eBay listings are Belimbing-managed.** Listings created through eBay Inventory APIs should be revised through Belimbing so the local draft/readiness state and eBay state do not diverge. The listing snapshot should record ownership explicitly and compare later eBay pull results against Belimbing's last published contract so externally changed title/price/quantity drift is visible.
 - **Confidence signals matter.** eBay Motors alignment is not only API compliance. The listing UX should encourage enough photos, visible defects, tested/untested state, warranty/return clarity, accurate condition notes, and truthful compatibility.
 
 ## Public Contract
@@ -143,7 +143,7 @@ Goal: publish and revise eBay Motors listings using official eBay APIs and the d
 - [x] Implement publish as explicit eBay operations: inventory item upsert, product compatibility upsert when applicable, offer create/update, and offer publish/withdraw. {Codex/gpt-5}
 - [x] Publish a new eBay Motors listing from a ready Belimbing item through official eBay APIs. {Codex/gpt-5}
 - [x] Revise an existing eBay listing when fitment, item specifics, photos, price, quantity, title, or description changes. {Codex/gpt-5}
-- [ ] Mark Belimbing-created eBay listings as Belimbing-managed and surface drift if the eBay listing later changes outside Belimbing.
+- [x] Mark Belimbing-created eBay listings as Belimbing-managed and surface drift if the eBay listing later changes outside Belimbing. {Codex/gpt-5}
 - [x] Preserve eBay operation results and failures in the integration exchange so support can diagnose API issues without exposing raw errors as the primary operator experience. {Codex/gpt-5}
 - [ ] Keep imported/synced existing eBay listings reconcilable with Belimbing items and fitment records.
 

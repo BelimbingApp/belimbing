@@ -166,6 +166,9 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                     <div class="mt-1 text-xs text-muted">
                                         {{ $listing->external_listing_id ?? $listing->external_offer_id ?? __('No external ID') }}
                                     </div>
+                                    @if ($listing->drift_summary)
+                                        <div class="mt-1 text-xs text-status-danger">{{ $listing->drift_summary }}</div>
+                                    @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y">
                                     @if ($listing->item)
@@ -181,6 +184,9 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                     <div class="flex flex-wrap items-center gap-2">
                                         <x-ui.badge :variant="$this->listingStatusVariant($listing->status)">
                                             {{ __(Illuminate\Support\Str::headline($listing->status ?? 'unknown')) }}
+                                        </x-ui.badge>
+                                        <x-ui.badge :variant="$this->managementStateVariant($listing->management_state)">
+                                            {{ __(Illuminate\Support\Str::headline(str_replace('_', ' ', $listing->management_state))) }}
                                         </x-ui.badge>
                                         @if ($listing->item)
                                             <x-ui.badge :variant="$this->itemStatusVariant($listing->item->status)">

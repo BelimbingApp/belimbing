@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Models;
 
 use App\Modules\Commerce\Inventory\Models\Item;
@@ -22,6 +23,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $marketplace_id
  * @property string|null $title
  * @property string|null $status
+ * @property string $management_state
+ * @property string $drift_status
+ * @property string|null $drift_summary
  * @property int|null $price_amount
  * @property string|null $currency_code
  * @property string|null $listing_url
@@ -51,6 +55,9 @@ class Listing extends Model
         'marketplace_id',
         'title',
         'status',
+        'management_state',
+        'drift_status',
+        'drift_summary',
         'price_amount',
         'currency_code',
         'listing_url',

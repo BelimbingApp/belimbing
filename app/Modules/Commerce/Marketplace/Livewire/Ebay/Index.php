@@ -211,6 +211,10 @@ class Index extends Component
             return __('Unlinked');
         }
 
+        if ($listing->management_state === 'belimbing_managed' && $listing->drift_status === 'drifted') {
+            return __('Externally Changed');
+        }
+
         if ($this->isDrifted($listing)) {
             return __('Drifted');
         }
@@ -222,6 +226,10 @@ class Index extends Component
     {
         if ($listing->item_id === null) {
             return 'warning';
+        }
+
+        if ($listing->management_state === 'belimbing_managed' && $listing->drift_status === 'drifted') {
+            return 'danger';
         }
 
         if ($this->isDrifted($listing)) {
@@ -236,6 +244,15 @@ class Index extends Component
         return in_array(Str::upper((string) $status), self::ACTIVE_LISTING_STATUSES, true)
             ? 'success'
             : 'default';
+    }
+
+    public function managementStateVariant(string $state): string
+    {
+        return match ($state) {
+            'belimbing_managed' => 'success',
+            'imported' => 'default',
+            default => 'default',
+        };
     }
 
     public function itemStatusVariant(?string $status): string
@@ -265,6 +282,10 @@ class Index extends Component
 
         if ($item === null) {
             return false;
+        }
+
+        if ($listing->management_state === 'belimbing_managed' && $listing->drift_status === 'drifted') {
+            return true;
         }
 
         $listingActive = in_array(Str::upper((string) $listing->status), self::ACTIVE_LISTING_STATUSES, true);

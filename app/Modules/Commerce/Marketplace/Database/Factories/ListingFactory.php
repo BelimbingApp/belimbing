@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Database\Factories;
 
 use App\Modules\Commerce\Marketplace\Models\Listing;
@@ -31,6 +32,9 @@ class ListingFactory extends Factory
             'marketplace_id' => 'EBAY_US',
             'title' => fake()->sentence(4),
             'status' => 'ACTIVE',
+            'management_state' => 'imported',
+            'drift_status' => 'unknown',
+            'drift_summary' => null,
             'price_amount' => fake()->numberBetween(1000, 50000),
             'currency_code' => 'USD',
             'listing_url' => fake()->url(),
