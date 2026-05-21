@@ -42,7 +42,6 @@
 .roster-copied { outline: 2px dashed var(--color-accent, #6366f1); outline-offset: -2px; }
 .roster-fill-handle { opacity: 0; pointer-events: none; transition: opacity 100ms; }
 td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacity: 1; pointer-events: auto; }
-.roster-row-selected { border-left: 3px solid var(--color-accent, #6366f1) !important; background-color: color-mix(in srgb, var(--color-accent, #6366f1) 8%, transparent) !important; }
 
 @media print {
     @page { size: A4 landscape; margin: 10mm; }
@@ -89,78 +88,24 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
     </div>
 </div>
 
+{{-- Combined action bar --}}
 @if ($canManage)
-<div class="roster-print-hide mt-3 flex items-center gap-3 rounded-xl border border-border-default bg-surface-card px-3 py-2">
-    <div class="flex min-w-[9rem] items-center rounded-md bg-surface-subtle px-2.5 py-1 text-xs">
-        <template x-if="barCount === 0"><span class="text-muted">{{ __('Select a cell') }}</span></template>
-        <template x-if="barCount === 1"><span class="font-medium text-ink" x-text="barAddress"></span></template>
-        <template x-if="barCount > 1"><span class="font-medium text-ink" x-text="barCount + ' {{ __('cells') }}'"></span></template>
-    </div>
-    <div class="h-4 w-px shrink-0 bg-border-default"></div>
-    <select :value="barShift" @change="barShift = parseInt($event.target.value) || 0; saveBar()" :disabled="barCount === 0"
-            class="rounded-lg border border-border-default bg-surface-card px-2 py-1 text-sm text-ink disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-accent">
-        <option value="0">{{ __('Shift') }}</option>
-        @foreach ($shiftTemplates as $shiftTpl)
-            <option value="{{ $shiftTpl->id }}">{{ $shiftTpl->code }} — {{ $shiftTpl->name }}</option>
-        @endforeach
-    </select>
-    <select :value="barPolicy" @change="barPolicy = parseInt($event.target.value) || 0; saveBar()" :disabled="barCount === 0"
-            class="rounded-lg border border-border-default bg-surface-card px-2 py-1 text-sm text-ink disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-accent">
-        <option value="0">{{ __('Policy') }}</option>
-        @foreach ($policyGroups as $policyGrp)
-            <option value="{{ $policyGrp->id }}">{{ $policyGrp->code }} — {{ $policyGrp->name }}</option>
-        @endforeach
-    </select>
-    {{-- History button: only when a single cell is selected --}}
-    <template x-if="barCount === 1">
-        <button type="button"
-                @click="openHistory()"
-                class="ml-auto flex items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent">
-            <x-icon name="heroicon-o-clock" class="h-3.5 w-3.5" />
-            {{ __('History') }}
-        </button>
-    </template>
-</div>
-@endif
+<div class="roster-print-hide mt-3 flex items-center gap-1 overflow-x-auto rounded-xl border border-border-default bg-surface-card px-2 py-1.5 text-xs">
 
-{{-- Grid toolbar --}}
-@if ($canManage)
-<div class="roster-print-hide mt-2 flex items-center gap-0.5 rounded-xl border border-border-default bg-surface-card px-2 py-1.5 text-xs">
-    {{-- Row count badge --}}
-    <span class="mr-1.5 min-w-[4rem] text-muted">
-        <template x-if="selectedRows.length > 0">
-            <span><span class="font-semibold text-ink" x-text="selectedRows.length"></span> {{ __('row(s)') }}</span>
-        </template>
-        <template x-if="selectedRows.length === 0">
-            <span class="text-muted/60">{{ __('No rows') }}</span>
-        </template>
-    </span>
-    <div class="mr-1 h-4 w-px shrink-0 bg-border-default"></div>
-    {{-- Select all visible --}}
-    <button type="button" @click="selectAllRows()"
-            class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent">
-        <x-icon name="heroicon-o-check-circle" class="h-3.5 w-3.5" />{{ __('All') }}
-    </button>
-    {{-- Clear --}}
-    <button type="button" @click="clearSelection()"
-            :disabled="selectedRows.length === 0 && selection.length === 0"
-            class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-40">
-        <x-icon name="heroicon-o-x-circle" class="h-3.5 w-3.5" />{{ __('Clear') }}
-    </button>
-    <div class="mx-1 h-4 w-px shrink-0 bg-border-default"></div>
-    {{-- Copy previous period --}}
-    <button type="button" @click="toolbarCopyPrevious()"
-            class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent">
-        <x-icon name="heroicon-o-document-duplicate" class="h-3.5 w-3.5" />{{ __('Copy previous') }}
-    </button>
-    {{-- Undo --}}
-    <button type="button" @click="$wire.undoLastDraftRosterOperation()"
-            :disabled="!$wire.lastDraftAssignmentIds || $wire.lastDraftAssignmentIds.length === 0"
-            class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-40">
-        <x-icon name="heroicon-o-arrow-uturn-left" class="h-3.5 w-3.5" />{{ __('Undo') }}
-    </button>
-    {{-- Swap + Bulk assign pushed to the right; wired to modals in Phase 5 --}}
-    <div class="ml-auto flex items-center gap-1">
+    {{-- Default: nothing selected --}}
+    <span x-show="selectedRows.length === 0 && selection.length === 0"
+          class="shrink-0 text-muted/50">{{ __('Click an employee name to select rows, or a cell to edit') }}</span>
+
+    {{-- Row mode --}}
+    <div x-show="selectedRows.length > 0" class="flex shrink-0 items-center gap-1">
+        <span class="shrink-0 font-medium text-ink">
+            <span x-text="selectedRows.length"></span>&nbsp;{{ __('row(s)') }}
+        </span>
+        <button type="button" @click="clearSelection()"
+                class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent">
+            <x-icon name="heroicon-o-x-circle" class="h-3.5 w-3.5" />{{ __('Clear') }}
+        </button>
+        <div class="mx-0.5 h-4 w-px shrink-0 bg-border-default"></div>
         <button type="button"
                 :disabled="selectedRows.length !== 1"
                 @click="$dispatch('open-swap-modal', { empId: selectedRows[0] })"
@@ -168,10 +113,67 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
             <x-icon name="heroicon-o-arrows-right-left" class="h-3.5 w-3.5" />{{ __('Swap') }}
         </button>
         <button type="button"
-                :disabled="selectedRows.length === 0"
                 @click="$dispatch('open-bulk-assign-modal', { empIds: selectedRows })"
-                class="flex items-center gap-1 rounded-md border border-border-default px-2.5 py-1 font-medium text-ink hover:bg-surface-subtle focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-40">
+                class="flex items-center gap-1 rounded-md border border-border-default px-2.5 py-1 font-medium text-ink hover:bg-surface-subtle focus:outline-none focus:ring-1 focus:ring-accent">
             <x-icon name="heroicon-o-calendar-days" class="h-3.5 w-3.5" />{{ __('Bulk assign') }}
+        </button>
+    </div>
+
+    {{-- Cell mode --}}
+    <div x-show="selection.length > 0" class="flex shrink-0 items-center gap-1">
+        <div class="flex min-w-[6rem] shrink-0 items-center rounded-md bg-surface-subtle px-2 py-0.5">
+            <template x-if="barCount === 1"><span class="max-w-[12rem] truncate font-medium text-ink" x-text="barAddress"></span></template>
+            <template x-if="barCount > 1"><span class="font-medium text-ink" x-text="barCount + ' {{ __('cells') }}'"></span></template>
+        </div>
+        <select :value="barShift" @change="barShift = parseInt($event.target.value) || 0; saveBar()"
+                class="min-w-0 w-36 rounded-lg border border-border-default bg-surface-card px-2 py-1 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-accent">
+            <option value="0">{{ __('Shift') }}</option>
+            @foreach ($shiftTemplates as $shiftTpl)
+                <option value="{{ $shiftTpl->id }}">{{ $shiftTpl->code }} — {{ $shiftTpl->name }}</option>
+            @endforeach
+        </select>
+        <select :value="barPolicy" @change="barPolicy = parseInt($event.target.value) || 0; saveBar()"
+                class="min-w-0 w-36 rounded-lg border border-border-default bg-surface-card px-2 py-1 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-accent">
+            <option value="0">{{ __('Policy') }}</option>
+            @foreach ($policyGroups as $policyGrp)
+                <option value="{{ $policyGrp->id }}">{{ $policyGrp->code }} — {{ $policyGrp->name }}</option>
+            @endforeach
+        </select>
+        <input type="text" x-model="barJob" @keydown.enter="saveBar()"
+               placeholder="{{ __('Job') }}"
+               class="w-20 rounded-lg border border-border-default bg-surface-card px-2 py-1 text-xs text-ink placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent" />
+        <input type="text" x-model="barNote" @keydown.enter="saveBar()"
+               placeholder="{{ __('Note') }}"
+               class="w-32 rounded-lg border border-border-default bg-surface-card px-2 py-1 text-xs text-ink placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent" />
+        <div class="mx-0.5 h-4 w-px shrink-0 bg-border-default"></div>
+        <button type="button" @click="clearSelection()"
+                class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent">
+            <x-icon name="heroicon-o-x-circle" class="h-3.5 w-3.5" />{{ __('Clear') }}
+        </button>
+        <template x-if="barCount === 1">
+            <button type="button" @click="openHistory()"
+                    class="flex items-center gap-1 rounded-md border border-border-default px-2.5 py-1 font-medium text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent">
+                <x-icon name="heroicon-o-clock" class="h-3.5 w-3.5" />{{ __('History') }}
+            </button>
+        </template>
+    </div>
+
+    {{-- Stable right: All · Copy prev · Undo --}}
+    <div class="ml-auto flex shrink-0 items-center gap-0.5">
+        <div class="mx-1 h-4 w-px shrink-0 bg-border-default"></div>
+        <button type="button" @click="selectAllRows()"
+                class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent">
+            <x-icon name="heroicon-o-check-circle" class="h-3.5 w-3.5" />{{ __('All') }}
+        </button>
+        <div class="mx-0.5 h-4 w-px shrink-0 bg-border-default"></div>
+        <button type="button" @click="toolbarCopyPrevious()"
+                class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent">
+            <x-icon name="heroicon-o-document-duplicate" class="h-3.5 w-3.5" />{{ __('Copy prev') }}
+        </button>
+        <button type="button" @click="$wire.undoLastDraftRosterOperation()"
+                :disabled="!$wire.lastDraftAssignmentIds || $wire.lastDraftAssignmentIds.length === 0"
+                class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-40">
+            <x-icon name="heroicon-o-arrow-uturn-left" class="h-3.5 w-3.5" />{{ __('Undo') }}
         </button>
     </div>
 </div>
@@ -272,6 +274,7 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
                 <tr wire:key="roster-grid-row-{{ $employee->id }}" data-row-employee="{{ $employee->id }}" class="group hover:bg-surface-subtle/50">
                     <td class="sticky left-0 z-10 w-40 min-w-40 bg-surface-card group-hover:bg-surface-subtle px-table-cell-x py-1.5 align-top{{ $canManage ? ' cursor-pointer select-none' : '' }}"
                         data-name-cell="{{ $employee->id }}"
+                        :style="selectedRows.includes('{{ $employee->id }}') ? 'background-image:linear-gradient(to right,var(--color-accent) 3px,transparent 3px)' : ''"
                         @if ($canManage)
                         @click="handleRowSelect($event, '{{ $employee->id }}')"
                         @endif
@@ -286,11 +289,12 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
                         @php($cellShiftId = (int) ($cell['shift_template_id'] ?? 0))
                         @php($cellPolicyId = (int) ($cell['policy_group_id'] ?? 0))
                         @php($isDateLocked = isset($lockedDates[$day['date']]))
+                        @php($isToday = $day['is_today'] ?? false)
                         @php($actualOutcome = $actualMode ? ($actualOutcomes[$employee->id . '-' . $day['date']] ?? null) : null)
                         @php($actualTint = match($actualOutcome) { 'absent' => 'ring-2 ring-red-400 ring-inset', 'late', 'early' => 'ring-2 ring-warning ring-inset', 'matched' => 'ring-2 ring-success ring-inset', default => '' })
                         @php($isEditable = $canManage && ! $isDateLocked && ! $actualMode)
                         <td wire:key="roster-grid-cell-{{ $employee->id }}-{{ $day['date'] }}"
-                            class="relative p-0 align-middle {{ $actualTint }}"
+                            class="relative p-0 align-middle {{ $actualTint }}{{ $isToday ? ' bg-accent/5' : '' }}"
                             data-employee="{{ $employee->id }}"
                             data-date="{{ $day['date'] }}"
                             data-shift="{{ $cellShiftId }}"
@@ -596,6 +600,8 @@ Alpine.data('rosterGrid', (dayData) => ({
         barAddress: '',
         barMulti: false,
         barCount: 0,
+        barNote: '',
+        barJob: '',
 
         // Swap modal state
         swapModalOpen: false,
@@ -674,14 +680,6 @@ Alpine.data('rosterGrid', (dayData) => ({
             }
 
             this._updateBar();
-            this._highlightRows();
-        },
-
-        _highlightRows() {
-            this.$el.querySelectorAll('td[data-name-cell]').forEach(td => {
-                const empId = td.dataset.nameCell;
-                td.classList.toggle('roster-row-selected', this.selectedRows.includes(empId));
-            });
         },
 
         _updateBar() {
@@ -698,7 +696,7 @@ Alpine.data('rosterGrid', (dayData) => ({
                 this.barPolicy = data?.policy || 0;
                 const tr = this.$el.querySelector(`tr[data-row-employee="${s.empId}"]`);
                 const name = tr?.querySelector('td:first-child .truncate')?.textContent?.trim() || `#${s.empId}`;
-                this.barAddress = `${name} — ${s.date}`;
+                this.barAddress = `${name} ${s.date}`;
             } else {
                 const shifts = new Set(this.selection.map(s => this._cellData(s.empId, s.date)?.shift || 0));
                 const policies = new Set(this.selection.map(s => this._cellData(s.empId, s.date)?.policy || 0));
@@ -712,18 +710,19 @@ Alpine.data('rosterGrid', (dayData) => ({
             if (!this.barShift || !this.barPolicy || this.barCount === 0) return;
             if (this.barCount === 1) {
                 const s = this.selection[0];
-                this.$wire.saveCellOverride(parseInt(s.empId), s.date, this.barShift, this.barPolicy);
+                this.$wire.saveCellOverride(parseInt(s.empId), s.date, this.barShift, this.barPolicy, this.barNote, this.barJob);
             } else {
                 const overrides = this.selection.map(s => ({
                     employee_id: parseInt(s.empId), date: s.date,
                     shift_template_id: this.barShift, policy_group_id: this.barPolicy,
                 }));
-                this.$wire.saveCellOverrides(overrides);
+                this.$wire.saveCellOverrides(overrides, this.barNote, this.barJob);
             }
         },
 
-        // Cell selection
+        // Cell selection (clears any row selection first)
         handleCellSelect({ empId, date, extendShift, toggle }) {
+            this.selectedRows = []; this.rowAnchor = null;
             const idx = this._idx(empId, date);
             if (!idx) return;
 
@@ -761,8 +760,10 @@ Alpine.data('rosterGrid', (dayData) => ({
 
         // Toolbar actions
         selectAllRows() {
+            this.selection = []; this.anchor = null; this.focus = null;
+            this.copyBuffer = null; this.copySourceKeys = [];
             this.selectedRows = [...this.employees];
-            this._highlightRows();
+            this._highlight();
         },
 
         toolbarCopyPrevious() {
@@ -771,10 +772,12 @@ Alpine.data('rosterGrid', (dayData) => ({
             this.$wire.copyPreviousPeriod();
         },
 
-        // Row selection
+        // Row selection (clears any cell selection first)
         handleRowSelect(event, empId) {
             const empIdx = this.employees.indexOf(String(empId));
             if (empIdx === -1) return;
+            this.selection = []; this.anchor = null; this.focus = null;
+            this.copyBuffer = null; this.copySourceKeys = [];
 
             if (event.shiftKey && this.rowAnchor !== null) {
                 const min = Math.min(this.rowAnchor, empIdx);
@@ -795,7 +798,7 @@ Alpine.data('rosterGrid', (dayData) => ({
                     this.rowAnchor = empIdx;
                 }
             }
-            this._highlightRows();
+            this._highlight();
         },
 
         clearSelection() {
@@ -850,6 +853,7 @@ Alpine.data('rosterGrid', (dayData) => ({
         startFillDrag(event, empId, date) {
             event.preventDefault();
             event.stopPropagation();
+            this.selectedRows = []; this.rowAnchor = null;
             if (this.selection.length === 0) {
                 this.selection = [{ empId: String(empId), date }];
                 this.anchor = this._idx(empId, date);

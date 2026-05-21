@@ -41,7 +41,11 @@
                 $isWeekend = $day['is_weekend'] ?? false;
                 $isHoliday = $day['is_holiday'] ?? false;
                 $isLocked = $day['is_locked'] ?? false;
-                $headerSurface = $isHoliday ? 'bg-day-holiday' : '';
+                $headerSurface = match (true) {
+                    $isHoliday => 'bg-day-holiday',
+                    $isToday   => 'bg-accent/10',
+                    default    => '',
+                };
                 $headerInk = match (true) {
                     $isHoliday => 'text-day-holiday-ink',
                     $isToday => 'text-accent',
