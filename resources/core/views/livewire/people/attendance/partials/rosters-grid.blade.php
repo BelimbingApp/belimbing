@@ -119,6 +119,60 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
 </div>
 @endif
 
+{{-- Grid toolbar --}}
+@if ($canManage)
+<div class="roster-print-hide mt-2 flex items-center gap-0.5 rounded-xl border border-border-default bg-surface-card px-2 py-1.5 text-xs">
+    {{-- Row count badge --}}
+    <span class="mr-1.5 min-w-[4rem] text-muted">
+        <template x-if="selectedRows.length > 0">
+            <span><span class="font-semibold text-ink" x-text="selectedRows.length"></span> {{ __('row(s)') }}</span>
+        </template>
+        <template x-if="selectedRows.length === 0">
+            <span class="text-muted/60">{{ __('No rows') }}</span>
+        </template>
+    </span>
+    <div class="mr-1 h-4 w-px shrink-0 bg-border-default"></div>
+    {{-- Select all visible --}}
+    <button type="button" @click="selectAllRows()"
+            class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent">
+        <x-icon name="heroicon-o-check-circle" class="h-3.5 w-3.5" />{{ __('All') }}
+    </button>
+    {{-- Clear --}}
+    <button type="button" @click="clearSelection()"
+            :disabled="selectedRows.length === 0 && selection.length === 0"
+            class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-40">
+        <x-icon name="heroicon-o-x-circle" class="h-3.5 w-3.5" />{{ __('Clear') }}
+    </button>
+    <div class="mx-1 h-4 w-px shrink-0 bg-border-default"></div>
+    {{-- Copy previous period --}}
+    <button type="button" @click="toolbarCopyPrevious()"
+            class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent">
+        <x-icon name="heroicon-o-document-duplicate" class="h-3.5 w-3.5" />{{ __('Copy previous') }}
+    </button>
+    {{-- Undo --}}
+    <button type="button" @click="$wire.undoLastDraftRosterOperation()"
+            :disabled="!$wire.lastDraftAssignmentIds || $wire.lastDraftAssignmentIds.length === 0"
+            class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-40">
+        <x-icon name="heroicon-o-arrow-uturn-left" class="h-3.5 w-3.5" />{{ __('Undo') }}
+    </button>
+    {{-- Swap + Bulk assign pushed to the right; wired to modals in Phase 5 --}}
+    <div class="ml-auto flex items-center gap-1">
+        <button type="button"
+                :disabled="selectedRows.length !== 1"
+                @click="$dispatch('open-swap-modal', { empId: selectedRows[0] })"
+                class="flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-40">
+            <x-icon name="heroicon-o-arrows-right-left" class="h-3.5 w-3.5" />{{ __('Swap') }}
+        </button>
+        <button type="button"
+                :disabled="selectedRows.length === 0"
+                @click="$dispatch('open-bulk-assign-modal', { empIds: selectedRows })"
+                class="flex items-center gap-1 rounded-md border border-border-default px-2.5 py-1 font-medium text-ink hover:bg-surface-subtle focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-40">
+            <x-icon name="heroicon-o-calendar-days" class="h-3.5 w-3.5" />{{ __('Bulk assign') }}
+        </button>
+    </div>
+</div>
+@endif
+
 {{-- Cell history drawer --}}
 @if ($canManage)
 <div
@@ -548,6 +602,18 @@ Alpine.data('rosterGrid', (dayData) => ({
             }
 
             this._highlight();
+        },
+
+        // Toolbar actions
+        selectAllRows() {
+            this.selectedRows = [...this.employees];
+            this._highlightRows();
+        },
+
+        toolbarCopyPrevious() {
+            const ids = this.selectedRows.length > 0 ? this.selectedRows : this.employees;
+            this.$wire.set('selectedRosterEmployeeIds', ids);
+            this.$wire.copyPreviousPeriod();
         },
 
         // Row selection

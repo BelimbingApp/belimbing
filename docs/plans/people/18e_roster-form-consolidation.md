@@ -1,6 +1,6 @@
 # 18e_roster-form-consolidation.md
 
-**Status:** In Progress — Phase 4 next
+**Status:** In Progress — Phase 5 next
 **Last Updated:** 2026-05-21
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan
@@ -77,13 +77,13 @@ The form mode is eliminated. Every operation a manager needs is reachable from t
 
 ### Phase 4 — Grid toolbar
 
-- [ ] Add a slim toolbar row between the formula bar and the grid table, visible to managers only.
-- [ ] "Select all visible" — sets `selectedRows` to all employee IDs rendered.
-- [ ] "Clear selection" — clears both `selectedRows` and `selection`.
-- [ ] "Copy previous period" — calls existing `copyPreviousPeriod()`; scoped to `selectedRows` if any, otherwise all visible rows.
-- [ ] "Undo" — calls existing `undoLastDraftRosterOperation()`; disabled when nothing to undo.
-- [ ] "Swap" — opens the swap modal (Phase 5); enabled only when exactly one row is selected.
-- [ ] "Bulk assign" — opens the bulk assign modal (Phase 5); enabled only when at least one row is selected.
+- [x] Slim toolbar between formula bar and grid table, visible to managers only; shows selected row count badge. {claude/sonnet-4.6}
+- [x] "All" — `selectAllRows()` sets `selectedRows` to all rendered employee IDs. {claude/sonnet-4.6}
+- [x] "Clear" — calls `clearSelection()` (resets both `selectedRows` and cell `selection`); disabled when nothing selected. {claude/sonnet-4.6}
+- [x] "Copy previous" — `toolbarCopyPrevious()` syncs `selectedRows` (or all visible rows if none selected) to `selectedRosterEmployeeIds`, then calls `copyPreviousPeriod()`. {claude/sonnet-4.6}
+- [x] "Undo" — calls `undoLastDraftRosterOperation()`; disabled when `lastDraftAssignmentIds` is empty. {claude/sonnet-4.6}
+- [x] "Swap" — dispatches `open-swap-modal` with `empId`; disabled unless exactly one row is selected. Wired to modal in Phase 5. {claude/sonnet-4.6}
+- [x] "Bulk assign" — dispatches `open-bulk-assign-modal` with `empIds`; disabled when no rows selected. Wired to modal in Phase 5. {claude/sonnet-4.6}
 
 ### Phase 5 — Swap and bulk assign modals
 
