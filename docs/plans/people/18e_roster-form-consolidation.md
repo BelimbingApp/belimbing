@@ -1,6 +1,6 @@
 # 18e_roster-form-consolidation.md
 
-**Status:** In Progress — Phase 6 next
+**Status:** Complete
 **Last Updated:** 2026-05-21
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan
@@ -94,10 +94,10 @@ The form mode is eliminated. Every operation a manager needs is reachable from t
 
 ### Phase 6 — Retire the form, preview state, and dead validation code
 
-- [ ] Remove `$mode`, `startNewRosterAssignment()`, `cancelRosterForm()`, and the "New roster assignment" / "Back" buttons.
-- [ ] Delete `rosters-form.blade.php`.
-- [ ] Remove `buildPreviewCell()`, the `selectedLookup` / `proposedShift` preview path from `BuildsRosterGrid`, and `state = 'preview'` from `day-tile.blade.php`.
-- [ ] Remove `$showPreviewLegend` prop and all preview references from the grid partial.
-- [ ] Remove `rosterValidationFindings()`, `validateRosterDraft()`, `rosterCoverageRows()`, `rosterCoverageMatrix`, and `rosterRequiredPerShift` if nothing else depends on them.
-- [ ] Remove `editingRosterAssignmentId` form-edit path if superseded; keep if still needed by the assignment list rows.
-- [ ] Drop `publish_state` column from `AttendanceRosterAssignment` in a follow-up migration once all code references are removed.
+- [x] Remove `$mode`, `startNewRosterAssignment()`, `cancelRosterForm()`, and the "New roster assignment" / "Back" buttons. {claude/sonnet-4.6}
+- [x] Delete `rosters-form.blade.php`. {claude/sonnet-4.6}
+- [x] Remove `buildPreviewCell()`, the `selectedLookup` / `proposedShift` preview path from `BuildsRosterGrid`. `day-tile.blade.php` already clean (state prop retained as no-op). {claude/sonnet-4.6}
+- [x] Remove `$showPreviewLegend` from grid include; no preview references remain in the grid partial. {claude/sonnet-4.6}
+- [x] Remove `rosterValidationFindings()`, `validateRosterDraft()`, `acceptRosterWarnings()`, `rosterCoverageRows()`, `rosterCoverageMatrix()`, `rosterTemplates()`, `applyRosterTemplate()`, `publishReviewedRosters()`, and associated dead properties (`rosterRequiredPerShift`, `rosterTemplateKey`, `rosterValidationRan`, `rosterWarningsAccepted`, `rosterRevisionNote`, `rosterPublishState`). {claude/sonnet-4.6}
+- [x] Remove `editingRosterAssignmentId` form-edit path: `editRosterAssignment()`, `updateExistingRosterAssignment()`, and the editing property removed. Edit button removed from assignment list. {claude/sonnet-4.6}
+- [x] Drop `publish_state` column and compound index from `AttendanceRosterAssignment` migration (edit in place); `'people_*'` wildcard in `scripts/unstable-table-list.sh` already covers this table. Pending `php artisan migrate` on dev. {claude/sonnet-4.6}
