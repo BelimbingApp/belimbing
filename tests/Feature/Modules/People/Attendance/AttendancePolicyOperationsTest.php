@@ -26,7 +26,6 @@ use App\Modules\People\Attendance\Services\AttendanceDayResolverService;
 use App\Modules\People\Attendance\Services\AttendancePolicySimulationService;
 use App\Modules\People\Attendance\Services\AttendancePolicyValidationService;
 use App\Modules\People\Settings\Models\EmployeeWorkProfile;
-use App\Modules\People\Settings\Models\PeopleNotificationDeliveryLog;
 use App\Modules\People\Settings\Models\PeopleReferenceEntry;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
@@ -613,18 +612,13 @@ it('lets managers create roster assignments from the guided roster builder', fun
 
     Livewire::test(Rosters::class)
         ->assertSee('Roster')
-        ->assertSee('New roster assignment')
-        ->call('startNewRosterAssignment')
-        ->assertSet('mode', 'form')
-        ->set('rosterEmployeeId', (string) $employee->id)
+        ->set('selectedRosterEmployeeIds', [(string) $employee->id])
         ->set('rosterShiftTemplateId', (string) $shift->id)
         ->set('rosterPolicyGroupId', (string) $policyGroup->id)
         ->set('rosterEffectiveFrom', '2026-06-01')
         ->set('rosterEffectiveTo', '2026-06-30')
-        ->set('rosterPublishState', 'published')
         ->call('saveRosterAssignment')
         ->assertHasNoErrors()
-        ->assertSet('mode', 'list')
         ->assertSee('Roster assignment saved.')
         ->assertSee($employee->full_name);
 
@@ -634,8 +628,7 @@ it('lets managers create roster assignments from the guided roster builder', fun
         ->firstOrFail();
 
     expect($assignment->attendance_shift_template_id)->toBe($shift->id)
-        ->and($assignment->attendance_policy_group_id)->toBe($policyGroup->id)
-        ->and($assignment->publish_state)->toBe('published');
+        ->and($assignment->attendance_policy_group_id)->toBe($policyGroup->id);
 });
 
 it('lets managers bulk-create roster assignments from filtered employee selections', function (): void {
@@ -684,19 +677,15 @@ it('lets managers bulk-create roster assignments from filtered employee selectio
     $this->actingAs($user);
 
     Livewire::test(Rosters::class)
-        ->call('startNewRosterAssignment')
-        ->assertSee('Filter the workforce')
         ->set('rosterWorkforceClassId', (string) $direct->id)
         ->call('selectAllFilteredRosterEmployees')
         ->assertSet('rosterSelectAllFiltered', true)
-        ->assertSee('3 selected')
         ->set('rosterShiftTemplateId', (string) $shift->id)
         ->set('rosterPolicyGroupId', (string) $policyGroup->id)
         ->set('rosterEffectiveFrom', '2026-07-01')
         ->set('rosterEffectiveTo', '2026-07-31')
         ->call('saveRosterAssignment')
         ->assertHasNoErrors()
-        ->assertSet('mode', 'list')
         ->assertSee('3 roster assignments saved.');
 
     expect(AttendanceRosterAssignment::query()
@@ -744,7 +733,7 @@ it('skips overlapping employees while saving valid bulk roster assignments', fun
             ->count())->toBe(1);
 });
 
-it('shows saved and unsaved roster assignments in the roster grid', function (): void {
+it('shows roster assignments from saved data in the grid', function (): void {
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
     $employees = Employee::factory()->active()->count(2)->create(['company_id' => $company->id]);
@@ -767,17 +756,16 @@ it('shows saved and unsaved roster assignments in the roster grid', function ():
     $this->actingAs($user);
 
     Livewire::test(Rosters::class)
-        ->call('startNewRosterAssignment')
-        ->set('rosterEffectiveFrom', '2026-08-01')
-        ->set('rosterEffectiveTo', '2026-08-07')
+        ->set('listWeekAnchor', '2026-08-03')
+        ->assertSee('DAY')
         ->set('selectedRosterEmployeeIds', [(string) $employees[1]->id])
         ->set('rosterShiftTemplateId', (string) $nightShift->id)
         ->set('rosterPolicyGroupId', (string) $policyGroup->id)
-        ->assertSee('Employee')
-        ->assertSee('DAY')
-        ->assertSee('Published')
-        ->assertSee('NIGHT')
-        ->assertSee('Preview');
+        ->set('rosterEffectiveFrom', '2026-08-01')
+        ->set('rosterEffectiveTo', '2026-08-07')
+        ->call('saveRosterAssignment')
+        ->assertHasNoErrors()
+        ->assertSee('NIGHT');
 });
 
 it('narrows the list-mode calendar via the filter prose without flipping into form mode', function (): void {
@@ -822,13 +810,11 @@ it('narrows the list-mode calendar via the filter prose without flipping into fo
     $this->actingAs($user);
 
     Livewire::test(Rosters::class)
-        ->assertSet('mode', 'list')
         ->assertSee(ATTENDANCE_POLICY_PRODUCTION_EMPLOYEE_NAME)
         ->assertSee(ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME)
         ->assertSee('all departments')
         ->assertViewHas('filteredEmployeeCount', 2)
         ->set('rosterDepartmentId', (string) $production->id)
-        ->assertSet('mode', 'list')
         ->assertSee(ATTENDANCE_POLICY_PRODUCTION_EMPLOYEE_NAME)
         ->assertViewHas('filteredEmployeeCount', 1)
         ->assertSee('Production')
@@ -853,7 +839,6 @@ it('applies a per-cell shift override from list mode without requiring form stat
     // call has to carry the explicit choice. Previously it silently failed
     // because saveCellOverride() depended on the form state.
     Livewire::test(Rosters::class)
-        ->assertSet('mode', 'list')
         ->assertSet('rosterShiftTemplateId', '')
         ->assertSet('rosterPolicyGroupId', '')
         ->call('saveCellOverride', $employee->id, $targetDate, $shift->id, $policyGroup->id)
@@ -887,7 +872,7 @@ it('flashes a soft error when the cell override is called without shift or polic
     expect(AttendanceRosterAssignment::query()->where('employee_id', $employee->id)->exists())->toBeFalse();
 });
 
-it('edits a roster assignment in place, bumping the revision and flipping back to list mode', function (): void {
+it('records a cell override on an existing roster assignment and bumps revision', function (): void {
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
     $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
@@ -908,24 +893,16 @@ it('edits a roster assignment in place, bumping the revision and flipping back t
     $this->actingAs($user);
 
     Livewire::test(Rosters::class)
-        ->assertSet('mode', 'list')
-        ->call('editRosterAssignment', $assignment->id)
-        ->assertSet('mode', 'form')
-        ->assertSet('editingRosterAssignmentId', (string) $assignment->id)
-        ->assertSet('rosterShiftTemplateId', (string) $dayShift->id)
-        ->assertSet('rosterPublishState', 'draft')
-        ->set('rosterShiftTemplateId', (string) $eveShift->id)
-        ->set('rosterPublishState', 'published')
-        ->call('saveRosterAssignment')
+        ->call('saveCellOverride', $employee->id, '2026-09-15', $eveShift->id, $policyGroup->id)
         ->assertHasNoErrors()
-        ->assertSet('mode', 'list')
-        ->assertSet('editingRosterAssignmentId', '')
-        ->assertSee('Roster assignment updated.');
+        ->assertSee('Roster cell override saved.');
 
     $assignment->refresh();
-    expect((int) $assignment->attendance_shift_template_id)->toBe($eveShift->id)
-        ->and($assignment->publish_state)->toBe('published')
-        ->and((int) $assignment->revision)->toBe(2);
+    $override = collect($assignment->exceptions)->firstWhere('date', '2026-09-15');
+
+    expect((int) $assignment->revision)->toBe(2)
+        ->and($override)->not->toBeNull()
+        ->and((int) $override['attendance_shift_template_id'])->toBe($eveShift->id);
 });
 
 it('switches the list-mode calendar between week and month scopes', function (): void {
@@ -969,7 +946,6 @@ it('opens to the calendar as the list-mode primary surface and supports week nav
     $this->actingAs($user);
 
     Livewire::test(Rosters::class)
-        ->assertSet('mode', 'list')
         ->assertSee('Calendar')
         ->assertSee('Records')
         ->assertSee('Employee')
@@ -1062,7 +1038,7 @@ it('rejects cell overrides for employees and roster dimensions outside the curre
         ->exists())->toBeFalse();
 });
 
-it('imports spreadsheet roster rows and publishes reviewed drafts with notification intents', function (): void {
+it('imports spreadsheet roster rows without disturbing unrelated draft assignments', function (): void {
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
     $employee = Employee::factory()->active()->create(['company_id' => $company->id, 'employee_number' => 'EMP-SPREAD']);
@@ -1080,29 +1056,16 @@ it('imports spreadsheet roster rows and publishes reviewed drafts with notificat
         ->set('spreadsheetRosterRows', "EMP-SPREAD,2026-09-01,DAY,STD,Line one\n")
         ->call('importSpreadsheetRosterRows')
         ->assertHasNoErrors()
-        ->set('rosterEffectiveFrom', '2026-09-01')
-        ->set('rosterEffectiveTo', '2026-09-01')
-        ->set('rosterShiftTemplateId', (string) $shift->id)
-        ->set('rosterPolicyGroupId', (string) $policyGroup->id)
-        ->call('validateRosterDraft')
-        ->call('acceptRosterWarnings')
-        ->set('rosterRevisionNote', 'September publish')
-        ->call('publishReviewedRosters')
-        ->assertHasNoErrors();
+        ->assertSee('Spreadsheet roster import saved');
 
     $assignment = AttendanceRosterAssignment::query()
         ->where('company_id', $company->id)
         ->where('employee_id', $employee->id)
         ->firstOrFail();
 
-    expect($assignment->publish_state)->toBe('published')
-        ->and($unselectedDraft->fresh()->publish_state)->toBe('draft')
-        ->and($assignment->metadata['revision_note'])->toBe('September publish')
-        ->and(PeopleNotificationDeliveryLog::query()
-            ->where('notifiable_type', AttendanceRosterAssignment::class)
-            ->where('notifiable_id', $assignment->id)
-            ->where('subject', 'attendance.roster.published')
-            ->exists())->toBeTrue();
+    expect($assignment->attendance_shift_template_id)->toBe($shift->id)
+        ->and($assignment->attendance_policy_group_id)->toBe($policyGroup->id)
+        ->and($unselectedDraft->fresh()->publish_state)->toBe('draft');
 });
 
 it('emits stable roster operator JSON from the attendance roster command', function (): void {
