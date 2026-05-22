@@ -23,6 +23,7 @@ use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use App\Modules\Commerce\Marketplace\Models\MarketplaceMetadata;
 use App\Modules\Commerce\Marketplace\Models\ProductReference;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
+use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
 use App\Modules\Commerce\Sales\Models\Order;
 use App\Modules\Commerce\Sales\Models\OrderLine;
 use App\Modules\Commerce\Sales\Models\Sale;
@@ -282,6 +283,32 @@ test('ebay settings can refresh metadata for mapped template categories', functi
     Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_item_aspects_for_category')
         && $request->hasHeader('Authorization', 'Bearer application-token-settings-refresh')
         && $request['category_id'] === '33710');
+});
+
+test('ebay settings default template mappings from commerce plugins', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    configureEbayMarketplaceForCompany($user->company_id, []);
+
+    app(CommercePluginRegistry::class)->registerMarketplaceTemplateMapping([
+        'id' => 'test.ebay.settings-template',
+        'channel' => EbayConfiguration::CHANNEL,
+        'template_code' => 'settings-headlight',
+        'marketplace_id' => 'EBAY_MOTORS_US',
+        'category_tree_id' => '100',
+        'category_id' => '33710',
+    ]);
+
+    $template = ProductTemplate::factory()->create([
+        'company_id' => $user->company_id,
+        'code' => 'settings-headlight',
+        'metadata' => null,
+    ]);
+
+    Livewire::test(EbaySettings::class)
+        ->assertSet("templateCategoryMappings.{$template->id}.marketplace_id", 'EBAY_MOTORS_US')
+        ->assertSet("templateCategoryMappings.{$template->id}.category_tree_id", '100')
+        ->assertSet("templateCategoryMappings.{$template->id}.category_id", '33710');
 });
 
 test('ebay marketplace surfaces imported listing audit states', function (): void {

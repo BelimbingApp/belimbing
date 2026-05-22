@@ -11,6 +11,7 @@ use App\Modules\Commerce\Marketplace\Models\AspectMapping;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use App\Modules\Commerce\Marketplace\Models\MarketplaceMetadata;
 use App\Modules\Commerce\Marketplace\Models\ProductReference;
+use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -24,6 +25,7 @@ class EbayListingReadinessService
         private readonly EbayConfiguration $configuration,
         private readonly SettingsService $settings,
         private readonly EbayOAuthService $oauth,
+        private readonly CommercePluginRegistry $commercePlugins,
     ) {}
 
     public function refreshForItem(Item $item): ListingDraft
@@ -125,11 +127,14 @@ class EbayListingReadinessService
     private function templateMapping(Item $item): array
     {
         $metadata = $item->productTemplate?->metadata ?? [];
+        $pluginMapping = $item->productTemplate !== null
+            ? $this->commercePlugins->marketplaceTemplateMappingForTemplate(EbayConfiguration::CHANNEL, $item->productTemplate)
+            : [];
 
         return collect([
-            'marketplace_id' => data_get($metadata, 'marketplace.ebay.marketplace_id'),
-            'category_tree_id' => data_get($metadata, 'marketplace.ebay.category_tree_id'),
-            'category_id' => data_get($metadata, 'marketplace.ebay.category_id'),
+            'marketplace_id' => data_get($metadata, 'marketplace.ebay.marketplace_id') ?? ($pluginMapping['marketplace_id'] ?? null),
+            'category_tree_id' => data_get($metadata, 'marketplace.ebay.category_tree_id') ?? ($pluginMapping['category_tree_id'] ?? null),
+            'category_id' => data_get($metadata, 'marketplace.ebay.category_id') ?? ($pluginMapping['category_id'] ?? null),
         ])
             ->map(fn (mixed $value): ?string => is_string($value) && trim($value) !== '' ? trim($value) : null)
             ->filter()

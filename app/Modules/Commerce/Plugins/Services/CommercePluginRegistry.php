@@ -2,6 +2,7 @@
 
 namespace App\Modules\Commerce\Plugins\Services;
 
+use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannelProvider;
 use App\Modules\Commerce\Plugins\Contracts\CommerceReadinessContributor;
@@ -13,6 +14,9 @@ class CommercePluginRegistry
 
     /** @var array<class-string<MarketplaceChannelProvider>, class-string<MarketplaceChannelProvider>> */
     private array $marketplaceChannelProviders = [];
+
+    /** @var array<string, array<string, mixed>> */
+    private array $marketplaceTemplateMappings = [];
 
     /** @var array<class-string<CommerceReadinessContributor>, class-string<CommerceReadinessContributor>> */
     private array $readinessContributors = [];
@@ -42,6 +46,18 @@ class CommercePluginRegistry
     {
         if (is_subclass_of($provider, MarketplaceChannelProvider::class)) {
             $this->marketplaceChannelProviders[$provider] = $provider;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $mapping
+     */
+    public function registerMarketplaceTemplateMapping(array $mapping): void
+    {
+        $id = $this->idFrom($mapping);
+
+        if ($id !== null) {
+            $this->marketplaceTemplateMappings[$id] = $mapping;
         }
     }
 
@@ -87,6 +103,35 @@ class CommercePluginRegistry
     public function marketplaceChannelProviders(): array
     {
         return array_values($this->marketplaceChannelProviders);
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    public function marketplaceTemplateMappings(): array
+    {
+        return $this->marketplaceTemplateMappings;
+    }
+
+    /**
+     * @return array{marketplace_id?: string, category_tree_id?: string, category_id?: string}
+     */
+    public function marketplaceTemplateMappingForTemplate(string $channel, ProductTemplate $template): array
+    {
+        foreach ($this->marketplaceTemplateMappings as $mapping) {
+            if (($mapping['channel'] ?? null) !== $channel || ($mapping['template_code'] ?? null) !== $template->code) {
+                continue;
+            }
+
+            return collect([
+                'marketplace_id' => $mapping['marketplace_id'] ?? null,
+                'category_tree_id' => $mapping['category_tree_id'] ?? null,
+                'category_id' => $mapping['category_id'] ?? null,
+            ])
+                ->map(fn (mixed $value): ?string => is_string($value) && trim($value) !== '' ? trim($value) : null)
+                ->filter()
+                ->all();
+        }
+
+        return [];
     }
 
     /** @return list<class-string<CommerceReadinessContributor>> */

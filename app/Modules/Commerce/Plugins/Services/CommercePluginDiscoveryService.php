@@ -66,6 +66,12 @@ class CommercePluginDiscoveryService
                 }
             }
 
+            foreach ($config['marketplace_template_mappings'] ?? [] as $mapping) {
+                if (is_array($mapping)) {
+                    $registry->registerMarketplaceTemplateMapping($mapping);
+                }
+            }
+
             foreach ($config['readiness_contributors'] ?? [] as $contributor) {
                 if (is_string($contributor)) {
                     $registry->registerReadinessContributor($contributor);

@@ -131,6 +131,7 @@ The file returns arrays keyed by the Commerce seams the extension contributes:
 |---|---|
 | `catalog_presets` | Categories, templates, attributes, mappings, or setup actions the extension can seed or apply. |
 | `marketplace_channel_providers` | `MarketplaceChannelProvider` classes registered with the Commerce marketplace host. |
+| `marketplace_template_mappings` | Channel/category defaults for product templates, such as eBay marketplace, category tree, and category ID. |
 | `readiness_contributors` | Classes that add item/listing readiness checks and operator-facing gaps. |
 | `workbench_panels` | Item or workbench panels that should render inside Commerce surfaces. |
 | `insight_pages` | Extension-owned reports or merchant workflow pages with menu placement metadata. |
@@ -144,6 +145,9 @@ return [
     ],
     'marketplace_channel_providers' => [
         Extensions\Vendor\Package\Marketplace\ChannelProvider::class,
+    ],
+    'marketplace_template_mappings' => [
+        ['id' => 'vendor.package.ebay.template', 'channel' => 'ebay', 'template_code' => 'vendor-template'],
     ],
     'readiness_contributors' => [
         Extensions\Vendor\Package\Readiness\IdentifierReadiness::class,

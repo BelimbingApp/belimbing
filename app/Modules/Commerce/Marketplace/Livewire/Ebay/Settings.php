@@ -14,6 +14,7 @@ use App\Modules\Commerce\Marketplace\Ebay\EbayConnectionTester;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMetadataService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
+use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -149,13 +150,15 @@ class Settings extends SettingsForm
             'commerce.marketplace.manage',
         );
 
+        $templates = $this->productTemplates()->keyBy('id');
+
         $mappings = collect($this->templateCategoryMappings)
-            ->map(fn (array $mapping): array => [
-                'marketplace_id' => $this->nullableDefault($mapping['marketplace_id'] ?? null) ?: 'EBAY_MOTORS_US',
-                'category_tree_id' => $this->nullableDefault($mapping['category_tree_id'] ?? null) ?: '100',
+            ->map(fn (array $mapping, int $templateId): array => [
+                'marketplace_id' => $this->nullableDefault($mapping['marketplace_id'] ?? null) ?: $this->defaultMarketplaceId($templates->get($templateId)),
+                'category_tree_id' => $this->nullableDefault($mapping['category_tree_id'] ?? null) ?: $this->defaultCategoryTreeId($templates->get($templateId)),
                 'category_id' => $this->nullableDefault($mapping['category_id'] ?? null),
             ])
-            ->filter(fn (array $mapping): bool => $mapping['category_id'] !== null)
+            ->filter(fn (array $mapping): bool => $mapping['category_id'] !== null && $mapping['marketplace_id'] !== null && $mapping['category_tree_id'] !== null)
             ->unique(fn (array $mapping): string => implode(':', $mapping))
             ->values();
 
@@ -286,13 +289,42 @@ class Settings extends SettingsForm
     {
         $this->templateCategoryMappings = $this->productTemplates()
             ->mapWithKeys(function (ProductTemplate $template): array {
+                $pluginMapping = app(CommercePluginRegistry::class)
+                    ->marketplaceTemplateMappingForTemplate(EbayConfiguration::CHANNEL, $template);
+
                 return [$template->id => [
-                    'marketplace_id' => data_get($template->metadata, 'marketplace.ebay.marketplace_id') ?: 'EBAY_MOTORS_US',
-                    'category_tree_id' => data_get($template->metadata, 'marketplace.ebay.category_tree_id') ?: '100',
-                    'category_id' => data_get($template->metadata, 'marketplace.ebay.category_id'),
+                    'marketplace_id' => data_get($template->metadata, 'marketplace.ebay.marketplace_id') ?: ($pluginMapping['marketplace_id'] ?? $this->defaultMarketplaceId($template)),
+                    'category_tree_id' => data_get($template->metadata, 'marketplace.ebay.category_tree_id') ?: ($pluginMapping['category_tree_id'] ?? null),
+                    'category_id' => data_get($template->metadata, 'marketplace.ebay.category_id') ?: ($pluginMapping['category_id'] ?? null),
                 ]];
             })
             ->all();
+    }
+
+    private function defaultMarketplaceId(?ProductTemplate $template): ?string
+    {
+        if ($template instanceof ProductTemplate) {
+            $mapping = app(CommercePluginRegistry::class)
+                ->marketplaceTemplateMappingForTemplate(EbayConfiguration::CHANNEL, $template);
+
+            if (($mapping['marketplace_id'] ?? null) !== null) {
+                return $mapping['marketplace_id'];
+            }
+        }
+
+        return app(EbayConfiguration::class)->forCompany($this->companyId())['marketplace_id'] ?? null;
+    }
+
+    private function defaultCategoryTreeId(?ProductTemplate $template): ?string
+    {
+        if (! $template instanceof ProductTemplate) {
+            return null;
+        }
+
+        $mapping = app(CommercePluginRegistry::class)
+            ->marketplaceTemplateMappingForTemplate(EbayConfiguration::CHANNEL, $template);
+
+        return $mapping['category_tree_id'] ?? null;
     }
 
     private function nullableDefault(mixed $value): ?string

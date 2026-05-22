@@ -21,6 +21,7 @@ use App\Modules\Commerce\Marketplace\Models\AspectMapping;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use App\Modules\Commerce\Marketplace\Models\MarketplaceMetadata;
 use App\Modules\Commerce\Marketplace\Models\ProductReference;
+use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
 use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 
@@ -50,6 +51,38 @@ test('eBay listing readiness records blockers on the durable draft', function ()
     Livewire::test(Show::class, ['item' => $item->fresh()])
         ->assertSee('eBay readiness')
         ->assertSee('Map this item template to an eBay category');
+});
+
+test('eBay listing readiness uses plugin template mapping defaults', function (): void {
+    $user = createAdminUser();
+    app(SettingsService::class)->set('marketplace.ebay.marketplace_id', 'EBAY_US', Scope::company($user->company_id));
+
+    app(CommercePluginRegistry::class)->registerMarketplaceTemplateMapping([
+        'id' => 'test.ebay.plugin-template',
+        'channel' => EbayConfiguration::CHANNEL,
+        'template_code' => 'plugin-headlight',
+        'marketplace_id' => 'EBAY_MOTORS_US',
+        'category_tree_id' => '100',
+        'category_id' => '33710',
+    ]);
+
+    $template = ProductTemplate::factory()->create([
+        'company_id' => $user->company_id,
+        'code' => 'plugin-headlight',
+        'metadata' => null,
+    ]);
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'product_template_id' => $template->id,
+    ]);
+
+    $draft = app(EbayListingReadinessService::class)->refreshForItem($item);
+
+    expect($draft->marketplace_id)->toBe('EBAY_US')
+        ->and($draft->metadata_marketplace_id)->toBe('EBAY_MOTORS_US')
+        ->and($draft->category_id)->toBe('33710')
+        ->and($draft->readiness_snapshot['facts']['category_tree_id'])->toBe('100')
+        ->and(collect($draft->readiness_snapshot['blockers'])->pluck('key')->all())->not->toContain('category');
 });
 
 test('eBay listing readiness uses template mapping policies aspects and product references', function (): void {

@@ -54,6 +54,16 @@ return [
     'marketplace_channel_providers' => [
         CommercePluginDiscoveryTestChannelProvider::class,
     ],
+    'marketplace_template_mappings' => [
+        [
+            'id' => 'vendor.package.ebay.template',
+            'channel' => 'ebay',
+            'template_code' => 'vendor-template',
+            'marketplace_id' => 'EBAY_MOTORS_US',
+            'category_tree_id' => '100',
+            'category_id' => '33710',
+        ],
+    ],
     'workbench_panels' => [
         [
             'id' => 'vendor.package.panel',
@@ -78,6 +88,7 @@ PHP);
     expect($registry->catalogPresets())->toHaveKey('vendor.package.catalog')
         ->and($registry->readinessContributors())->toContain(CommercePluginDiscoveryTestReadinessContributor::class)
         ->and($registry->marketplaceChannelProviders())->toContain(CommercePluginDiscoveryTestChannelProvider::class)
+        ->and($registry->marketplaceTemplateMappings())->toHaveKey('vendor.package.ebay.template')
         ->and($registry->workbenchPanels())->toHaveKey('vendor.package.panel')
         ->and($registry->insightPages())->toHaveKey('vendor.package.insight');
 
@@ -89,4 +100,18 @@ PHP);
         ->and($panels[0]['entries'][0]['code'])->toBe('test.ready');
 
     File::deleteDirectory($root);
+});
+
+test('commerce plugin discovery leaves generic commerce usable without nested extensions', function (): void {
+    $registry = new CommercePluginRegistry;
+    $discovery = new CommercePluginDiscoveryService([
+        base_path('app/Modules/Commerce/*/Config/commerce.php'),
+    ]);
+
+    $discovery->discoverInto($registry);
+
+    expect($registry->workbenchPanels())->toHaveKey('commerce.inventory.item-basics')
+        ->and($registry->catalogPresets())->not->toHaveKey('ham.auto-parts.catalog')
+        ->and($registry->marketplaceTemplateMappings())->not->toHaveKey('ham.auto-parts.ebay-motors.lighting_headlights')
+        ->and($registry->insightPages())->not->toHaveKey('ham.auto-parts.insights.sold-this-month');
 });
