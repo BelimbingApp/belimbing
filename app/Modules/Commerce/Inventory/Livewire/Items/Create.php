@@ -152,12 +152,14 @@ class Create extends Component
             'skuAvailable' => $this->skuAvailability(),
             'categories' => Category::query()
                 ->where('company_id', Auth::user()?->company_id)
+                ->with('parent.parent.parent.parent.parent')
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
             'productTemplates' => ProductTemplate::query()
                 ->where('company_id', Auth::user()?->company_id)
                 ->where('is_active', true)
+                ->with('category.parent.parent.parent.parent.parent')
                 ->orderBy('name')
                 ->get(),
         ]);

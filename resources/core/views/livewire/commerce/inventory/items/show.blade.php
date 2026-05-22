@@ -3,9 +3,6 @@
 use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /** @var Show $this */
 /** @var ListingDraft|null $ebayListingDraft */
 ?>
@@ -179,7 +176,7 @@ use App\Modules\Commerce\Marketplace\Models\ListingDraft;
                             <p class="mt-1 text-sm text-muted">{{ __('Pick the reusable category and template that decide which structured fields apply to this item.') }}</p>
                         </div>
                         <div class="flex flex-wrap justify-end gap-2">
-                            <x-ui.badge>{{ $item->category?->name ?? __('No category') }}</x-ui.badge>
+                            <x-ui.badge>{{ $item->category?->path_label ?? __('No category') }}</x-ui.badge>
                             <x-ui.badge>{{ $item->productTemplate?->name ?? __('No template') }}</x-ui.badge>
                         </div>
                     </div>
@@ -195,7 +192,7 @@ use App\Modules\Commerce\Marketplace\Models\ListingDraft;
                             >
                                 <option value="">{{ __('No category') }}</option>
                                 @foreach ($categories as $category)
-                                    <option value="{{ $category->id }}">{{ $category->name }}</option>
+                                    <option value="{{ $category->id }}">{{ $category->path_label }}</option>
                                 @endforeach
                             </x-ui.select>
 
@@ -212,7 +209,7 @@ use App\Modules\Commerce\Marketplace\Models\ListingDraft;
                                     <option value="{{ $template->id }}">
                                         {{ $template->name }}
                                         @if ($template->category)
-                                            {{ __('(:category)', ['category' => $template->category->name]) }}
+                                            {{ __('(:category)', ['category' => $template->category->path_label]) }}
                                         @endif
                                     </option>
                                 @endforeach
@@ -227,7 +224,7 @@ use App\Modules\Commerce\Marketplace\Models\ListingDraft;
                         <dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
                                 <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Category') }}</dt>
-                                <dd class="mt-1 text-sm text-ink">{{ $item->category?->name ?? __('No category') }}</dd>
+                                <dd class="mt-1 text-sm text-ink">{{ $item->category?->path_label ?? __('No category') }}</dd>
                             </div>
                             <div>
                                 <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Template') }}</dt>
@@ -797,7 +794,7 @@ use App\Modules\Commerce\Marketplace\Models\ListingDraft;
                                         @if ($attribute->productTemplate)
                                             {{ __('(:template)', ['template' => $attribute->productTemplate->name]) }}
                                         @elseif ($attribute->category)
-                                            {{ __('(:category)', ['category' => $attribute->category->name]) }}
+                                            {{ __('(:category)', ['category' => $attribute->category->path_label]) }}
                                         @endif
                                     </option>
                                 @endforeach

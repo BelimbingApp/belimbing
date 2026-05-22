@@ -63,7 +63,7 @@
                     >
                         <option value="">{{ __('No category') }}</option>
                         @foreach ($categories as $category)
-                            <option value="{{ $category->id }}">{{ $category->name }}</option>
+                            <option value="{{ $category->id }}">{{ $category->path_label }}</option>
                         @endforeach
                     </x-ui.select>
 
@@ -76,7 +76,12 @@
                     >
                         <option value="">{{ __('No template') }}</option>
                         @foreach ($productTemplates as $template)
-                            <option value="{{ $template->id }}">{{ $template->name }}</option>
+                            <option value="{{ $template->id }}">
+                                {{ $template->name }}
+                                @if ($template->category)
+                                    {{ __('(:category)', ['category' => $template->category->path_label]) }}
+                                @endif
+                            </option>
                         @endforeach
                     </x-ui.select>
                 </div>

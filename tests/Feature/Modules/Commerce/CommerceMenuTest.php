@@ -10,6 +10,12 @@ test('commerce menu is organized around operator jobs instead of implementation 
         ->keyBy('id');
 
     expect($items['commerce.catalog']->label)->toBe('Catalog')
+        ->and($items['commerce.catalog.categories']->parent)->toBe('commerce.catalog')
+        ->and($items['commerce.catalog.categories']->label)->toBe('Categories')
+        ->and($items['commerce.catalog.templates']->parent)->toBe('commerce.catalog')
+        ->and($items['commerce.catalog.templates']->label)->toBe('Templates')
+        ->and($items['commerce.catalog.attributes']->parent)->toBe('commerce.catalog')
+        ->and($items['commerce.catalog.attributes']->label)->toBe('Attributes')
         ->and($items['commerce.inventory']->label)->toBe('Inventory')
         ->and($items['commerce.marketplace']->label)->toBe('Marketplace')
         ->and($items['commerce.sales']->label)->toBe('Sales')

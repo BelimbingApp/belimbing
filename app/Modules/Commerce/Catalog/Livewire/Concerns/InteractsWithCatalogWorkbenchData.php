@@ -45,6 +45,7 @@ trait InteractsWithCatalogWorkbenchData
 
         $query = Category::query()
             ->where($categoryTable.self::COLUMN_COMPANY_ID, $companyId)
+            ->with('parent.parent.parent.parent.parent')
             ->withCount(['attributes', 'productTemplates'])
             ->when($this->search !== '', fn (Builder $query) => $query->where(function (Builder $query) use ($categoryTable): void {
                 $query->where($categoryTable.self::COLUMN_CODE, 'like', '%'.$this->search.'%')
@@ -66,7 +67,7 @@ trait InteractsWithCatalogWorkbenchData
         $query = ProductTemplate::query()
             ->select($templateTable.'.*')
             ->where($templateTable.self::COLUMN_COMPANY_ID, $companyId)
-            ->with('category')
+            ->with('category.parent.parent.parent.parent.parent')
             ->withCount(['attributes', 'items'])
             ->when($this->search !== '', fn (Builder $query) => $query->where(function (Builder $query) use ($templateTable): void {
                 $query->where($templateTable.self::COLUMN_CODE, 'like', '%'.$this->search.'%')
@@ -97,7 +98,7 @@ trait InteractsWithCatalogWorkbenchData
         $query = Attribute::query()
             ->select($attributeTable.'.*')
             ->where($attributeTable.self::COLUMN_COMPANY_ID, $companyId)
-            ->with(['category', 'productTemplate'])
+            ->with(['category.parent.parent.parent.parent.parent', 'productTemplate'])
             ->when($this->search !== '', fn (Builder $query) => $query->where(function (Builder $query) use ($attributeTable): void {
                 $query->where($attributeTable.self::COLUMN_CODE, 'like', '%'.$this->search.'%')
                     ->orWhere($attributeTable.self::COLUMN_NAME, 'like', '%'.$this->search.'%');

@@ -437,12 +437,13 @@ class Show extends Component
             'availableAttributes' => $this->applicableAttributeQuery(Auth::user()?->company_id)->get(),
             'categories' => Category::query()
                 ->where('company_id', Auth::user()?->company_id)
+                ->with('parent.parent.parent.parent.parent')
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->get(),
             'productTemplates' => ProductTemplate::query()
                 ->where('company_id', Auth::user()?->company_id)
-                ->with('category')
+                ->with('category.parent.parent.parent.parent.parent')
                 ->orderBy('name')
                 ->get(),
             'fitmentSourceItems' => Item::query()

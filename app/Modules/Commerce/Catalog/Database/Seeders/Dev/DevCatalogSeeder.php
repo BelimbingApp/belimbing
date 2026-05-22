@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Catalog\Database\Seeders\Dev;
 
 use App\Base\Database\Seeders\DevSeeder;
@@ -29,6 +30,9 @@ class DevCatalogSeeder extends DevSeeder
                     'code' => $category['code'],
                 ],
                 [
+                    'parent_id' => $category['parent_code'] !== null
+                        ? ($categories[$category['parent_code']] ?? null)?->id
+                        : null,
                     'name' => $category['name'],
                     'description' => $category['description'],
                     'sort_order' => $category['sort_order'],
@@ -76,28 +80,52 @@ class DevCatalogSeeder extends DevSeeder
     }
 
     /**
-     * @return list<array{code: string, name: string, description: string, sort_order: int}>
+     * @return list<array{code: string, parent_code: string|null, name: string, description: string, sort_order: int}>
      */
     private function categories(): array
     {
         return [
             [
+                'code' => 'auto-parts',
+                'parent_code' => null,
+                'name' => 'Auto Parts',
+                'description' => 'Vehicle parts and accessories grouped into sellable families.',
+                'sort_order' => 10,
+            ],
+            [
                 'code' => 'auto-lighting',
+                'parent_code' => 'auto-parts',
                 'name' => 'Auto Lighting',
                 'description' => 'Headlights, tail lights, marker lights, and related lighting assemblies.',
                 'sort_order' => 10,
             ],
             [
                 'code' => 'engine-parts',
+                'parent_code' => 'auto-parts',
                 'name' => 'Engine Parts',
                 'description' => 'Used engine accessories and mechanical components.',
                 'sort_order' => 20,
             ],
             [
+                'code' => 'auto-body',
+                'parent_code' => 'auto-parts',
+                'name' => 'Auto Body',
+                'description' => 'Exterior panels, mirrors, trim, and related body components.',
+                'sort_order' => 30,
+            ],
+            [
                 'code' => 'electronics',
+                'parent_code' => null,
                 'name' => 'Electronics',
                 'description' => 'Reusable non-auto example for cameras, audio gear, and similar items.',
                 'sort_order' => 90,
+            ],
+            [
+                'code' => 'camera-bodies',
+                'parent_code' => 'electronics',
+                'name' => 'Camera Bodies',
+                'description' => 'Mirrorless and DSLR camera bodies sold as individual listings.',
+                'sort_order' => 10,
             ],
         ];
     }
@@ -122,7 +150,7 @@ class DevCatalogSeeder extends DevSeeder
             ],
             [
                 'code' => 'camera-body',
-                'category_code' => 'electronics',
+                'category_code' => 'camera-bodies',
                 'name' => 'Camera Body',
                 'description' => 'Non-auto example showing the catalog can describe other resale goods.',
             ],

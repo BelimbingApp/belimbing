@@ -10,6 +10,8 @@ use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannelProvider;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMarketplaceChannelProvider;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
+use App\Modules\Commerce\Plugins\Services\CommercePluginDiscoveryService;
+use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -28,8 +30,12 @@ class ServiceProvider extends BaseServiceProvider
 
     public function boot(): void
     {
+        $commercePlugins = $this->app->make(CommercePluginRegistry::class);
+        $this->app->make(CommercePluginDiscoveryService::class)->discoverInto($commercePlugins);
+
         $this->registerChannelProviders([
             EbayMarketplaceChannelProvider::class,
+            ...$commercePlugins->marketplaceChannelProviders(),
         ]);
 
         if ($this->app->runningInConsole()) {

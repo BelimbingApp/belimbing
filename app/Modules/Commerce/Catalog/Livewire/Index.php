@@ -9,6 +9,7 @@ use App\Modules\Commerce\Catalog\Models\Attribute;
 use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -37,11 +38,24 @@ class Index extends Component
 
     public bool $showCreateModal = false;
 
+    public string $createKind = '';
+
+    public ?int $selectedCategoryId = null;
+
+    /**
+     * @var array<int, int>
+     */
+    public array $expandedCategoryIds = [];
+
+    public bool $categoryExpansionInitialized = false;
+
     public string $categoryName = '';
 
     public string $categoryCode = '';
 
     public ?string $categoryDescription = null;
+
+    public ?int $categoryParentId = null;
 
     public ?int $templateCategoryId = null;
 
@@ -64,6 +78,15 @@ class Index extends Component
     public bool $attributeRequired = false;
 
     public ?string $attributeOptions = null;
+
+    public function mount(?string $tab = null): void
+    {
+        if ($tab !== null && in_array($tab, $this->tabs(), true)) {
+            $this->tab = $tab;
+            $this->sortBy = $this->defaultSortBy($tab);
+            $this->sortDir = $this->defaultSortDir($tab);
+        }
+    }
 
     public function setTab(string $tab): void
     {
@@ -93,7 +116,120 @@ class Index extends Component
             $this->setTab($tab);
         }
 
+        if ($this->tab === 'categories') {
+            $this->reset('categoryParentId', 'categoryName', 'categoryCode', 'categoryDescription');
+        }
+
+        $this->createKind = $this->tab;
         $this->showCreateModal = true;
+    }
+
+    public function selectCategory(int $categoryId): void
+    {
+        $category = Category::query()
+            ->where('company_id', $this->companyId())
+            ->with('parent.parent.parent.parent.parent')
+            ->findOrFail($categoryId);
+
+        $this->selectedCategoryId = $category->id;
+        $this->expandedCategoryIds = array_values(array_unique([
+            ...$this->expandedCategoryIds,
+            ...$this->categoryAncestorIds($category),
+        ]));
+    }
+
+    public function toggleCategoryExpansion(int $categoryId): void
+    {
+        Category::query()
+            ->where('company_id', $this->companyId())
+            ->findOrFail($categoryId);
+
+        if (in_array($categoryId, $this->expandedCategoryIds, true)) {
+            $this->expandedCategoryIds = array_values(array_diff($this->expandedCategoryIds, [$categoryId]));
+
+            return;
+        }
+
+        $this->expandedCategoryIds[] = $categoryId;
+    }
+
+    public function toggleAllCategoryExpansion(): void
+    {
+        $branchIds = Category::query()
+            ->where('company_id', $this->companyId())
+            ->whereHas('children')
+            ->pluck('id')
+            ->map(fn (int|string $id): int => (int) $id)
+            ->all();
+
+        if ($branchIds === []) {
+            return;
+        }
+
+        $expandedBranchIds = array_intersect($branchIds, $this->expandedCategoryIds);
+
+        $this->expandedCategoryIds = count($expandedBranchIds) === count($branchIds)
+            ? []
+            : $branchIds;
+    }
+
+    public function addChildCategory(?int $parentCategoryId = null): void
+    {
+        $this->setTab('categories');
+        $this->reset('categoryName', 'categoryCode', 'categoryDescription');
+        $this->categoryParentId = $parentCategoryId;
+        $this->createKind = 'categories';
+        $this->showCreateModal = true;
+    }
+
+    public function addCategoryTemplate(int $categoryId): void
+    {
+        Category::query()
+            ->where('company_id', $this->companyId())
+            ->findOrFail($categoryId);
+
+        $this->reset('templateName', 'templateCode', 'templateDescription');
+        $this->templateCategoryId = $categoryId;
+        $this->createKind = 'templates';
+        $this->showCreateModal = true;
+    }
+
+    public function addCategoryAttribute(int $categoryId): void
+    {
+        Category::query()
+            ->where('company_id', $this->companyId())
+            ->findOrFail($categoryId);
+
+        $this->reset('attributeProductTemplateId', 'attributeName', 'attributeCode', 'attributeOptions');
+        $this->attributeCategoryId = $categoryId;
+        $this->attributeType = Attribute::TYPE_TEXT;
+        $this->attributeRequired = false;
+        $this->createKind = 'attributes';
+        $this->showCreateModal = true;
+    }
+
+    public function showCategoryTemplates(int $categoryId): void
+    {
+        Category::query()
+            ->where('company_id', $this->companyId())
+            ->findOrFail($categoryId);
+
+        $this->setTab('templates');
+        $this->filterCategoryId = (string) $categoryId;
+        $this->search = '';
+    }
+
+    public function showCategoryAttributes(int $categoryId): void
+    {
+        Category::query()
+            ->where('company_id', $this->companyId())
+            ->findOrFail($categoryId);
+
+        $this->setTab('attributes');
+        $this->filterCategoryId = (string) $categoryId;
+        $this->filterTemplateId = '';
+        $this->filterType = '';
+        $this->search = '';
     }
 
     public function manageTemplateAttributes(int $templateId): void
@@ -118,6 +254,7 @@ class Index extends Component
         $this->setTab('attributes');
         $this->attributeCategoryId = $template->category_id;
         $this->attributeProductTemplateId = $template->id;
+        $this->createKind = 'attributes';
         $this->showCreateModal = true;
     }
 
@@ -163,19 +300,28 @@ class Index extends Component
         $companyId = $this->companyId();
 
         $validated = $this->validate([
+            'categoryParentId' => ['nullable', 'integer', Rule::exists(Category::class, 'id')->where('company_id', $companyId)],
             'categoryName' => ['required', 'string', 'max:255'],
             'categoryCode' => ['required', 'string', 'max:255', Rule::unique(Category::class, 'code')->where('company_id', $companyId)],
             'categoryDescription' => ['nullable', 'string', 'max:5000'],
         ]);
 
-        Category::query()->create([
+        $category = Category::query()->create([
             'company_id' => $companyId,
+            'parent_id' => $validated['categoryParentId'] ?: null,
             'code' => Str::slug($validated['categoryCode']),
             'name' => $validated['categoryName'],
             'description' => $validated['categoryDescription'] ?: null,
         ]);
 
-        $this->reset('categoryName', 'categoryCode', 'categoryDescription');
+        $this->selectedCategoryId = $category->id;
+
+        if ($category->parent_id !== null) {
+            $this->expandedCategoryIds = array_values(array_unique([...$this->expandedCategoryIds, $category->parent_id]));
+        }
+
+        $this->reset('categoryParentId', 'categoryName', 'categoryCode', 'categoryDescription');
+        $this->createKind = '';
         $this->showCreateModal = false;
         session()->flash('success', __('Category created.'));
     }
@@ -201,6 +347,7 @@ class Index extends Component
         ]);
 
         $this->reset('templateCategoryId', 'templateName', 'templateCode', 'templateDescription');
+        $this->createKind = '';
         $this->showCreateModal = false;
         session()->flash('success', __('Template created.'));
     }
@@ -241,6 +388,7 @@ class Index extends Component
             'attributeOptions',
         );
         $this->attributeType = Attribute::TYPE_TEXT;
+        $this->createKind = '';
         $this->showCreateModal = false;
         session()->flash('success', __('Attribute created.'));
     }
@@ -253,11 +401,12 @@ class Index extends Component
             ->where('company_id', $companyId)
             ->findOrFail($categoryId);
 
-        if (! in_array($field, ['code', 'name', 'description', 'sort_order'], true)) {
+        if (! in_array($field, ['parent_id', 'code', 'name', 'description', 'sort_order'], true)) {
             return;
         }
 
         $rules = [
+            'parent_id' => ['nullable', 'integer', Rule::exists(Category::class, 'id')->where('company_id', $companyId)],
             'code' => ['required', 'string', 'max:255', Rule::unique((new Category)->getTable(), 'code')->where('company_id', $companyId)->ignore($categoryId)],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
@@ -266,9 +415,31 @@ class Index extends Component
 
         $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
 
-        $category->{$field} = $field === 'code'
-            ? Str::slug($validated[$field])
-            : $validated[$field];
+        if ($field === 'parent_id') {
+            $parentId = $validated[$field] ? (int) $validated[$field] : null;
+
+            if ($parentId === $category->id) {
+                $this->addError('categoryParentId', __('A category cannot be its own parent.'));
+
+                return;
+            }
+
+            $parent = $parentId === null
+                ? null
+                : Category::query()->where('company_id', $companyId)->with('parent.parent.parent.parent.parent')->findOrFail($parentId);
+
+            if ($parent instanceof Category && $parent->isDescendantOf($category)) {
+                $this->addError('categoryParentId', __('A category cannot be moved under one of its sub-categories.'));
+
+                return;
+            }
+        }
+
+        $category->{$field} = match ($field) {
+            'parent_id' => $validated[$field] ? (int) $validated[$field] : null,
+            'code' => Str::slug($validated[$field]),
+            default => $validated[$field],
+        };
         $category->save();
     }
 
@@ -359,9 +530,19 @@ class Index extends Component
         $companyId = $this->companyId();
         $categories = Category::query()
             ->where('company_id', $companyId)
+            ->with('parent.parent.parent.parent.parent')
+            ->withCount(['attributes', 'children', 'productTemplates'])
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
+        $categoryBranchIds = $categories->where('children_count', '>', 0)->pluck('id')->all();
+
+        if ($this->tab === 'categories' && ! $this->categoryExpansionInitialized) {
+            $this->expandedCategoryIds = $categoryBranchIds;
+            $this->categoryExpansionInitialized = true;
+        }
+
+        $selectedCategory = $this->selectedCategory($companyId, $categories);
 
         $templates = ProductTemplate::query()
             ->where('company_id', $companyId)
@@ -370,15 +551,96 @@ class Index extends Component
 
         return view('livewire.commerce.catalog.index', [
             'categories' => $categories,
+            'categoryBranchIds' => $categoryBranchIds,
+            'categoryTree' => $this->categoryTree($categories),
+            'selectedCategory' => $selectedCategory,
             'templates' => $templates,
             'rows' => $this->rows($companyId),
             'attributeTypes' => Attribute::types(),
             'sortableColumns' => $this->sortableColumns(),
             'tabs' => [
-                ['id' => 'categories', 'label' => __('Categories'), 'icon' => 'heroicon-o-folder'],
-                ['id' => 'templates', 'label' => __('Templates'), 'icon' => 'heroicon-o-clipboard-document-list'],
-                ['id' => 'attributes', 'label' => __('Attributes'), 'icon' => 'heroicon-o-tag'],
+                ['id' => 'categories', 'label' => __('Categories'), 'icon' => 'heroicon-o-folder', 'route' => route('commerce.catalog.categories')],
+                ['id' => 'templates', 'label' => __('Templates'), 'icon' => 'heroicon-o-clipboard-document-list', 'route' => route('commerce.catalog.templates')],
+                ['id' => 'attributes', 'label' => __('Attributes'), 'icon' => 'heroicon-o-tag', 'route' => route('commerce.catalog.attributes')],
             ],
         ]);
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Collection<int, Category>  $categories
+     * @return Collection<int, Category>
+     */
+    private function categoryTree(\Illuminate\Database\Eloquent\Collection $categories): Collection
+    {
+        $search = Str::lower(trim($this->search));
+        $childrenByParent = $categories->groupBy(fn (Category $category): int => $category->parent_id ?? 0);
+
+        $build = function (?int $parentId) use (&$build, $childrenByParent, $search): Collection {
+            return ($childrenByParent->get($parentId ?? 0) ?? collect())
+                ->map(function (Category $category) use ($build, $search): ?Category {
+                    $children = $build($category->id);
+                    $matches = $search === '' || str_contains(Str::lower($category->name), $search)
+                        || str_contains(Str::lower($category->code), $search)
+                        || str_contains(Str::lower($category->description ?? ''), $search)
+                        || str_contains(Str::lower($category->path_label), $search);
+
+                    if (! $matches && $children->isEmpty()) {
+                        return null;
+                    }
+
+                    $category->setRelation('treeChildren', $children);
+
+                    return $category;
+                })
+                ->filter()
+                ->values();
+        };
+
+        return $build(null);
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Collection<int, Category>  $categories
+     */
+    private function selectedCategory(int $companyId, \Illuminate\Database\Eloquent\Collection $categories): ?Category
+    {
+        $selectedId = $this->selectedCategoryId ?? $categories->first()?->id;
+
+        if ($selectedId === null) {
+            return null;
+        }
+
+        return Category::query()
+            ->where('company_id', $companyId)
+            ->with([
+                'attributes.productTemplate',
+                'children',
+                'parent.parent.parent.parent.parent',
+                'productTemplates',
+            ])
+            ->withCount(['attributes', 'children', 'productTemplates'])
+            ->find($selectedId);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function categoryAncestorIds(Category $category): array
+    {
+        $ids = [];
+        $parent = $category->parent;
+        $visited = [];
+
+        while ($parent instanceof Category) {
+            if (in_array($parent->id, $visited, true)) {
+                break;
+            }
+
+            $visited[] = $parent->id;
+            $ids[] = $parent->id;
+            $parent = $parent->parent;
+        }
+
+        return $ids;
     }
 }
