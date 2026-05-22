@@ -5,6 +5,7 @@ use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 
 /** @var Show $this */
 /** @var ListingDraft|null $ebayListingDraft */
+/** @var list<array{id: string, label: string, description: string|null, entries: list<array{code: string, severity: string, label: string, description?: string, action?: string}>}> $extensionReadinessPanels */
 ?>
 
 <div>
@@ -634,6 +635,56 @@ use App\Modules\Commerce\Marketplace\Models\ListingDraft;
                         </x-ui.button>
                     @endif
                 </x-ui.card>
+
+                @foreach ($extensionReadinessPanels as $panel)
+                    <x-ui.card id="extension-readiness-{{ Illuminate\Support\Str::slug($panel['id']) }}" wire:key="extension-readiness-{{ $panel['id'] }}">
+                        <div class="mb-3 flex items-start justify-between gap-3">
+                            <div>
+                                <h2 class="text-base font-medium tracking-tight text-ink">{{ __($panel['label']) }}</h2>
+                                @if ($panel['description'])
+                                    <p class="mt-1 text-sm text-muted">{{ __($panel['description']) }}</p>
+                                @endif
+                            </div>
+                            <x-ui.badge>{{ count($panel['entries']) }}</x-ui.badge>
+                        </div>
+
+                        <div class="space-y-2">
+                            @foreach ($panel['entries'] as $entry)
+                                @php($entryVariant = match ($entry['severity']) {
+                                    'success' => 'success',
+                                    'blocker' => 'danger',
+                                    'warning' => 'warning',
+                                    default => 'info',
+                                })
+                                @php($actionTargets = [
+                                    'item_facts' => ['label' => __('Edit item facts'), 'href' => '#item-facts'],
+                                    'catalog_fit' => ['label' => __('Edit catalog fit'), 'href' => '#catalog-fit'],
+                                    'fitment' => ['label' => __('Edit fitment'), 'href' => '#fitment'],
+                                    'attributes' => ['label' => __('Edit attributes'), 'href' => '#attributes'],
+                                    'descriptions' => ['label' => __('Edit descriptions'), 'href' => '#descriptions'],
+                                    'photos' => ['label' => __('Edit photos'), 'href' => '#photos'],
+                                ])
+
+                                <div wire:key="extension-readiness-{{ $panel['id'] }}-{{ $entry['code'] }}" class="rounded-2xl border border-border-default bg-surface-subtle p-3">
+                                    <div class="flex items-start gap-3">
+                                        <x-ui.badge :variant="$entryVariant">{{ __(Illuminate\Support\Str::headline($entry['severity'])) }}</x-ui.badge>
+                                        <div class="min-w-0 flex-1">
+                                            <p class="text-sm font-medium text-ink">{{ __($entry['label']) }}</p>
+                                            @if (isset($entry['description']))
+                                                <p class="mt-1 text-sm text-muted">{{ __($entry['description']) }}</p>
+                                            @endif
+                                            @if (isset($entry['action'], $actionTargets[$entry['action']]))
+                                                <a href="{{ $actionTargets[$entry['action']]['href'] }}" class="mt-2 inline-flex text-sm font-medium text-accent hover:underline">
+                                                    {{ $actionTargets[$entry['action']]['label'] }}
+                                                </a>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </x-ui.card>
+                @endforeach
 
                 <x-ui.card id="photos">
                     <div

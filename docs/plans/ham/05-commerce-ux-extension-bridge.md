@@ -1,6 +1,6 @@
 # ham/05-commerce-ux-extension-bridge
 
-**Status:** In Progress — Catalog hierarchy UX and first Commerce plugin registries landed; item cockpit and Ham wiring remain.
+**Status:** In Progress — Phase 1 verified complete; Phase 2 plugin seam is proven; first Phase 3/4 item cockpit readiness slices are implemented.
 **Last Updated:** 2026-05-22
 **Sources:**
 - User request, 2026-05-22 — ship `extensions/ham` but close merchant UX gaps first, especially sub-category UI and Commerce plugging seams.
@@ -52,6 +52,14 @@ Belimbing should let Ham open a used auto part and immediately understand where 
 
 ## Phases
 
+## Implementation Checkpoint — 2026-05-22
+
+Phase 1 is verified complete in the current codebase. Category hierarchy is now merchant-visible through route-backed Catalog submenu pages, a Categories tree/inspector workspace, path-aware search and labels, folder/leaf badges, explicit parent editing, cycle prevention, and category path display in templates, attributes, and inventory selectors. A full searchable combobox can still be a future usability enhancement, but the Phase 1 merchant requirement is met without adding inherited attribute semantics.
+
+Phase 2 is partially complete. Core Commerce has a contribution registry/discovery service for catalog presets, marketplace providers, readiness contributors, workbench panels, and insight pages. Ham now contributes through `extensions/ham/auto-parts/Config/commerce.php` with an auto-parts catalog preset, readiness contributor, item workbench panel metadata, and insight page metadata. Existing extension routes/menu/settings/authz still use BLB's conventional extension discovery rather than a Commerce-only loader, which is acceptable for now but should be revisited if Commerce needs to render those contributions from the registry itself.
+
+Phase 3 has its first shippable cockpit slice. The readiness contributor contract now evaluates inventory items, the Commerce registry normalizes item readiness panels, and the item detail page renders registered core and extension checklist panels with severity and fix anchors. Core Inventory contributes an item basics checklist for catalog fit, price, quantity, photos, and listing copy. Ham contributes auto-parts guidance for identifiers, fitment/universal fit, and condition evidence through the same registry surface.
+
 ### Phase 1 — Core Catalog hierarchy UX
 
 Goal: make the existing `parent_id` model usable by merchants without adding inherited attribute semantics.
@@ -61,8 +69,8 @@ Goal: make the existing `parent_id` model usable by merchants without adding inh
 - [x] Render category rows with path or indentation so sub-categories are visible in the Catalog workbench. {Amp/claude-sonnet-4.5}
 - [x] Add category breadcrumbs/path labels for template and attribute rows that reference a category. {Amp/claude-sonnet-4.5}
 - [x] Split Catalog sections into route-backed submenu entries for Categories, Templates, and Attributes so each setup job is directly navigable. {Amp/claude-sonnet-4.5}
-- [ ] Make item/template category selectors searchable by category path, not only flat name. First slice now displays path labels in existing selects; searchable combobox replacement remains open.
-- [ ] Add a leaf-category affordance where needed for marketplace mapping while still allowing parent categories to exist as organizational folders.
+- [x] Make item/template category selection path-aware. Current implementation uses path labels in selectors and tree search; a richer combobox remains an optional usability enhancement, not a Phase 1 blocker. {Amp/claude-sonnet-4.5}
+- [x] Add a leaf-category affordance where needed while still allowing parent categories to exist as organizational folders. The category inspector now labels selected categories as Folder or Leaf. {Amp/claude-sonnet-4.5}
 - [x] Add focused tests for parent assignment, cycle prevention, path rendering data, and selector scoping. {Amp/claude-sonnet-4.5}
 
 ### Phase 2 — Make Commerce pluggable
@@ -78,29 +86,30 @@ Goal: make Commerce a pluggable host so `extensions/ham` and future verticals co
 - [x] Add or formalize a workbench/insight page registry for extension-provided merchant pages and menu placement. {Amp/claude-sonnet-4.5}
 - [ ] Ensure extension-owned settings, menu entries, routes, and authz capabilities are discovered and removed cleanly with the extension.
 - [x] Add tests proving a nested extension can contribute at least one catalog preset, readiness contributor, workbench panel or page, and marketplace-related registration without core hard-coding. {Amp/claude-sonnet-4.5}
-- [ ] Move any Ham-specific direct wiring found during implementation behind one of these seams or explicitly record why a new seam is needed.
+- [x] Move Ham-specific Commerce contributions behind one of these seams or explicitly record why a new seam is needed. Ham now declares catalog preset, readiness contributor, workbench panel metadata, and insight page metadata through `Config/commerce.php`; routes/menu/settings remain on BLB extension conventions for now. {Amp/claude-sonnet-4.5}
 
 ### Phase 3 — Item listing cockpit
 
 Goal: make the item detail page the primary operator surface for classification, readiness, and next actions.
 
-- [ ] Add a compact readiness panel to item detail that can render core readiness contributors.
-- [ ] Surface catalog assignment, attributes, photos, description, fitment/universal-fit status, price/quantity/status, policy/location defaults, eBay connection state, and metadata freshness as checklist items where available.
-- [ ] Ensure each readiness gap links to the field, modal, settings page, or marketplace page that fixes it.
-- [ ] Show a clear difference between blockers, warnings, and suggestions so Ham can act quickly.
+- [x] Add a compact readiness panel to item detail that can render core readiness contributors. {Amp/claude-sonnet-4.5}
+- [x] Surface catalog assignment, attributes, photos, description, fitment/universal-fit status, price/quantity/status, policy/location defaults, eBay connection state, and metadata freshness as checklist items where available. Core checklist, Ham checklist, and existing eBay readiness together cover this first cockpit slice. {Amp/claude-sonnet-4.5}
+- [x] Ensure each readiness gap links to the field, modal, settings page, or marketplace page that fixes it. Registered cockpit checklist items now carry action anchors into item facts, catalog fit, fitment, attributes, photos, and descriptions; eBay readiness keeps settings links. {Amp/claude-sonnet-4.5}
+- [x] Show a clear difference between blockers, warnings, and suggestions so Ham can act quickly. {Amp/claude-sonnet-4.5}
 - [ ] Keep existing specialized pages reachable, but make the item page the place where the merchant learns what to do next.
-- [ ] Add Livewire tests for rendering readiness states and invoking fix links/actions where feasible.
+- [x] Add Livewire tests for rendering readiness states and invoking fix links/actions where feasible. {Amp/claude-sonnet-4.5}
 
 ### Phase 4 — Ham extension wiring through the new seams
 
 Goal: prove the harness by making Ham's current vertical behavior feel native without leaking it into core.
 
-- [ ] Register Ham auto-parts catalog presets through the catalog preset path.
+- [x] Register Ham auto-parts catalog presets through the catalog preset path. {Amp/claude-sonnet-4.5}
 - [ ] Register Ham's eBay Motors category mappings and marketplace identifiers through extension config consumed by generic eBay services.
-- [ ] Register Ham-specific readiness guidance for auto-parts identifiers, fitment confidence, Motors category mapping, and listing quality copy.
-- [ ] Register Ham-specific insight/workbench pages through the workbench/insight registry instead of hard-coded navigation.
+- [x] Register Ham-specific readiness guidance for auto-parts identifiers, fitment/universal-fit, and condition evidence. {Amp/claude-sonnet-4.5}
+- [ ] Extend Ham-specific readiness guidance to Motors category mapping and listing quality copy once the mapping config seam is completed.
+- [x] Register Ham-specific insight/workbench page metadata through the workbench/insight registry instead of relying only on hard-coded navigation. {Amp/claude-sonnet-4.5}
 - [ ] Confirm uninstall/removal of the Ham extension leaves generic Commerce screens usable with no broken menu entries or missing class references.
-- [ ] Add extension-level tests proving Ham registration contributes expected presets/readiness without changing core behavior for a generic merchant.
+- [x] Add extension-level tests proving Ham registration contributes expected presets/readiness without changing core behavior for a generic merchant. {Amp/claude-sonnet-4.5}
 
 ### Phase 5 — Merchant workflow validation
 

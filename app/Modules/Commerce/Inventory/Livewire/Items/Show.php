@@ -18,6 +18,7 @@ use App\Modules\Commerce\Inventory\Services\InventoryItemService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayListingReadinessService;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
+use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -456,6 +457,7 @@ class Show extends Component
                 ->get(),
             'canBootstrapFitmentFromAttributes' => $this->fitmentAttributeCodes() !== [],
             'ebayListingDraft' => $this->ebayListingDraft(),
+            'extensionReadinessPanels' => app(CommercePluginRegistry::class)->itemReadinessPanels($this->item),
         ]);
     }
 

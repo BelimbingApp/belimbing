@@ -1,16 +1,29 @@
 <?php
 
+use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannelProvider;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
+use App\Modules\Commerce\Plugins\Contracts\CommerceReadinessContributor;
 use App\Modules\Commerce\Plugins\Services\CommercePluginDiscoveryService;
 use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
 use Illuminate\Support\Facades\File;
 
-final class CommercePluginDiscoveryTestReadinessContributor
+final class CommercePluginDiscoveryTestReadinessContributor implements CommerceReadinessContributor
 {
     public function id(): string
     {
         return 'test.readiness';
+    }
+
+    public function readinessForItem(Item $item): array
+    {
+        return [
+            [
+                'code' => 'test.ready',
+                'severity' => 'success',
+                'label' => 'Test readiness entry',
+            ],
+        ];
     }
 }
 
@@ -42,7 +55,12 @@ return [
         CommercePluginDiscoveryTestChannelProvider::class,
     ],
     'workbench_panels' => [
-        ['id' => 'vendor.package.panel', 'label' => 'Vendor Panel'],
+        [
+            'id' => 'vendor.package.panel',
+            'label' => 'Vendor Panel',
+            'subject' => 'commerce.inventory.item',
+            'readiness_contributor' => CommercePluginDiscoveryTestReadinessContributor::class,
+        ],
     ],
     'insight_pages' => [
         ['id' => 'vendor.package.insight', 'route' => 'vendor.insight'],
@@ -62,6 +80,13 @@ PHP);
         ->and($registry->marketplaceChannelProviders())->toContain(CommercePluginDiscoveryTestChannelProvider::class)
         ->and($registry->workbenchPanels())->toHaveKey('vendor.package.panel')
         ->and($registry->insightPages())->toHaveKey('vendor.package.insight');
+
+    $item = Item::factory()->make();
+    $panels = $registry->itemReadinessPanels($item);
+
+    expect($panels)->toHaveCount(1)
+        ->and($panels[0]['id'])->toBe('test.readiness')
+        ->and($panels[0]['entries'][0]['code'])->toBe('test.ready');
 
     File::deleteDirectory($root);
 });

@@ -184,6 +184,28 @@ test('authenticated users can view an inventory item detail page', function (): 
         ->assertSee('1450.00');
 });
 
+test('item detail page renders core readiness checklist from commerce plugins', function (): void {
+    $user = createAdminUser();
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'ITEM-CHECKLIST',
+        'title' => 'Checklist test item',
+        'quantity_on_hand' => 0,
+        'target_price_amount' => null,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('commerce.inventory.items.show', $item))
+        ->assertOk()
+        ->assertSee('Item checklist')
+        ->assertSee('Choose a catalog fit')
+        ->assertSee('Set a target price')
+        ->assertSee('Quantity is zero')
+        ->assertSee('Add item photos')
+        ->assertSee('Add listing copy');
+});
+
 test('item facts can be updated directly from the detail page component', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
