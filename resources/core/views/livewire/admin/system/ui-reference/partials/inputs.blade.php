@@ -227,21 +227,21 @@
                 :title="__('Time Input')"
                 component="<code>x-ui.time-input</code>"
             >
-                {{ __('Pill-shaped − / value / + stepper for HH:MM time fields. Driven by Alpine\'s stepTime() and parseTime() helpers. Pass field="fieldName" and the component derives :value, @change, and button handlers automatically.') }}
+                {{ __('Pill-shaped HH:MM time field. Native time picker is the default; opt into − / value / + step buttons when compact stepping is better for the task.') }}
             </x-ui.catalog-section>
 
             <div class="mt-4 space-y-6" x-data="{ shiftStart: 480, shiftStartHhmm: '08:00',
                 stepTime(f,d){ this.shiftStart=((this.shiftStart+d*5)%1440+1440)%1440; this.shiftStartHhmm=String(Math.floor(this.shiftStart/60)).padStart(2,'0')+':'+String(this.shiftStart%60).padStart(2,'0') },
                 parseTime(f,v){ const p=v.split(':'); const h=+p[0]; const m=+(p[1]||0); if(!isNaN(h)){this.shiftStart=(h*60+m+1440)%1440; this.shiftStartHhmm=String(Math.floor(this.shiftStart/60)).padStart(2,'0')+':'+String(this.shiftStart%60).padStart(2,'0')} } }">
                 <div>
-                    <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted mb-3">{{ __('With step buttons (default)') }}</p>
+                    <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted mb-3">{{ __('Native time picker (default)') }}</p>
                     <x-ui.time-input field="shiftStart" />
                     <p class="mt-2 text-xs text-muted font-mono">&lt;x-ui.time-input field=&quot;shiftStart&quot; /&gt;</p>
                 </div>
                 <div>
-                    <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted mb-3">{{ __('Input only (no step buttons)') }}</p>
-                    <x-ui.time-input field="shiftStart" :with-steps="false" />
-                    <p class="mt-2 text-xs text-muted font-mono">&lt;x-ui.time-input field=&quot;shiftStart&quot; :with-steps=&quot;false&quot; /&gt;</p>
+                    <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted mb-3">{{ __('With step buttons') }}</p>
+                    <x-ui.time-input field="shiftStart" :with-steps="true" />
+                    <p class="mt-2 text-xs text-muted font-mono">&lt;x-ui.time-input field=&quot;shiftStart&quot; :with-steps=&quot;true&quot; /&gt;</p>
                 </div>
             </div>
         </x-ui.card>
