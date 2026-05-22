@@ -127,10 +127,27 @@
             <div class="space-y-4">
                 <x-ui.catalog-section
                     :title="__('Choice Controls')"
-                    component="<code>x-ui.select</code>, <code>x-ui.combobox</code>, <code>x-ui.checkbox</code>, <code>x-ui.radio</code>"
+                    component="<code>x-ui.segmented-control</code>, <code>x-ui.select</code>, <code>x-ui.combobox</code>, <code>x-ui.checkbox</code>, <code>x-ui.radio</code>"
                 >
-                    {{ __('Select, checkbox, radio, and textarea controls share the same subdued help treatment so spacing stays consistent across forms.') }}
+                    {{ __('Use segmented controls for short peer choices, selects and comboboxes for longer lists, and checkbox or radio controls when each option needs more explanation.') }}
                 </x-ui.catalog-section>
+
+                <div class="space-y-1" x-data="{ displayMode: 'both' }">
+                    <div class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Segmented Control') }}</div>
+                    <x-ui.segmented-control
+                        :options="[
+                            ['value' => 'both', 'label' => __('Both')],
+                            ['value' => 'dial', 'label' => __('Dial')],
+                            ['value' => 'strip', 'label' => __('Strip')],
+                        ]"
+                        value="both"
+                        :label="__('Display mode')"
+                        size="md"
+                        full-width
+                        x-model="displayMode"
+                    />
+                    <x-ui.field-help :hint="__('Use for compact mutually exclusive choices when every option can stay visible.')" />
+                </div>
 
                 <x-ui.select
                     id="ui-reference-select"
