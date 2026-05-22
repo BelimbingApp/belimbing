@@ -233,10 +233,22 @@ $inventoryLocations = $accountResources->where('kind', AccountResource::KIND_INV
                         </table>
                     </div>
 
-                    <x-ui.button type="button" variant="primary" wire:click="saveTemplateCategoryMappings" wire:loading.attr="disabled" wire:target="saveTemplateCategoryMappings">
-                        <x-icon name="heroicon-o-check" class="h-4 w-4" />
-                        {{ __('Save category mappings') }}
-                    </x-ui.button>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <x-ui.button type="button" variant="primary" wire:click="saveTemplateCategoryMappings" wire:loading.attr="disabled" wire:target="saveTemplateCategoryMappings">
+                            <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                            {{ __('Save category mappings') }}
+                        </x-ui.button>
+
+                        <x-ui.button type="button" variant="outline" wire:click="refreshMappedCategoryMetadata" wire:loading.attr="disabled" wire:target="refreshMappedCategoryMetadata">
+                            <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
+                            <span wire:loading.remove wire:target="refreshMappedCategoryMetadata">{{ __('Refresh metadata') }}</span>
+                            <span wire:loading wire:target="refreshMappedCategoryMetadata">{{ __('Refreshing...') }}</span>
+                        </x-ui.button>
+
+                        <p class="text-xs text-muted">
+                            {{ __('Refresh pulls category aspects, compatibility properties, compatibility policy, and condition policy for mapped categories.') }}
+                        </p>
+                    </div>
                 @endif
             </div>
         </x-ui.card>

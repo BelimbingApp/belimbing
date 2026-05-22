@@ -15,6 +15,7 @@ use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMarketplaceChannel;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMetadataService;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index as MarketplaceIndex;
+use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings as EbaySettings;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
 use App\Modules\Commerce\Marketplace\Models\AspectMapping;
 use App\Modules\Commerce\Marketplace\Models\Listing;
@@ -218,6 +219,69 @@ test('ebay marketplace page is visible to admins', function (): void {
         ->assertSee('eBay settings')
         ->assertSee(route('commerce.marketplace.ebay.settings'), false)
         ->assertDontSee('Connect eBay');
+});
+
+test('ebay settings can refresh metadata for mapped template categories', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    configureEbayMarketplaceForCompany($user->company_id, ['https://api.ebay.com/oauth/api_scope/sell.inventory']);
+
+    app(OAuthTokenStore::class)->persist(
+        EbayConfiguration::CHANNEL,
+        Scope::company($user->company_id),
+        [
+            'access_token' => 'application-token-settings-refresh',
+            'expires_in' => 3600,
+        ],
+        EbayConfiguration::APPLICATION_SCOPES,
+        EbayConfiguration::APPLICATION_TOKEN_ACCOUNT_KEY,
+        metadata: ['token_kind' => 'application'],
+    );
+
+    $template = ProductTemplate::factory()->create([
+        'company_id' => $user->company_id,
+        'name' => 'Headlight Assembly',
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100' => Http::response([
+            'categoryTreeId' => '100',
+            'rootCategoryNode' => ['category' => ['categoryId' => '6000', 'categoryName' => 'eBay Motors']],
+        ]),
+        'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_category_subtree*' => Http::response([
+            'categorySubtreeNode' => ['category' => ['categoryId' => '33710', 'categoryName' => 'Headlight Assemblies']],
+        ]),
+        'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_item_aspects_for_category*' => Http::response([
+            'aspects' => [['localizedAspectName' => 'Brand']],
+        ]),
+        'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_compatibility_properties*' => Http::response([
+            'compatibilityProperties' => [['name' => 'Year'], ['name' => 'Make']],
+        ]),
+        'https://api.sandbox.ebay.com/sell/metadata/v1/marketplace/EBAY_MOTORS_US/get_automotive_parts_compatibility_policies*' => Http::response([
+            'automotivePartsCompatibilityPolicies' => [['categoryId' => '33710', 'compatibilityBasedOn' => 'ASSEMBLY']],
+        ]),
+        'https://api.sandbox.ebay.com/sell/metadata/v1/marketplace/EBAY_MOTORS_US/get_item_condition_policies*' => Http::response([
+            'itemConditionPolicies' => [['categoryId' => '33710', 'itemConditions' => [['conditionId' => '3000']]]],
+        ]),
+    ]);
+
+    Livewire::test(EbaySettings::class)
+        ->set("templateCategoryMappings.{$template->id}.marketplace_id", 'EBAY_MOTORS_US')
+        ->set("templateCategoryMappings.{$template->id}.category_tree_id", '100')
+        ->set("templateCategoryMappings.{$template->id}.category_id", '33710')
+        ->call('refreshMappedCategoryMetadata')
+        ->assertHasNoErrors();
+
+    expect(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_CATEGORY_TREE)->where('key', '100')->exists())->toBeTrue()
+        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_CATEGORY_SUBTREE)->where('key', '100:33710')->exists())->toBeTrue()
+        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_CATEGORY_ASPECTS)->where('key', '100:33710')->exists())->toBeTrue()
+        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_COMPATIBILITY_PROPERTIES)->where('key', '100:33710')->exists())->toBeTrue()
+        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_AUTOMOTIVE_PARTS_COMPATIBILITY_POLICIES)->where('key', '33710')->exists())->toBeTrue()
+        ->and(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_ITEM_CONDITION_POLICIES)->where('key', '33710')->exists())->toBeTrue();
+
+    Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_item_aspects_for_category')
+        && $request->hasHeader('Authorization', 'Bearer application-token-settings-refresh')
+        && $request['category_id'] === '33710');
 });
 
 test('ebay marketplace surfaces imported listing audit states', function (): void {

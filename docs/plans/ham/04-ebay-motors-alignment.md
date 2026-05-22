@@ -1,7 +1,7 @@
 # ham/04-ebay-motors-alignment
 
-**Status:** Complete
-**Last Updated:** 2026-05-21
+**Status:** In Progress — Phase 1 verified complete; Phase 2 metadata sync UX is the active implementation slice.
+**Last Updated:** 2026-05-22
 **Sources:**
 - User context: Ham operates from California and sells through the eBay store `rpm*parts`; Belimbing must help him align with US eBay Motors discovery, not only generic marketplace listing.
 - `docs/plans/ham/01-ebay-car-parts-operations.md` — Ham operating model, Belimbing Commerce / Ham extension split, eBay read/write integration direction.
@@ -80,6 +80,12 @@ The first implementation priority is therefore **Belimbing ↔ eBay Motors align
 
 ## Phases
 
+## Implementation Checkpoint — 2026-05-22
+
+Phase 1 has been verified against the current codebase and is complete: Commerce now has an item fitment model/table, item-level universal-fit handling, inventory item fitment add/edit/delete/bulk import UI, bootstrap from configured catalog attributes, copy-from-item reuse, Ham auto-parts fitment/identifier seeds, and fitment coverage on inventory list/detail surfaces.
+
+Phase 2 is also substantially implemented through eBay metadata services, cached metadata storage, refresh command, template-to-eBay-category mapping settings, policy/location import, and tests. The next useful Phase 2 gap is operator-facing refresh from the mapping screen so a merchant can map templates and immediately pull category aspects, compatibility properties, compatibility policy, and condition policy without using the CLI.
+
 ### Phase 0 — Motors metadata, auth, and listing foundation
 
 Goal: give Belimbing the platform primitives needed to reason about eBay Motors before building operator-facing fitment workflows.
@@ -115,6 +121,7 @@ Goal: make Belimbing aware of what eBay expects for the selected Motors category
 - [x] Fetch automotive parts compatibility policies and item condition policies through eBay Metadata APIs, including compatibility limits and policy flags where available. {Amp/claude-sonnet-4.5}
 - [x] Store enough metadata to compute readiness offline for normal UI use, while keeping refresh/retry behavior explicit. {Amp/claude-sonnet-4.5}
 - [x] Add a mapping surface between Belimbing catalog categories/templates and eBay Motors categories. {Amp/claude-sonnet-4.5}
+- [x] Add an operator-facing refresh action from mapped templates so eBay category aspects, compatibility properties, automotive compatibility policy, and condition policy can be cached from the settings UI without CLI access. {Amp/claude-sonnet-4.5}
 - [x] Add policy and location selection defaults for Ham once eBay account data has been imported. {Amp/claude-sonnet-4.5}
 - [x] Import catalog/ePID-backed product specifics where eBay exposes them for a listing or comparable product, then map those specifics into the same aspect-readiness pipeline as seller-entered attributes. {Amp/claude-sonnet-4.5}
 

@@ -11,6 +11,7 @@ use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Marketplace\Ebay\EbayAccountSetupImporter;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConnectionTester;
+use App\Modules\Commerce\Marketplace\Ebay\EbayMetadataService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
 use Illuminate\Contracts\View\View;
@@ -139,6 +140,51 @@ class Settings extends SettingsForm
 
         $this->loadTemplateCategoryMappings();
         session()->flash('success', __('eBay category mappings saved.'));
+    }
+
+    public function refreshMappedCategoryMetadata(EbayMetadataService $metadata): void
+    {
+        app(AuthorizationService::class)->authorize(
+            Actor::forUser(Auth::user()),
+            'commerce.marketplace.manage',
+        );
+
+        $mappings = collect($this->templateCategoryMappings)
+            ->map(fn (array $mapping): array => [
+                'marketplace_id' => $this->nullableDefault($mapping['marketplace_id'] ?? null) ?: 'EBAY_MOTORS_US',
+                'category_tree_id' => $this->nullableDefault($mapping['category_tree_id'] ?? null) ?: '100',
+                'category_id' => $this->nullableDefault($mapping['category_id'] ?? null),
+            ])
+            ->filter(fn (array $mapping): bool => $mapping['category_id'] !== null)
+            ->unique(fn (array $mapping): string => implode(':', $mapping))
+            ->values();
+
+        if ($mappings->isEmpty()) {
+            session()->flash('error', __('Add at least one eBay category ID before refreshing metadata.'));
+
+            return;
+        }
+
+        try {
+            $companyId = $this->companyId();
+
+            foreach ($mappings as $mapping) {
+                $categoryId = (string) $mapping['category_id'];
+                $marketplaceId = (string) $mapping['marketplace_id'];
+                $categoryTreeId = (string) $mapping['category_tree_id'];
+
+                $metadata->categoryTree($companyId, $marketplaceId, $categoryTreeId, forceRefresh: true);
+                $metadata->categorySubtree($companyId, $marketplaceId, $categoryTreeId, $categoryId, forceRefresh: true);
+                $metadata->categoryAspects($companyId, $marketplaceId, $categoryTreeId, $categoryId, forceRefresh: true);
+                $metadata->compatibilityProperties($companyId, $marketplaceId, $categoryTreeId, $categoryId, forceRefresh: true);
+                $metadata->automotivePartsCompatibilityPolicies($companyId, $marketplaceId, [$categoryId], forceRefresh: true);
+                $metadata->itemConditionPolicies($companyId, $marketplaceId, [$categoryId], forceRefresh: true);
+            }
+
+            session()->flash('success', trans_choice('Refreshed eBay metadata for :count mapped category.|Refreshed eBay metadata for :count mapped categories.', $mappings->count(), ['count' => $mappings->count()]));
+        } catch (Throwable $exception) {
+            session()->flash('error', $exception->getMessage());
+        }
     }
 
     public function connectButtonLabel(): string
