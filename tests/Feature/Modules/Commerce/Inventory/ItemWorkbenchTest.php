@@ -22,7 +22,8 @@ use Livewire\Livewire;
 const INVENTORY_OEM_NUMBER_ATTRIBUTE_NAME = 'OEM Number';
 const INVENTORY_HEADLIGHT_TEMPLATE_NAME = 'Headlight Assembly';
 const INVENTORY_BMW_135I_FITMENT_LABEL = '2011 BMW 135i';
-
+const INVENTORY_FITMENT_TRIM = 'M Sport';
+const INVENTORY_FITMENT_ENGINE = 'N55 3.0L';
 test('guests are redirected to login from inventory item pages', function (): void {
     $item = Item::factory()->create();
 
@@ -371,8 +372,8 @@ test('item fitments can be edited from the detail page component', function (): 
         ->call('editFitment', $fitment->id)
         ->assertSet('fitmentYear', '2011')
         ->set('fitmentYear', '2012')
-        ->set('fitmentTrim', 'M Sport')
-        ->set('fitmentEngine', 'N55 3.0L')
+        ->set('fitmentTrim', INVENTORY_FITMENT_TRIM)
+        ->set('fitmentEngine', INVENTORY_FITMENT_ENGINE)
         ->set('fitmentNotes', 'Corrected after donor VIN review.')
         ->call('updateFitment')
         ->assertHasNoErrors()
@@ -381,15 +382,15 @@ test('item fitments can be edited from the detail page component', function (): 
 
     expect($fitment->fresh())
         ->display_year->toBe('2012')
-        ->display_trim->toBe('M Sport')
-        ->display_engine->toBe('N55 3.0L')
+        ->display_trim->toBe(INVENTORY_FITMENT_TRIM)
+        ->display_engine->toBe(INVENTORY_FITMENT_ENGINE)
         ->notes->toBe('Corrected after donor VIN review.')
         ->compatibility_properties->toBe([
             'Year' => '2012',
             'Make' => 'BMW',
             'Model' => '135i',
-            'Trim' => 'M Sport',
-            'Engine' => 'N55 3.0L',
+            'Trim' => INVENTORY_FITMENT_TRIM,
+            'Engine' => INVENTORY_FITMENT_ENGINE,
         ]);
 });
 
