@@ -15,6 +15,8 @@
             $tooltip .= "\n[".$item->id.($item->sourceModule ? ' · '.$item->sourceModule : '').']'
                 ."\n".$item->sourceFile;
         }
+
+        $href = $item->href();
     @endphp
 
     @if($item->hasRoute())
@@ -22,7 +24,7 @@
         <a
             x-show="sidebarRail"
             x-cloak
-            href="{{ $item->route ? route($item->route) : $item->url }}"
+            href="{{ $href }}"
             @if($item->route) wire:navigate @endif
             class="flex items-center justify-center w-full h-8 rounded-none transition {{ $isActive ? 'bg-surface-card text-ink' : 'text-link hover:bg-surface-subtle' }}"
             aria-label="{{ __($item->label) }}"
@@ -50,7 +52,7 @@
             @endif
 
             <a
-                href="{{ $item->route ? route($item->route) : $item->url }}"
+                href="{{ $href }}"
                 @if($item->route) wire:navigate @endif
                 class="truncate flex-1"
                 title="{{ $tooltip }}"
@@ -61,9 +63,9 @@
                 type="button"
                 @click.prevent="togglePin('{{ $item->id }}')"
                 class="shrink-0 w-4 h-4 transition-opacity"
-                :class="isPinnedByUrl('{{ $item->route ? route($item->route) : $item->url }}') ? 'text-accent opacity-100' : 'text-muted hover:text-ink opacity-0 group-hover:opacity-100'"
-                :title="isPinnedByUrl('{{ $item->route ? route($item->route) : $item->url }}') ? '{{ __('Unpin') }}' : '{{ __('Pin to top') }}'"
-                :aria-label="isPinnedByUrl('{{ $item->route ? route($item->route) : $item->url }}') ? '{{ __('Unpin :item', ['item' => $item->label]) }}' : '{{ __('Pin :item to top', ['item' => $item->label]) }}'"
+                :class="isPinnedByUrl('{{ $href }}') ? 'text-accent opacity-100' : 'text-muted hover:text-ink opacity-0 group-hover:opacity-100'"
+                :title="isPinnedByUrl('{{ $href }}') ? '{{ __('Unpin') }}' : '{{ __('Pin to top') }}'"
+                :aria-label="isPinnedByUrl('{{ $href }}') ? '{{ __('Unpin :item', ['item' => $item->label]) }}' : '{{ __('Pin :item to top', ['item' => $item->label]) }}'"
             >
                 <x-icon name="heroicon-o-pin" class="w-3.5 h-3.5" />
             </button>
