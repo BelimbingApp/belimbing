@@ -21,7 +21,7 @@ test('db wipe is blocked for persistent databases', function (): void {
             '--database' => 'wipe_guard_test',
             '--force' => true,
         ])
-            ->expectsOutputToContain('db:wipe is blocked because it bypasses BLB table stability.')
+            ->expectsOutputToContain('db:wipe is blocked because it bypasses BLB incubating-schema safeguards.')
             ->assertExitCode(1);
     } finally {
         DB::purge('wipe_guard_test');

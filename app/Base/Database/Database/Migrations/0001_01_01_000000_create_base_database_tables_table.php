@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -18,13 +19,9 @@ return new class extends Migration
             $table->string('module_name')->nullable()->index();
             $table->string('module_path')->nullable()->index();
             $table->string('migration_file')->nullable()->index();
-            $table->boolean('is_stable')->default(true)->index();
             $table->timestamp('stabilized_at')->nullable();
             $table->unsignedBigInteger('stabilized_by')->nullable();
             $table->timestamps();
-
-            // Indexes for common queries
-            $table->index(['module_name', 'is_stable']);
         });
     }
 

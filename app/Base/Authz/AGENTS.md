@@ -19,11 +19,11 @@ Run the specialized seeder to update role-capability mappings without wiping oth
 php artisan db:seed --class="App\Base\Authz\Database\Seeders\AuthzRoleCapabilitySeeder"
 ```
 
-#### Development (Destructive)
+#### Development
 If you are doing a fresh install or a full reseed:
 
 ```bash
-php artisan migrate:fresh --seed --dev
+php artisan migrate --dev
 ```
 
 ### Key Principles

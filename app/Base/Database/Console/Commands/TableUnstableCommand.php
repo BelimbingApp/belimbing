@@ -1,24 +1,24 @@
 <?php
+
 namespace App\Base\Database\Console\Commands;
 
-use App\Base\Database\Console\Concerns\PrintsTableUnstableUsage;
+use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Database\Models\TableRegistry;
+use App\Base\Database\Services\TableInspector;
 use Illuminate\Console\Command;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
- * Mark tables as unstable so migrate:fresh will drop and rebuild them.
+ * Legacy helper that now points developers to source-local incubating schema.
  */
 #[AsCommand(name: 'blb:table:unstable')]
 class TableUnstableCommand extends Command
 {
-    use PrintsTableUnstableUsage;
-
     protected $signature = 'blb:table:unstable
-                            {tables?* : Table name(s) (or trailing * prefix match) to mark unstable}
-                            {--list : Show current stable/unstable status of all tables}';
+                            {tables?* : Registered table name(s) (or trailing * prefix match) to locate source migrations}
+                            {--list : Show registered tables and their source schema state}';
 
-    protected $description = 'Mark database tables as unstable so migrate:fresh will drop them';
+    protected $description = 'Show where to declare incubating schema in source migrations';
 
     public function handle(): int
     {
@@ -29,10 +29,12 @@ class TableUnstableCommand extends Command
         $tables = $this->argument('tables');
 
         if (empty($tables)) {
-            $this->components->error('Provide one or more table name(s).');
+            $this->components->error('Provide one or more registered table name(s).');
             $this->line('');
-            $this->printTableUnstableUsage('  Examples:');
-            $this->line('  <comment>php artisan blb:table:unstable --list</comment>             Show table stability status');
+            $this->line('  Source-local workflow:');
+            $this->line('    <comment>1.</comment> Add <comment>use App\Base\Database\Concerns\IncubatingSchema;</comment> to the owning migration');
+            $this->line('    <comment>2.</comment> Add <comment>use IncubatingSchema;</comment> inside the migration class');
+            $this->line('    <comment>3.</comment> Run <comment>php artisan migrate --dev</comment>');
             $this->line('');
 
             return Command::FAILURE;
@@ -41,42 +43,46 @@ class TableUnstableCommand extends Command
         $tableNames = $this->expandTableArguments($tables);
 
         if ($tableNames === []) {
-            $this->components->info('No matching stable tables found.');
+            $this->components->info('No matching registered tables found.');
 
             return Command::SUCCESS;
         }
 
-        $query = TableRegistry::query()->stable()->whereIn('table_name', $tableNames);
-
-        $rows = $query->get();
+        $rows = TableRegistry::query()
+            ->whereIn('table_name', $tableNames)
+            ->orderBy('table_name')
+            ->get();
 
         if ($rows->isEmpty()) {
-            $this->components->info('No matching stable tables found.');
+            $this->components->info('No matching registered tables found.');
 
             return Command::SUCCESS;
         }
 
-        $marked = 0;
+        $this->components->warn('Local table stability toggles are retired. Declare incubating schema in the source migration instead.');
+        $this->line('');
+
+        $inspector = app(TableInspector::class);
+        $schemaStates = app(IncubatingSchemaInspector::class)->schemaStatesForTables($rows->pluck('table_name')->all());
 
         foreach ($rows as $row) {
-            $row->markUnstable();
-            $this->components->twoColumnDetail($row->table_name, '<fg=yellow>unstable</>');
-            $marked++;
+            $source = $inspector->migrationSource($row->table_name);
+            $relativePath = $source['relative_path'] ?? ($row->migration_file ?? 'Migration file not found');
+
+            $this->components->twoColumnDetail($row->table_name, $relativePath);
+            $this->components->twoColumnDetail('Schema state', $schemaStates[$row->table_name] ?? 'unknown');
         }
 
         $this->line('');
-        $this->components->info("Marked {$marked} table(s) as unstable. Run `php artisan migrate:fresh --seed --dev` to rebuild them.");
+        $this->line('  Add this marker to the owning migration file:');
+        $this->line('    <comment>use App\Base\Database\Concerns\IncubatingSchema;</comment>');
+        $this->line('    <comment>use IncubatingSchema;</comment>');
+        $this->line('  Then run <comment>php artisan migrate --dev</comment>.');
 
         return Command::SUCCESS;
     }
 
     /**
-     * Expand table arguments to concrete table names.
-     *
-     * Supports:
-     * - Exact names: users, companies
-     * - Prefix wildcards: ai_* (matches ai_providers, ai_provider_models, ...)
-     *
      * @param  array<int, string>  $args
      * @return array<int, string>
      */
@@ -86,6 +92,7 @@ class TableUnstableCommand extends Command
 
         foreach ($args as $arg) {
             $arg = trim((string) $arg);
+
             if ($arg === '') {
                 continue;
             }
@@ -98,15 +105,16 @@ class TableUnstableCommand extends Command
                 }
 
                 $matched = TableRegistry::query()
-                    ->stable()
                     ->where('table_name', 'like', $prefix.'%')
                     ->pluck('table_name')
                     ->all();
 
                 $names = array_merge($names, $matched);
-            } else {
-                $names[] = $arg;
+
+                continue;
             }
+
+            $names[] = $arg;
         }
 
         $names = array_values(array_unique($names));
@@ -115,9 +123,6 @@ class TableUnstableCommand extends Command
         return $names;
     }
 
-    /**
-     * Show stability status for all registered tables.
-     */
     protected function showStatus(): int
     {
         $tables = TableRegistry::query()->orderBy('module_name')->orderBy('table_name')->get();
@@ -128,12 +133,17 @@ class TableUnstableCommand extends Command
             return Command::SUCCESS;
         }
 
+        $schemaStates = app(IncubatingSchemaInspector::class)->schemaStatesForTables(
+            $tables->pluck('table_name')->all(),
+        );
+
         $this->table(
-            ['Table', 'Module', 'Stable'],
-            $tables->map(fn (TableRegistry $t) => [
-                $t->table_name,
-                $t->module_name ?? '—',
-                $t->is_stable ? '<fg=green>✓</>' : '<fg=yellow>✗</>',
+            ['Table', 'Module', 'Schema', 'Migration'],
+            $tables->map(fn (TableRegistry $table) => [
+                $table->table_name,
+                $table->module_name ?? '—',
+                $schemaStates[$table->table_name] ?? 'unknown',
+                $table->migration_file ?? '—',
             ])->all(),
         );
 

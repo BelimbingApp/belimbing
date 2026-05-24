@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Concerns;
 
 use App\Base\Database\Models\TableRegistry;
@@ -7,8 +8,7 @@ use App\Base\Database\Models\TableRegistry;
  * Trait for migrations to register tables in the Table Registry.
  *
  * Call registerTable() in up() and unregisterTable() in down() to track
- * which module owns each table. Tables can then be marked stable in the
- * admin UI to survive migrate:fresh.
+ * which module owns each table and which migration file declared it.
  */
 trait RegistersTables
 {

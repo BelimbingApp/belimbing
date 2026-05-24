@@ -2,7 +2,6 @@
 
 namespace App\Base\Database\Concerns;
 
-use App\Base\Database\Console\Concerns\PrintsTableUnstableUsage;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -18,8 +17,6 @@ use Illuminate\Support\Facades\DB;
  */
 trait GuardsGlobalReset
 {
-    use PrintsTableUnstableUsage;
-
     /**
      * Block reset/refresh.
      *
@@ -42,6 +39,7 @@ trait GuardsGlobalReset
         $this->line('');
         $this->line('    <comment>php artisan migrate --dev</comment>                Local rebuild for source-declared incubating schema');
         $this->line('    <comment>php artisan migrate:fresh</comment>               Full Laravel wipe only when the database is disposable');
+        $this->line('');
 
         return Command::FAILURE;
     }

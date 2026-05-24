@@ -22,8 +22,6 @@ test('registry reconciliation removes entries for missing undeclared relations',
         'module_name' => 'User',
         'module_path' => TABLE_REGISTRY_RECONCILIATION_USER_MODULE_PATH,
         'migration_file' => '0200_01_20_000000_create_orphaned_table.php',
-        'is_stable' => true,
-        'stabilized_at' => now(),
     ]);
 
     $notices = app(TableInspector::class)->reconcileRegistry();
@@ -39,8 +37,6 @@ test('registry reconciliation preserves declared tables even before they exist l
         'module_name' => 'Wrong',
         'module_path' => 'app/Wrong',
         'migration_file' => 'wrong.php',
-        'is_stable' => false,
-        'stabilized_at' => null,
     ]);
 
     app(TableInspector::class)->reconcileRegistry();
@@ -50,8 +46,7 @@ test('registry reconciliation preserves declared tables even before they exist l
     expect($entry)->not()->toBeNull()
         ->and($entry->module_name)->toBe('User')
         ->and($entry->module_path)->toBe(TABLE_REGISTRY_RECONCILIATION_USER_MODULE_PATH)
-        ->and($entry->migration_file)->toBe('0200_01_20_000000_create_users_table.php')
-        ->and($entry->is_stable)->toBeFalse();
+        ->and($entry->migration_file)->toBe('0200_01_20_000000_create_users_table.php');
 });
 
 test('database tables index shows reconciliation notice and omits orphaned rows', function (): void {
@@ -62,8 +57,6 @@ test('database tables index shows reconciliation notice and omits orphaned rows'
         'module_name' => 'User',
         'module_path' => TABLE_REGISTRY_RECONCILIATION_USER_MODULE_PATH,
         'migration_file' => '0200_01_20_000001_create_ghost_registry_entry.php',
-        'is_stable' => true,
-        'stabilized_at' => now(),
     ]);
 
     Livewire::test(DatabaseTablesIndex::class)
@@ -80,8 +73,6 @@ test('database table show redirects to registry when an orphaned entry is reques
         'module_name' => 'User',
         'module_path' => TABLE_REGISTRY_RECONCILIATION_USER_MODULE_PATH,
         'migration_file' => '0200_01_20_000002_create_ghost_table_view.php',
-        'is_stable' => true,
-        'stabilized_at' => now(),
     ]);
 
     Livewire::test(DatabaseTablesShow::class, ['tableName' => 'ghost_table_view'])

@@ -39,6 +39,71 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         return $contents !== false && $this->isIncubating($contents);
     }
 
+    public function tableSchemaState(string $tableName): string
+    {
+        return $this->schemaStatesForTables([$tableName])[$tableName] ?? 'unknown';
+    }
+
+    /**
+     * @param  list<string>  $tableNames
+     * @return array<string, string>
+     */
+    public function schemaStatesForTables(array $tableNames): array
+    {
+        if ($tableNames === []) {
+            return [];
+        }
+
+        $rows = TableRegistry::query()
+            ->whereIn('table_name', $tableNames)
+            ->get(['table_name', 'migration_file']);
+
+        $files = $rows
+            ->pluck('migration_file')
+            ->filter(fn (mixed $file): bool => is_string($file) && $file !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        $incubatingFiles = [];
+
+        foreach ($files as $migrationFile) {
+            $path = $this->migrationPathByFileName($migrationFile);
+
+            if ($path === null) {
+                continue;
+            }
+
+            $contents = file_get_contents($path);
+
+            if ($contents !== false && $this->isIncubating($contents)) {
+                $incubatingFiles[$migrationFile] = true;
+            }
+        }
+
+        $states = [];
+
+        foreach ($tableNames as $tableName) {
+            if (in_array($tableName, TableRegistry::INFRASTRUCTURE_TABLES, true)) {
+                $states[$tableName] = 'infrastructure';
+
+                continue;
+            }
+
+            $migrationFile = $rows->firstWhere('table_name', $tableName)?->migration_file;
+
+            if (! is_string($migrationFile) || $migrationFile === '') {
+                $states[$tableName] = 'unknown';
+
+                continue;
+            }
+
+            $states[$tableName] = isset($incubatingFiles[$migrationFile]) ? 'incubating' : 'stable';
+        }
+
+        return $states;
+    }
+
     /**
      * @param  list<string>  $migrationPaths
      * @return array{files: list<string>, tables: list<string>, migrations: list<string>, seeders_reset: int}

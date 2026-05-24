@@ -141,20 +141,20 @@ The workflow is agent-first: source search should reveal the schema state, and m
 
 Goal: make the policy honest before changing behavior.
 
-- [ ] Replace `AGENTS.md` destructive-evolution language with progressive-evolution guidance.
-- [ ] Update `docs/architecture/database.md` to describe `migrate --dev` as the development schema workflow.
-- [ ] Update `app/Base/Database/AGENTS.md` so agents stop treating `migrate:fresh --dev --seed` as the primary command.
-- [ ] Add agent-first wording to database guidance: coding agents should use familiar Laravel commands and source-local schema metadata.
-- [ ] Decide whether `migrate:fresh` is restored or blocked outside disposable/test databases.
+- [x] Replace `AGENTS.md` destructive-evolution language with progressive-evolution guidance.
+- [x] Update `docs/architecture/database.md` to describe `migrate --dev` as the development schema workflow.
+- [x] Update `app/Base/Database/AGENTS.md` so agents stop treating `migrate:fresh --dev --seed` as the primary command.
+- [x] Add agent-first wording to database guidance: coding agents should use familiar Laravel commands and source-local schema metadata.
+- [x] Decide whether `migrate:fresh` is restored or blocked outside disposable/test databases.
 
 ### Phase 2 - Add migration-local schema maturity
 
 Goal: move schema state into git-tracked module files.
 
-- [ ] Define migration-local metadata for stable/incubating state using a constant, trait, enum, or attribute.
-- [ ] Choose the metadata form with agent readability as a first-order criterion: grep-friendly, obvious beside `up()`, and easy to edit without extra docs.
-- [ ] Add parser/resolver support for stable and incubating migration states.
-- [ ] Support stable-to-incubating changes in source and document when that is acceptable before release versus after public use.
+- [x] Define migration-local metadata for stable/incubating state using a constant, trait, enum, or attribute.
+- [x] Choose the metadata form with agent readability as a first-order criterion: grep-friendly, obvious beside `up()`, and easy to edit without extra docs.
+- [x] Add parser/resolver support for stable and incubating migration states.
+- [x] Support stable-to-incubating changes in source and document when that is acceptable before release versus after public use.
 - [ ] Decide whether optional `Database/schema.php` module defaults are needed, and keep them coarse only.
 - [ ] Document the future `composer.json extra.blb.schema` mirror for coarse pluggable-module defaults.
 
@@ -162,19 +162,19 @@ Goal: move schema state into git-tracked module files.
 
 Goal: keep one familiar command while making development schema refresh automatic.
 
-- [ ] Before native migration, resolve incubating migration files to affected tables.
-- [ ] Drop affected incubating tables and clear their migration records.
-- [ ] Preserve stable tables unless dependency closure requires a rebuild or the command refuses.
-- [ ] Make `migrate --dev` output deterministic and agent-readable: affected files, affected tables, refused dependencies, and next source edit.
-- [ ] Keep dev seeding local-only and tied to `--dev`.
+- [x] Before native migration, resolve incubating migration files to affected tables.
+- [x] Drop affected incubating tables and clear their migration records.
+- [x] Preserve stable tables unless dependency closure requires a rebuild or the command refuses.
+- [x] Make `migrate --dev` output deterministic and agent-readable: affected files, affected tables, refused dependencies, and next source edit.
+- [x] Keep dev seeding local-only and tied to `--dev`.
 
 ### Phase 4 - Restore or block `migrate:fresh`
 
 Goal: remove the semantic trap.
 
-- [ ] Remove selective rebuild behavior from `migrate:fresh`.
-- [ ] Remove `--dev` from `migrate:fresh` once `migrate --dev` owns the development path.
-- [ ] Adjust tests and docs that currently assert selective behavior through `migrate:fresh`.
+- [x] Remove selective rebuild behavior from `migrate:fresh`.
+- [x] Remove `--dev` from `migrate:fresh` once `migrate --dev` owns the development path.
+- [x] Adjust tests and docs that currently assert selective behavior through `migrate:fresh`.
 - [ ] Keep `migrate:refresh` and `migrate:reset` blocked unless a separate disposable-database policy is introduced.
 
 ### Phase 5 - Dependency-aware dev migration
@@ -199,9 +199,9 @@ Goal: make preview installs of under-development modules reliable across repos.
 
 Goal: finish the conceptual migration.
 
-- [ ] Rename user-facing "Stable" labels to schema maturity language.
-- [ ] Remove `base_database_tables.is_stable` after source declarations become authoritative; existing controlled installations can drop the column manually once code no longer references it.
-- [ ] Deprecate `blb:table:unstable` or convert it into a helper that edits/source-guides migration-local metadata for source changes, with any local-only override clearly labeled diagnostic.
+- [x] Rename user-facing "Stable" labels to schema maturity language.
+- [x] Remove `base_database_tables.is_stable` after source declarations become authoritative; existing controlled installations can drop the column manually once code no longer references it.
+- [x] Deprecate `blb:table:unstable` or convert it into a helper that edits/source-guides migration-local metadata for source changes, with any local-only override clearly labeled diagnostic.
 - [ ] Audit existing plans that mention destructive evolution or `migrate:fresh --dev --seed` and update wording where it would mislead future work.
 
 Manual operator cleanup for controlled installations, after the implementation no longer reads `is_stable`:

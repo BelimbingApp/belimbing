@@ -90,8 +90,6 @@ PHP);
         'module_name' => 'test-mod',
         'module_path' => 'extensions/test-vendor/test-mod',
         'migration_file' => INCUBATING_SCHEMA_TEST_FILE,
-        'is_stable' => true,
-        'stabilized_at' => now(),
     ]);
 
     expect(app(IncubatingSchemaPreflight::class)->tableIsIncubating(INCUBATING_SCHEMA_TEST_TABLE))->toBeTrue();

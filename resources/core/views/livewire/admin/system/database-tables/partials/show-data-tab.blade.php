@@ -14,16 +14,10 @@
             />
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            @if(app()->environment('local') && $tableRegistry)
-                <button
-                    wire:click="toggleStability"
-                    class="cursor-pointer"
-                    title="{{ $tableRegistry->is_stable ? __('Click to mark unstable') : __('Click to mark stable') }}"
-                >
-                    <x-ui.badge :variant="$this->stabilityVariant($tableRegistry->is_stable)">
-                        {{ $tableRegistry->is_stable ? __('Stable') : __('Unstable') }}
-                    </x-ui.badge>
-                </button>
+            @if($tableRegistry)
+                <x-ui.badge :variant="$this->schemaStateVariant($schemaState)">
+                    {{ Str::headline($schemaState) }}
+                </x-ui.badge>
             @endif
             <x-ui.button
                 variant="ghost"

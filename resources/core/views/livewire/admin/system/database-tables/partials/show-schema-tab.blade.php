@@ -136,9 +136,14 @@
         <div class="mb-3 flex items-center justify-between gap-3">
             <div>
                 <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Migration source') }}</h2>
-                <p class="text-sm text-muted">{{ __('The migration file that originally registered this table in Belimbing.') }}</p>
+                <p class="text-sm text-muted">{{ __('The migration file that originally registered this table in Belimbing, plus its current source-declared schema maturity.') }}</p>
             </div>
-            <span class="text-xs font-mono text-muted">{{ $migrationSource['file_name'] }}</span>
+            <div class="flex items-center gap-2">
+                <x-ui.badge :variant="$this->schemaStateVariant($schemaState)">
+                    {{ Str::headline($schemaState) }}
+                </x-ui.badge>
+                <span class="text-xs font-mono text-muted">{{ $migrationSource['file_name'] }}</span>
+            </div>
         </div>
 
         <div class="rounded-2xl border border-border-default bg-surface-subtle/70">

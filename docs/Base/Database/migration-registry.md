@@ -138,7 +138,7 @@ Operation Layer (0300)
 ### If Module Dependencies Change
 
 1. May need to renumber migrations
-2. Use `migrate:fresh --seed` in development (destructive evolution; --seed required)
+2. Use `migrate --dev` in development after marking the relevant source migrations incubating
 3. Update registry with new MM_DD assignment
 
 ---

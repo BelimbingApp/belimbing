@@ -12,8 +12,6 @@ test('migrate command reports orphaned registry entries removed during reconcili
         'module_name' => 'User',
         'module_path' => 'app/Modules/Core/User',
         'migration_file' => '0200_01_20_000001_create_ghost_registry_entry.php',
-        'is_stable' => true,
-        'stabilized_at' => now(),
     ]);
 
     $command = app(MigrateCommand::class);

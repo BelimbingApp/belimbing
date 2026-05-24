@@ -19,7 +19,7 @@ To manage this complexity, the framework enforces:
 
 Migrations are **auto-discovered** from Base and Module directories when migration commands run. Laravel core tables in `database/migrations/` are always included.
 
-This document keeps only the high-level design, naming spec, registry table, and directory layout. For operational details — including discovery paths, command behavior, `migrate:fresh --dev --seed` for development, and the RegistersSeeders trait — see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md).
+This document keeps only the high-level design, naming spec, registry table, and directory layout. For operational details — including discovery paths, command behavior, `migrate --dev` for development, and the RegistersSeeders trait — see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md).
 
 ---
 
@@ -72,7 +72,7 @@ Table names use owner, module, and entity names to prevent ownership conflicts. 
 
 BLB uses database registries to track module-owned database assets.
 
-`base_database_tables` records tables created by migrations, including the owning module, module path, migration file, and stability state. This powers migration provenance, stability-aware fresh rebuilds, and the admin database table browser.
+`base_database_tables` records tables created by migrations, including the owning module, module path, and migration file. This powers migration provenance, source-declared incubating-schema rebuilds, and the admin database table browser.
 
 `base_database_seeders` records seeders registered by migrations via `registerSeeder()` in `up()` and `unregisterSeeder()` in `down()`. Seeders can also be discovered from module `Database/Seeders/` when seeding runs. States: `pending` → `running` → `completed` | `failed` | `skipped`; completed seeders are skipped on later runs.
 
@@ -195,7 +195,7 @@ Extensions use real calendar years. The MM_DD can be the actual date or a module
 
 ### Maintaining The Registry
 
-When adding a module, choose the owner first, reserve the next `MM_DD` that preserves dependency order, and add the row before creating migrations. If dependencies change during initialization, renumber the affected migrations, update this registry, and rebuild with `migrate:fresh --dev --seed`.
+When adding a module, choose the owner first, reserve the next `MM_DD` that preserves dependency order, and add the row before creating migrations. If dependencies change during initialization, renumber the affected migrations, update this registry, and rebuild with `migrate --dev`.
 
 ---
 

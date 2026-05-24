@@ -44,8 +44,6 @@ Every migration that creates a table registers it here via `RegistersSeeders`. E
 | `module_name` | Owning module (e.g. `Geonames`) |
 | `module_path` | Module path (e.g. `app/Modules/Core/Geonames`) |
 | `migration_file` | Migration filename that created this table — the key for per-migration scoping |
-| `is_stable` | Legacy transitional column from the older table-stability workflow |
-| `stabilized_at` / `stabilized_by` | Legacy audit trail for that transitional column |
 
 ## Seeder Registration
 
