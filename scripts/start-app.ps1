@@ -53,9 +53,9 @@ function Resolve-FrankenPhpHome {
 }
 
 function Resolve-BunPath {
-    $bun = Get-Command bun -ErrorAction SilentlyContinue
+    $bun = Resolve-NativeCommandPath 'bun'
     if ($bun) {
-        return $bun.Source
+        return $bun
     }
 
     $wingetPackages = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
@@ -64,6 +64,37 @@ function Resolve-BunPath {
             Select-Object -First 1 -ExpandProperty FullName
         if ($wingetBun) {
             return $wingetBun
+        }
+    }
+
+    return ''
+}
+
+function Resolve-NativeCommandPath {
+    param(
+        [string] $Command
+    )
+
+    $nativeExtensions = @('.exe', '.cmd', '.bat', '.com')
+
+    $commandInfo = Get-Command $Command -All -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandType -eq 'Application' -and $nativeExtensions -contains $_.Extension } |
+        Select-Object -First 1
+
+    if ($commandInfo) {
+        return $commandInfo.Source
+    }
+
+    foreach ($pathEntry in ($env:Path -split [IO.Path]::PathSeparator)) {
+        if (-not $pathEntry) {
+            continue
+        }
+
+        foreach ($extension in $nativeExtensions) {
+            $candidate = Join-Path $pathEntry "$Command$extension"
+            if (Test-Path $candidate) {
+                return $candidate
+            }
         }
     }
 
@@ -156,10 +187,13 @@ try {
         $bun = Resolve-BunPath
         if ($bun) {
             $processes += Start-BelimbingProcess -Name 'Vite' -FilePath $bun -Arguments @('run', 'dev', '--', '--host', '127.0.0.1', '--port', "$VitePort")
-        } elseif (Get-Command npm -ErrorAction SilentlyContinue) {
-            $processes += Start-BelimbingProcess -Name 'Vite' -FilePath 'npm' -Arguments @('run', 'dev', '--', '--host', '127.0.0.1', '--port', "$VitePort")
         } else {
-            Write-Host "Bun/npm is not available, so Vite was not started." -ForegroundColor Yellow
+            $npm = Resolve-NativeCommandPath 'npm'
+            if ($npm) {
+                $processes += Start-BelimbingProcess -Name 'Vite' -FilePath $npm -Arguments @('run', 'dev', '--', '--host', '127.0.0.1', '--port', "$VitePort")
+            } else {
+                Write-Host "Bun/npm is not available, so Vite was not started." -ForegroundColor Yellow
+            }
         }
     }
 
