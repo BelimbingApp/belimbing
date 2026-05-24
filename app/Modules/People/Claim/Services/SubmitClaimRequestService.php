@@ -3,6 +3,8 @@
 namespace App\Modules\People\Claim\Services;
 
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\People\Claim\Data\ClaimSubmissionInput;
+use App\Modules\People\Claim\Data\ClaimSubmissionSummary;
 use App\Modules\People\Claim\Exceptions\ClaimRequestLifecycleException;
 use App\Modules\People\Claim\Models\ClaimAssignment;
 use App\Modules\People\Claim\Models\ClaimAssignmentLine;
@@ -13,6 +15,7 @@ use App\Modules\People\Claim\Models\ClaimRequestAuditEvent;
 use App\Modules\People\Claim\Models\ClaimType;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class SubmitClaimRequestService
 {
@@ -98,188 +101,30 @@ class SubmitClaimRequestService
             $context = $this->resolveContext($assignment->company_id, $options['claim_context_id'] ?? null);
             $currency = (string) ($options['currency'] ?? 'MYR');
 
-            $prepared = [];
-            $allBlocking = [];
-            $profileKeys = [];
-            $requestedTotal = 0.0;
-            $strictest = null;
-            $allDuplicateRisks = [];
+            $preparation = $this->prepareLines($employee, $assignment, $context, $lineSpecs, $options);
 
-            foreach ($lineSpecs as $index => $spec) {
-                $assignmentLine = $spec['assignment_line'];
-                $assignmentLine->loadMissing(['type', 'policy']);
-                $incurredOn = $spec['incurred_on'];
-                $requestedAmount = (float) $spec['requested_amount'];
-                $attachmentCount = (int) ($spec['attachment_count'] ?? 0);
-                $providerName = $this->blankToNull($spec['provider_name'] ?? null);
-                $receiptNumber = $this->blankToNull($spec['receipt_number'] ?? null);
-
-                $this->validateLineSubmission($employee, $assignment, $assignmentLine, $requestedAmount, $options);
-
-                $claimType = $assignmentLine->type;
-                $policy = $assignmentLine->policy;
-
-                if ($policy !== null && ! $this->cohortPredicate->matches($employee, $policy->cohort_predicate)) {
-                    throw ClaimRequestLifecycleException::invalidSubmission(sprintf(
-                        'Employee is not eligible for claim policy [%s] on line %d.',
-                        $policy->code,
-                        $index + 1,
-                    ));
-                }
-
-                $evaluation = $this->policyEvaluation->evaluateBeforeSubmission(
-                    employeeId: (int) $employee->getKey(),
-                    claimType: $claimType,
-                    policy: $policy,
-                    incurredOn: $incurredOn,
-                    requestedAmount: $requestedAmount,
-                    attachmentCount: $attachmentCount,
-                    providerName: $providerName,
-                    combinedClaimTypeIds: $this->combinedClaimTypeIds($assignmentLine),
-                    employee: $employee,
-                );
-                $allBlocking = array_merge($allBlocking, $evaluation['blocking']);
-
-                $duplicateRisks = $this->duplicateRisks->findRisks(
-                    employeeId: (int) $employee->getKey(),
-                    claimTypeId: (int) $claimType->getKey(),
-                    incurredOn: $incurredOn,
-                    requestedAmount: $requestedAmount,
-                    providerName: $providerName,
-                    receiptNumber: $receiptNumber,
-                );
-                $allDuplicateRisks = array_merge($allDuplicateRisks, $duplicateRisks);
-
-                if ($context !== null && $context->max_claim_limit !== null && $requestedAmount > (float) $context->max_claim_limit) {
-                    $allBlocking[] = sprintf('Claim context [%s] limits a line to %.2f.', $context->label, (float) $context->max_claim_limit);
-                }
-
-                $approvalProfileKey = $policy?->approval_profile_key ?: $claimType?->approval_route_key;
-                if ($approvalProfileKey !== null && $approvalProfileKey !== '') {
-                    $profileKeys[$approvalProfileKey] = true;
-                }
-
-                $requestedTotal += $requestedAmount;
-
-                $linePayload = [
-                    'index' => $index,
-                    'assignment_line' => $assignmentLine,
-                    'claim_type' => $claimType,
-                    'policy' => $policy,
-                    'incurred_on' => $incurredOn,
-                    'description' => $spec['description'] ?? null,
-                    'unit' => $spec['unit'] ?? $claimType->default_unit,
-                    'quantity' => $spec['quantity'] ?? 1,
-                    'rate' => $spec['rate'] ?? $requestedAmount,
-                    'requested_amount' => $requestedAmount,
-                    'provider_name' => $providerName,
-                    'receipt_number' => $receiptNumber,
-                    'attachment_count' => $attachmentCount,
-                    'approval_profile_key' => $approvalProfileKey,
-                    'policy_snapshot' => $evaluation['snapshot'],
-                    'duplicate_risks' => $duplicateRisks,
-                ];
-                $prepared[] = $linePayload;
-
-                if ($strictest === null || $requestedAmount > (float) $strictest['requested_amount']) {
-                    $strictest = $linePayload;
-                }
+            if ($preparation['blocking'] !== []) {
+                throw ClaimRequestLifecycleException::invalidSubmission(implode(' ', array_unique($preparation['blocking'])));
             }
 
-            if ($allBlocking !== []) {
-                throw ClaimRequestLifecycleException::invalidSubmission(implode(' ', array_unique($allBlocking)));
-            }
+            $this->assertSingleApprovalProfile($preparation['profile_keys']);
 
-            if (count($profileKeys) > 1) {
-                throw ClaimRequestLifecycleException::invalidSubmission(sprintf(
-                    'Lines require incompatible approval profiles (%s). Split into separate requests.',
-                    implode(', ', array_keys($profileKeys)),
-                ));
-            }
+            $request = $this->persistRequestHeader(
+                $employee,
+                $assignment,
+                $context,
+                $currency,
+                new ClaimSubmissionSummary(
+                    strictest: $preparation['strictest'],
+                    requestedTotal: $preparation['requested_total'],
+                    lineCount: count($preparation['prepared']),
+                    duplicateRisks: $preparation['duplicate_risks'],
+                ),
+                $options,
+            );
 
-            $headerProfileKey = $strictest['approval_profile_key'];
-
-            $request = ClaimRequest::query()->create([
-                'company_id' => $assignment->company_id,
-                'employee_id' => $employee->getKey(),
-                'claim_assignment_id' => $assignment->getKey(),
-                'claim_context_id' => $context?->getKey(),
-                'reference_number' => $this->nextReferenceNumber($assignment->company_id),
-                'status' => ClaimRequest::STATUS_SUBMITTED,
-                'currency' => $currency,
-                'requested_amount' => $requestedTotal,
-                'approved_amount' => 0,
-                'reimbursed_amount' => 0,
-                'approval_profile_key' => $headerProfileKey,
-                'approval_route_snapshot' => $headerProfileKey === null ? null : ['profile_key' => $headerProfileKey],
-                'strictest_line_snapshot' => [
-                    'claim_type_id' => $strictest['claim_type']?->getKey(),
-                    'claim_type_code' => $strictest['claim_type']?->code,
-                    'claim_type_name' => $strictest['claim_type']?->name,
-                    'claim_policy_id' => $strictest['policy']?->getKey(),
-                    'claim_policy_code' => $strictest['policy']?->code,
-                    'approval_profile_key' => $headerProfileKey,
-                    'line_index' => $strictest['index'],
-                    'requested_amount' => (float) $strictest['requested_amount'],
-                ],
-                'submitted_by_user_id' => $options['submitted_by_user_id'] ?? null,
-                'on_behalf_actor_user_id' => $options['on_behalf_actor_user_id'] ?? null,
-                'on_behalf_reason' => $options['on_behalf_reason'] ?? null,
-                'submitted_at' => now(),
-                'metadata' => [
-                    'source' => 'claim-workbench',
-                    'duplicate_risks' => $allDuplicateRisks,
-                    'line_count' => count($prepared),
-                ],
-            ]);
-
-            foreach ($prepared as $payload) {
-                $claimType = $payload['claim_type'];
-                ClaimLine::query()->create([
-                    'claim_request_id' => $request->getKey(),
-                    'claim_type_id' => $claimType->getKey(),
-                    'claim_policy_id' => $payload['policy']?->getKey(),
-                    'claim_assignment_line_id' => $payload['assignment_line']->getKey(),
-                    'incurred_on' => $payload['incurred_on'],
-                    'description' => $payload['description'],
-                    'unit' => $payload['unit'],
-                    'quantity' => $payload['quantity'],
-                    'rate' => $payload['rate'],
-                    'requested_amount' => $payload['requested_amount'],
-                    'approved_amount' => 0,
-                    'reimbursed_amount' => 0,
-                    'currency' => $currency,
-                    'provider_name' => $payload['provider_name'],
-                    'receipt_number' => $payload['receipt_number'],
-                    'attachment_count' => $payload['attachment_count'],
-                    'payroll_pay_item_code' => $claimType->payroll_pay_item_code,
-                    'debit_account_code' => $claimType->debit_account_code,
-                    'credit_account_code' => $claimType->credit_account_code,
-                    'policy_snapshot' => $payload['policy_snapshot'],
-                    'accounting_snapshot' => [
-                        'payroll_pay_item_code' => $claimType->payroll_pay_item_code,
-                        'debit_account_code' => $claimType->debit_account_code,
-                        'credit_account_code' => $claimType->credit_account_code,
-                    ],
-                    'metadata' => [
-                        'source' => 'claim-workbench',
-                        'duplicate_risks' => $payload['duplicate_risks'],
-                    ],
-                ]);
-            }
-
-            ClaimRequestAuditEvent::query()->create([
-                'claim_request_id' => $request->getKey(),
-                'from_status' => ClaimRequest::STATUS_DRAFT,
-                'to_status' => ClaimRequest::STATUS_SUBMITTED,
-                'actor_user_id' => $options['submitted_by_user_id'] ?? $options['on_behalf_actor_user_id'] ?? null,
-                'reason' => 'submitted',
-                'occurred_at' => now(),
-                'metadata' => [
-                    'requested_amount' => $requestedTotal,
-                    'line_count' => count($prepared),
-                ],
-            ]);
+            $this->persistLines($request, $preparation['prepared'], $currency);
+            $this->recordSubmissionAudit($request, $preparation['requested_total'], count($preparation['prepared']), $options);
 
             $request = $request->refresh();
             $this->notifications->dispatch(ClaimNotificationDispatcher::EVENT_SUBMITTED, $request, [
@@ -289,6 +134,267 @@ class SubmitClaimRequestService
 
             return $request;
         });
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $lineSpecs
+     * @param  array<string, mixed>  $options
+     * @return array{
+     *     prepared: list<array<string, mixed>>,
+     *     blocking: list<string>,
+     *     profile_keys: array<string, true>,
+     *     requested_total: float,
+     *     strictest: array<string, mixed>|null,
+     *     duplicate_risks: list<array<string, mixed>>,
+     * }
+     */
+    private function prepareLines(
+        Employee $employee,
+        ClaimAssignment $assignment,
+        ?ClaimContext $context,
+        array $lineSpecs,
+        array $options,
+    ): array {
+        $prepared = [];
+        $allBlocking = [];
+        $profileKeys = [];
+        $requestedTotal = 0.0;
+        $strictest = null;
+        $allDuplicateRisks = [];
+
+        foreach ($lineSpecs as $index => $spec) {
+            $linePrep = $this->prepareLine($employee, $assignment, $context, $index, $spec, $options);
+
+            $prepared[] = $linePrep['payload'];
+            $allBlocking = array_merge($allBlocking, $linePrep['blocking']);
+            $allDuplicateRisks = array_merge($allDuplicateRisks, $linePrep['duplicate_risks']);
+            $requestedTotal += $linePrep['payload']['requested_amount'];
+
+            $approvalProfileKey = $linePrep['payload']['approval_profile_key'];
+            if ($approvalProfileKey !== null && $approvalProfileKey !== '') {
+                $profileKeys[$approvalProfileKey] = true;
+            }
+
+            if ($strictest === null || $linePrep['payload']['requested_amount'] > (float) $strictest['requested_amount']) {
+                $strictest = $linePrep['payload'];
+            }
+        }
+
+        return [
+            'prepared' => $prepared,
+            'blocking' => $allBlocking,
+            'profile_keys' => $profileKeys,
+            'requested_total' => $requestedTotal,
+            'strictest' => $strictest,
+            'duplicate_risks' => $allDuplicateRisks,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $spec
+     * @param  array<string, mixed>  $options
+     * @return array{payload: array<string, mixed>, blocking: list<string>, duplicate_risks: list<array<string, mixed>>}
+     */
+    private function prepareLine(
+        Employee $employee,
+        ClaimAssignment $assignment,
+        ?ClaimContext $context,
+        int $index,
+        array $spec,
+        array $options,
+    ): array {
+        $assignmentLine = $spec['assignment_line'];
+        $assignmentLine->loadMissing(['type', 'policy']);
+        $incurredOn = $spec['incurred_on'];
+        $requestedAmount = (float) $spec['requested_amount'];
+        $attachmentCount = (int) ($spec['attachment_count'] ?? 0);
+        $providerName = $this->blankToNull($spec['provider_name'] ?? null);
+        $receiptNumber = $this->blankToNull($spec['receipt_number'] ?? null);
+
+        $this->validateLineSubmission($employee, $assignment, $assignmentLine, $requestedAmount, $options);
+
+        $claimType = $assignmentLine->type;
+        $policy = $assignmentLine->policy;
+
+        if ($policy !== null && ! $this->cohortPredicate->matches($employee, $policy->cohort_predicate)) {
+            throw ClaimRequestLifecycleException::invalidSubmission(sprintf(
+                'Employee is not eligible for claim policy [%s] on line %d.',
+                $policy->code,
+                $index + 1,
+            ));
+        }
+
+        $evaluation = $this->policyEvaluation->evaluateBeforeSubmission(
+            claimType: $claimType,
+            policy: $policy,
+            input: new ClaimSubmissionInput(
+                employeeId: (int) $employee->getKey(),
+                incurredOn: $incurredOn,
+                requestedAmount: $requestedAmount,
+                attachmentCount: $attachmentCount,
+                providerName: $providerName,
+                combinedClaimTypeIds: $this->combinedClaimTypeIds($assignmentLine),
+                employee: $employee,
+            ),
+        );
+
+        $duplicateRisks = $this->duplicateRisks->findRisks(
+            employeeId: (int) $employee->getKey(),
+            claimTypeId: (int) $claimType->getKey(),
+            incurredOn: $incurredOn,
+            requestedAmount: $requestedAmount,
+            providerName: $providerName,
+            receiptNumber: $receiptNumber,
+        );
+
+        $blocking = $evaluation['blocking'];
+        if ($context !== null && $context->max_claim_limit !== null && $requestedAmount > (float) $context->max_claim_limit) {
+            $blocking[] = sprintf('Claim context [%s] limits a line to %.2f.', $context->label, (float) $context->max_claim_limit);
+        }
+
+        return [
+            'payload' => [
+                'index' => $index,
+                'assignment_line' => $assignmentLine,
+                'claim_type' => $claimType,
+                'policy' => $policy,
+                'incurred_on' => $incurredOn,
+                'description' => $spec['description'] ?? null,
+                'unit' => $spec['unit'] ?? $claimType->default_unit,
+                'quantity' => $spec['quantity'] ?? 1,
+                'rate' => $spec['rate'] ?? $requestedAmount,
+                'requested_amount' => $requestedAmount,
+                'provider_name' => $providerName,
+                'receipt_number' => $receiptNumber,
+                'attachment_count' => $attachmentCount,
+                'approval_profile_key' => $policy?->approval_profile_key ?: $claimType?->approval_route_key,
+                'policy_snapshot' => $evaluation['snapshot'],
+                'duplicate_risks' => $duplicateRisks,
+            ],
+            'blocking' => $blocking,
+            'duplicate_risks' => $duplicateRisks,
+        ];
+    }
+
+    /**
+     * @param  array<string, true>  $profileKeys
+     */
+    private function assertSingleApprovalProfile(array $profileKeys): void
+    {
+        if (count($profileKeys) > 1) {
+            throw ClaimRequestLifecycleException::invalidSubmission(sprintf(
+                'Lines require incompatible approval profiles (%s). Split into separate requests.',
+                implode(', ', array_keys($profileKeys)),
+            ));
+        }
+    }
+
+    /** @param  array<string, mixed>  $options */
+    private function persistRequestHeader(
+        Employee $employee,
+        ClaimAssignment $assignment,
+        ?ClaimContext $context,
+        string $currency,
+        ClaimSubmissionSummary $summary,
+        array $options,
+    ): ClaimRequest {
+        $headerProfileKey = $summary->strictest['approval_profile_key'];
+
+        return ClaimRequest::query()->create([
+            'company_id' => $assignment->company_id,
+            'employee_id' => $employee->getKey(),
+            'claim_assignment_id' => $assignment->getKey(),
+            'claim_context_id' => $context?->getKey(),
+            'reference_number' => $this->nextReferenceNumber($assignment->company_id),
+            'status' => ClaimRequest::STATUS_SUBMITTED,
+            'currency' => $currency,
+            'requested_amount' => $summary->requestedTotal,
+            'approved_amount' => 0,
+            'reimbursed_amount' => 0,
+            'approval_profile_key' => $headerProfileKey,
+            'approval_route_snapshot' => $headerProfileKey === null ? null : ['profile_key' => $headerProfileKey],
+            'strictest_line_snapshot' => [
+                'claim_type_id' => $summary->strictest['claim_type']?->getKey(),
+                'claim_type_code' => $summary->strictest['claim_type']?->code,
+                'claim_type_name' => $summary->strictest['claim_type']?->name,
+                'claim_policy_id' => $summary->strictest['policy']?->getKey(),
+                'claim_policy_code' => $summary->strictest['policy']?->code,
+                'approval_profile_key' => $headerProfileKey,
+                'line_index' => $summary->strictest['index'],
+                'requested_amount' => (float) $summary->strictest['requested_amount'],
+            ],
+            'submitted_by_user_id' => $options['submitted_by_user_id'] ?? null,
+            'on_behalf_actor_user_id' => $options['on_behalf_actor_user_id'] ?? null,
+            'on_behalf_reason' => $options['on_behalf_reason'] ?? null,
+            'submitted_at' => now(),
+            'metadata' => [
+                'source' => 'claim-workbench',
+                'duplicate_risks' => $summary->duplicateRisks,
+                'line_count' => $summary->lineCount,
+            ],
+        ]);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $prepared
+     */
+    private function persistLines(ClaimRequest $request, array $prepared, string $currency): void
+    {
+        foreach ($prepared as $payload) {
+            $claimType = $payload['claim_type'];
+            $payItemCode = $this->resolvePayItemCode($claimType, $payload['incurred_on']);
+
+            ClaimLine::query()->create([
+                'claim_request_id' => $request->getKey(),
+                'claim_type_id' => $claimType->getKey(),
+                'claim_policy_id' => $payload['policy']?->getKey(),
+                'claim_assignment_line_id' => $payload['assignment_line']->getKey(),
+                'incurred_on' => $payload['incurred_on'],
+                'description' => $payload['description'],
+                'unit' => $payload['unit'],
+                'quantity' => $payload['quantity'],
+                'rate' => $payload['rate'],
+                'requested_amount' => $payload['requested_amount'],
+                'approved_amount' => 0,
+                'reimbursed_amount' => 0,
+                'currency' => $currency,
+                'provider_name' => $payload['provider_name'],
+                'receipt_number' => $payload['receipt_number'],
+                'attachment_count' => $payload['attachment_count'],
+                'payroll_pay_item_code' => $payItemCode,
+                'debit_account_code' => $claimType->debit_account_code,
+                'credit_account_code' => $claimType->credit_account_code,
+                'policy_snapshot' => $payload['policy_snapshot'],
+                'accounting_snapshot' => [
+                    'payroll_pay_item_code' => $payItemCode,
+                    'debit_account_code' => $claimType->debit_account_code,
+                    'credit_account_code' => $claimType->credit_account_code,
+                ],
+                'metadata' => [
+                    'source' => 'claim-workbench',
+                    'duplicate_risks' => $payload['duplicate_risks'],
+                ],
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     */
+    private function recordSubmissionAudit(ClaimRequest $request, float $requestedTotal, int $lineCount, array $options): void
+    {
+        ClaimRequestAuditEvent::query()->create([
+            'claim_request_id' => $request->getKey(),
+            'from_status' => ClaimRequest::STATUS_DRAFT,
+            'to_status' => ClaimRequest::STATUS_SUBMITTED,
+            'actor_user_id' => $options['submitted_by_user_id'] ?? $options['on_behalf_actor_user_id'] ?? null,
+            'reason' => 'submitted',
+            'occurred_at' => now(),
+            'metadata' => [
+                'requested_amount' => $requestedTotal,
+                'line_count' => $lineCount,
+            ],
+        ]);
     }
 
     private function validateOnBehalfOptions(array $options): void
@@ -406,5 +512,38 @@ class SubmitClaimRequestService
         $value = trim((string) $value);
 
         return $value === '' ? null : $value;
+    }
+
+    /**
+     * Resolve the pay-item code for a claim type effective at a given date.
+     *
+     * Reads from the Payroll-owned mapping table
+     * (people_payroll_claim_type_pay_items). Returns null when the table
+     * is absent (Payroll plugin uninstalled) so the line snapshot is
+     * left empty rather than crashing the submission.
+     */
+    private function resolvePayItemCode(ClaimType $claimType, mixed $incurredOn): ?string
+    {
+        if (! Schema::hasTable('people_payroll_claim_type_pay_items')) {
+            return null;
+        }
+
+        $date = $incurredOn instanceof \DateTimeInterface
+            ? $incurredOn->format('Y-m-d')
+            : (string) $incurredOn;
+
+        $row = DB::table('people_payroll_claim_type_pay_items')
+            ->where('claim_type_id', $claimType->getKey())
+            ->where('effective_from', '<=', $date)
+            ->where(function ($query) use ($date): void {
+                $query->whereNull('effective_to')
+                    ->orWhere('effective_to', '>', $date);
+            })
+            ->orderByDesc('effective_from')
+            ->first(['payroll_pay_item_code']);
+
+        $code = $row?->payroll_pay_item_code;
+
+        return is_string($code) && $code !== '' ? $code : null;
     }
 }

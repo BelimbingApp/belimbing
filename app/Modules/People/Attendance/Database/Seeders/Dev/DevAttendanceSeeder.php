@@ -71,7 +71,7 @@ class DevAttendanceSeeder extends DevSeeder
                 'crosses_midnight' => false,
                 'expected_work_minutes' => 480,
                 'break_windows' => [['label' => 'Lunch', 'starts_at' => '12:00', 'ends_at' => '13:00', 'paid' => false]],
-                'payroll_attribution' => 'shift_start_date',
+                'cross_midnight_attribution' => 'shift_start_date',
                 'effective_from' => '2026-01-01',
                 'status' => AttendanceShiftTemplate::STATUS_ACTIVE,
                 'source_system' => 'hr2000',
@@ -102,7 +102,7 @@ class DevAttendanceSeeder extends DevSeeder
                 'crosses_midnight' => true,
                 'expected_work_minutes' => 480,
                 'break_windows' => [['label' => 'Midnight break', 'starts_at' => '00:00', 'ends_at' => '01:00', 'paid' => false]],
-                'payroll_attribution' => 'shift_start_date',
+                'cross_midnight_attribution' => 'shift_start_date',
                 'effective_from' => '2026-01-01',
                 'status' => AttendanceShiftTemplate::STATUS_ACTIVE,
                 'source_system' => 'hr2000',
@@ -175,7 +175,7 @@ class DevAttendanceSeeder extends DevSeeder
                     'monthly_rounding' => ['method' => 'ceiling', 'minutes' => 15],
                     'pay_item_code' => 'lateness_deduction',
                 ],
-                'payroll_defaults' => ['currency' => 'MYR'],
+                'currency' => 'MYR',
                 'effective_from' => '2026-01-01',
                 'version' => 1,
                 'status' => AttendancePolicyGroup::STATUS_ACTIVE,
@@ -195,7 +195,6 @@ class DevAttendanceSeeder extends DevSeeder
                 'attendance_policy_group_id' => $policyGroup->id,
                 'name' => 'Full Attendance',
                 'allowance_type' => AttendanceAllowanceRule::TYPE_MONTHLY,
-                'payroll_pay_item_code' => 'full_attendance_allowance',
                 'ceiling_amount' => 50,
                 'resolution_method' => AttendanceAllowanceRule::RESOLUTION_MIN,
                 'condition_rows' => [
@@ -218,7 +217,6 @@ class DevAttendanceSeeder extends DevSeeder
                 'attendance_policy_group_id' => $policyGroup->id,
                 'name' => 'Night Shift FW',
                 'allowance_type' => AttendanceAllowanceRule::TYPE_DAILY,
-                'payroll_pay_item_code' => 'shift1',
                 'ceiling_amount' => 31,
                 'resolution_method' => AttendanceAllowanceRule::RESOLUTION_MIN,
                 'condition_rows' => [
@@ -333,6 +331,13 @@ class DevAttendanceSeeder extends DevSeeder
                 ]);
             }
 
+            $exceptionTags = [];
+            if ($index === 3) {
+                $exceptionTags = ['missing_clock_events'];
+            } elseif ($index === 1) {
+                $exceptionTags = ['late_in'];
+            }
+
             $day->fill([
                 'company_id' => $company->id,
                 'attendance_shift_template_id' => $shift->id,
@@ -347,7 +352,7 @@ class DevAttendanceSeeder extends DevSeeder
                 'late_minutes' => $index === 1 ? 12 : 0,
                 'absent_minutes' => $index === 3 ? 480 : 0,
                 'overtime_candidate_minutes' => $index === 0 ? 55 : 0,
-                'exception_tags' => $index === 3 ? ['missing_clock_events'] : ($index === 1 ? ['late_in'] : []),
+                'exception_tags' => $exceptionTags,
                 'projection_snapshot' => ['source' => 'dev-seeder'],
                 'metadata' => ['scenario' => 'attendance-dev'],
             ])->save();

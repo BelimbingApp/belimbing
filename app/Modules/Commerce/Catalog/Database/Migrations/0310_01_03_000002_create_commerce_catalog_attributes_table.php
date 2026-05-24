@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -22,7 +23,7 @@ return new class extends Migration
 
             $table->index(['company_id', 'code']);
             $table->index(['category_id', 'sort_order']);
-            $table->index(['product_template_id', 'sort_order']);
+            $table->index(['product_template_id', 'sort_order'], 'commerce_catalog_attrs_template_sort_index');
         });
     }
 

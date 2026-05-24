@@ -1,11 +1,11 @@
 <?php
 
-use App\Base\Foundation\Enums\BlbErrorCode;
 use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Foundation\Exceptions\BlbIntegrationException;
 use App\Modules\Core\AI\DTO\WorkspaceFileEntry;
 use App\Modules\Core\AI\DTO\WorkspaceManifest;
 use App\Modules\Core\AI\DTO\WorkspaceValidationResult;
+use App\Modules\Core\AI\Enums\AIErrorCode;
 use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
 use App\Modules\Core\AI\Services\LaraContextProvider;
 use App\Modules\Core\AI\Services\LaraPromptFactory;
@@ -80,7 +80,7 @@ it('throws integration exception when Lara runtime context cannot be encoded', f
 
     expect(fn () => $factory->buildForCurrentUser())
         ->toThrow(function (BlbIntegrationException $exception): void {
-            expect($exception->reasonCode)->toBe(BlbErrorCode::LARA_PROMPT_CONTEXT_ENCODE_FAILED);
+            expect($exception->reasonCode)->toBe(AIErrorCode::LARA_PROMPT_CONTEXT_ENCODE_FAILED);
         });
 
     fclose($resource);
@@ -116,7 +116,7 @@ it('throws configuration exception when Lara workspace validation fails', functi
 
     expect(fn () => $factory->buildForCurrentUser())
         ->toThrow(function (BlbConfigurationException $exception): void {
-            expect($exception->reasonCode)->toBe(BlbErrorCode::WORKSPACE_VALIDATION_FAILED)
+            expect($exception->reasonCode)->toBe(AIErrorCode::WORKSPACE_VALIDATION_FAILED)
                 ->and($exception->context['errors'])->toBeArray()
                 ->and($exception->context['errors'])->not->toBeEmpty();
         });

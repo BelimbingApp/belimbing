@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Sales\Database\Seeders\Dev;
 
 use App\Base\Database\Seeders\DevSeeder;
@@ -108,7 +109,7 @@ class DevSaleSeeder extends DevSeeder
 
     /**
      * Demo sales scattered across the current and prior two months so the
-     * Insights surfaces ("Sold this month," upcoming "Top earners last 90
+     * Insights surfaces ("Month-to-Date Sales," upcoming "Top Sellers (90 Days)
      * days") have something to render under the licensee company.
      *
      * @return list<array<string, mixed>>

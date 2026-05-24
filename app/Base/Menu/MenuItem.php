@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Menu;
 
 readonly class MenuItem
@@ -52,6 +53,18 @@ readonly class MenuItem
     public function hasRoute(): bool
     {
         return ! is_null($this->route) || ! is_null($this->url);
+    }
+
+    /**
+     * Resolved navigation URL for sidebar links and pins.
+     */
+    public function href(): ?string
+    {
+        if ($this->route !== null) {
+            return route($this->route);
+        }
+
+        return $this->url;
     }
 
     /**

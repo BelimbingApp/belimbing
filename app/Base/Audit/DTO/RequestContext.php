@@ -1,8 +1,10 @@
 <?php
+
 namespace App\Base\Audit\DTO;
 
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Support\TraceId;
 use Illuminate\Support\Str;
 
 /**
@@ -16,7 +18,7 @@ use Illuminate\Support\Str;
 final readonly class RequestContext
 {
     public function __construct(
-        public string $correlationId,
+        public string $traceId,
         public ?string $ipAddress = null,
         public ?string $url = null,
         public ?string $userAgent = null,
@@ -34,12 +36,10 @@ final readonly class RequestContext
         $request = request();
 
         return new self(
-            correlationId: (string) Str::uuid(),
+            traceId: TraceId::current(),
             ipAddress: $request->ip(),
             url: $request->fullUrl(),
-            userAgent: $request->userAgent() !== null
-                ? Str::limit($request->userAgent(), 512, '')
-                : null,
+            userAgent: self::clientLabel($request->userAgent()),
             actorType: $actor?->type->value,
             actorId: $actor?->id,
             companyId: $actor?->companyId,
@@ -57,7 +57,7 @@ final readonly class RequestContext
     public static function forConsole(?Actor $actor = null, ?string $command = null): self
     {
         return new self(
-            correlationId: (string) Str::uuid(),
+            traceId: TraceId::generate(),
             ipAddress: null,
             url: $command !== null ? 'artisan:'.$command : null,
             userAgent: null,
@@ -74,7 +74,7 @@ final readonly class RequestContext
     public static function forScheduler(?string $taskDescription = null): self
     {
         return new self(
-            correlationId: (string) Str::uuid(),
+            traceId: TraceId::generate(),
             ipAddress: null,
             url: $taskDescription !== null ? 'schedule:'.$taskDescription : null,
             userAgent: null,
@@ -94,7 +94,7 @@ final readonly class RequestContext
     public static function forQueue(?Actor $actor = null, ?string $jobClass = null): self
     {
         return new self(
-            correlationId: (string) Str::uuid(),
+            traceId: TraceId::generate(),
             ipAddress: null,
             url: $jobClass !== null ? 'queue:'.$jobClass : null,
             userAgent: null,
@@ -103,5 +103,41 @@ final readonly class RequestContext
             companyId: $actor?->companyId,
             actorRole: $actor?->attributes['role'] ?? null,
         );
+    }
+
+    private static function clientLabel(?string $userAgent): ?string
+    {
+        if ($userAgent === null || $userAgent === '') {
+            return null;
+        }
+
+        $browser = match (true) {
+            str_contains($userAgent, 'Edg/') => self::matchVersion($userAgent, 'Edg') ?? 'Edge',
+            str_contains($userAgent, 'Chrome/') && ! str_contains($userAgent, 'Chromium/') => self::matchVersion($userAgent, 'Chrome') ?? 'Chrome',
+            str_contains($userAgent, 'Firefox/') => self::matchVersion($userAgent, 'Firefox') ?? 'Firefox',
+            str_contains($userAgent, 'Safari/') && str_contains($userAgent, 'Version/') => self::matchVersion($userAgent, 'Version', 'Safari') ?? 'Safari',
+            str_contains($userAgent, 'curl/') => self::matchVersion($userAgent, 'curl') ?? 'curl',
+            default => 'unknown',
+        };
+
+        $platform = match (true) {
+            str_contains($userAgent, 'Windows') => 'Windows',
+            str_contains($userAgent, 'Android') => 'Android',
+            str_contains($userAgent, 'iPhone') || str_contains($userAgent, 'iPad') => 'iOS',
+            str_contains($userAgent, 'Mac OS X') || str_contains($userAgent, 'Macintosh') => 'macOS',
+            str_contains($userAgent, 'Linux') => 'Linux',
+            default => null,
+        };
+
+        return Str::limit($platform !== null ? $browser.' / '.$platform : $browser, 80, '');
+    }
+
+    private static function matchVersion(string $userAgent, string $token, ?string $label = null): ?string
+    {
+        if (! preg_match('/'.preg_quote($token, '/').'\/(\d+)/', $userAgent, $matches)) {
+            return null;
+        }
+
+        return ($label ?? $token).' '.$matches[1];
     }
 }

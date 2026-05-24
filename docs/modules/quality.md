@@ -180,7 +180,7 @@ Published as `config('quality')`:
 - **SCAR:** `quality.scar.{create,view,issue,review,accept,rework,close,cancel,reject}`
 - **Evidence:** `quality.evidence.{upload,view}`
 - **Knowledge/Reports:** `quality.knowledge.view`, `quality.report.view`
-- **Workflow transitions:** `workflow.quality_ncr.*`, `workflow.quality_scar.*`
+- **Workflow transitions:** `operations.quality.ncr.*`, `operations.quality.scar.*`
 
 ---
 

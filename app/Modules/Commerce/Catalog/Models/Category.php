@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Catalog\Models;
 
 use App\Modules\Commerce\Catalog\Database\Factories\CategoryFactory;
@@ -8,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection as SupportCollection;
 
 /**
  * @property int $id
@@ -22,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Collection<int, Category> $children
  * @property-read Collection<int, ProductTemplate> $productTemplates
  * @property-read Collection<int, Attribute> $attributes
+ * @property-read string $path_label
  */
 class Category extends Model
 {
@@ -65,6 +68,67 @@ class Category extends Model
     public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id')->orderBy('sort_order')->orderBy('name');
+    }
+
+    public function pathLabel(): string
+    {
+        return $this->ancestorsAndSelf()
+            ->pluck('name')
+            ->implode(' › ');
+    }
+
+    public function getPathLabelAttribute(): string
+    {
+        return $this->pathLabel();
+    }
+
+    public function depth(): int
+    {
+        return max(0, $this->ancestorsAndSelf()->count() - 1);
+    }
+
+    public function isDescendantOf(self $category): bool
+    {
+        $parent = $this->parent;
+        $visited = [];
+
+        while ($parent instanceof self) {
+            if (in_array($parent->id, $visited, true)) {
+                return false;
+            }
+
+            $visited[] = $parent->id;
+
+            if ($parent->is($category)) {
+                return true;
+            }
+
+            $parent = $parent->parent;
+        }
+
+        return false;
+    }
+
+    /**
+     * @return SupportCollection<int, Category>
+     */
+    private function ancestorsAndSelf(): SupportCollection
+    {
+        $categories = collect();
+        $category = $this;
+        $visited = [];
+
+        while ($category instanceof self) {
+            if (in_array($category->id, $visited, true)) {
+                break;
+            }
+
+            $visited[] = $category->id;
+            $categories->prepend($category);
+            $category = $category->parent;
+        }
+
+        return $categories->values();
     }
 
     /**

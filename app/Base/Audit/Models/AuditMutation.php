@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Audit\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -11,8 +12,10 @@ class AuditMutation extends Model
     protected $table = 'base_audit_mutations';
 
     /**
-     * Disable updated_at since this table is append-only.
+     * Disable Eloquent timestamps since this table stores only event time.
      */
+    public const CREATED_AT = null;
+
     public const UPDATED_AT = null;
 
     /**
@@ -28,10 +31,14 @@ class AuditMutation extends Model
         'user_agent',
         'auditable_type',
         'auditable_id',
+        'subject_name',
+        'subject_id',
+        'subject_identifier',
+        'source',
         'event',
         'old_values',
         'new_values',
-        'correlation_id',
+        'trace_id',
         'occurred_at',
     ];
 
@@ -41,6 +48,7 @@ class AuditMutation extends Model
     protected $casts = [
         'old_values' => 'array',
         'new_values' => 'array',
+        'subject_id' => 'integer',
         'occurred_at' => 'datetime',
     ];
 }

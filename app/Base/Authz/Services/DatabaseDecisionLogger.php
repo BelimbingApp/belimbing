@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Authz\Services;
 
 use App\Base\Authz\Contracts\DecisionLogger;
@@ -6,6 +7,7 @@ use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\DTO\ResourceContext;
 use App\Base\Authz\Models\DecisionLog;
+use App\Base\Support\TraceId;
 use Illuminate\Contracts\Foundation\Application;
 use Throwable;
 
@@ -50,7 +52,7 @@ class DatabaseDecisionLogger implements DecisionLogger
             'reason_code' => $decision->reasonCode->value,
             'applied_policies' => json_encode($decision->appliedPolicies),
             'context' => json_encode($context),
-            'correlation_id' => isset($context['correlation_id']) ? (string) $context['correlation_id'] : null,
+            'trace_id' => TraceId::current(isset($context['trace_id']) ? (string) $context['trace_id'] : null),
             'occurred_at' => $now,
             'created_at' => $now,
             'updated_at' => $now,

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Menu\Services;
 
 use App\Base\Menu\Contracts\MenuAccessChecker;
@@ -60,9 +61,7 @@ final class VisibleNavMenuItemsFlat implements NavigableMenuSnapshot
                             $item->label,
                         ),
                         'icon' => $item->icon ?? 'heroicon-o-squares-2x2',
-                        'href' => $item->route
-                            ? route($item->route)
-                            : $item->url,
+                        'href' => $item->href(),
                         'route' => $item->route,
                     ],
                 ],

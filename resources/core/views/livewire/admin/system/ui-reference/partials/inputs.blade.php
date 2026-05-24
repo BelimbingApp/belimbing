@@ -127,10 +127,27 @@
             <div class="space-y-4">
                 <x-ui.catalog-section
                     :title="__('Choice Controls')"
-                    component="<code>x-ui.select</code>, <code>x-ui.combobox</code>, <code>x-ui.checkbox</code>, <code>x-ui.radio</code>"
+                    component="<code>x-ui.segmented-control</code>, <code>x-ui.select</code>, <code>x-ui.combobox</code>, <code>x-ui.checkbox</code>, <code>x-ui.radio</code>"
                 >
-                    {{ __('Select, checkbox, radio, and textarea controls share the same subdued help treatment so spacing stays consistent across forms.') }}
+                    {{ __('Use segmented controls for short peer choices, selects and comboboxes for longer lists, and checkbox or radio controls when each option needs more explanation.') }}
                 </x-ui.catalog-section>
+
+                <div class="space-y-1" x-data="{ displayMode: 'both' }">
+                    <div class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Segmented Control') }}</div>
+                    <x-ui.segmented-control
+                        :options="[
+                            ['value' => 'both', 'label' => __('Both')],
+                            ['value' => 'dial', 'label' => __('Dial')],
+                            ['value' => 'strip', 'label' => __('Strip')],
+                        ]"
+                        value="both"
+                        :label="__('Display mode')"
+                        size="md"
+                        full-width
+                        x-model="displayMode"
+                    />
+                    <x-ui.field-help :hint="__('Use for compact mutually exclusive choices when every option can stay visible.')" />
+                </div>
 
                 <x-ui.select
                     id="ui-reference-select"
@@ -200,6 +217,31 @@
                             />
                         </div>
                     </div>
+                </div>
+            </div>
+        </x-ui.card>
+
+        {{-- Time input --}}
+        <x-ui.card>
+            <x-ui.catalog-section
+                :title="__('Time Input')"
+                component="<code>x-ui.time-input</code>"
+            >
+                {{ __('Pill-shaped HH:MM time field. Native time picker is the default; opt into − / value / + step buttons when compact stepping is better for the task.') }}
+            </x-ui.catalog-section>
+
+            <div class="mt-4 space-y-6" x-data="{ shiftStart: 480, shiftStartHhmm: '08:00',
+                stepTime(f,d){ this.shiftStart=((this.shiftStart+d*5)%1440+1440)%1440; this.shiftStartHhmm=String(Math.floor(this.shiftStart/60)).padStart(2,'0')+':'+String(this.shiftStart%60).padStart(2,'0') },
+                parseTime(f,v){ const p=v.split(':'); const h=+p[0]; const m=+(p[1]||0); if(!isNaN(h)){this.shiftStart=(h*60+m+1440)%1440; this.shiftStartHhmm=String(Math.floor(this.shiftStart/60)).padStart(2,'0')+':'+String(this.shiftStart%60).padStart(2,'0')} } }">
+                <div>
+                    <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted mb-3">{{ __('Native time picker (default)') }}</p>
+                    <x-ui.time-input field="shiftStart" />
+                    <p class="mt-2 text-xs text-muted font-mono">&lt;x-ui.time-input field=&quot;shiftStart&quot; /&gt;</p>
+                </div>
+                <div>
+                    <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted mb-3">{{ __('With step buttons') }}</p>
+                    <x-ui.time-input field="shiftStart" :with-steps="true" />
+                    <p class="mt-2 text-xs text-muted font-mono">&lt;x-ui.time-input field=&quot;shiftStart&quot; :with-steps=&quot;true&quot; /&gt;</p>
                 </div>
             </div>
         </x-ui.card>

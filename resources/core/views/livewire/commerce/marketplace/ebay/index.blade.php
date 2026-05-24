@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Modules\Commerce\Marketplace\Livewire\Ebay\Index $this */
+
+use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
+
+/** @var Index $this */
 ?>
 
 <div>
@@ -51,11 +54,15 @@
                     </div>
                 </dl>
 
+                @unless ($token)
+                    <div class="mt-5 rounded-lg border border-border-default bg-surface-subtle/70 p-3 text-sm text-muted">
+                        {{ __('Set up the eBay connection in') }}
+                        <a href="{{ route('commerce.marketplace.ebay.settings') }}" class="font-medium text-accent hover:underline" wire:navigate>
+                            {{ __('eBay settings') }}</a>{{ __(', then return here to pull listings and orders.') }}
+                    </div>
+                @endunless
+
                 <div class="mt-5 flex flex-wrap gap-2">
-                    <x-ui.button type="button" variant="primary" wire:click="connect">
-                        <x-icon name="heroicon-o-link" class="h-4 w-4" />
-                        {{ __('Connect eBay') }}
-                    </x-ui.button>
                     <x-ui.button type="button" variant="outline" wire:click="pullListings" wire:loading.attr="disabled">
                         <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
                         {{ __('Pull Listings') }}
@@ -82,13 +89,13 @@
             </x-ui.card>
 
             <x-ui.card class="xl:col-span-3">
-                <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
                     <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
                         <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Synced') }}</div>
                         <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['totalListings'] }}</div>
                     </div>
                     <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Matched') }}</div>
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Linked') }}</div>
                         <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['linkedListings'] }}</div>
                     </div>
                     <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
@@ -96,13 +103,222 @@
                         <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['unlinkedListings'] }}</div>
                     </div>
                     <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Drifted') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['driftedListings'] }}</div>
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Externally Changed') }}</div>
+                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['externallyChangedListings'] }}</div>
+                    </div>
+                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Ready to Adopt') }}</div>
+                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['readyToAdoptListings'] }}</div>
+                    </div>
+                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Missing Fitment') }}</div>
+                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['missingFitmentListings'] }}</div>
+                    </div>
+                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Conflicting IDs') }}</div>
+                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['conflictingIdentifierListings'] }}</div>
+                    </div>
+                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Relist Required') }}</div>
+                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['legacyRelistRequiredListings'] }}</div>
+                    </div>
+                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Missing Identifiers') }}</div>
+                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['missingIdentifierListings'] }}</div>
                     </div>
                     <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
                         <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Not Listed') }}</div>
                         <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['unlistedItems'] }}</div>
                     </div>
+                </div>
+            </x-ui.card>
+        </div>
+
+        <x-ui.card>
+            <div class="mb-4 flex items-center justify-between gap-3">
+                <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Store Progress') }}</h2>
+                <x-ui.badge>{{ $stats['linkedListings'] }}</x-ui.badge>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
+                <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Improved') }}</div>
+                    <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $qualitySummary['improved'] }}</div>
+                </div>
+                <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Unchanged') }}</div>
+                    <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $qualitySummary['unchanged'] }}</div>
+                </div>
+                <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Regressed') }}</div>
+                    <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $qualitySummary['regressed'] }}</div>
+                </div>
+                <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Strong') }}</div>
+                    <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $qualitySummary['strong'] }}</div>
+                </div>
+                <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Needs Work') }}</div>
+                    <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $qualitySummary['needs_work'] }}</div>
+                </div>
+            </div>
+        </x-ui.card>
+
+        <x-ui.card>
+            <div class="mb-4 flex items-center justify-between gap-3">
+                <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Cleanup Queue') }}</h2>
+                <x-ui.badge>{{ $cleanupQueue->count() }}</x-ui.badge>
+            </div>
+
+            <div class="overflow-x-auto -mx-card-inner px-card-inner">
+                <table class="min-w-full divide-y divide-border-default text-sm">
+                    <thead class="bg-surface-subtle/80">
+                        <tr>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Priority') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Listing / Item') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Import Audit') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Quality') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Recommendations') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Performance') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border-default">
+                        @forelse ($cleanupQueue as $row)
+                            @php($listing = $row['listing'])
+                            <tr class="hover:bg-surface-subtle/50 transition-colors">
+                                <td class="px-table-cell-x py-table-cell-y align-top">
+                                    <div class="flex flex-col gap-2">
+                                        <x-ui.badge :variant="$row['state_variant']">{{ $row['state_label'] }}</x-ui.badge>
+                                        <div class="font-mono text-xs text-muted">{{ __('Impact :score', ['score' => $row['impact_score']]) }}</div>
+                                    </div>
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y align-top">
+                                    <div class="font-mono text-xs text-muted">{{ $listing->external_sku ?? __('No SKU') }}</div>
+                                    <div class="mt-1 text-sm font-medium text-ink">{{ $listing->title ?? $listing->external_listing_id }}</div>
+                                    @if ($listing->item)
+                                        <a href="{{ route('commerce.inventory.items.show', $listing->item) }}" class="mt-1 inline-block font-mono text-xs text-accent hover:underline" wire:navigate>
+                                            {{ $listing->item->sku }}
+                                        </a>
+                                    @endif
+                                    @if ($row['issues'] !== [])
+                                        <div class="mt-2 space-y-1">
+                                            @foreach ($row['issues'] as $issue)
+                                                <div class="text-xs text-muted">{{ $issue }}</div>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y align-top">
+                                    <div class="flex flex-wrap gap-2">
+                                        @foreach ($row['import_audit'] as $audit)
+                                            <x-ui.badge :variant="$audit['variant']">
+                                                {{ $audit['label'] }}: {{ $audit['value'] }}
+                                            </x-ui.badge>
+                                        @endforeach
+                                    </div>
+                                    @if ($row['specific_alignment'] !== [])
+                                        <div class="mt-2 space-y-1">
+                                            @foreach (collect($row['specific_alignment'])->where('status', 'conflict')->take(2) as $alignment)
+                                                <div class="text-xs text-status-danger">{{ $alignment['label'] }}: {{ $alignment['summary'] }}</div>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y align-top">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <x-ui.badge :variant="$row['current_quality']['variant']">
+                                            {{ $row['current_quality']['label'] }}
+                                        </x-ui.badge>
+                                        <span class="font-mono text-xs text-muted">{{ __('Now :score', ['score' => $row['current_quality']['score']]) }}</span>
+                                    </div>
+                                    <div class="mt-2 text-xs text-muted">
+                                        {{ __('Imported baseline :score', ['score' => $row['baseline_quality']['score']]) }}
+                                    </div>
+                                    <div class="mt-1 text-xs {{ $row['quality_delta'] >= 0 ? 'text-status-success' : 'text-status-danger' }}">
+                                        {{ __('Delta :delta', ['delta' => $row['quality_delta'] >= 0 ? '+' . $row['quality_delta'] : $row['quality_delta']]) }}
+                                    </div>
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y align-top">
+                                    @if ($row['recommendations'] !== [])
+                                        <div class="space-y-1.5">
+                                            @foreach ($row['recommendations'] as $recommendation)
+                                                <div class="text-xs text-ink">{{ $recommendation }}</div>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <div class="text-xs text-muted">{{ __('No immediate cleanup recommendation.') }}</div>
+                                    @endif
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y align-top">
+                                    <div class="space-y-1 text-xs text-muted">
+                                        <div>{{ __('Sales: :count', ['count' => $row['performance']['sale_count']]) }}</div>
+                                        <div>{{ __('Last sold: :value', ['value' => $row['performance']['last_sold_at']?->diffForHumans() ?? __('Never')]) }}</div>
+                                        <div>{{ __('Inventory age: :days days', ['days' => $row['performance']['inventory_age_days'] ?? 0]) }}</div>
+                                        @if ($row['performance']['listed_age_days'] !== null)
+                                            <div>{{ __('Listed age: :days days', ['days' => $row['performance']['listed_age_days']]) }}</div>
+                                        @endif
+                                        @if ($row['performance']['buyer_signal_count'] > 0)
+                                            <div class="text-status-danger">{{ __('Buyer signals: :count', ['count' => $row['performance']['buyer_signal_count']]) }}</div>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No cleanup queue rows yet.') }}</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </x-ui.card>
+
+        <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <x-ui.card>
+                <div class="mb-4 flex items-center justify-between gap-3">
+                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Trust Signals') }}</h2>
+                    <x-ui.badge>{{ $trustSignals->count() }}</x-ui.badge>
+                </div>
+
+                <div class="space-y-3">
+                    @forelse ($trustSignals as $signal)
+                        <div class="border-b border-border-default pb-3 last:border-0 last:pb-0">
+                            <div class="flex items-center gap-2">
+                                <x-ui.badge :variant="$signal['severity']">{{ $signal['label'] }}</x-ui.badge>
+                                <span class="text-xs text-muted">{{ $signal['ordered_at']?->diffForHumans() ?? __('Unknown date') }}</span>
+                            </div>
+                            <div class="mt-2 text-sm font-medium text-ink">{{ $signal['listing_title'] }}</div>
+                            <div class="mt-1 text-xs text-muted">{{ $signal['detail'] }}</div>
+                            @if ($signal['buyer'])
+                                <div class="mt-1 text-xs text-muted">{{ __('Buyer: :buyer', ['buyer' => $signal['buyer']]) }}</div>
+                            @endif
+                        </div>
+                    @empty
+                        <div class="text-sm text-muted">{{ __('No buyer-question or return signals are currently linked to eBay listings.') }}</div>
+                    @endforelse
+                </div>
+            </x-ui.card>
+
+            <x-ui.card>
+                <div class="mb-4 flex items-center justify-between gap-3">
+                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Fitment Reuse') }}</h2>
+                    <x-ui.badge>{{ $fitmentBatchCandidates->count() }}</x-ui.badge>
+                </div>
+
+                <div class="space-y-3">
+                    @forelse ($fitmentBatchCandidates as $candidate)
+                        <div class="border-b border-border-default pb-3 last:border-0 last:pb-0">
+                            <a href="{{ route('commerce.inventory.items.show', $candidate['target_item']) }}" class="font-mono text-sm text-accent hover:underline" wire:navigate>
+                                {{ $candidate['target_item']->sku }}
+                            </a>
+                            <div class="mt-1 text-sm text-ink">{{ $candidate['target_item']->title }}</div>
+                            <div class="mt-1 text-xs text-muted">
+                                {{ __('Copy fitment from :sku (:count entries).', ['sku' => $candidate['source_item']->sku, 'count' => $candidate['fitment_count']]) }}
+                            </div>
+                        </div>
+                    @empty
+                        <div class="text-sm text-muted">{{ __('No same-template fitment reuse candidates are waiting right now.') }}</div>
+                    @endforelse
                 </div>
             </x-ui.card>
         </div>
@@ -131,7 +347,7 @@
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Reconciliation') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('eBay Listing') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('BLB Item') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Belimbing Item') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Price') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Synced') }}</th>
@@ -159,6 +375,9 @@
                                     <div class="mt-1 text-xs text-muted">
                                         {{ $listing->external_listing_id ?? $listing->external_offer_id ?? __('No external ID') }}
                                     </div>
+                                    @if ($listing->drift_summary)
+                                        <div class="mt-1 text-xs text-status-danger">{{ $listing->drift_summary }}</div>
+                                    @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y">
                                     @if ($listing->item)
@@ -175,6 +394,9 @@
                                         <x-ui.badge :variant="$this->listingStatusVariant($listing->status)">
                                             {{ __(Illuminate\Support\Str::headline($listing->status ?? 'unknown')) }}
                                         </x-ui.badge>
+                                        <x-ui.badge :variant="$this->managementStateVariant($listing->management_state)">
+                                            {{ __(Illuminate\Support\Str::headline(str_replace('_', ' ', $listing->management_state))) }}
+                                        </x-ui.badge>
                                         @if ($listing->item)
                                             <x-ui.badge :variant="$this->itemStatusVariant($listing->item->status)">
                                                 {{ __(Illuminate\Support\Str::headline($listing->item->status)) }}
@@ -185,7 +407,7 @@
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm text-ink tabular-nums">
                                     <div>{{ $this->formatMoney($listing->price_amount, $listing->currency_code) }}</div>
                                     @if ($listing->item?->target_price_amount !== null)
-                                        <div class="mt-1 text-xs text-muted">{{ __('BLB: :price', ['price' => $this->formatMoney($listing->item->target_price_amount, $listing->item->currency_code)]) }}</div>
+                                        <div class="mt-1 text-xs text-muted">{{ __('Belimbing: :price', ['price' => $this->formatMoney($listing->item->target_price_amount, $listing->item->currency_code)]) }}</div>
                                     @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
@@ -251,7 +473,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No active BLB inventory is missing from eBay.') }}</td>
+                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No active Belimbing inventory is missing from eBay.') }}</td>
                             </tr>
                         @endforelse
                     </tbody>

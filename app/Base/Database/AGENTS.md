@@ -140,6 +140,23 @@ php artisan migrate --dev
 
 The old `blb:table:unstable` and admin UI stability toggle are now legacy/transitional tools. Do not use them as the source of truth for new schema work.
 
+### Deprecated compatibility bridge
+
+`scripts/unstable-table-list.sh` is still honored by `php artisan migrate --dev` as a temporary git-tracked compatibility list for existing under-development tables. Treat it as deprecated. The real destination is migration-local `use IncubatingSchema;` in each owning migration file.
+
+## PostgreSQL Identifier Limit
+
+BLB rejects PostgreSQL migration DDL containing identifiers over PostgreSQL's 63-byte limit before the statement reaches the database. The guard is enabled only while BLB migration execution runs (`migrate`, `migrate:rollback`, `migrate:reset`; `migrate:fresh` delegates its rebuild phase to `migrate`), so normal application queries do not pay identifier-inspection overhead.
+
+The guard covers both Laravel schema builder SQL and raw `DB::statement()` DDL executed inside those migration commands.
+
+Use explicit short names for long indexes and constraints:
+
+```php
+$table->unique(['long_column_a', 'long_column_b'], 'short_unique_name');
+$table->foreignId('long_related_id')->constrained('related_table', indexName: 'short_fk_name');
+```
+
 ## Agent Guardrails
 
 - **Prefer `php artisan migrate --dev` for local schema iteration.** It is the agent-first path and keeps the workflow close to native Laravel.

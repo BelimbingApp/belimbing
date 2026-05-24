@@ -1,7 +1,8 @@
 <?php
+
 namespace App\Base\Database\Exceptions;
 
-use App\Base\Foundation\Enums\BlbErrorCode;
+use App\Base\Database\Enums\DatabaseErrorCode;
 use App\Base\Foundation\Exceptions\BlbInvariantViolationException;
 
 /**
@@ -13,7 +14,7 @@ final class CircularSeederDependencyException extends BlbInvariantViolationExcep
     {
         return new self(
             'Circular dependency detected among dev seeders: '.implode(', ', $seederClasses),
-            BlbErrorCode::CIRCULAR_SEEDER_DEPENDENCY,
+            DatabaseErrorCode::CIRCULAR_SEEDER_DEPENDENCY,
             ['seeder_classes' => $seederClasses],
         );
     }

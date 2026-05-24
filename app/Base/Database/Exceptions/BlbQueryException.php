@@ -1,7 +1,8 @@
 <?php
+
 namespace App\Base\Database\Exceptions;
 
-use App\Base\Foundation\Enums\BlbErrorCode;
+use App\Base\Database\Enums\DatabaseErrorCode;
 use App\Base\Foundation\Exceptions\BlbDataContractException;
 
 /**
@@ -18,7 +19,7 @@ final class BlbQueryException extends BlbDataContractException
     {
         return new self(
             'Invalid query: '.$reason,
-            BlbErrorCode::DATABASE_QUERY_INVALID,
+            DatabaseErrorCode::DATABASE_QUERY_INVALID,
             ['reason' => $reason],
         );
     }
@@ -33,7 +34,7 @@ final class BlbQueryException extends BlbDataContractException
     {
         return new self(
             'Query execution failed: '.$message,
-            BlbErrorCode::DATABASE_QUERY_EXECUTION_FAILED,
+            DatabaseErrorCode::DATABASE_QUERY_EXECUTION_FAILED,
             ['error' => $message],
             previous: $previous,
         );

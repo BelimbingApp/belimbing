@@ -3,18 +3,44 @@
 namespace App\Modules\People\Employees\Services;
 
 use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\People\Payroll\Models\PayrollEmployeeStatutoryProfile;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use stdClass;
 
+/**
+ * Computes an employee's readiness for payroll processing.
+ *
+ * Reads from the Payroll plugin's `people_payroll_employee_statutory_profiles`
+ * table when Payroll is installed; degrades to "missing statutory profile"
+ * for every employee when the plugin is absent. The boundary is kept by
+ * accessing the table via the DB facade rather than importing the Payroll
+ * Eloquent model — same pattern used by other source-side helpers that
+ * need read-only access to plugin tables.
+ */
 class EmployeePayrollReadinessService
 {
     public const STATE_READY = 'ready';
 
     public const STATE_BLOCKED = 'blocked';
 
+    private const STATUTORY_PROFILE_TABLE = 'people_payroll_employee_statutory_profiles';
+
+    private const WORK_PROFILE_TABLE = 'people_employee_work_profiles';
+
+    private const PORTAL_ACCESS_TABLE = 'people_employee_portal_accesses';
+
     private const BANK_NAME_METADATA_PATH = 'employees.metadata->payroll_bank->bank_name';
 
     private const BANK_ACCOUNT_NUMBER_METADATA_PATH = 'employees.metadata->payroll_bank->bank_account_number';
+
+    private const ANY_ROWS_CONDITION = '1 = 1';
+
+    private const NO_ROWS_CONDITION = '1 = 0';
+
+    private const STATUTORY_PROFILE_EMPLOYEE_ID_COLUMN = self::STATUTORY_PROFILE_TABLE.'.employee_id';
+
+    private const STATUTORY_PROFILE_VALIDATION_MESSAGES_COLUMN = self::STATUTORY_PROFILE_TABLE.'.validation_messages';
 
     /**
      * @return array<string, string>
@@ -36,21 +62,29 @@ class EmployeePayrollReadinessService
      */
     public function summarize(Employee $employee): array
     {
-        $employee->loadMissing([
-            'workProfile.costCenter',
-            'workProfile.organizationUnit',
-            'workProfile.employmentGroup',
-            'workProfile.jobTitle',
-            'workProfile.workforceClass',
-            'workProfile.jobGrade',
-            'workProfile.workCalendar',
-            'portalAccess.user',
-        ]);
+        $relations = [];
+
+        if ($this->workProfileTableExists()) {
+            $relations[] = 'workProfile';
+        } else {
+            $employee->setRelation('workProfile', null);
+        }
+
+        if ($this->portalAccessTableExists()) {
+            $relations[] = 'portalAccess.user';
+        } else {
+            $employee->setRelation('portalAccess', null);
+        }
+
+        if ($relations !== []) {
+            $employee->loadMissing($relations);
+        }
 
         $workProfile = $employee->workProfile;
         $portalAccess = $employee->portalAccess;
         $bank = $this->bankDetails($employee);
         $statutoryProfile = $this->latestStatutoryProfile($employee);
+        $validationMessages = $this->normaliseValidationMessages($statutoryProfile);
 
         $blockers = [];
 
@@ -68,7 +102,7 @@ class EmployeePayrollReadinessService
 
         if ($statutoryProfile === null) {
             $blockers[] = $this->blocker('missing_statutory_profile', 'No employee statutory profile is available.');
-        } elseif (($statutoryProfile->validation_messages ?? []) !== []) {
+        } elseif ($validationMessages !== []) {
             $blockers[] = $this->blocker(
                 'statutory_profile_has_issues',
                 'Current statutory profile still has validation messages.',
@@ -98,31 +132,51 @@ class EmployeePayrollReadinessService
             'statutory_profile' => [
                 'present' => $statutoryProfile !== null,
                 'country_iso' => $statutoryProfile?->country_iso,
-                'effective_from' => $statutoryProfile?->effective_from?->toDateString(),
-                'effective_to' => $statutoryProfile?->effective_to?->toDateString(),
-                'validation_messages' => $statutoryProfile?->validation_messages ?? [],
+                'effective_from' => $this->dateString($statutoryProfile?->effective_from),
+                'effective_to' => $this->dateString($statutoryProfile?->effective_to),
+                'validation_messages' => $validationMessages,
             ],
         ];
     }
 
     public function applyStateFilter(Builder $query, string $state): void
     {
+        $workProfileTableExists = $this->workProfileTableExists();
+        $statutoryTableExists = $this->statutoryProfileTableExists();
+
         if ($state === self::STATE_READY) {
+            if (! $workProfileTableExists) {
+                $query->whereRaw(self::NO_ROWS_CONDITION);
+
+                return;
+            }
+
             $query
-                ->whereNotNull('employee_work_profiles.id')
-                ->whereNotNull('employee_work_profiles.pay_rate_type')
-                ->where('employee_work_profiles.pay_rate_type', '!=', '')
+                ->whereNotNull('people_employee_work_profiles.id')
+                ->whereNotNull('people_employee_work_profiles.pay_rate_type')
+                ->where('people_employee_work_profiles.pay_rate_type', '!=', '')
                 ->where('employees.status', 'active')
                 ->whereNotNull(self::BANK_NAME_METADATA_PATH)
                 ->where(self::BANK_NAME_METADATA_PATH, '!=', '')
                 ->whereNotNull(self::BANK_ACCOUNT_NUMBER_METADATA_PATH)
-                ->where(self::BANK_ACCOUNT_NUMBER_METADATA_PATH, '!=', '')
-                ->whereHas('statutoryProfiles', function (Builder $statutoryQuery): void {
-                    $statutoryQuery->where(function (Builder $validationQuery): void {
-                        $validationQuery->whereNull('validation_messages')
-                            ->orWhereJsonLength('validation_messages', 0);
+                ->where(self::BANK_ACCOUNT_NUMBER_METADATA_PATH, '!=', '');
+
+            if (! $statutoryTableExists) {
+                // No payroll plugin installed → no employee is payroll-ready.
+                $query->whereRaw(self::NO_ROWS_CONDITION);
+
+                return;
+            }
+
+            $query->whereExists(function ($sub): void {
+                $sub->select(DB::raw(1))
+                    ->from(self::STATUTORY_PROFILE_TABLE)
+                    ->whereColumn(self::STATUTORY_PROFILE_EMPLOYEE_ID_COLUMN, 'employees.id')
+                    ->where(function ($validationQuery): void {
+                        $validationQuery->whereNull(self::STATUTORY_PROFILE_VALIDATION_MESSAGES_COLUMN)
+                            ->orWhereJsonLength(self::STATUTORY_PROFILE_VALIDATION_MESSAGES_COLUMN, 0);
                     });
-                });
+            });
 
             return;
         }
@@ -131,37 +185,55 @@ class EmployeePayrollReadinessService
             return;
         }
 
-        $query->where(function (Builder $blockingQuery): void {
+        $query->where(function (Builder $blockingQuery) use ($statutoryTableExists): void {
             foreach (array_keys(self::blockerLabels()) as $index => $blocker) {
                 $method = $index === 0 ? 'where' : 'orWhere';
-                $blockingQuery->{$method}(function (Builder $query) use ($blocker): void {
-                    $this->applyBlockerFilter($query, $blocker);
+                $blockingQuery->{$method}(function (Builder $query) use ($blocker, $statutoryTableExists): void {
+                    $this->applyBlockerFilter($query, $blocker, $statutoryTableExists);
                 });
             }
         });
     }
 
-    public function applyBlockerFilter(Builder $query, string $blocker): void
+    public function applyBlockerFilter(Builder $query, string $blocker, ?bool $statutoryTableExists = null): void
     {
+        $statutoryTableExists ??= $this->statutoryProfileTableExists();
+        $workProfileTableExists = $this->workProfileTableExists();
+
         match ($blocker) {
-            'missing_work_profile' => $query->whereNull('employee_work_profiles.id'),
-            'missing_pay_basis' => $query->where(function (Builder $payBasisQuery): void {
-                $payBasisQuery->whereNull('employee_work_profiles.id')
-                    ->orWhereNull('employee_work_profiles.pay_rate_type')
-                    ->orWhere('employee_work_profiles.pay_rate_type', '');
-            }),
+            'missing_work_profile' => $workProfileTableExists
+                ? $query->whereNull('people_employee_work_profiles.id')
+                : $query->whereRaw(self::ANY_ROWS_CONDITION),
+            'missing_pay_basis' => $workProfileTableExists
+                ? $query->where(function (Builder $payBasisQuery): void {
+                    $payBasisQuery->whereNull('people_employee_work_profiles.id')
+                        ->orWhereNull('people_employee_work_profiles.pay_rate_type')
+                        ->orWhere('people_employee_work_profiles.pay_rate_type', '');
+                })
+                : $query->whereRaw(self::ANY_ROWS_CONDITION),
             'missing_bank_details' => $query->where(function (Builder $bankQuery): void {
                 $bankQuery->whereNull(self::BANK_NAME_METADATA_PATH)
                     ->orWhere(self::BANK_NAME_METADATA_PATH, '')
                     ->orWhereNull(self::BANK_ACCOUNT_NUMBER_METADATA_PATH)
                     ->orWhere(self::BANK_ACCOUNT_NUMBER_METADATA_PATH, '');
             }),
-            'missing_statutory_profile' => $query->whereDoesntHave('statutoryProfiles'),
-            'statutory_profile_has_issues' => $query->whereHas('statutoryProfiles', function (Builder $statutoryQuery): void {
-                $statutoryQuery->whereJsonLength('validation_messages', '>', 0);
-            }),
+            'missing_statutory_profile' => $statutoryTableExists
+                ? $query->whereNotExists(function ($sub): void {
+                    $sub->select(DB::raw(1))
+                        ->from(self::STATUTORY_PROFILE_TABLE)
+                        ->whereColumn(self::STATUTORY_PROFILE_EMPLOYEE_ID_COLUMN, 'employees.id');
+                })
+                : $query->whereRaw(self::ANY_ROWS_CONDITION),
+            'statutory_profile_has_issues' => $statutoryTableExists
+                ? $query->whereExists(function ($sub): void {
+                    $sub->select(DB::raw(1))
+                        ->from(self::STATUTORY_PROFILE_TABLE)
+                        ->whereColumn(self::STATUTORY_PROFILE_EMPLOYEE_ID_COLUMN, 'employees.id')
+                        ->whereJsonLength(self::STATUTORY_PROFILE_VALIDATION_MESSAGES_COLUMN, '>', 0);
+                })
+                : $query->whereRaw(self::NO_ROWS_CONDITION),
             'inactive_employment' => $query->where('employees.status', '!=', 'active'),
-            default => $query->whereRaw('1 = 0'),
+            default => $query->whereRaw(self::NO_ROWS_CONDITION),
         };
     }
 
@@ -182,18 +254,75 @@ class EmployeePayrollReadinessService
         ];
     }
 
-    private function latestStatutoryProfile(Employee $employee): ?PayrollEmployeeStatutoryProfile
+    private function latestStatutoryProfile(Employee $employee): ?stdClass
     {
-        if ($employee->relationLoaded('statutoryProfiles')) {
-            return $employee->statutoryProfiles
-                ->sortByDesc(fn (PayrollEmployeeStatutoryProfile $profile): string => (string) $profile->effective_from)
-                ->first();
+        if (! $this->statutoryProfileTableExists()) {
+            return null;
         }
 
-        return $employee->statutoryProfiles()
+        $row = DB::table(self::STATUTORY_PROFILE_TABLE)
+            ->where('employee_id', $employee->id)
             ->orderByDesc('effective_from')
             ->orderByDesc('id')
             ->first();
+
+        if ($row === null) {
+            return null;
+        }
+
+        return $row;
+    }
+
+    private function statutoryProfileTableExists(): bool
+    {
+        return Schema::hasTable(self::STATUTORY_PROFILE_TABLE);
+    }
+
+    private function workProfileTableExists(): bool
+    {
+        return Schema::hasTable(self::WORK_PROFILE_TABLE);
+    }
+
+    private function portalAccessTableExists(): bool
+    {
+        return Schema::hasTable(self::PORTAL_ACCESS_TABLE);
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    private function normaliseValidationMessages(?stdClass $statutoryProfile): array
+    {
+        if ($statutoryProfile === null) {
+            return [];
+        }
+
+        $raw = $statutoryProfile->validation_messages ?? null;
+        if (is_array($raw)) {
+            return $raw;
+        }
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return [];
+    }
+
+    private function dateString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+        if (is_string($value) && $value !== '') {
+            return substr($value, 0, 10);
+        }
+
+        return null;
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Base\Database\Models\SeederRegistry;
 use App\Base\Database\Models\TableRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 {
@@ -16,6 +17,10 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
      */
     public function tableIsIncubating(string $tableName): bool
     {
+        if ($this->tableMatchesDeprecatedScriptPattern($tableName)) {
+            return true;
+        }
+
         if (! Schema::hasTable('base_database_tables')) {
             return false;
         }
@@ -66,6 +71,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             ->all();
 
         $incubatingFiles = [];
+        $deprecatedTables = $this->deprecatedScriptTables();
 
         foreach ($files as $migrationFile) {
             $path = $this->migrationPathByFileName($migrationFile);
@@ -98,7 +104,9 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
                 continue;
             }
 
-            $states[$tableName] = isset($incubatingFiles[$migrationFile]) ? 'incubating' : 'stable';
+            $states[$tableName] = isset($incubatingFiles[$migrationFile]) || in_array($tableName, $deprecatedTables, true)
+                ? 'incubating'
+                : 'stable';
         }
 
         return $states;
@@ -106,18 +114,18 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 
     /**
      * @param  list<string>  $migrationPaths
-     * @return array{files: list<string>, tables: list<string>, migrations: list<string>, seeders_reset: int}
+     * @return array{files: list<string>, tables: list<string>, migrations: list<string>, seeders_reset: int, deprecated_script_tables: list<string>}
      */
     public function run(array $migrationPaths): array
     {
         if (! Schema::hasTable('migrations')) {
-            return ['files' => [], 'tables' => [], 'migrations' => [], 'seeders_reset' => 0];
+            return ['files' => [], 'tables' => [], 'migrations' => [], 'seeders_reset' => 0, 'deprecated_script_tables' => []];
         }
 
         $incubating = $this->incubatingMigrations($migrationPaths);
 
         if ($incubating === []) {
-            return ['files' => [], 'tables' => [], 'migrations' => [], 'seeders_reset' => 0];
+            return ['files' => [], 'tables' => [], 'migrations' => [], 'seeders_reset' => 0, 'deprecated_script_tables' => []];
         }
 
         $tables = $this->liveTablesDeclaredBy($incubating);
@@ -147,6 +155,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             'tables' => $tables,
             'migrations' => array_values($deletedMigrations),
             'seeders_reset' => $seedersReset,
+            'deprecated_script_tables' => $this->deprecatedScriptTables(),
         ];
     }
 
@@ -157,11 +166,41 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     public function incubatingMigrations(array $migrationPaths): array
     {
         $migrations = [];
+        $seenFiles = [];
 
         foreach ($this->migrationFiles($migrationPaths) as $path) {
             $contents = file_get_contents($path);
 
             if ($contents === false || ! $this->isIncubating($contents)) {
+                continue;
+            }
+
+            $migration = [
+                'path' => $path,
+                'relative_path' => $this->relativeBasePath($path),
+                'file' => basename($path),
+                'migration_name' => pathinfo($path, PATHINFO_FILENAME),
+                'tables' => $this->createdTables($contents),
+            ];
+
+            $migrations[] = $migration;
+            $seenFiles[$migration['file']] = true;
+        }
+
+        foreach ($this->deprecatedScriptMigrationFiles() as $migrationFile) {
+            if (isset($seenFiles[$migrationFile])) {
+                continue;
+            }
+
+            $path = $this->migrationPathByFileName($migrationFile);
+
+            if ($path === null) {
+                continue;
+            }
+
+            $contents = file_get_contents($path);
+
+            if ($contents === false) {
                 continue;
             }
 
@@ -370,5 +409,96 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     private function relativeBasePath(string $absolutePath): string
     {
         return str_replace([base_path().DIRECTORY_SEPARATOR, '\\'], ['', '/'], $absolutePath);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function deprecatedScriptTables(): array
+    {
+        $patterns = $this->deprecatedScriptPatterns();
+
+        if ($patterns === []) {
+            return [];
+        }
+
+        return TableRegistry::query()
+            ->pluck('table_name')
+            ->filter(function (string $tableName) use ($patterns): bool {
+                foreach ($patterns as $pattern) {
+                    if (Str::is($pattern, $tableName)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function tableMatchesDeprecatedScriptPattern(string $tableName): bool
+    {
+        foreach ($this->deprecatedScriptPatterns() as $pattern) {
+            if (Str::is($pattern, $tableName)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function deprecatedScriptMigrationFiles(): array
+    {
+        return TableRegistry::query()
+            ->whereIn('table_name', $this->deprecatedScriptTables())
+            ->whereNotNull('migration_file')
+            ->pluck('migration_file')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function deprecatedScriptPatterns(): array
+    {
+        $path = env('BLB_DEPRECATED_UNSTABLE_TABLE_LIST', base_path('scripts/unstable-table-list.sh'));
+
+        if (! is_string($path) || trim($path) === '' || ! is_file($path)) {
+            return [];
+        }
+
+        $contents = file_get_contents($path);
+
+        if ($contents === false) {
+            return [];
+        }
+
+        if (preg_match('/BLB_DEPRECATED_UNSTABLE_TABLE_PATTERNS=\((.*?)\)/s', $contents, $matches) !== 1) {
+            return [];
+        }
+
+        $patterns = [];
+
+        foreach (preg_split('/\R/', $matches[1]) ?: [] as $line) {
+            $pattern = trim($line);
+
+            if ($pattern === '' || str_starts_with($pattern, '#')) {
+                continue;
+            }
+
+            $pattern = trim($pattern, " \t\n\r\0\x0B'\"");
+
+            if ($pattern !== '') {
+                $patterns[] = $pattern;
+            }
+        }
+
+        return array_values(array_unique($patterns));
     }
 }

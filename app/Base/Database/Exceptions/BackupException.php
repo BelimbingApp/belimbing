@@ -1,7 +1,8 @@
 <?php
+
 namespace App\Base\Database\Exceptions;
 
-use App\Base\Foundation\Enums\BlbErrorCode;
+use App\Base\Database\Enums\DatabaseErrorCode;
 use App\Base\Foundation\Exceptions\BlbException;
 use Throwable;
 
@@ -14,7 +15,7 @@ final class BackupException extends BlbException
     {
         return new self(
             'Backup configuration invalid: '.$reason,
-            BlbErrorCode::BACKUP_CONFIGURATION_INVALID,
+            DatabaseErrorCode::BACKUP_CONFIGURATION_INVALID,
             ['reason' => $reason],
         );
     }
@@ -23,7 +24,7 @@ final class BackupException extends BlbException
     {
         return new self(
             "Backup driver '{$driver}' is not supported.",
-            BlbErrorCode::BACKUP_DRIVER_UNSUPPORTED,
+            DatabaseErrorCode::BACKUP_DRIVER_UNSUPPORTED,
             ['driver' => $driver],
         );
     }
@@ -38,7 +39,7 @@ final class BackupException extends BlbException
 
         return new self(
             $message,
-            BlbErrorCode::BACKUP_TOOLING_MISSING,
+            DatabaseErrorCode::BACKUP_TOOLING_MISSING,
             ['tool' => $tool, 'hint' => $hint],
         );
     }
@@ -47,7 +48,7 @@ final class BackupException extends BlbException
     {
         return new self(
             'Database dump failed: '.$detail,
-            BlbErrorCode::BACKUP_DUMP_FAILED,
+            DatabaseErrorCode::BACKUP_DUMP_FAILED,
             ['detail' => $detail],
             previous: $previous,
         );
@@ -57,7 +58,7 @@ final class BackupException extends BlbException
     {
         return new self(
             'Backup encryption failed: '.$detail,
-            BlbErrorCode::BACKUP_ENCRYPTION_FAILED,
+            DatabaseErrorCode::BACKUP_ENCRYPTION_FAILED,
             ['detail' => $detail],
             previous: $previous,
         );
@@ -67,7 +68,7 @@ final class BackupException extends BlbException
     {
         return new self(
             'Backup decryption failed: '.$detail,
-            BlbErrorCode::BACKUP_DECRYPTION_FAILED,
+            DatabaseErrorCode::BACKUP_DECRYPTION_FAILED,
             ['detail' => $detail],
             previous: $previous,
         );
@@ -77,7 +78,7 @@ final class BackupException extends BlbException
     {
         return new self(
             'Backup storage write failed: '.$detail,
-            BlbErrorCode::BACKUP_STORAGE_FAILED,
+            DatabaseErrorCode::BACKUP_STORAGE_FAILED,
             ['detail' => $detail],
             previous: $previous,
         );
@@ -87,7 +88,7 @@ final class BackupException extends BlbException
     {
         return new self(
             "Backup artifact not found: {$backupId}",
-            BlbErrorCode::BACKUP_ARTIFACT_NOT_FOUND,
+            DatabaseErrorCode::BACKUP_ARTIFACT_NOT_FOUND,
             ['backup_id' => $backupId],
         );
     }
@@ -96,7 +97,7 @@ final class BackupException extends BlbException
     {
         return new self(
             'Backup artifact failed integrity check: '.$detail,
-            BlbErrorCode::BACKUP_ARTIFACT_CORRUPT,
+            DatabaseErrorCode::BACKUP_ARTIFACT_CORRUPT,
             ['detail' => $detail],
         );
     }
@@ -105,7 +106,7 @@ final class BackupException extends BlbException
     {
         return new self(
             'Restore refused: '.$reason,
-            BlbErrorCode::BACKUP_RESTORE_REFUSED,
+            DatabaseErrorCode::BACKUP_RESTORE_REFUSED,
             ['reason' => $reason],
         );
     }
@@ -114,7 +115,7 @@ final class BackupException extends BlbException
     {
         return new self(
             'Restore failed: '.$detail,
-            BlbErrorCode::BACKUP_RESTORE_FAILED,
+            DatabaseErrorCode::BACKUP_RESTORE_FAILED,
             ['detail' => $detail],
             previous: $previous,
         );

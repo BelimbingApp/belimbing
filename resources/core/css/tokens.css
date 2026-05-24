@@ -98,6 +98,26 @@
     --color-surface-secondary-hover: #404040;
 
     /*
+     * Day-type tints (Normal / Rest / Off / Holiday).
+     *
+     * Used by calendar surfaces — Attendance roster grid, Leave calendars,
+     * Claim period pickers — to mark non-working days quietly. Backgrounds
+     * sit a notch warmer than `surface-card` so a glance separates working
+     * vs non-working days without saturated color. The `*-ink` variant is
+     * the label color used when the cell stands alone (no shift pill).
+     *
+     * day-rest    — weekly rest day per work calendar metadata
+     * day-off     — weekly off day per work calendar metadata
+     * day-holiday — public/non-working calendar exception
+     */
+    --color-day-rest: #f1ebde;
+    --color-day-rest-ink: #6b6057;
+    --color-day-off: #ece4d2;
+    --color-day-off-ink: #6b6057;
+    --color-day-holiday: #f3e4d3;
+    --color-day-holiday-ink: #9a5226;
+
+    /*
      * Spacing (semantic by role). Use in Blade; density is tuned here (or via data-density).
      * Default: compact/dense for high information per unit of space; keep hierarchy and readability.
      * card-inner      — card inner padding (p-card-inner)
@@ -147,4 +167,10 @@
     --color-status-info-border: #1e40af;
     --color-surface-secondary: var(--color-zinc-600);
     --color-surface-secondary-hover: var(--color-zinc-500);
+    --color-day-rest: rgba(245, 239, 228, 0.06);
+    --color-day-rest-ink: var(--color-zinc-400);
+    --color-day-off: rgba(245, 239, 228, 0.10);
+    --color-day-off-ink: var(--color-zinc-400);
+    --color-day-holiday: rgba(193, 77, 43, 0.14);
+    --color-day-holiday-ink: #c97a55;
 }

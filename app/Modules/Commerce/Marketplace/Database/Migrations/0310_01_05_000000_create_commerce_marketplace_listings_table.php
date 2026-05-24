@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -18,6 +19,9 @@ return new class extends Migration
             $table->string('marketplace_id')->nullable();
             $table->string('title')->nullable();
             $table->string('status')->nullable()->index();
+            $table->string('management_state')->default('imported')->index();
+            $table->string('drift_status')->default('unknown')->index();
+            $table->text('drift_summary')->nullable();
             $table->unsignedBigInteger('price_amount')->nullable();
             $table->char('currency_code', 3)->nullable();
             $table->string('listing_url')->nullable();
@@ -28,7 +32,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['company_id', 'channel', 'external_listing_id'], 'commerce_marketplace_listing_external_unique');
-            $table->index(['company_id', 'channel', 'external_sku']);
+            $table->index(['company_id', 'channel', 'external_sku'], 'commerce_marketplace_listings_company_channel_sku_index');
             $table->index(['company_id', 'item_id']);
         });
     }

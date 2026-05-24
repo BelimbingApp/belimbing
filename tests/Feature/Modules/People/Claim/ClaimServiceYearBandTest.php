@@ -2,12 +2,14 @@
 
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\People\Claim\Data\ClaimSubmissionInput;
 use App\Modules\People\Claim\Models\ClaimAssignment;
 use App\Modules\People\Claim\Models\ClaimAssignmentLine;
 use App\Modules\People\Claim\Models\ClaimPolicy;
 use App\Modules\People\Claim\Models\ClaimPolicyBand;
 use App\Modules\People\Claim\Models\ClaimType;
 use App\Modules\People\Claim\Services\ClaimPolicyEvaluationService;
+use DateTimeImmutable;
 
 /**
  * Build a service-year-banded policy:
@@ -84,14 +86,16 @@ function makeServiceYearFixture(string $employmentStart): array
 function evaluateSvc(array $f, float $amount, string $incurred): array
 {
     return app(ClaimPolicyEvaluationService::class)->evaluateBeforeSubmission(
-        employeeId: $f['employee']->id,
         claimType: $f['type'],
         policy: $f['policy'],
-        incurredOn: new DateTimeImmutable($incurred),
-        requestedAmount: $amount,
-        attachmentCount: 0,
-        providerName: null,
-        employee: $f['employee'],
+        input: new ClaimSubmissionInput(
+            employeeId: $f['employee']->id,
+            incurredOn: new DateTimeImmutable($incurred),
+            requestedAmount: $amount,
+            attachmentCount: 0,
+            providerName: null,
+            employee: $f['employee'],
+        ),
     );
 }
 

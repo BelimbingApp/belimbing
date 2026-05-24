@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Exceptions;
 
 use App\Base\Foundation\Exceptions\BlbIntegrationException;
@@ -36,6 +37,39 @@ class MarketplaceOperationException extends BlbIntegrationException
                 'status' => $status,
                 'exchange_id' => $exchangeId,
             ], static fn (mixed $value): bool => $value !== null),
+        );
+    }
+
+    /**
+     * @param  list<array{key: string, label: string}>  $blockers
+     */
+    public static function draftNotReady(string $channel, int $draftId, array $blockers = []): self
+    {
+        $summary = collect($blockers)
+            ->pluck('label')
+            ->filter(fn (mixed $label): bool => is_string($label) && trim($label) !== '')
+            ->take(3)
+            ->implode(' ');
+
+        $suffix = $summary !== '' ? ' '.$summary : '';
+
+        return new self(
+            "Marketplace channel [{$channel}] draft [{$draftId}] is not ready for publish or revise.{$suffix}",
+            context: array_filter([
+                'draft_id' => $draftId,
+                'blockers' => $blockers,
+            ], static fn (mixed $value): bool => $value !== null && $value !== []),
+        );
+    }
+
+    public static function listingNotWritable(string $channel, int $listingId, string $reason): self
+    {
+        return new self(
+            "Marketplace channel [{$channel}] listing [{$listingId}] cannot be updated. {$reason}",
+            context: [
+                'listing_id' => $listingId,
+                'reason' => $reason,
+            ],
         );
     }
 }

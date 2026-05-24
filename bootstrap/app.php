@@ -1,10 +1,15 @@
 <?php
 
+use App\Base\Authz\Enums\AuthzErrorCode;
 use App\Base\Authz\Middleware\AuthorizeCapability;
+use App\Base\Database\Enums\DatabaseErrorCode;
 use App\Base\Database\Middleware\DatabaseConnectionRecovery;
-use App\Base\Foundation\Enums\BlbErrorCode;
+use App\Base\Foundation\Enums\FoundationErrorCode;
 use App\Base\Foundation\Exceptions\BlbException;
 use App\Base\Locale\Middleware\ApplyLocaleContext;
+use App\Modules\Core\AI\Enums\AIErrorCode;
+use App\Modules\Core\Company\Enums\CompanyErrorCode;
+use App\Modules\Core\Employee\Enums\EmployeeErrorCode;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -54,14 +59,14 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             $status = match ($exception->reasonCode) {
-                BlbErrorCode::BLB_DATA_CONTRACT,
-                BlbErrorCode::LARA_AGENT_ID_TYPE_INVALID,
-                BlbErrorCode::AUTHZ_UNKNOWN_CAPABILITY => 422,
-                BlbErrorCode::AUTHZ_DENIED => 403,
-                BlbErrorCode::BLB_INVARIANT_VIOLATION,
-                BlbErrorCode::CIRCULAR_SEEDER_DEPENDENCY,
-                BlbErrorCode::LICENSEE_COMPANY_DELETION_FORBIDDEN,
-                BlbErrorCode::SYSTEM_EMPLOYEE_DELETION_FORBIDDEN => 409,
+                FoundationErrorCode::BLB_DATA_CONTRACT,
+                AIErrorCode::LARA_AGENT_ID_TYPE_INVALID,
+                AuthzErrorCode::AUTHZ_UNKNOWN_CAPABILITY => 422,
+                AuthzErrorCode::AUTHZ_DENIED => 403,
+                FoundationErrorCode::BLB_INVARIANT_VIOLATION,
+                DatabaseErrorCode::CIRCULAR_SEEDER_DEPENDENCY,
+                CompanyErrorCode::LICENSEE_COMPANY_DELETION_FORBIDDEN,
+                EmployeeErrorCode::SYSTEM_EMPLOYEE_DELETION_FORBIDDEN => 409,
                 default => 500,
             };
 

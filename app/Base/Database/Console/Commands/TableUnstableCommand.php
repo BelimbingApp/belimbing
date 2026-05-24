@@ -6,6 +6,7 @@ use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\TableInspector;
 use Illuminate\Console\Command;
+use Illuminate\Support\Str;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
@@ -97,16 +98,15 @@ class TableUnstableCommand extends Command
                 continue;
             }
 
-            if (str_ends_with($arg, '*')) {
-                $prefix = substr($arg, 0, -1);
-
-                if ($prefix === '') {
+            if (str_contains($arg, '*')) {
+                if ($arg === '*') {
                     continue;
                 }
 
                 $matched = TableRegistry::query()
-                    ->where('table_name', 'like', $prefix.'%')
                     ->pluck('table_name')
+                    ->filter(fn (string $tableName): bool => Str::is($arg, $tableName))
+                    ->values()
                     ->all();
 
                 $names = array_merge($names, $matched);

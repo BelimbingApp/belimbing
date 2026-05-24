@@ -32,6 +32,7 @@
             </x-ui.alert>
         @endif
 
+        {{-- Identification --}}
         <x-ui.card>
             <div>
                 <h2 class="text-base font-semibold text-ink">{{ __('Identification') }}</h2>
@@ -43,65 +44,192 @@
             </div>
         </x-ui.card>
 
-        <x-ui.card>
-            <div>
-                <h2 class="text-base font-semibold text-ink">{{ __('Work schedule') }}</h2>
-                <p class="mt-1 text-sm text-muted">{{ __('The normal start, end, break and expected payable work time for this shift.') }}</p>
-            </div>
-            <div class="mt-4 space-y-4">
-                <x-ui.alert variant="info">
-                    {{ __('Policy Builder decides rounding, lateness and overtime. Shift Builder only defines scheduled time and punch expectations.') }}
-                    <a href="{{ route('people.attendance.policy-groups') }}" target="_blank" rel="noopener noreferrer" class="font-medium text-accent hover:underline">{{ __('Open Policy Groups in a new tab') }}</a>
-                </x-ui.alert>
-                <div class="grid gap-4 sm:grid-cols-3">
-                    <x-ui.input id="attendance-shift-starts-at" type="time" wire:model="shiftStartsAt" label="{{ __('Shift start') }}" required help="{{ __('When scheduled work begins.') }}" :error="$errors->first('shiftStartsAt')" />
-                    <x-ui.input id="attendance-shift-ends-at" type="time" wire:model="shiftEndsAt" label="{{ __('Shift end') }}" required help="{{ __('Use an earlier end time for overnight shifts.') }}" :error="$errors->first('shiftEndsAt')" />
-                    <x-ui.input id="attendance-shift-expected-work-minutes" type="number" min="1" max="1440" wire:model="shiftExpectedWorkMinutes" label="{{ __('Expected work') }}" suffix="{{ __('min') }}" required help="{{ __('Payable work time before policy rounding or exceptions.') }}" :error="$errors->first('shiftExpectedWorkMinutes')" />
-                </div>
-                <div class="space-y-3">
-                    <div class="flex justify-end">
-                        @if (count($shiftBreaks) < 2)
-                            <x-ui.button type="button" size="sm" variant="secondary" wire:click="addShiftBreak">
-                                <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
-                                {{ count($shiftBreaks) === 0 ? __('Add Break') : __('Add Another Break') }}
-                            </x-ui.button>
-                        @endif
+        {{-- ── Work schedule + punch grace (unified card) ───────────────────── --}}
+        <div
+            x-data="shiftBuilder"
+            style="--sb-dial-day:var(--color-surface-card,#faf9f5);--sb-dial-night:var(--color-surface-pinned,#dfd9cf);--sb-break:#7a7548;"
+        >
+        <div class="bg-surface-card border border-border-default rounded-2xl shadow-sm">
+
+            {{-- Card header --}}
+            <div class="px-6 pt-5 pb-4 flex items-start justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-base font-semibold text-ink">{{ __('Shift Builder') }}</h2>
+                        <x-ui.help @click="sbHelpOpen = !sbHelpOpen" ::aria-expanded="sbHelpOpen" />
                     </div>
-                    @if (count($shiftBreaks) > 0)
-                        @foreach ($shiftBreaks as $index => $break)
-                            <div class="grid gap-4 sm:grid-cols-4" wire:key="shift-break-{{ $index }}">
-                                <x-ui.input id="attendance-shift-break-{{ $index }}-label" wire:model="shiftBreaks.{{ $index }}.label" label="{{ __('Label') }}" placeholder="{{ __('Lunch') }}" :error="$errors->first('shiftBreaks.'.$index.'.label')" />
-                                <x-ui.input id="attendance-shift-break-{{ $index }}-starts-at" type="time" wire:model="shiftBreaks.{{ $index }}.starts_at" label="{{ __('Start') }}" :error="$errors->first('shiftBreaks.'.$index.'.starts_at')" />
-                                <x-ui.input id="attendance-shift-break-{{ $index }}-ends-at" type="time" wire:model="shiftBreaks.{{ $index }}.ends_at" label="{{ __('End') }}" :error="$errors->first('shiftBreaks.'.$index.'.ends_at')" />
-                                <div class="space-y-1">
-                                    <span class="block text-[11px] uppercase tracking-wider font-semibold text-transparent" aria-hidden="true">{{ __('Paid') }}</span>
-                                    <div class="pt-[14px]">
-                                        <x-ui.checkbox id="attendance-shift-break-{{ $index }}-paid" wire:model="shiftBreaks.{{ $index }}.paid" label="{{ __('Paid') }}" help="{{ __('Paid breaks count as worked time; unpaid breaks are deducted by payroll when the evaluator runs.') }}" />
-                                    </div>
-                                </div>
-                                <div class="sm:col-span-4 flex justify-end">
-                                    <x-ui.button type="button" size="sm" variant="danger" wire:click="removeShiftBreak({{ $index }})">{{ __('Remove') }}</x-ui.button>
-                                </div>
-                            </div>
-                        @endforeach
-                    @endif
+                    <p class="mt-1 text-sm text-muted">{{ __('Scheduled time and breaks for this shift.') }}</p>
                 </div>
             </div>
-        </x-ui.card>
 
-        <x-ui.card>
-            <div>
-                <h2 class="text-base font-semibold text-ink">{{ __('Punch windows') }}</h2>
-                <p class="mt-1 text-sm text-muted">{{ __('How early or late BLB should accept clock events around shift start and end.') }}</p>
+            {{-- Help panel (dismissible, slides in below card title) --}}
+            <div
+                x-cloak
+                x-show="sbHelpOpen"
+                x-transition:enter="transition-all ease-out duration-200 motion-reduce:duration-0"
+                x-transition:enter-start="max-h-0 opacity-0"
+                x-transition:enter-end="max-h-60 opacity-100"
+                x-transition:leave="transition-all ease-in duration-150 motion-reduce:duration-0"
+                x-transition:leave-start="max-h-60 opacity-100"
+                x-transition:leave-end="max-h-0 opacity-0"
+                class="mx-6 mb-4 overflow-hidden rounded-xl border border-border-default bg-surface-subtle"
+                @click="sbHelpOpen = false"
+                role="note"
+                aria-label="{{ __('Click to dismiss') }}"
+            >
+                <div class="px-4 py-3 space-y-1.5">
+                    <p class="text-xs font-semibold text-ink">{{ __('About punch grace') }}</p>
+                    <p class="text-xs text-muted">{{ __('Punch grace is the window of time around a shift boundary where a clock punch (in or out) is still accepted as belonging to that shift. Without it, a clock-in one minute late would be rejected or flagged.') }}</p>
+                    <p class="text-xs text-muted">{{ __('Drag the striped handles on the lower strip to set each window. Terracotta = outer (before start, after end). Olive = inner slip (just inside each boundary).') }}</p>
+                    <p class="text-xs text-muted border-t border-border-default pt-1.5">{{ __('Policy Builder decides rounding, lateness and overtime — Shift Builder only defines scheduled time and punch expectations.') }} <a href="{{ route('people.attendance.policy-groups') }}" target="_blank" rel="noopener noreferrer" class="font-medium text-ink underline hover:text-accent" @click.stop>{{ __('Open Policy Groups →') }}</a></p>
+                </div>
             </div>
-            <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <x-ui.input id="attendance-shift-in-before" type="number" min="0" max="720" wire:model="shiftInWindowBeforeMinutes" label="{{ __('Clock-in before') }}" suffix="{{ __('min') }}" help="{{ __('How early before shift start a clock-in can match this shift.') }}" :error="$errors->first('shiftInWindowBeforeMinutes')" />
-                <x-ui.input id="attendance-shift-in-after" type="number" min="0" max="720" wire:model="shiftInWindowAfterMinutes" label="{{ __('Clock-in after') }}" suffix="{{ __('min') }}" help="{{ __('How late after shift start a clock-in can still match this shift.') }}" :error="$errors->first('shiftInWindowAfterMinutes')" />
-                <x-ui.input id="attendance-shift-out-before" type="number" min="0" max="720" wire:model="shiftOutWindowBeforeMinutes" label="{{ __('Clock-out before') }}" suffix="{{ __('min') }}" help="{{ __('How early before shift end a clock-out can match this shift.') }}" :error="$errors->first('shiftOutWindowBeforeMinutes')" />
-                <x-ui.input id="attendance-shift-out-after" type="number" min="0" max="720" wire:model="shiftOutWindowAfterMinutes" label="{{ __('Clock-out after') }}" suffix="{{ __('min') }}" help="{{ __('How late after shift end a clock-out can match this shift.') }}" :error="$errors->first('shiftOutWindowAfterMinutes')" />
-            </div>
-        </x-ui.card>
 
+            <div class="px-6 pb-6">
+
+                {{-- ── Shift Builder strip ── --}}
+                <div class="mb-5">
+
+                    {{-- Legend: two labelled groups --}}
+                    <div class="flex justify-end items-center gap-3 mb-2">
+                        {{-- Shift group --}}
+                        <div class="flex items-center gap-2 text-[11px] text-muted">
+                            <span class="text-[9px] font-semibold uppercase tracking-widest text-muted/50 select-none">{{ __('Shift') }}</span>
+                            <span class="inline-flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-sm bg-accent inline-block shrink-0"></span>{{ __('on the clock') }}
+                            </span>
+                            <span class="inline-flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-sm inline-block shrink-0" style="background:var(--sb-break,#7a7548)"></span>{{ __('break') }}
+                            </span>
+                        </div>
+                        {{-- Separator --}}
+                        <div class="w-px h-3.5 bg-border-default shrink-0"></div>
+                        {{-- Grace group --}}
+                        <div class="flex items-center gap-2 text-[11px] text-muted">
+                            <span class="text-[9px] font-semibold uppercase tracking-widest text-muted/50 select-none">{{ __('Grace') }}</span>
+                            <span class="inline-flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-sm inline-block shrink-0" style="background-image:repeating-linear-gradient(45deg,rgba(181,98,47,.50) 0,rgba(181,98,47,.50) 1.5px,rgba(181,98,47,.12) 1.5px,rgba(181,98,47,.12) 4.5px)"></span>{{ __('outer window') }}
+                            </span>
+                            <span class="inline-flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-sm inline-block shrink-0" style="background-image:repeating-linear-gradient(45deg,rgba(122,117,72,.55) 0,rgba(122,117,72,.55) 1.5px,rgba(122,117,72,.12) 1.5px,rgba(122,117,72,.12) 4.5px)"></span>{{ __('inner slip') }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div x-ref="stripContainer" wire:ignore></div>
+                </div>
+
+                {{-- Dial + readouts --}}
+                <div class="grid gap-7 items-start" style="grid-template-columns: min(340px, 42%) 1fr">
+                    {{-- Clock dial --}}
+                    <div class="flex flex-col items-center gap-3">
+                        <div x-ref="dialContainer" class="w-full max-w-[320px] mx-auto" wire:ignore></div>
+                    </div>
+
+                    {{-- Readouts + time steppers --}}
+                    <div class="flex flex-col gap-5 min-w-0">
+
+                        {{-- On the clock --}}
+                        <div>
+                            <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted mb-2">{{ __('On the clock') }}</p>
+                            <div class="flex items-center justify-between py-1 gap-3">
+                                <div class="flex items-center gap-2.5 text-sm text-ink shrink-0">
+                                    <span class="w-2.5 h-2.5 rounded-sm bg-accent inline-block"></span>
+                                    {{ __('Shift starts') }}
+                                </div>
+                                <x-ui.time-input field="shiftStart" />
+                            </div>
+                            <div class="flex items-center justify-between py-1 gap-3">
+                                <div class="flex items-center gap-2.5 text-sm text-ink shrink-0">
+                                    <span class="w-2.5 h-2.5 rounded-sm bg-accent inline-block"></span>
+                                    {{ __('Shift ends') }}
+                                    <template x-if="crossesMidnight">
+                                        <span class="text-[10px] font-semibold uppercase tracking-wider text-muted border border-border-default rounded px-1 py-0.5">{{ __('next day') }}</span>
+                                    </template>
+                                </div>
+                                <x-ui.time-input field="shiftEnd" />
+                            </div>
+                        </div>
+
+                        {{-- Break (visualised on dial) --}}
+                        <div>
+                            <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted mb-2">{{ $shiftBreaks[0]['label'] ?? __('Break') }}</p>
+                            <div class="flex items-center justify-between py-1 gap-3">
+                                <div class="flex items-center gap-2.5 text-sm text-ink shrink-0">
+                                    <span class="w-2.5 h-2.5 rounded-sm inline-block" style="background:var(--sb-break,#7a7548)"></span>
+                                    {{ __('Starts') }}
+                                </div>
+                                <x-ui.time-input field="breakStart" />
+                            </div>
+                            <div class="flex items-center justify-between py-1 gap-3">
+                                <div class="flex items-center gap-2.5 text-sm text-ink shrink-0">
+                                    <span class="w-2.5 h-2.5 rounded-sm inline-block" style="background:var(--sb-break,#7a7548)"></span>
+                                    {{ __('Ends') }}
+                                </div>
+                                <x-ui.time-input field="breakEnd" />
+                            </div>
+                        </div>
+
+                        {{-- Additional break (tea break etc., Livewire-bound, not on dial) --}}
+                        @if (!empty($shiftBreaks[1]))
+                        <div class="mt-3">
+                            <div class="flex items-center justify-between mb-2">
+                                <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted">{{ $shiftBreaks[1]['label'] ?? __('Break 2') }}</p>
+                                <button type="button" class="text-[10px] font-medium text-muted hover:text-status-danger transition-colors" wire:click="removeShiftBreak(1)">{{ __('Remove') }}</button>
+                            </div>
+                            <div class="flex items-center justify-between py-1 gap-3">
+                                <div class="flex items-center gap-2.5 text-sm text-ink shrink-0">
+                                    <span class="w-2.5 h-2.5 rounded-sm inline-block" style="background:var(--sb-break,#7a7548)"></span>
+                                    {{ __('Starts') }}
+                                </div>
+                                <x-ui.time-input field="break2Start" />
+                            </div>
+                            <div class="flex items-center justify-between py-1 gap-3">
+                                <div class="flex items-center gap-2.5 text-sm text-ink shrink-0">
+                                    <span class="w-2.5 h-2.5 rounded-sm inline-block" style="background:var(--sb-break,#7a7548)"></span>
+                                    {{ __('Ends') }}
+                                </div>
+                                <x-ui.time-input field="break2End" />
+                            </div>
+                        </div>
+                        @endif
+
+                        @if (count($shiftBreaks) < 2)
+                        <div class="mt-2">
+                            <button type="button" class="text-[10px] font-medium text-muted hover:text-accent transition-colors" wire:click="addShiftBreak">{{ __('+ Add break') }}</button>
+                        </div>
+                        @endif
+
+                        {{-- Duration totals --}}
+                        <div class="border-t border-border-default pt-3 flex flex-col gap-0.5">
+                            <div class="flex justify-between items-baseline py-1">
+                                <span class="text-sm text-muted">{{ __('Day length') }}</span>
+                                <span class="text-sm text-ink tabular-nums" x-text="shiftDurStr"></span>
+                            </div>
+                            <div class="flex justify-between items-baseline py-1">
+                                <span class="text-sm text-muted">{{ $shiftBreaks[0]['label'] ?? __('Break') }}</span>
+                                <span class="text-sm text-ink tabular-nums" x-text="break1DurStr"></span>
+                            </div>
+                            @if (!empty($shiftBreaks[1]))
+                            <div class="flex justify-between items-baseline py-1" x-show="hasBreak2">
+                                <span class="text-sm text-muted">{{ $shiftBreaks[1]['label'] ?? __('Break 2') }}</span>
+                                <span class="text-sm text-ink tabular-nums" x-text="break2DurStr"></span>
+                            </div>
+                            @endif
+                            <div class="flex justify-between items-baseline py-1">
+                                <span class="text-sm font-semibold text-ink">{{ __('Paid work') }}</span>
+                                <span class="text-lg font-semibold text-accent tabular-nums" x-text="paidStr"></span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>{{-- end px-6 pb-6 --}}
+        </div>{{-- end work schedule card --}}
+        </div>{{-- end x-data="shiftBuilder" --}}
+
+        {{-- Effective dates & activation + actions --}}
         <x-ui.card>
             <div>
                 <h2 class="text-base font-semibold text-ink">{{ __('Effective dates & activation') }}</h2>
@@ -119,17 +247,14 @@
                     <option value="inactive">{{ __('Inactive') }}</option>
                 </x-ui.select>
             </div>
+            <div class="mt-5 flex flex-wrap justify-end gap-2">
+                <x-ui.button type="button" variant="secondary" wire:click="cancelShiftEdit">{{ __('Cancel') }}</x-ui.button>
+                <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.policy-groups.validator') }}">{{ __('Open Validator') }}</x-ui.button>
+                <x-ui.button type="submit" variant="primary" :disabled="! $canManage">
+                    {{ $editingShiftTemplateId === null ? __('Create shift') : __('Save shift') }}
+                </x-ui.button>
+            </div>
         </x-ui.card>
-
-        <div class="flex flex-wrap justify-end gap-2">
-            <x-ui.button type="button" variant="secondary" wire:click="cancelShiftEdit">{{ __('Cancel') }}</x-ui.button>
-            <x-ui.button as="a" variant="secondary" href="{{ route('people.attendance.policy-groups.validator') }}">
-                {{ __('Open Validator') }}
-            </x-ui.button>
-            <x-ui.button type="submit" variant="primary" :disabled="! $canManage">
-                {{ $editingShiftTemplateId === null ? __('Create shift') : __('Save shift') }}
-            </x-ui.button>
-        </div>
     </form>
 @endif
 

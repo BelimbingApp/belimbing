@@ -2,19 +2,57 @@
 
 namespace App\Modules\People\Attendance\Livewire;
 
-use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\People\Attendance\Livewire\Concerns\BuildsRosterGrid;
+use App\Modules\People\Attendance\Livewire\Concerns\BuildsRosterRenderingData;
 use App\Modules\People\Attendance\Livewire\Concerns\InteractsWithAttendanceScreen;
-use App\Modules\People\Attendance\Models\AttendancePolicyGroup;
-use App\Modules\People\Attendance\Models\AttendanceRosterAssignment;
-use App\Modules\People\Attendance\Models\AttendanceRosterPattern;
-use App\Modules\People\Attendance\Models\AttendanceShiftTemplate;
+use App\Modules\People\Attendance\Livewire\Concerns\ManagesRosterCellHistory;
+use App\Modules\People\Attendance\Livewire\Concerns\ManagesRosterOperations;
+use App\Modules\People\Attendance\Livewire\Concerns\ManagesRosterSelection;
+use App\Modules\People\Attendance\Livewire\Concerns\ManagesRosterSelfService;
+use App\Modules\People\Attendance\Livewire\Concerns\ResolvesRosterPolicySchedule;
+use App\Modules\People\Settings\Models\PeopleReferenceEntry;
 use Illuminate\Contracts\View\View;
-use Illuminate\Validation\Rule;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 class Rosters extends Component
 {
+    use BuildsRosterGrid;
+    use BuildsRosterRenderingData;
     use InteractsWithAttendanceScreen;
+    use ManagesRosterCellHistory;
+    use ManagesRosterOperations;
+    use ManagesRosterSelection;
+    use ManagesRosterSelfService;
+    use ResolvesRosterPolicySchedule;
+    use WithPagination;
+
+    public string $rosterSearch = '';
+
+    public string $rosterDepartmentId = '';
+
+    public string $rosterSupervisorId = '';
+
+    public string $rosterOrganizationUnitId = '';
+
+    public string $rosterCostCenterId = '';
+
+    public string $rosterWorkforceClassId = '';
+
+    public string $rosterEmploymentGroupId = '';
+
+    public string $rosterWorkCalendarId = '';
+
+    public string $rosterPayRateType = '';
+
+    public string $rosterEmployeeStatus = 'active';
+
+    public bool $rosterSelectAllFiltered = false;
+
+    /**
+     * @var list<string>
+     */
+    public array $selectedRosterEmployeeIds = [];
 
     public string $rosterEmployeeId = '';
 
@@ -28,141 +66,88 @@ class Rosters extends Component
 
     public string $rosterEffectiveTo = '';
 
-    public string $rosterPublishState = 'draft';
+    public string $swapFromEmployeeId = '';
+
+    public string $swapToEmployeeId = '';
+
+    public string $swapDate = '';
+
+    public string $rosterBulkNote = '';
+
+    public string $spreadsheetRosterRows = '';
+
+    /**
+     * Monday of the week being browsed in list mode. Empty defaults to today's
+     * Monday. Drives the calendar grid that opens the page; isolated from
+     * `rosterEffectiveFrom/To` so navigating the list doesn't mutate the form.
+     */
+    public string $listWeekAnchor = '';
+
+    /**
+     * Zoom level for the list-mode calendar. `week` shows Mon-Sun for the
+     * anchor; `month` shows the full month containing the anchor. Period
+     * navigation buttons step a week or a month at a time accordingly.
+     */
+    public string $listScope = 'week';
+
+    /**
+     * @var list<int>
+     */
+    public array $lastDraftAssignmentIds = [];
+
+    /**
+     * When true, the grid overlays actual attendance outcomes from
+     * AttendanceDay records onto the planned cells.
+     */
+    public bool $actualMode = false;
 
     public function mount(): void
     {
         $this->rosterEffectiveFrom = now()->toDateString();
     }
 
-    public function saveRosterAssignment(): void
+    public function updated(string $property): void
     {
-        if (! $this->ensureSchemaReady()) {
-            return;
+        if (in_array($property, $this->rosterFilterProperties(), true)) {
+            $this->resetPage();
+            $this->rosterSelectAllFiltered = false;
         }
-
-        $this->authorizeAttendance('people.attendance.manage');
-
-        $companyId = $this->companyId();
-        $validated = $this->validate([
-            'rosterEmployeeId' => ['required', 'integer', Rule::exists(Employee::class, 'id')->where('company_id', $companyId)],
-            'rosterPatternId' => ['nullable', 'integer', Rule::exists(AttendanceRosterPattern::class, 'id')->where('company_id', $companyId)],
-            'rosterShiftTemplateId' => ['required', 'integer', Rule::exists(AttendanceShiftTemplate::class, 'id')->where('company_id', $companyId)],
-            'rosterPolicyGroupId' => ['required', 'integer', Rule::exists(AttendancePolicyGroup::class, 'id')->where('company_id', $companyId)],
-            'rosterEffectiveFrom' => ['required', 'date'],
-            'rosterEffectiveTo' => ['nullable', 'date', 'after_or_equal:rosterEffectiveFrom'],
-            'rosterPublishState' => ['required', Rule::in(['draft', 'published'])],
-        ]);
-
-        if ($this->hasRosterOverlap((int) $validated['rosterEmployeeId'], $validated['rosterEffectiveFrom'], $this->blankToNull($validated['rosterEffectiveTo'] ?? null))) {
-            $this->addError('rosterEffectiveFrom', __('This employee already has a roster assignment in that date range.'));
-
-            return;
-        }
-
-        AttendanceRosterAssignment::query()->create([
-            'company_id' => $companyId,
-            'employee_id' => (int) $validated['rosterEmployeeId'],
-            'attendance_roster_pattern_id' => $this->blankToNull($validated['rosterPatternId'] ?? null),
-            'attendance_shift_template_id' => (int) $validated['rosterShiftTemplateId'],
-            'attendance_policy_group_id' => (int) $validated['rosterPolicyGroupId'],
-            'effective_from' => $validated['rosterEffectiveFrom'],
-            'effective_to' => $this->blankToNull($validated['rosterEffectiveTo'] ?? null),
-            'publish_state' => $validated['rosterPublishState'],
-            'lock_state' => 'open',
-            'revision' => 1,
-            'exceptions' => [],
-            'metadata' => ['created_from' => 'attendance_roster_builder'],
-        ]);
-
-        $this->resetForm();
-        session()->flash('success', __('Roster assignment saved. It will be used when attendance days are resolved for the covered dates.'));
-    }
-
-    public function deleteRosterAssignment(int $assignmentId): void
-    {
-        if (! $this->ensureSchemaReady()) {
-            return;
-        }
-
-        $this->authorizeAttendance('people.attendance.manage');
-
-        AttendanceRosterAssignment::query()
-            ->where('company_id', $this->companyId())
-            ->findOrFail($assignmentId)
-            ->delete();
-
-        session()->flash('success', __('Roster assignment deleted.'));
     }
 
     public function render(): View
     {
         $companyId = $this->companyId();
         $schemaReady = $this->schemaReady();
+        $isMySchedule = $this->isMyScheduleMode();
+        $canManage = $this->canAttendance('people.attendance.manage');
+        $canUnlock = $this->canAttendance('people.attendance.roster.unlock');
+
+        $viewData = $schemaReady
+            ? $this->renderDataForReadySchema($companyId)
+            : $this->renderDataForUnreadySchema();
+
+        $gridStart = $this->gridPeriodStart()->toDateString();
+        $gridEnd = $this->gridPeriodEnd()->toDateString();
+        $rosterGridRows = $viewData['rosterGridRows'] ?? collect();
+        $lockedDates = $viewData['lockedDates'] ?? [];
 
         return view('livewire.people.attendance.rosters', [
             'schemaReady' => $schemaReady,
-            'canManage' => $this->canAttendance('people.attendance.manage'),
-            'employees' => $schemaReady
-                ? Employee::query()
-                    ->where('company_id', $companyId)
-                    ->where('status', 'active')
-                    ->orderBy('full_name')
-                    ->limit(100)
-                    ->get()
-                : collect(),
-            'shiftTemplates' => $schemaReady
-                ? AttendanceShiftTemplate::query()
-                    ->where('company_id', $companyId)
-                    ->orderBy('code')
-                    ->get()
-                : collect(),
-            'policyGroups' => $schemaReady
-                ? AttendancePolicyGroup::query()
-                    ->where('company_id', $companyId)
-                    ->orderBy('code')
-                    ->get()
-                : collect(),
-            'rosterPatterns' => $schemaReady
-                ? AttendanceRosterPattern::query()
-                    ->where('company_id', $companyId)
-                    ->orderBy('code')
-                    ->get()
-                : collect(),
-            'rosterAssignments' => $schemaReady
-                ? AttendanceRosterAssignment::query()
-                    ->where('company_id', $companyId)
-                    ->with(['employee', 'shiftTemplate', 'policyGroup', 'rosterPattern'])
-                    ->latest('effective_from')
-                    ->limit(40)
-                    ->get()
-                : collect(),
+            'canManage' => $canManage,
+            'canUnlock' => $canUnlock,
+            'isMySchedule' => $isMySchedule,
+            'actualMode' => $this->actualMode,
+            'currentPeriodLocked' => ! empty($lockedDates),
+            'acknowledgedForPeriod' => $isMySchedule && $schemaReady ? $this->acknowledgedForPeriod($gridStart, $gridEnd) : false,
+            'acknowledgmentCount' => $canManage && $schemaReady ? $this->acknowledgmentCountForPeriod($rosterGridRows, $gridStart, $gridEnd) : null,
+            'gridPeriodStart' => $gridStart,
+            'gridPeriodEnd' => $gridEnd,
+            'organizationUnits' => $this->referenceOptions(PeopleReferenceEntry::TYPE_ORGANIZATION_UNIT, $schemaReady),
+            'costCenters' => $this->referenceOptions(PeopleReferenceEntry::TYPE_COST_CENTER, $schemaReady),
+            'employmentGroups' => $this->referenceOptions(PeopleReferenceEntry::TYPE_EMPLOYMENT_GROUP, $schemaReady),
+            'workforceClasses' => $this->referenceOptions(PeopleReferenceEntry::TYPE_WORKFORCE_CLASS, $schemaReady),
+            'workCalendars' => $this->referenceOptions(PeopleReferenceEntry::TYPE_WORK_CALENDAR, $schemaReady),
+            ...$viewData,
         ]);
-    }
-
-    private function hasRosterOverlap(int $employeeId, string $effectiveFrom, ?string $effectiveTo): bool
-    {
-        $rangeEnd = $effectiveTo ?? '9999-12-31';
-
-        return AttendanceRosterAssignment::query()
-            ->where('company_id', $this->companyId())
-            ->where('employee_id', $employeeId)
-            ->where('effective_from', '<=', $rangeEnd)
-            ->where(function ($query) use ($effectiveFrom): void {
-                $query->whereNull('effective_to')
-                    ->orWhere('effective_to', '>=', $effectiveFrom);
-            })
-            ->exists();
-    }
-
-    private function resetForm(): void
-    {
-        $this->rosterEmployeeId = '';
-        $this->rosterPatternId = '';
-        $this->rosterShiftTemplateId = '';
-        $this->rosterPolicyGroupId = '';
-        $this->rosterEffectiveFrom = now()->toDateString();
-        $this->rosterEffectiveTo = '';
-        $this->rosterPublishState = 'draft';
     }
 }
