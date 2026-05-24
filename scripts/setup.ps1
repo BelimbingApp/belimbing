@@ -6,6 +6,15 @@
 .DESCRIPTION
     Prepares a Windows development environment using FrankenPHP's bundled PHP,
     SQLite, Composer, and Bun/npm frontend dependencies.
+
+    Re-running this script is safe — it is idempotent. User-configurable values
+    (.env domains, ports, company name) are only written when absent unless the
+    corresponding parameter is explicitly provided. Infrastructure values
+    (DB_CONNECTION, SESSION_DRIVER, etc.) are always applied.
+
+    The admin user is created on first run only. On subsequent runs the
+    provisioner re-asserts roles without touching the password. Pass
+    -ResetAdmin to explicitly overwrite admin credentials.
 #>
 
 [CmdletBinding()]
@@ -27,7 +36,11 @@ param(
     [switch] $SkipHosts,
     [switch] $SkipComposerInstall,
     [switch] $SkipNodeInstall,
-    [switch] $SkipMigrate
+    [switch] $SkipMigrate,
+
+    # Force admin credential reset even when an admin already exists.
+    # Without this flag the provisioner re-asserts roles only — password is untouched.
+    [switch] $ResetAdmin
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,12 +75,40 @@ function Resolve-FrankenPhpHome {
     return Join-Path $HOME '.frankenphp'
 }
 
+function Get-EnvValue {
+    param(
+        [Parameter(Mandatory = $true)][string] $Path,
+        [Parameter(Mandatory = $true)][string] $Key,
+        [string] $Default = ''
+    )
+
+    if (-not (Test-Path $Path)) {
+        return $Default
+    }
+
+    $match = Get-Content -Path $Path | Where-Object { $_ -match "^\s*$([regex]::Escape($Key))=(.*)$" } | Select-Object -First 1
+    if (-not $match) {
+        return $Default
+    }
+
+    return ($match -replace "^\s*$([regex]::Escape($Key))=", '').Trim('"')
+}
+
 function Set-EnvValue {
     param(
         [Parameter(Mandatory = $true)][string] $Path,
         [Parameter(Mandatory = $true)][string] $Key,
-        [AllowEmptyString()][string] $Value
+        [AllowEmptyString()][string] $Value,
+        # When set, skip the write if the key already has a non-empty value.
+        [switch] $OnlyIfAbsent
     )
+
+    if ($OnlyIfAbsent -and (Test-Path $Path)) {
+        $existing = Get-EnvValue -Path $Path -Key $Key
+        if ($existing -ne '') {
+            return
+        }
+    }
 
     if ($Value -match '[\s#"]') {
         $escapedValue = $Value.Replace('\', '\\').Replace('"', '\"')
@@ -135,25 +176,6 @@ function Set-EnvValue {
     Write-TextFileSafely -TargetPath $Path -Content $next
 }
 
-function Get-EnvValue {
-    param(
-        [Parameter(Mandatory = $true)][string] $Path,
-        [Parameter(Mandatory = $true)][string] $Key,
-        [string] $Default = ''
-    )
-
-    if (-not (Test-Path $Path)) {
-        return $Default
-    }
-
-    $match = Get-Content -Path $Path | Where-Object { $_ -match "^\s*$([regex]::Escape($Key))=(.*)$" } | Select-Object -First 1
-    if (-not $match) {
-        return $Default
-    }
-
-    return ($match -replace "^\s*$([regex]::Escape($Key))=", '').Trim('"')
-}
-
 function Add-HostsEntry {
     param(
         [string[]] $Domains,
@@ -215,6 +237,19 @@ function New-AdminBootstrapFile {
     return $path
 }
 
+# Returns $true when at least one user with company_id=1 exists in the SQLite
+# database. Returns $false on any error (table absent, db missing, etc.).
+function Test-AdminExists {
+    param([string] $DatabasePath)
+    if (-not (Test-Path $DatabasePath)) { return $false }
+    try {
+        $result = & $script:PhpExe -r 'try{$p=new PDO("sqlite:".$argv[1]);$n=$p->query("SELECT COUNT(*) FROM users WHERE company_id=1")->fetchColumn();echo $n>0?"yes":"no";}catch(Exception $e){echo "no";}' -- $DatabasePath 2>$null
+        return ($result -eq 'yes')
+    } catch {
+        return $false
+    }
+}
+
 function Resolve-BunPath {
     $bun = Get-Command bun -ErrorAction SilentlyContinue
     if ($bun) {
@@ -247,6 +282,16 @@ function Invoke-Composer {
     Invoke-Php -Arguments $composerArguments
 }
 
+# Capture which params were explicitly provided so we can distinguish
+# "user changed this" from "default value that should not stomp .env".
+$explicitEnvironment    = $PSBoundParameters.ContainsKey('Environment')
+$explicitFrontendDomain = $PSBoundParameters.ContainsKey('FrontendDomain')
+$explicitBackendDomain  = $PSBoundParameters.ContainsKey('BackendDomain')
+$explicitAppPort        = $PSBoundParameters.ContainsKey('AppPort')
+$explicitVitePort       = $PSBoundParameters.ContainsKey('VitePort')
+$explicitCompanyName    = $PSBoundParameters.ContainsKey('LicenseeCompanyName')
+$explicitCompanyCode    = $PSBoundParameters.ContainsKey('LicenseeCompanyCode')
+
 Push-Location $ProjectRootPath
 try {
     Write-Step "Locating FrankenPHP"
@@ -266,7 +311,7 @@ try {
     New-Item -ItemType Directory -Force -Path $PhpConfigDir | Out-Null
     New-Item -ItemType Directory -Force -Path $DevopsDir | Out-Null
     if (-not (Test-Path $CaBundlePath)) {
-        Invoke-WebRequest -Uri 'https://curl.se/ca/cacert.pem' -OutFile $CaBundlePath
+        Invoke-WebRequest -Uri 'https://curl.se/ca/cacert.pem' -OutFile $CaBundlePath -TimeoutSec 30
     }
 
     @"
@@ -289,11 +334,15 @@ variables_order=EGPCS
     $env:PHPRC = $PhpConfigDir
     Write-Ok "PHP ini: $PhpIniPath"
 
+    $missingExtensions = @()
     foreach ($extension in @('ctype', 'dom', 'fileinfo', 'filter', 'intl', 'mbstring', 'openssl', 'pdo', 'pdo_sqlite', 'session', 'tokenizer', 'xml', 'zip')) {
-        Invoke-Php @('-r', "exit(extension_loaded('$extension') ? 0 : 1);")
-        if ($LASTEXITCODE -ne 0) {
-            throw "Missing PHP extension: $extension"
+        $loaded = & $script:PhpExe -r "echo extension_loaded('$extension') ? 'yes' : 'no';" 2>$null
+        if ($loaded -ne 'yes') {
+            $missingExtensions += $extension
         }
+    }
+    if ($missingExtensions.Count -gt 0) {
+        throw "Missing PHP extensions: $($missingExtensions -join ', '). Ensure FrankenPHP is correctly installed in '$frankenPhpHome'."
     }
     Write-Ok "Required PHP extensions are enabled"
 
@@ -310,25 +359,31 @@ variables_order=EGPCS
     }
 
     $databaseForEnv = $DatabasePath.Replace('\', '/')
-    Set-EnvValue $envPath 'APP_ENV' $Environment
-    Set-EnvValue $envPath 'APP_DEBUG' 'true'
-    Set-EnvValue $envPath 'APP_SCHEME' 'https'
-    Set-EnvValue $envPath 'APP_URL' "https://$FrontendDomain"
-    Set-EnvValue $envPath 'FRONTEND_DOMAIN' $FrontendDomain
-    Set-EnvValue $envPath 'BACKEND_DOMAIN' $BackendDomain
-    Set-EnvValue $envPath 'BLB_INGRESS_MODE' 'direct'
-    Set-EnvValue $envPath 'APP_PORT' "$AppPort"
-    Set-EnvValue $envPath 'VITE_PORT' "$VitePort"
-    Set-EnvValue $envPath 'DB_CONNECTION' 'sqlite'
-    Set-EnvValue $envPath 'DB_DATABASE' $databaseForEnv
-    Set-EnvValue $envPath 'SESSION_DRIVER' 'database'
-    Set-EnvValue $envPath 'QUEUE_CONNECTION' 'database'
-    Set-EnvValue $envPath 'CACHE_STORE' 'database'
-    Set-EnvValue $envPath 'LICENSEE_COMPANY_NAME' $LicenseeCompanyName
+
+    # Infrastructure values — BLB's architecture decisions, always applied.
+    Set-EnvValue $envPath 'APP_DEBUG'         'true'
+    Set-EnvValue $envPath 'APP_SCHEME'        'https'
+    Set-EnvValue $envPath 'BLB_INGRESS_MODE'  'direct'
+    Set-EnvValue $envPath 'DB_CONNECTION'     'sqlite'
+    Set-EnvValue $envPath 'DB_DATABASE'       $databaseForEnv
+    Set-EnvValue $envPath 'SESSION_DRIVER'    'database'
+    Set-EnvValue $envPath 'QUEUE_CONNECTION'  'database'
+    Set-EnvValue $envPath 'CACHE_STORE'       'database'
+
+    # User-configurable values — written only when absent unless the param was
+    # explicitly provided on this invocation.
+    Set-EnvValue $envPath 'APP_ENV'           $Environment          -OnlyIfAbsent:(-not $explicitEnvironment)
+    Set-EnvValue $envPath 'APP_URL'           "https://$FrontendDomain" -OnlyIfAbsent:(-not $explicitFrontendDomain)
+    Set-EnvValue $envPath 'FRONTEND_DOMAIN'   $FrontendDomain       -OnlyIfAbsent:(-not $explicitFrontendDomain)
+    Set-EnvValue $envPath 'BACKEND_DOMAIN'    $BackendDomain        -OnlyIfAbsent:(-not $explicitBackendDomain)
+    Set-EnvValue $envPath 'APP_PORT'          "$AppPort"            -OnlyIfAbsent:(-not $explicitAppPort)
+    Set-EnvValue $envPath 'VITE_PORT'         "$VitePort"           -OnlyIfAbsent:(-not $explicitVitePort)
+    Set-EnvValue $envPath 'LICENSEE_COMPANY_NAME' $LicenseeCompanyName -OnlyIfAbsent:(-not $explicitCompanyName)
     if (-not $LicenseeCompanyCode) {
         $LicenseeCompanyCode = Get-DefaultCompanyCode $LicenseeCompanyName
     }
-    Set-EnvValue $envPath 'LICENSEE_COMPANY_CODE' $LicenseeCompanyCode
+    Set-EnvValue $envPath 'LICENSEE_COMPANY_CODE' $LicenseeCompanyCode -OnlyIfAbsent:(-not $explicitCompanyCode)
+
     Write-Ok "SQLite database: $DatabasePath"
 
     Write-Step "Configuring local domains"
@@ -336,9 +391,16 @@ variables_order=EGPCS
 
     if (-not $SkipComposerInstall) {
         Write-Step "Installing Composer locally if needed"
-        if (-not (Test-Path $ComposerPath)) {
+        if (Test-Path $ComposerPath) {
+            Write-Ok "Composer already present — checking for updates"
+            try {
+                Invoke-Php @($ComposerPath, 'self-update', '--quiet')
+            } catch {
+                Write-Warning "Composer self-update failed — continuing with existing version"
+            }
+        } else {
             $installer = Join-Path $env:TEMP "composer-setup-$PID.php"
-            Invoke-WebRequest -Uri 'https://getcomposer.org/installer' -OutFile $installer
+            Invoke-WebRequest -Uri 'https://getcomposer.org/installer' -OutFile $installer -TimeoutSec 30
             try {
                 Invoke-Php @($installer, '--install-dir', $DevopsDir, '--filename', 'composer.phar')
             } finally {
@@ -400,14 +462,32 @@ variables_order=EGPCS
         }
 
         if (-not $SkipMigrate) {
-            $adminBootstrapFile = New-AdminBootstrapFile -Name $AdminName -Email $AdminEmail -Password $AdminPassword
+            # Only bootstrap admin credentials on first run or when explicitly requested.
+            # Skipping the bootstrap file lets FrameworkPrimitivesProvisioner use the
+            # canonical anchor path — re-asserts roles without touching the password.
+            $adminExists = Test-AdminExists -DatabasePath $databaseForEnv
+            $needsBootstrap = (-not $adminExists) -or $ResetAdmin
+
+            if ($adminExists -and $ResetAdmin) {
+                Write-Output "  -ResetAdmin specified — admin credentials will be overwritten"
+            } elseif ($adminExists) {
+                Write-Ok "Admin user already exists — skipping credential bootstrap"
+            }
+
+            $adminBootstrapFile = $null
+            if ($needsBootstrap) {
+                $adminBootstrapFile = New-AdminBootstrapFile -Name $AdminName -Email $AdminEmail -Password $AdminPassword
+            }
+
             $previousCompanyName = $env:LICENSEE_COMPANY_NAME
             $previousCompanyCode = $env:LICENSEE_COMPANY_CODE
             $previousBootstrapFile = $env:BLB_BOOTSTRAP_ADMIN_FILE
 
             $env:LICENSEE_COMPANY_NAME = $LicenseeCompanyName
             $env:LICENSEE_COMPANY_CODE = $LicenseeCompanyCode
-            $env:BLB_BOOTSTRAP_ADMIN_FILE = $adminBootstrapFile
+            if ($adminBootstrapFile) {
+                $env:BLB_BOOTSTRAP_ADMIN_FILE = $adminBootstrapFile
+            }
 
             try {
                 if ($Environment -eq 'local') {
@@ -434,7 +514,9 @@ variables_order=EGPCS
                     $env:BLB_BOOTSTRAP_ADMIN_FILE = $previousBootstrapFile
                 }
 
-                Remove-Item $adminBootstrapFile -Force -ErrorAction SilentlyContinue
+                if ($adminBootstrapFile) {
+                    Remove-Item $adminBootstrapFile -Force -ErrorAction SilentlyContinue
+                }
             }
         }
         Invoke-Php @('artisan', 'config:clear')
