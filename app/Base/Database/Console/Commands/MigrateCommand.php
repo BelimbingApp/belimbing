@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Console\Commands;
 
 use App\Base\Database\Concerns\InteractsWithModuleMigrations;
@@ -6,10 +7,11 @@ use App\Base\Database\Exceptions\CircularSeederDependencyException;
 use App\Base\Database\Models\SeederRegistry;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Seeders\DevSeeder;
+use App\Base\Database\Services\IncubatingSchemaPreflight;
 use App\Base\Foundation\Services\FrameworkPrimitivesProvisioner;
 use App\Base\Support\AppPath;
+use Illuminate\Console\Command;
 use Illuminate\Database\Console\Migrations\MigrateCommand as IlluminateMigrateCommand;
-use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputOption;
 
@@ -39,16 +41,7 @@ class MigrateCommand extends IlluminateMigrateCommand
                 'dev',
                 null,
                 InputOption::VALUE_NONE,
-                'Run dev seeders after production seeders (APP_ENV=local only). Implies --seed.',
-            ),
-        );
-
-        $this->getDefinition()->addOption(
-            new InputOption(
-                'unstable',
-                null,
-                InputOption::VALUE_NONE,
-                'Register newly discovered tables as unstable (is_stable=false) so migrate:fresh will rebuild them.',
+                'Run local development migration flow: rebuild incubating schema, seed production data, then run dev seeders.',
             ),
         );
     }
@@ -60,6 +53,12 @@ class MigrateCommand extends IlluminateMigrateCommand
      */
     public function handle(): int
     {
+        if ($this->option('dev') && ! app()->environment('local')) {
+            $this->error('--dev may only be used when APP_ENV=local. Current: '.app()->environment());
+
+            return Command::FAILURE;
+        }
+
         // --dev implies --seed (dev seeders need production seeders to have run first)
         if ($this->option('dev') && ! $this->option('seed')) {
             $this->input->setOption('seed', true);
@@ -90,6 +89,10 @@ class MigrateCommand extends IlluminateMigrateCommand
                 // Next, we will check to see if a path option has been defined. If it has
                 // we will use the path relative to the root of this installation folder
                 // so that migrations may be run for any path within the applications.
+                if ($this->option('dev') && ! $this->option('pretend')) {
+                    $this->runIncubatingSchemaPreflight();
+                }
+
                 $this->migrator
                     ->setOutput($this->output)
                     ->run($this->getMigrationPaths(), [
@@ -101,13 +104,9 @@ class MigrateCommand extends IlluminateMigrateCommand
                     return;
                 }
 
-                $existingRegistry = $this->snapshotTableRegistryIfUnstable();
-
                 // Auto-discover, register, and reconcile tables from migration files
                 $reconciliation = TableRegistry::reconcile();
                 $this->reportRemovedRegistryEntries($reconciliation['removed']);
-
-                $this->flagNewTablesAsUnstableIfRequested($existingRegistry);
 
                 // Handle seeding with module-aware auto-discovery
                 if ($this->option('seed')) {
@@ -126,47 +125,6 @@ class MigrateCommand extends IlluminateMigrateCommand
                 }
             },
         );
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function snapshotTableRegistryIfUnstable(): array
-    {
-        if ($this->option('unstable') && Schema::hasTable('base_database_tables')) {
-            return TableRegistry::query()->pluck('table_name')->all();
-        }
-
-        return [];
-    }
-
-    /**
-     * @param  list<string>  $existingRegistry
-     */
-    private function flagNewTablesAsUnstableIfRequested(array $existingRegistry): void
-    {
-        if (! $this->option('unstable') || ! Schema::hasTable('base_database_tables')) {
-            return;
-        }
-
-        $newTables = array_values(array_diff(
-            TableRegistry::query()->pluck('table_name')->all(),
-            $existingRegistry,
-        ));
-
-        $newTables = array_values(array_diff($newTables, TableRegistry::INFRASTRUCTURE_TABLES));
-
-        if ($newTables === []) {
-            return;
-        }
-
-        TableRegistry::query()
-            ->whereIn('table_name', $newTables)
-            ->update([
-                'is_stable' => false,
-                'stabilized_at' => null,
-                'stabilized_by' => null,
-            ]);
     }
 
     /**
@@ -246,6 +204,38 @@ class MigrateCommand extends IlluminateMigrateCommand
 
         foreach ($removedTables as $table) {
             $this->line("  - {$table}");
+        }
+    }
+
+    /**
+     * Drop source-declared incubating tables before Laravel's native migrator runs.
+     */
+    private function runIncubatingSchemaPreflight(): void
+    {
+        $result = app(IncubatingSchemaPreflight::class)->run($this->getMigrationPaths());
+
+        if ($result['files'] === []) {
+            $this->components->info('No incubating schema migrations declared.');
+
+            return;
+        }
+
+        $this->components->info('Rebuilding incubating schema before native migrate.');
+
+        foreach ($result['files'] as $file) {
+            $this->components->twoColumnDetail('Incubating', $file);
+        }
+
+        foreach ($result['tables'] as $table) {
+            $this->components->twoColumnDetail('Dropped table', $table);
+        }
+
+        foreach ($result['migrations'] as $migration) {
+            $this->components->twoColumnDetail('Cleared migration', $migration);
+        }
+
+        if ($result['seeders_reset'] > 0) {
+            $this->components->twoColumnDetail('Seeders reset', (string) $result['seeders_reset']);
         }
     }
 

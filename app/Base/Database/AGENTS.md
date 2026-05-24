@@ -1,6 +1,6 @@
 # Database Module (app/Base/Database)
 
-Migration-file-aware infrastructure on top of Laravel. Provides table stability (`is_stable`), automatic seeder discovery, and module migration auto-loading.
+Migration-file-aware infrastructure on top of Laravel. Provides source-declared incubating schema, automatic seeder discovery, and module migration auto-loading.
 
 **Full architecture:** [docs/architecture/database.md](../../../docs/architecture/database.md) — naming conventions, migration registry, table naming, dependency graph.
 
@@ -36,7 +36,7 @@ app/Modules/*/*/Database/Migrations/
 
 ## The `base_database_tables` Registry
 
-Every migration that creates a table registers it here via `RegistersSeeders`. Each row links back to the exact migration file, enabling per-migration scoping for stability toggles, seeder runs, and selective rebuilds.
+Every migration that creates a table registers it here via `RegistersSeeders`. Each row links back to the exact migration file so BLB can map live tables back to source migrations for seeder runs, admin browsing, and incubating-schema rebuilds.
 
 | Column | Purpose |
 |--------|---------|
@@ -44,8 +44,8 @@ Every migration that creates a table registers it here via `RegistersSeeders`. E
 | `module_name` | Owning module (e.g. `Geonames`) |
 | `module_path` | Module path (e.g. `app/Modules/Core/Geonames`) |
 | `migration_file` | Migration filename that created this table — the key for per-migration scoping |
-| `is_stable` | Whether `migrate:fresh` preserves this table (default: `true`) |
-| `stabilized_at` / `stabilized_by` | Audit trail for stability changes |
+| `is_stable` | Legacy transitional column from the older table-stability workflow |
+| `stabilized_at` / `stabilized_by` | Legacy audit trail for that transitional column |
 
 ## Seeder Registration
 
@@ -93,63 +93,77 @@ php artisan migrate --seed --seeder=Company/RelationshipTypeSeeder
 
 Dev seeders extend `App\Base\Database\Seeders\DevSeeder`, implement `seed()` (not `run()`), and only run when `APP_ENV=local`.
 
-## Table Stability
+## Incubating Schema
 
-Every table defaults to `is_stable = true`. **Only `migrate:fresh` checks this flag** — all other commands ignore it.
-
-| `is_stable` | `migrate:fresh` behaviour |
-|-------------|----------------------------------|
-| `true` | Table and its data are **preserved** |
-| `false` | Table is **dropped and rebuilt** from its migration |
-
-### Mark newly-created tables unstable
-
-When you add new migrations that create new tables and you want the next `migrate:fresh` to rebuild them by default, run:
+BLB is moving away from local table-stability toggles toward source-local schema maturity. The primary workflow is:
 
 ```bash
-php artisan migrate --unstable
+php artisan migrate --dev
 ```
 
-This keeps existing table stability unchanged and marks **only newly discovered/registered tables** as `is_stable=false` (in `base_database_tables`).
+`--dev` means:
+
+- local environment only
+- production seeders still run
+- dev seeders still run
+- source-declared incubating migrations are dropped and rerun before Laravel's native migrator continues
+
+### Declare a migration incubating
+
+Keep the declaration in the migration file itself so coding agents can discover it beside the schema they are editing:
+
+```php
+use App\Base\Database\Concerns\IncubatingSchema;
+
+return new class extends Migration
+{
+    use IncubatingSchema;
+};
+```
+
+Equivalent constant form is also supported:
+
+```php
+public const BLB_SCHEMA_STABLE = false;
+```
 
 ### Schema change workflow
 
 To edit an existing migration's schema (add/remove/rename columns, change indexes):
 
 ```bash
-# 1. Mark the table(s) unstable
-php artisan blb:table:unstable ai_providers
-php artisan blb:table:unstable ai_providers ai_provider_models  # multiple
-php artisan blb:table:unstable ai_*  # trailing wildcard (prefix match)
+# 1. Mark the source migration incubating
 
 # 2. Edit the migration file
 
-# 3. Rebuild
-php artisan migrate:fresh --seed --dev
+# 3. Rebuild locally
+php artisan migrate --dev
 ```
 
-The admin UI at `admin/system/database-tables` (local env only) also lets you toggle stability per-table.
+The old `blb:table:unstable` and admin UI stability toggle are now legacy/transitional tools. Do not use them as the source of truth for new schema work.
 
 ## Agent Guardrails
 
-- **NEVER wipe the entire database as a shortcut** (local or otherwise). BLB enforces **table stability** so `migrate:fresh` only rebuilds tables explicitly marked unstable.
-- **If you need to change a migration file, first mark the affected table(s) unstable** via `blb:table:unstable`, then rebuild with `migrate:fresh`. Follow the schema change workflow below.
+- **Prefer `php artisan migrate --dev` for local schema iteration.** It is the agent-first path and keeps the workflow close to native Laravel.
+- **If you need to change a migration file, declare that migration incubating in source** and rebuild with `migrate --dev`.
 - **Prefer editing the source migration** over creating additive migrations during the initialization phase (no production data to preserve).
+- **Treat `migrate:fresh` as a true full wipe.** Use it only when the database is disposable.
 
 ## Local Development — Command Decision Guide
 
-**`migrate:fresh --seed --dev` is the primary local tool.** Use it for almost everything.
+**`migrate --dev` is the primary local tool.** Use it for almost everything.
 
 | Situation | Command |
 |-----------|---------|
-| New migration or schema change (after marking unstable) | `migrate:fresh --seed --dev` |
+| New migration or schema change | `migrate --dev` |
 | Apply pending migrations without wiping | `migrate --seed --dev` |
 | Run a specific dev seeder | `migrate --seed --seeder=Company/Dev/DevCompanyAddressSeeder` |
+| Disposable local database full reset | `migrate:fresh` |
 | Production / staging deploy | `migrate` — never `migrate:fresh` |
 
 `--dev` implies `--seed`, creates the licensee company (id=1) if absent, then runs all dev seeders in dependency order. `APP_ENV=local` only.
 
-`migrate:refresh` and `migrate:reset` are **blocked** in Belimbing — they bypass table stability.
+`migrate:refresh`, `migrate:reset`, and `db:wipe` are **blocked** in Belimbing — they bypass the incubating-schema preflight.
 
 ## Refactoring Dependencies
 

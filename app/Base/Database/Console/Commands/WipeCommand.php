@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Console\Commands;
 
 use Illuminate\Console\Command;
@@ -16,10 +17,10 @@ class WipeCommand extends IlluminateWipeCommand
             return (int) parent::handle();
         }
 
-        $this->components->error('db:wipe is blocked because it bypasses BLB table stability.');
+        $this->components->error('db:wipe is blocked because it bypasses BLB incubating-schema safeguards.');
         $this->line('');
-        $this->line('  Use <comment>php artisan migrate:fresh --seed --dev</comment> after marking affected tables unstable.');
-        $this->line('  Example: <comment>php artisan blb:table:unstable ai_pricing_snapshots ai_pricing_overrides</comment>');
+        $this->line('  Use <comment>php artisan migrate --dev</comment> for local rebuilds of source-declared incubating schema.');
+        $this->line('  Use <comment>php artisan migrate:fresh</comment> only when you intentionally want a full Laravel wipe.');
         $this->line('');
 
         return Command::FAILURE;
