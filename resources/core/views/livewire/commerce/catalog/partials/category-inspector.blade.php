@@ -27,27 +27,27 @@
             <h3 class="text-sm font-semibold text-ink">{{ __('Basics') }}</h3>
             <div class="mt-3 grid gap-3 md:grid-cols-2">
                 <div x-data="{ editing: false, val: @js($selectedCategory->name) }">
-                    <label class="text-xs font-medium text-muted">{{ __('Name') }}</label>
+                    <label for="category-name-{{ $selectedCategory->id }}" class="text-xs font-medium text-muted">{{ __('Name') }}</label>
                     <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="mt-1 cursor-pointer rounded-lg border border-border-default bg-surface-subtle/40 px-3 py-2 text-sm text-ink hover:border-accent">
                         <span x-text="val"></span>
                     </div>
-                    <input x-show="editing" x-ref="input" x-model="val" @keydown.enter="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'name', val)" @keydown.escape="editing = false; val = @js($selectedCategory->name)" @blur="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'name', val)" type="text" class="mt-1 w-full rounded-lg border border-accent bg-surface-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent" />
+                    <input id="category-name-{{ $selectedCategory->id }}" x-show="editing" x-ref="input" x-model="val" @keydown.enter="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'name', val)" @keydown.escape="editing = false; val = @js($selectedCategory->name)" @blur="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'name', val)" type="text" class="mt-1 w-full rounded-lg border border-accent bg-surface-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent" />
                 </div>
 
                 <div x-data="{ editing: false, val: @js($selectedCategory->code) }">
-                    <label class="text-xs font-medium text-muted">{{ __('Code') }}</label>
+                    <label for="category-code-{{ $selectedCategory->id }}" class="text-xs font-medium text-muted">{{ __('Code') }}</label>
                     <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="mt-1 cursor-pointer rounded-lg border border-border-default bg-surface-subtle/40 px-3 py-2 font-mono text-sm text-muted hover:border-accent">
                         <span x-text="val"></span>
                     </div>
-                    <input x-show="editing" x-ref="input" x-model="val" @keydown.enter="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'code', val)" @keydown.escape="editing = false; val = @js($selectedCategory->code)" @blur="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'code', val)" type="text" class="mt-1 w-full rounded-lg border border-accent bg-surface-card px-3 py-2 font-mono text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent" />
+                    <input id="category-code-{{ $selectedCategory->id }}" x-show="editing" x-ref="input" x-model="val" @keydown.enter="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'code', val)" @keydown.escape="editing = false; val = @js($selectedCategory->code)" @blur="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'code', val)" type="text" class="mt-1 w-full rounded-lg border border-accent bg-surface-card px-3 py-2 font-mono text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent" />
                 </div>
 
                 <div x-data="{ editing: false, val: @js((string) ($selectedCategory->parent_id ?? '')) }">
-                    <label class="text-xs font-medium text-muted">{{ __('Parent') }}</label>
+                    <label for="category-parent-{{ $selectedCategory->id }}" class="text-xs font-medium text-muted">{{ __('Parent') }}</label>
                     <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.focus())" class="mt-1 cursor-pointer rounded-lg border border-border-default bg-surface-subtle/40 px-3 py-2 text-sm text-ink hover:border-accent">
                         {{ $selectedCategory->parent?->path_label ?: __('Top level') }}
                     </div>
-                    <select x-show="editing" x-ref="input" x-model="val" @change="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'parent_id', val)" @blur="editing = false" class="mt-1 w-full rounded-lg border border-accent bg-surface-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent">
+                    <select id="category-parent-{{ $selectedCategory->id }}" x-show="editing" x-ref="input" x-model="val" @change="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'parent_id', val)" @blur="editing = false" class="mt-1 w-full rounded-lg border border-accent bg-surface-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent">
                         <option value="">{{ __('Top level') }}</option>
                         @foreach ($categories as $category)
                             @if ($category->id !== $selectedCategory->id)
@@ -58,19 +58,19 @@
                 </div>
 
                 <div x-data="{ editing: false, val: @js((string) $selectedCategory->sort_order) }">
-                    <label class="text-xs font-medium text-muted">{{ __('Sort order') }}</label>
+                    <label for="category-sort-order-{{ $selectedCategory->id }}" class="text-xs font-medium text-muted">{{ __('Sort order') }}</label>
                     <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="mt-1 cursor-pointer rounded-lg border border-border-default bg-surface-subtle/40 px-3 py-2 text-sm text-ink hover:border-accent">
                         <span x-text="val"></span>
                     </div>
-                    <input x-show="editing" x-ref="input" x-model="val" @keydown.enter="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'sort_order', val)" @keydown.escape="editing = false; val = @js((string) $selectedCategory->sort_order)" @blur="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'sort_order', val)" type="number" min="0" class="mt-1 w-full rounded-lg border border-accent bg-surface-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent" />
+                    <input id="category-sort-order-{{ $selectedCategory->id }}" x-show="editing" x-ref="input" x-model="val" @keydown.enter="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'sort_order', val)" @keydown.escape="editing = false; val = @js((string) $selectedCategory->sort_order)" @blur="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'sort_order', val)" type="number" min="0" class="mt-1 w-full rounded-lg border border-accent bg-surface-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent" />
                 </div>
 
                 <div class="md:col-span-2" x-data="{ editing: false, val: @js($selectedCategory->description ?? '') }">
-                    <label class="text-xs font-medium text-muted">{{ __('Description') }}</label>
+                    <label for="category-description-{{ $selectedCategory->id }}" class="text-xs font-medium text-muted">{{ __('Description') }}</label>
                     <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="mt-1 min-h-11 cursor-pointer rounded-lg border border-border-default bg-surface-subtle/40 px-3 py-2 text-sm text-muted hover:border-accent">
                         <span x-text="val || @js(__('No description yet.'))"></span>
                     </div>
-                    <textarea x-show="editing" x-ref="input" x-model="val" @keydown.meta.enter="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'description', val)" @keydown.ctrl.enter="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'description', val)" @keydown.escape="editing = false; val = @js($selectedCategory->description ?? '')" @blur="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'description', val)" rows="3" class="mt-1 w-full rounded-lg border border-accent bg-surface-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent"></textarea>
+                    <textarea id="category-description-{{ $selectedCategory->id }}" x-show="editing" x-ref="input" x-model="val" @keydown.meta.enter="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'description', val)" @keydown.ctrl.enter="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'description', val)" @keydown.escape="editing = false; val = @js($selectedCategory->description ?? '')" @blur="editing = false; $wire.saveCategoryField({{ $selectedCategory->id }}, 'description', val)" rows="3" class="mt-1 w-full rounded-lg border border-accent bg-surface-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent"></textarea>
                 </div>
             </div>
         </section>

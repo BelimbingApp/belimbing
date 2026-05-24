@@ -14,6 +14,10 @@ use Illuminate\Support\Str;
 
 class EbayListingOperationService
 {
+    private const INVENTORY_ITEM_PATH = '/sell/inventory/v1/inventory_item/';
+
+    private const OFFER_PATH = '/sell/inventory/v1/offer/';
+
     public function __construct(
         private readonly EbayConfiguration $configuration,
         private readonly EbayOAuthService $oauth,
@@ -259,7 +263,7 @@ class EbayListingOperationService
             accessToken: $accessToken,
             operation: 'listing.inventory_item.upsert',
             method: 'PUT',
-            path: '/sell/inventory/v1/inventory_item/'.rawurlencode($sku),
+            path: self::INVENTORY_ITEM_PATH.rawurlencode($sku),
             body: $payload['inventory_item'] ?? [],
             headers: [
                 'Content-Language' => 'en-US',
@@ -295,7 +299,7 @@ class EbayListingOperationService
                 accessToken: $accessToken,
                 operation: 'listing.compatibility.delete',
                 method: 'DELETE',
-                path: '/sell/inventory/v1/inventory_item/'.rawurlencode($sku).'/product_compatibility',
+                path: self::INVENTORY_ITEM_PATH.rawurlencode($sku).'/product_compatibility',
             );
 
             return $this->operationResult('compatibility_delete', $response);
@@ -307,7 +311,7 @@ class EbayListingOperationService
             accessToken: $accessToken,
             operation: 'listing.compatibility.upsert',
             method: 'PUT',
-            path: '/sell/inventory/v1/inventory_item/'.rawurlencode($sku).'/product_compatibility',
+            path: self::INVENTORY_ITEM_PATH.rawurlencode($sku).'/product_compatibility',
             body: [
                 'compatibleProducts' => $applications,
             ],
@@ -358,7 +362,7 @@ class EbayListingOperationService
             accessToken: $accessToken,
             operation: 'listing.offer.update',
             method: 'PUT',
-            path: '/sell/inventory/v1/offer/'.rawurlencode($offerId),
+            path: self::OFFER_PATH.rawurlencode($offerId),
             body: $payload['offer'] ?? [],
             headers: [
                 'Content-Language' => 'en-US',
@@ -383,7 +387,7 @@ class EbayListingOperationService
             accessToken: $accessToken,
             operation: 'listing.offer.publish',
             method: 'POST',
-            path: '/sell/inventory/v1/offer/'.rawurlencode($offerId).'/publish',
+            path: self::OFFER_PATH.rawurlencode($offerId).'/publish',
         );
 
         return [
@@ -405,7 +409,7 @@ class EbayListingOperationService
             accessToken: $accessToken,
             operation: 'listing.offer.withdraw',
             method: 'POST',
-            path: '/sell/inventory/v1/offer/'.rawurlencode($offerId).'/withdraw',
+            path: self::OFFER_PATH.rawurlencode($offerId).'/withdraw',
         );
 
         return [

@@ -374,7 +374,7 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
         'title' => 'BMW donor vehicle set',
         'status' => Item::STATUS_READY,
     ]);
-    $fitmentTargetItem = Item::factory()->create([
+    Item::factory()->create([
         'company_id' => $user->company_id,
         'product_template_id' => $sharedTemplate->id,
         'sku' => 'FIT-TARGET-1',

@@ -1490,7 +1490,7 @@ it('resets acknowledgment when a published cell override is saved for an employe
     $monday = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY)->toDateString();
     $sunday = CarbonImmutable::today()->endOfWeek(CarbonImmutable::SUNDAY)->toDateString();
 
-    $assignment = AttendanceRosterAssignment::query()->create([
+    AttendanceRosterAssignment::query()->create([
         'company_id' => $company->id,
         'employee_id' => $employee->id,
         'attendance_shift_template_id' => $shift->id,

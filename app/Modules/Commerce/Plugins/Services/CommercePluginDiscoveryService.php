@@ -54,46 +54,53 @@ class CommercePluginDiscoveryService
                 return;
             }
 
-            foreach ($config['catalog_presets'] ?? [] as $preset) {
-                if (is_array($preset)) {
-                    $registry->registerCatalogPreset($preset);
-                }
-            }
-
-            foreach ($config['marketplace_channel_providers'] ?? [] as $provider) {
-                if (is_string($provider)) {
-                    $registry->registerMarketplaceChannelProvider($provider);
-                }
-            }
-
-            foreach ($config['marketplace_template_mappings'] ?? [] as $mapping) {
-                if (is_array($mapping)) {
-                    $registry->registerMarketplaceTemplateMapping($mapping);
-                }
-            }
-
-            foreach ($config['readiness_contributors'] ?? [] as $contributor) {
-                if (is_string($contributor)) {
-                    $registry->registerReadinessContributor($contributor);
-                }
-            }
-
-            foreach ($config['workbench_panels'] ?? [] as $panel) {
-                if (is_array($panel)) {
-                    $registry->registerWorkbenchPanel($panel);
-                }
-            }
-
-            foreach ($config['insight_pages'] ?? [] as $page) {
-                if (is_array($page)) {
-                    $registry->registerInsightPage($page);
-                }
-            }
+            $this->registerArrayContributions($config, $registry);
+            $this->registerStringContributions($config, $registry);
         } catch (\Throwable $e) {
             Log::warning('Failed to load Commerce plugin contribution file', [
                 'file' => $file,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    private function registerArrayContributions(array $config, CommercePluginRegistry $registry): void
+    {
+        $registrations = [
+            'catalog_presets' => 'registerCatalogPreset',
+            'marketplace_template_mappings' => 'registerMarketplaceTemplateMapping',
+            'workbench_panels' => 'registerWorkbenchPanel',
+            'insight_pages' => 'registerInsightPage',
+        ];
+
+        foreach ($registrations as $key => $method) {
+            foreach ($config[$key] ?? [] as $entry) {
+                if (is_array($entry)) {
+                    $registry->{$method}($entry);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    private function registerStringContributions(array $config, CommercePluginRegistry $registry): void
+    {
+        $registrations = [
+            'marketplace_channel_providers' => 'registerMarketplaceChannelProvider',
+            'readiness_contributors' => 'registerReadinessContributor',
+        ];
+
+        foreach ($registrations as $key => $method) {
+            foreach ($config[$key] ?? [] as $entry) {
+                if (is_string($entry)) {
+                    $registry->{$method}($entry);
+                }
+            }
         }
     }
 }
