@@ -289,7 +289,7 @@ variables_order=EGPCS
     $env:PHPRC = $PhpConfigDir
     Write-Ok "PHP ini: $PhpIniPath"
 
-    foreach ($extension in @('openssl', 'pdo_sqlite', 'sqlite3', 'mbstring', 'fileinfo', 'zip')) {
+    foreach ($extension in @('ctype', 'dom', 'fileinfo', 'filter', 'intl', 'mbstring', 'openssl', 'pdo', 'pdo_sqlite', 'session', 'tokenizer', 'xml', 'zip')) {
         Invoke-Php @('-r', "exit(extension_loaded('$extension') ? 0 : 1);")
         if ($LASTEXITCODE -ne 0) {
             throw "Missing PHP extension: $extension"
@@ -366,6 +366,27 @@ variables_order=EGPCS
             }
         } else {
             Write-Warning "Bun/npm is not available. Install Bun for the full dev workflow: https://bun.sh/docs/installation"
+        }
+    }
+
+    Write-Step "Installing CLI tools (rg, jq)"
+    $cliTools = @(
+        @{ Name = 'ripgrep (rg)'; Binary = 'rg'; WingetId = 'BurntSushi.ripgrep.MSVC' },
+        @{ Name = 'jq';           Binary = 'jq'; WingetId = 'jqlang.jq' }
+    )
+    foreach ($tool in $cliTools) {
+        if (Get-Command $tool.Binary -ErrorAction SilentlyContinue) {
+            Write-Ok "$($tool.Name) already installed"
+        } elseif (Get-Command winget -ErrorAction SilentlyContinue) {
+            Write-Output "  Installing $($tool.Name)..."
+            winget install --id $tool.WingetId --accept-source-agreements --accept-package-agreements --silent
+            if (Get-Command $tool.Binary -ErrorAction SilentlyContinue) {
+                Write-Ok "$($tool.Name) installed"
+            } else {
+                Write-Warning "$($tool.Name) installed but not yet on PATH — restart your shell or add winget's install path to PATH"
+            }
+        } else {
+            Write-Warning "$($tool.Name) not found and winget is unavailable — install manually: https://github.com/$($tool.WingetId.ToLower())"
         }
     }
 
