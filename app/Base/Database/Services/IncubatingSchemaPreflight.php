@@ -6,6 +6,7 @@ use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Database\Exceptions\IncubatingSchemaDependencyException;
 use App\Base\Database\Models\SeederRegistry;
 use App\Base\Database\Models\TableRegistry;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -63,50 +64,14 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             ->whereIn('table_name', $tableNames)
             ->get(['table_name', 'migration_file']);
 
-        $files = $rows
-            ->pluck('migration_file')
-            ->filter(fn (mixed $file): bool => is_string($file) && $file !== '')
-            ->unique()
-            ->values()
-            ->all();
-
-        $incubatingFiles = [];
+        $incubatingFiles = $this->incubatingFilesForRows($rows);
         $deprecatedTables = $this->deprecatedScriptTables();
-
-        foreach ($files as $migrationFile) {
-            $path = $this->migrationPathByFileName($migrationFile);
-
-            if ($path === null) {
-                continue;
-            }
-
-            $contents = file_get_contents($path);
-
-            if ($contents !== false && $this->isIncubating($contents)) {
-                $incubatingFiles[$migrationFile] = true;
-            }
-        }
+        $rowsByTable = $rows->keyBy('table_name');
 
         $states = [];
 
         foreach ($tableNames as $tableName) {
-            if (in_array($tableName, TableRegistry::INFRASTRUCTURE_TABLES, true)) {
-                $states[$tableName] = 'infrastructure';
-
-                continue;
-            }
-
-            $migrationFile = $rows->firstWhere('table_name', $tableName)?->migration_file;
-
-            if (! is_string($migrationFile) || $migrationFile === '') {
-                $states[$tableName] = 'unknown';
-
-                continue;
-            }
-
-            $states[$tableName] = isset($incubatingFiles[$migrationFile]) || in_array($tableName, $deprecatedTables, true)
-                ? 'incubating'
-                : 'stable';
+            $states[$tableName] = $this->schemaStateForTable($tableName, $rowsByTable, $incubatingFiles, $deprecatedTables);
         }
 
         return $states;
@@ -308,6 +273,67 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         $declared = array_values(array_unique($declared));
 
         return array_values(array_intersect($declared, $this->liveTableNames()));
+    }
+
+    /**
+     * @param  Collection<int, TableRegistry>  $rows
+     * @return array<string, true>
+     */
+    private function incubatingFilesForRows(Collection $rows): array
+    {
+        $incubatingFiles = [];
+
+        foreach ($this->migrationFilesForRows($rows) as $migrationFile) {
+            $path = $this->migrationPathByFileName($migrationFile);
+
+            if ($path === null) {
+                continue;
+            }
+
+            $contents = file_get_contents($path);
+
+            if ($contents !== false && $this->isIncubating($contents)) {
+                $incubatingFiles[$migrationFile] = true;
+            }
+        }
+
+        return $incubatingFiles;
+    }
+
+    /**
+     * @param  Collection<int, TableRegistry>  $rows
+     * @return list<string>
+     */
+    private function migrationFilesForRows(Collection $rows): array
+    {
+        return $rows
+            ->pluck('migration_file')
+            ->filter(fn (mixed $file): bool => is_string($file) && $file !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  Collection<string, TableRegistry>  $rowsByTable
+     * @param  array<string, true>  $incubatingFiles
+     * @param  list<string>  $deprecatedTables
+     */
+    private function schemaStateForTable(string $tableName, Collection $rowsByTable, array $incubatingFiles, array $deprecatedTables): string
+    {
+        if (in_array($tableName, TableRegistry::INFRASTRUCTURE_TABLES, true)) {
+            return 'infrastructure';
+        }
+
+        $migrationFile = $rowsByTable->get($tableName)?->migration_file;
+
+        if (! is_string($migrationFile) || $migrationFile === '') {
+            return 'unknown';
+        }
+
+        return isset($incubatingFiles[$migrationFile]) || in_array($tableName, $deprecatedTables, true)
+            ? 'incubating'
+            : 'stable';
     }
 
     /**
