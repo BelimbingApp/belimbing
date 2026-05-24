@@ -324,9 +324,16 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
                                     </x-ui.day-tile>
                                 </button>
                                 {{-- Fill handle: visible on hover via CSS; activates drag-fill on mousedown --}}
-                                <div class="roster-fill-handle absolute bottom-0 right-0 z-10 h-3 w-3 -translate-x-px -translate-y-px cursor-crosshair rounded-full border-2 border-white bg-accent shadow-sm"
-                                     data-fill-handle="{{ $employee->id }}:{{ $day['date'] }}"
-                                     onmousedown="window.rosterGrid?.startFillDrag(event, '{{ $employee->id }}', '{{ $day['date'] }}')"></div>
+                                <button
+                                    type="button"
+                                    aria-label="{{ __('Fill roster from :date for :employee', ['date' => $day['date'], 'employee' => $employee->displayName()]) }}"
+                                    tabindex="-1"
+                                    class="roster-fill-handle absolute bottom-0 right-0 z-10 h-3 w-3 -translate-x-px -translate-y-px cursor-crosshair rounded-full border-2 border-white bg-accent shadow-sm"
+                                    data-fill-handle="{{ $employee->id }}:{{ $day['date'] }}"
+                                    data-employee-id="{{ $employee->id }}"
+                                    data-date="{{ $day['date'] }}"
+                                    onmousedown="window.rosterGrid?.startFillDrag(event, this.dataset.employeeId, this.dataset.date)"
+                                ></button>
                             @else
                                 {{-- Read-only tile: locked period, actual mode, or non-manager --}}
                                 <x-ui.day-tile
@@ -448,8 +455,8 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
                     <span class="ml-1 font-medium text-ink" x-text="swapFromName"></span>
                 </div>
                 <div>
-                    <label class="mb-1 block text-xs font-medium text-muted">{{ __('Swap with') }}</label>
-                    <select x-model="swapTargetEmpId"
+                    <label for="roster-swap-target-employee" class="mb-1 block text-xs font-medium text-muted">{{ __('Swap with') }}</label>
+                    <select id="roster-swap-target-employee" x-model="swapTargetEmpId"
                             class="w-full rounded-lg border border-border-default bg-surface-card px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
                         <option value="">{{ __('— Select employee —') }}</option>
                         <template x-for="emp in swapTargetList" :key="emp.id">
@@ -458,8 +465,8 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
                     </select>
                 </div>
                 <div>
-                    <label class="mb-1 block text-xs font-medium text-muted">{{ __('Date') }}</label>
-                    <input type="date" x-model="swapDateStr"
+                    <label for="roster-swap-date" class="mb-1 block text-xs font-medium text-muted">{{ __('Date') }}</label>
+                    <input id="roster-swap-date" type="date" x-model="swapDateStr"
                            class="w-full rounded-lg border border-border-default bg-surface-card px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent" />
                 </div>
                 @error('swapDate')
@@ -503,8 +510,8 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="mb-1 block text-xs font-medium text-muted">{{ __('Shift') }} <span class="text-red-500">*</span></label>
-                        <select wire:model="rosterShiftTemplateId"
+                        <label for="roster-bulk-shift-template" class="mb-1 block text-xs font-medium text-muted">{{ __('Shift') }} <span class="text-red-500">*</span></label>
+                        <select id="roster-bulk-shift-template" wire:model="rosterShiftTemplateId"
                                 class="w-full rounded-lg border border-border-default bg-surface-card px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
                             <option value="">{{ __('— Select shift —') }}</option>
                             @foreach ($shiftTemplates as $shiftTpl)
@@ -514,8 +521,8 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
                         @error('rosterShiftTemplateId')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                     </div>
                     <div>
-                        <label class="mb-1 block text-xs font-medium text-muted">{{ __('Policy') }} <span class="text-red-500">*</span></label>
-                        <select wire:model="rosterPolicyGroupId"
+                        <label for="roster-bulk-policy-group" class="mb-1 block text-xs font-medium text-muted">{{ __('Policy') }} <span class="text-red-500">*</span></label>
+                        <select id="roster-bulk-policy-group" wire:model="rosterPolicyGroupId"
                                 class="w-full rounded-lg border border-border-default bg-surface-card px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
                             <option value="">{{ __('— Select policy —') }}</option>
                             @foreach ($policyGroups as $policyGrp)
@@ -527,8 +534,8 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
                 </div>
                 @if ($rosterPatterns->isNotEmpty())
                 <div>
-                    <label class="mb-1 block text-xs font-medium text-muted">{{ __('Pattern (optional)') }}</label>
-                    <select wire:model="rosterPatternId"
+                    <label for="roster-bulk-pattern" class="mb-1 block text-xs font-medium text-muted">{{ __('Pattern (optional)') }}</label>
+                    <select id="roster-bulk-pattern" wire:model="rosterPatternId"
                             class="w-full rounded-lg border border-border-default bg-surface-card px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
                         <option value="">{{ __('— No pattern —') }}</option>
                         @foreach ($rosterPatterns as $pattern)
@@ -544,8 +551,8 @@ td:hover .roster-fill-handle, .roster-fill-handle.roster-handle-visible { opacit
                                 label="{{ __('To (blank = open-ended)') }}" :error="$errors->first('rosterEffectiveTo')" />
                 </div>
                 <div>
-                    <label class="mb-1 block text-xs font-medium text-muted">{{ __('Note (optional)') }}</label>
-                    <textarea x-model="bulkNote" rows="2"
+                    <label for="roster-bulk-note" class="mb-1 block text-xs font-medium text-muted">{{ __('Note (optional)') }}</label>
+                    <textarea id="roster-bulk-note" x-model="bulkNote" rows="2"
                               class="w-full rounded-lg border border-border-default bg-surface-card px-2 py-1.5 text-sm placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent"
                               placeholder="{{ __('Reason for this assignment') }}"></textarea>
                 </div>

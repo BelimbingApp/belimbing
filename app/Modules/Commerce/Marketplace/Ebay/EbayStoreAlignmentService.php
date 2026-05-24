@@ -530,14 +530,10 @@ class EbayStoreAlignmentService
                     ->map(fn (array $values): array => collect($values)->map(fn (string $value): string => strtolower($value))->sort()->values()->all())
                     ->values();
 
-                $status = $valueSets->count() < 2
-                    ? 'partial'
-                    : ($valueSets->unique(fn (array $values): string => json_encode($values))->count() === 1 ? 'aligned' : 'conflict');
-
                 return [
                     'key' => $group['key'],
                     'label' => $group['label'],
-                    'status' => $status,
+                    'status' => $this->alignmentStatus($valueSets),
                     'summary' => $sources
                         ->map(fn (array $values, string $source): string => Str::headline(str_replace('_', ' ', $source)).': '.implode(', ', $values))
                         ->implode(' | '),
@@ -671,5 +667,16 @@ class EbayStoreAlignmentService
         }
 
         return null;
+    }
+
+    private function alignmentStatus(Collection $valueSets): string
+    {
+        if ($valueSets->count() < 2) {
+            return 'partial';
+        }
+
+        return $valueSets->unique(fn (array $values): string => json_encode($values))->count() === 1
+            ? 'aligned'
+            : 'conflict';
     }
 }

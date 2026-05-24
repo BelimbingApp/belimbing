@@ -21,6 +21,28 @@ class EbayListingReadinessService
 
     public const STATUS_BLOCKED = 'blocked';
 
+    private const MANUFACTURER_PART_NUMBER_ASPECT = 'Manufacturer Part Number';
+
+    private const OE_PART_NUMBER_ASPECT = 'OE/OEM Part Number';
+
+    private const INTERCHANGE_PART_NUMBER_ASPECT = 'Interchange Part Number';
+
+    private const PART_NUMBER_ASPECT_NAMES = [
+        self::MANUFACTURER_PART_NUMBER_ASPECT,
+        'MPN',
+        self::OE_PART_NUMBER_ASPECT,
+        self::INTERCHANGE_PART_NUMBER_ASPECT,
+    ];
+
+    private const USEFUL_TITLE_ASPECT_NAMES = [
+        'Brand',
+        self::MANUFACTURER_PART_NUMBER_ASPECT,
+        'MPN',
+        self::OE_PART_NUMBER_ASPECT,
+        self::INTERCHANGE_PART_NUMBER_ASPECT,
+        'Placement on Vehicle',
+    ];
+
     public function __construct(
         private readonly EbayConfiguration $configuration,
         private readonly SettingsService $settings,
@@ -310,7 +332,7 @@ class EbayListingReadinessService
             $warnings[] = $this->gap('identifier_brand', __('Add a brand identifier when it is known.'), 'attributes');
         }
 
-        if (! $this->hasAnyAspect($aspectFacts, ['Manufacturer Part Number', 'MPN', 'OE/OEM Part Number', 'Interchange Part Number'])) {
+        if (! $this->hasAnyAspect($aspectFacts, self::PART_NUMBER_ASPECT_NAMES)) {
             $warnings[] = $this->gap('identifier_part_number', __('Add manufacturer, OEM, or interchange part numbers when available.'), 'attributes');
         }
 
@@ -432,7 +454,7 @@ class EbayListingReadinessService
             [
                 'key' => 'part_number',
                 'label' => 'Part Number',
-                'names' => ['Manufacturer Part Number', 'MPN', 'OE/OEM Part Number', 'Interchange Part Number'],
+                'names' => self::PART_NUMBER_ASPECT_NAMES,
             ],
         ];
 
@@ -458,14 +480,10 @@ class EbayListingReadinessService
                     ->map(fn (array $values): array => collect($values)->map(fn (string $value): string => strtolower($value))->sort()->values()->all())
                     ->values();
 
-                $status = $valueSets->count() < 2
-                    ? 'partial'
-                    : ($valueSets->unique(fn (array $values): string => json_encode($values))->count() === 1 ? 'aligned' : 'conflict');
-
                 return [
                     'key' => $group['key'],
                     'label' => $group['label'],
-                    'status' => $status,
+                    'status' => $this->alignmentStatus($valueSets),
                     'sources' => $sources,
                 ];
             })
@@ -541,9 +559,24 @@ class EbayListingReadinessService
 
         return match ($normalization) {
             AspectMapping::NORMALIZATION_NUMBER => is_numeric($value) ? (string) (float) $value : $value,
-            AspectMapping::NORMALIZATION_BOOLEAN => in_array(strtolower($value), ['1', 'true', 'yes', 'y'], true) ? 'Yes' : (in_array(strtolower($value), ['0', 'false', 'no', 'n'], true) ? 'No' : $value),
+            AspectMapping::NORMALIZATION_BOOLEAN => $this->normalizeBooleanAspectValue($value),
             default => trim($value),
         };
+    }
+
+    private function normalizeBooleanAspectValue(string $value): string
+    {
+        $normalized = strtolower($value);
+
+        if (in_array($normalized, ['1', 'true', 'yes', 'y'], true)) {
+            return 'Yes';
+        }
+
+        if (in_array($normalized, ['0', 'false', 'no', 'n'], true)) {
+            return 'No';
+        }
+
+        return $value;
     }
 
     /**
@@ -666,9 +699,20 @@ class EbayListingReadinessService
         $title = strtolower($title);
 
         return collect($mappedAspects)
-            ->filter(fn (mixed $value, string $name): bool => in_array($name, ['Brand', 'Manufacturer Part Number', 'MPN', 'OE/OEM Part Number', 'Interchange Part Number', 'Placement on Vehicle'], true)
+            ->filter(fn (mixed $value, string $name): bool => in_array($name, self::USEFUL_TITLE_ASPECT_NAMES, true)
                 && is_string($value)
                 && trim($value) !== '')
             ->contains(fn (string $value): bool => str_contains($title, strtolower($value)));
+    }
+
+    private function alignmentStatus(Collection $valueSets): string
+    {
+        if ($valueSets->count() < 2) {
+            return 'partial';
+        }
+
+        return $valueSets->unique(fn (array $values): string => json_encode($values))->count() === 1
+            ? 'aligned'
+            : 'conflict';
     }
 }
