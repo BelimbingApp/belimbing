@@ -138,11 +138,11 @@ To edit an existing migration's schema (add/remove/rename columns, change indexe
 php artisan migrate --dev
 ```
 
-The old `blb:table:unstable` and admin UI stability toggle are now legacy/transitional tools. Do not use them as the source of truth for new schema work.
+The old `blb:table:unstable` command and admin UI stability toggle are retired. Do not use local toggles as the source of truth for new schema work.
 
 ### Deprecated compatibility bridge
 
-`scripts/unstable-table-list.sh` is still honored by `php artisan migrate --dev` as a temporary git-tracked compatibility list for existing under-development tables. Treat it as deprecated. The real destination is migration-local `use IncubatingSchema;` in each owning migration file.
+`scripts/unstable-table-list.sh` is still honored by `php artisan migrate --dev` as a temporary git-tracked compatibility list for existing under-development tables. Treat it as deprecated. Use it as an operator checklist for updating other installations and extension repos. The real destination is migration-local `use IncubatingSchema;` in each owning migration file.
 
 ## PostgreSQL Identifier Limit
 

@@ -19,7 +19,7 @@ Laravel migration commands should stay familiar, with the fewest possible BLB-sp
 
 **Laravel-compatible migration flow** keeps `migrate` as the main command. BLB-specific behavior lives behind the existing local-only `--dev` flag rather than a separate command family.
 
-**Source-declared schema maturity** records which migration files are incubating in git-tracked migration metadata. The database can cache or display this state, but source is authoritative.
+**Source-declared schema maturity** records which migration files are incubating in git-tracked migration metadata. The database can cache or display this state, but source is authoritative. A deprecated git-tracked table-pattern bridge may exist temporarily while older under-development tables are moved into migration-local declarations.
 
 **Development migrate preflight** runs before the native migrator when `--dev` is present. It reads source-declared incubating migrations, computes affected tables, drops those tables safely, clears affected migration records, then lets Laravel migrate normally.
 
@@ -201,7 +201,7 @@ Goal: finish the conceptual migration.
 
 - [x] Rename user-facing "Stable" labels to schema maturity language.
 - [x] Remove `base_database_tables.is_stable` after source declarations become authoritative; existing controlled installations can drop the column manually once code no longer references it.
-- [x] Deprecate `blb:table:unstable` or convert it into a helper that edits/source-guides migration-local metadata for source changes, with any local-only override clearly labeled diagnostic.
+- [x] Remove `blb:table:unstable` from the steady-state workflow and keep only a deprecated git-tracked compatibility list while other installations adopt migration-local incubating markers.
 - [ ] Audit existing plans that mention destructive evolution or `migrate:fresh --dev --seed` and update wording where it would mislead future work.
 
 Manual operator cleanup for controlled installations, after the implementation no longer reads `is_stable`:

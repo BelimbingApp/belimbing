@@ -34,6 +34,9 @@ cd "${PROJECT_ROOT}"
 printf '%s\n' 'Deprecated: scripts/unstable-table-list.sh is now a compatibility bridge.' >&2
 printf '%s\n' 'Move each table pattern into the owning migration file with use IncubatingSchema;' >&2
 printf '%s\n' 'migrate --dev already reads this script while the transition is in progress.' >&2
+printf '%s\n' 'Use the patterns below to locate affected tables and update their owning migrations on other installations.' >&2
 printf '\n' >&2
 
-php artisan blb:table:unstable "${BLB_DEPRECATED_UNSTABLE_TABLE_PATTERNS[@]}"
+for pattern in "${BLB_DEPRECATED_UNSTABLE_TABLE_PATTERNS[@]}"; do
+  printf '%s\n' "${pattern}"
+done

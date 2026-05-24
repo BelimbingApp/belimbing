@@ -10,7 +10,6 @@ use App\Base\Database\Console\Commands\RekeyCommand;
 use App\Base\Database\Console\Commands\ResetCommand;
 use App\Base\Database\Console\Commands\RollbackCommand;
 use App\Base\Database\Console\Commands\StatusCommand;
-use App\Base\Database\Console\Commands\TableUnstableCommand;
 use App\Base\Database\Console\Commands\WipeCommand;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Database\Postgres\GuardedPostgresConnection;
@@ -93,7 +92,6 @@ class ServiceProvider extends BaseServiceProvider
         });
 
         $this->commands([
-            TableUnstableCommand::class,
             BackupCommand::class,
             RekeyCommand::class,
         ]);
