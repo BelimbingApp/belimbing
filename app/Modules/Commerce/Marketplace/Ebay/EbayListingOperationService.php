@@ -84,11 +84,13 @@ class EbayListingOperationService
             draft: $draft,
             existing: $listing,
             operationLog: $operationLog,
-            externalListingId: $listing->external_listing_id,
-            externalOfferId: (string) $listing->external_offer_id,
-            status: 'ACTIVE',
-            listedAt: $listing->listed_at ?? Carbon::now(),
-            endedAt: null,
+            publication: [
+                'external_listing_id' => $listing->external_listing_id,
+                'external_offer_id' => (string) $listing->external_offer_id,
+                'status' => 'ACTIVE',
+                'listed_at' => $listing->listed_at ?? Carbon::now(),
+                'ended_at' => null,
+            ],
         );
 
         $this->markSuccess($draft, $listing, 'published');
@@ -231,11 +233,13 @@ class EbayListingOperationService
             draft: $draft,
             existing: $existingListing,
             operationLog: $operationLog,
-            externalListingId: (string) ($publishOperation['listing_id'] ?? $existingListing?->external_listing_id ?? ''),
-            externalOfferId: (string) $offerId,
-            status: 'ACTIVE',
-            listedAt: Carbon::now(),
-            endedAt: null,
+            publication: [
+                'external_listing_id' => (string) ($publishOperation['listing_id'] ?? $existingListing?->external_listing_id ?? ''),
+                'external_offer_id' => (string) $offerId,
+                'status' => 'ACTIVE',
+                'listed_at' => Carbon::now(),
+                'ended_at' => null,
+            ],
         );
 
         $this->markSuccess($draft, $listing, 'published');
@@ -261,12 +265,14 @@ class EbayListingOperationService
             companyId: $companyId,
             config: $config,
             accessToken: $accessToken,
-            operation: 'listing.inventory_item.upsert',
-            method: 'PUT',
-            path: self::INVENTORY_ITEM_PATH.rawurlencode($sku),
-            body: $payload['inventory_item'] ?? [],
-            headers: [
-                'Content-Language' => 'en-US',
+            request: [
+                'operation' => 'listing.inventory_item.upsert',
+                'method' => 'PUT',
+                'path' => self::INVENTORY_ITEM_PATH.rawurlencode($sku),
+                'body' => $payload['inventory_item'] ?? [],
+                'headers' => [
+                    'Content-Language' => 'en-US',
+                ],
             ],
         );
 
@@ -297,9 +303,11 @@ class EbayListingOperationService
                 companyId: $companyId,
                 config: $config,
                 accessToken: $accessToken,
-                operation: 'listing.compatibility.delete',
-                method: 'DELETE',
-                path: self::INVENTORY_ITEM_PATH.rawurlencode($sku).'/product_compatibility',
+                request: [
+                    'operation' => 'listing.compatibility.delete',
+                    'method' => 'DELETE',
+                    'path' => self::INVENTORY_ITEM_PATH.rawurlencode($sku).'/product_compatibility',
+                ],
             );
 
             return $this->operationResult('compatibility_delete', $response);
@@ -309,14 +317,16 @@ class EbayListingOperationService
             companyId: $companyId,
             config: $config,
             accessToken: $accessToken,
-            operation: 'listing.compatibility.upsert',
-            method: 'PUT',
-            path: self::INVENTORY_ITEM_PATH.rawurlencode($sku).'/product_compatibility',
-            body: [
-                'compatibleProducts' => $applications,
-            ],
-            headers: [
-                'Content-Language' => 'en-US',
+            request: [
+                'operation' => 'listing.compatibility.upsert',
+                'method' => 'PUT',
+                'path' => self::INVENTORY_ITEM_PATH.rawurlencode($sku).'/product_compatibility',
+                'body' => [
+                    'compatibleProducts' => $applications,
+                ],
+                'headers' => [
+                    'Content-Language' => 'en-US',
+                ],
             ],
         );
 
@@ -334,12 +344,14 @@ class EbayListingOperationService
             companyId: $companyId,
             config: $config,
             accessToken: $accessToken,
-            operation: 'listing.offer.create',
-            method: 'POST',
-            path: '/sell/inventory/v1/offer',
-            body: $payload['offer'] ?? [],
-            headers: [
-                'Content-Language' => 'en-US',
+            request: [
+                'operation' => 'listing.offer.create',
+                'method' => 'POST',
+                'path' => '/sell/inventory/v1/offer',
+                'body' => $payload['offer'] ?? [],
+                'headers' => [
+                    'Content-Language' => 'en-US',
+                ],
             ],
         );
 
@@ -360,12 +372,14 @@ class EbayListingOperationService
             companyId: $companyId,
             config: $config,
             accessToken: $accessToken,
-            operation: 'listing.offer.update',
-            method: 'PUT',
-            path: self::OFFER_PATH.rawurlencode($offerId),
-            body: $payload['offer'] ?? [],
-            headers: [
-                'Content-Language' => 'en-US',
+            request: [
+                'operation' => 'listing.offer.update',
+                'method' => 'PUT',
+                'path' => self::OFFER_PATH.rawurlencode($offerId),
+                'body' => $payload['offer'] ?? [],
+                'headers' => [
+                    'Content-Language' => 'en-US',
+                ],
             ],
         );
 
@@ -385,9 +399,11 @@ class EbayListingOperationService
             companyId: $companyId,
             config: $config,
             accessToken: $accessToken,
-            operation: 'listing.offer.publish',
-            method: 'POST',
-            path: self::OFFER_PATH.rawurlencode($offerId).'/publish',
+            request: [
+                'operation' => 'listing.offer.publish',
+                'method' => 'POST',
+                'path' => self::OFFER_PATH.rawurlencode($offerId).'/publish',
+            ],
         );
 
         return [
@@ -407,9 +423,11 @@ class EbayListingOperationService
             companyId: $companyId,
             config: $config,
             accessToken: $accessToken,
-            operation: 'listing.offer.withdraw',
-            method: 'POST',
-            path: self::OFFER_PATH.rawurlencode($offerId).'/withdraw',
+            request: [
+                'operation' => 'listing.offer.withdraw',
+                'method' => 'POST',
+                'path' => self::OFFER_PATH.rawurlencode($offerId).'/withdraw',
+            ],
         );
 
         return [
@@ -421,19 +439,17 @@ class EbayListingOperationService
 
     /**
      * @param  array<string, mixed>  $config
-     * @param  array<string, mixed>  $body
-     * @param  array<string, string>  $headers
+     * @param  array{operation: string, method: string, path: string, body?: array<string, mixed>, headers?: array<string, string>}  $request
      */
     private function request(
         int $companyId,
         array $config,
         string $accessToken,
-        string $operation,
-        string $method,
-        string $path,
-        array $body = [],
-        array $headers = [],
+        array $request,
     ): IntegrationResponse {
+        $operation = $request['operation'];
+        $method = $request['method'];
+        $path = $request['path'];
         $response = $this->integration->send(new IntegrationRequest(
             system: EbayConfiguration::CHANNEL,
             operation: 'commerce.marketplace.ebay.'.$operation,
@@ -443,8 +459,8 @@ class EbayListingOperationService
             provider: EbayConfiguration::CHANNEL,
             headers: array_merge([
                 'Authorization' => 'Bearer '.$accessToken,
-            ], $headers),
-            body: $body === [] ? null : $body,
+            ], $request['headers'] ?? []),
+            body: ($request['body'] ?? []) === [] ? null : $request['body'],
             ownerType: 'company',
             ownerId: $companyId,
             timeoutSeconds: 30,
@@ -481,19 +497,16 @@ class EbayListingOperationService
 
     /**
      * @param  list<array<string, mixed>>  $operationLog
+     * @param  array{external_listing_id: string|null, external_offer_id: string, status: string, listed_at: Carbon|null, ended_at: Carbon|null}  $publication
      */
     private function storeListing(
         ListingDraft $draft,
         ?Listing $existing,
         array $operationLog,
-        ?string $externalListingId,
-        string $externalOfferId,
-        string $status,
-        ?Carbon $listedAt,
-        ?Carbon $endedAt,
+        array $publication,
     ): Listing {
-        $externalListingId = is_string($externalListingId) && trim($externalListingId) !== ''
-            ? trim($externalListingId)
+        $externalListingId = is_string($publication['external_listing_id']) && trim($publication['external_listing_id']) !== ''
+            ? trim($publication['external_listing_id'])
             : $existing?->external_listing_id;
 
         $item = $draft->item;
@@ -506,23 +519,23 @@ class EbayListingOperationService
             [
                 'company_id' => $draft->company_id,
                 'channel' => EbayConfiguration::CHANNEL,
-                'external_listing_id' => $externalListingId ?? $externalOfferId,
+                'external_listing_id' => $externalListingId ?? $publication['external_offer_id'],
             ],
             [
                 'item_id' => $draft->item_id,
-                'external_offer_id' => $externalOfferId,
+                'external_offer_id' => $publication['external_offer_id'],
                 'external_sku' => $payload['sku'] ?? $draft->external_sku,
                 'marketplace_id' => $draft->marketplace_id,
                 'title' => $title,
-                'status' => $status,
+                'status' => $publication['status'],
                 'management_state' => Listing::MANAGEMENT_BELIMBING_MANAGED,
                 'drift_status' => Listing::DRIFT_IN_SYNC,
                 'drift_summary' => null,
                 'price_amount' => is_string($price) ? (int) round(((float) $price) * 100) : null,
                 'currency_code' => is_string($currency) ? strtoupper($currency) : null,
                 'listing_url' => $externalListingId !== null && $externalListingId !== '' ? 'https://www.ebay.com/itm/'.$externalListingId : null,
-                'listed_at' => $listedAt,
-                'ended_at' => $endedAt,
+                'listed_at' => $publication['listed_at'],
+                'ended_at' => $publication['ended_at'],
                 'last_synced_at' => Carbon::now(),
                 'raw_payload' => [
                     'publish_contract' => $payload,
